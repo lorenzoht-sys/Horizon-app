@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="130" height="34" viewBox="0 0 130 34">
+  <!-- Head -->
+  <circle cx="11" cy="7" r="6" fill="#2BBFBF"/>
+  <!-- Body -->
+  <line x1="11" y1="13" x2="11" y2="24" stroke="#2BBFBF" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Arms open (H crossbar) -->
+  <line x1="2" y1="18" x2="20" y2="18" stroke="#2BBFBF" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Left leg -->
+  <line x1="11" y1="24" x2="5" y2="32" stroke="#2BBFBF" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Right leg -->
+  <line x1="11" y1="24" x2="17" y2="32" stroke="#2BBFBF" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- "orizon" in dark green (readable on white) -->
+  <text x="26" y="25" font-family="Poppins, sans-serif" font-size="20" font-weight="700" fill="#0D2B2B" letter-spacing="-0.5">orizon</text>
+</svg>

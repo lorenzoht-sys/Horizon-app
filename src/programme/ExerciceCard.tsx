@@ -1,0 +1,139 @@
+import { useState } from 'react';
+import type { Exercice, CategorieExercice } from '../types';
+import { Plus, Play, X } from 'lucide-react';
+import YoutubePlayer from '../components/YoutubePlayer';
+
+const CAT: Record<CategorieExercice, { icon: string; label: string; color: string }> = {
+  equilibre: { icon: '↕',  label: 'Équilibre', color: '#185FA5' },
+  force:     { icon: '💪', label: 'Force',      color: '#3B6D11' },
+  mobilite:  { icon: '🔄', label: 'Mobilité',   color: '#BA7517' },
+  souplesse: { icon: '🤸', label: 'Souplesse',  color: '#993556' },
+  endurance: { icon: '🚶', label: 'Endurance',  color: '#0F6E56' },
+  memoire:   { icon: '🧠', label: 'Mémoire',    color: '#534AB7' },
+};
+
+// Ré-exports pour compatibilité
+export const CATEGORIE_LABELS = Object.fromEntries(
+  Object.entries(CAT).map(([k, v]) => [k, v.icon + ' ' + v.label])
+) as Record<CategorieExercice, string>;
+
+export const CATEGORIE_COLORS: Record<CategorieExercice, string> = {
+  equilibre: 'bg-blue-100 text-blue-700',
+  force:     'bg-green-100 text-green-700',
+  mobilite:  'bg-yellow-100 text-yellow-700',
+  souplesse: 'bg-orange-100 text-orange-700',
+  endurance: 'bg-red-100 text-red-700',
+  memoire:   'bg-purple-100 text-purple-700',
+};
+
+interface Props {
+  exercice: Exercice;
+  onAdd?: (exercice: Exercice) => void;
+  compact?: boolean;
+}
+
+export default function ExerciceCard({ exercice, onAdd, compact }: Props) {
+  const [showVideo, setShowVideo] = useState(false);
+  const cat = CAT[exercice.categorie];
+
+  return (
+    <>
+      <div style={{
+        background: '#ffffff',
+        border: '1px solid #E8F4FD',
+        borderRadius: 12,
+        padding: '12px 16px',
+        marginBottom: 8,
+        cursor: 'default',
+      }}>
+
+        {/* Miniature vidéo (non-compact) */}
+        {!compact && exercice.videoYoutubeId && (
+          <div
+            className="relative mb-3 rounded-lg overflow-hidden cursor-pointer group"
+            onClick={() => setShowVideo(true)}
+          >
+            <img
+              src={`https://img.youtube.com/vi/${exercice.videoYoutubeId}/hqdefault.jpg`}
+              alt={exercice.nom}
+              className="w-full object-cover rounded-lg"
+              style={{ maxHeight: 130 }}
+            />
+            <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/40 transition-colors">
+              <span className="bg-white/90 text-dark rounded-full p-2">
+                <Play size={16} fill="currentColor" />
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* EN-TÊTE : titre à gauche, durée/bouton à droite */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#0D2B4B', lineHeight: 1.3 }}>
+            {exercice.nom}
+          </span>
+          {onAdd ? (
+            <button
+              onClick={() => onAdd(exercice)}
+              className="flex-shrink-0 bg-primary text-white rounded-lg hover:bg-dark transition-colors"
+              style={{ padding: '4px 8px', marginLeft: 10 }}
+              title="Ajouter au programme"
+            >
+              <Plus size={13} />
+            </button>
+          ) : (
+            <span style={{ fontSize: 12, color: '#888', whiteSpace: 'nowrap', marginLeft: 10 }}>
+              {exercice.dureeEstimeeMinutes} min
+            </span>
+          )}
+        </div>
+
+        {/* CATÉGORIE — texte simple, pas de fond */}
+        <span style={{ fontSize: 12, color: cat.color, display: 'inline-block', marginBottom: compact ? 0 : 8 }}>
+          {cat.icon} {cat.label}
+        </span>
+
+        {/* Contenu étendu (non-compact) */}
+        {!compact && (
+          <>
+            <hr style={{ border: 'none', borderTop: '1px solid #E8F4FD', margin: '0 0 10px' }} />
+
+            <p style={{ fontSize: 13, color: '#333', margin: '0 0 4px', lineHeight: 1.5 }}>
+              {exercice.description}
+            </p>
+
+            {exercice.consigneSecurite && (
+              <p style={{ fontSize: 12, color: '#993C1D', margin: '0 0 6px', display: 'flex', gap: 5, alignItems: 'flex-start' }}>
+                <span>⚠️</span><span>{exercice.consigneSecurite}</span>
+              </p>
+            )}
+
+            {exercice.videoYoutubeId && (
+              <span
+                onClick={() => setShowVideo(true)}
+                style={{ fontSize: 12, color: '#2BBFBF', cursor: 'pointer', display: 'inline-block', marginTop: 4 }}
+              >
+                ▶ Voir la démonstration
+              </span>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Modal vidéo */}
+      {showVideo && exercice.videoYoutubeId && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-white font-semibold">{exercice.nom}</h3>
+              <button onClick={() => setShowVideo(false)} className="text-white/70 hover:text-white p-1">
+                <X size={24} />
+              </button>
+            </div>
+            <YoutubePlayer videoId={exercice.videoYoutubeId} />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
