@@ -36,16 +36,18 @@ function migrateParticipant(p: Participant): Participant {
 }
 
 function load(): Participant[] {
+  const cleared = !!localStorage.getItem('mouvtrack_demo_cleared');
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEMO_PARTICIPANTS.map(migrateParticipant);
+    if (!raw) return cleared ? [] : DEMO_PARTICIPANTS.map(migrateParticipant);
     const stored: Participant[] = JSON.parse(raw);
     const migrated = stored.map(migrateParticipant);
+    if (cleared) return migrated;
     const ids = new Set(migrated.map(p => p.id));
     const missing = DEMO_PARTICIPANTS.filter(p => !ids.has(p.id)).map(migrateParticipant);
     return missing.length > 0 ? [...missing, ...migrated] : migrated;
   } catch {
-    return DEMO_PARTICIPANTS.map(migrateParticipant);
+    return cleared ? [] : DEMO_PARTICIPANTS.map(migrateParticipant);
   }
 }
 

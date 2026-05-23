@@ -8,14 +8,16 @@ import { DEMO_ZONES } from '../data/demoZones';
 const STORAGE_KEY = 'mouvtrack_zones';
 
 function load(): ZoneGeographique[] {
+  const cleared = !!localStorage.getItem('mouvtrack_demo_cleared');
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
+      if (cleared) return [];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(DEMO_ZONES));
       return DEMO_ZONES;
     }
     return JSON.parse(raw);
-  } catch { return DEMO_ZONES; }
+  } catch { return cleared ? [] : DEMO_ZONES; }
 }
 
 export function useZones() {

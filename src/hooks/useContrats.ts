@@ -16,16 +16,18 @@ function migrateContrat(c: any): Contrat {
 }
 
 function load(): Contrat[] {
+  const cleared = !!localStorage.getItem('mouvtrack_demo_cleared');
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEMO_CONTRATS;
+    if (!raw) return cleared ? [] : DEMO_CONTRATS;
     const stored: Contrat[] = JSON.parse(raw).map(migrateContrat);
+    if (cleared) return stored;
     // Fusionner les contrats demo manquants
     const ids = new Set(stored.map(c => c.id));
     const missing = DEMO_CONTRATS.filter(c => !ids.has(c.id));
     return missing.length > 0 ? [...missing, ...stored] : stored;
   } catch {
-    return DEMO_CONTRATS;
+    return cleared ? [] : DEMO_CONTRATS;
   }
 }
 

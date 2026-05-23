@@ -8,16 +8,18 @@ import { DEMO_SEANCES } from '../data/demoSeances';
 const STORAGE_KEY = 'mouvtrack_seances';
 
 function load(): Seance[] {
+  const cleared = !!localStorage.getItem('mouvtrack_demo_cleared');
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEMO_SEANCES;
+    if (!raw) return cleared ? [] : DEMO_SEANCES;
     const stored: Seance[] = JSON.parse(raw);
+    if (cleared) return stored;
     // Fusionner les séances demo manquantes
     const ids = new Set(stored.map(s => s.id));
     const missing = DEMO_SEANCES.filter(s => !ids.has(s.id));
     return missing.length > 0 ? [...missing, ...stored] : stored;
   } catch {
-    return DEMO_SEANCES;
+    return cleared ? [] : DEMO_SEANCES;
   }
 }
 

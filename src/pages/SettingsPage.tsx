@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Save, Upload, Plus, Trash2, RotateCcw } from 'lucide-react';
+import { Save, Upload, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { v4 as uuidv4 } from 'uuid';
 import PageWrapper from '../components/layout/PageWrapper';
@@ -237,7 +237,33 @@ function inputClass(error?: string) {
 export default function SettingsPage() {
   const [form, setForm] = useState<SettingsPraticien>(loadSettings);
   const [errors, setErrors] = useState<Partial<Record<keyof SettingsPraticien, string>>>({});
+  const [showResetModal, setShowResetModal] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  function handleResetDemo() {
+    localStorage.setItem('mouvtrack_demo_cleared', '1');
+    const dataKeys = [
+      'mouvtrack_participants',
+      'mouvtrack_seances',
+      'mouvtrack_contrats',
+      'mouvtrack_zones',
+      'notes_seances',
+      'mouvtrack_indispos_pierre',
+      'mouvtrack_question_templates',
+    ];
+    dataKeys.forEach(k => localStorage.removeItem(k));
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('brouillon_bilan_') || key.startsWith('bilan_en_cours_'))) {
+        toRemove.push(key);
+      }
+    }
+    toRemove.forEach(k => localStorage.removeItem(k));
+    setShowResetModal(false);
+    toast.success('Données supprimées — rechargement en cours…');
+    setTimeout(() => window.location.reload(), 800);
+  }
 
   function set(field: keyof SettingsPraticien, value: string) {
     setForm(f => ({ ...f, [field]: value }));
@@ -445,23 +471,15 @@ export default function SettingsPage() {
           <section>
             <SectionTitle title="Données de démonstration" />
             <p className="text-sm text-gray-500 mb-4">
-              Réinitialise les patients, séances et contrats avec les données de démonstration.
-              Utile pour recommencer une démo propre.
+              Supprime définitivement tous les patients, bilans, contrats et séances.
+              Les exercices et paramètres du praticien sont conservés.
             </p>
             <button
-              onClick={() => {
-                if (!confirm('Réinitialiser toutes les données de démonstration ? Vos modifications seront perdues.')) return;
-                localStorage.removeItem('mouvtrack_participants');
-                localStorage.removeItem('mouvtrack_seances');
-                localStorage.removeItem('mouvtrack_contrats');
-                localStorage.removeItem('mouvtrack_indispos_pierre');
-                toast.success('Données réinitialisées — rechargement en cours…');
-                setTimeout(() => window.location.reload(), 800);
-              }}
-              className="flex items-center gap-2 border border-orange-200 text-orange-600 hover:bg-orange-50 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
+              onClick={() => setShowResetModal(true)}
+              className="flex items-center gap-2 border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
             >
-              <RotateCcw size={15} />
-              Réinitialiser les données demo
+              <Trash2 size={15} />
+              🗑️ Réinitialiser les données de démo
             </button>
           </section>
 
@@ -510,6 +528,32 @@ export default function SettingsPage() {
         </div>
 
       </div>
+      {showResetModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-heading font-bold text-dark text-lg">Réinitialiser les données de démo</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Cette action supprime tous les patients, bilans et contrats.<br />
+              Les exercices et paramètres sont conservés.<br />
+              <span className="font-semibold text-red-600">Cette action est irréversible.</span>
+            </p>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setShowResetModal(false)}
+                className="flex-1 border border-gray-200 text-gray-600 hover:bg-gray-50 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleResetDemo}
+                className="flex-1 bg-red-600 text-white hover:bg-red-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+              >
+                Confirmer la réinitialisation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PageWrapper>
   );
 }
