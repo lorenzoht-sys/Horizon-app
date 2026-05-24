@@ -200,7 +200,7 @@ function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: 
 
   return (
     <div>
-      <div style={{ background: C.dark, paddingTop: 'calc(16px + env(safe-area-inset-top))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+      <div style={{ background: C.dark, paddingTop: 'max(52px, calc(16px + env(safe-area-inset-top)))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <img src="/logo-horizon.png.png?v=2" alt="Horizon" style={{ height: 24 }} onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }} />
