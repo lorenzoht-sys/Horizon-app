@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { useParticipants } from '../../hooks/useParticipants';
 import { useAgenda } from '../../hooks/useAgenda';
 import { useJournalSeance } from '../../hooks/useJournalSeance';
+import { useContrats } from '../../hooks/useContrats';
 import { RESSENTI_CONFIG } from '../../components/journal/NoteSeanceModal';
 import BilanStepper from '../../components/bilan/BilanStepper';
 import type { RessentiSeance, Bilan } from '../../types';
@@ -44,10 +45,96 @@ const card: React.CSSProperties = {
   border: `1px solid ${C.border}`, padding: '12px 14px', marginBottom: 8,
 };
 
+// ── Composants UI réutilisables ───────────────────────────────────────────────
+
+function CarteStatMobile({ icon, label, valeur }: { icon: string; label: string; valeur: number }) {
+  return (
+    <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '12px', textAlign: 'center' }}>
+      <div style={{ fontSize: 22, marginBottom: 4 }}>{icon}</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>{valeur}</div>
+      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{label}</div>
+    </div>
+  );
+}
+
+function BoutonActionMobile({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} style={{
+      width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+      padding: '13px 16px', background: 'white', border: `1px solid ${C.border}`,
+      borderRadius: 12, marginBottom: 8, cursor: 'pointer', textAlign: 'left',
+    }}>
+      <span style={{ fontSize: 22 }}>{icon}</span>
+      <span style={{ fontSize: 15, fontWeight: 600, color: C.text, flex: 1 }}>{label}</span>
+      <i className="ti ti-chevron-right" style={{ fontSize: 16, color: '#D0DCDC' }} />
+    </button>
+  );
+}
+
+function SectionMobile({ titre, children }: { titre: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, paddingLeft: 4 }}>
+        {titre}
+      </div>
+      <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ItemMobile({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} style={{
+      width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+      padding: '13px 16px', background: 'none', border: 'none',
+      borderBottom: `1px solid #F4FAFA`, cursor: 'pointer', textAlign: 'left',
+    }}>
+      <i className={`ti ${icon}`} style={{ fontSize: 20, color: C.primary }} aria-hidden="true" />
+      <span style={{ fontSize: 15, fontWeight: 500, color: C.text, flex: 1 }}>{label}</span>
+      <i className="ti ti-chevron-right" style={{ fontSize: 16, color: '#D0DCDC' }} aria-hidden="true" />
+    </button>
+  );
+}
+
+function InfoSection({ titre, children }: { titre: string; children: React.ReactNode }) {
+  return (
+    <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '14px 16px' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.primary, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+        {titre}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function InfoLigne({ icon, texte }: { icon: string; texte: string }) {
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080', marginBottom: 6 }}>
+      <i className={`ti ${icon}`} style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+      <span>{texte}</span>
+    </div>
+  );
+}
+
+function BoutonRapide({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} style={{
+      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+      padding: '8px 4px', background: C.bg, border: `1px solid ${C.border}`,
+      borderRadius: 10, cursor: 'pointer',
+    }}>
+      <i className={`ti ${icon}`} style={{ fontSize: 18, color: C.primary }} aria-hidden="true" />
+      <span style={{ fontSize: 10, color: '#5C7A7A', fontWeight: 600 }}>{label}</span>
+    </button>
+  );
+}
+
 // ── Bottom Nav ────────────────────────────────────────────────────────────────
 
 const NAV = [
-  { id: 'aujourdhui', icon: 'ti-calendar-today', label: "Aujourd'hui" },
+  { id: 'aujourdhui', icon: 'ti-home', label: 'Accueil' },
   { id: 'patients',   icon: 'ti-users',           label: 'Patients' },
   { id: 'saisie',     icon: 'ti-plus',            label: 'Saisie', principal: true },
   { id: 'tournee',    icon: 'ti-route',           label: 'Tournée' },
@@ -84,20 +171,39 @@ function BottomNav({ onglet, onChange }: { onglet: string; onChange: (id: string
 
 // ── EcranAujourdhui ───────────────────────────────────────────────────────────
 
-function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
+function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: string) => void; onNaviguerSaisie: () => void }) {
   const { participants } = useParticipants();
-  const { seancesDuJour, changerStatut } = useAgenda();
+  const { seances: allSeances, seancesDuJour, changerStatut } = useAgenda();
+  const { contratsARenouveler } = useContrats();
   const today = new Date().toISOString().slice(0, 10);
   const seances = seancesDuJour(today);
   const settings = (() => { try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); } catch { return {}; } })();
   const prenom = settings.prenom || 'Pierre';
+
+  // Séances de la semaine courante
+  const now = new Date();
+  const lundiOffset = now.getDay() === 0 ? -6 : 1 - now.getDay();
+  const lundi = new Date(now); lundi.setDate(now.getDate() + lundiOffset);
+  const dim = new Date(lundi); dim.setDate(lundi.getDate() + 6);
+  const seancesSemaine = allSeances.filter(s =>
+    s.date >= lundi.toISOString().slice(0, 10) &&
+    s.date <= dim.toISOString().slice(0, 10) &&
+    s.statut === 'planifiee'
+  );
+
+  // Patients sans bilan dans les 90 derniers jours
+  const il90j = new Date(); il90j.setDate(il90j.getDate() - 90);
+  const il90jFmt = il90j.toISOString().slice(0, 10);
+  const bilansAFaire = participants.filter(p =>
+    p.bilans.length === 0 || p.bilans.every(b => b.date < il90jFmt)
+  );
 
   return (
     <div>
       <div style={{ background: C.dark, padding: '20px 16px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <img src="/logo-horizon.png.png?v=2" alt="Horizon" style={{ height: 24 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <img src="/logo-horizon.png.png?v=2" alt="Horizon" style={{ height: 24 }} onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }} />
             <div style={{ fontSize: 18, fontWeight: 700, color: 'white', marginTop: 10 }}>Bonjour {prenom} 👋</div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{formatDateLong(new Date())}</div>
           </div>
@@ -109,9 +215,33 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void })
 
       <div style={{ padding: 16 }}>
         {seances.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: C.muted, fontSize: 14 }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>🌅</div>
-            Aucune séance aujourd'hui
+          <div>
+            {/* Stats rapides */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+              <CarteStatMobile icon="👥" label="Patients" valeur={participants.length} />
+              <CarteStatMobile icon="📋" label="Bilans à faire" valeur={bilansAFaire.length} />
+              <CarteStatMobile icon="📅" label="Séances semaine" valeur={seancesSemaine.length} />
+              <CarteStatMobile icon="⏰" label="Contrats fin proche" valeur={contratsARenouveler.length} />
+            </div>
+
+            <div style={{ textAlign: 'center', padding: '16px 0 20px', color: C.muted, fontSize: 14 }}>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>🌅</div>
+              Aucune séance aujourd'hui
+            </div>
+
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                Actions rapides
+              </div>
+              <BoutonActionMobile icon="👤" label="Nouveau patient" onClick={onNaviguerSaisie} />
+              <BoutonActionMobile icon="📋" label="Nouveau bilan" onClick={onNaviguerSaisie} />
+            </div>
+
+            {contratsARenouveler.length > 0 && (
+              <div style={{ marginTop: 16, background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 12, padding: '12px 14px', fontSize: 13, color: '#92400E', fontWeight: 600 }}>
+                ⏰ {contratsARenouveler.length} contrat{contratsARenouveler.length > 1 ? 's' : ''} à renouveler bientôt
+              </div>
+            )}
           </div>
         ) : seances.map(s => {
           const p = participants.find(x => x.id === s.participantId);
@@ -172,6 +302,11 @@ function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
                 <div style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>
                   {calcAge(p.dateNaissance)} ans{prochaine ? ` · ${formatDateCourt(prochaine.date)}` : ''}
                 </div>
+                {(p.contexteClinic || p.pathologie) && (
+                  <div style={{ fontSize: 11, color: '#5C7A7A', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {p.contexteClinic || p.pathologie}
+                  </div>
+                )}
               </div>
               <i className="ti ti-chevron-right" style={{ fontSize: 18, color: '#D0DCDC' }} />
             </div>
@@ -497,34 +632,209 @@ function EcranTournee() {
   );
 }
 
-// ── EcranPlus ─────────────────────────────────────────────────────────────────
+// ── EcranSettings ─────────────────────────────────────────────────────────────
 
-function EcranPlus({ onLogout }: { onLogout: () => void }) {
-  const items = [
-    { icon: 'ti-settings', label: 'Paramètres', path: '/settings' },
-    { icon: 'ti-map-pin',  label: 'Carte',       path: '/map' },
-  ];
+function EcranSettings({ onBack }: { onBack: () => void }) {
+  const inp: React.CSSProperties = { width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, outline: 'none', marginBottom: 14, boxSizing: 'border-box', background: 'white' };
+  const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
+
+  const [form, setForm] = useState(() => {
+    const defaults = { prenom: '', nom: '', titre: 'Enseignant en Activité Physique Adaptée', email: '', telephone: '', siret: '', numeroSAP: '', villeSignature: '', tarifHoraire: '45' };
+    try { return { ...defaults, ...JSON.parse(localStorage.getItem('settings_praticien') || '{}') }; }
+    catch { return defaults; }
+  });
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('anthropic_api_key') ?? '');
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
+
+  function set(field: string, value: string) { setForm(f => ({ ...f, [field]: value })); }
+
+  function sauvegarder() {
+    if (!form.prenom.trim() || !form.nom.trim()) { toast.error('Prénom et nom requis'); return; }
+    const existing = (() => { try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); } catch { return {}; } })();
+    localStorage.setItem('settings_praticien', JSON.stringify({ ...existing, ...form }));
+    if (apiKey.trim()) localStorage.setItem('anthropic_api_key', apiKey.trim());
+    else localStorage.removeItem('anthropic_api_key');
+    toast.success('Paramètres enregistrés ✅');
+    onBack();
+  }
+
+  function reinitialiserDonnees() {
+    localStorage.setItem('mouvtrack_demo_cleared', '1');
+    ['mouvtrack_participants', 'mouvtrack_seances', 'mouvtrack_contrats',
+     'mouvtrack_zones', 'notes_seances', 'mouvtrack_indispos_pierre',
+     'mouvtrack_question_templates'].forEach(k => localStorage.removeItem(k));
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('brouillon_bilan_') || key.startsWith('bilan_en_cours_'))) toRemove.push(key);
+    }
+    toRemove.forEach(k => localStorage.removeItem(k));
+    toast.success('Données supprimées — rechargement…');
+    setTimeout(() => window.location.reload(), 800);
+  }
+
   return (
-    <div style={{ padding: 16 }}>
-      <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 16 }}>Plus</div>
-      {items.map(item => (
-        <button key={item.path} onClick={() => window.location.assign(item.path)}
-          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: 'white', border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 8, cursor: 'pointer', textAlign: 'left' }}>
-          <i className={`ti ${item.icon}`} style={{ fontSize: 20, color: C.primary }} />
-          <span style={{ fontSize: 15, fontWeight: 500, color: C.text, flex: 1 }}>{item.label}</span>
-          <i className="ti ti-chevron-right" style={{ fontSize: 16, color: '#D0DCDC' }} />
+    <div style={{ minHeight: '100vh', background: C.bg }}>
+      <div style={{ background: C.dark, padding: 16 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
+          <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} aria-hidden="true" />
         </button>
-      ))}
-      <button onClick={onLogout}
-        style={{ width: '100%', padding: '14px 16px', marginTop: 8, background: 'none', border: `1px solid ${C.border}`, borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14, color: '#E85050', fontSize: 15 }}>
-        <i className="ti ti-logout" style={{ fontSize: 20 }} />
-        Déconnexion
-      </button>
+        <div style={{ fontSize: 18, fontWeight: 700, color: 'white' }}>Paramètres</div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Profil et informations professionnelles</div>
+      </div>
+
+      <div style={{ padding: 16, paddingBottom: 40 }}>
+
+        <InfoSection titre="Mon profil">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 0 }}>
+            <div>
+              <label style={lbl}>Prénom *</label>
+              <input value={form.prenom} onChange={e => set('prenom', e.target.value)} placeholder="Pierre" style={inp} />
+            </div>
+            <div>
+              <label style={lbl}>Nom *</label>
+              <input value={form.nom} onChange={e => set('nom', e.target.value)} placeholder="Clavier" style={inp} />
+            </div>
+          </div>
+          <label style={lbl}>Titre professionnel</label>
+          <input value={form.titre} onChange={e => set('titre', e.target.value)} placeholder="Enseignant APA" style={inp} />
+          <label style={lbl}>Email</label>
+          <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="pierre@mouvapa.com" style={inp} />
+          <label style={lbl}>Téléphone</label>
+          <input type="tel" value={form.telephone} onChange={e => set('telephone', e.target.value)} placeholder="06 12 34 56 78" style={{ ...inp, marginBottom: 0 }} />
+        </InfoSection>
+
+        <div style={{ height: 12 }} />
+
+        <InfoSection titre="Informations légales">
+          <label style={lbl}>Numéro SIRET</label>
+          <input value={form.siret} onChange={e => set('siret', e.target.value)} placeholder="XXX XXX XXX XXXXX" style={inp} />
+          <label style={lbl}>Numéro SAP</label>
+          <input value={form.numeroSAP} onChange={e => set('numeroSAP', e.target.value)} placeholder="SAP XXXXXXXXX" style={inp} />
+          <label style={lbl}>Ville de signature</label>
+          <input value={form.villeSignature} onChange={e => set('villeSignature', e.target.value)} placeholder="Paris" style={inp} />
+          <label style={lbl}>Tarif horaire (€)</label>
+          <input type="number" value={form.tarifHoraire} onChange={e => set('tarifHoraire', e.target.value)} placeholder="45" style={{ ...inp, marginBottom: 0 }} />
+        </InfoSection>
+
+        <div style={{ height: 12 }} />
+
+        <InfoSection titre="🧠 Clé API Claude (IA)">
+          <div style={{ background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#92400E', marginBottom: 10 }}>
+            Nécessaire pour les interprétations automatiques des bilans.
+          </div>
+          <label style={lbl}>Clé API (sk-ant-...)</label>
+          <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-ant-api03-..." style={{ ...inp, fontFamily: 'monospace', marginBottom: 0 }} />
+          {apiKey && <div style={{ fontSize: 12, color: '#1D9E75', marginTop: 6 }}>✓ Clé configurée</div>}
+        </InfoSection>
+
+        <button onClick={sauvegarder} style={{ width: '100%', padding: 16, background: C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginTop: 16 }}>
+          💾 Enregistrer
+        </button>
+
+        {/* Zone danger */}
+        <div style={{ marginTop: 28, borderTop: `1px solid ${C.border}`, paddingTop: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#E85050', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+            Zone danger
+          </div>
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #FECACA', padding: '14px 16px' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>
+              🗑️ Supprimer les données patients
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
+              Supprime tous les patients, bilans, contrats et séances. Les exercices et paramètres sont conservés.
+            </div>
+            <button onClick={() => setShowConfirmReset(true)} style={{ padding: '10px 16px', background: 'none', border: '1px solid #E85050', borderRadius: 10, color: '#E85050', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+              Réinitialiser les données
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Modal de confirmation */}
+      {showConfirmReset && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24 }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>
+              ⚠️ Confirmer la suppression
+            </div>
+            <p style={{ fontSize: 14, color: '#4A6080', lineHeight: 1.6, marginBottom: 20 }}>
+              Tous les <strong>patients, bilans, contrats et séances</strong> seront supprimés.<br />
+              Les exercices et paramètres sont conservés.<br />
+              <strong style={{ color: '#E85050' }}>Cette action est irréversible.</strong>
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setShowConfirmReset(false)} style={{ flex: 1, padding: '12px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
+                Annuler
+              </button>
+              <button onClick={reinitialiserDonnees} style={{ flex: 1, padding: '12px', background: '#E85050', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer' }}>
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Fiche patient mobile ───────────────────────────────────────────────────────
+// ── EcranPlus ─────────────────────────────────────────────────────────────────
+
+function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout: () => void; onOuvrirSettings: () => void; onNaviguerOnglet: (id: string) => void }) {
+  const settings = (() => { try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); } catch { return {}; } })();
+  const initiales = `${(settings.prenom || 'P')[0]}${(settings.nom || '')[0] || ''}`;
+
+  return (
+    <div style={{ padding: 16 }}>
+
+      {/* Profil praticien */}
+      <div style={{ background: C.dark, borderRadius: 14, padding: '16px', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+        <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: 'white', flexShrink: 0 }}>
+          {initiales}
+        </div>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>
+            {settings.prenom || 'Praticien'}{settings.nom ? ` ${settings.nom}` : ''}
+          </div>
+          {settings.titre && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>{settings.titre}</div>}
+        </div>
+      </div>
+
+      {/* Section Mon activité */}
+      <SectionMobile titre="Mon activité">
+        <ItemMobile icon="ti-route" label="Tournée du jour" onClick={() => onNaviguerOnglet('tournee')} />
+        <ItemMobile icon="ti-calendar" label="Agenda complet" onClick={() => toast('Accessible depuis l\'ordinateur 💻', { icon: 'ℹ️' })} />
+        <ItemMobile icon="ti-map-pin" label="Carte patients" onClick={() => toast('Accessible depuis l\'ordinateur 💻', { icon: 'ℹ️' })} />
+      </SectionMobile>
+
+      {/* Section Contenu */}
+      <SectionMobile titre="Contenu">
+        <ItemMobile icon="ti-dumbbell" label="Bibliothèque exercices" onClick={() => toast('Accessible depuis l\'ordinateur 💻', { icon: 'ℹ️' })} />
+      </SectionMobile>
+
+      {/* Section Compte */}
+      <SectionMobile titre="Compte">
+        <ItemMobile icon="ti-settings" label="Paramètres" onClick={onOuvrirSettings} />
+      </SectionMobile>
+
+      {/* Déconnexion */}
+      <button onClick={onLogout} style={{
+        width: '100%', padding: '14px 16px', marginTop: 8,
+        background: 'none', border: `1px solid ${C.border}`,
+        borderRadius: 12, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 14,
+        color: '#E85050', fontSize: 15,
+      }}>
+        <i className="ti ti-logout" style={{ fontSize: 20 }} aria-hidden="true" />
+        Déconnexion
+      </button>
+
+      <div style={{ textAlign: 'center', marginTop: 20, fontSize: 11, color: C.muted }}>
+        Horizon v1.0
+      </div>
+    </div>
+  );
+}
 
 // ── Détail bilan mobile ────────────────────────────────────────────────────────
 
@@ -561,7 +871,6 @@ function DetailBilanMobile({ bilan, onBack }: { bilan: import('../../types').Bil
 
       <div style={{ padding: 16 }}>
 
-        {/* Résultats des tests */}
         {TESTS.length > 0 && (
           <>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Résultats des tests</div>
@@ -576,7 +885,6 @@ function DetailBilanMobile({ bilan, onBack }: { bilan: import('../../types').Bil
           </>
         )}
 
-        {/* Notes professionnelles */}
         {bilan.notesProfessionnelles && (
           <>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Notes professionnelles</div>
@@ -586,7 +894,6 @@ function DetailBilanMobile({ bilan, onBack }: { bilan: import('../../types').Bil
           </>
         )}
 
-        {/* Objectifs suivants */}
         {bilan.objectifsSuivants && (
           <>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Objectifs suivants</div>
@@ -596,7 +903,6 @@ function DetailBilanMobile({ bilan, onBack }: { bilan: import('../../types').Bil
           </>
         )}
 
-        {/* Interprétation IA */}
         {bilan.interpretationIA && (
           <>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Analyse IA</div>
@@ -627,49 +933,165 @@ function DetailBilanMobile({ bilan, onBack }: { bilan: import('../../types').Bil
 function FichePatientMobile({ participantId, onBack }: { participantId: string; onBack: () => void }) {
   const { participants } = useParticipants();
   const { notesParPatient } = useJournalSeance();
+  const { seances } = useAgenda();
+  const { contratActifDeParticipant } = useContrats();
   const p = participants.find(x => x.id === participantId);
   const [onglet, setOnglet] = useState('infos');
   const [bilanDetail, setBilanDetail] = useState<import('../../types').Bilan | null>(null);
   if (!p) return null;
   if (bilanDetail) return <DetailBilanMobile bilan={bilanDetail} onBack={() => setBilanDetail(null)} />;
+
   const notes = notesParPatient(p.id);
   const sortedBilans = [...p.bilans].sort((a, b) => b.date.localeCompare(a.date));
+  const contrat = contratActifDeParticipant(participantId);
+  const today = new Date().toISOString().slice(0, 10);
+  const prochaineSeance = seances
+    .filter(s => s.participantId === participantId && s.date >= today && s.statut === 'planifiee')
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+
+  const ONGLETS = [
+    { id: 'infos',   label: 'Infos' },
+    { id: 'sante',   label: 'Santé' },
+    { id: 'bilans',  label: 'Bilans' },
+    { id: 'journal', label: 'Journal' },
+  ];
 
   return (
     <div>
       <div style={{ background: C.dark, padding: 16 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', marginBottom: 12, padding: 0 }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} />
+          <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} aria-hidden="true" />
         </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 48, height: 48, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: 'white' }}>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <div style={{ width: 48, height: 48, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: 'white', flexShrink: 0 }}>
             {p.prenom[0]}{p.nom[0]}
           </div>
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, color: 'white' }}>{p.prenom} {p.nom}</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{calcAge(p.dateNaissance)} ans{p.pathologie ? ` · ${p.pathologie.slice(0, 30)}` : ''}</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
+              {calcAge(p.dateNaissance)} ans
+              {p.taille ? ` · ${p.taille} cm` : ''}
+              {p.poids ? ` · ${p.poids} kg` : ''}
+            </div>
+            {(p.contexteClinic || p.pathologie) && (
+              <div style={{ marginTop: 6, background: 'rgba(43,191,191,0.2)', border: '1px solid rgba(43,191,191,0.3)', borderRadius: 20, padding: '2px 10px', fontSize: 11, color: C.primary, display: 'inline-block' }}>
+                {p.contexteClinic || p.pathologie}
+              </div>
+            )}
           </div>
+        </div>
+
+        {/* Stats rapides */}
+        <div style={{ display: 'flex', gap: 8 }}>
+          {contrat && (
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.08)', borderRadius: 10, padding: '8px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'white' }}>{contrat.nombreSeancesRealisees}/{contrat.nombreSeancesTotal}</div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>séances</div>
+            </div>
+          )}
+          {sortedBilans[0] && (
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.08)', borderRadius: 10, padding: '8px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'white' }}>{formatDateCourt(sortedBilans[0].date)}</div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>dernier bilan</div>
+            </div>
+          )}
+          {prochaineSeance && (
+            <div style={{ flex: 1, background: 'rgba(43,191,191,0.2)', borderRadius: 10, padding: '8px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.primary }}>{prochaineSeance.heureDebut}</div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{formatDateCourt(prochaineSeance.date)}</div>
+            </div>
+          )}
         </div>
       </div>
 
-      <div style={{ display: 'flex', background: 'white', borderBottom: `1px solid ${C.border}` }}>
-        {[{ id: 'infos', label: 'Infos' }, { id: 'bilans', label: 'Bilans' }, { id: 'journal', label: 'Journal' }].map(o => (
+      {/* Actions rapides */}
+      <div style={{ display: 'flex', gap: 8, padding: '12px 16px', background: 'white', borderBottom: `1px solid ${C.border}` }}>
+        <BoutonRapide icon="ti-clipboard" label="Bilan" onClick={() => {}} />
+        <BoutonRapide icon="ti-notes" label="Note" onClick={() => {}} />
+        {p.adresseRue && (
+          <BoutonRapide icon="ti-map-pin" label="Maps" onClick={() => ouvrirMaps(`${p.adresseRue} ${p.adresseVille || ''}`)} />
+        )}
+      </div>
+
+      {/* Onglets */}
+      <div style={{ display: 'flex', background: 'white', borderBottom: `1px solid ${C.border}`, position: 'sticky', top: 0, zIndex: 10 }}>
+        {ONGLETS.map(o => (
           <button key={o.id} onClick={() => setOnglet(o.id)}
-            style={{ flex: 1, padding: '12px 4px', background: 'none', border: 'none', borderBottom: `2px solid ${onglet === o.id ? C.primary : 'transparent'}`, color: onglet === o.id ? C.primary : C.muted, fontWeight: onglet === o.id ? 700 : 400, fontSize: 13, cursor: 'pointer' }}>
+            style={{ flex: 1, padding: '11px 2px', background: 'none', border: 'none', borderBottom: `2px solid ${onglet === o.id ? C.primary : 'transparent'}`, color: onglet === o.id ? C.primary : C.muted, fontWeight: onglet === o.id ? 700 : 400, fontSize: 12, cursor: 'pointer' }}>
             {o.label}
           </button>
         ))}
       </div>
 
       <div style={{ padding: 16 }}>
+
         {onglet === 'infos' && (
-          <div>
-            {p.telephone && <div style={{ ...card }}><span style={{ fontSize: 12, color: C.muted }}>Téléphone</span><div style={{ fontWeight: 600, color: C.text }}>{p.telephone}</div></div>}
-            {p.email && <div style={{ ...card }}><span style={{ fontSize: 12, color: C.muted }}>Email</span><div style={{ fontWeight: 600, color: C.text }}>{p.email}</div></div>}
-            {p.adresseRue && <div style={{ ...card }}><span style={{ fontSize: 12, color: C.muted }}>Adresse</span><div style={{ fontWeight: 600, color: C.text }}>{p.adresseRue}, {p.adresseCodePostal} {p.adresseVille}</div></div>}
-            {p.pathologie && <div style={{ ...card }}><span style={{ fontSize: 12, color: C.muted }}>Pathologie</span><div style={{ fontWeight: 600, color: C.text }}>{p.pathologie}</div></div>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <InfoSection titre="Coordonnées">
+              {p.telephone && <InfoLigne icon="ti-phone" texte={p.telephone} />}
+              {p.email && <InfoLigne icon="ti-mail" texte={p.email} />}
+              {p.adresseRue && <InfoLigne icon="ti-map-pin" texte={`${p.adresseRue}, ${p.adresseCodePostal || ''} ${p.adresseVille || ''}`} />}
+            </InfoSection>
+
+            {contrat && (
+              <InfoSection titre="Contrat actif">
+                <InfoLigne icon="ti-calendar" texte={`${contrat.joursFixe.join(', ')} à ${contrat.heureDebut} · ${contrat.dureeMinutes} min`} />
+                <InfoLigne icon="ti-clock" texte={`${new Date(contrat.dateDebut + 'T12:00').toLocaleDateString('fr-FR')} → ${new Date(contrat.dateFin + 'T12:00').toLocaleDateString('fr-FR')}`} />
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                    <span style={{ color: C.muted }}>Progression</span>
+                    <span style={{ fontWeight: 700, color: C.text }}>{contrat.nombreSeancesRealisees}/{contrat.nombreSeancesTotal}</span>
+                  </div>
+                  <div style={{ height: 5, background: C.border, borderRadius: 3 }}>
+                    <div style={{ height: '100%', width: `${(contrat.nombreSeancesRealisees / contrat.nombreSeancesTotal) * 100}%`, background: C.primary, borderRadius: 3 }} />
+                  </div>
+                </div>
+              </InfoSection>
+            )}
+
+            {(p.activitesSouhaitees?.length || p.objectifsPatient) && (
+              <InfoSection titre="Objectifs">
+                {p.activitesSouhaitees?.length ? (
+                  <div style={{ fontSize: 13, color: '#4A6080' }}>🎯 {p.activitesSouhaitees.join(' · ')}</div>
+                ) : null}
+                {p.objectifsPatient && (
+                  <div style={{ fontSize: 13, color: '#4A6080', marginTop: 4, fontStyle: 'italic' }}>"{p.objectifsPatient}"</div>
+                )}
+              </InfoSection>
+            )}
+
+            {p.pathologie && !p.contexteClinic && (
+              <InfoSection titre="Pathologie">
+                <div style={{ fontSize: 13, color: '#4A6080' }}>{p.pathologie}</div>
+              </InfoSection>
+            )}
           </div>
         )}
+
+        {onglet === 'sante' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {p.antecedentsMedicaux ? (
+              <InfoSection titre="Antécédents médicaux">
+                <div style={{ fontSize: 13, color: '#4A6080', lineHeight: 1.6 }}>{p.antecedentsMedicaux}</div>
+              </InfoSection>
+            ) : null}
+            {p.antecedentsChirurgicaux ? (
+              <InfoSection titre="Antécédents chirurgicaux">
+                <div style={{ fontSize: 13, color: '#4A6080', lineHeight: 1.6 }}>{p.antecedentsChirurgicaux}</div>
+              </InfoSection>
+            ) : null}
+            {p.allergies ? (
+              <InfoSection titre="Allergies">
+                <div style={{ fontSize: 13, color: '#4A6080' }}>{p.allergies}</div>
+              </InfoSection>
+            ) : null}
+            {!p.antecedentsMedicaux && !p.antecedentsChirurgicaux && !p.allergies && (
+              <div style={{ color: C.muted, textAlign: 'center', padding: 30 }}>Aucune information de santé renseignée</div>
+            )}
+          </div>
+        )}
+
         {onglet === 'bilans' && (
           <div>
             {sortedBilans.length === 0 ? <div style={{ color: C.muted, textAlign: 'center', padding: 30 }}>Aucun bilan</div> :
@@ -688,6 +1110,7 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
               ))}
           </div>
         )}
+
         {onglet === 'journal' && (
           <div>
             {notes.length === 0 ? <div style={{ color: C.muted, textAlign: 'center', padding: 30 }}>Aucune note</div> :
@@ -718,23 +1141,26 @@ interface Props { onLogout: () => void }
 export default function AppMobile({ onLogout }: Props) {
   const [onglet, setOnglet] = useState('aujourdhui');
   const [ficheId, setFicheId] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const shell: React.CSSProperties = { maxWidth: 480, margin: '0 auto', minHeight: '100vh', background: C.bg, fontFamily: "'Nunito',sans-serif" };
+
+  if (showSettings) {
+    return <div style={shell}><EcranSettings onBack={() => setShowSettings(false)} /></div>;
+  }
 
   if (ficheId) {
-    return (
-      <div style={{ maxWidth: 480, margin: '0 auto', minHeight: '100vh', background: C.bg, fontFamily: "'Nunito',sans-serif" }}>
-        <FichePatientMobile participantId={ficheId} onBack={() => setFicheId(null)} />
-      </div>
-    );
+    return <div style={shell}><FichePatientMobile participantId={ficheId} onBack={() => setFicheId(null)} /></div>;
   }
 
   return (
-    <div style={{ maxWidth: 480, margin: '0 auto', minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column', fontFamily: "'Nunito',sans-serif" }}>
+    <div style={{ ...shell, display: 'flex', flexDirection: 'column' }}>
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 80 }}>
-        {onglet === 'aujourdhui' && <EcranAujourdhui onVoirFiche={setFicheId} />}
+        {onglet === 'aujourdhui' && <EcranAujourdhui onVoirFiche={setFicheId} onNaviguerSaisie={() => setOnglet('saisie')} />}
         {onglet === 'patients'   && <EcranPatients onVoirFiche={setFicheId} />}
         {onglet === 'saisie'     && <EcranSaisie />}
         {onglet === 'tournee'    && <EcranTournee />}
-        {onglet === 'plus'       && <EcranPlus onLogout={onLogout} />}
+        {onglet === 'plus'       && <EcranPlus onLogout={onLogout} onOuvrirSettings={() => setShowSettings(true)} onNaviguerOnglet={setOnglet} />}
       </div>
       <BottomNav onglet={onglet} onChange={setOnglet} />
     </div>
