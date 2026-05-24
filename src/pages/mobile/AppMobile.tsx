@@ -646,7 +646,7 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('anthropic_api_key') ?? '');
   const [showConfirmReset, setShowConfirmReset] = useState(false);
 
-  function set(field: string, value: string) { setForm(f => ({ ...f, [field]: value })); }
+  function set(field: string, value: string) { setForm((f: Record<string, string>) => ({ ...f, [field]: value })); }
 
   function sauvegarder() {
     if (!form.prenom.trim() || !form.nom.trim()) { toast.error('Prénom et nom requis'); return; }
