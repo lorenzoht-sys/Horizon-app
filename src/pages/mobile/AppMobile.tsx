@@ -200,7 +200,7 @@ function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: 
 
   return (
     <div>
-      <div style={{ background: C.dark, padding: '20px 16px 16px' }}>
+      <div style={{ background: C.dark, paddingTop: 'calc(16px + env(safe-area-inset-top))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <img src="/logo-horizon.png.png?v=2" alt="Horizon" style={{ height: 24 }} onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }} />
@@ -283,7 +283,7 @@ function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
 
   return (
     <div>
-      <div style={{ background: 'white', padding: 16, borderBottom: `1px solid ${C.border}`, position: 'sticky', top: 0, zIndex: 10 }}>
+      <div style={{ background: 'white', paddingTop: 'calc(16px + env(safe-area-inset-top))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}`, position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>Mes patients</div>
         <input type="search" placeholder="Rechercher..." value={q} onChange={e => setQ(e.target.value)}
           style={{ width: '100%', padding: '10px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, background: C.bg, outline: 'none', boxSizing: 'border-box' }} />
@@ -589,7 +589,7 @@ function EcranTournee() {
 
   return (
     <div>
-      <div style={{ background: 'white', padding: 16, borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ background: 'white', paddingTop: 'calc(16px + env(safe-area-inset-top))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}` }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 4 }}>Ma tournée</div>
         <div style={{ fontSize: 12, color: C.muted }}>{seances.length} patient{seances.length !== 1 ? 's' : ''} · {formatDateLong(new Date())}</div>
       </div>
@@ -675,7 +675,7 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg }}>
-      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top) + 20px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+      <div style={{ background: C.dark, paddingTop: 'calc(16px + env(safe-area-inset-top))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
           <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} aria-hidden="true" />
         </button>
@@ -859,7 +859,7 @@ function DetailBilanMobile({ bilan, onBack }: { bilan: import('../../types').Bil
 
   return (
     <div>
-      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top) + 20px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+      <div style={{ background: C.dark, paddingTop: 'calc(16px + env(safe-area-inset-top))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
           <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} />
         </button>
@@ -958,7 +958,7 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
 
   return (
     <div>
-      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top) + 20px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+      <div style={{ background: C.dark, paddingTop: 'calc(16px + env(safe-area-inset-top))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', marginBottom: 12, padding: 0 }}>
           <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} aria-hidden="true" />
         </button>

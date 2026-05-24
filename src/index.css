@@ -18,7 +18,10 @@
 }
 
 /* ── PWA safe-area ── */
-body { padding-bottom: env(safe-area-inset-bottom); }
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
 
 /* ── Sidebar Horizon ── */
 .sidebar-nav-item:hover {
