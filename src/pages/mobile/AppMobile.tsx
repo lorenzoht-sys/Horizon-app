@@ -200,7 +200,7 @@ function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: 
 
   return (
     <div>
-      <div style={{ background: C.dark, paddingTop: 'max(52px, calc(16px + env(safe-area-inset-top)))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <img src="/logo-horizon.png.png?v=2" alt="Horizon" style={{ height: 24 }} onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }} />
@@ -283,7 +283,7 @@ function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
 
   return (
     <div>
-      <div style={{ background: 'white', paddingTop: 'max(52px, calc(16px + env(safe-area-inset-top)))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}`, position: 'sticky', top: 0, zIndex: 10 }}>
+      <div style={{ background: 'white', paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}`, position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>Mes patients</div>
         <input type="search" placeholder="Rechercher..." value={q} onChange={e => setQ(e.target.value)}
           style={{ width: '100%', padding: '10px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, background: C.bg, outline: 'none', boxSizing: 'border-box' }} />
@@ -333,7 +333,7 @@ function EcranSaisie() {
 function ChoixSaisie({ onNote, onPatient, onBilan }: { onNote: () => void; onPatient: () => void; onBilan: () => void }) {
   const btn: React.CSSProperties = { width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: 16, background: 'white', border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 10, cursor: 'pointer', textAlign: 'left' };
   return (
-    <div style={{ paddingTop: 'max(52px, calc(20px + env(safe-area-inset-top)))', paddingLeft: 20, paddingRight: 20, paddingBottom: 20 }}>
+    <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 20, paddingRight: 20, paddingBottom: 20 }}>
       <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 20 }}>Que saisir ?</div>
       <button onClick={onNote} style={btn}>
         <span style={{ fontSize: 28 }}>📝</span>
@@ -382,7 +382,7 @@ function NouveauPatientMobile({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div style={{ paddingTop: 'max(52px, calc(16px + env(safe-area-inset-top)))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+    <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
           <i className="ti ti-arrow-left" style={{ fontSize: 22, color: C.text }} />
@@ -424,7 +424,7 @@ function NouveauBilanMobile({ onBack }: { onBack: () => void }) {
 
   if (etape === 'bilan' && participant) {
     return (
-      <div style={{ paddingTop: 'max(52px, calc(16px + env(safe-area-inset-top)))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+      <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
           <button onClick={() => setEtape('choix')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
             <i className="ti ti-arrow-left" style={{ fontSize: 22, color: C.text }} />
@@ -450,7 +450,7 @@ function NouveauBilanMobile({ onBack }: { onBack: () => void }) {
   const label: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
 
   return (
-    <div style={{ paddingTop: 'max(52px, calc(16px + env(safe-area-inset-top)))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+    <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
           <i className="ti ti-arrow-left" style={{ fontSize: 22, color: C.text }} />
@@ -519,7 +519,7 @@ function NoteRapide({ onBack }: { onBack: () => void }) {
   const label: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
 
   return (
-    <div style={{ paddingTop: 'max(52px, calc(16px + env(safe-area-inset-top)))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+    <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
           <i className="ti ti-arrow-left" style={{ fontSize: 22, color: C.text }} />
@@ -589,7 +589,7 @@ function EcranTournee() {
 
   return (
     <div>
-      <div style={{ background: 'white', paddingTop: 'max(52px, calc(16px + env(safe-area-inset-top)))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ background: 'white', paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}` }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 4 }}>Ma tournée</div>
         <div style={{ fontSize: 12, color: C.muted }}>{seances.length} patient{seances.length !== 1 ? 's' : ''} · {formatDateLong(new Date())}</div>
       </div>
@@ -675,7 +675,7 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg }}>
-      <div style={{ background: C.dark, paddingTop: 'max(52px, calc(16px + env(safe-area-inset-top)))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
           <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} aria-hidden="true" />
         </button>
@@ -785,7 +785,7 @@ function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout:
   const initiales = `${(settings.prenom || 'P')[0]}${(settings.nom || '')[0] || ''}`;
 
   return (
-    <div style={{ paddingTop: 'max(52px, calc(16px + env(safe-area-inset-top)))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+    <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
 
       {/* Profil praticien */}
       <div style={{ background: C.dark, borderRadius: 14, padding: '16px', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
@@ -859,7 +859,7 @@ function DetailBilanMobile({ bilan, onBack }: { bilan: import('../../types').Bil
 
   return (
     <div>
-      <div style={{ background: C.dark, paddingTop: 'max(52px, calc(16px + env(safe-area-inset-top)))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
           <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} />
         </button>
@@ -958,7 +958,7 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
 
   return (
     <div>
-      <div style={{ background: C.dark, paddingTop: 'max(52px, calc(16px + env(safe-area-inset-top)))', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', marginBottom: 12, padding: 0 }}>
           <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} aria-hidden="true" />
         </button>
