@@ -435,7 +435,7 @@ export default function ParticipantProfile() {
       </Link>
 
       {/* ── HEADER ──────────────────────────────────────────── */}
-      <div className="rounded-2xl mb-4" style={{ background: '#0D2B4B' }}>
+      <div className="rounded-2xl mb-4" style={{ background: '#0D2B2B' }}>
         <div className="p-5">
 
           {/* Ligne 1 : avatar + identité + menu */}

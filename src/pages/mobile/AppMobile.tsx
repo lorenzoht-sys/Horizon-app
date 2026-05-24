@@ -31,7 +31,7 @@ function ouvrirMaps(adresse: string) {
 }
 
 const C = { // colors
-  dark:    '#032c28',
+  dark:    '#0D2B2B',
   primary: '#2BBFBF',
   green:   '#1ca48c',
   bg:      '#F4FAFA',
