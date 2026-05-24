@@ -675,7 +675,7 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg }}>
-      <div style={{ background: C.dark, padding: 16 }}>
+      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top) + 20px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
           <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} aria-hidden="true" />
         </button>
@@ -859,7 +859,7 @@ function DetailBilanMobile({ bilan, onBack }: { bilan: import('../../types').Bil
 
   return (
     <div>
-      <div style={{ background: C.dark, padding: 16 }}>
+      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top) + 20px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
           <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} />
         </button>
@@ -958,7 +958,7 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
 
   return (
     <div>
-      <div style={{ background: C.dark, padding: 16 }}>
+      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top) + 20px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', marginBottom: 12, padding: 0 }}>
           <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} aria-hidden="true" />
         </button>
