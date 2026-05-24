@@ -50,7 +50,7 @@ const card: React.CSSProperties = {
 function CarteStatMobile({ icon, label, valeur }: { icon: string; label: string; valeur: number }) {
   return (
     <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '12px', textAlign: 'center' }}>
-      <div style={{ fontSize: 22, marginBottom: 4 }}>{icon}</div>
+      <i className={`ti ${icon}`} style={{ fontSize: 28, color: C.primary, marginBottom: 4, display: 'block' }} />
       <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>{valeur}</div>
       <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{label}</div>
     </div>
@@ -218,14 +218,14 @@ function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: 
           <div>
             {/* Stats rapides */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
-              <CarteStatMobile icon="👥" label="Patients" valeur={participants.length} />
-              <CarteStatMobile icon="📋" label="Bilans à faire" valeur={bilansAFaire.length} />
-              <CarteStatMobile icon="📅" label="Séances semaine" valeur={seancesSemaine.length} />
-              <CarteStatMobile icon="⏰" label="Contrats fin proche" valeur={contratsARenouveler.length} />
+              <CarteStatMobile icon="ti-users" label="Patients" valeur={participants.length} />
+              <CarteStatMobile icon="ti-clipboard-list" label="Bilans à faire" valeur={bilansAFaire.length} />
+              <CarteStatMobile icon="ti-calendar" label="Séances semaine" valeur={seancesSemaine.length} />
+              <CarteStatMobile icon="ti-alarm" label="Contrats fin proche" valeur={contratsARenouveler.length} />
             </div>
 
             <div style={{ textAlign: 'center', padding: '16px 0 20px', color: C.muted, fontSize: 14 }}>
-              <div style={{ fontSize: 36, marginBottom: 8 }}>🌅</div>
+              <i className="ti ti-calendar-off" style={{ fontSize: 48, color: '#8FA8A8', display: 'block', marginBottom: 8 }} />
               Aucune séance aujourd'hui
             </div>
 
