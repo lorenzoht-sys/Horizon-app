@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useParticipants } from '../../hooks/useParticipants';
 import { useAgenda } from '../../hooks/useAgenda';
@@ -783,6 +783,42 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
 function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout: () => void; onOuvrirSettings: () => void; onNaviguerOnglet: (id: string) => void }) {
   const settings = (() => { try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); } catch { return {}; } })();
   const initiales = `${(settings.prenom || 'P')[0]}${(settings.nom || '')[0] || ''}`;
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const BACKUP_KEYS = [
+    'mouvtrack_participants', 'mouvtrack_contrats', 'mouvtrack_seances',
+    'notes_seances', 'mouvtrack_exercices', 'settings_praticien',
+    'anthropic_api_key', 'mouvtrack_zones', 'mouvtrack_question_templates',
+  ];
+
+  function exporterDonnees() {
+    const data: Record<string, string> = { _version: '1', _date: new Date().toISOString() };
+    BACKUP_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) data[k] = v; });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `horizon-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Données exportées avec succès ✅');
+  }
+
+  function importerDonnees(file: File) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string);
+        BACKUP_KEYS.forEach(k => { if (typeof data[k] === 'string') localStorage.setItem(k, data[k]); });
+        toast.success('Import réussi — rechargement…');
+        setTimeout(() => window.location.reload(), 800);
+      } catch {
+        toast.error('Fichier invalide');
+      }
+    };
+    reader.readAsText(file);
+  }
 
   return (
     <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
@@ -812,6 +848,12 @@ function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout:
         <ItemMobile icon="ti-dumbbell" label="Bibliothèque exercices" onClick={() => toast('Accessible depuis l\'ordinateur 💻', { icon: 'ℹ️' })} />
       </SectionMobile>
 
+      {/* Section Gestion */}
+      <SectionMobile titre="Gestion">
+        <ItemMobile icon="ti-download" label="Exporter mes données (JSON)" onClick={exporterDonnees} />
+        <ItemMobile icon="ti-upload" label="Importer des données" onClick={() => setShowImportConfirm(true)} />
+      </SectionMobile>
+
       {/* Section Compte */}
       <SectionMobile titre="Compte">
         <ItemMobile icon="ti-settings" label="Paramètres" onClick={onOuvrirSettings} />
@@ -832,6 +874,34 @@ function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout:
       <div style={{ textAlign: 'center', marginTop: 20, fontSize: 11, color: C.muted }}>
         Horizon v1.0
       </div>
+
+      {/* Input fichier caché pour l'import */}
+      <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) importerDonnees(f); e.target.value = ''; }} />
+
+      {/* Modal confirmation import */}
+      {showImportConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24 }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>
+              📥 Importer des données
+            </div>
+            <p style={{ fontSize: 14, color: '#4A6080', lineHeight: 1.6, marginBottom: 20 }}>
+              Cette action <strong>remplacera toutes vos données actuelles</strong>.<br />
+              <strong style={{ color: '#E85050' }}>Continuer ?</strong>
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setShowImportConfirm(false)} style={{ flex: 1, padding: '12px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
+                Annuler
+              </button>
+              <button onClick={() => { setShowImportConfirm(false); fileInputRef.current?.click(); }}
+                style={{ flex: 1, padding: '12px', background: C.primary, border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer' }}>
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
