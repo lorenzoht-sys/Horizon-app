@@ -130,9 +130,9 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
       );
       case 1: return (
         <div className="space-y-8">
-          <Step2_Physical form={form} update={update} previous={previous} testsActifs={ALL_TESTS} />
+          <Step2_Physical form={form} update={update} previous={previous} testsActifs={ALL_TESTS} profilHandicap={participant.profilHandicap} />
           <div className="border-t border-gray-100 pt-6">
-            <Step3_EnduranceMemory form={form} update={update} previous={previous} testsActifs={ALL_TESTS} />
+            <Step3_EnduranceMemory form={form} update={update} previous={previous} testsActifs={ALL_TESTS} profilHandicap={participant.profilHandicap} />
           </div>
         </div>
       );
@@ -144,8 +144,8 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
   function renderTrimestrielStep() {
     switch (step) {
       case 0: return <Step1_Identity form={form} update={update} nextTrimestre={nextTrimestre} />;
-      case 1: return <Step2_Physical form={form} update={update} previous={previous} testsActifs={participant.testsActifs} />;
-      case 2: return <Step3_EnduranceMemory form={form} update={update} previous={previous} testsActifs={participant.testsActifs} />;
+      case 1: return <Step2_Physical form={form} update={update} previous={previous} testsActifs={participant.testsActifs} profilHandicap={participant.profilHandicap} />;
+      case 2: return <Step3_EnduranceMemory form={form} update={update} previous={previous} testsActifs={participant.testsActifs} profilHandicap={participant.profilHandicap} />;
       case 3: return <Step_ResultsIA form={form} update={update} participant={participant} previous={previous} />;
       case 4: return <Step4_Notes form={form} update={update} onGenerateMessage={autoGenerateMessage} />;
     }

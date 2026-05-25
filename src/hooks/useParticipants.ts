@@ -122,9 +122,11 @@ export function useParticipants() {
 
   const addBilan = useCallback((participantId: string, bilan: Omit<Bilan, 'id'>) => {
     const newBilan: Bilan = { ...bilan, id: uuidv4() };
-    setParticipants(prev =>
-      prev.map(p => p.id === participantId ? { ...p, bilans: [...p.bilans, newBilan] } : p)
-    );
+    setParticipants(prev => {
+      const updated = prev.map(p => p.id === participantId ? { ...p, bilans: [...p.bilans, newBilan] } : p);
+      save(updated); // Sauvegarde synchrone avant le démontage potentiel du composant
+      return updated;
+    });
     return newBilan;
   }, []);
 

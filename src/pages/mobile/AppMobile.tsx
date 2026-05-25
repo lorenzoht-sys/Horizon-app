@@ -321,12 +321,12 @@ function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
 
 type ModeSaisie = 'choix' | 'note' | 'patient' | 'bilan';
 
-function EcranSaisie() {
+function EcranSaisie({ onVoirFiche }: { onVoirFiche?: (id: string) => void }) {
   const [mode, setMode] = useState<ModeSaisie>('choix');
   const back = () => setMode('choix');
   if (mode === 'note')    return <NoteRapide onBack={back} />;
   if (mode === 'patient') return <NouveauPatientMobile onBack={back} />;
-  if (mode === 'bilan')   return <NouveauBilanMobile onBack={back} />;
+  if (mode === 'bilan')   return <NouveauBilanMobile onBack={back} onVoirFiche={onVoirFiche} />;
   return <ChoixSaisie onNote={() => setMode('note')} onPatient={() => setMode('patient')} onBilan={() => setMode('bilan')} />;
 }
 
@@ -415,7 +415,7 @@ function NouveauPatientMobile({ onBack }: { onBack: () => void }) {
 
 // ── Nouveau bilan mobile ───────────────────────────────────────────────────────
 
-function NouveauBilanMobile({ onBack }: { onBack: () => void }) {
+function NouveauBilanMobile({ onBack, onVoirFiche }: { onBack: () => void; onVoirFiche?: (id: string) => void }) {
   const { participants, addBilan } = useParticipants();
   const [participantId, setParticipantId] = useState('');
   const [etape, setEtape] = useState<'choix' | 'bilan'>('choix');
@@ -439,7 +439,11 @@ function NouveauBilanMobile({ onBack }: { onBack: () => void }) {
           onSave={(bilan: Omit<Bilan, 'id'>) => {
             addBilan(participant.id, bilan);
             toast.success('Bilan enregistré ✅');
-            onBack();
+            if (onVoirFiche) {
+              onVoirFiche(participant.id);
+            } else {
+              onBack();
+            }
           }}
           onCancel={() => setEtape('choix')}
         />
@@ -1228,7 +1232,7 @@ export default function AppMobile({ onLogout }: Props) {
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 80 }}>
         {onglet === 'aujourdhui' && <EcranAujourdhui onVoirFiche={setFicheId} onNaviguerSaisie={() => setOnglet('saisie')} />}
         {onglet === 'patients'   && <EcranPatients onVoirFiche={setFicheId} />}
-        {onglet === 'saisie'     && <EcranSaisie />}
+        {onglet === 'saisie'     && <EcranSaisie onVoirFiche={setFicheId} />}
         {onglet === 'tournee'    && <EcranTournee />}
         {onglet === 'plus'       && <EcranPlus onLogout={onLogout} onOuvrirSettings={() => setShowSettings(true)} onNaviguerOnglet={setOnglet} />}
       </div>

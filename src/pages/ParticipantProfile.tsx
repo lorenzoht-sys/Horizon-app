@@ -24,7 +24,7 @@ import { exportFichePatientPDF } from '../utils/exportFichePatientPDF';
 import { calculerNote, NORMES_SCORING } from '../data/norms';
 import { TAG_CONFIG } from '../data/profiles';
 import toast from 'react-hot-toast';
-import type { Bilan, Participant, RessentiSeance, Contrat, Seance } from '../types';
+import type { Bilan, Participant, RessentiSeance, Contrat, Seance, ProfilHandicap } from '../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -50,6 +50,13 @@ const AVATAR_COLORS = ['#1A5F9E', '#2BBFBF', '#8B5CF6', '#F59E0B', '#EF4444', '#
 function avatarColor(id: string): string {
   return AVATAR_COLORS[id.charCodeAt(0) % AVATAR_COLORS.length];
 }
+
+const PROFILS_HANDICAP: { id: ProfilHandicap; label: string; emoji: string }[] = [
+  { id: 'fauteuil_roulant', label: 'Fauteuil roulant',    emoji: '♿' },
+  { id: 'avc_hemiplegie',   label: 'AVC / Hémiplégie',    emoji: '🧠' },
+  { id: 'parkinson',        label: 'Parkinson',            emoji: '🫸' },
+  { id: 'sep',              label: 'Sclérose en plaques',  emoji: '🎗️' },
+];
 
 function calcAge(dateNaissance: string): number {
   const today = new Date(), birth = new Date(dateNaissance);
@@ -339,6 +346,7 @@ export default function ParticipantProfile() {
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [geocoding, setGeocoding]       = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
+  const [showProfilPicker, setShowProfilPicker] = useState(false);
 
   const participant = participants.find(p => p.id === id);
   if (!participant) return (
@@ -494,6 +502,50 @@ export default function ParticipantProfile() {
                   )}
                 </div>
               )}
+
+              {/* Profil handicap */}
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                {participant.profilHandicap && (() => {
+                  const p = PROFILS_HANDICAP.find(x => x.id === participant.profilHandicap);
+                  return p ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-white" style={{ background: '#0D5050' }}>
+                      {p.emoji} {p.label}
+                    </span>
+                  ) : null;
+                })()}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowProfilPicker(v => !v)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border border-white/30 text-white/60 hover:text-white hover:border-white/50 transition-colors"
+                  >
+                    ♿ {participant.profilHandicap ? 'Modifier le profil' : '+ Profil handicap'}
+                  </button>
+                  {showProfilPicker && (
+                    <>
+                      <div className="fixed inset-0 z-50" onClick={() => setShowProfilPicker(false)} />
+                      <div className="absolute left-0 top-full mt-1 bg-white rounded-xl shadow-xl z-50 py-1 min-w-[210px] border border-gray-100">
+                        {participant.profilHandicap && (
+                          <button
+                            onClick={() => { updateParticipant(id!, { profilHandicap: undefined }); setShowProfilPicker(false); }}
+                            className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2"
+                          >
+                            ✕ Retirer le profil
+                          </button>
+                        )}
+                        {PROFILS_HANDICAP.map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => { updateParticipant(id!, { profilHandicap: p.id }); setShowProfilPicker(false); }}
+                            className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 transition-colors ${participant.profilHandicap === p.id ? 'bg-teal-50 text-teal-800 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
+                          >
+                            {p.emoji} {p.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Menu ··· */}
