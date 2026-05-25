@@ -6,13 +6,13 @@ import RadarChart from '../components/charts/RadarChart';
 import ComparisonTable from '../components/charts/ComparisonTable';
 import PrintableReport from '../components/export/PrintableReport';
 import ExportButton from '../components/export/ExportButton';
-import FicheBilanPDF, { calculerNotesAuto } from '../components/export/FicheBilanPDF';
+import { calculerNotesAuto } from '../components/export/FicheBilanPDF';
 import { exportFicheBilanPDF } from '../utils/exportPDF';
 import { ArrowLeft, Calendar, MessageSquare, StickyNote, Target, AlertTriangle, FileText } from 'lucide-react';
 
 function loadSettings() {
-  try { return { email: '', telephone: '', logoUrl: '', ...JSON.parse(localStorage.getItem('settings_praticien') || '{}') }; }
-  catch { return { email: '', telephone: '', logoUrl: '' }; }
+  try { return { prenom: '', nom: '', email: '', telephone: '', societe: '', logoPraticien: '', ...JSON.parse(localStorage.getItem('settings_praticien') || '{}') }; }
+  catch { return { prenom: '', nom: '', email: '', telephone: '', societe: '', logoPraticien: '' }; }
 }
 
 export default function BilanDetail() {
@@ -59,12 +59,12 @@ export default function BilanDetail() {
           <button
             onClick={async () => {
               setExporting(true);
-              await new Promise(r => setTimeout(r, 200));
-              await exportFicheBilanPDF(
-                'fiche-bilan-mouv',
-                `FicheBilan_${participant.nom}_${participant.prenom}_${bilan.date}_MouvAPA.pdf`
-              );
-              setExporting(false);
+              try {
+                await exportFicheBilanPDF(
+                  { bilan, participant, notes: bilan.notesBilan ?? calculerNotesAuto(bilan), settings: loadSettings() },
+                  `FicheBilan_${participant.nom}_${participant.prenom}_${bilan.date}_MouvAPA.pdf`
+                );
+              } finally { setExporting(false); }
             }}
             disabled={exporting}
             className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-dark transition-colors disabled:opacity-60"
@@ -129,15 +129,6 @@ export default function BilanDetail() {
         </div>
       )}
 
-      {/* Composant PDF caché — capturé par html2canvas */}
-      <div id="fiche-bilan-mouv" style={{ position: 'fixed', top: -9999, left: -9999, zIndex: -1 }}>
-        <FicheBilanPDF
-          bilan={bilan}
-          participant={participant}
-          notes={bilan.notesBilan ?? calculerNotesAuto(bilan)}
-          settings={loadSettings()}
-        />
-      </div>
     </PageWrapper>
   );
 }

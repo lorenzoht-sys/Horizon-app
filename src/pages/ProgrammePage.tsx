@@ -8,7 +8,6 @@ import ExerciceCard from '../programme/ExerciceCard';
 import ExerciceConfigModal from '../programme/ExerciceConfigModal';
 import AdherenceChart from '../programme/AdherenceChart';
 import SuiviCalendar from '../programme/SuiviCalendar';
-import PrintableProgramme from '../programme/PrintableProgramme';
 import { exportProgrammePDF } from '../utils/exportPDF';
 import type { Exercice, ExerciceProgramme, CategorieExercice } from '../types';
 import { ArrowLeft, Trash2, Edit2, Save, Plus, Activity, FileDown, Loader2 } from 'lucide-react';
@@ -63,8 +62,12 @@ export default function ProgrammePage() {
     if (!programmeActif || !participant) return;
     setExportLoading(true);
     try {
+      const settings = (() => {
+        try { return { prenom: '', nom: '', email: '', telephone: '', societe: '', logoPraticien: '', ...JSON.parse(localStorage.getItem('settings_praticien') || '{}') }; }
+        catch { return { prenom: '', nom: '', email: '', telephone: '', societe: '', logoPraticien: '' }; }
+      })();
       const fileName = `MouvAPA_Programme_${participant.nom}_${participant.prenom}_${programmeActif.dateDebut}.pdf`;
-      await exportProgrammePDF('pp-page1', 'pp-page2', fileName);
+      await exportProgrammePDF({ programme: programmeActif, exercices, participant, settings }, fileName);
       toast.success('Programme PDF exporté !');
     } catch {
       toast.error('Erreur lors de l\'export PDF');
@@ -417,14 +420,6 @@ export default function ProgrammePage() {
         />
       )}
 
-      {/* Composants PDF cachés — capturés par html2canvas à l'export */}
-      {programmeActif && participant && (
-        <PrintableProgramme
-          programme={programmeActif}
-          exercices={exercices}
-          participant={participant}
-        />
-      )}
     </PageWrapper>
   );
 }

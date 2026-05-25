@@ -175,7 +175,8 @@ interface SettingsPraticien {
   numeroSAP: string;
   numeroTVA: string;
   villeSignature: string;
-  logoUrl: string;
+  societe: string;
+  logoPraticien: string;
   tarifHoraire: string;
   fraisKmDefaut: string;
 }
@@ -184,7 +185,8 @@ const DEFAULTS: SettingsPraticien = {
   prenom: '', nom: '', titre: 'Enseignant en Activité Physique Adaptée',
   email: '', telephone: '', adresseRue: '', adresseCodePostal: '',
   adresseVille: '', siret: '', numeroSAP: '', numeroTVA: '',
-  villeSignature: '', logoUrl: '', tarifHoraire: '45', fraisKmDefaut: '0.50',
+  villeSignature: '', societe: '', logoPraticien: '',
+  tarifHoraire: '45', fraisKmDefaut: '0.50',
 };
 
 function loadSettings(): SettingsPraticien {
@@ -238,7 +240,7 @@ export default function SettingsPage() {
   const [form, setForm] = useState<SettingsPraticien>(loadSettings);
   const [errors, setErrors] = useState<Partial<Record<keyof SettingsPraticien, string>>>({});
   const [showResetModal, setShowResetModal] = useState(false);
-  const logoInputRef = useRef<HTMLInputElement>(null);
+  const logoPraticienRef = useRef<HTMLInputElement>(null);
 
   function handleResetDemo() {
     localStorage.setItem('mouvtrack_demo_cleared', '1');
@@ -270,12 +272,12 @@ export default function SettingsPage() {
     if (errors[field]) setErrors(e => ({ ...e, [field]: undefined }));
   }
 
-  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleLogoPraticienChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 600_000) { toast.error('Image trop lourde (max 600 Ko)'); return; }
     const reader = new FileReader();
-    reader.onload = ev => set('logoUrl', ev.target?.result as string);
+    reader.onload = ev => set('logoPraticien', ev.target?.result as string);
     reader.readAsDataURL(file);
   }
 
@@ -349,6 +351,11 @@ export default function SettingsPage() {
                 <input value={form.telephone} onChange={e => set('telephone', e.target.value)}
                   placeholder="06 12 34 56 78" className={inputClass(errors.telephone)} />
               </Field>
+              <Field label="Nom de la société" error={errors.societe}>
+                <input value={form.societe} onChange={e => set('societe', e.target.value)}
+                  placeholder="Horizon APA" className={inputClass(errors.societe)} />
+                <p className="text-xs text-gray-400 mt-1">Optionnel — affiché dans l'en-tête de vos PDFs</p>
+              </Field>
             </div>
           </section>
 
@@ -396,33 +403,45 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* ── Logo ── */}
+          {/* ── Logo de ma société ── */}
           <section>
-            <SectionTitle title="Mon logo" />
+            <SectionTitle title="Logo de ma société (PDFs)" />
+            <p className="text-xs text-gray-400 mb-4">
+              Affiché dans l'en-tête de tous vos PDFs à la place du logo Horizon. Laissez vide pour garder le logo Horizon.
+            </p>
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
-                <img
-                  src={form.logoUrl || '/logo.png'}
-                  alt="Logo"
-                  className="w-full h-full object-contain p-1"
-                  onError={e => { (e.target as HTMLImageElement).src = '/logo.png'; }}
-                />
+                {form.logoPraticien ? (
+                  <img src={form.logoPraticien} alt="Logo société" className="w-full h-full object-contain p-1" />
+                ) : (
+                  <span className="text-xs text-gray-300 text-center leading-tight">Aucun logo</span>
+                )}
               </div>
               <div>
                 <input
-                  ref={logoInputRef}
+                  ref={logoPraticienRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/png,image/jpeg"
                   className="hidden"
-                  onChange={handleLogoChange}
+                  onChange={handleLogoPraticienChange}
                 />
-                <button
-                  onClick={() => logoInputRef.current?.click()}
-                  className="flex items-center gap-2 border border-gray-200 text-gray-600 hover:bg-gray-50 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
-                >
-                  <Upload size={15} />
-                  Changer le logo
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => logoPraticienRef.current?.click()}
+                    className="flex items-center gap-2 border border-gray-200 text-gray-600 hover:bg-gray-50 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+                  >
+                    <Upload size={15} />
+                    {form.logoPraticien ? 'Changer le logo' : 'Ajouter un logo'}
+                  </button>
+                  {form.logoPraticien && (
+                    <button
+                      onClick={() => set('logoPraticien', '')}
+                      className="flex items-center gap-2 border border-red-200 text-red-500 hover:bg-red-50 px-3 py-2 rounded-xl text-sm transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
                 <p className="text-xs text-gray-400 mt-1.5">PNG ou JPG, max 600 Ko</p>
               </div>
             </div>

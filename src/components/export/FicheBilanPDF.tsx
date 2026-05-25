@@ -1,24 +1,13 @@
+import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import type { Bilan, Participant, NotesBilan } from '../../types';
 import { NORMES_SCORING, calculerNote } from '../../data/norms';
+import { PdfHeader, PdfFooter, type PdfPraticienSettings } from './PdfShared';
 
-// ─── Utilitaires ──────────────────────────────────────────────────────────────
-
-function fmt(d: string) {
-  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-function age(dn: string) {
-  const t = new Date(), b = new Date(dn);
-  let a = t.getFullYear() - b.getFullYear();
-  if (t.getMonth() < b.getMonth()) a--;
-  return a;
-}
-
-// ─── Calcul notes depuis valeurs brutes ───────────────────────────────────────
+// ─── Calcul notes ─────────────────────────────────────────────────────────────
 
 export function calculerNotesAuto(bilan: Bilan): NotesBilan {
   const n: NotesBilan = {};
   const { equilibre: eq, chairStand30: cs, handGrip: hg, tug3m, souplesse, tm6, memoire } = bilan;
-
   const eqVals = [eq.droite, eq.gauche].filter((v): v is number => v !== null);
   if (eqVals.length) n.equilibre = calculerNote(eqVals.reduce((s, v) => s + v, 0) / eqVals.length, NORMES_SCORING.equilibreUnipodal);
   if (cs !== null) n.force = calculerNote(cs, NORMES_SCORING.chairStand30);
@@ -32,31 +21,59 @@ export function calculerNotesAuto(bilan: Bilan): NotesBilan {
   return n;
 }
 
-// ─── Composants internes ──────────────────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
-function CelluleTest({ titre, unite, children }: { titre: string; unite?: string; children?: React.ReactNode }) {
-  return (
-    <div style={{ border: '1.5px solid #D0D8E8', borderRadius: 6, overflow: 'hidden' }}>
-      <div style={{ background: '#E8EDF5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 10px' }}>
-        <span style={{ fontWeight: 700, fontSize: 13, color: '#1A5F9E' }}>{titre}</span>
-        {unite && <span style={{ fontWeight: 700, fontSize: 13, color: '#0D2B4B' }}>{unite}</span>}
-      </div>
-      {children && <div style={{ padding: '6px 10px', fontSize: 12, color: '#333', background: 'white' }}>{children}</div>}
-    </div>
-  );
+const noteColor = (n: number) => n <= 2 ? '#EF4444' : n === 3 ? '#F59E0B' : '#22C55E';
+
+const S = StyleSheet.create({
+  page: { fontFamily: 'Helvetica', fontSize: 11, color: '#0D2B4B', paddingBottom: 46 },
+  body: { paddingHorizontal: 26, paddingTop: 14 },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 5 },
+  mainTitle: { fontSize: 22, fontFamily: 'Helvetica-Bold', color: '#1A5F9E', lineHeight: 1.1 },
+  subtitle: { fontSize: 15, fontFamily: 'Helvetica-Bold', color: '#1A5F9E' },
+  appName: { fontSize: 9, color: '#888888', fontStyle: 'italic' },
+  infoRight: { alignItems: 'flex-end' },
+  dateTxt: { fontSize: 11, color: '#333333' },
+  participantTxt: { fontSize: 10, color: '#555555' },
+  divider: { height: 2, backgroundColor: '#1A5F9E', marginBottom: 12 },
+  sectionLabel: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: '#1A5F9E', textAlign: 'right', marginBottom: 6 },
+  cellRow: { flexDirection: 'row', marginBottom: 6 },
+  cellSpacer: { width: 7 },
+  cell: { flex: 1, borderWidth: 1.5, borderColor: '#D0D8E8' },
+  cellHeader: { backgroundColor: '#E8EDF5', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8 },
+  cellTitle: { fontFamily: 'Helvetica-Bold', fontSize: 11, color: '#1A5F9E' },
+  cellValue: { fontFamily: 'Helvetica-Bold', fontSize: 11, color: '#0D2B4B' },
+  cellBody: { paddingVertical: 4, paddingHorizontal: 8, fontSize: 10, color: '#333333', backgroundColor: 'white' },
+  barSection: { marginBottom: 12 },
+  barLegend: { textAlign: 'right', fontSize: 8, color: '#555555', fontStyle: 'italic', marginTop: 4 },
+  barRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 3 },
+  barLabel: { width: 62, fontSize: 10, color: '#333333', fontFamily: 'Helvetica-Bold', textAlign: 'right' },
+  barBg: { flex: 1, height: 16, backgroundColor: '#E8EDF5', marginLeft: 7 },
+  barFill: { height: '100%' },
+  barNum: { width: 18, fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#333333', marginLeft: 4, textAlign: 'center' },
+  interpretTitle: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#1A5F9E', marginBottom: 5 },
+  interpretBox: { borderWidth: 1, borderColor: '#D0D8E8', padding: 9, fontSize: 10, color: '#333333', lineHeight: 1.65, textAlign: 'justify', backgroundColor: 'white' },
+});
+
+function fmt(d: string) {
+  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+function calcAge(dn: string) {
+  const t = new Date(), b = new Date(dn);
+  let a = t.getFullYear() - b.getFullYear();
+  if (t.getMonth() < b.getMonth()) a--;
+  return a;
 }
 
-const NOTE_COLOR = (n: number) => n <= 2 ? '#EF4444' : n === 3 ? '#F59E0B' : '#22C55E';
-
-function BarreNote({ label, note }: { label: string; note: number }) {
+function Cellule({ titre, unite, body }: { titre: string; unite?: string; body?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 5, gap: 8 }}>
-      <div style={{ width: 75, fontSize: 11, color: '#333', fontWeight: 500, textAlign: 'right', flexShrink: 0 }}>{label}</div>
-      <div style={{ flex: 1, height: 20, background: '#E8EDF5', borderRadius: 3, overflow: 'hidden' }}>
-        <div style={{ width: `${(note / 5) * 100}%`, height: '100%', background: NOTE_COLOR(note), borderRadius: 3 }} />
-      </div>
-      <div style={{ width: 20, fontSize: 11, fontWeight: 700, color: '#333' }}>{note}</div>
-    </div>
+    <View style={S.cell}>
+      <View style={S.cellHeader}>
+        <Text style={S.cellTitle}>{titre}</Text>
+        {unite ? <Text style={S.cellValue}>{unite}</Text> : null}
+      </View>
+      {body ? <View style={S.cellBody}><Text>{body}</Text></View> : null}
+    </View>
   );
 }
 
@@ -66,14 +83,14 @@ interface Props {
   bilan: Bilan;
   participant: Participant;
   notes: NotesBilan;
-  settings: { email: string; telephone: string; logoUrl: string };
+  settings: PdfPraticienSettings;
 }
 
 export default function FicheBilanPDF({ bilan, participant, notes, settings }: Props) {
   const { equilibre: eq, chairStand30: cs, handGrip: hg, tug3m, souplesse, tm6, memoire } = bilan;
   const sVal = souplesse.valeur !== null ? (souplesse.valeur >= 0 ? '+' : '') + souplesse.valeur : '—';
 
-  const ALL_BARRES: { label: string; key: keyof NotesBilan }[] = [
+  const BARRES: { label: string; key: keyof NotesBilan }[] = [
     { label: 'Souplesse', key: 'souplesse' },
     { label: 'Mémoire',   key: 'memoire'   },
     { label: 'Mobilité',  key: 'mobilite'  },
@@ -81,103 +98,77 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
     { label: 'Endurance', key: 'endurance' },
     { label: 'Force',     key: 'force'     },
   ];
-  const barres = ALL_BARRES
-    .filter(b => notes[b.key] !== undefined)
-    .map(b => ({ label: b.label, key: b.key, note: notes[b.key] as number }));
+  const barres = BARRES.filter(b => notes[b.key] !== undefined);
+  const interp = bilan.interpretationIA?.textePro || bilan.notesProfessionnelles || '—';
 
   return (
-    <div style={{ width: 794, fontFamily: 'Arial, sans-serif', fontSize: 12, color: '#0D2B4B', background: 'white', padding: '28px 32px', boxSizing: 'border-box' }}>
+    <Document>
+      <Page size="A4" style={S.page}>
+        <PdfHeader settings={settings} title="Fiche bilan" />
+        <View style={S.body}>
 
-      {/* HEADER */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-        <div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: '#1A5F9E', lineHeight: 1.1, letterSpacing: '-0.5px' }}>FICHE BILAN</div>
-          <div style={{ fontSize: 20, fontWeight: 900, color: '#1A5F9E', lineHeight: 1.1, marginBottom: 4 }}>
-            {bilan.type === 'initial' ? 'PREMIER RENDEZ-VOUS' : 'BILAN TRIMESTRIEL'}
-          </div>
-          <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic' }}>Mouv'APA – Activité Physique Adaptée</div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-          {settings.logoUrl
-            ? <img src={settings.logoUrl} style={{ height: 52, objectFit: 'contain' }} alt="Logo" />
-            : <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#1A5F9E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 900, fontSize: 18 }}>M</div>
-          }
-          <div style={{ fontSize: 13, color: '#333' }}>Date : {fmt(bilan.date)}</div>
-          <div style={{ fontSize: 12, color: '#555' }}>{participant.prenom} {participant.nom} · {age(participant.dateNaissance)} ans</div>
-        </div>
-      </div>
+          {/* Titre + infos participant */}
+          <View style={S.titleRow}>
+            <View>
+              <Text style={S.mainTitle}>FICHE BILAN</Text>
+              <Text style={S.subtitle}>{bilan.type === 'initial' ? 'PREMIER RENDEZ-VOUS' : 'BILAN TRIMESTRIEL'}</Text>
+              <Text style={S.appName}>Horizon – Activité Physique Adaptée</Text>
+            </View>
+            <View style={S.infoRight}>
+              <Text style={S.dateTxt}>Date : {fmt(bilan.date)}</Text>
+              <Text style={S.participantTxt}>{participant.prenom} {participant.nom} · {calcAge(participant.dateNaissance)} ans</Text>
+            </View>
+          </View>
+          <View style={S.divider} />
 
-      {/* Ligne bleue */}
-      <div style={{ height: 2, background: '#1A5F9E', marginBottom: 20 }} />
+          {/* Résultats tests */}
+          <Text style={S.sectionLabel}>RÉSULTATS DES TESTS</Text>
 
-      {/* RÉSULTATS DES TESTS */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: '#1A5F9E', textAlign: 'right', letterSpacing: '0.05em', marginBottom: 10 }}>RÉSULTATS DES TESTS</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <CelluleTest titre="Force" unite={`${cs ?? '—'} Reps`}>
-            <div style={{ display: 'flex', gap: 16 }}>
-              <span>Main D : <strong>{hg.droite ?? '—'} Kg</strong></span>
-              <span>Main G : <strong>{hg.gauche ?? '—'} Kg</strong></span>
-            </div>
-          </CelluleTest>
+          <View style={S.cellRow}>
+            <Cellule titre="Force" unite={`${cs ?? '—'} Reps`} body={`Main D : ${hg.droite ?? '—'} Kg  ·  Main G : ${hg.gauche ?? '—'} Kg`} />
+            <View style={S.cellSpacer} />
+            <Cellule titre="Endurance" unite={`${tm6.distanceMetres ?? '—'} M`} body={`O2 : ${tm6.spo2Avant ?? '—'} / ${tm6.spo2Apres ?? '—'} / ${tm6.spo22min ?? '—'}  ·  FC : ${tm6.fcAvant ?? '—'} / ${tm6.fcApres ?? '—'} Bpm`} />
+          </View>
+          <View style={S.cellRow}>
+            <Cellule titre="Souplesse" unite={`${sVal} Cm`} />
+            <View style={S.cellSpacer} />
+            <Cellule titre="Mobilité" unite={`${tug3m ?? '—'} Sec`} />
+          </View>
+          <View style={S.cellRow}>
+            <Cellule titre="Équilibre" body={`Jambe D : ${eq.droite ?? '—'} Sec  ·  Jambe G : ${eq.gauche ?? '—'} Sec`} />
+            <View style={S.cellSpacer} />
+            <Cellule titre="Mémoire" body={`Immédiat : ${memoire.scoreImmediat ?? '—'} / 5  ·  Différé : ${memoire.scoreDiffere ?? '—'} / 5`} />
+          </View>
 
-          <CelluleTest titre="Endurance" unite={`${tm6.distanceMetres ?? '—'} M`}>
-            <div>
-              <div style={{ fontSize: 11 }}>{tm6.spo2Avant ?? '—'} / {tm6.spo2Apres ?? '—'} / {tm6.spo22min ?? '—'} O2</div>
-              <div style={{ fontSize: 11 }}>{tm6.fcAvant ?? '—'} / {tm6.fcApres ?? '—'} / {tm6.fc2min ?? '—'} Bpm</div>
-            </div>
-          </CelluleTest>
+          {/* Graphiques */}
+          {barres.length > 0 && (
+            <View style={S.barSection}>
+              <Text style={[S.sectionLabel, { textAlign: 'center' }]}>GRAPHIQUES</Text>
+              {barres.map(({ label, key }) => {
+                const note = notes[key] as number;
+                return (
+                  <View key={key} style={S.barRow}>
+                    <Text style={S.barLabel}>{label}</Text>
+                    <View style={S.barBg}>
+                      <View style={[S.barFill, { width: `${(note / 5) * 100}%`, backgroundColor: noteColor(note) }]} />
+                    </View>
+                    <Text style={S.barNum}>{note}</Text>
+                  </View>
+                );
+              })}
+              <Text style={S.barLegend}>1/5 = Faible — 5/5 = Très Bon</Text>
+            </View>
+          )}
 
-          <CelluleTest titre="Souplesse" unite={`${sVal} Cm`} />
-          <CelluleTest titre="Mobilité" unite={`${tug3m ?? '—'} Sec`} />
+          {/* Interprétation */}
+          <Text style={S.interpretTitle}>INTERPRÉTATION :</Text>
+          <View style={S.interpretBox}>
+            <Text>{interp}</Text>
+          </View>
 
-          <CelluleTest titre="Équilibre">
-            <div style={{ display: 'flex', gap: 16 }}>
-              <span>Jambe D : <strong>{eq.droite ?? '—'} Sec</strong></span>
-              <span>Jambe G : <strong>{eq.gauche ?? '—'} Sec</strong></span>
-            </div>
-          </CelluleTest>
-
-          <CelluleTest titre="Mémoire">
-            <div>
-              <span><strong>{memoire.scoreImmediat ?? '—'} / 5</strong> Mots</span>
-              <span style={{ margin: '0 8px' }}>10 Min :</span>
-              <span><strong>{memoire.scoreDiffere ?? '—'} / 5</strong> Mots</span>
-            </div>
-          </CelluleTest>
-        </div>
-      </div>
-
-      {/* GRAPHIQUES */}
-      {barres.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#1A5F9E', textAlign: 'center', letterSpacing: '0.08em', marginBottom: 12 }}>GRAPHIQUES</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: 83, paddingRight: 28, marginBottom: 4, fontSize: 10, color: '#999' }}>
-            {[0,1,2,3,4,5].map(v => <span key={v}>{v}</span>)}
-          </div>
-          {barres.map(({ label, key }) => (
-            <BarreNote key={label} label={label} note={(notes[key] as number)!} />
-          ))}
-          <div style={{ textAlign: 'right', fontSize: 10, color: '#555', fontStyle: 'italic', marginTop: 8 }}>
-            1/5 = Faible — 5/5 = Très Bon
-          </div>
-        </div>
-      )}
-
-      {/* INTERPRÉTATION */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: '#1A5F9E', letterSpacing: '0.05em', marginBottom: 8 }}>INTERPRÉTATION :</div>
-        <div style={{ border: '1px solid #D0D8E8', borderRadius: 6, padding: '10px 14px', minHeight: 80, fontSize: 12, color: '#333', lineHeight: 1.65, textAlign: 'justify', background: 'white' }}>
-          {bilan.interpretationIA?.textePro || bilan.notesProfessionnelles || '—'}
-        </div>
-      </div>
-
-      {/* FOOTER */}
-      <div style={{ borderTop: '1.5px solid #1A5F9E', paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#555' }}>
-        <span>{settings.email}</span>
-        <span>{settings.telephone}</span>
-        <span>www.mouvapa.com</span>
-      </div>
-    </div>
+        </View>
+        <PdfFooter settings={settings} />
+      </Page>
+    </Document>
   );
 }

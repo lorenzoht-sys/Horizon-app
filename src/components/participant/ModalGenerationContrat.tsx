@@ -3,7 +3,6 @@ import { X, Download, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Contrat, Participant } from '../../types';
 import type { ContratPDFData } from '../export/ContratPDF';
-import ContratPDF from '../export/ContratPDF';
 import { exportContratPDF } from '../../utils/exportContratPDF';
 import { LABELS_JOURS_LONG } from '../../utils/horaires';
 
@@ -63,6 +62,8 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
       telephone: settings.telephone || '',
       email: settings.email || '',
     },
+    societe: settings.societe || undefined,
+    logoPraticien: settings.logoPraticien || undefined,
     patient: {
       nomPrenom: `${participant.prenom} ${participant.nom}`,
       adresse: adressePatient,
@@ -102,9 +103,6 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
 
   return (
     <>
-      {/* Le composant PDF caché dans le DOM — mis à jour en temps réel */}
-      <ContratPDF data={pdfData} />
-
       <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
 

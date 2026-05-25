@@ -20,7 +20,6 @@ import JournalTab from '../components/journal/JournalTab';
 import ParticipantForm from '../components/participant/ParticipantForm';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
 import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
-import FichePatientPDF from '../components/export/FichePatientPDF';
 import { exportFichePatientPDF } from '../utils/exportFichePatientPDF';
 import { calculerNote, NORMES_SCORING } from '../data/norms';
 import { TAG_CONFIG } from '../data/profiles';
@@ -67,8 +66,8 @@ function formatDateCourt(date: string): string {
 }
 
 function loadSettings() {
-  try { return { prenom: '', nom: '', ...JSON.parse(localStorage.getItem('settings_praticien') || '{}') }; }
-  catch { return { prenom: '', nom: '' }; }
+  try { return { prenom: '', nom: '', titre: '', email: '', telephone: '', societe: '', logoPraticien: '', ...JSON.parse(localStorage.getItem('settings_praticien') || '{}') }; }
+  catch { return { prenom: '', nom: '', titre: '', email: '', telephone: '', societe: '', logoPraticien: '' }; }
 }
 
 // ── CarteStats ────────────────────────────────────────────────────────────────
@@ -386,8 +385,10 @@ export default function ParticipantProfile() {
   async function handleExportFiche() {
     setExportingPDF(true);
     try {
-      await new Promise(r => setTimeout(r, 200));
-      await exportFichePatientPDF(`Fiche_${participant!.nom}_${participant!.prenom}_MouvAPA.pdf`);
+      await exportFichePatientPDF(
+        { participant, bilanInitial, contratActif, settings },
+        `Fiche_${participant!.nom}_${participant!.prenom}_MouvAPA.pdf`
+      );
     } finally { setExportingPDF(false); }
   }
 
@@ -708,13 +709,6 @@ export default function ParticipantProfile() {
         />
       )}
 
-      {/* Template PDF caché */}
-      <FichePatientPDF
-        participant={participant}
-        bilanInitial={bilanInitial}
-        contratActif={contratActif}
-        settings={settings}
-      />
     </PageWrapper>
   );
 }

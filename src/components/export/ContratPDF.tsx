@@ -1,3 +1,6 @@
+import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { PdfHeader, PdfFooter } from './PdfShared';
+
 export interface ContratPDFData {
   pierre: {
     nom: string;
@@ -6,6 +9,8 @@ export interface ContratPDFData {
     telephone: string;
     email: string;
   };
+  societe?: string;
+  logoPraticien?: string;
   patient: {
     nomPrenom: string;
     adresse: string;
@@ -26,258 +31,239 @@ export interface ContratPDFData {
   dateSignature: string;
 }
 
-// ── Composants internes ───────────────────────────────────────────────────────
+const DARK = '#0D2B2B';
 
-function Article({ titre, children }: { titre: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 5 }}>{titre}</div>
-      <div style={{ fontSize: 12, lineHeight: 1.65, textAlign: 'justify' as const }}>{children}</div>
-    </div>
-  );
-}
+const S = StyleSheet.create({
+  page: {
+    fontFamily: 'Helvetica',
+    fontSize: 11,
+    color: '#000000',
+    paddingBottom: 74,
+  },
+  header: {
+    backgroundColor: DARK,
+    paddingVertical: 16,
+    paddingHorizontal: 28,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    color: 'white',
+    fontSize: 15,
+    fontFamily: 'Helvetica-Bold',
+  },
+  logo: {
+    height: 34,
+    width: 70,
+  },
+  body: {
+    paddingHorizontal: 40,
+    paddingTop: 18,
+  },
+  pageTitle: {
+    fontSize: 18,
+    fontFamily: 'Helvetica-Bold',
+    textAlign: 'center',
+  },
+  pageTitleSub: {
+    fontSize: 14,
+    fontFamily: 'Helvetica-Bold',
+    textAlign: 'center',
+    marginBottom: 14,
+  },
+  divider: {
+    borderTopWidth: 2,
+    borderTopColor: '#000000',
+    marginBottom: 18,
+  },
+  row: {
+    flexDirection: 'row',
+    marginBottom: 18,
+  },
+  sectionTitle: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 11,
+    textAlign: 'center',
+    marginBottom: 5,
+  },
+  box: {
+    borderWidth: 1.5,
+    borderColor: '#000000',
+    padding: 9,
+    fontSize: 10,
+    lineHeight: 1.7,
+  },
+  articleTitle: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 11,
+    marginBottom: 3,
+  },
+  articleBody: {
+    fontSize: 10,
+    lineHeight: 1.65,
+    textAlign: 'justify',
+    marginBottom: 13,
+  },
+  conditionBox: {
+    borderWidth: 1.5,
+    borderColor: '#000000',
+    padding: 10,
+    marginTop: 10,
+    marginBottom: 20,
+    minHeight: 58,
+  },
+  signRow: {
+    flexDirection: 'row',
+  },
+  signBox: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#000000',
+    padding: 12,
+    minHeight: 90,
+    alignItems: 'center',
+  },
+});
 
-function FooterPDF({ pierre, page }: { pierre: ContratPDFData['pierre']; page: string }) {
-  return (
-    <div style={{
-      position: 'absolute' as const,
-      bottom: 24, left: 60, right: 60,
-      borderTop: '2px dashed #ccc',
-      paddingTop: 14,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    }}>
-      <div>
-        <div style={{ fontSize: 17, fontWeight: 900 }}>
-          {pierre.nom.split(' ').reverse().join(' ')}
-        </div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#1A5F9E', marginTop: 2 }}>Enseignant APA</div>
-        <div style={{ fontSize: 11, color: '#555' }}>
-          <strong>A</strong>ctivité&nbsp;<strong>P</strong>hysique&nbsp;<strong>A</strong>daptée
-        </div>
-      </div>
-      <div style={{ fontSize: 11, lineHeight: 1.8, color: '#333', textAlign: 'center' as const }}>
-        <div>📞 {pierre.telephone}</div>
-        <div>✉️ {pierre.email}</div>
-        <div>📍 Nantes et sa périphérie</div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 6 }}>
-        <img
-          src="/logo.png"
-          style={{ width: 52, height: 52, borderRadius: '50%', background: '#1A5F9E', objectFit: 'contain' as const, padding: 3 }}
-          alt="Mouv'APA"
-        />
-        <div style={{ fontSize: 10, color: '#888' }}>{page}</div>
-      </div>
-    </div>
-  );
-}
+const B = ({ children }: { children: string }) => (
+  <Text style={{ fontFamily: 'Helvetica-Bold' }}>{children}</Text>
+);
 
-// ── Page 1 ────────────────────────────────────────────────────────────────────
 
-function ContratPDFPage1({ data }: { data: ContratPDFData }) {
-  const PAGE: React.CSSProperties = {
-    width: 794, height: 1123,
-    padding: '56px 60px 90px',
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 13, color: '#000',
-    background: 'white',
-    lineHeight: 1.5,
-    position: 'relative' as const,
-    boxSizing: 'border-box' as const,
+export default function ContratPDF({ data }: { data: ContratPDFData }) {
+  const dots = '.......................................';
+  const pdfSettings = {
+    prenom: data.pierre.nom,
+    nom: '',
+    email: data.pierre.email,
+    telephone: data.pierre.telephone,
+    societe: data.societe,
+    logoPraticien: data.logoPraticien,
   };
-  const BOX: React.CSSProperties = {
-    border: '1.5px solid #000',
-    padding: '11px 13px',
-    fontSize: 12, lineHeight: 1.7,
-  };
-
   return (
-    <div style={PAGE}>
-      {/* Titre */}
-      <div style={{ textAlign: 'center' as const, marginBottom: 32 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 900, lineHeight: 1.25, margin: 0 }}>
-          Contrat de prestation<br />Activité Physique Adaptée
-        </h1>
-        <hr style={{ border: 'none', borderTop: '2px solid #000', marginTop: 18 }} />
-      </div>
+    <Document>
+      {/* ── Page 1 ── */}
+      <Page size="A4" style={S.page}>
+        <PdfHeader settings={pdfSettings} title="Contrat de prestation" />
+        <View style={S.body}>
+          <Text style={S.pageTitle}>Contrat de prestation</Text>
+          <Text style={S.pageTitleSub}>Activité Physique Adaptée</Text>
+          <View style={S.divider} />
 
-      {/* Parties */}
-      <div style={{ display: 'flex', gap: 36, marginBottom: 28 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ textAlign: 'center' as const, fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Prestataire :</div>
-          <div style={BOX}>
-            <strong>Nom, prénom :</strong> {data.pierre.nom}<br />
-            <strong>Adresse :</strong> {data.pierre.adresse}<br />
-            <strong>SIRET :</strong> {data.pierre.siret}<br />
-            <strong>Téléphone :</strong> {data.pierre.telephone}<br />
-            <strong>Email :</strong> {data.pierre.email}
-          </div>
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ textAlign: 'center' as const, fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Participant :</div>
-          <div style={BOX}>
-            <strong>Nom, prénom :</strong> {data.patient.nomPrenom}<br />
-            <strong>Adresse :</strong> {data.patient.adresse}<br />
-            <strong>Téléphone :</strong> {data.patient.telephone || '........................................'}<br />
-            <strong>Email :</strong> {data.patient.email || '........................................'}<br />
-            <strong>Droit à l'image :</strong> {data.droitImage || '........................................'}
-          </div>
-        </div>
-      </div>
+          {/* Parties */}
+          <View style={S.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={S.sectionTitle}>Prestataire :</Text>
+              <View style={S.box}>
+                <Text><B>Nom, prénom : </B>{data.pierre.nom}</Text>
+                <Text><B>Adresse : </B>{data.pierre.adresse}</Text>
+                <Text><B>SIRET : </B>{data.pierre.siret}</Text>
+                <Text><B>Téléphone : </B>{data.pierre.telephone}</Text>
+                <Text><B>Email : </B>{data.pierre.email}</Text>
+              </View>
+            </View>
+            <View style={{ flex: 1, marginLeft: 16 }}>
+              <Text style={S.sectionTitle}>Participant :</Text>
+              <View style={S.box}>
+                <Text><B>Nom, prénom : </B>{data.patient.nomPrenom}</Text>
+                <Text><B>Adresse : </B>{data.patient.adresse}</Text>
+                <Text><B>Téléphone : </B>{data.patient.telephone || dots}</Text>
+                <Text><B>Email : </B>{data.patient.email || dots}</Text>
+                <Text><B>Droit à l'image : </B>{data.droitImage || dots}</Text>
+              </View>
+            </View>
+          </View>
 
-      <Article titre="Article 1 – Objet">
-        Le présent contrat a pour objet l'organisation et l'encadrement de séances d'Activité
-        Physique Adaptée (APA) réalisées par le Prestataire au bénéfice du <strong>Participant</strong>.
-      </Article>
+          <View style={S.articleTitle}><Text>Article 1 – Objet</Text></View>
+          <Text style={S.articleBody}>
+            Le présent contrat a pour objet l'organisation et l'encadrement de séances d'Activité Physique Adaptée (APA) réalisées par le Prestataire au bénéfice du Participant.
+          </Text>
 
-      <Article titre="Article 2 – Durée et période d'essai">
-        Le contrat débute le <strong>{data.contrat.dateDebut}</strong>.<br /><br />
-        Une période d'essai de deux séances est prévue afin de permettre à chaque partie
-        de vérifier si l'accompagnement correspond aux attentes.<br /><br />
-        À l'issue de cette période, le contrat se poursuit pour une durée indéterminée par
-        tacite reconduction, sauf résiliation par l'une ou l'autre des parties avec un préavis
-        d'un mois.
-      </Article>
+          <View style={S.articleTitle}><Text>Article 2 – Durée et période d'essai</Text></View>
+          <Text style={S.articleBody}>
+            Le contrat débute le {data.contrat.dateDebut}.{'\n\n'}
+            Une période d'essai de deux séances est prévue afin de permettre à chaque partie de vérifier si l'accompagnement correspond aux attentes.{'\n\n'}
+            À l'issue de cette période, le contrat se poursuit pour une durée indéterminée par tacite reconduction, sauf résiliation par l'une ou l'autre des parties avec un préavis d'un mois.
+          </Text>
 
-      <Article titre="Article 3 – Organisation des séances">
-        Durée : <strong>{data.contrat.duree}</strong><br />
-        Fréquence : <strong>{data.contrat.frequence}</strong><br />
-        Lieu : <strong>{data.contrat.lieu}</strong><br /><br />
-        Les séances sont organisées selon les modalités convenues entre le Prestataire et le{' '}
-        <strong>Participant</strong>. Toute modification exceptionnelle pourra être convenue d'un
-        commun accord.
-      </Article>
+          <View style={S.articleTitle}><Text>Article 3 – Organisation des séances</Text></View>
+          <Text style={S.articleBody}>
+            Durée : {data.contrat.duree}{'\n'}
+            Fréquence : {data.contrat.frequence}{'\n'}
+            Lieu : {data.contrat.lieu}{'\n\n'}
+            Les séances sont organisées selon les modalités convenues entre le Prestataire et le Participant. Toute modification exceptionnelle pourra être convenue d'un commun accord.
+          </Text>
 
-      <Article titre="Article 4 – Rémunération et règlement">
-        Tarif horaire : <strong>{data.tarif} €</strong> (ce tarif est susceptible d'être révisé par le
-        Prestataire, avec un préavis de 30 jours).<br /><br />
-        Frais kilométriques : lorsque les séances nécessitent un déplacement au domicile du{' '}
-        <strong>Participant</strong>, des frais kilométriques pourront être facturés en sus sur la base de{' '}
-        <strong>{data.fraisKm} €/km</strong>.<br /><br />
-        Le règlement s'effectue à la fin de chaque mois, sur présentation d'une facture remise par
-        le Prestataire.
-      </Article>
+          <View style={S.articleTitle}><Text>Article 4 – Rémunération et règlement</Text></View>
+          <Text style={S.articleBody}>
+            Tarif horaire : {data.tarif} € (ce tarif est susceptible d'être révisé par le Prestataire, avec un préavis de 30 jours).{'\n\n'}
+            Frais kilométriques : lorsque les séances nécessitent un déplacement au domicile du Participant, des frais kilométriques pourront être facturés en sus sur la base de {data.fraisKm} €/km.{'\n\n'}
+            Le règlement s'effectue à la fin de chaque mois, sur présentation d'une facture remise par le Prestataire.
+          </Text>
+        </View>
+        <PdfFooter settings={pdfSettings} />
+      </Page>
 
-      <FooterPDF pierre={data.pierre} page="1/2" />
-    </div>
-  );
-}
+      {/* ── Page 2 ── */}
+      <Page size="A4" style={S.page}>
+        <PdfHeader settings={pdfSettings} title="Contrat de prestation" />
+        <View style={S.body}>
+          <View style={S.articleTitle}><Text>Article 5 – Annulation</Text></View>
+          <Text style={S.articleBody}>
+            - Toute séance annulée par le Participant plus de 24 heures avant l'horaire prévu n'est pas facturée.{'\n'}
+            - Toute séance annulée par le Participant moins de 24 heures avant l'horaire prévu reste due.{'\n'}
+            - Toute séance annulée par le Prestataire sera reportée ou, à défaut, non facturée.
+          </Text>
 
-// ── Page 2 ────────────────────────────────────────────────────────────────────
+          <View style={S.articleTitle}><Text>Article 6 – Assurance et responsabilité</Text></View>
+          <Text style={S.articleBody}>
+            Le Prestataire déclare être couvert par une assurance responsabilité civile professionnelle. Le Participant déclare être couvert pour tout dommage dont il pourrait être responsable pendant la séance.
+          </Text>
 
-function ContratPDFPage2({ data }: { data: ContratPDFData }) {
-  const PAGE: React.CSSProperties = {
-    width: 794, height: 1123,
-    padding: '56px 60px 90px',
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 13, color: '#000',
-    background: 'white',
-    lineHeight: 1.5,
-    position: 'relative' as const,
-    boxSizing: 'border-box' as const,
-  };
+          <View style={S.articleTitle}><Text>Article 7 – Engagements</Text></View>
+          <Text style={S.articleBody}>
+            Le Prestataire s'engage à assurer des séances adaptées, sécurisées et respectueuses du niveau et des besoins du Participant.{'\n\n'}
+            Le Participant s'engage à informer le Prestataire de tout problème de santé, contre-indication médicale ou changement de situation pouvant influencer la pratique de l'activité.
+          </Text>
 
-  return (
-    <div style={PAGE}>
-      <Article titre="Article 5 – Annulation">
-        <ul style={{ margin: '6px 0 0 18px', padding: 0 }}>
-          <li>Toute séance annulée par le <strong>Participant</strong> plus de 24 heures avant
-            l'horaire prévu n'est pas facturée.</li>
-          <li>Toute séance annulée par le <strong>Participant</strong> moins de 24 heures avant
-            l'horaire prévu reste due.</li>
-          <li>Toute séance annulée par le Prestataire sera reportée ou, à défaut, non facturée.</li>
-        </ul>
-      </Article>
+          <View style={S.articleTitle}><Text>Article 8 – Données personnelles et droit à l'image</Text></View>
+          <Text style={S.articleBody}>
+            Le Prestataire peut être amené à collecter certaines informations personnelles et/ou médicales nécessaires à l'organisation et au bon déroulement des séances. Ces données sont strictement confidentielles et traitées conformément à la réglementation en vigueur (RGPD).{'\n\n'}
+            Des photographies ou vidéos peuvent être réalisées à des fins pédagogiques. Aucune image du Participant ne pourra être utilisée sans son accord écrit préalable. Le Participant peut refuser ou retirer son accord à tout moment (voir page 1).
+          </Text>
 
-      <Article titre="Article 6 – Assurance et responsabilité">
-        Le Prestataire déclare être couvert par une assurance responsabilité civile professionnelle.
-        Le <strong>Participant</strong> déclare être couvert pour tout dommage dont il pourrait être
-        responsable pendant la séance.
-      </Article>
+          {/* Condition particulière */}
+          <View style={S.conditionBox}>
+            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10, marginBottom: 4 }}>Condition particulière :</Text>
+            <Text style={{ fontSize: 10, lineHeight: 1.65 }}>
+              {data.conditionParticuliere ||
+                `${dots}${dots}${dots}\n${dots}${dots}${dots}\n${dots}${dots}${dots}`}
+            </Text>
+          </View>
 
-      <Article titre="Article 7 – Engagements">
-        Le Prestataire s'engage à assurer des séances adaptées, sécurisées et respectueuses du
-        niveau et des besoins du <strong>Participant</strong>.<br /><br />
-        Le <strong>Participant</strong> s'engage à informer le Prestataire de tout problème de santé,
-        contre-indication médicale ou changement de situation pouvant influencer la pratique
-        de l'activité.
-      </Article>
+          {/* Fait à */}
+          <Text style={{ fontSize: 11, marginBottom: 22 }}>
+            <B>Fait à </B>{data.villeSignature}, <B>le </B>{data.dateSignature}
+          </Text>
 
-      <Article titre="Article 8 – Données personnelles et droit à l'image">
-        Le Prestataire peut être amené à collecter certaines informations personnelles et/ou médicales
-        nécessaires à l'organisation et au bon déroulement des séances. Ces données sont strictement
-        confidentielles et traitées conformément à la réglementation en vigueur (RGPD).<br /><br />
-        Des photographies ou vidéos peuvent être réalisées à des fins pédagogiques. Aucune image du
-        Participant ne pourra être utilisée sans son accord écrit préalable. Le Participant peut
-        refuser ou retirer son accord à tout moment (voir page 1).
-      </Article>
-
-      {/* Condition particulière */}
-      <div style={{
-        border: '1.5px solid #000',
-        padding: '11px 13px',
-        marginTop: 16, marginBottom: 24,
-        minHeight: 72,
-        fontSize: 12, lineHeight: 1.65,
-      }}>
-        <strong>Condition particulière :</strong><br />
-        {data.conditionParticuliere
-          ? data.conditionParticuliere
-          : (
-            <>
-              {'..........................................................................................................'}<br />
-              {'..........................................................................................................'}<br />
-              {'..........................................................................................................'}
-            </>
-          )
-        }
-      </div>
-
-      {/* Fait à */}
-      <div style={{ marginBottom: 28, fontSize: 13 }}>
-        <strong>Fait à</strong> {data.villeSignature},{' '}
-        <strong>le</strong> {data.dateSignature}
-      </div>
-
-      {/* Signatures */}
-      <div style={{ display: 'flex', gap: 36 }}>
-        {[
-          { titre: 'Le Participant', mention: '(Date et signature précédée de la mention\n« lu et approuvé »)' },
-          { titre: 'Le Prestataire', mention: '(Date et signature précédée de la mention\n« lu et approuvé »)' },
-        ].map(({ titre, mention }) => (
-          <div key={titre} style={{
-            flex: 1,
-            border: '1.5px solid #000',
-            padding: '12px',
-            minHeight: 110,
-            fontSize: 12,
-            textAlign: 'center' as const,
-          }}>
-            <strong>{titre}</strong><br />
-            <span style={{ fontSize: 11, color: '#555', whiteSpace: 'pre-line' as const }}>{mention}</span>
-          </div>
-        ))}
-      </div>
-
-      <FooterPDF pierre={data.pierre} page="2/2" />
-    </div>
-  );
-}
-
-// ── Composant conteneur (rendu caché dans le DOM) ─────────────────────────────
-
-interface Props {
-  data: ContratPDFData | null;
-}
-
-export default function ContratPDF({ data }: Props) {
-  if (!data) return null;
-  return (
-    <div style={{ position: 'absolute', top: -9999, left: -9999, visibility: 'hidden', zIndex: -1 }}>
-      <div id="contrat-pdf-page-1"><ContratPDFPage1 data={data} /></div>
-      <div id="contrat-pdf-page-2"><ContratPDFPage2 data={data} /></div>
-    </div>
+          {/* Signatures */}
+          <View style={S.signRow}>
+            {[
+              { titre: 'Le Participant' },
+              { titre: 'Le Prestataire' },
+            ].map(({ titre }, i) => (
+              <View key={titre} style={[S.signBox, i === 1 ? { marginLeft: 16 } : {}]}>
+                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 11, marginBottom: 5 }}>{titre}</Text>
+                <Text style={{ fontSize: 9, color: '#555555', textAlign: 'center' }}>
+                  {'(Date et signature précédée de la mention\n« lu et approuvé »)'}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+        <PdfFooter settings={pdfSettings} />
+      </Page>
+    </Document>
   );
 }
