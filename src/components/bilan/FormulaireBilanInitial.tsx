@@ -69,24 +69,6 @@ function genId() {
 
 const BLOCS: BlocConditionnel[] = [
   {
-    id: 'identite',
-    titre: '👤 Identité',
-    questions: [
-      { id: 'nom',           label: 'Nom',             type: 'text',    obligatoire: true },
-      { id: 'prenom',        label: 'Prénom',          type: 'text',    obligatoire: true },
-      { id: 'dateNaissance', label: 'Date naissance',  type: 'date',    obligatoire: true },
-      { id: 'telephone',     label: 'Téléphone',       type: 'tel' },
-      { id: 'email',         label: 'Email',           type: 'email' },
-      { id: 'adresse',       label: 'Adresse',         type: 'text' },
-      { id: 'taille',        label: 'Taille (cm)',     type: 'number' },
-      { id: 'poids',         label: 'Poids (kg)',      type: 'number' },
-      { id: 'iban',          label: 'IBAN',            type: 'text' },
-      { id: 'bic',           label: 'BIC',             type: 'text' },
-      { id: 'droitImage',    label: "Droit à l'image", type: 'oui-non' },
-    ],
-  },
-
-  {
     id: 'modeDeplacement',
     titre: '🚶 Mode de déplacement',
     questions: [
