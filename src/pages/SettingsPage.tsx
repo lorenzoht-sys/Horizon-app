@@ -308,6 +308,7 @@ export default function SettingsPage() {
     if (!validate()) { toast.error('Veuillez corriger les erreurs'); return; }
     const toSave = { ...form, siret: form.siret.replace(/\s/g, '') };
     localStorage.setItem('settings_praticien', JSON.stringify(toSave));
+    window.dispatchEvent(new Event('settings_praticien_updated'));
     toast.success('Paramètres enregistrés');
   }
 

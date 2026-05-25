@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Home, Calendar, Route, Dumbbell, Layers, Settings,
@@ -32,12 +33,19 @@ function loadSettings() {
 }
 
 export default function Sidebar({ onShowOnboarding, onLogout }: Props) {
-  const settings     = loadSettings();
-  const incomplete   = settingsIncomplete();
-  const prenom       = settings.prenom || 'P';
-  const nom          = settings.nom    || 'C';
-  const initiales    = `${prenom[0] ?? 'P'}${nom[0] ?? 'C'}`.toUpperCase();
-  const titrePraticien = settings.titre || 'Praticien APA';
+  const [settings, setSettings] = useState(loadSettings);
+
+  useEffect(() => {
+    const handler = () => setSettings(loadSettings());
+    window.addEventListener('settings_praticien_updated', handler);
+    return () => window.removeEventListener('settings_praticien_updated', handler);
+  }, []);
+
+  const incomplete     = !settings.siret || !settings.numeroSAP;
+  const prenom         = settings.prenom || 'P';
+  const nom            = settings.nom    || 'C';
+  const initiales      = `${prenom[0] ?? 'P'}${nom[0] ?? 'C'}`.toUpperCase();
+  const titrePraticien = settings.titre  || 'Praticien APA';
 
   return (
     <div
