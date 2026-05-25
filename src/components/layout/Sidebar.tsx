@@ -20,12 +20,6 @@ const NAV_ITEMS = [
   { path: '/map',       icon: Map,         label: 'Carte',           end: false },
 ];
 
-function settingsIncomplete(): boolean {
-  try {
-    const s = JSON.parse(localStorage.getItem('settings_praticien') || '{}');
-    return !s.siret || !s.numeroSAP;
-  } catch { return true; }
-}
 
 function loadSettings() {
   try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); }
