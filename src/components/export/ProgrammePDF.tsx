@@ -63,6 +63,8 @@ const S = StyleSheet.create({
   exAlertIcon: { fontSize: 11, marginRight: 4 },
   exAlertText: { fontSize: 10, color: '#993C1D', lineHeight: 1.5, flex: 1 },
   exNote: { fontSize: 10, color: '#555555', fontStyle: 'italic', marginBottom: 8 },
+  exAdaptation: { backgroundColor: '#FFFBEB', borderLeftWidth: 3, borderLeftColor: '#F59E0B', paddingHorizontal: 10, paddingVertical: 6, marginBottom: 8 },
+  exAdaptationText: { fontSize: 10, color: '#78350F', lineHeight: 1.5 },
   joursRow: { flexDirection: 'row', flexWrap: 'wrap' },
   jourActive: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#1A5F9E', borderBottomWidth: 2, borderBottomColor: '#1A5F9E', paddingVertical: 1, paddingHorizontal: 3, marginRight: 2 },
   jourInactive: { fontSize: 10, color: '#B4B2A9', paddingVertical: 1, paddingHorizontal: 3, marginRight: 2 },
@@ -154,6 +156,13 @@ function PageExercices({ participant, programme, exercices, settings }: Omit<Pro
             )}
             {ep.notePersonnalisee && (
               <Text style={S.exNote}>"{ep.notePersonnalisee}"</Text>
+            )}
+            {participant.profilHandicap && ex.adaptations?.[participant.profilHandicap] && (
+              <View style={S.exAdaptation}>
+                <Text style={S.exAdaptationText}>
+                  Adaptation : {ex.adaptations[participant.profilHandicap]}
+                </Text>
+              </View>
             )}
             <View style={S.joursRow}>
               {[1, 2, 3, 4, 5, 6, 7].map(d => {

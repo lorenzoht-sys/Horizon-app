@@ -9,7 +9,7 @@ import ExerciceConfigModal from '../programme/ExerciceConfigModal';
 import AdherenceChart from '../programme/AdherenceChart';
 import SuiviCalendar from '../programme/SuiviCalendar';
 import { exportProgrammePDF } from '../utils/exportPDF';
-import type { Exercice, ExerciceProgramme, CategorieExercice } from '../types';
+import type { Exercice, ExerciceProgramme, CategorieExercice, ProfilHandicap } from '../types';
 import { ArrowLeft, Trash2, Edit2, Save, Plus, Activity, FileDown, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -23,11 +23,26 @@ const CATEGORIES: { value: CategorieExercice | 'all'; label: string }[] = [
   { value: 'memoire', label: '🟣 Mémoire' },
 ];
 
+const PROFILS_HANDICAP: { id: ProfilHandicap; label: string; emoji: string }[] = [
+  { id: 'fauteuil_roulant', label: 'Fauteuil roulant', emoji: '♿' },
+  { id: 'avc_hemiplegie',   label: 'AVC / Hémiplégie', emoji: '🧠' },
+  { id: 'parkinson',        label: 'Parkinson',         emoji: '🫸' },
+  { id: 'sep',              label: 'Sclérose en plaques', emoji: '🎗️' },
+];
+
+const POSITIONS: { id: string; label: string }[] = [
+  { id: 'tous',     label: 'Toutes positions' },
+  { id: 'fauteuil', label: '♿ Fauteuil' },
+  { id: 'assis',    label: '🪑 Assis' },
+  { id: 'debout',   label: '🧍 Debout' },
+  { id: 'couche',   label: '🛏 Allongé' },
+];
+
 const JOURS_LABEL = ['', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 export default function ProgrammePage() {
   const { id } = useParams<{ id: string }>();
-  const { participants } = useParticipants();
+  const { participants, updateParticipant } = useParticipants();
   const {
     programmes,
     programmeActif,
@@ -42,6 +57,8 @@ export default function ProgrammePage() {
   const exercices = useMemo(() => loadExercices(), []);
 
   const [catFilter, setCatFilter] = useState<CategorieExercice | 'all'>('all');
+  const [profilFilter, setProfilFilter] = useState<ProfilHandicap | null>(participant?.profilHandicap ?? null);
+  const [positionFilter, setPositionFilter] = useState('tous');
   const [configTarget, setConfigTarget] = useState<Exercice | null>(null);
   const [editingEp, setEditingEp] = useState<ExerciceProgramme | null>(null);
   const [tab, setTab] = useState<'builder' | 'adherence'>('builder');
@@ -54,9 +71,26 @@ export default function ProgrammePage() {
   const [dateDebut, setDateDebut] = useState(new Date().toISOString().slice(0, 10));
   const [showNewForm, setShowNewForm] = useState(!programmeActif);
 
-  const filteredExercices = catFilter === 'all'
-    ? exercices
-    : exercices.filter(e => e.categorie === catFilter);
+  const filteredExercices = exercices.filter(ex => {
+    if (catFilter !== 'all' && ex.categorie !== catFilter) return false;
+    if (profilFilter) {
+      const compatible =
+        !ex.profilsCompatibles ||
+        ex.profilsCompatibles.includes('tous') ||
+        ex.profilsCompatibles.includes(profilFilter);
+      if (!compatible) return false;
+    }
+    if (positionFilter !== 'tous' && ex.positionRequise && ex.positionRequise !== 'tous' && ex.positionRequise !== positionFilter) {
+      return false;
+    }
+    return true;
+  });
+
+  function handleProfilChange(profil: ProfilHandicap | null) {
+    setProfilFilter(profil);
+    setPositionFilter('tous');
+    if (id) updateParticipant(id, { profilHandicap: profil ?? undefined });
+  }
 
   async function handleExportPDF() {
     if (!programmeActif || !participant) return;
@@ -216,8 +250,37 @@ export default function ProgrammePage() {
               {/* Bibliothèque */}
               <div className="bg-white rounded-2xl border border-gray-100 p-5">
                 <h2 className="font-heading font-semibold text-dark mb-3">Bibliothèque d'exercices</h2>
+
+                {/* Filtres profil handicap */}
+                <div className="flex gap-1 flex-wrap mb-2">
+                  {PROFILS_HANDICAP.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => handleProfilChange(profilFilter === p.id ? null : p.id)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${profilFilter === p.id ? 'bg-teal-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                      {p.emoji} {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Filtre position (visible si profil actif) */}
+                {profilFilter && (
+                  <div className="flex gap-1 flex-wrap mb-2">
+                    {POSITIONS.map(pos => (
+                      <button
+                        key={pos.id}
+                        onClick={() => setPositionFilter(pos.id)}
+                        className={`px-2 py-0.5 rounded-lg text-xs font-medium border transition-colors ${positionFilter === pos.id ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                      >
+                        {pos.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {/* Filtres catégories */}
-                <div className="flex gap-1 flex-wrap mb-4">
+                <div className="flex gap-1 flex-wrap mb-3">
                   {CATEGORIES.map(c => (
                     <button
                       key={c.value}
@@ -228,13 +291,20 @@ export default function ProgrammePage() {
                     </button>
                   ))}
                 </div>
-                <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
+
+                <div className="text-xs text-gray-400 mb-2">
+                  {filteredExercices.length} exercice{filteredExercices.length > 1 ? 's' : ''}
+                  {profilFilter && ' compatibles avec ce profil'}
+                </div>
+
+                <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
                   {filteredExercices.map(ex => (
                     <ExerciceCard
                       key={ex.id}
                       exercice={ex}
                       onAdd={() => setConfigTarget(ex)}
                       compact
+                      profilHandicap={profilFilter ?? undefined}
                     />
                   ))}
                 </div>
@@ -405,6 +475,7 @@ export default function ProgrammePage() {
         <ExerciceConfigModal
           exercice={configTarget}
           initial={editingEp ?? undefined}
+          defaultNote={!editingEp && profilFilter ? configTarget.adaptations?.[profilFilter] : undefined}
           onConfirm={(ep) => {
             if (programmeActif) {
               if (editingEp) {

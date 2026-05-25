@@ -386,7 +386,7 @@ export default function ParticipantProfile() {
     setExportingPDF(true);
     try {
       await exportFichePatientPDF(
-        { participant, bilanInitial, contratActif, settings },
+        { participant: participant!, bilanInitial, contratActif, settings },
         `Fiche_${participant!.nom}_${participant!.prenom}_MouvAPA.pdf`
       );
     } finally { setExportingPDF(false); }

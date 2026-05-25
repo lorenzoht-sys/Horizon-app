@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Exercice, CategorieExercice } from '../types';
+import type { Exercice, CategorieExercice, ProfilHandicap } from '../types';
 import { Plus, Play, X } from 'lucide-react';
 import YoutubePlayer from '../components/YoutubePlayer';
 
@@ -30,17 +30,23 @@ interface Props {
   exercice: Exercice;
   onAdd?: (exercice: Exercice) => void;
   compact?: boolean;
+  profilHandicap?: ProfilHandicap;
 }
 
-export default function ExerciceCard({ exercice, onAdd, compact }: Props) {
+export default function ExerciceCard({ exercice, onAdd, compact, profilHandicap }: Props) {
   const [showVideo, setShowVideo] = useState(false);
   const cat = CAT[exercice.categorie];
+
+  const adaptation = profilHandicap ? exercice.adaptations?.[profilHandicap] : undefined;
+  const estSpecifique = profilHandicap != null
+    && !(exercice.profilsCompatibles?.includes('tous') ?? true)
+    && (exercice.profilsCompatibles?.includes(profilHandicap) ?? false);
 
   return (
     <>
       <div style={{
         background: '#ffffff',
-        border: '1px solid #E8F4FD',
+        border: `1px solid ${estSpecifique ? '#2BBFBF' : '#E8F4FD'}`,
         borderRadius: 12,
         padding: '12px 16px',
         marginBottom: 8,
@@ -67,7 +73,7 @@ export default function ExerciceCard({ exercice, onAdd, compact }: Props) {
           </div>
         )}
 
-        {/* EN-TÊTE : titre à gauche, durée/bouton à droite */}
+        {/* EN-TÊTE : titre à gauche, bouton à droite */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: '#0D2B4B', lineHeight: 1.3 }}>
             {exercice.nom}
@@ -88,10 +94,32 @@ export default function ExerciceCard({ exercice, onAdd, compact }: Props) {
           )}
         </div>
 
-        {/* CATÉGORIE — texte simple, pas de fond */}
-        <span style={{ fontSize: 12, color: cat.color, display: 'inline-block', marginBottom: compact ? 0 : 8 }}>
-          {cat.icon} {cat.label}
-        </span>
+        {/* Catégorie + badge adapté */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: adaptation ? 8 : (compact ? 0 : 8) }}>
+          <span style={{ fontSize: 12, color: cat.color }}>
+            {cat.icon} {cat.label}
+          </span>
+          {estSpecifique && (
+            <span style={{
+              fontSize: 10, background: '#0D2B2B', color: 'white',
+              padding: '2px 8px', borderRadius: 20, fontWeight: 700, whiteSpace: 'nowrap',
+            }}>
+              Adapté ♿
+            </span>
+          )}
+        </div>
+
+        {/* Encart adaptation */}
+        {adaptation && (
+          <div style={{
+            background: '#FFFBEB', border: '1px solid #FCD34D',
+            borderRadius: 8, padding: '7px 10px',
+            fontSize: 11, color: '#78350F', lineHeight: 1.5,
+            marginBottom: compact ? 0 : 8,
+          }}>
+            <strong>Adaptation :</strong> {adaptation}
+          </div>
+        )}
 
         {/* Contenu étendu (non-compact) */}
         {!compact && (

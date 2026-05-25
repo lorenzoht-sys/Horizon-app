@@ -10,9 +10,10 @@ interface Props {
   initial?: Partial<ExerciceProgramme>;
   onConfirm: (ep: Omit<ExerciceProgramme, 'ordre'>) => void;
   onClose: () => void;
+  defaultNote?: string;
 }
 
-export default function ExerciceConfigModal({ exercice, initial, onConfirm, onClose }: Props) {
+export default function ExerciceConfigModal({ exercice, initial, onConfirm, onClose, defaultNote }: Props) {
   const [niveau, setNiveau] = useState<NiveauExercice>(initial?.niveau ?? 'debutant');
   const [series, setSeries] = useState(initial?.series ?? 3);
   const [repetitions, setRepetitions] = useState(initial?.repetitions ?? 10);
@@ -20,7 +21,7 @@ export default function ExerciceConfigModal({ exercice, initial, onConfirm, onCl
   const [modeRep, setModeRep] = useState<'rep' | 'duree'>(initial?.dureeSecondes ? 'duree' : 'rep');
   const [pause, setPause] = useState(initial?.pauseSecondes ?? 30);
   const [jours, setJours] = useState<number[]>(initial?.frequenceParSemaine ?? [1, 3, 5]);
-  const [note, setNote] = useState(initial?.notePersonnalisee ?? '');
+  const [note, setNote] = useState(initial?.notePersonnalisee ?? defaultNote ?? '');
 
   function toggleJour(num: number) {
     setJours(prev =>

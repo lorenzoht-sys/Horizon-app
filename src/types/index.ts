@@ -83,6 +83,8 @@ export type ProfilPatient =
 // Nouveau système — tags multiples
 export type TagPatient = 'senior' | 'post_op' | 'chronique' | 'adulte_blessure';
 
+export type ProfilHandicap = 'fauteuil_roulant' | 'avc_hemiplegie' | 'parkinson' | 'sep';
+
 export type TestKey = 'equilibre' | 'chairStand' | 'handGrip' | 'tug' | 'souplesse' | 'tm6' | 'memoire';
 
 export type TypeQuestion = 'texte' | 'note' | 'oui_non';
@@ -337,6 +339,10 @@ export interface Exercice {
   materielNecessaire?: string;
   dureeEstimeeMinutes: number;
   custom?: boolean;
+  profilsCompatibles?: (ProfilHandicap | 'tous')[];
+  adaptations?: Partial<Record<ProfilHandicap, string>>;
+  positionRequise?: 'debout' | 'assis' | 'couche' | 'fauteuil' | 'tous';
+  niveauMobilite?: 'minimal' | 'modere' | 'complet';
 }
 
 export interface ExerciceProgramme {
@@ -509,6 +515,7 @@ export interface Participant {
   bilans: Bilan[];
   programmes?: Programme[];
   rgpd?: RgpdConsent;
+  profilHandicap?: ProfilHandicap;
   // Profil de vie
   modeDeplacementHabituel?: 'voiture' | 'velo' | 'transports' | 'marche' | 'fauteuil' | 'autre';
   modeDeplacementDetail?: string;
