@@ -299,9 +299,19 @@ const BLOCS: BlocConditionnel[] = [
         label: 'Activités que le patient aimerait pratiquer',
         type: 'choix-multiple',
         options: [
-          '🚲 Vélo', '🎾 Raquette', '🏊 Natation', '🚶 Marche/randonnée',
-          '🧘 Yoga/stretching', '💃 Danse', '🏋️ Musculation légère',
-          '⛳ Golf', '🚵 Vélo électrique', '🏸 Badminton',
+          '🚶 Marche / Randonnée',
+          '🚴 Cyclisme (vélo, vélo électrique)',
+          '🏊 Natation / Aquagym',
+          '🎾 Raquettes (tennis, badminton, ping-pong)',
+          '⚽ Jeux de ballon (foot, pétanque, volley)',
+          '🎯 Précision (pétanque, golf, tir à l\'arc, fléchettes)',
+          '🤸 Gym douce / Stretching / Yoga',
+          '💃 Danse / Activités rythmiques',
+          '🏋️ Renforcement musculaire',
+          '🧠 Activités cognitives (mémoire, jeux de société)',
+          '🌱 Activités de plein air (jardinage, pêche)',
+          '🏃 Cardio / Endurance',
+          '♿ Activités adaptées (aquathérapie, handisport)',
         ],
         avecChampLibre: true,
       },
@@ -659,27 +669,40 @@ function ChoixMultiple({
   avecChampLibre?: boolean;
 }) {
   const selected = value ?? [];
-  const customValue = selected.find(s => !options.includes(s)) ?? '';
+  const predefined = selected.filter(s => options.includes(s));
+  const customs = selected.filter(s => !options.includes(s));
 
   const toggle = (opt: string) =>
-    onChange(selected.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt]);
+    onChange(
+      predefined.includes(opt)
+        ? [...predefined.filter(s => s !== opt), ...customs]
+        : [...predefined, opt, ...customs]
+    );
 
-  const setCustom = (text: string) => {
-    const base = selected.filter(s => options.includes(s));
-    onChange(text ? [...base, text] : base);
+  const updateCustom = (idx: number, text: string) => {
+    const next = customs.map((c, i) => (i === idx ? text : c));
+    onChange([...predefined, ...next]);
+  };
+
+  const removeCustom = (idx: number) => {
+    onChange([...predefined, ...customs.filter((_, i) => i !== idx)]);
+  };
+
+  const addCustom = () => {
+    onChange([...predefined, ...customs, '']);
   };
 
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 mb-3">
         {options.map(opt => (
           <button
             key={opt}
             type="button"
             onClick={() => toggle(opt)}
             className={`px-3 py-1.5 rounded-xl text-sm font-medium border transition-colors ${
-              selected.includes(opt)
+              predefined.includes(opt)
                 ? 'bg-primary text-white border-primary'
                 : 'border-gray-200 text-gray-600 hover:border-primary/50 hover:bg-gray-50'
             }`}
@@ -688,14 +711,36 @@ function ChoixMultiple({
           </button>
         ))}
       </div>
+
       {avecChampLibre && (
-        <input
-          type="text"
-          value={customValue}
-          onChange={e => setCustom(e.target.value)}
-          placeholder="Autre activité..."
-          className="mt-2 w-full border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-primary"
-        />
+        <div className="mt-1">
+          {customs.map((custom, idx) => (
+            <div key={idx} className="flex items-center gap-2 mb-2">
+              <input
+                type="text"
+                value={custom}
+                onChange={e => updateCustom(idx, e.target.value)}
+                placeholder="Activité personnalisée..."
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-primary"
+              />
+              <button
+                type="button"
+                onClick={() => removeCustom(idx)}
+                aria-label="Supprimer"
+                className="text-gray-400 hover:text-red-500 p-1 text-base leading-none flex-shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addCustom}
+            className="flex items-center gap-1.5 text-primary text-sm font-medium border border-dashed border-primary/40 hover:border-primary hover:bg-primary/5 px-3 py-1.5 rounded-xl transition-colors"
+          >
+            + Autre
+          </button>
+        </div>
       )}
     </div>
   );
