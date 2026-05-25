@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Bilan, TestKey } from '../../../types';
+import type { Bilan, TestKey, ProfilHandicap } from '../../../types';
 import DeltaIndicator from '../DeltaIndicator';
 import { useBilanDelta } from '../../../hooks/useBilanDelta';
 import { TEST_LABELS } from '../../../data/profiles';
@@ -12,6 +12,7 @@ interface Props {
   update: (patch: Partial<BilanForm>) => void;
   previous: Bilan | null;
   testsActifs?: TestKey[];
+  profilHandicap?: ProfilHandicap;
 }
 
 function Num({ label, value, onChange, unit, min, max, step = 1 }: {

@@ -87,7 +87,11 @@ export function useParticipants() {
 
   const addParticipant = useCallback((data: Omit<Participant, 'id' | 'token' | 'bilans'>) => {
     const newP: Participant = { tags: [], ...data, id: uuidv4(), token: generateToken(), bilans: [] };
-    setParticipants(prev => [newP, ...prev]);
+    setParticipants(prev => {
+      const updated = [newP, ...prev];
+      save(updated);
+      return updated;
+    });
     if (hasAddress(newP)) {
       runGeocode(newP.id, newP.adresseRue!, newP.adresseCodePostal ?? '', newP.adresseVille!);
     }
@@ -95,7 +99,11 @@ export function useParticipants() {
   }, []);
 
   const updateParticipant = useCallback((id: string, data: Partial<Omit<Participant, 'id' | 'token'>>) => {
-    setParticipants(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
+    setParticipants(prev => {
+      const updated = prev.map(p => p.id === id ? { ...p, ...data } : p);
+      save(updated);
+      return updated;
+    });
     // Re-géocoder si l'adresse a changé
     const addressChanged = 'adresseRue' in data || 'adresseVille' in data || 'adresseCodePostal' in data;
     if (addressChanged) {
@@ -117,7 +125,11 @@ export function useParticipants() {
   }, []);
 
   const deleteParticipant = useCallback((id: string) => {
-    setParticipants(prev => prev.filter(p => p.id !== id));
+    setParticipants(prev => {
+      const updated = prev.filter(p => p.id !== id);
+      save(updated);
+      return updated;
+    });
   }, []);
 
   const addBilan = useCallback((participantId: string, bilan: Omit<Bilan, 'id'>) => {
@@ -131,13 +143,15 @@ export function useParticipants() {
   }, []);
 
   const updateBilan = useCallback((participantId: string, bilanId: string, data: Partial<Bilan>) => {
-    setParticipants(prev =>
-      prev.map(p =>
+    setParticipants(prev => {
+      const updated = prev.map(p =>
         p.id === participantId
           ? { ...p, bilans: p.bilans.map(b => b.id === bilanId ? { ...b, ...data } : b) }
           : p
-      )
-    );
+      );
+      save(updated);
+      return updated;
+    });
   }, []);
 
   const getByToken = useCallback((token: string) => {

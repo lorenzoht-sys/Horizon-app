@@ -5,48 +5,6 @@ import { useBilanDelta } from '../../../hooks/useBilanDelta';
 import { TEST_LABELS } from '../../../data/profiles';
 import { Plus } from 'lucide-react';
 
-type AdaptationTest = { note: string; nonApplicable?: boolean };
-type AdaptationsMap = Partial<Record<TestKey, AdaptationTest>>;
-
-const ADAPTATIONS: Record<ProfilHandicap, AdaptationsMap> = {
-  fauteuil_roulant: {
-    equilibre:  { note: 'Test debout non applicable. Évaluer l\'équilibre assis (maintien sans appui, yeux ouverts puis fermés). Noter le temps tenu.', nonApplicable: true },
-    chairStand: { note: 'Test non applicable en fauteuil roulant. Remplacer par : nombre de transferts assis-debout en 30s si possible.', nonApplicable: true },
-    tug:        { note: 'Test de marche non applicable. Alternative : temps de propulsion sur 3m en fauteuil roulant.', nonApplicable: true },
-    souplesse:  { note: 'Effectuer en position assise : flexion avant depuis le fauteuil, mesurer la distance doigts-sol ou doigts-pieds.' },
-  },
-  avc_hemiplegie: {
-    equilibre:  { note: 'Tester les deux côtés séparément. Le côté hémiplégique peut être non testable (noter 0 si instable dès le départ).' },
-    handGrip:   { note: 'La différence entre la main valide et la main hémiplégique est un indicateur clé d\'évolution. Tester les deux.' },
-    tug:        { note: 'Prévoir un assistant à proximité. Le patient peut utiliser une aide technique (canne, déambulateur). Chronométrer le temps total.' },
-  },
-  parkinson: {
-    equilibre:  { note: 'Effectuer en phase ON (traitement actif). Noter l\'heure du test et l\'heure du dernier traitement dopaminergique.' },
-    chairStand: { note: 'Surveiller le risque de chute au lever. Préférer la phase ON. Laisser le patient partir sans aide.' },
-    tug:        { note: 'Surveiller le freezing. Ne pas anticiper — laisser le patient partir seul. Noter si freezing observé et à quel moment.' },
-  },
-  sep: {
-    equilibre:  { note: 'Effectuer en début de séance, avant l\'installation de la fatigue. Le résultat peut varier significativement selon l\'heure.' },
-    tug:        { note: 'Les résultats peuvent varier selon le niveau de fatigue du jour. Effectuer ce test en premier. Interrompre si chute de SpO₂.' },
-    souplesse:  { note: 'Interrompre si douleur neuropathique apparaît. La chaleur peut aggraver les symptômes (signe d\'Uhthoff).' },
-  },
-};
-
-function AdaptationNote({ profil, testKey }: { profil: ProfilHandicap; testKey: TestKey }) {
-  const adapt = ADAPTATIONS[profil]?.[testKey];
-  if (!adapt) return null;
-  return adapt.nonApplicable ? (
-    <div className="mb-3 flex items-start gap-2 bg-red-50 border-l-4 border-red-400 px-3 py-2 rounded-r-lg text-xs text-red-800 leading-relaxed">
-      <span className="flex-shrink-0 font-bold mt-0.5">⚠️</span>
-      <span><strong>Test non recommandé pour ce profil.</strong> {adapt.note}</span>
-    </div>
-  ) : (
-    <div className="mb-3 flex items-start gap-2 bg-amber-50 border-l-4 border-amber-400 px-3 py-2 rounded-r-lg text-xs text-amber-900 leading-relaxed">
-      <span className="flex-shrink-0 mt-0.5">♿</span>
-      <span><strong>Adaptation :</strong> {adapt.note}</span>
-    </div>
-  );
-}
 
 // ─── Souplesse +/- ──────────────────────────────────────────────
 
