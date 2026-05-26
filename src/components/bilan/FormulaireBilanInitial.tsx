@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import GIRWidget from './GIRWidget';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -8,7 +9,8 @@ type QuestionType =
   | 'text' | 'date' | 'number' | 'tel' | 'email' | 'oui-non'
   | 'echelle-10' | 'echelle-5' | 'choix-unique' | 'choix-multiple'
   | 'textarea' | 'time'
-  | 'operations-list' | 'pathologies-list' | 'traitements-list';
+  | 'operations-list' | 'pathologies-list' | 'traitements-list'
+  | 'gir';
 
 interface Question {
   id: string;
@@ -236,6 +238,7 @@ const BLOCS: BlocConditionnel[] = [
         type: 'choix-unique',
         options: ['Aucune', 'Canne', 'Déambulateur', 'Autre'],
       },
+      { id: 'gir', label: 'Évaluation GIR (Grille AGGIR)', type: 'gir' },
     ],
   },
 
@@ -960,6 +963,11 @@ function RenduInput({
         </div>
       );
 
+    case 'gir':
+      return (
+        <GIRWidget value={value ?? null} onChange={onChange} />
+      );
+
     default:
       return null;
   }
@@ -1079,6 +1087,7 @@ const CLÉS_INITIALES: Record<string, OuiNon | null> = {
 const TYPES_SIMPLES: QuestionType[] = [
   'text', 'tel', 'email', 'date', 'time', 'number', 'textarea',
   'oui-non', 'echelle-5', 'echelle-10', 'choix-unique', 'choix-multiple',
+  // 'gir' exclu du compteur de complétion (objet complexe)
 ];
 
 export default function FormulaireBilanInitial({ participantId, onFlat, initialFlat }: Props) {
