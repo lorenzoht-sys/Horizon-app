@@ -57,9 +57,30 @@ const MODES_DEPLACEMENT = [
 ] as const;
 
 const ACTIVITES_PREDEFINIES = [
-  '🚲 Vélo', '🎾 Raquette', '🏊 Natation', '🚶 Marche / randonnée',
-  '🧘 Yoga / stretching', '💃 Danse', '🏋️ Musculation légère',
-  '⛳ Golf', '🎣 Pêche', '🌱 Jardinage', '🏸 Badminton', '🚵 Vélo électrique',
+  '🚶 Marche / Randonnée',
+  '🚴 Cyclisme (vélo, vélo électrique)',
+  '🏊 Natation / Aquagym',
+  '🎾 Raquettes (tennis, badminton, ping-pong)',
+  '⚽ Jeux de ballon (basket, foot, volley)',
+  '🎯 Précision (pétanque, golf, sarbacane, tir à l\'arc, fléchettes)',
+  '🤸 Gym douce / Stretching / Yoga',
+  '💃 Danse / Activités rythmiques',
+  '🏋️ Renforcement musculaire',
+  '🧠 Activités cognitives',
+];
+
+const OBJECTIFS_PREDEFINIS = [
+  '💪 Renforcement musculaire',
+  '⚖️ Améliorer l\'équilibre',
+  '🦵 Améliorer la mobilité',
+  '🫀 Endurance à l\'effort',
+  '🛡️ Prévention des chutes',
+  '🏠 Maintien de l\'autonomie',
+  '😌 Réduire les douleurs',
+  '🎯 Améliorer la coordination',
+  '🧘 Travailler la souplesse',
+  '🔄 Reprendre une activité physique',
+  '💙 Regagner confiance en ses capacités',
 ];
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -117,13 +138,17 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
     antecedentsMedicaux:   initial?.antecedentsMedicaux   ?? '',
     antecedentsChirurgicaux: initial?.antecedentsChirurgicaux ?? '',
     allergies:         initial?.allergies         ?? '',
-    objectifsPatient:  initial?.objectifsPatient  ?? '',
+    objectifsPatient:  '',  // champ retiré du form — géré via objectifsSelectionnes
   });
 
   // ── États spéciaux ──────────────────────────────────────────────
   const [modeDeplacement, setModeDeplacement] = useState<string>(initial?.modeDeplacementHabituel ?? '');
   const [activitesSouhaitees, setActivitesSouhaitees] = useState<string[]>(initial?.activitesSouhaitees ?? []);
   const [nouvelleActivite, setNouvelleActivite] = useState('');
+  const [objectifsSelectionnes, setObjectifsSelectionnes] = useState<string[]>(
+    Array.isArray(initial?.objectifsPatient) ? initial.objectifsPatient : []
+  );
+  const [nouvelObjectif, setNouvelObjectif] = useState('');
 
   // ── Handlers ────────────────────────────────────────────────────
 
@@ -154,6 +179,18 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
     setNouvelleActivite('');
   }
 
+  function toggleObjectif(o: string) {
+    setObjectifsSelectionnes(prev => prev.includes(o) ? prev.filter(x => x !== o) : [...prev, o]);
+  }
+
+  function ajouterObjectifLibre() {
+    const v = nouvelObjectif.trim();
+    if (v && !objectifsSelectionnes.includes(v)) {
+      setObjectifsSelectionnes(prev => [...prev, v]);
+    }
+    setNouvelObjectif('');
+  }
+
   function toggleJour(jour: JourSemaine) {
     setDisponibilites(d => ({
       ...d,
@@ -174,12 +211,14 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const { objectifsPatient: _ignored, ...formRest } = form;
     onSubmit({
-      ...form,
+      ...formRest,
       taille: form.taille ? Number(form.taille) : undefined,
       poids:  form.poids  ? Number(form.poids)  : undefined,
       modeDeplacementHabituel: modeDeplacement as Participant['modeDeplacementHabituel'] || undefined,
       activitesSouhaitees,
+      objectifsPatient: objectifsSelectionnes.length > 0 ? objectifsSelectionnes : undefined,
       tags, testsActifs, rgpd, disponibilites,
       profil: initial?.profil,
       coordonnees: initial?.coordonnees,
@@ -505,11 +544,39 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
           </div>
 
           <div>
-            <label className={CLS_LABEL}>Objectifs personnels</label>
-            <textarea name="objectifsPatient" value={form.objectifsPatient} onChange={handleChange}
-              placeholder="Jouer avec mes petits-enfants, reprendre la randonnée, marcher jusqu'à la boulangerie..."
-              rows={2}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary resize-none" />
+            <label className={CLS_LABEL}>Objectifs du patient</label>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {OBJECTIFS_PREDEFINIS.map(o => (
+                <button key={o} type="button" onClick={() => toggleObjectif(o)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                    objectifsSelectionnes.includes(o)
+                      ? 'bg-teal-100 text-teal-800 border-teal-300'
+                      : 'bg-white border-gray-200 text-gray-600 hover:border-teal-300'
+                  }`}>
+                  {o}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={nouvelObjectif}
+                onChange={e => setNouvelObjectif(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ajouterObjectifLibre(); } }}
+                placeholder="✏️ Autre objectif..."
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-primary"
+              />
+              <button type="button" onClick={ajouterObjectifLibre}
+                className="px-4 py-2 bg-teal-600 text-white rounded-xl text-sm font-medium hover:bg-teal-700 transition-colors">
+                + Ajouter
+              </button>
+            </div>
+            {objectifsSelectionnes.filter(o => !OBJECTIFS_PREDEFINIS.includes(o)).map((o, i) => (
+              <div key={i} className="flex items-center gap-2 mt-2">
+                <span className="flex-1 text-sm text-gray-700 bg-teal-50 border border-teal-200 rounded-xl px-3 py-1.5">{o}</span>
+                <button type="button" onClick={() => toggleObjectif(o)}
+                  className="text-gray-400 hover:text-red-500 text-sm">✕</button>
+              </div>
+            ))}
           </div>
         </div>
       </div>

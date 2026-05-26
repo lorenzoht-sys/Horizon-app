@@ -163,13 +163,11 @@ function Page1({ participant, settings }: { participant: Participant; settings: 
         {((participant.activitesSouhaitees?.length ?? 0) > 0 || participant.objectifsPatient) && (
           <>
             <Section titre="Objectifs & activités souhaitées" />
+            {participant.objectifsPatient && (Array.isArray(participant.objectifsPatient) ? participant.objectifsPatient.length > 0 : true) && (
+              <Ligne label="Objectifs" valeur={Array.isArray(participant.objectifsPatient) ? participant.objectifsPatient.join(' · ') : participant.objectifsPatient} />
+            )}
             {(participant.activitesSouhaitees?.length ?? 0) > 0 && (
               <Ligne label="Activités souhaitées" valeur={participant.activitesSouhaitees!.join(' · ')} />
-            )}
-            {participant.objectifsPatient && (
-              <View style={S.quoteBox}>
-                <Text style={S.quoteText}>"{participant.objectifsPatient}"</Text>
-              </View>
             )}
           </>
         )}

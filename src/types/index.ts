@@ -523,7 +523,7 @@ export interface Participant {
   antecedentsChirurgicaux?: string;
   allergies?: string;
   activitesSouhaitees?: string[];
-  objectifsPatient?: string;
+  objectifsPatient?: string | string[];
   // Coordonnées bancaires (SAP)
   iban?: string;
   bic?: string;

@@ -1126,12 +1126,16 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
 
             {(p.activitesSouhaitees?.length || p.objectifsPatient) && (
               <InfoSection titre="Objectifs">
+                {p.objectifsPatient && (Array.isArray(p.objectifsPatient) ? p.objectifsPatient.length > 0 : true) && (
+                  <div style={{ fontSize: 13, color: '#4A6080', marginBottom: 4 }}>
+                    {(Array.isArray(p.objectifsPatient) ? p.objectifsPatient : [p.objectifsPatient]).map((o, i) => (
+                      <span key={i} style={{ display: 'inline-block', background: '#E6F7F5', color: '#0F7265', borderRadius: 12, padding: '2px 8px', margin: '2px', fontSize: 12 }}>{o}</span>
+                    ))}
+                  </div>
+                )}
                 {p.activitesSouhaitees?.length ? (
                   <div style={{ fontSize: 13, color: '#4A6080' }}>🎯 {p.activitesSouhaitees.join(' · ')}</div>
                 ) : null}
-                {p.objectifsPatient && (
-                  <div style={{ fontSize: 13, color: '#4A6080', marginTop: 4, fontStyle: 'italic' }}>"{p.objectifsPatient}"</div>
-                )}
               </InfoSection>
             )}
 
