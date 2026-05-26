@@ -37,6 +37,15 @@ export interface Bilan {
   memoire: {
     scoreImmediat: number | null;
     scoreDiffere: number | null;
+    dubois?: {
+      rappelImmediatLibre: number | null;
+      rappelImmediatIndice: number | null;
+      rappelDiffereLibre: number | null;
+      rappelDiffereIndice: number | null;
+      scoreImmediat: number | null;
+      scoreDiffere: number | null;
+      scoreMIS: number | null;
+    };
   };
 
   notesProfessionnelles: string;

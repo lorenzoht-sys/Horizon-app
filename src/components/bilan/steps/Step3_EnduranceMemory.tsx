@@ -4,6 +4,7 @@ import DeltaIndicator from '../DeltaIndicator';
 import { useBilanDelta } from '../../../hooks/useBilanDelta';
 import { TEST_LABELS } from '../../../data/profiles';
 import { Plus } from 'lucide-react';
+import DuboisMISWidget from '../DuboisMISWidget';
 
 type BilanForm = Omit<Bilan, 'id'>;
 
@@ -144,16 +145,21 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
       {active.includes('memoire') && (
         <section>
           <div className="flex items-center gap-3 mb-3">
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Mémoire (Dubois)</h3>
-            <DeltaIndicator delta={d.memoireImmediat} unit="/5" />
-            <DeltaIndicator delta={d.memoireDiffere} unit="/5" />
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Mémoire — Test Dubois MIS</h3>
+            {mem.dubois?.scoreMIS != null && (
+              <DeltaIndicator delta={d.memoireMIS} unit="/8" />
+            )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Num label="Score immédiat (/5)" value={mem.scoreImmediat} unit="/5" min={0} max={5}
-              onChange={v => setMem({ scoreImmediat: v })} />
-            <Num label="Score différé (/5)" value={mem.scoreDiffere} unit="/5" min={0} max={5}
-              onChange={v => setMem({ scoreDiffere: v })} />
-          </div>
+          <DuboisMISWidget
+            value={mem.dubois ?? null}
+            onChange={dubois => {
+              setMem({
+                dubois,
+                scoreImmediat: dubois.scoreImmediat,
+                scoreDiffere: dubois.scoreDiffere,
+              });
+            }}
+          />
         </section>
       )}
 

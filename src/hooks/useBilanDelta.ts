@@ -38,5 +38,10 @@ export function useBilanDelta(current: Bilan, previous: Bilan | null) {
     tm6Distance: calcDelta(current.tm6.distanceMetres, p?.tm6.distanceMetres ?? null, false),
     memoireImmediat: calcDelta(current.memoire.scoreImmediat, p?.memoire.scoreImmediat ?? null, false),
     memoireDiffere: calcDelta(current.memoire.scoreDiffere, p?.memoire.scoreDiffere ?? null, false),
+    memoireMIS: calcDelta(
+      current.memoire.dubois?.scoreMIS ?? null,
+      p?.memoire.dubois?.scoreMIS ?? null,
+      false,
+    ),
   };
 }

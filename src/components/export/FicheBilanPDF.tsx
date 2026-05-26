@@ -137,7 +137,11 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
           <View style={S.cellRow}>
             <Cellule titre="Équilibre" body={`Jambe D : ${eq.droite ?? '—'} Sec  ·  Jambe G : ${eq.gauche ?? '—'} Sec`} />
             <View style={S.cellSpacer} />
-            <Cellule titre="Mémoire" body={`Immédiat : ${memoire.scoreImmediat ?? '—'} / 5  ·  Différé : ${memoire.scoreDiffere ?? '—'} / 5`} />
+            <Cellule titre="Mémoire" body={
+              memoire.dubois?.scoreMIS != null
+                ? `MIS : ${memoire.dubois.scoreMIS}/8  ·  Immédiat : ${memoire.dubois.scoreImmediat ?? '—'}/4  ·  Différé : ${memoire.dubois.scoreDiffere ?? '—'}/4`
+                : `Immédiat : ${memoire.scoreImmediat ?? '—'}/5  ·  Différé : ${memoire.scoreDiffere ?? '—'}/5`
+            } />
           </View>
 
           {/* Graphiques */}
