@@ -15,6 +15,7 @@ import LoginPage from './pages/LoginPage';
 import SettingsPage from './pages/SettingsPage';
 import ContratNouveauPage from './pages/ContratNouveauPage';
 import ComparaisonPage from './pages/ComparaisonPage';
+import StatsPage from './pages/StatsPage';
 import OnboardingModal from './components/OnboardingModal';
 import { BandeauHorsLigne, NotificationMiseAJour } from './components/pwa/PWAComponents';
 
@@ -97,6 +98,7 @@ export default function App() {
                     <Route path="/participant/:id/contrat/nouveau" element={<ContratNouveauPage />} />
                     <Route path="/participant/:id/comparaison" element={<ComparaisonPage />} />
                     <Route path="/exercices" element={<ExercicesPage />} />
+                    <Route path="/stats" element={<StatsPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/zones" element={
                       <Suspense fallback={<MapFallback />}><ZonesPage /></Suspense>
