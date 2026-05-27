@@ -17,9 +17,26 @@ const DEFAULT: StatsPro = {
 function load(): StatsPro {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? { ...DEFAULT, ...JSON.parse(raw) } : DEFAULT;
+    if (!raw) return { ...DEFAULT };
+    const parsed = JSON.parse(raw);
+    return {
+      caParMois:
+        parsed?.caParMois !== null &&
+        typeof parsed?.caParMois === 'object' &&
+        !Array.isArray(parsed?.caParMois)
+          ? parsed.caParMois
+          : {},
+      objectifMensuel:
+        typeof parsed?.objectifMensuel === 'number'
+          ? parsed.objectifMensuel
+          : DEFAULT.objectifMensuel,
+      objectifAnnuel:
+        typeof parsed?.objectifAnnuel === 'number'
+          ? parsed.objectifAnnuel
+          : DEFAULT.objectifAnnuel,
+    };
   } catch {
-    return DEFAULT;
+    return { ...DEFAULT };
   }
 }
 

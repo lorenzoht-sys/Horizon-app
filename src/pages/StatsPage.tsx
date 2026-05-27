@@ -103,12 +103,12 @@ function FormulaireSaisieCA({ statsPro, onSave }: {
 }) {
   const [ouvert, setOuvert] = useState(false);
   const annee = new Date().getFullYear();
-  const [valeurs, setValeurs] = useState<Record<string, number>>({ ...statsPro.caParMois });
-  const [objMensuel, setObjMensuel] = useState(statsPro.objectifMensuel);
-  const [objAnnuel, setObjAnnuel] = useState(statsPro.objectifAnnuel);
+  const [valeurs, setValeurs] = useState<Record<string, number>>({ ...(statsPro.caParMois ?? {}) });
+  const [objMensuel, setObjMensuel] = useState(statsPro.objectifMensuel ?? 0);
+  const [objAnnuel, setObjAnnuel] = useState(statsPro.objectifAnnuel ?? 0);
 
   useEffect(() => {
-    setValeurs({ ...statsPro.caParMois });
+    setValeurs({ ...(statsPro.caParMois ?? {}) });
     setObjMensuel(statsPro.objectifMensuel);
     setObjAnnuel(statsPro.objectifAnnuel);
   }, [statsPro]);
@@ -190,7 +190,7 @@ function GraphiqueCA({ statsPro }: { statsPro: StatsPro }) {
   const moisActuel = new Date().getMonth();
 
   const caData = Array.from({ length: 12 }, (_, i) => {
-    const v = statsPro.caParMois[moisKey(annee, i)];
+    const v = (statsPro.caParMois ?? {})[moisKey(annee, i)];
     return v !== undefined ? v : null;
   });
 
@@ -209,7 +209,7 @@ function GraphiqueCA({ statsPro }: { statsPro: StatsPro }) {
       {
         type: 'line' as const,
         label: 'Objectif mensuel',
-        data: Array(12).fill(statsPro.objectifMensuel),
+        data: Array(12).fill(statsPro.objectifMensuel ?? 0),
         borderColor: '#F59E0B',
         borderDash: [5, 4] as any,
         borderWidth: 1.5,
@@ -325,7 +325,7 @@ function SectionProgression({ participants }: { participants: Participant[] }) {
   };
 
   participants.forEach(p => {
-    const bilans = [...p.bilans].sort((a, b) => a.date.localeCompare(b.date));
+    const bilans = [...(p.bilans ?? [])].sort((a, b) => a.date.localeCompare(b.date));
     if (bilans.length < 2) return;
     const ini = bilans[0];
     const act = bilans[bilans.length - 1];
@@ -513,19 +513,23 @@ function SectionRepartition({ participants }: { participants: Participant[] }) {
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 export default function StatsPage() {
-  const { participants } = useParticipants();
-  const { seances } = useAgenda();
+  const { participants: rawParticipants } = useParticipants();
+  const { seances: rawSeances } = useAgenda();
   const { contratActifDeParticipant } = useContrats();
   const { statsPro, sauvegarder } = useStatsPro();
+
+  const participants = rawParticipants ?? [];
+  const seances = rawSeances ?? [];
+  const caParMois = statsPro?.caParMois ?? {};
 
   const now = new Date();
   const moisActuelKey = todayKey();
   const moisPrecKey   = moisPrecedentKey(moisActuelKey);
 
-  const caMois     = statsPro.caParMois[moisActuelKey] ?? 0;
-  const caPrecedent= statsPro.caParMois[moisPrecKey] ?? 0;
-  const deltaCaPct = caPrecedent > 0 ? Math.round(((caMois - caPrecedent) / caPrecedent) * 100) : null;
-  const caAnnuel   = Object.entries(statsPro.caParMois)
+  const caMois      = caParMois[moisActuelKey] ?? 0;
+  const caPrecedent = caParMois[moisPrecKey] ?? 0;
+  const deltaCaPct  = caPrecedent > 0 ? Math.round(((caMois - caPrecedent) / caPrecedent) * 100) : null;
+  const caAnnuel    = Object.entries(caParMois)
     .filter(([k]) => k.startsWith(now.getFullYear().toString()))
     .reduce((s, [, v]) => s + v, 0);
 
