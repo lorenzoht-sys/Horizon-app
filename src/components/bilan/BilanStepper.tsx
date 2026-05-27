@@ -23,7 +23,7 @@ function emptyBilan(trimestre: number): BilanForm {
     handGrip: { droite: null, gauche: null },
     tug3m: null,
     souplesse: { methode: 'assis', valeur: null },
-    tm6: { distanceMetres: null, fcAvant: null, fcApres: null, fc2min: null, spo2Avant: null, spo2Apres: null, spo22min: null, ressentiBorg: null },
+    tm6: { distanceMetres: null, fcAvant: null, fcApres: null, fc2min: null, spo2Avant: null, spo2Apres: null, spo22min: null, borgRPE: null },
     memoire: { scoreImmediat: null, scoreDiffere: null },
     notesProfessionnelles: '', objectifsSuivants: '', pointsVigilance: '', messageClient: '',
     notesBilan: undefined,

@@ -31,7 +31,7 @@ export interface Bilan {
     spo2Avant: number | null;
     spo2Apres: number | null;
     spo22min: number | null;
-    ressentiBorg: number | null;
+    borgRPE: number | null;
   };
 
   memoire: {

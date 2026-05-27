@@ -55,6 +55,13 @@ const S = StyleSheet.create({
   interpretBox: { borderWidth: 1, borderColor: '#D0D8E8', padding: 9, fontSize: 10, color: '#333333', lineHeight: 1.65, textAlign: 'justify', backgroundColor: 'white' },
 });
 
+function borgRPEInterp(v: number): string {
+  if (v <= 11) return 'Effort faible';
+  if (v <= 14) return 'Effort modéré — zone cible APA';
+  if (v <= 17) return 'Effort élevé';
+  return 'Effort maximal';
+}
+
 function fmt(d: string) {
   return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
@@ -127,7 +134,7 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
           <View style={S.cellRow}>
             <Cellule titre="Force" unite={`${cs ?? '—'} Reps`} body={`Main D : ${hg.droite ?? '—'} Kg  ·  Main G : ${hg.gauche ?? '—'} Kg`} />
             <View style={S.cellSpacer} />
-            <Cellule titre="Endurance" unite={`${tm6.distanceMetres ?? '—'} M`} body={`O2 : ${tm6.spo2Avant ?? '—'} / ${tm6.spo2Apres ?? '—'} / ${tm6.spo22min ?? '—'}  ·  FC : ${tm6.fcAvant ?? '—'} / ${tm6.fcApres ?? '—'} Bpm`} />
+            <Cellule titre="Endurance" unite={`${tm6.distanceMetres ?? '—'} M`} body={`O2 : ${tm6.spo2Avant ?? '—'} / ${tm6.spo2Apres ?? '—'} / ${tm6.spo22min ?? '—'}  ·  FC : ${tm6.fcAvant ?? '—'} / ${tm6.fcApres ?? '—'} Bpm${tm6.borgRPE != null ? `\nRessenti effort (Borg) : ${tm6.borgRPE}/20 — ${borgRPEInterp(tm6.borgRPE)}` : ''}`} />
           </View>
           <View style={S.cellRow}>
             <Cellule titre="Souplesse" unite={`${sVal} Cm`} />

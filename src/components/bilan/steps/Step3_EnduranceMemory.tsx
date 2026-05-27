@@ -1,5 +1,23 @@
 import { useState } from 'react';
 import type { Bilan, TestKey, ProfilHandicap } from '../../../types';
+
+const BORG_RPE_LEVELS = [
+  { v: 6,  label: 'Aucun effort' },
+  { v: 7,  label: 'Extrêmement léger' },
+  { v: 8,  label: '' },
+  { v: 9,  label: 'Très léger' },
+  { v: 10, label: '' },
+  { v: 11, label: 'Léger' },
+  { v: 12, label: '' },
+  { v: 13, label: 'Quelque peu difficile' },
+  { v: 14, label: '' },
+  { v: 15, label: 'Difficile' },
+  { v: 16, label: '' },
+  { v: 17, label: 'Très difficile' },
+  { v: 18, label: '' },
+  { v: 19, label: 'Extrêmement difficile' },
+  { v: 20, label: 'Effort maximal' },
+] as const;
 import DeltaIndicator from '../DeltaIndicator';
 import { useBilanDelta } from '../../../hooks/useBilanDelta';
 import { TEST_LABELS } from '../../../data/profiles';
@@ -118,32 +136,68 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
             💡 La mesure à 2 min après permet d'évaluer la récupération cardiaque du patient.
           </p>
 
-          {/* Échelle de Borg — boutons */}
+          {/* Échelle de Borg RPE 6-20 */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-2">
-              Ressenti d'effort — Échelle de Borg
-              <span className="font-normal text-gray-400 ml-1">(6 = aucun effort · 20 = effort maximal)</span>
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].map(v => {
-                const color = v <= 9 ? '#3B6D11' : v <= 12 ? '#F59E0B' : v <= 16 ? '#EF8C00' : '#EF4444';
-                const active = tm6.ressentiBorg === v;
+            <div className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-3">
+              Ressenti d'effort — Échelle de Borg RPE 6-20
+            </div>
+            <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 mb-4">
+              <span className="text-base flex-shrink-0">💬</span>
+              <p className="text-xs text-blue-700 leading-relaxed">
+                Demander au patient :{' '}
+                <strong>« Sur cette échelle de 6 à 20, comment estimez-vous votre effort pendant le test de marche ? »</strong>
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {BORG_RPE_LEVELS.map(({ v, label }) => {
+                const color = v <= 12 ? '#1D9E75' : v <= 16 ? '#F59E0B' : '#E85050';
+                const active = tm6.borgRPE === v;
                 return (
-                  <button key={v} type="button"
-                    onClick={() => setTm6({ ressentiBorg: v })}
-                    style={{ borderColor: active ? color : undefined, background: active ? color : undefined }}
-                    className={`w-9 h-9 rounded-lg text-xs font-bold border transition-colors ${
-                      active ? 'text-white' : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                    }`}>
-                    {v}
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setTm6({ borgRPE: active ? null : v })}
+                    style={active
+                      ? { background: color, borderColor: color }
+                      : { borderColor: color + '55' }}
+                    className={`rounded-xl border-2 px-3 py-2.5 text-left transition-all ${
+                      active ? '' : 'bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="font-black text-base" style={{ color: active ? 'white' : color }}>
+                      {v}
+                    </div>
+                    {label && (
+                      <div className="text-[11px] leading-tight mt-0.5" style={{ color: active ? 'rgba(255,255,255,0.9)' : '#6B7280' }}>
+                        {label}
+                      </div>
+                    )}
                   </button>
                 );
               })}
             </div>
-            <div className="flex justify-between text-xs text-gray-400 mt-1">
-              <span>Aucun effort</span>
-              <span>Effort maximal</span>
-            </div>
+
+            {tm6.borgRPE != null && (() => {
+              const v = tm6.borgRPE!;
+              const color = v <= 12 ? '#1D9E75' : v <= 16 ? '#F59E0B' : '#E85050';
+              const interp =
+                v <= 11 ? "Effort faible — peut augmenter l'intensité" :
+                v <= 14 ? 'Effort modéré — zone cible APA ✅' :
+                v <= 17 ? 'Effort élevé — adapter le programme' :
+                'Effort maximal ⚠️ — réduire l\'intensité';
+              return (
+                <div className="mt-3 rounded-xl border-2 px-4 py-2.5 flex items-center gap-3"
+                  style={{ borderColor: color, background: color + '18' }}>
+                  <span className="text-2xl font-black tabular-nums" style={{ color }}>{v}/20</span>
+                  <span className="text-sm font-semibold" style={{ color }}>{interp}</span>
+                </div>
+              );
+            })()}
+
+            <p className="text-[11px] text-gray-400 italic mt-2">
+              Borg G., 1982 · Échelle de perception de l'effort RPE 6-20
+            </p>
           </div>
         </section>
       )}
