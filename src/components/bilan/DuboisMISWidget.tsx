@@ -1,5 +1,5 @@
 // Test de dépistage mémoire — Dubois MIS (Memory Impairment Screen)
-// Dubois et al., 2002 — Protocol 4 mots / rappel immédiat / 5 min / rappel différé
+// Dubois et al., 2002 — Protocol 5 mots / rappel immédiat / 5 min / rappel différé
 
 import { useState, useEffect, useRef } from 'react';
 
@@ -24,6 +24,7 @@ const MOTS = [
   { mot: 'SOLEIL',  categorie: 'Astre' },
   { mot: 'BRUN',    categorie: 'Couleur' },
   { mot: 'LIBERTÉ', categorie: 'Sentiment' },
+  { mot: 'CHAPEAU', categorie: 'Vêtement' },
 ];
 
 const TIMER_INITIAL = 300; // 5 minutes en secondes
@@ -67,10 +68,10 @@ function computeScores(
 }
 
 function getMISInterpretation(score: number): { color: string; label: string } {
-  if (score === 8) return { color: '#1D9E75', label: 'Mémoire normale ✅' };
-  if (score >= 5)  return { color: '#F59E0B', label: 'Troubles légers — à surveiller' };
-  if (score === 4) return { color: '#F59E0B', label: 'Seuil — consultation recommandée' };
-  return { color: '#E85050', label: 'Troubles significatifs ⚠️ Orienter vers un médecin' };
+  if (score === 10) return { color: '#1D9E75', label: 'Mémoire normale ✅' };
+  if (score >= 7)   return { color: '#F59E0B', label: 'Troubles légers — à surveiller' };
+  if (score >= 5)   return { color: '#F59E0B', label: 'Seuil — consultation recommandée' };
+  return { color: '#E85050', label: 'Troubles significatifs ⚠️' };
 }
 
 // ─── Sous-composants ──────────────────────────────────────────────────────────
@@ -78,7 +79,7 @@ function getMISInterpretation(score: number): { color: string; label: string } {
 function ScoreButtons({ value, onChange }: { value: number | null; onChange: (v: number) => void }) {
   return (
     <div className="flex gap-2">
-      {[0, 1, 2, 3, 4].map(n => (
+      {[0, 1, 2, 3, 4, 5].map(n => (
         <button
           key={n}
           type="button"
@@ -92,7 +93,7 @@ function ScoreButtons({ value, onChange }: { value: number | null; onChange: (v:
           {n}
         </button>
       ))}
-      <span className="self-center text-xs text-gray-400 ml-1">/4</span>
+      <span className="self-center text-xs text-gray-400 ml-1">/5</span>
     </div>
   );
 }
@@ -106,7 +107,7 @@ function IndiciageSection({
   indice: number | null;
   onIndice: (v: number) => void;
 }) {
-  if (libre >= 4) return null;
+  if (libre >= 5) return null;
   return (
     <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 space-y-2">
       <p className="text-xs font-semibold text-amber-800">
@@ -221,18 +222,18 @@ export default function DuboisMISWidget({ value, onChange }: Props) {
           style={{ borderColor: interp.color, background: `${interp.color}12` }}>
           <div className="text-center min-w-[64px]">
             <div className="text-3xl font-black" style={{ color: interp.color }}>{mis}</div>
-            <div className="text-xs text-gray-500">/8</div>
+            <div className="text-xs text-gray-500">/10</div>
           </div>
           <div>
             <div className="text-sm font-semibold" style={{ color: interp.color }}>{interp.label}</div>
             <div className="text-xs text-gray-500 mt-1">
-              Immédiat : {value?.scoreImmediat ?? '—'}/4 · Différé : {value?.scoreDiffere ?? '—'}/4
+              Immédiat : {value?.scoreImmediat ?? '—'}/5 · Différé : {value?.scoreDiffere ?? '—'}/5
             </div>
           </div>
         </div>
 
         <p className="text-xs text-gray-400 italic">
-          Test MIS — Dubois et al., 2002 · Score ≥ 5/8 : mémoire normale · Score &lt; 5/8 : dépistage positif
+          Test MIS — Dubois et al., 2002 · Score = 10/10 : mémoire normale · Score ≤ 4/10 : dépistage positif
         </p>
       </div>
     );
@@ -265,7 +266,7 @@ export default function DuboisMISWidget({ value, onChange }: Props) {
 
         <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-5 space-y-3">
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Montrez ces 4 mots au patient
+            Montrez ces 5 mots au patient
           </p>
           <div className="space-y-2">
             {MOTS.map(m => (

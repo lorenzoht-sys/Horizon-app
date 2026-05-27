@@ -32,7 +32,7 @@ function bilanAxisValue(key: TestKey, bilan: Bilan, normalize: ReturnType<typeof
     case 'tm6':       return normalize.tm6(bilan.tm6.distanceMetres ?? 0);
     case 'memoire': {
       const mis = bilan.memoire.dubois?.scoreMIS;
-      if (mis != null) return Math.round((mis / 8) * 100);
+      if (mis != null) return Math.round((mis / 10) * 100);
       const moy = ((bilan.memoire.scoreImmediat ?? 0) + (bilan.memoire.scoreDiffere ?? 0)) / 2;
       return normalize.memoire(moy);
     }

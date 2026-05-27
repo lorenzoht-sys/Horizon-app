@@ -4,6 +4,7 @@ import DeltaIndicator from '../DeltaIndicator';
 import { useBilanDelta } from '../../../hooks/useBilanDelta';
 import { TEST_LABELS } from '../../../data/profiles';
 import { Plus } from 'lucide-react';
+import ChronoWidget from '../ChronoWidget';
 
 
 // ─── Souplesse +/- ──────────────────────────────────────────────
@@ -131,11 +132,25 @@ export default function Step2_Physical({ form, update, previous, testsActifs }: 
               <DeltaIndicator delta={d.equilibreGauche} unit="s" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Num label="Pied droit" value={form.equilibre.droite} unit="s" min={0} max={60} step={1}
-              onChange={v => update({ equilibre: { ...form.equilibre, droite: v } })} />
-            <Num label="Pied gauche" value={form.equilibre.gauche} unit="s" min={0} max={60} step={1}
-              onChange={v => update({ equilibre: { ...form.equilibre, gauche: v } })} />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-600">Jambe droite</p>
+              <ChronoWidget
+                mode="up-MMSS"
+                onStop={s => update({ equilibre: { ...form.equilibre, droite: Math.round(s) } })}
+              />
+              <Num label="Durée" value={form.equilibre.droite} unit="s" min={0} max={60} step={1}
+                onChange={v => update({ equilibre: { ...form.equilibre, droite: v } })} />
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-600">Jambe gauche</p>
+              <ChronoWidget
+                mode="up-MMSS"
+                onStop={s => update({ equilibre: { ...form.equilibre, gauche: Math.round(s) } })}
+              />
+              <Num label="Durée" value={form.equilibre.gauche} unit="s" min={0} max={60} step={1}
+                onChange={v => update({ equilibre: { ...form.equilibre, gauche: v } })} />
+            </div>
           </div>
         </section>
       )}
@@ -178,8 +193,14 @@ export default function Step2_Physical({ form, update, previous, testsActifs }: 
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">TUG 3m (s)</h3>
             <DeltaIndicator delta={d.tug3m} unit="s" />
           </div>
-          <Num label="Temps (moins = mieux)" value={form.tug3m} unit="s" min={0} max={60} step={0.1}
-            onChange={v => update({ tug3m: v })} />
+          <div className="space-y-2">
+            <ChronoWidget
+              mode="up-SScc"
+              onStop={s => update({ tug3m: parseFloat(s.toFixed(2)) })}
+            />
+            <Num label="Temps (moins = mieux)" value={form.tug3m} unit="s" min={0} max={60} step={0.01}
+              onChange={v => update({ tug3m: v })} />
+          </div>
         </section>
       )}
 

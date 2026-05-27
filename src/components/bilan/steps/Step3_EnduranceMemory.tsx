@@ -5,6 +5,7 @@ import { useBilanDelta } from '../../../hooks/useBilanDelta';
 import { TEST_LABELS } from '../../../data/profiles';
 import { Plus } from 'lucide-react';
 import DuboisMISWidget from '../DuboisMISWidget';
+import ChronoWidget from '../ChronoWidget';
 
 type BilanForm = Omit<Bilan, 'id'>;
 
@@ -68,6 +69,12 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">TM6 — Test de Marche de 6 minutes</h3>
             <DeltaIndicator delta={d.tm6Distance} unit="m" />
+          </div>
+
+          {/* Chrono 6 minutes */}
+          <div className="mb-4">
+            <p className="text-xs font-medium text-gray-600 mb-2">Chronomètre 6 minutes</p>
+            <ChronoWidget mode="down-6min" />
           </div>
 
           {/* Distance */}
@@ -147,7 +154,7 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
           <div className="flex items-center gap-3 mb-3">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Mémoire — Test Dubois MIS</h3>
             {mem.dubois?.scoreMIS != null && (
-              <DeltaIndicator delta={d.memoireMIS} unit="/8" />
+              <DeltaIndicator delta={d.memoireMIS} unit="/10" />
             )}
           </div>
           <DuboisMISWidget
