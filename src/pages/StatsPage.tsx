@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component } from 'react';
+import type { ReactNode } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, Tooltip, Legend, Filler, ArcElement,
+  BarController, LineController, DoughnutController,
 } from 'chart.js';
 import { Chart, Line, Doughnut } from 'react-chartjs-2';
 import { TrendingUp, TrendingDown, Edit3, ChevronDown, ChevronUp } from 'lucide-react';
@@ -16,7 +18,33 @@ import type { Participant } from '../types';
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, Tooltip, Legend, Filler, ArcElement,
+  BarController, LineController, DoughnutController,
 );
+
+// ─── ErrorBoundary ────────────────────────────────────────────────────────────
+
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  state = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-40 rounded-xl bg-red-50 text-red-500 text-sm p-4">
+          <span className="font-medium">Erreur de chargement</span>
+          <span className="text-xs text-red-400 mt-1">{(this.state.error as Error | null)?.message}</span>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -189,10 +217,15 @@ function GraphiqueCA({ statsPro }: { statsPro: StatsPro }) {
   const annee = new Date().getFullYear();
   const moisActuel = new Date().getMonth();
 
-  const caData = Array.from({ length: 12 }, (_, i) => {
-    const v = (statsPro.caParMois ?? {})[moisKey(annee, i)];
-    return v !== undefined ? v : null;
-  });
+  let caData: (number | null)[] = Array(12).fill(null);
+  try {
+    caData = Array.from({ length: 12 }, (_, i) => {
+      const v = (statsPro.caParMois ?? {})[moisKey(annee, i)];
+      return v !== undefined ? v : null;
+    });
+  } catch {
+    caData = Array(12).fill(null);
+  }
 
   const data: any = {
     labels: MOIS_COURTS,
@@ -258,13 +291,18 @@ function GraphiqueCA({ statsPro }: { statsPro: StatsPro }) {
 
 function GraphiqueSeances({ seances }: { seances: any[] }) {
   const semaines = getLast12Weeks();
-  const seancesData = semaines.map(s =>
-    seances.filter(seance =>
-      seance.statut === 'realisee' &&
-      new Date(seance.date) >= s.debut &&
-      new Date(seance.date) <= s.fin
-    ).length
-  );
+  let seancesData: number[] = Array(12).fill(0);
+  try {
+    seancesData = semaines.map(s =>
+      (seances ?? []).filter(seance =>
+        seance.statut === 'realisee' &&
+        new Date(seance.date) >= s.debut &&
+        new Date(seance.date) <= s.fin
+      ).length
+    );
+  } catch {
+    seancesData = Array(12).fill(0);
+  }
 
   const data = {
     labels: semaines.map(s => s.label),
@@ -320,41 +358,50 @@ function calcDeltaPct(vi: number | null, va: number | null, lowerIsBetter = fals
 }
 
 function SectionProgression({ participants }: { participants: Participant[] }) {
-  const progressions: Record<string, number[]> = {
-    equilibre: [], force: [], handGrip: [], mobilite: [], souplesse: [], endurance: [], memoire: [],
-  };
+  let rows: { key: string; label: string; moy: number | null; n: number }[] = [];
+  try {
+    const progressions: Record<string, number[]> = {
+      equilibre: [], force: [], handGrip: [], mobilite: [], souplesse: [], endurance: [], memoire: [],
+    };
 
-  participants.forEach(p => {
-    const bilans = [...(p.bilans ?? [])].sort((a, b) => a.date.localeCompare(b.date));
-    if (bilans.length < 2) return;
-    const ini = bilans[0];
-    const act = bilans[bilans.length - 1];
+    (participants ?? []).forEach(p => {
+      try {
+        const bilans = [...(p.bilans ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+        if (bilans.length < 2) return;
+        const ini = bilans[0];
+        const act = bilans[bilans.length - 1];
 
-    const pushIf = (key: string, v: number | null) => { if (v !== null) progressions[key].push(v); };
+        const pushIf = (key: string, v: number | null) => { if (v !== null) progressions[key].push(v); };
 
-    const eqI = ((ini.equilibre?.droite ?? 0) + (ini.equilibre?.gauche ?? 0)) / 2;
-    const eqA = ((act.equilibre?.droite ?? 0) + (act.equilibre?.gauche ?? 0)) / 2;
-    pushIf('equilibre', calcDeltaPct(eqI, eqA));
-    pushIf('force',     calcDeltaPct(ini.chairStand30, act.chairStand30));
-    const hgI = ((ini.handGrip?.droite ?? 0) + (ini.handGrip?.gauche ?? 0)) / 2;
-    const hgA = ((act.handGrip?.droite ?? 0) + (act.handGrip?.gauche ?? 0)) / 2;
-    pushIf('handGrip',  calcDeltaPct(hgI, hgA));
-    pushIf('mobilite',  calcDeltaPct(ini.tug3m, act.tug3m, true));
-    pushIf('souplesse', calcDeltaPct(ini.souplesse?.valeur, act.souplesse?.valeur));
-    pushIf('endurance', calcDeltaPct(ini.tm6?.distanceMetres, act.tm6?.distanceMetres));
-    const memI = ini.memoire?.dubois?.scoreMIS ?? ((ini.memoire?.scoreImmediat ?? 0) + (ini.memoire?.scoreDiffere ?? 0));
-    const memA = act.memoire?.dubois?.scoreMIS ?? ((act.memoire?.scoreImmediat ?? 0) + (act.memoire?.scoreDiffere ?? 0));
-    pushIf('memoire', calcDeltaPct(memI, memA));
-  });
+        const eqI = ((ini.equilibre?.droite ?? 0) + (ini.equilibre?.gauche ?? 0)) / 2;
+        const eqA = ((act.equilibre?.droite ?? 0) + (act.equilibre?.gauche ?? 0)) / 2;
+        pushIf('equilibre', calcDeltaPct(eqI, eqA));
+        pushIf('force',     calcDeltaPct(ini.chairStand30, act.chairStand30));
+        const hgI = ((ini.handGrip?.droite ?? 0) + (ini.handGrip?.gauche ?? 0)) / 2;
+        const hgA = ((act.handGrip?.droite ?? 0) + (act.handGrip?.gauche ?? 0)) / 2;
+        pushIf('handGrip',  calcDeltaPct(hgI, hgA));
+        pushIf('mobilite',  calcDeltaPct(ini.tug3m, act.tug3m, true));
+        pushIf('souplesse', calcDeltaPct(ini.souplesse?.valeur, act.souplesse?.valeur));
+        pushIf('endurance', calcDeltaPct(ini.tm6?.distanceMetres, act.tm6?.distanceMetres));
+        const memI = ini.memoire?.dubois?.scoreMIS ?? ((ini.memoire?.scoreImmediat ?? 0) + (ini.memoire?.scoreDiffere ?? 0));
+        const memA = act.memoire?.dubois?.scoreMIS ?? ((act.memoire?.scoreImmediat ?? 0) + (act.memoire?.scoreDiffere ?? 0));
+        pushIf('memoire', calcDeltaPct(memI, memA));
+      } catch {
+        // patient ignoré si ses données sont corrompues
+      }
+    });
 
-  const rows = Object.entries(progressions)
-    .map(([key, vals]) => ({
-      key,
-      label: LABELS_TESTS[key],
-      moy: vals.length > 0 ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null,
-      n: vals.length,
-    }))
-    .filter(r => r.moy !== null);
+    rows = Object.entries(progressions)
+      .map(([key, vals]) => ({
+        key,
+        label: LABELS_TESTS[key],
+        moy: vals.length > 0 ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null,
+        n: vals.length,
+      }))
+      .filter(r => r.moy !== null);
+  } catch {
+    rows = [];
+  }
 
   if (rows.length === 0) {
     return <p className="text-xs text-gray-400 italic py-4">Pas encore assez de bilans pour calculer les progressions.</p>;
@@ -391,23 +438,32 @@ function SectionAssiduite({ participants, seances, contratActif }: {
   seances: any[];
   contratActif: (id: string) => any;
 }) {
-  const tops = participants
-    .map(p => {
-      const contrat = contratActif(p.id);
-      const seancesPt = seances.filter(s => s.participantId === p.id);
-      const planifiees = contrat
-        ? seancesPt.filter(s => s.contratId === contrat.id).length
-        : seancesPt.length;
-      const realisees = contrat
-        ? seancesPt.filter(s => s.contratId === contrat.id && s.statut === 'realisee').length
-        : seancesPt.filter(s => s.statut === 'realisee').length;
-      if (planifiees === 0) return null;
-      const taux = Math.round((realisees / planifiees) * 100);
-      return { p, realisees, planifiees, taux };
-    })
-    .filter(Boolean)
-    .sort((a, b) => b!.taux - a!.taux)
-    .slice(0, 5) as { p: Participant; realisees: number; planifiees: number; taux: number }[];
+  let tops: { p: Participant; realisees: number; planifiees: number; taux: number }[] = [];
+  try {
+    tops = (participants ?? [])
+      .map(p => {
+        try {
+          const contrat = contratActif(p.id);
+          const seancesPt = (seances ?? []).filter(s => s.participantId === p.id);
+          const planifiees = contrat
+            ? seancesPt.filter(s => s.contratId === contrat.id).length
+            : seancesPt.length;
+          const realisees = contrat
+            ? seancesPt.filter(s => s.contratId === contrat.id && s.statut === 'realisee').length
+            : seancesPt.filter(s => s.statut === 'realisee').length;
+          if (planifiees === 0) return null;
+          const taux = Math.round((realisees / planifiees) * 100);
+          return { p, realisees, planifiees, taux };
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => b!.taux - a!.taux)
+      .slice(0, 5) as { p: Participant; realisees: number; planifiees: number; taux: number }[];
+  } catch {
+    tops = [];
+  }
 
   if (tops.length === 0) {
     return <p className="text-xs text-gray-400 italic py-4">Aucune séance enregistrée.</p>;
@@ -438,27 +494,37 @@ function SectionAssiduite({ participants, seances, contratActif }: {
 // ─── Répartition patients ─────────────────────────────────────────────────────
 
 function SectionRepartition({ participants }: { participants: Participant[] }) {
+  let filteredLabels: string[] = [];
+  let filteredData: number[] = [];
   const counts: Record<string, number> = {
     'Sénior': 0, 'Post-op': 0, 'Chronique': 0, 'Adulte blessé': 0, 'Autre': 0,
   };
 
-  participants.forEach(p => {
-    const tags = p.tags ?? [];
-    if (tags.includes('post_op'))          counts['Post-op']++;
-    else if (tags.includes('senior'))      counts['Sénior']++;
-    else if (tags.includes('chronique'))   counts['Chronique']++;
-    else if (tags.includes('adulte_blessure')) counts['Adulte blessé']++;
-    else {
-      const age = calculerAge(p.dateNaissance);
-      const ctx = (p.contexteClinic ?? '').toLowerCase();
-      if (ctx.includes('pth') || ctx.includes('opér') || ctx.includes('post-op')) counts['Post-op']++;
-      else if (age >= 65) counts['Sénior']++;
-      else counts['Autre']++;
-    }
-  });
+  try {
+    (participants ?? []).forEach(p => {
+      try {
+        const tags = p.tags ?? [];
+        if (tags.includes('post_op'))              counts['Post-op']++;
+        else if (tags.includes('senior'))          counts['Sénior']++;
+        else if (tags.includes('chronique'))       counts['Chronique']++;
+        else if (tags.includes('adulte_blessure')) counts['Adulte blessé']++;
+        else {
+          const age = calculerAge(p.dateNaissance);
+          const ctx = (p.contexteClinic ?? '').toLowerCase();
+          if (ctx.includes('pth') || ctx.includes('opér') || ctx.includes('post-op')) counts['Post-op']++;
+          else if (age >= 65) counts['Sénior']++;
+          else counts['Autre']++;
+        }
+      } catch {
+        counts['Autre']++;
+      }
+    });
+  } catch {
+    // counts reste à zéro
+  }
 
-  const filteredLabels = Object.keys(counts).filter(k => counts[k] > 0);
-  const filteredData   = filteredLabels.map(k => counts[k]);
+  filteredLabels = Object.keys(counts).filter(k => counts[k] > 0);
+  filteredData   = filteredLabels.map(k => counts[k]);
   const COLORS = ['#1A5F9E','#2BBFBF','#F59E0B','#1D9E75','#888780'];
 
   if (filteredData.length === 0) {
@@ -610,16 +676,20 @@ export default function StatsPage() {
             </div>
             <div className="text-right">
               <div className="text-xs text-gray-400">Objectif mensuel</div>
-              <div className="text-sm font-semibold text-gray-700">{statsPro.objectifMensuel.toLocaleString('fr-FR')} €</div>
+              <div className="text-sm font-semibold text-gray-700">{(statsPro.objectifMensuel ?? 0).toLocaleString('fr-FR')} €</div>
             </div>
           </div>
-          <GraphiqueCA statsPro={statsPro} />
+          <ErrorBoundary>
+            <GraphiqueCA statsPro={statsPro} />
+          </ErrorBoundary>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <div className="text-sm font-semibold text-gray-800 mb-1">Séances hebdomadaires</div>
           <div className="text-xs text-gray-400 mb-3">12 dernières semaines — séances réalisées</div>
-          <GraphiqueSeances seances={seances} />
+          <ErrorBoundary>
+            <GraphiqueSeances seances={seances} />
+          </ErrorBoundary>
         </div>
       </div>
 
@@ -627,21 +697,27 @@ export default function StatsPage() {
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <div className="text-sm font-semibold text-gray-800 mb-3">Progression moyenne par test</div>
-          <SectionProgression participants={participants} />
+          <ErrorBoundary>
+            <SectionProgression participants={participants} />
+          </ErrorBoundary>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <div className="text-sm font-semibold text-gray-800 mb-3">Top assiduité</div>
-          <SectionAssiduite
-            participants={participants}
-            seances={seances}
-            contratActif={contratActifDeParticipant}
-          />
+          <ErrorBoundary>
+            <SectionAssiduite
+              participants={participants}
+              seances={seances}
+              contratActif={contratActifDeParticipant}
+            />
+          </ErrorBoundary>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <div className="text-sm font-semibold text-gray-800 mb-3">Répartition patients</div>
-          <SectionRepartition participants={participants} />
+          <ErrorBoundary>
+            <SectionRepartition participants={participants} />
+          </ErrorBoundary>
           <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
             Total : <span className="font-semibold text-gray-700">{participants.length} patient{participants.length > 1 ? 's' : ''}</span>
           </div>
