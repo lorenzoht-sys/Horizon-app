@@ -136,19 +136,19 @@ export default function Step2_Physical({ form, update, previous, testsActifs }: 
             <div className="space-y-2">
               <p className="text-xs font-semibold text-gray-600">Jambe droite</p>
               <ChronoWidget
-                mode="up-MMSS"
-                onStop={s => update({ equilibre: { ...form.equilibre, droite: Math.round(s) } })}
+                mode="up-MMSScc"
+                onStop={s => update({ equilibre: { ...form.equilibre, droite: parseFloat(s.toFixed(2)) } })}
               />
-              <Num label="Durée" value={form.equilibre.droite} unit="s" min={0} max={60} step={1}
+              <Num label="Durée" value={form.equilibre.droite} unit="s" min={0} max={60} step={0.01}
                 onChange={v => update({ equilibre: { ...form.equilibre, droite: v } })} />
             </div>
             <div className="space-y-2">
               <p className="text-xs font-semibold text-gray-600">Jambe gauche</p>
               <ChronoWidget
-                mode="up-MMSS"
-                onStop={s => update({ equilibre: { ...form.equilibre, gauche: Math.round(s) } })}
+                mode="up-MMSScc"
+                onStop={s => update({ equilibre: { ...form.equilibre, gauche: parseFloat(s.toFixed(2)) } })}
               />
-              <Num label="Durée" value={form.equilibre.gauche} unit="s" min={0} max={60} step={1}
+              <Num label="Durée" value={form.equilibre.gauche} unit="s" min={0} max={60} step={0.01}
                 onChange={v => update({ equilibre: { ...form.equilibre, gauche: v } })} />
             </div>
           </div>
@@ -195,7 +195,7 @@ export default function Step2_Physical({ form, update, previous, testsActifs }: 
           </div>
           <div className="space-y-2">
             <ChronoWidget
-              mode="up-SScc"
+              mode="up-MMSScc"
               onStop={s => update({ tug3m: parseFloat(s.toFixed(2)) })}
             />
             <Num label="Temps (moins = mieux)" value={form.tug3m} unit="s" min={0} max={60} step={0.01}

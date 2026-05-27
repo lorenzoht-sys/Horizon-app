@@ -1,62 +1,57 @@
 import { useState, useRef, useEffect } from 'react';
 
-// mode 'up-MMSS'  : chrono qui monte, affiche 00:00
-// mode 'up-SScc'  : chrono qui monte, affiche 00.00 (centièmes)
-// mode 'down-6min': compte à rebours 6 minutes, beep à la fin
+// mode 'up-MMSScc'  : chrono montant MM:SS.cc (équilibre, TUG)
+// mode 'down-6min'  : compte à rebours 6 min MM:SS, beep à la fin
 
-type Mode = 'up-MMSS' | 'up-SScc' | 'down-6min';
+type Mode = 'up-MMSScc' | 'down-6min';
 
 interface Props {
   mode: Mode;
-  onStop?: (seconds: number) => void;
+  onStop?: (seconds: number) => void; // secondes avec 2 décimales
   onEnd?: () => void;
 }
 
 export default function ChronoWidget({ mode, onStop, onEnd }: Props) {
   const INITIAL = mode === 'down-6min' ? 360_000 : 0;
 
-  const [ms, setMs] = useState(INITIAL);
+  const [ms, setMs]       = useState(INITIAL);
   const [status, setStatus] = useState<'idle' | 'running' | 'paused' | 'done'>('idle');
 
   const startRef  = useRef(0);
   const baseRef   = useRef(INITIAL);
-  const rafRef    = useRef(0);
+  const timerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const onStopRef = useRef(onStop);
   const onEndRef  = useRef(onEnd);
   useEffect(() => { onStopRef.current = onStop; }, [onStop]);
   useEffect(() => { onEndRef.current  = onEnd;  }, [onEnd]);
 
-  function loop(now: number) {
-    const elapsed = now - startRef.current;
-    let current: number;
-
+  function tick() {
+    const elapsed = performance.now() - startRef.current;
     if (mode === 'down-6min') {
-      current = baseRef.current - elapsed;
+      const current = baseRef.current - elapsed;
       if (current <= 0) {
-        baseRef.current = 0;
         setMs(0);
         setStatus('done');
+        if (timerRef.current) clearInterval(timerRef.current);
         playBeep();
         onEndRef.current?.();
         return;
       }
+      setMs(current);
     } else {
-      current = baseRef.current + elapsed;
+      setMs(baseRef.current + elapsed);
     }
-
-    setMs(current);
-    rafRef.current = requestAnimationFrame(loop);
   }
 
   function start() {
     if (status === 'done') return;
     startRef.current = performance.now();
     setStatus('running');
-    rafRef.current = requestAnimationFrame(loop);
+    timerRef.current = setInterval(tick, 10);
   }
 
   function stop() {
-    cancelAnimationFrame(rafRef.current);
+    if (timerRef.current) clearInterval(timerRef.current);
     const elapsed = performance.now() - startRef.current;
     const current =
       mode === 'down-6min'
@@ -66,40 +61,44 @@ export default function ChronoWidget({ mode, onStop, onEnd }: Props) {
     setMs(current);
     setStatus('paused');
     if (mode !== 'down-6min') {
-      onStopRef.current?.(current / 1000);
+      onStopRef.current?.(parseFloat((current / 1000).toFixed(2)));
     }
   }
 
   function reset() {
-    cancelAnimationFrame(rafRef.current);
+    if (timerRef.current) clearInterval(timerRef.current);
     baseRef.current = INITIAL;
     setMs(INITIAL);
     setStatus('idle');
   }
 
-  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+  useEffect(() => () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+  }, []);
 
-  function format(val: number): string {
-    if (mode === 'up-SScc') {
-      const s  = Math.floor(val / 1000);
-      const cs = Math.floor((val % 1000) / 10);
-      return `${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
-    }
-    const totalSec = Math.floor(val / 1000);
-    const m = Math.floor(totalSec / 60);
-    const s = totalSec % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  function formatDisplay(val: number) {
+    const total   = Math.max(0, val);
+    const minutes = Math.floor(total / 60000);
+    const secondes = Math.floor((total % 60000) / 1000);
+    const centièmes = Math.floor((total % 1000) / 10);
+    return {
+      mmss: `${String(minutes).padStart(2, '0')}:${String(secondes).padStart(2, '0')}`,
+      cc:   String(centièmes).padStart(2, '0'),
+    };
   }
+
+  const { mmss, cc } = formatDisplay(ms);
 
   return (
     <div
       style={{ background: '#0D2B2B' }}
       className="rounded-xl p-4 flex flex-col items-center gap-3"
     >
-      <div
-        style={{ fontSize: 32, fontWeight: 700, color: 'white', fontFamily: 'monospace', letterSpacing: 2 }}
-      >
-        {format(ms)}
+      <div style={{ fontFamily: 'monospace', color: 'white', display: 'flex', alignItems: 'baseline' }}>
+        <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: 2 }}>{mmss}</span>
+        {mode !== 'down-6min' && (
+          <span style={{ fontSize: 24, fontWeight: 700 }}>.{cc}</span>
+        )}
       </div>
 
       {status === 'done' && (
