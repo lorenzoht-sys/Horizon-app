@@ -26,14 +26,29 @@ export const CATEGORIE_COLORS: Record<CategorieExercice, string> = {
   memoire:   'bg-purple-100 text-purple-700',
 };
 
+const COULEURS_PROFILS: Record<ProfilHandicap, string> = {
+  fauteuil_roulant: '#1A5F9E',
+  avc_hemiplegie:   '#8B5CF6',
+  parkinson:        '#F59E0B',
+  sep:              '#1D9E75',
+};
+
+const LABELS_PROFILS: Record<ProfilHandicap, string> = {
+  fauteuil_roulant: 'Fauteuil',
+  avc_hemiplegie:   'AVC',
+  parkinson:        'Parkinson',
+  sep:              'SEP',
+};
+
 interface Props {
   exercice: Exercice;
   onAdd?: (exercice: Exercice) => void;
   compact?: boolean;
   profilHandicap?: ProfilHandicap;
+  incompatible?: boolean;
 }
 
-export default function ExerciceCard({ exercice, onAdd, compact, profilHandicap }: Props) {
+export default function ExerciceCard({ exercice, onAdd, compact, profilHandicap, incompatible }: Props) {
   const [showVideo, setShowVideo] = useState(false);
   const cat = CAT[exercice.categorie];
 
@@ -41,6 +56,34 @@ export default function ExerciceCard({ exercice, onAdd, compact, profilHandicap 
   const estSpecifique = profilHandicap != null
     && !(exercice.profilsCompatibles?.includes('tous') ?? true)
     && (exercice.profilsCompatibles?.includes(profilHandicap) ?? false);
+
+  const badgeCouleur = profilHandicap ? COULEURS_PROFILS[profilHandicap] : '#0D2B2B';
+
+  if (incompatible) {
+    return (
+      <div style={{
+        background: '#F9FAFB',
+        border: '1px solid #E5E7EB',
+        borderRadius: 12,
+        padding: '12px 16px',
+        marginBottom: 8,
+        opacity: 0.55,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#6B7280' }}>{exercice.nom}</span>
+          <span style={{
+            fontSize: 10, color: '#EF4444', background: '#FEE2E2',
+            padding: '2px 8px', borderRadius: 20, fontWeight: 600, whiteSpace: 'nowrap',
+          }}>
+            ✕ Non recommandé
+          </span>
+        </div>
+        <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 3 }}>
+          {cat.icon} {cat.label}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -73,7 +116,7 @@ export default function ExerciceCard({ exercice, onAdd, compact, profilHandicap 
           </div>
         )}
 
-        {/* EN-TÊTE : titre à gauche, bouton à droite */}
+        {/* EN-TÊTE */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: '#0D2B4B', lineHeight: 1.3 }}>
             {exercice.nom}
@@ -99,12 +142,14 @@ export default function ExerciceCard({ exercice, onAdd, compact, profilHandicap 
           <span style={{ fontSize: 12, color: cat.color }}>
             {cat.icon} {cat.label}
           </span>
-          {estSpecifique && (
+          {estSpecifique && profilHandicap && (
             <span style={{
-              fontSize: 10, background: '#0D2B2B', color: 'white',
+              fontSize: 10,
+              background: badgeCouleur,
+              color: 'white',
               padding: '2px 8px', borderRadius: 20, fontWeight: 700, whiteSpace: 'nowrap',
             }}>
-              Adapté ♿
+              ♿ {LABELS_PROFILS[profilHandicap]}
             </span>
           )}
         </div>
@@ -143,6 +188,23 @@ export default function ExerciceCard({ exercice, onAdd, compact, profilHandicap 
               >
                 ▶ Voir la démonstration
               </span>
+            )}
+
+            {/* Badge référence scientifique */}
+            {exercice.reference && (
+              <div style={{
+                marginTop: 8,
+                paddingTop: 7,
+                borderTop: '1px solid #E8F4FD',
+                fontSize: 10,
+                color: '#6B7280',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}>
+                <span>📚</span>
+                <span>{exercice.reference}</span>
+              </div>
             )}
           </>
         )}

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { loadExercices, saveCustomExercice } from '../data/exercices';
 import PageWrapper from '../components/layout/PageWrapper';
 import ExerciceCard from '../programme/ExerciceCard';
-import type { CategorieExercice, Exercice } from '../types';
+import type { CategorieExercice, Exercice, ProfilHandicap } from '../types';
 import { Plus, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import toast from 'react-hot-toast';
@@ -18,6 +18,21 @@ const CATEGORIES: { value: CategorieExercice | 'all'; label: string }[] = [
   { value: 'memoire', label: '🟣 Mémoire' },
 ];
 
+const PROFILS_HANDICAP: { id: ProfilHandicap; label: string; emoji: string; color: string }[] = [
+  { id: 'fauteuil_roulant', label: 'Fauteuil roulant',    emoji: '♿',  color: '#1A5F9E' },
+  { id: 'avc_hemiplegie',   label: 'AVC / Hémiplégie',    emoji: '🧠', color: '#8B5CF6' },
+  { id: 'parkinson',        label: 'Parkinson',            emoji: '🫸', color: '#F59E0B' },
+  { id: 'sep',              label: 'Sclérose en plaques',  emoji: '🎗️', color: '#1D9E75' },
+];
+
+const POSITIONS: { id: string; label: string }[] = [
+  { id: 'tous',     label: 'Toutes positions' },
+  { id: 'fauteuil', label: '♿ Fauteuil' },
+  { id: 'assis',    label: '🪑 Assis' },
+  { id: 'debout',   label: '🧍 Debout' },
+  { id: 'couche',   label: '🛏 Allongé' },
+];
+
 const EMPTY_EX: Omit<Exercice, 'id'> = {
   nom: '',
   categorie: 'force',
@@ -31,15 +46,62 @@ const EMPTY_EX: Omit<Exercice, 'id'> = {
 export default function ExercicesPage() {
   const [exercices, setExercices] = useState(() => loadExercices());
   const [catFilter, setCatFilter] = useState<CategorieExercice | 'all'>('all');
+  const [profilFilter, setProfilFilter] = useState<ProfilHandicap | null>(null);
+  const [positionFilter, setPositionFilter] = useState('tous');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<Omit<Exercice, 'id'>>(EMPTY_EX);
   const [videoUrl, setVideoUrl] = useState('');
   const videoId = extractYoutubeId(videoUrl);
 
-  const filtered = useMemo(() =>
-    catFilter === 'all' ? exercices : exercices.filter(e => e.categorie === catFilter),
-    [exercices, catFilter]
-  );
+  const { compatible, incompatibles } = useMemo(() => {
+    const parCategorie = exercices.filter(ex =>
+      catFilter === 'all' || ex.categorie === catFilter
+    );
+
+    if (!profilFilter) {
+      return { compatible: parCategorie, incompatibles: [] as Exercice[] };
+    }
+
+    const isCompatible = (ex: Exercice) => {
+      const profilOk =
+        !ex.profilsCompatibles ||
+        ex.profilsCompatibles.includes('tous') ||
+        ex.profilsCompatibles.includes(profilFilter);
+      const posOk =
+        positionFilter === 'tous' ||
+        !ex.positionRequise ||
+        ex.positionRequise === 'tous' ||
+        ex.positionRequise === positionFilter;
+      return profilOk && posOk;
+    };
+
+    const isIncompatible = (ex: Exercice) =>
+      !!ex.profilsCompatibles &&
+      !ex.profilsCompatibles.includes('tous') &&
+      !ex.profilsCompatibles.includes(profilFilter);
+
+    const comp = parCategorie.filter(isCompatible).sort((a, b) => {
+      const aSpec = a.profilsCompatibles?.includes(profilFilter) && !a.profilsCompatibles.includes('tous');
+      const bSpec = b.profilsCompatibles?.includes(profilFilter) && !b.profilsCompatibles.includes('tous');
+      if (aSpec && !bSpec) return -1;
+      if (!aSpec && bSpec) return 1;
+      return 0;
+    });
+
+    const incompat = parCategorie.filter(isIncompatible);
+
+    return { compatible: comp, incompatibles: incompat };
+  }, [exercices, catFilter, profilFilter, positionFilter]);
+
+  function handleProfilChange(profil: ProfilHandicap) {
+    if (profilFilter === profil) {
+      setProfilFilter(null);
+      setPositionFilter('tous');
+    } else {
+      setProfilFilter(profil);
+      setPositionFilter('tous');
+    }
+  }
 
   function handleAdd() {
     if (!form.nom.trim()) { toast.error('Nom requis'); return; }
@@ -51,6 +113,8 @@ export default function ExercicesPage() {
     setShowForm(false);
     toast.success('Exercice ajouté à la bibliothèque !');
   }
+
+  const profilActif = profilFilter ? PROFILS_HANDICAP.find(p => p.id === profilFilter) : null;
 
   return (
     <PageWrapper>
@@ -68,25 +132,124 @@ export default function ExercicesPage() {
         </button>
       </div>
 
-      {/* Filtres */}
-      <div className="flex gap-2 flex-wrap mb-6">
+      {/* Filtres profil handicap */}
+      <div className="flex gap-1 flex-wrap mb-2">
+        {PROFILS_HANDICAP.map(p => (
+          <button
+            key={p.id}
+            onClick={() => handleProfilChange(p.id)}
+            style={profilFilter === p.id ? { background: p.color, color: 'white', border: 'none' } : {}}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${
+              profilFilter === p.id
+                ? ''
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-transparent'
+            }`}
+          >
+            {p.emoji} {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Filtre position (visible si profil actif) */}
+      {profilFilter && (
+        <div className="flex gap-1 flex-wrap mb-2">
+          {POSITIONS.map(pos => (
+            <button
+              key={pos.id}
+              onClick={() => setPositionFilter(pos.id)}
+              className={`px-2 py-0.5 rounded-lg text-xs font-medium border transition-colors ${
+                positionFilter === pos.id
+                  ? 'border-teal-500 bg-teal-50 text-teal-700'
+                  : 'border-gray-200 text-gray-500 hover:border-gray-300'
+              }`}
+            >
+              {pos.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Bandeau profil actif */}
+      {profilActif && (
+        <div
+          className="flex items-center gap-3 rounded-xl px-4 py-2.5 mb-3"
+          style={{ background: profilActif.color + '18', border: `1px solid ${profilActif.color}40` }}
+        >
+          <span className="text-xl">{profilActif.emoji}</span>
+          <div className="flex-1">
+            <span className="text-sm font-semibold" style={{ color: profilActif.color }}>
+              Filtre actif : {profilActif.label}
+            </span>
+            <div className="text-xs mt-0.5" style={{ color: profilActif.color + 'AA' }}>
+              Exercices spécifiques en premier · Exercices universels · Non recommandés grisés
+            </div>
+          </div>
+          <button
+            onClick={() => { setProfilFilter(null); setPositionFilter('tous'); }}
+            className="transition-colors"
+            style={{ color: profilActif.color + '80' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Filtres catégorie */}
+      <div className="flex gap-2 flex-wrap mb-4">
         {CATEGORIES.map(c => (
           <button
             key={c.value}
             onClick={() => setCatFilter(c.value as CategorieExercice | 'all')}
-            className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${catFilter === c.value ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-primary/50'}`}
+            className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
+              catFilter === c.value
+                ? 'bg-primary text-white'
+                : 'bg-white border border-gray-200 text-gray-600 hover:border-primary/50'
+            }`}
           >
             {c.label}
           </button>
         ))}
       </div>
 
-      {/* Grid */}
+      {/* Compteur */}
+      <p className="text-xs text-gray-400 mb-4">
+        {compatible.length} exercice{compatible.length > 1 ? 's' : ''}
+        {profilActif ? ` compatible${compatible.length > 1 ? 's' : ''} avec ce profil` : ' disponibles'}
+        {incompatibles.length > 0 && ` · ${incompatibles.length} non recommandé${incompatibles.length > 1 ? 's' : ''}`}
+      </p>
+
+      {/* Grille exercices compatibles */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map(ex => (
-          <ExerciceCard key={ex.id} exercice={ex} />
+        {compatible.map(ex => (
+          <ExerciceCard
+            key={ex.id}
+            exercice={ex}
+            profilHandicap={profilFilter ?? undefined}
+          />
         ))}
       </div>
+
+      {/* Section exercices non recommandés */}
+      {incompatibles.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex-1 h-px bg-gray-100" />
+            <span className="text-xs text-gray-400 font-medium whitespace-nowrap">
+              Non recommandés pour ce profil ({incompatibles.length})
+            </span>
+            <div className="flex-1 h-px bg-gray-100" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {incompatibles.map(ex => (
+              <ExerciceCard
+                key={ex.id}
+                exercice={ex}
+                incompatible
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Modal ajout */}
       {showForm && (
@@ -142,7 +305,6 @@ export default function ExercicesPage() {
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" />
                 </div>
               </div>
-              {/* Vidéo YouTube */}
               <div>
                 <label className="block text-xs font-semibold text-dark mb-1">Lien vidéo de démonstration (YouTube)</label>
                 <input
@@ -170,7 +332,6 @@ export default function ExercicesPage() {
                   </div>
                 )}
               </div>
-
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setShowForm(false)} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm hover:bg-gray-50 transition-colors">Annuler</button>
                 <button onClick={handleAdd} className="flex-1 bg-primary text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-dark transition-colors">Ajouter</button>

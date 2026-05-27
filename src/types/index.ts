@@ -183,6 +183,7 @@ export interface Exercice {
   adaptations?: Partial<Record<ProfilHandicap, string>>;
   positionRequise?: 'debout' | 'assis' | 'couche' | 'fauteuil' | 'tous';
   niveauMobilite?: 'minimal' | 'modere' | 'complet';
+  reference?: string;
 }
 
 export interface ExerciceProgramme {
