@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useParticipants } from '../hooks/useParticipants';
 import PageWrapper from '../components/layout/PageWrapper';
 import RadarChart from '../components/charts/RadarChart';
@@ -8,7 +8,7 @@ import PrintableReport from '../components/export/PrintableReport';
 import ExportButton from '../components/export/ExportButton';
 import { calculerNotesAuto } from '../components/export/FicheBilanPDF';
 import { exportFicheBilanPDF } from '../utils/exportPDF';
-import { ArrowLeft, Calendar, MessageSquare, StickyNote, Target, AlertTriangle, FileText } from 'lucide-react';
+import { ArrowLeft, Calendar, MessageSquare, StickyNote, Target, AlertTriangle, FileText, TrendingUp } from 'lucide-react';
 
 function loadSettings() {
   try { return { prenom: '', nom: '', email: '', telephone: '', societe: '', logoPraticien: '', ...JSON.parse(localStorage.getItem('settings_praticien') || '{}') }; }
@@ -19,6 +19,7 @@ export default function BilanDetail() {
   const { id, bilanId } = useParams<{ id: string; bilanId: string }>();
   const { participants } = useParticipants();
   const [exporting, setExporting] = useState(false);
+  const navigate = useNavigate();
 
   const participant = participants.find(p => p.id === id);
   const bilan = participant?.bilans.find(b => b.id === bilanId);
@@ -55,7 +56,16 @@ export default function BilanDetail() {
             <span>{participant.prenom} {participant.nom}</span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {participant.bilans.length >= 2 && (
+            <button
+              onClick={() => navigate(`/participant/${id}/comparaison`)}
+              className="flex items-center gap-2 bg-secondary/20 text-secondary px-4 py-2 rounded-xl text-sm font-semibold hover:bg-secondary/30 transition-colors border border-secondary/30"
+            >
+              <TrendingUp size={15} />
+              Rapport d'évolution
+            </button>
+          )}
           <button
             onClick={async () => {
               setExporting(true);
