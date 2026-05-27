@@ -29,7 +29,20 @@ export default function ContratNouveauPage() {
 
   const participant = participants.find(p => p.id === id);
   const bilanInitial = participant?.bilans.find(b => b.type === 'initial');
-  const org = bilanInitial?.bilanInitialData?.organisation;
+  const flatData = bilanInitial?.bilanInitialData?.formulaireFlat?.data;
+
+  // Lecture des disponibilités depuis le formulaire plat (bilan initial)
+  const JOUR_MAP: Record<string, JourSemaine> = {
+    'Lun': 'lun', 'Mar': 'mar', 'Mer': 'mer', 'Jeu': 'jeu', 'Ven': 'ven', 'Sam': 'sam',
+  };
+  const orgFlat = flatData ? {
+    jours: (Array.isArray(flatData['joursDisponibles']) ? flatData['joursDisponibles'] as string[] : [])
+      .map(l => JOUR_MAP[l]).filter((j): j is JourSemaine => Boolean(j)),
+    heureSouhaitee: typeof flatData['heureSouhaitee'] === 'string' ? flatData['heureSouhaitee'] : undefined,
+    dureeMinutes: parseInt(String(flatData['dureeSeance'] ?? '')) || null,
+    creneau: typeof flatData['creneau'] === 'string' ? flatData['creneau'] : '',
+    contraintes: typeof flatData['contraintes'] === 'string' ? flatData['contraintes'] : undefined,
+  } : null;
 
   const [mode, setMode] = useState<ModePeriode>('duree');
   const [joursFixe, setJoursFixe] = useState<JourSemaine[]>(['lun']);
@@ -45,11 +58,11 @@ export default function ContratNouveauPage() {
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
-    if (!org) return;
-    if (org.joursDisponibles.length > 0) setJoursFixe(org.joursDisponibles);
-    if (org.heureSouhaitee) setHeureDebut(org.heureSouhaitee);
-    setDureeMinutes(org.dureeSeanceMinutes);
-  }, [org]);
+    if (!orgFlat) return;
+    if (orgFlat.jours.length > 0) setJoursFixe(orgFlat.jours);
+    if (orgFlat.heureSouhaitee) setHeureDebut(orgFlat.heureSouhaitee);
+    if (orgFlat.dureeMinutes) setDureeMinutes(orgFlat.dureeMinutes);
+  }, [flatData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleJour(jour: JourSemaine) {
     setJoursFixe(prev =>
@@ -144,20 +157,19 @@ export default function ContratNouveauPage() {
 
       <div className="max-w-xl">
         {/* Rappel disponibilités bilan initial */}
-        {org && (
+        {orgFlat && (orgFlat.jours.length > 0 || orgFlat.heureSouhaitee) && (
           <div className="bg-blue-50 border border-blue-200 rounded-2xl px-5 py-4 mb-6">
             <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">
               Disponibilités du bilan initial
             </div>
             <div className="text-sm text-blue-800">
-              {org.joursDisponibles.map(j => LABELS_JOURS_LONG[j]).join(', ')}
-              {' · '}
-              {org.creneau === 'matin' ? 'Matin' : org.creneau === 'apres-midi' ? 'Après-midi' : 'Flexible'}
-              {org.heureSouhaitee && ` · ${org.heureSouhaitee}`}
-              {' · '}{org.dureeSeanceMinutes} min
+              {orgFlat.jours.map((j: JourSemaine) => LABELS_JOURS_LONG[j]).join(', ')}
+              {orgFlat.creneau && ` · ${orgFlat.creneau}`}
+              {orgFlat.heureSouhaitee && ` · ${orgFlat.heureSouhaitee}`}
+              {orgFlat.dureeMinutes && ` · ${orgFlat.dureeMinutes} min`}
             </div>
-            {org.contraintes && (
-              <div className="text-xs text-blue-600 mt-1 italic">"{org.contraintes}"</div>
+            {orgFlat.contraintes && (
+              <div className="text-xs text-blue-600 mt-1 italic">"{orgFlat.contraintes}"</div>
             )}
           </div>
         )}
