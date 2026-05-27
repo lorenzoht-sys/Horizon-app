@@ -357,6 +357,10 @@ export default function ParticipantProfile() {
 
   const sortedBilans = [...participant.bilans].sort((a, b) => a.date.localeCompare(b.date));
   const bilanInitial = participant.bilans.find(b => b.type === 'initial') ?? null;
+  const contreIndicationsTexte: string | null =
+    bilanInitial?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
+      ? (bilanInitial.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail ?? null)
+      : null;
   const latestBilan  = sortedBilans[sortedBilans.length - 1] ?? null;
   const contratActif = contrats.find(c => c.participantId === participant.id && c.statut === 'actif') ?? null;
   const notes        = notesParPatient(participant.id);
@@ -500,6 +504,17 @@ export default function ParticipantProfile() {
                   {participant.contexteClinic && (
                     <span className="text-xs text-white/45 italic">"{participant.contexteClinic}"</span>
                   )}
+                </div>
+              )}
+
+              {/* Badge contre-indications */}
+              {contreIndicationsTexte && (
+                <div className="mt-2 flex items-start gap-2 bg-red-900/30 border border-red-500/50 rounded-xl px-3 py-2">
+                  <span className="flex-shrink-0 text-sm">⚠️</span>
+                  <div>
+                    <span className="text-xs font-bold text-red-300 uppercase tracking-wide">Contre-indications à l'effort</span>
+                    <p className="text-xs text-red-200 mt-0.5 leading-relaxed">{contreIndicationsTexte}</p>
+                  </div>
                 </div>
               )}
 

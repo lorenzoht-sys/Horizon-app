@@ -367,4 +367,5 @@ export interface Participant {
   // Coordonnées bancaires (SAP)
   iban?: string;
   bic?: string;
+  droitImage?: boolean;
 }

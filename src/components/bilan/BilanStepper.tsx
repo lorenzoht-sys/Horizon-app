@@ -122,11 +122,31 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
   function renderInitialStep() {
     switch (step) {
       case 0: return (
-        <FormulaireBilanInitial
-          participantId={participant.id}
-          onFlat={handleFlat}
-          initialFlat={form.bilanInitialData?.formulaireFlat}
-        />
+        <div className="space-y-4">
+          {/* Résumé patient lecture seule */}
+          <div className="bg-primary/8 border border-primary/20 rounded-xl px-4 py-3 flex items-center gap-3">
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+              style={{ background: '#1A5F9E' }}
+            >
+              {participant.prenom[0]}{participant.nom[0]}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-dark">
+                Bilan de {participant.prenom} {participant.nom}
+              </p>
+              <p className="text-xs text-gray-500">
+                {Math.floor((Date.now() - new Date(participant.dateNaissance).getTime()) / 31557600000)} ans
+                {participant.contexteClinic ? ` · ${participant.contexteClinic}` : ''}
+              </p>
+            </div>
+          </div>
+          <FormulaireBilanInitial
+            participantId={participant.id}
+            onFlat={handleFlat}
+            initialFlat={form.bilanInitialData?.formulaireFlat}
+          />
+        </div>
       );
       case 1: return (
         <div className="space-y-8">

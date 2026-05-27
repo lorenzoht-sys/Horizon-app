@@ -198,8 +198,6 @@ const BLOCS: BlocConditionnel[] = [
         type: 'text',
         placeholder: 'Insuffisance cardiaque, diabète T2, BPCO...',
       },
-      { id: 'contreIndications',       label: "Contre-indications à l'effort ?", type: 'oui-non' },
-      { id: 'contreIndicationsDetail', label: 'Lesquelles ?',                    type: 'text', conditionnelSi: 'contreIndications_oui' },
       { id: 'fcMax',       label: 'FC max autorisée (si prescrite)', type: 'number', placeholder: '130' },
       {
         id: 'dyspneeEffort',
@@ -215,6 +213,28 @@ const BLOCS: BlocConditionnel[] = [
       },
       { id: 'spo2Repos',         label: 'SpO₂ au repos (%)',        type: 'number' },
       { id: 'tensionArterielle', label: 'Tension artérielle connue', type: 'text', placeholder: '130/80' },
+    ],
+  },
+
+  // ─── CONTRE-INDICATIONS (toujours affiché) ──────────────────────────────
+
+  {
+    id: 'contreIndicationsEffort',
+    titre: "⚠️ Contre-indications à l'effort",
+    questions: [
+      {
+        id: 'contreIndications',
+        label: "Y a-t-il des contre-indications à l'effort physique ?",
+        type: 'oui-non',
+      },
+      {
+        id: 'contreIndicationsDetail',
+        label: 'Lesquelles ?',
+        type: 'textarea',
+        conditionnelSi: 'contreIndications_oui',
+        placeholder: 'FC max 130 bpm, éviter les impacts, pas de port de charges > 5 kg...',
+        aide: 'Ces contre-indications seront affichées en alerte dans la fiche patient et tous les PDFs.',
+      },
     ],
   },
 

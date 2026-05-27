@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Participant, TagPatient, TestKey, RgpdConsent, DisponibilitesPatient, JourSemaine, CreneauPreference } from '../../types';
+import type { Participant, TagPatient, TestKey, RgpdConsent } from '../../types';
 import { TAG_CONFIG, TAG_ORDER, ALL_TESTS, TEST_LABELS, buildTestsActifs } from '../../data/profiles';
 import { Save, X, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -33,56 +33,6 @@ function getCategorieIMC(imc: number): { label: string; couleur: string } {
   return           { label: 'Obésité morbide',              couleur: '#991B1B' };
 }
 
-// ─── Constantes ───────────────────────────────────────────────────────────────
-
-const JOURS: { val: JourSemaine; label: string }[] = [
-  { val: 'lun', label: 'Lun' }, { val: 'mar', label: 'Mar' },
-  { val: 'mer', label: 'Mer' }, { val: 'jeu', label: 'Jeu' },
-  { val: 'ven', label: 'Ven' }, { val: 'sam', label: 'Sam' },
-];
-
-const CRENEAUX: { val: CreneauPreference; label: string; desc: string }[] = [
-  { val: 'matin',     label: 'Matin',      desc: '8h-12h' },
-  { val: 'apres-midi', label: 'Après-midi', desc: '14h-18h' },
-  { val: 'soiree',    label: 'Soirée',     desc: '18h-20h' },
-];
-
-const MODES_DEPLACEMENT = [
-  { id: 'voiture',    label: '🚗 Voiture' },
-  { id: 'velo',       label: '🚲 Vélo' },
-  { id: 'transports', label: '🚌 Transports' },
-  { id: 'marche',     label: '🚶 Marche' },
-  { id: 'fauteuil',   label: '♿ Fauteuil' },
-  { id: 'autre',      label: '✏️ Autre' },
-] as const;
-
-const ACTIVITES_PREDEFINIES = [
-  '🚶 Marche / Randonnée',
-  '🚴 Cyclisme (vélo, vélo électrique)',
-  '🏊 Natation / Aquagym',
-  '🎾 Raquettes (tennis, badminton, ping-pong)',
-  '⚽ Jeux de ballon (basket, foot, volley)',
-  '🎯 Précision (pétanque, golf, sarbacane, tir à l\'arc, fléchettes)',
-  '🤸 Gym douce / Stretching / Yoga',
-  '💃 Danse / Activités rythmiques',
-  '🏋️ Renforcement musculaire',
-  '🧠 Activités cognitives',
-];
-
-const OBJECTIFS_PREDEFINIS = [
-  '💪 Renforcement musculaire',
-  '⚖️ Améliorer l\'équilibre',
-  '🦵 Améliorer la mobilité',
-  '🫀 Endurance à l\'effort',
-  '🛡️ Prévention des chutes',
-  '🏠 Maintien de l\'autonomie',
-  '😌 Réduire les douleurs',
-  '🎯 Améliorer la coordination',
-  '🧘 Travailler la souplesse',
-  '🔄 Reprendre une activité physique',
-  '💙 Regagner confiance en ses capacités',
-];
-
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -102,12 +52,7 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
   );
   const [showTestAdjust, setShowTestAdjust] = useState(false);
 
-  // ── Disponibilités ──────────────────────────────────────────────
-  const [disponibilites, setDisponibilites] = useState<DisponibilitesPatient>(
-    initial?.disponibilites ?? { joursDisponibles: [], creneauxPreference: [], contraintes: '', dureeSeanceMinutes: 45 }
-  );
-
-  // ── RGPD ────────────────────────────────────────────────────────
+  // ── RGPD + droit à l'image ──────────────────────────────────────
   const [rgpd, setRgpd] = useState<RgpdConsent>({
     consentementObtenu:  initial?.rgpd?.consentementObtenu  ?? false,
     droitAcces:          initial?.rgpd?.droitAcces          ?? false,
@@ -116,8 +61,9 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
     methodeConsentement: initial?.rgpd?.methodeConsentement ?? 'oral_note',
     consentementDate:    initial?.rgpd?.consentementDate    ?? new Date().toISOString().slice(0, 10),
   });
+  const [droitImage, setDroitImage] = useState<boolean>(initial?.droitImage ?? false);
 
-  // ── Champs texte (handleChange générique) ───────────────────────
+  // ── Champs texte ────────────────────────────────────────────────
   const [form, setForm] = useState({
     nom:               initial?.nom               ?? '',
     prenom:            initial?.prenom            ?? '',
@@ -125,7 +71,6 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
     dateCreation:      initial?.dateCreation      ?? new Date().toISOString().slice(0, 10),
     email:             initial?.email             ?? '',
     telephone:         initial?.telephone         ?? '',
-    pathologie:        initial?.pathologie        ?? '',
     contexteClinic:    initial?.contexteClinic    ?? '',
     adresseRue:        initial?.adresseRue        ?? '',
     adresseCodePostal: initial?.adresseCodePostal ?? '',
@@ -134,21 +79,7 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
     poids:             initial?.poids?.toString()  ?? '',
     iban:              initial?.iban              ?? '',
     bic:               initial?.bic               ?? '',
-    modeDeplacementDetail: initial?.modeDeplacementDetail ?? '',
-    antecedentsMedicaux:   initial?.antecedentsMedicaux   ?? '',
-    antecedentsChirurgicaux: initial?.antecedentsChirurgicaux ?? '',
-    allergies:         initial?.allergies         ?? '',
-    objectifsPatient:  '',  // champ retiré du form — géré via objectifsSelectionnes
   });
-
-  // ── États spéciaux ──────────────────────────────────────────────
-  const [modeDeplacement, setModeDeplacement] = useState<string>(initial?.modeDeplacementHabituel ?? '');
-  const [activitesSouhaitees, setActivitesSouhaitees] = useState<string[]>(initial?.activitesSouhaitees ?? []);
-  const [nouvelleActivite, setNouvelleActivite] = useState('');
-  const [objectifsSelectionnes, setObjectifsSelectionnes] = useState<string[]>(
-    Array.isArray(initial?.objectifsPatient) ? initial.objectifsPatient : []
-  );
-  const [nouvelObjectif, setNouvelObjectif] = useState('');
 
   // ── Handlers ────────────────────────────────────────────────────
 
@@ -167,63 +98,28 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
     setTestsActifs(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   }
 
-  function toggleActivite(a: string) {
-    setActivitesSouhaitees(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
-  }
-
-  function ajouterActiviteLibre() {
-    const v = nouvelleActivite.trim();
-    if (v && !activitesSouhaitees.includes(v)) {
-      setActivitesSouhaitees(prev => [...prev, v]);
-    }
-    setNouvelleActivite('');
-  }
-
-  function toggleObjectif(o: string) {
-    setObjectifsSelectionnes(prev => prev.includes(o) ? prev.filter(x => x !== o) : [...prev, o]);
-  }
-
-  function ajouterObjectifLibre() {
-    const v = nouvelObjectif.trim();
-    if (v && !objectifsSelectionnes.includes(v)) {
-      setObjectifsSelectionnes(prev => [...prev, v]);
-    }
-    setNouvelObjectif('');
-  }
-
-  function toggleJour(jour: JourSemaine) {
-    setDisponibilites(d => ({
-      ...d,
-      joursDisponibles: d.joursDisponibles.includes(jour)
-        ? d.joursDisponibles.filter(j => j !== jour)
-        : [...d.joursDisponibles, jour],
-    }));
-  }
-
-  function toggleCreneau(c: CreneauPreference) {
-    setDisponibilites(d => ({
-      ...d,
-      creneauxPreference: d.creneauxPreference.includes(c)
-        ? d.creneauxPreference.filter(x => x !== c)
-        : [...d.creneauxPreference, c],
-    }));
-  }
-
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const { objectifsPatient: _ignored, ...formRest } = form;
     onSubmit({
-      ...formRest,
+      ...form,
       taille: form.taille ? Number(form.taille) : undefined,
       poids:  form.poids  ? Number(form.poids)  : undefined,
-      modeDeplacementHabituel: modeDeplacement as Participant['modeDeplacementHabituel'] || undefined,
-      activitesSouhaitees,
-      objectifsPatient: objectifsSelectionnes.length > 0 ? objectifsSelectionnes : undefined,
-      tags, testsActifs, rgpd, disponibilites,
-      profil: initial?.profil,
-      coordonnees: initial?.coordonnees,
-      geocodeFailed: initial?.geocodeFailed,
-      programmes: initial?.programmes,
+      // Préserver les données cliniques existantes (issues du bilan initial)
+      pathologie:              initial?.pathologie,
+      antecedentsMedicaux:     initial?.antecedentsMedicaux,
+      antecedentsChirurgicaux: initial?.antecedentsChirurgicaux,
+      allergies:               initial?.allergies,
+      modeDeplacementHabituel: initial?.modeDeplacementHabituel,
+      modeDeplacementDetail:   initial?.modeDeplacementDetail,
+      activitesSouhaitees:     initial?.activitesSouhaitees,
+      objectifsPatient:        initial?.objectifsPatient,
+      disponibilites:          initial?.disponibilites,
+      droitImage,
+      tags, testsActifs, rgpd,
+      profil:         initial?.profil,
+      coordonnees:    initial?.coordonnees,
+      geocodeFailed:  initial?.geocodeFailed,
+      programmes:     initial?.programmes,
     });
   }
 
@@ -306,10 +202,11 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
 
       {/* ── CONTEXTE CLINIQUE ── */}
       <div>
-        <label className={CLS_LABEL}>Contexte clinique <span className="text-gray-400 font-normal">(optionnel)</span></label>
+        <label className={CLS_LABEL}>Contexte clinique <span className="text-gray-400 font-normal">(optionnel — 1 ligne)</span></label>
         <input name="contexteClinic" value={form.contexteClinic} onChange={handleChange}
           placeholder="ex: PTH droite + diabète type 2 — opéré le 15/01/2025"
           className={CLS_INPUT} />
+        <p className="text-xs text-gray-400 mt-1">Résumé rapide. Les détails cliniques sont saisis dans le bilan initial.</p>
       </div>
 
       {/* ── IDENTITÉ ── */}
@@ -367,14 +264,6 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
           </span>
         </div>
       )}
-
-      {/* ── PATHOLOGIE ── */}
-      <div>
-        <label className={CLS_LABEL}>Pathologie / contexte rapide</label>
-        <textarea name="pathologie" value={form.pathologie} onChange={handleChange} rows={2}
-          placeholder="Ex : Arthrose genou droit, HTA contrôlée..."
-          className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 resize-none" />
-      </div>
 
       {/* ── ADRESSE ── */}
       <div>
@@ -441,202 +330,7 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
         </div>
       </div>
 
-      {/* ── PROFIL DE VIE ── */}
-      <div className="border border-gray-100 rounded-2xl overflow-hidden">
-        <div className="bg-gray-50 px-4 py-3 flex items-center gap-2.5">
-          <span className="text-lg">🚶</span>
-          <div>
-            <div className="font-semibold text-dark text-sm">Profil de vie</div>
-            <div className="text-xs text-gray-500">Déplacement · Santé · Antécédents</div>
-          </div>
-        </div>
-        <div className="p-4 space-y-4">
-
-          {/* Mode de déplacement */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-2">Mode de déplacement habituel</label>
-            <div className="flex flex-wrap gap-2">
-              {MODES_DEPLACEMENT.map(m => (
-                <button key={m.id} type="button"
-                  onClick={() => setModeDeplacement(d => d === m.id ? '' : m.id)}
-                  className={`px-3 py-1.5 rounded-xl text-sm font-medium border transition-colors ${
-                    modeDeplacement === m.id
-                      ? 'bg-primary text-white border-primary'
-                      : 'bg-white border-gray-200 text-gray-600 hover:border-primary/50'
-                  }`}>
-                  {m.label}
-                </button>
-              ))}
-            </div>
-            {modeDeplacement === 'autre' && (
-              <input
-                name="modeDeplacementDetail"
-                value={form.modeDeplacementDetail}
-                onChange={handleChange}
-                placeholder="Précisez..."
-                className={`${CLS_INPUT} mt-2`}
-              />
-            )}
-          </div>
-
-          {/* Antécédents médicaux */}
-          <div>
-            <label className={CLS_LABEL}>Antécédents médicaux</label>
-            <textarea name="antecedentsMedicaux" value={form.antecedentsMedicaux} onChange={handleChange}
-              placeholder="AVC 2018, diabète type 2, hypertension..."
-              rows={2}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary resize-none" />
-          </div>
-
-          {/* Antécédents chirurgicaux */}
-          <div>
-            <label className={CLS_LABEL}>Antécédents chirurgicaux</label>
-            <textarea name="antecedentsChirurgicaux" value={form.antecedentsChirurgicaux} onChange={handleChange}
-              placeholder="PTH droite 2022, opération genou 2020..."
-              rows={2}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary resize-none" />
-          </div>
-
-          {/* Allergies */}
-          <div>
-            <label className={CLS_LABEL}>Allergies connues <span className="text-gray-400 font-normal">(optionnel)</span></label>
-            <input name="allergies" value={form.allergies} onChange={handleChange}
-              placeholder="Aspirine, latex..." className={CLS_INPUT} />
-          </div>
-        </div>
-      </div>
-
-      {/* ── ACTIVITÉS SOUHAITÉES ── */}
-      <div className="border border-teal-100 rounded-2xl overflow-hidden">
-        <div className="bg-teal-50 px-4 py-3 flex items-center gap-2.5">
-          <span className="text-lg">🎯</span>
-          <div>
-            <div className="font-semibold text-dark text-sm">Activités souhaitées</div>
-            <div className="text-xs text-gray-500">Ce que le patient aimerait pratiquer</div>
-          </div>
-        </div>
-        <div className="p-4 space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {ACTIVITES_PREDEFINIES.map(a => (
-              <button key={a} type="button" onClick={() => toggleActivite(a)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
-                  activitesSouhaitees.includes(a)
-                    ? 'bg-teal-100 text-teal-800 border-teal-300'
-                    : 'bg-white border-gray-200 text-gray-600 hover:border-teal-300'
-                }`}>
-                {a}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex gap-2">
-            <input
-              value={nouvelleActivite}
-              onChange={e => setNouvelleActivite(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ajouterActiviteLibre(); } }}
-              placeholder="Autre activité souhaitée..."
-              className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-primary"
-            />
-            <button type="button" onClick={ajouterActiviteLibre}
-              className="px-4 py-2 bg-teal-600 text-white rounded-xl text-sm font-medium hover:bg-teal-700 transition-colors">
-              + Ajouter
-            </button>
-          </div>
-
-          <div>
-            <label className={CLS_LABEL}>Objectifs du patient</label>
-            <div className="flex flex-wrap gap-2 mb-3">
-              {OBJECTIFS_PREDEFINIS.map(o => (
-                <button key={o} type="button" onClick={() => toggleObjectif(o)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
-                    objectifsSelectionnes.includes(o)
-                      ? 'bg-teal-100 text-teal-800 border-teal-300'
-                      : 'bg-white border-gray-200 text-gray-600 hover:border-teal-300'
-                  }`}>
-                  {o}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                value={nouvelObjectif}
-                onChange={e => setNouvelObjectif(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ajouterObjectifLibre(); } }}
-                placeholder="✏️ Autre objectif..."
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-primary"
-              />
-              <button type="button" onClick={ajouterObjectifLibre}
-                className="px-4 py-2 bg-teal-600 text-white rounded-xl text-sm font-medium hover:bg-teal-700 transition-colors">
-                + Ajouter
-              </button>
-            </div>
-            {objectifsSelectionnes.filter(o => !OBJECTIFS_PREDEFINIS.includes(o)).map((o, i) => (
-              <div key={i} className="flex items-center gap-2 mt-2">
-                <span className="flex-1 text-sm text-gray-700 bg-teal-50 border border-teal-200 rounded-xl px-3 py-1.5">{o}</span>
-                <button type="button" onClick={() => toggleObjectif(o)}
-                  className="text-gray-400 hover:text-red-500 text-sm">✕</button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ── DISPONIBILITÉS ── */}
-      <div className="border border-green-100 rounded-2xl overflow-hidden">
-        <div className="bg-green-50 px-4 py-3 flex items-center gap-2.5">
-          <span className="text-lg">📅</span>
-          <div>
-            <div className="font-semibold text-dark text-sm">Disponibilités</div>
-            <div className="text-xs text-gray-500">Pour l'optimisation de tournée</div>
-          </div>
-        </div>
-        <div className="p-4 space-y-4">
-          <div>
-            <div className="text-xs font-semibold text-gray-600 mb-2">Jours disponibles</div>
-            <div className="flex gap-2 flex-wrap">
-              {JOURS.map(({ val, label }) => {
-                const sel = disponibilites.joursDisponibles.includes(val);
-                return (
-                  <button key={val} type="button" onClick={() => toggleJour(val)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                      sel ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary/50'
-                    }`}>
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs font-semibold text-gray-600 mb-2">Préférence horaire</div>
-            <div className="space-y-2">
-              {CRENEAUX.map(({ val, label, desc }) => {
-                const sel = disponibilites.creneauxPreference.includes(val);
-                return (
-                  <label key={val} className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input type="checkbox" checked={sel} onChange={() => toggleCreneau(val)} className="w-4 h-4 accent-primary" />
-                    <span className="text-sm text-gray-700">{label} <span className="text-xs text-gray-400">{desc}</span></span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Durée de séance (minutes)</label>
-            <input type="number" min={15} max={120} step={5}
-              value={disponibilites.dureeSeanceMinutes}
-              onChange={e => setDisponibilites(d => ({ ...d, dureeSeanceMinutes: Number(e.target.value) }))}
-              className="w-28 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Contraintes particulières</label>
-            <input value={disponibilites.contraintes ?? ''} onChange={e => setDisponibilites(d => ({ ...d, contraintes: e.target.value }))}
-              placeholder="Ex: Jamais avant 9h, préfère les matins..." className={CLS_INPUT} />
-          </div>
-        </div>
-      </div>
-
-      {/* ── RGPD ── */}
+      {/* ── RGPD + DROIT À L'IMAGE ── */}
       <div className="border border-blue-100 rounded-2xl overflow-hidden">
         <div className="bg-blue-50 px-4 py-3 flex items-center gap-2.5">
           <span className="text-lg">🔒</span>
@@ -663,6 +357,12 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
                 {label}
               </label>
             ))}
+            {/* Droit à l'image */}
+            <label className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700 select-none">
+              <input type="checkbox" checked={droitImage} className="w-4 h-4 accent-primary"
+                onChange={e => setDroitImage(e.target.checked)} />
+              Droit à l'image accordé (photos/vidéos en séance)
+            </label>
           </div>
           <div>
             <div className="text-xs font-medium text-gray-600 mb-2">Mode de recueil</div>

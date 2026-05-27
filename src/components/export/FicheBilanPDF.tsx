@@ -108,6 +108,12 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
   const barres = BARRES.filter(b => notes[b.key] !== undefined);
   const interp = bilan.interpretationIA?.textePro || bilan.notesProfessionnelles || '—';
 
+  const bilanInitial = participant.bilans.find(b => b.type === 'initial');
+  const contreIndic: string | null =
+    bilanInitial?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
+      ? (bilanInitial.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail ?? null)
+      : null;
+
   return (
     <Document>
       <Page size="A4" style={S.page}>
@@ -168,6 +174,16 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
                 );
               })}
               <Text style={S.barLegend}>1/5 = Faible — 5/5 = Très Bon</Text>
+            </View>
+          )}
+
+          {/* Contre-indications */}
+          {contreIndic && (
+            <View style={{ marginBottom: 12, borderWidth: 1.5, borderColor: '#EF4444', backgroundColor: '#FEF2F2', borderRadius: 6, padding: 8 }}>
+              <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#DC2626', marginBottom: 3 }}>
+                ⚠️ CONTRE-INDICATIONS À L'EFFORT
+              </Text>
+              <Text style={{ fontSize: 10, color: '#7F1D1D', lineHeight: 1.5 }}>{contreIndic}</Text>
             </View>
           )}
 
