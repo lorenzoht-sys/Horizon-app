@@ -10,45 +10,44 @@ function load(): Facture[] {
   } catch { return []; }
 }
 
+function save(factures: Facture[]): void {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(factures)); } catch { /* ignore */ }
+}
+
 export function useFactures() {
   const [factures, setFactures] = useState<Facture[]>(load);
 
-  function updateAndSave(updater: (prev: Facture[]) => Facture[]) {
-    setFactures(prev => {
-      const next = updater(prev);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
-  }
-
   function ajouterFactures(nouvelles: Facture[]) {
-    updateAndSave(prev => {
-      const ids = new Set(nouvelles.map(f => f.id));
-      const filtered = prev.filter(f => !ids.has(f.id));
-      return [...nouvelles, ...filtered].sort((a, b) =>
-        b.dateEmission.localeCompare(a.dateEmission)
-      );
-    });
+    const prev = load();
+    const ids = new Set(nouvelles.map(f => f.id));
+    const filtered = prev.filter(f => !ids.has(f.id));
+    const next = [...nouvelles, ...filtered].sort((a, b) =>
+      b.dateEmission.localeCompare(a.dateEmission)
+    );
+    save(next);       // synchrone — avant tout changement d'onglet
+    setFactures(next);
   }
 
   function marquerEmise(id: string) {
-    updateAndSave(prev =>
-      prev.map(f => f.id === id ? { ...f, statut: 'emise' as const } : f)
-    );
+    const next = load().map(f => f.id === id ? { ...f, statut: 'emise' as const } : f);
+    save(next);
+    setFactures(next);
   }
 
   function marquerPayee(id: string) {
-    updateAndSave(prev =>
-      prev.map(f =>
-        f.id === id
-          ? { ...f, statut: 'payee' as const, datePaiement: new Date().toISOString().split('T')[0] }
-          : f
-      )
+    const next = load().map(f =>
+      f.id === id
+        ? { ...f, statut: 'payee' as const, datePaiement: new Date().toISOString().split('T')[0] }
+        : f
     );
+    save(next);
+    setFactures(next);
   }
 
   function supprimerFacture(id: string) {
-    updateAndSave(prev => prev.filter(f => f.id !== id));
+    const next = load().filter(f => f.id !== id);
+    save(next);
+    setFactures(next);
   }
 
   return { factures, ajouterFactures, marquerEmise, marquerPayee, supprimerFacture };
