@@ -169,104 +169,110 @@ function SectionMigrationCloud() {
   const [progress, setProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('');
   const [done, setDone] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   async function handleMigrate() {
+    console.log('[Migration] Bouton cliqué. supabase =', supabase);
+    setErrorMsg('');
+    setDone(false);
+
     if (!supabase) {
-      setStatusMessage('Supabase non configuré — ajoutez les variables VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY.');
+      setErrorMsg('Supabase non configuré — les variables VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY sont manquantes.');
       return;
     }
+
     setMigrating(true);
-    setDone(false);
     setProgress(0);
     setStatusMessage('Lecture des données locales…');
 
     try {
-      // Lire les données depuis localStorage
       const participantsRaw = localStorage.getItem('mouvtrack_participants');
       const contratsRaw = localStorage.getItem('mouvtrack_contrats');
       const seancesRaw = localStorage.getItem('mouvtrack_seances');
       const notesRaw = localStorage.getItem('notes_seances');
 
-      const participants = participantsRaw ? JSON.parse(participantsRaw) : [];
-      const contrats = contratsRaw ? JSON.parse(contratsRaw) : [];
-      const seances = seancesRaw ? JSON.parse(seancesRaw) : [];
-      const notes = notesRaw ? JSON.parse(notesRaw) : [];
+      const participants: Record<string, unknown>[] = participantsRaw ? JSON.parse(participantsRaw) : [];
+      const contrats: Record<string, unknown>[] = contratsRaw ? JSON.parse(contratsRaw) : [];
+      const seances: Record<string, unknown>[] = seancesRaw ? JSON.parse(seancesRaw) : [];
+      const notes: Record<string, unknown>[] = notesRaw ? JSON.parse(notesRaw) : [];
 
-      const totalSteps = 5;
+      console.log('[Migration] Données lues :', { participants: participants.length, contrats: contrats.length, seances: seances.length, notes: notes.length });
+
+      const totalSteps = 4;
       let step = 0;
 
-      // Migrer les participants
+      // ── Participants + bilans + programmes ──────────────────────────────────
       setStatusMessage(`Migration des participants (${participants.length})…`);
-      if (participants.length > 0) {
-        for (const p of participants) {
-          const { bilans: _bilans, programmes: _programmes, ...pData } = p;
-          await supabase.from('participants').upsert(participantToDb({ ...pData, bilans: [], programmes: [] }));
-          // Migrer les bilans du participant
-          if (_bilans && _bilans.length > 0) {
-            for (const b of _bilans) {
-              await supabase.from('bilans').upsert(bilanToDb(p.id, b));
-            }
-          }
-          // Migrer les programmes du participant
-          if (_programmes && _programmes.length > 0) {
-            for (const prog of _programmes) {
-              await supabase.from('programmes').upsert({
-                id: prog.id,
-                participant_id: p.id,
-                date_debut: prog.dateDebut,
-                date_fin: prog.dateFin ?? null,
-                titre: prog.titre,
-                objectif: prog.objectif ?? null,
-                message_motivation: prog.messageMotivation ?? null,
-                exercices: prog.exercices,
-                actif: prog.actif,
-                suivi_semaines: prog.suiviSemaines,
-              });
-            }
-          }
+      for (const p of participants) {
+        const { bilans: _bilans, programmes: _programmes, ...pData } = p as Record<string, unknown>;
+        const { error: e1 } = await supabase.from('participants').upsert(
+          participantToDb({ ...pData, bilans: [], programmes: [] } as unknown as Parameters<typeof participantToDb>[0])
+        );
+        if (e1) throw new Error(`Participant ${p.id} : ${e1.message}`);
+
+        const bilansArr = Array.isArray(_bilans) ? _bilans : [];
+        for (const b of bilansArr) {
+          const { error: e2 } = await supabase.from('bilans').upsert(bilanToDb(p.id as string, b as Parameters<typeof bilanToDb>[1]));
+          if (e2) throw new Error(`Bilan : ${e2.message}`);
+        }
+
+        const progArr = Array.isArray(_programmes) ? _programmes : [];
+        for (const prog of progArr as Record<string, unknown>[]) {
+          const { error: e3 } = await supabase.from('programmes').upsert({
+            id: prog.id,
+            participant_id: p.id,
+            date_debut: prog.dateDebut,
+            date_fin: prog.dateFin ?? null,
+            titre: prog.titre,
+            objectif: prog.objectif ?? null,
+            message_motivation: prog.messageMotivation ?? null,
+            exercices: prog.exercices ?? [],
+            actif: prog.actif ?? false,
+            suivi_semaines: prog.suiviSemaines ?? [],
+            date_creation: prog.dateCreation ?? new Date().toISOString().slice(0, 10),
+          });
+          if (e3) throw new Error(`Programme : ${e3.message}`);
         }
       }
       step++;
       setProgress(Math.round((step / totalSteps) * 100));
 
-      // Migrer les contrats
+      // ── Contrats ───────────────────────────────────────────────────────────
       setStatusMessage(`Migration des contrats (${contrats.length})…`);
-      if (contrats.length > 0) {
-        for (const c of contrats) {
-          await supabase.from('contrats').upsert(contratToDb(c));
-        }
+      for (const c of contrats) {
+        const { error: e } = await supabase.from('contrats').upsert(contratToDb(c as unknown as Parameters<typeof contratToDb>[0]));
+        if (e) throw new Error(`Contrat : ${e.message}`);
       }
       step++;
       setProgress(Math.round((step / totalSteps) * 100));
 
-      // Migrer les séances
+      // ── Séances ────────────────────────────────────────────────────────────
       setStatusMessage(`Migration des séances (${seances.length})…`);
-      if (seances.length > 0) {
-        for (const s of seances) {
-          await supabase.from('seances').upsert(seanceToDb(s));
-        }
+      for (const s of seances) {
+        const { error: e } = await supabase.from('seances').upsert(seanceToDb(s as Parameters<typeof seanceToDb>[0]));
+        if (e) throw new Error(`Séance : ${e.message}`);
       }
       step++;
       setProgress(Math.round((step / totalSteps) * 100));
 
-      // Migrer les notes de séance
+      // ── Notes séances ──────────────────────────────────────────────────────
       setStatusMessage(`Migration des notes (${notes.length})…`);
-      if (notes.length > 0) {
-        for (const n of notes) {
-          await supabase.from('notes_seances').upsert(noteSeanceToDb(n));
-        }
+      for (const n of notes) {
+        const { error: e } = await supabase.from('notes_seances').upsert(noteSeanceToDb(n as Parameters<typeof noteSeanceToDb>[0]));
+        if (e) throw new Error(`Note : ${e.message}`);
       }
-      step++;
-      setProgress(Math.round((step / totalSteps) * 100));
-
       step++;
       setProgress(100);
-      setStatusMessage(`✅ Migration terminée ! ${participants.length} participants · ${contrats.length} contrats · ${seances.length} séances · ${notes.length} notes`);
+
+      const msg = `✅ Migration terminée ! ${participants.length} participants · ${contrats.length} contrats · ${seances.length} séances · ${notes.length} notes`;
+      setStatusMessage(msg);
       setDone(true);
+      console.log('[Migration]', msg);
       toast.success('✅ Migration terminée !');
     } catch (err) {
-      console.error('Erreur migration:', err);
-      setStatusMessage('Erreur lors de la migration. Vérifiez la console.');
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[Migration] Erreur :', msg);
+      setErrorMsg(`❌ Erreur : ${msg}`);
       toast.error('Erreur lors de la migration');
     } finally {
       setMigrating(false);
@@ -283,6 +289,7 @@ function SectionMigrationCloud() {
         Migre vos données locales (localStorage) vers Supabase. À utiliser une seule fois lors de la première connexion.
       </p>
 
+      {/* Progression */}
       {migrating && (
         <div className="mb-4">
           <div className="w-full bg-gray-100 rounded-full h-2.5 mb-2">
@@ -295,12 +302,20 @@ function SectionMigrationCloud() {
         </div>
       )}
 
+      {/* Succès */}
       {done && !migrating && (
         <div className="mb-4 bg-green-50 border border-green-200 rounded-xl px-4 py-4">
           <p className="text-sm font-semibold text-green-700">{statusMessage}</p>
           <p className="text-xs text-green-600 mt-1">
             Vérifiez dans Supabase → Table Editor que les données sont bien présentes.
           </p>
+        </div>
+      )}
+
+      {/* Erreur (Supabase non configuré ou erreur réseau) */}
+      {errorMsg && !migrating && (
+        <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <p className="text-sm font-semibold text-red-700">{errorMsg}</p>
         </div>
       )}
 
