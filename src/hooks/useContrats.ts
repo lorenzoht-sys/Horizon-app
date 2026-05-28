@@ -3,32 +3,23 @@ import { v4 as uuidv4 } from 'uuid';
 import { differenceInDays } from 'date-fns';
 import type { Contrat, Seance, JourSemaine, StatutContrat } from '../types';
 import { calculerNombreSeances, genererDatesSeances, addMinutes } from '../utils/horaires';
+import { supabase } from '../lib/supabase';
+import { dbToContrat, contratToDb } from '../lib/mappers';
 import { DEMO_CONTRATS } from '../data/demoContrats';
 
-const STORAGE_KEY = 'mouvtrack_contrats';
+const LS_KEY = 'mouvtrack_contrats';
 
-// Migration: anciens contrats stockaient jourFixe (string) au lieu de joursFixe (string[])
-function migrateContrat(c: any): Contrat {
-  if (!c.joursFixe && c.jourFixe) {
-    return { ...c, joursFixe: [c.jourFixe] };
+function loadFromLocal(): Contrat[] {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    return raw ? JSON.parse(raw) : DEMO_CONTRATS;
+  } catch {
+    return DEMO_CONTRATS;
   }
-  return c as Contrat;
 }
 
-function load(): Contrat[] {
-  const cleared = !!localStorage.getItem('mouvtrack_demo_cleared');
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return cleared ? [] : DEMO_CONTRATS;
-    const stored: Contrat[] = JSON.parse(raw).map(migrateContrat);
-    if (cleared) return stored;
-    // Fusionner les contrats demo manquants
-    const ids = new Set(stored.map(c => c.id));
-    const missing = DEMO_CONTRATS.filter(c => !ids.has(c.id));
-    return missing.length > 0 ? [...missing, ...stored] : stored;
-  } catch {
-    return cleared ? [] : DEMO_CONTRATS;
-  }
+function saveToLocal(contrats: Contrat[]) {
+  localStorage.setItem(LS_KEY, JSON.stringify(contrats));
 }
 
 interface CreerContratData {
@@ -43,17 +34,31 @@ interface CreerContratData {
 }
 
 export function useContrats() {
-  const [contrats, setContrats] = useState<Contrat[]>(load);
+  const [contrats, setContrats] = useState<Contrat[]>([]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(contrats));
-  }, [contrats]);
+    if (!supabase) {
+      setContrats(loadFromLocal());
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('contrats')
+      .select('*')
+      .order('date_creation', { ascending: false })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) { console.error('Erreur chargement contrats:', error); return; }
+        setContrats((data ?? []).map(dbToContrat));
+      });
+    return () => { cancelled = true; };
+  }, []);
 
-  function creerContrat(
+  async function creerContrat(
     data: CreerContratData,
     adresse: string,
     coordonnees?: { lat: number; lng: number }
-  ): { contrat: Contrat; seancesData: Omit<Seance, 'id'>[] } {
+  ): Promise<{ contrat: Contrat; seancesData: Omit<Seance, 'id'>[] }> {
     const nbSeances = calculerNombreSeances(data.dateDebut, data.dateFin, data.joursFixe);
     const contrat: Contrat = {
       ...data,
@@ -63,7 +68,18 @@ export function useContrats() {
       nombreSeancesTotal: nbSeances,
       nombreSeancesRealisees: 0,
     };
-    setContrats(prev => [...prev, contrat]);
+
+    if (!supabase) {
+      setContrats(prev => {
+        const updated = [...prev, contrat];
+        saveToLocal(updated);
+        return updated;
+      });
+    } else {
+      const { error } = await supabase.from('contrats').insert(contratToDb(contrat));
+      if (error) { console.error('Erreur création contrat:', error); }
+      else { setContrats(prev => [...prev, contrat]); }
+    }
 
     const dates = genererDatesSeances(data.dateDebut, data.dateFin, data.joursFixe);
     const heureFin = addMinutes(data.heureDebut, data.dureeMinutes);
@@ -83,19 +99,49 @@ export function useContrats() {
     return { contrat, seancesData };
   }
 
-  function modifierStatut(id: string, statut: StatutContrat) {
+  async function modifierStatut(id: string, statut: StatutContrat) {
+    if (!supabase) {
+      setContrats(prev => {
+        const updated = prev.map(c => c.id === id ? { ...c, statut } : c);
+        saveToLocal(updated);
+        return updated;
+      });
+      return;
+    }
+    await supabase.from('contrats').update({ statut }).eq('id', id);
     setContrats(prev => prev.map(c => c.id === id ? { ...c, statut } : c));
   }
 
-  function supprimerContrat(id: string) {
+  async function supprimerContrat(id: string) {
+    if (!supabase) {
+      setContrats(prev => {
+        const updated = prev.filter(c => c.id !== id);
+        saveToLocal(updated);
+        return updated;
+      });
+      return;
+    }
+    await supabase.from('contrats').delete().eq('id', id);
     setContrats(prev => prev.filter(c => c.id !== id));
   }
 
-  function incrementerSeancesRealisees(contratId: string) {
+  async function incrementerSeancesRealisees(contratId: string) {
+    const contrat = contrats.find(c => c.id === contratId);
+    if (!contrat) return;
+    const newCount = Math.min(contrat.nombreSeancesRealisees + 1, contrat.nombreSeancesTotal);
+    if (!supabase) {
+      setContrats(prev => {
+        const updated = prev.map(c =>
+          c.id === contratId ? { ...c, nombreSeancesRealisees: newCount } : c
+        );
+        saveToLocal(updated);
+        return updated;
+      });
+      return;
+    }
+    await supabase.from('contrats').update({ nombre_seances_realisees: newCount }).eq('id', contratId);
     setContrats(prev => prev.map(c =>
-      c.id === contratId
-        ? { ...c, nombreSeancesRealisees: Math.min(c.nombreSeancesRealisees + 1, c.nombreSeancesTotal) }
-        : c
+      c.id === contratId ? { ...c, nombreSeancesRealisees: newCount } : c
     ));
   }
 

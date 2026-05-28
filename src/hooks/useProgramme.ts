@@ -1,7 +1,8 @@
-import { useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Programme, ExerciceProgramme, SuiviJour } from '../types';
-import { useParticipants } from './useParticipants';
+import { supabase } from '../lib/supabase';
+import { dbToProgramme, programmeToDb } from '../lib/mappers';
 
 function getMondayISO(date: Date): string {
   const d = new Date(date);
@@ -11,17 +12,80 @@ function getMondayISO(date: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+function lsKey(participantId: string) {
+  return `mouvtrack_programmes_${participantId}`;
+}
+
+function loadFromLocal(participantId: string): Programme[] {
+  try {
+    const raw = localStorage.getItem(lsKey(participantId));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveToLocal(participantId: string, programmes: Programme[]) {
+  localStorage.setItem(lsKey(participantId), JSON.stringify(programmes));
+}
+
 export function useProgramme(participantId: string) {
-  const { participants, updateParticipant } = useParticipants();
-  const participant = participants.find(p => p.id === participantId);
-  const programmes: Programme[] = participant?.programmes ?? [];
+  const [programmes, setProgrammes] = useState<Programme[]>([]);
+
+  useEffect(() => {
+    if (!participantId) return;
+    if (!supabase) {
+      setProgrammes(loadFromLocal(participantId));
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('programmes')
+      .select('*')
+      .eq('participant_id', participantId)
+      .order('date_creation', { ascending: false })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) { console.error('Erreur chargement programmes:', error); return; }
+        setProgrammes((data ?? []).map(dbToProgramme));
+      });
+    return () => { cancelled = true; };
+  }, [participantId]);
+
   const programmeActif = programmes.find(p => p.actif) ?? null;
 
-  const saveProgrammes = useCallback((next: Programme[]) => {
-    updateParticipant(participantId, { programmes: next } as never);
-  }, [participantId, updateParticipant]);
+  async function upsertProgramme(prog: Programme) {
+    if (!supabase) {
+      setProgrammes(prev => {
+        const exists = prev.some(p => p.id === prog.id);
+        const updated = exists
+          ? prev.map(p => p.id === prog.id ? prog : p)
+          : [...prev, prog];
+        saveToLocal(participantId, updated);
+        return updated;
+      });
+      return;
+    }
+    const { error } = await supabase
+      .from('programmes')
+      .upsert(programmeToDb(prog));
+    if (error) console.error('Erreur sauvegarde programme:', error);
+  }
 
-  const createProgramme = useCallback((data: Omit<Programme, 'id' | 'participantId' | 'dateCreation' | 'suiviSemaines' | 'actif'>) => {
+  async function deleteProgrammeDb(id: string) {
+    if (!supabase) {
+      setProgrammes(prev => {
+        const updated = prev.filter(p => p.id !== id);
+        saveToLocal(participantId, updated);
+        return updated;
+      });
+      return;
+    }
+    const { error } = await supabase.from('programmes').delete().eq('id', id);
+    if (error) console.error('Erreur suppression programme:', error);
+  }
+
+  const createProgramme = useCallback(async (data: Omit<Programme, 'id' | 'participantId' | 'dateCreation' | 'suiviSemaines' | 'actif'>) => {
     const newProg: Programme = {
       ...data,
       id: uuidv4(),
@@ -30,43 +94,74 @@ export function useProgramme(participantId: string) {
       actif: true,
       suiviSemaines: [],
     };
-    const updated = programmes.map(p => ({ ...p, actif: false }));
-    saveProgrammes([...updated, newProg]);
+    if (!supabase) {
+      setProgrammes(prev => {
+        const updated = [...prev.map(p => ({ ...p, actif: false })), newProg];
+        saveToLocal(participantId, updated);
+        return updated;
+      });
+      return newProg;
+    }
+    // Désactiver tous les programmes actifs du participant
+    await supabase.from('programmes').update({ actif: false }).eq('participant_id', participantId);
+    const { error } = await supabase.from('programmes').upsert(programmeToDb(newProg));
+    if (error) console.error('Erreur création programme:', error);
+    setProgrammes(prev => [...prev.map(p => ({ ...p, actif: false })), newProg]);
     return newProg;
-  }, [programmes, participantId, saveProgrammes]);
+  }, [programmes, participantId]);
 
-  const updateProgramme = useCallback((id: string, data: Partial<Programme>) => {
-    saveProgrammes(programmes.map(p => p.id === id ? { ...p, ...data } : p));
-  }, [programmes, saveProgrammes]);
+  const updateProgramme = useCallback(async (id: string, data: Partial<Programme>) => {
+    const current = programmes.find(p => p.id === id);
+    if (!current) return;
+    const merged = { ...current, ...data };
+    await upsertProgramme(merged);
+    if (supabase) {
+      setProgrammes(prev => prev.map(p => p.id === id ? merged : p));
+    }
+  }, [programmes]);
 
-  const deleteProgramme = useCallback((id: string) => {
-    saveProgrammes(programmes.filter(p => p.id !== id));
-  }, [programmes, saveProgrammes]);
+  const deleteProgramme = useCallback(async (id: string) => {
+    await deleteProgrammeDb(id);
+    if (supabase) {
+      setProgrammes(prev => prev.filter(p => p.id !== id));
+    }
+  }, []);
 
-  const addExerciceToProgramme = useCallback((programmeId: string, ep: Omit<ExerciceProgramme, 'ordre'>) => {
+  const addExerciceToProgramme = useCallback(async (programmeId: string, ep: Omit<ExerciceProgramme, 'ordre'>) => {
     const prog = programmes.find(p => p.id === programmeId);
     if (!prog) return;
     const ordre = prog.exercices.length;
     const updated = { ...prog, exercices: [...prog.exercices, { ...ep, ordre }] };
-    saveProgrammes(programmes.map(p => p.id === programmeId ? updated : p));
-  }, [programmes, saveProgrammes]);
+    await upsertProgramme(updated);
+    if (supabase) {
+      setProgrammes(prev => prev.map(p => p.id === programmeId ? updated : p));
+    }
+  }, [programmes]);
 
-  const removeExerciceFromProgramme = useCallback((programmeId: string, exerciceId: string) => {
+  const removeExerciceFromProgramme = useCallback(async (programmeId: string, exerciceId: string) => {
     const prog = programmes.find(p => p.id === programmeId);
     if (!prog) return;
     const exercices = prog.exercices.filter(e => e.exerciceId !== exerciceId)
       .map((e, i) => ({ ...e, ordre: i }));
-    saveProgrammes(programmes.map(p => p.id === programmeId ? { ...p, exercices } : p));
-  }, [programmes, saveProgrammes]);
+    const updated = { ...prog, exercices };
+    await upsertProgramme(updated);
+    if (supabase) {
+      setProgrammes(prev => prev.map(p => p.id === programmeId ? updated : p));
+    }
+  }, [programmes]);
 
-  const updateExerciceInProgramme = useCallback((programmeId: string, exerciceId: string, data: Partial<ExerciceProgramme>) => {
+  const updateExerciceInProgramme = useCallback(async (programmeId: string, exerciceId: string, data: Partial<ExerciceProgramme>) => {
     const prog = programmes.find(p => p.id === programmeId);
     if (!prog) return;
     const exercices = prog.exercices.map(e => e.exerciceId === exerciceId ? { ...e, ...data } : e);
-    saveProgrammes(programmes.map(p => p.id === programmeId ? { ...p, exercices } : p));
-  }, [programmes, saveProgrammes]);
+    const updated = { ...prog, exercices };
+    await upsertProgramme(updated);
+    if (supabase) {
+      setProgrammes(prev => prev.map(p => p.id === programmeId ? updated : p));
+    }
+  }, [programmes]);
 
-  const toggleSuivi = useCallback((programmeId: string, dateISO: string, suivi: SuiviJour) => {
+  const toggleSuivi = useCallback(async (programmeId: string, dateISO: string, suivi: SuiviJour) => {
     const prog = programmes.find(p => p.id === programmeId);
     if (!prog) return;
     const semaine = getMondayISO(new Date(dateISO));
@@ -85,8 +180,12 @@ export function useProgramme(participantId: string) {
       jours[dateISO] = existing.map((e, i) => i === idx ? { ...e, ...suivi } : e);
     }
     suiviSemaines[sIdx] = { ...suiviSemaines[sIdx], jours };
-    saveProgrammes(programmes.map(p => p.id === programmeId ? { ...p, suiviSemaines } : p));
-  }, [programmes, saveProgrammes]);
+    const updated = { ...prog, suiviSemaines };
+    await upsertProgramme(updated);
+    if (supabase) {
+      setProgrammes(prev => prev.map(p => p.id === programmeId ? updated : p));
+    }
+  }, [programmes]);
 
   function calcAdherence(prog: Programme): { taux: number; fait: number; prevu: number } {
     if (prog.suiviSemaines.length === 0) return { taux: 0, fait: 0, prevu: 0 };

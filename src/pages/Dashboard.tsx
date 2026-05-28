@@ -323,8 +323,8 @@ export default function Dashboard() {
             </div>
             <div className="p-6">
               <ParticipantForm
-                onSubmit={(data) => {
-                  const p = addParticipant(data);
+                onSubmit={async (data) => {
+                  const p = await addParticipant(data);
                   setShowForm(false);
                   toast.success(`${data.prenom} ${data.nom} ajouté(e) !`);
                   navigate(`/participant/${p.id}`);

@@ -1,10 +1,12 @@
 import { useState, useRef } from 'react';
-import { Save, Upload, Plus, Trash2 } from 'lucide-react';
+import { Save, Upload, Plus, Trash2, CloudUpload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { v4 as uuidv4 } from 'uuid';
 import PageWrapper from '../components/layout/PageWrapper';
 import type { IndisponibilitePierre, JourSemaine } from '../types';
 import { SectionApplication } from '../components/pwa/PWAComponents';
+import { supabase } from '../lib/supabase';
+import { participantToDb, bilanToDb, contratToDb, seanceToDb, noteSeanceToDb } from '../lib/mappers';
 
 const JOURS_LABELS: Record<JourSemaine | 'dim', string> = {
   lun: 'Lundi', mar: 'Mardi', mer: 'Mercredi', jeu: 'Jeudi',
@@ -156,6 +158,160 @@ function SectionIndisponibilites() {
       </button>
 
       {showModal && <ModalAjoutIndispo onSave={handleSave} onClose={() => setShowModal(false)} />}
+    </section>
+  );
+}
+
+// ── Section Migration Cloud ────────────────────────────────────────────────────
+
+function SectionMigrationCloud() {
+  const [migrating, setMigrating] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [done, setDone] = useState(false);
+
+  async function handleMigrate() {
+    if (!supabase) {
+      setStatusMessage('Supabase non configuré — ajoutez les variables VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY.');
+      return;
+    }
+    setMigrating(true);
+    setDone(false);
+    setProgress(0);
+    setStatusMessage('Lecture des données locales…');
+
+    try {
+      // Lire les données depuis localStorage
+      const participantsRaw = localStorage.getItem('mouvtrack_participants');
+      const contratsRaw = localStorage.getItem('mouvtrack_contrats');
+      const seancesRaw = localStorage.getItem('mouvtrack_seances');
+      const notesRaw = localStorage.getItem('notes_seances');
+
+      const participants = participantsRaw ? JSON.parse(participantsRaw) : [];
+      const contrats = contratsRaw ? JSON.parse(contratsRaw) : [];
+      const seances = seancesRaw ? JSON.parse(seancesRaw) : [];
+      const notes = notesRaw ? JSON.parse(notesRaw) : [];
+
+      const totalSteps = 5;
+      let step = 0;
+
+      // Migrer les participants
+      setStatusMessage(`Migration des participants (${participants.length})…`);
+      if (participants.length > 0) {
+        for (const p of participants) {
+          const { bilans: _bilans, programmes: _programmes, ...pData } = p;
+          await supabase.from('participants').upsert(participantToDb({ ...pData, bilans: [], programmes: [] }));
+          // Migrer les bilans du participant
+          if (_bilans && _bilans.length > 0) {
+            for (const b of _bilans) {
+              await supabase.from('bilans').upsert(bilanToDb(p.id, b));
+            }
+          }
+          // Migrer les programmes du participant
+          if (_programmes && _programmes.length > 0) {
+            for (const prog of _programmes) {
+              await supabase.from('programmes').upsert({
+                id: prog.id,
+                participant_id: p.id,
+                date_debut: prog.dateDebut,
+                date_fin: prog.dateFin ?? null,
+                titre: prog.titre,
+                objectif: prog.objectif ?? null,
+                message_motivation: prog.messageMotivation ?? null,
+                exercices: prog.exercices,
+                actif: prog.actif,
+                suivi_semaines: prog.suiviSemaines,
+              });
+            }
+          }
+        }
+      }
+      step++;
+      setProgress(Math.round((step / totalSteps) * 100));
+
+      // Migrer les contrats
+      setStatusMessage(`Migration des contrats (${contrats.length})…`);
+      if (contrats.length > 0) {
+        for (const c of contrats) {
+          await supabase.from('contrats').upsert(contratToDb(c));
+        }
+      }
+      step++;
+      setProgress(Math.round((step / totalSteps) * 100));
+
+      // Migrer les séances
+      setStatusMessage(`Migration des séances (${seances.length})…`);
+      if (seances.length > 0) {
+        for (const s of seances) {
+          await supabase.from('seances').upsert(seanceToDb(s));
+        }
+      }
+      step++;
+      setProgress(Math.round((step / totalSteps) * 100));
+
+      // Migrer les notes de séance
+      setStatusMessage(`Migration des notes (${notes.length})…`);
+      if (notes.length > 0) {
+        for (const n of notes) {
+          await supabase.from('notes_seances').upsert(noteSeanceToDb(n));
+        }
+      }
+      step++;
+      setProgress(Math.round((step / totalSteps) * 100));
+
+      step++;
+      setProgress(100);
+      setStatusMessage(`✅ Migration terminée ! ${participants.length} participants · ${contrats.length} contrats · ${seances.length} séances · ${notes.length} notes`);
+      setDone(true);
+      toast.success('✅ Migration terminée !');
+    } catch (err) {
+      console.error('Erreur migration:', err);
+      setStatusMessage('Erreur lors de la migration. Vérifiez la console.');
+      toast.error('Erreur lors de la migration');
+    } finally {
+      setMigrating(false);
+    }
+  }
+
+  return (
+    <section>
+      <div className="mb-5">
+        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Données cloud</h2>
+        <div className="h-px bg-gray-100" />
+      </div>
+      <p className="text-sm text-gray-500 mb-4">
+        Migre vos données locales (localStorage) vers Supabase. À utiliser une seule fois lors de la première connexion.
+      </p>
+
+      {migrating && (
+        <div className="mb-4">
+          <div className="w-full bg-gray-100 rounded-full h-2.5 mb-2">
+            <div
+              className="bg-primary h-2.5 rounded-full transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <p className="text-xs text-gray-500">{statusMessage}</p>
+        </div>
+      )}
+
+      {done && !migrating && (
+        <div className="mb-4 bg-green-50 border border-green-200 rounded-xl px-4 py-4">
+          <p className="text-sm font-semibold text-green-700">{statusMessage}</p>
+          <p className="text-xs text-green-600 mt-1">
+            Vérifiez dans Supabase → Table Editor que les données sont bien présentes.
+          </p>
+        </div>
+      )}
+
+      <button
+        onClick={handleMigrate}
+        disabled={migrating}
+        className="flex items-center gap-2 bg-primary text-white hover:bg-dark px-5 py-3 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+      >
+        <CloudUpload size={16} />
+        {migrating ? 'Migration en cours…' : '☁️ Migrer mes données vers Supabase'}
+      </button>
     </section>
   );
 }
@@ -486,6 +642,9 @@ export default function SettingsPage() {
 
           {/* ── Indisponibilités ── */}
           <SectionIndisponibilites />
+
+          {/* ── Migration vers le cloud ── */}
+          <SectionMigrationCloud />
 
           {/* ── Données demo ── */}
           <section>

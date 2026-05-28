@@ -1,5 +1,6 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { supabase } from './lib/supabase';
 import { useDevice } from './hooks/useDevice';
 import AppMobile from './pages/mobile/AppMobile';
 import { Toaster } from 'react-hot-toast';
@@ -37,14 +38,32 @@ function MapFallback() {
 
 export default function App() {
   const { isMobile } = useDevice();
-  const [isLoggedIn, setIsLoggedIn] = useState(() =>
-    localStorage.getItem('isLoggedIn') === 'true'
-  );
-  const [showOnboarding, setShowOnboarding] = useState(() =>
-    isLoggedIn &&
-    !localStorage.getItem('settings_praticien') &&
-    !localStorage.getItem('onboarding_complete')
-  );
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (!supabase) {
+      setIsLoggedIn(localStorage.getItem('isLoggedIn') === 'true');
+      setAuthLoading(false);
+      return;
+    }
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setIsLoggedIn(!!session);
+      })
+      .catch(() => {
+        // Supabase inaccessible — on affiche quand même la page de connexion
+      })
+      .finally(() => {
+        setAuthLoading(false);
+      });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   function handleLogin() {
     setIsLoggedIn(true);
@@ -54,8 +73,24 @@ export default function App() {
   }
 
   function handleLogout() {
-    localStorage.removeItem('isLoggedIn');
+    if (supabase) {
+      void supabase.auth.signOut();
+    } else {
+      localStorage.setItem('isLoggedIn', 'false');
+    }
     setIsLoggedIn(false);
+  }
+
+  if (authLoading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#0D2B2B' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🌊</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: '#2BBFBF', marginBottom: 8 }}>Horizon</div>
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>Chargement…</div>
+        </div>
+      </div>
+    );
   }
 
   return (

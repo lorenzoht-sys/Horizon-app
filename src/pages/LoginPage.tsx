@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 import './LoginPage.css';
 
 // ── Panneau gauche ────────────────────────────────────────────────────────────
@@ -388,14 +389,27 @@ export default function LoginPage({ onLogin }: Props) {
     setError('');
     if (!email || !password) { setError('Veuillez remplir tous les champs'); return; }
     setLoading(true);
-    await new Promise(r => setTimeout(r, 700));
-    if (email === 'pierre@mouvapa.com' && password === 'mouvapa2025') {
-      localStorage.setItem('isLoggedIn', 'true');
-      onLogin();
-      navigate('/');
-    } else {
-      setError('Email ou mot de passe incorrect');
+
+    if (!supabase) {
+      if (email === 'pierre@mouvapa.com' && password === 'mouvapa2025') {
+        localStorage.setItem('isLoggedIn', 'true');
+        onLogin();
+        navigate('/');
+      } else {
+        setError('Email ou mot de passe incorrect');
+      }
+      setLoading(false);
+      return;
     }
+
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    if (authError) {
+      setError('Email ou mot de passe incorrect');
+      setLoading(false);
+      return;
+    }
+    onLogin();
+    navigate('/');
     setLoading(false);
   };
 

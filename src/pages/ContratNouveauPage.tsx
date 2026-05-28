@@ -94,7 +94,7 @@ export default function ContratNouveauPage() {
     return joursFixe.map(j => LABELS_JOURS_LONG[j]).join(' + ');
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!participant) return;
     if (!dateDebut || joursFixe.length === 0) {
@@ -112,7 +112,7 @@ export default function ContratNouveauPage() {
       ? { lat: participant.coordonnees.lat, lng: participant.coordonnees.lng }
       : undefined;
 
-    const { seancesData } = creerContrat(
+    const result = await creerContrat(
       {
         participantId: participant.id,
         dateDebut,
@@ -127,7 +127,7 @@ export default function ContratNouveauPage() {
       coordonnees
     );
 
-    bulkCreerSeances(seancesData);
+    await bulkCreerSeances(result.seancesData);
     toast.success(`Contrat créé — ${nbSeances} séances générées automatiquement`);
     navigate(`/participant/${participant.id}`);
   }

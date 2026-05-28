@@ -1,34 +1,58 @@
 import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { NoteSeance } from '../types';
+import { supabase } from '../lib/supabase';
+import { dbToNoteSeance, noteSeanceToDb } from '../lib/mappers';
 
-const STORAGE_KEY = 'notes_seances';
-const SYNC_EVENT  = 'mouvtrack_notes_sync';
+const LS_KEY = 'notes_seances';
 
-function load(): NoteSeance[] {
+function loadFromLocal(): NoteSeance[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(LS_KEY);
     return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
+}
+
+function saveToLocal(notes: NoteSeance[]) {
+  localStorage.setItem(LS_KEY, JSON.stringify(notes));
 }
 
 export function useJournalSeance() {
-  const [notes, setNotes] = useState<NoteSeance[]>(load);
+  const [notes, setNotes] = useState<NoteSeance[]>([]);
 
-  // Sync between hook instances in the same tab via custom event
   useEffect(() => {
-    const onSync = () => setNotes(load());
-    window.addEventListener(SYNC_EVENT, onSync);
-    return () => window.removeEventListener(SYNC_EVENT, onSync);
+    if (!supabase) {
+      setNotes(loadFromLocal());
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('notes_seances')
+      .select('*')
+      .order('date', { ascending: false })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) { console.error('Erreur chargement notes séances:', error); return; }
+        setNotes((data ?? []).map(dbToNoteSeance));
+      });
+    return () => { cancelled = true; };
   }, []);
 
-  function ajouterNote(note: Omit<NoteSeance, 'id'>): NoteSeance {
-    const nouvelle = { ...note, id: uuidv4() };
-    const next = [...notes, nouvelle];
-    // Write to localStorage BEFORE dispatching, so listeners read updated data
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    setNotes(next);
-    window.dispatchEvent(new CustomEvent(SYNC_EVENT));
+  async function ajouterNote(note: Omit<NoteSeance, 'id'>): Promise<NoteSeance> {
+    const nouvelle: NoteSeance = { ...note, id: uuidv4() };
+    if (!supabase) {
+      setNotes(prev => {
+        const updated = [nouvelle, ...prev];
+        saveToLocal(updated);
+        return updated;
+      });
+      return nouvelle;
+    }
+    const { error } = await supabase.from('notes_seances').insert(noteSeanceToDb(nouvelle));
+    if (error) { console.error('Erreur ajout note séance:', error); }
+    else { setNotes(prev => [nouvelle, ...prev]); }
     return nouvelle;
   }
 

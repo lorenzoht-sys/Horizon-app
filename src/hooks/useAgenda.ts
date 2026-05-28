@@ -3,24 +3,23 @@ import { v4 as uuidv4 } from 'uuid';
 import { addDays, differenceInDays } from 'date-fns';
 import type { Seance, StatutSeance } from '../types';
 import { useParticipants } from './useParticipants';
+import { supabase } from '../lib/supabase';
+import { dbToSeance, seanceToDb } from '../lib/mappers';
 import { DEMO_SEANCES } from '../data/demoSeances';
 
-const STORAGE_KEY = 'mouvtrack_seances';
+const LS_KEY = 'mouvtrack_seances';
 
-function load(): Seance[] {
-  const cleared = !!localStorage.getItem('mouvtrack_demo_cleared');
+function loadFromLocal(): Seance[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return cleared ? [] : DEMO_SEANCES;
-    const stored: Seance[] = JSON.parse(raw);
-    if (cleared) return stored;
-    // Fusionner les séances demo manquantes
-    const ids = new Set(stored.map(s => s.id));
-    const missing = DEMO_SEANCES.filter(s => !ids.has(s.id));
-    return missing.length > 0 ? [...missing, ...stored] : stored;
+    const raw = localStorage.getItem(LS_KEY);
+    return raw ? JSON.parse(raw) : DEMO_SEANCES;
   } catch {
-    return cleared ? [] : DEMO_SEANCES;
+    return DEMO_SEANCES;
   }
+}
+
+function saveToLocal(seances: Seance[]) {
+  localStorage.setItem(LS_KEY, JSON.stringify(seances));
 }
 
 function addMinutes(heure: string, minutes: number): string {
@@ -34,30 +33,85 @@ function addMinutes(heure: string, minutes: number): string {
 export { addMinutes };
 
 export function useAgenda() {
-  const [seances, setSeances] = useState<Seance[]>(load);
+  const [seances, setSeances] = useState<Seance[]>([]);
   const { participants } = useParticipants();
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(seances));
-  }, [seances]);
+    if (!supabase) {
+      setSeances(loadFromLocal());
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('seances')
+      .select('*')
+      .order('date', { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) { console.error('Erreur chargement séances:', error); return; }
+        setSeances((data ?? []).map(dbToSeance));
+      });
+    return () => { cancelled = true; };
+  }, []);
 
-  function creerSeance(data: Omit<Seance, 'id'>): Seance {
-    const nouvelle = { ...data, id: uuidv4() };
-    setSeances(prev => [...prev, nouvelle]);
+  async function creerSeance(data: Omit<Seance, 'id'>): Promise<Seance> {
+    const nouvelle: Seance = { ...data, id: uuidv4() };
+    if (!supabase) {
+      setSeances(prev => {
+        const updated = [...prev, nouvelle];
+        saveToLocal(updated);
+        return updated;
+      });
+      return nouvelle;
+    }
+    const { error } = await supabase.from('seances').insert(seanceToDb(nouvelle));
+    if (error) { console.error('Erreur création séance:', error); }
+    else { setSeances(prev => [...prev, nouvelle]); }
     return nouvelle;
   }
 
-  function bulkCreerSeances(data: Omit<Seance, 'id'>[]): Seance[] {
+  async function bulkCreerSeances(data: Omit<Seance, 'id'>[]): Promise<Seance[]> {
     const nouvelles: Seance[] = data.map(d => ({ ...d, id: uuidv4() }));
-    setSeances(prev => [...prev, ...nouvelles]);
+    if (!supabase) {
+      setSeances(prev => {
+        const updated = [...prev, ...nouvelles];
+        saveToLocal(updated);
+        return updated;
+      });
+      return nouvelles;
+    }
+    const { error } = await supabase.from('seances').insert(nouvelles.map(s => seanceToDb(s)));
+    if (error) { console.error('Erreur bulk création séances:', error); }
+    else { setSeances(prev => [...prev, ...nouvelles]); }
     return nouvelles;
   }
 
-  function modifierSeance(id: string, updates: Partial<Seance>) {
+  async function modifierSeance(id: string, updates: Partial<Seance>) {
+    const current = seances.find(s => s.id === id);
+    if (!current) return;
+    const merged = { ...current, ...updates };
+    if (!supabase) {
+      setSeances(prev => {
+        const updated = prev.map(s => s.id === id ? merged : s);
+        saveToLocal(updated);
+        return updated;
+      });
+      return;
+    }
+    await supabase.from('seances').update(seanceToDb(merged)).eq('id', id);
     setSeances(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
   }
 
-  function supprimerSeance(id: string) {
+  async function supprimerSeance(id: string) {
+    if (!supabase) {
+      setSeances(prev => {
+        const updated = prev.filter(s => s.id !== id);
+        saveToLocal(updated);
+        return updated;
+      });
+      return;
+    }
+    await supabase.from('seances').delete().eq('id', id);
     setSeances(prev => prev.filter(s => s.id !== id));
   }
 
@@ -100,8 +154,8 @@ export function useAgenda() {
     });
   }
 
-  function changerStatut(id: string, statut: StatutSeance) {
-    modifierSeance(id, { statut });
+  async function changerStatut(id: string, statut: StatutSeance) {
+    await modifierSeance(id, { statut });
   }
 
   return {

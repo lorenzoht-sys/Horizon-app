@@ -28,8 +28,8 @@ export default function NewBilan() {
     </PageWrapper>
   );
 
-  function handleSave(bilan: Omit<Bilan, 'id'>) {
-    const saved = addBilan(participant!.id, bilan);
+  async function handleSave(bilan: Omit<Bilan, 'id'>) {
+    const saved = await addBilan(participant!.id, bilan);
     supprimerBrouillon(participant!.id);
     toast.success('Bilan enregistré !');
     navigate(`/participant/${participant!.id}/bilan/${saved.id}`);
