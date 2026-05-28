@@ -179,6 +179,13 @@ interface SettingsPraticien {
   logoPraticien: string;
   tarifHoraire: string;
   fraisKmDefaut: string;
+  // Facturation
+  dateSAP: string;
+  ibanPraticien: string;
+  bicPraticien: string;
+  prefixeFacture: string;
+  prochainNumeroFacture: string;
+  delaiPaiement: string;
 }
 
 const DEFAULTS: SettingsPraticien = {
@@ -187,6 +194,8 @@ const DEFAULTS: SettingsPraticien = {
   adresseVille: '', siret: '', numeroSAP: '', numeroTVA: '',
   villeSignature: '', societe: '', logoPraticien: '',
   tarifHoraire: '45', fraisKmDefaut: '0.50',
+  dateSAP: '', ibanPraticien: '', bicPraticien: '',
+  prefixeFacture: 'FACT', prochainNumeroFacture: '1', delaiPaiement: '30',
 };
 
 function loadSettings(): SettingsPraticien {
@@ -474,6 +483,50 @@ export default function SettingsPage() {
                 <input type="number" min={0} step={0.01} value={form.fraisKmDefaut}
                   onChange={e => set('fraisKmDefaut', e.target.value)}
                   placeholder="0.50" className={inputClass(errors.fraisKmDefaut)} />
+              </Field>
+            </div>
+          </section>
+
+          {/* ── Facturation & SAP ── */}
+          <section>
+            <SectionTitle title="Facturation & SAP" />
+            <div className="space-y-4">
+              <Field label="Date d'enregistrement SAP (attestation NOVA)">
+                <input type="date" value={form.dateSAP}
+                  onChange={e => set('dateSAP', e.target.value)}
+                  className={inputClass()} />
+                <p className="text-xs text-gray-400 mt-1">Date figurant sur votre attestation NOVA — obligatoire sur les factures SAP</p>
+              </Field>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Délai de paiement (jours)">
+                  <input type="number" min={0} value={form.delaiPaiement}
+                    onChange={e => set('delaiPaiement', e.target.value)}
+                    placeholder="30" className={inputClass()} />
+                </Field>
+                <Field label="Préfixe des factures">
+                  <input value={form.prefixeFacture}
+                    onChange={e => set('prefixeFacture', e.target.value)}
+                    placeholder="FACT" className={inputClass()} />
+                  <p className="text-xs text-gray-400 mt-1">Ex: FACT → FACT-2026.05-001</p>
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="IBAN (virement bancaire)">
+                  <input value={form.ibanPraticien}
+                    onChange={e => set('ibanPraticien', e.target.value)}
+                    placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX" className={inputClass()} />
+                </Field>
+                <Field label="BIC">
+                  <input value={form.bicPraticien}
+                    onChange={e => set('bicPraticien', e.target.value)}
+                    placeholder="BNPAFRPP" className={inputClass()} />
+                </Field>
+              </div>
+              <Field label="Prochain numéro de facture">
+                <input type="number" min={1} value={form.prochainNumeroFacture}
+                  onChange={e => set('prochainNumeroFacture', e.target.value)}
+                  className={`${inputClass()} max-w-xs`} />
+                <p className="text-xs text-gray-400 mt-1">Séquence continue — ne pas modifier sans raison légale</p>
               </Field>
             </div>
           </section>

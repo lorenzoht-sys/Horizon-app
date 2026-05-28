@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Home, Calendar, Route, Dumbbell, Layers, Settings,
-  HelpCircle, LogOut, Map, BarChart2,
+  HelpCircle, LogOut, Map, BarChart2, Receipt,
 } from 'lucide-react';
 import { IndicateurConnexion, BoutonInstallerApp } from '../pwa/PWAComponents';
 
@@ -18,7 +18,8 @@ const NAV_ITEMS = [
   { path: '/exercices', icon: Dumbbell,    label: 'Exercices',       end: false },
   { path: '/zones',     icon: Layers,      label: 'Zones',           end: false },
   { path: '/map',       icon: Map,         label: 'Carte',           end: false },
-  { path: '/stats',     icon: BarChart2,   label: 'Mes stats',       end: false },
+  { path: '/stats',       icon: BarChart2,   label: 'Mes stats',     end: false },
+  { path: '/facturation', icon: Receipt,     label: 'Facturation',   end: false },
 ];
 
 
