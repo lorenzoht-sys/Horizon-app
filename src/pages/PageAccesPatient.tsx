@@ -1,53 +1,30 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  trouverAccesParCode,
-  mettreAJourDernierAcces,
-  isExpire,
-} from '../hooks/useAccesPatients';
+import { trouverParticipantParCode, mettreAJourDernierAcces } from '../hooks/useAccesPatients';
 
 export default function PageAccesPatient() {
-  const [code, setCode] = useState(['', '', '', '', '', '']);
+  const [code, setCode] = useState('');
   const [erreur, setErreur] = useState('');
   const [loading, setLoading] = useState(false);
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    inputRefs.current[0]?.focus();
-  }, []);
-
-  function handleSaisie(index: number, valeur: string) {
-    if (!/^\d*$/.test(valeur)) return;
-    const nouveau = [...code];
-    nouveau[index] = valeur.slice(-1);
-    setCode(nouveau);
-    if (valeur && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-    if (nouveau.every(c => c !== '') && valeur !== '') {
-      verifierCode(nouveau.join(''));
-    }
-  }
-
-  function verifierCode(codeComplet: string) {
+  function verifierCode() {
+    const codeNorm = code.trim().toLowerCase();
+    if (!codeNorm) return;
     setLoading(true);
     setErreur('');
     setTimeout(() => {
-      const acces = trouverAccesParCode(codeComplet);
-      if (acces && acces.actif && !isExpire(acces.dateExpiration)) {
-        mettreAJourDernierAcces(acces.participantId);
-        navigate(`/patient/${acces.participantId}?code=${codeComplet}`);
+      const participant = trouverParticipantParCode(codeNorm);
+      if (participant) {
+        mettreAJourDernierAcces(participant.id);
+        navigate(`/patient/${participant.id}?code=${codeNorm}`);
       } else {
-        setErreur('Code incorrect ou expiré. Contactez votre intervenant APA.');
-        setCode(['', '', '', '', '', '']);
-        setTimeout(() => inputRefs.current[0]?.focus(), 50);
+        setErreur('Code incorrect. Contactez votre intervenant APA.');
+        setCode('');
       }
       setLoading(false);
     }, 600);
   }
-
-  const codeComplet = code.every(c => c !== '');
 
   return (
     <div style={{
@@ -67,38 +44,26 @@ export default function PageAccesPatient() {
           Votre espace personnel
         </div>
         <div style={{ fontSize: 14, color: '#8FA8A8', marginBottom: 28, lineHeight: 1.5 }}>
-          Saisissez le code à 6 chiffres<br />fourni par votre intervenant APA
+          Saisissez le code fourni<br />par votre intervenant APA
         </div>
 
-        {/* Saisie code */}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 24 }}>
-          {code.map((chiffre, i) => (
-            <input
-              key={i}
-              ref={el => { inputRefs.current[i] = el; }}
-              type="tel"
-              inputMode="numeric"
-              maxLength={1}
-              value={chiffre}
-              onChange={e => handleSaisie(i, e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Backspace' && !chiffre && i > 0) {
-                  const prev = [...code];
-                  prev[i - 1] = '';
-                  setCode(prev);
-                  inputRefs.current[i - 1]?.focus();
-                }
-              }}
-              style={{
-                width: 44, height: 52, textAlign: 'center',
-                fontSize: 24, fontWeight: 700, border: '2px solid',
-                borderColor: chiffre ? '#2BBFBF' : '#E0EEEE',
-                borderRadius: 10, color: '#0D2B2B', outline: 'none',
-                fontFamily: 'monospace', transition: 'border-color 0.15s',
-              }}
-            />
-          ))}
-        </div>
+        <input
+          type="text"
+          value={code}
+          onChange={e => setCode(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && verifierCode()}
+          placeholder="Ex : marie2026"
+          autoFocus
+          style={{
+            width: '100%', padding: '14px 16px',
+            fontSize: 20, fontWeight: 700, textAlign: 'center',
+            border: '2px solid', borderColor: code ? '#2BBFBF' : '#E0EEEE',
+            borderRadius: 10, color: '#0D2B2B', outline: 'none',
+            fontFamily: 'monospace', letterSpacing: '0.05em',
+            boxSizing: 'border-box', marginBottom: 16,
+            transition: 'border-color 0.15s',
+          }}
+        />
 
         {erreur && (
           <div style={{
@@ -111,15 +76,15 @@ export default function PageAccesPatient() {
         )}
 
         <button
-          onClick={() => codeComplet && !loading && verifierCode(code.join(''))}
-          disabled={!codeComplet || loading}
+          onClick={verifierCode}
+          disabled={!code.trim() || loading}
           style={{
             width: '100%', padding: '14px',
-            background: codeComplet ? '#2BBFBF' : '#E0EEEE',
-            color: codeComplet ? 'white' : '#8FA8A8',
+            background: code.trim() ? '#2BBFBF' : '#E0EEEE',
+            color: code.trim() ? 'white' : '#8FA8A8',
             border: 'none', borderRadius: 10,
             fontSize: 15, fontWeight: 700,
-            cursor: codeComplet ? 'pointer' : 'not-allowed',
+            cursor: code.trim() ? 'pointer' : 'not-allowed',
             transition: 'background 0.15s',
           }}
         >

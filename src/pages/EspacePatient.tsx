@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useSearchParams, Navigate } from 'react-router-dom';
 import type { Participant, Seance, Bilan, Contrat, Programme } from '../types';
-import { getAccesPatient, isExpire, mettreAJourDernierAcces } from '../hooks/useAccesPatients';
+import { calculerCode, getAccesPatient, mettreAJourDernierAcces } from '../hooks/useAccesPatients';
 import { loadExercices } from '../data/exercices';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -446,8 +446,11 @@ export default function EspacePatient() {
 
   const acces = getAccesPatient(id);
 
-  // Vérifie que le code de l'URL correspond bien à cet accès
-  if (!acces || !acces.actif || isExpire(acces.dateExpiration) || acces.code !== code) {
+  const participant = loadParticipant(id);
+  if (!participant) return <Navigate to="/patient" replace />;
+
+  // Vérifie que le code de l'URL correspond au code calculé du participant
+  if (!code || calculerCode(participant.prenom) !== code) {
     return <Navigate to="/patient" replace />;
   }
 
@@ -455,9 +458,6 @@ export default function EspacePatient() {
   if (!acces.dernierAcces || Date.now() - new Date(acces.dernierAcces).getTime() > 60000) {
     mettreAJourDernierAcces(id);
   }
-
-  const participant = loadParticipant(id);
-  if (!participant) return <Navigate to="/patient" replace />;
 
   const seances = loadSeancesPatient(id);
   const contrat = loadContratActif(id);

@@ -6,26 +6,26 @@ import { Toaster } from 'react-hot-toast';
 import Sidebar from './components/layout/Sidebar';
 import Dashboard from './pages/Dashboard';
 import ParticipantProfile from './pages/ParticipantProfile';
-import NewBilan from './pages/NewBilan';
-import BilanDetail from './pages/BilanDetail';
-import ClientView from './pages/ClientView';
-import ProgrammePage from './pages/ProgrammePage';
-import ExercicesPage from './pages/ExercicesPage';
 import LoginPage from './pages/LoginPage';
 import SettingsPage from './pages/SettingsPage';
-import ContratNouveauPage from './pages/ContratNouveauPage';
-import ComparaisonPage from './pages/ComparaisonPage';
-import StatsPage from './pages/StatsPage';
 import PageAccesPatient from './pages/PageAccesPatient';
 import EspacePatient from './pages/EspacePatient';
 import OnboardingModal from './components/OnboardingModal';
 import { BandeauHorsLigne, NotificationMiseAJour } from './components/pwa/PWAComponents';
+import ClientView from './pages/ClientView';
 
-// Lazy load : Leaflet est lourd (~150kb) — chargé uniquement sur /map, /tournee, /zones
-const MapPage    = lazy(() => import('./pages/MapPage'));
-const AgendaPage = lazy(() => import('./pages/AgendaPage'));
-const TourneePage = lazy(() => import('./pages/TourneePage'));
-const ZonesPage  = lazy(() => import('./pages/ZonesPage'));
+// Lazy load : pages lourdes chargées à la demande
+const MapPage           = lazy(() => import('./pages/MapPage'));
+const AgendaPage        = lazy(() => import('./pages/AgendaPage'));
+const TourneePage       = lazy(() => import('./pages/TourneePage'));
+const ZonesPage         = lazy(() => import('./pages/ZonesPage'));
+const ExercicesPage     = lazy(() => import('./pages/ExercicesPage'));
+const StatsPage         = lazy(() => import('./pages/StatsPage'));
+const ComparaisonPage   = lazy(() => import('./pages/ComparaisonPage'));
+const ContratNouveauPage = lazy(() => import('./pages/ContratNouveauPage'));
+const BilanDetail       = lazy(() => import('./pages/BilanDetail'));
+const NewBilan          = lazy(() => import('./pages/NewBilan'));
+const ProgrammePage     = lazy(() => import('./pages/ProgrammePage'));
 
 function MapFallback() {
   return (
@@ -98,13 +98,27 @@ export default function App() {
                   <Routes>
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/participant/:id" element={<ParticipantProfile />} />
-                    <Route path="/participant/:id/bilan/new" element={<NewBilan />} />
-                    <Route path="/participant/:id/bilan/:bilanId" element={<BilanDetail />} />
-                    <Route path="/participant/:id/programme" element={<ProgrammePage />} />
-                    <Route path="/participant/:id/contrat/nouveau" element={<ContratNouveauPage />} />
-                    <Route path="/participant/:id/comparaison" element={<ComparaisonPage />} />
-                    <Route path="/exercices" element={<ExercicesPage />} />
-                    <Route path="/stats" element={<StatsPage />} />
+                    <Route path="/participant/:id/bilan/new" element={
+                      <Suspense fallback={<MapFallback />}><NewBilan /></Suspense>
+                    } />
+                    <Route path="/participant/:id/bilan/:bilanId" element={
+                      <Suspense fallback={<MapFallback />}><BilanDetail /></Suspense>
+                    } />
+                    <Route path="/participant/:id/programme" element={
+                      <Suspense fallback={<MapFallback />}><ProgrammePage /></Suspense>
+                    } />
+                    <Route path="/participant/:id/contrat/nouveau" element={
+                      <Suspense fallback={<MapFallback />}><ContratNouveauPage /></Suspense>
+                    } />
+                    <Route path="/participant/:id/comparaison" element={
+                      <Suspense fallback={<MapFallback />}><ComparaisonPage /></Suspense>
+                    } />
+                    <Route path="/exercices" element={
+                      <Suspense fallback={<MapFallback />}><ExercicesPage /></Suspense>
+                    } />
+                    <Route path="/stats" element={
+                      <Suspense fallback={<MapFallback />}><StatsPage /></Suspense>
+                    } />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/zones" element={
                       <Suspense fallback={<MapFallback />}><ZonesPage /></Suspense>

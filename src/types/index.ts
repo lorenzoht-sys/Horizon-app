@@ -375,10 +375,6 @@ export interface Participant {
 
 export interface AccesPatient {
   participantId: string;
-  code: string;
-  dateCreation: string;
-  dateExpiration: string;
-  actif: boolean;
   visibilite: {
     progression: boolean;
     bilans: boolean;
