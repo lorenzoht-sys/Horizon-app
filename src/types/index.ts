@@ -371,3 +371,22 @@ export interface Participant {
   droitImage?: boolean;
 }
 
+// ── ESPACE PATIENT ────────────────────────────────────────────────────────────
+
+export interface AccesPatient {
+  participantId: string;
+  code: string;
+  dateCreation: string;
+  dateExpiration: string;
+  actif: boolean;
+  visibilite: {
+    progression: boolean;
+    bilans: boolean;
+    rdv: boolean;
+    programme: boolean;
+    messagePierre: boolean;
+  };
+  messagePierreTexte?: string;
+  dernierAcces?: string;
+}
+

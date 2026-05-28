@@ -20,6 +20,8 @@ import JournalTab from '../components/journal/JournalTab';
 import ParticipantForm from '../components/participant/ParticipantForm';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
 import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
+import ModalEspacePatient from '../components/participant/ModalEspacePatient';
+import { getAccesPatient } from '../hooks/useAccesPatients';
 import { exportFichePatientPDF } from '../utils/exportFichePatientPDF';
 import { calculerNote, NORMES_SCORING } from '../data/norms';
 import { TAG_CONFIG } from '../data/profiles';
@@ -347,6 +349,8 @@ export default function ParticipantProfile() {
   const [geocoding, setGeocoding]       = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
   const [showProfilPicker, setShowProfilPicker] = useState(false);
+  const [showEspacePatient, setShowEspacePatient] = useState(false);
+  const [accesPatient, setAccesPatient] = useState(() => id ? getAccesPatient(id) : null);
 
   const participant = participants.find(p => p.id === id);
   if (!participant) return (
@@ -677,6 +681,22 @@ export default function ParticipantProfile() {
             >
               <FileText size={11} /> {exportingPDF ? 'PDF…' : 'Fiche PDF'}
             </button>
+            <button
+              onClick={() => setShowEspacePatient(true)}
+              className={`flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border transition-colors ${
+                accesPatient?.actif
+                  ? 'bg-secondary/20 text-secondary border-secondary/30 hover:bg-secondary/30'
+                  : 'bg-white/10 text-white border-white/20 hover:bg-white/20'
+              }`}
+            >
+              <i className="ti ti-user-circle" style={{ fontSize: 13 }} aria-hidden="true" />
+              Espace patient
+              {accesPatient?.actif && (
+                <span className="bg-secondary text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                  Actif
+                </span>
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -773,6 +793,15 @@ export default function ParticipantProfile() {
           participantId={participant.id}
           participantNom={`${participant.prenom} ${participant.nom}`}
           onClose={() => setShowNoteModal(false)}
+        />
+      )}
+
+      {showEspacePatient && (
+        <ModalEspacePatient
+          participant={participant}
+          acces={accesPatient}
+          onClose={() => setShowEspacePatient(false)}
+          onUpdated={() => setAccesPatient(getAccesPatient(participant.id))}
         />
       )}
 

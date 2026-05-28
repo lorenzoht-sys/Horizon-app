@@ -16,6 +16,8 @@ import SettingsPage from './pages/SettingsPage';
 import ContratNouveauPage from './pages/ContratNouveauPage';
 import ComparaisonPage from './pages/ComparaisonPage';
 import StatsPage from './pages/StatsPage';
+import PageAccesPatient from './pages/PageAccesPatient';
+import EspacePatient from './pages/EspacePatient';
 import OnboardingModal from './components/OnboardingModal';
 import { BandeauHorsLigne, NotificationMiseAJour } from './components/pwa/PWAComponents';
 
@@ -69,6 +71,10 @@ export default function App() {
 
         {/* Vue client : pas de sidebar */}
         <Route path="/client/:token" element={<ClientView />} />
+
+        {/* Espace patient — public, sans auth praticien */}
+        <Route path="/patient" element={<PageAccesPatient />} />
+        <Route path="/patient/:id" element={<EspacePatient />} />
 
         {/* Interface pro — protégée */}
         <Route
