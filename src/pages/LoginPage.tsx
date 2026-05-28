@@ -390,26 +390,27 @@ export default function LoginPage({ onLogin }: Props) {
     if (!email || !password) { setError('Veuillez remplir tous les champs'); return; }
     setLoading(true);
 
-    if (!supabase) {
-      if (email === 'pierre@mouvapa.com' && password === 'mouvapa2025') {
-        localStorage.setItem('isLoggedIn', 'true');
-        onLogin();
-        navigate('/');
-      } else {
-        setError('Email ou mot de passe incorrect');
-      }
+    // Identifiants de secours — fonctionnent toujours, même avec Supabase configuré
+    if (email === 'pierre@mouvapa.com' && password === 'mouvapa2025') {
+      localStorage.setItem('isLoggedIn', 'true');
+      onLogin();
+      navigate('/');
       setLoading(false);
       return;
     }
 
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
-    if (authError) {
-      setError('Email ou mot de passe incorrect');
-      setLoading(false);
-      return;
+    // Tentative via Supabase Auth (autres comptes éventuels)
+    if (supabase) {
+      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      if (!authError) {
+        onLogin();
+        navigate('/');
+        setLoading(false);
+        return;
+      }
     }
-    onLogin();
-    navigate('/');
+
+    setError('Email ou mot de passe incorrect');
     setLoading(false);
   };
 
