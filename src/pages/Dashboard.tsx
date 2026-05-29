@@ -324,13 +324,13 @@ export default function Dashboard() {
             <div className="p-6">
               <ParticipantForm
                 onSubmit={async (data) => {
-                  const p = await addParticipant(data);
-                  setShowForm(false);
-                  if (p) {
+                  try {
+                    const p = await addParticipant(data);
+                    setShowForm(false);
                     toast.success(`${data.prenom} ${data.nom} ajouté(e) !`);
                     navigate(`/participant/${p.id}`);
-                  } else {
-                    toast.error('Erreur lors de l\'ajout du patient');
+                  } catch (error: any) {
+                    toast.error(error?.message || 'Erreur lors de l\'ajout du patient');
                   }
                 }}
                 onCancel={() => setShowForm(false)}

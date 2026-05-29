@@ -59,7 +59,7 @@ export function useParticipants() {
     const newP: Participant = { tags: [], ...data, id: uuidv4(), token: generateToken(), bilans: [] };
     if (supabase) {
       const { error } = await supabase.from('participants').insert(participantToDb(newP));
-      if (error) { console.error('Erreur ajout participant:', error); return null; }
+      if (error) { console.error('Erreur ajout participant:', error); throw error; }
       if (hasAddress(newP)) runGeocode(newP.id, newP.adresseRue!, newP.adresseCodePostal ?? '', newP.adresseVille!);
     }
     setParticipants(prev => [newP, ...prev]);

@@ -58,13 +58,13 @@ export default function ImportExcelModal({ onClose }: { onClose: () => void }) {
       // avant de passer au suivant, ce qui permet de suivre la progression.
       for (let i = 0; i < parsed.succes.length; i++) {
         const data = parsed.succes[i];
-        const added = await addParticipant(data);
-        if (added) {
+        try {
+          await addParticipant(data);
           nbSucces++;
-        } else {
+        } catch (error: any) {
           erreursSupabase.push({
             ligne: i + 2,
-            message: `${data.prenom} ${data.nom} — échec d'insertion (voir console)`,
+            message: `${data.prenom} ${data.nom} — ${error?.message || error?.details || JSON.stringify(error)}`,
           });
         }
         setProgress({ done: i + 1, total });
