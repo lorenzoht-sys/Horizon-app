@@ -1,198 +1,8 @@
 import { useState, type FormEvent, type CSSProperties } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import AuthLeftPanel from '../components/layout/AuthLeftPanel';
 import './LoginPage.css';
-
-// ── Panneau gauche ────────────────────────────────────────────────────────────
-
-function LeftPanel() {
-  const features = [
-    { icon: 'ti-chart-line',     title: 'Bilans trimestriels',      desc: 'Graphiques + PDF automatiques',       badge: '4/an' },
-    { icon: 'ti-clipboard-list', title: 'Programmes personnalisés', desc: 'Exercices + vidéos démo à domicile',  badge: '50+ exos' },
-    { icon: 'ti-map-pin',        title: 'Carte des patients',       desc: 'Gérez vos tournées à domicile',       badge: 'GPS' },
-  ];
-
-  const stats = [
-    { value: '127', label: 'patients' },
-    { value: '48',  label: 'bilans/mois' },
-    { value: '4.9★', label: 'satisfaction' },
-  ];
-
-  return (
-    <div className="login-left" style={{
-      width: '52%',
-      background: 'linear-gradient(160deg, #1A3A3A 0%, #032c28 60%, #081E1E 100%)',
-      padding: '44px 40px',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between',
-      position: 'relative',
-      overflow: 'hidden',
-    }}>
-
-      {/* Motif points */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)',
-        backgroundSize: '24px 24px',
-        pointerEvents: 'none',
-      }} />
-
-      {/* Lueur radiale turquoise */}
-      <div style={{
-        position: 'absolute', top: '30%', left: '-10%',
-        width: 420, height: 420, borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(43,191,191,0.12) 0%, transparent 70%)',
-        pointerEvents: 'none',
-      }} />
-
-      {/* Cercles décoratifs */}
-      <div style={{
-        position: 'absolute', top: -100, right: -100,
-        width: 360, height: 360, borderRadius: '50%',
-        border: '1.5px solid rgba(255,255,255,0.08)',
-        pointerEvents: 'none',
-      }} />
-      <div style={{
-        position: 'absolute', top: -40, right: -40,
-        width: 200, height: 200, borderRadius: '50%',
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid rgba(255,255,255,0.06)',
-        pointerEvents: 'none',
-      }} />
-      <div style={{
-        position: 'absolute', bottom: -80, right: 60,
-        width: 240, height: 240, borderRadius: '50%',
-        border: '1px solid rgba(43,191,191,0.12)',
-        pointerEvents: 'none',
-      }} />
-      <div style={{
-        position: 'absolute', bottom: -30, left: -60,
-        width: 200, height: 200, borderRadius: '50%',
-        background: 'rgba(43,191,191,0.05)',
-        pointerEvents: 'none',
-      }} />
-
-      {/* Tout le contenu au-dessus des décorations */}
-      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
-
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 42, height: 42,
-            background: 'white', borderRadius: 12,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
-          }}>
-            <img
-              src="/logo-horizon.png.png"
-              style={{ height: 36, objectFit: 'contain' }}
-              alt="Horizon"
-              onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }}
-            />
-          </div>
-        </div>
-
-        {/* Claim */}
-        <div>
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            background: 'rgba(43,191,191,0.15)',
-            border: '1px solid rgba(43,191,191,0.4)',
-            borderRadius: 20, padding: '5px 14px',
-            fontSize: 11, fontWeight: 600,
-            color: '#2BBFBF', letterSpacing: '0.04em',
-            marginBottom: 18,
-          }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2BBFBF', flexShrink: 0 }} />
-            Outil professionnel de suivi patient
-          </div>
-
-          <div style={{
-            fontFamily: "'Poppins', sans-serif",
-            fontSize: 32, fontWeight: 800,
-            color: 'white', lineHeight: 1.18,
-            letterSpacing: '-0.8px', marginBottom: 12,
-          }}>
-            Le lien entre<br />
-            vos séances et<br />
-            <span style={{ color: '#2BBFBF' }}>leurs progrès.</span>
-          </div>
-
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, marginBottom: 20 }}>
-            Bilans fonctionnels, programmes personnalisés,<br />
-            rapports PDF — partout où vous allez.
-          </div>
-
-          {/* Stats */}
-          <div style={{ display: 'flex', gap: 24 }}>
-            {stats.map((s, i) => (
-              <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: i > 0 ? 0 : 0 }}>
-                {i > 0 && <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.12)', marginRight: 24 }} />}
-                <div>
-                  <div style={{ fontFamily: "'Poppins', sans-serif", fontSize: 20, fontWeight: 700, color: 'white', lineHeight: 1 }}>
-                    {s.value}
-                  </div>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    {s.label}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Feature cards */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-          {features.map(f => (
-            <div key={f.title} style={{
-              display: 'flex', alignItems: 'center', gap: 13,
-              background: 'rgba(255,255,255,0.07)',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              borderLeft: '3px solid rgba(43,191,191,0.6)',
-              borderRadius: 12, padding: '12px 14px',
-            }}>
-              <div style={{
-                width: 38, height: 38,
-                background: 'rgba(43,191,191,0.18)',
-                border: '1px solid rgba(43,191,191,0.25)',
-                borderRadius: 10, flexShrink: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <i className={`ti ${f.icon}`} style={{ fontSize: 19, color: '#2BBFBF' }} aria-hidden="true" />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'white', lineHeight: 1.2 }}>{f.title}</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>{f.desc}</div>
-              </div>
-              <div style={{
-                fontSize: 10, fontWeight: 700, color: '#2BBFBF',
-                background: 'rgba(43,191,191,0.15)',
-                border: '1px solid rgba(43,191,191,0.25)',
-                borderRadius: 20, padding: '2px 8px',
-                flexShrink: 0, whiteSpace: 'nowrap',
-              }}>{f.badge}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Footer */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.1)' }} />
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.08em' }}>
-            HORIZON · 2025
-          </div>
-          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.1)' }} />
-        </div>
-
-      </div>
-    </div>
-  );
-}
-
-// ── Panneau droit ─────────────────────────────────────────────────────────────
 
 interface RightPanelProps {
   email: string;
@@ -218,6 +28,7 @@ function RightPanel({
     fontFamily: "'Nunito', sans-serif",
     color: '#032c28', background: '#FAFCFF',
     outline: 'none', boxSizing: 'border-box',
+    transition: 'border-color 0.2s, box-shadow 0.2s',
   };
 
   const labelStyle: CSSProperties = {
@@ -227,8 +38,8 @@ function RightPanel({
   };
 
   const trustItems = [
-    { icon: 'ti-shield-check', label: 'Conforme\nRGPD' },
-    { icon: 'ti-lock',         label: 'Données\nchiffrées' },
+    { icon: 'ti-shield-check',  label: 'Conforme\nRGPD' },
+    { icon: 'ti-lock',          label: 'Données\nchiffrées' },
     { icon: 'ti-device-mobile', label: '100%\nMobile' },
   ];
 
@@ -257,6 +68,7 @@ function RightPanel({
         <div style={{ marginBottom: 16 }}>
           <label style={labelStyle}>Email professionnel</label>
           <input
+            className="login-input"
             type="email"
             placeholder="pierre@mouvapa.com"
             value={email}
@@ -270,6 +82,7 @@ function RightPanel({
           <label style={labelStyle}>Mot de passe</label>
           <div style={{ position: 'relative' }}>
             <input
+              className="login-input"
               type={showPassword ? 'text' : 'password'}
               placeholder="••••••••"
               value={password}
@@ -291,9 +104,9 @@ function RightPanel({
         </div>
 
         <div style={{ textAlign: 'right', marginBottom: 22 }}>
-          <a href="#" onClick={e => e.preventDefault()} style={{ fontSize: 12, color: '#2BBFBF', fontWeight: 600, textDecoration: 'none' }}>
+          <Link to="/forgot-password" style={{ fontSize: 12, color: '#2BBFBF', fontWeight: 600, textDecoration: 'none' }}>
             Mot de passe oublié ?
-          </a>
+          </Link>
         </div>
 
         {error && (
@@ -358,19 +171,17 @@ function RightPanel({
         ))}
       </div>
 
-      {/* Note */}
-      <div style={{ textAlign: 'center', fontSize: 11, color: '#B8C8DC' }}>
-        Première utilisation ?{' '}
-        <a href="mailto:pierre@mouvapa.com" style={{ color: '#2BBFBF', fontWeight: 600, textDecoration: 'none' }}>
-          Contacter le support
-        </a>
+      {/* Lien inscription */}
+      <div style={{ textAlign: 'center', fontSize: 13, color: '#8B9BB4' }}>
+        Pas encore de compte ?{' '}
+        <Link to="/register" style={{ color: '#2BBFBF', fontWeight: 700, textDecoration: 'none' }}>
+          Créer un compte
+        </Link>
       </div>
 
     </div>
   );
 }
-
-// ── Page de connexion ─────────────────────────────────────────────────────────
 
 interface Props {
   onLogin: () => void;
@@ -390,7 +201,7 @@ export default function LoginPage({ onLogin }: Props) {
     if (!email || !password) { setError('Veuillez remplir tous les champs'); return; }
     setLoading(true);
 
-    // Identifiants de secours — fonctionnent toujours, même avec Supabase configuré
+    // Identifiants de secours — fonctionnent même sans Supabase configuré
     if (email === 'pierre@mouvapa.com' && password === 'mouvapa2025') {
       localStorage.setItem('isLoggedIn', 'true');
       onLogin();
@@ -399,7 +210,6 @@ export default function LoginPage({ onLogin }: Props) {
       return;
     }
 
-    // Tentative via Supabase Auth (autres comptes éventuels)
     if (supabase) {
       const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (!authError) {
@@ -416,7 +226,7 @@ export default function LoginPage({ onLogin }: Props) {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'Nunito', sans-serif" }}>
-      <LeftPanel />
+      <AuthLeftPanel />
       <RightPanel
         email={email} setEmail={setEmail}
         password={password} setPassword={setPassword}

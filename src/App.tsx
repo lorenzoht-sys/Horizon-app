@@ -8,6 +8,8 @@ import Sidebar from './components/layout/Sidebar';
 import Dashboard from './pages/Dashboard';
 import ParticipantProfile from './pages/ParticipantProfile';
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import SettingsPage from './pages/SettingsPage';
 import PageAccesPatient from './pages/PageAccesPatient';
 import EspacePatient from './pages/EspacePatient';
@@ -99,9 +101,15 @@ export default function App() {
       <NotificationMiseAJour />
       <Toaster position="top-right" toastOptions={{ style: { borderRadius: 12, fontSize: 14 } }} />
       <Routes>
-        {/* Page de connexion */}
+        {/* Pages d'authentification */}
         <Route path="/login" element={
           isLoggedIn ? <Navigate to="/" replace /> : <LoginPage onLogin={handleLogin} />
+        } />
+        <Route path="/register" element={
+          isLoggedIn ? <Navigate to="/" replace /> : <RegisterPage />
+        } />
+        <Route path="/forgot-password" element={
+          isLoggedIn ? <Navigate to="/" replace /> : <ForgotPasswordPage />
         } />
 
         {/* Vue client : pas de sidebar */}
