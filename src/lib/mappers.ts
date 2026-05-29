@@ -184,6 +184,7 @@ export function programmeToDb(p: Programme): Record<string, unknown> {
   return {
     id: p.id,
     participant_id: p.participantId,
+    date_creation: p.dateCreation || null,
     date_debut: p.dateDebut,
     date_fin: p.dateFin ?? null,
     titre: p.titre,
@@ -223,6 +224,7 @@ export function contratToDb(c: Contrat): Record<string, unknown> {
     duree_minutes: c.dureeMinutes,
     statut: c.statut,
     notes: c.notes ?? null,
+    date_creation: c.dateCreation || null,
     nombre_seances_total: c.nombreSeancesTotal,
     nombre_seances_realisees: c.nombreSeancesRealisees,
   };
