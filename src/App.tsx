@@ -68,24 +68,25 @@ export default function App() {
     }
 
     // Vérification de la session existante au démarrage
+    // setAuthLoading(false) est appelé immédiatement — jamais bloqué par Supabase
     supabase.auth.getSession()
-      .then(async ({ data: { session } }) => {
+      .then(({ data: { session } }) => {
         if (session) {
           setIsLoggedIn(true);
-          setShowOnboarding(await needsOnboarding(session.user.id));
+          // Vérification onboarding en arrière-plan, sans bloquer l'affichage
+          needsOnboarding(session.user.id).then(setShowOnboarding);
         }
         setAuthLoading(false);
       })
       .catch(() => setAuthLoading(false));
 
-    // Écoute des changements d'auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // Écoute des changements d'auth (callback synchrone pour éviter les races)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        // Vider les paramètres d'un éventuel utilisateur précédent
         localStorage.removeItem('settings_praticien');
         localStorage.removeItem('isLoggedIn');
         setIsLoggedIn(true);
-        setShowOnboarding(await needsOnboarding(session.user.id));
+        needsOnboarding(session.user.id).then(setShowOnboarding);
       } else if (event === 'SIGNED_OUT') {
         localStorage.removeItem('settings_praticien');
         localStorage.removeItem('isLoggedIn');
