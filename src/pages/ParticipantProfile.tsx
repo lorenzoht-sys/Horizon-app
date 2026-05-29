@@ -469,6 +469,9 @@ export default function ParticipantProfile() {
               <div className="text-white/55 text-xs mt-0.5 space-y-0.5 leading-relaxed">
                 <div>
                   {age} ans · né(e) le {new Date(participant.dateNaissance).toLocaleDateString('fr-FR')}
+                  {(participant.villeNaissance || participant.codePostalNaissance) && (
+                    <> à {[participant.villeNaissance, participant.codePostalNaissance].filter(Boolean).join(' ')}</>
+                  )}
                   {participant.taille && ` · ${participant.taille} cm`}
                   {participant.poids && ` · ${participant.poids} kg`}
                   {imc && ` · IMC ${imc}`}

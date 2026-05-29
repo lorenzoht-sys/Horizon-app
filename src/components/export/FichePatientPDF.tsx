@@ -109,9 +109,10 @@ function Page1({ participant, settings }: { participant: Participant; settings: 
     ? Math.round((participant.poids / ((participant.taille / 100) ** 2)) * 10) / 10
     : null;
 
+  const lieuNaissance = [participant.villeNaissance, participant.codePostalNaissance].filter(Boolean).join(' ');
   const infosLigne = [
     `${calcAge(participant.dateNaissance)} ans`,
-    `né(e) le ${formatDateFR(participant.dateNaissance)}`,
+    `né(e) le ${formatDateFR(participant.dateNaissance)}${lieuNaissance ? ` à ${lieuNaissance}` : ''}`,
     participant.taille && `${participant.taille} cm`,
     participant.poids && `${participant.poids} kg`,
     imc && `IMC ${imc} — ${getCategorieIMC(imc)}`,

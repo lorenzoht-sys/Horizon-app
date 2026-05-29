@@ -75,10 +75,12 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
     adresseRue:        initial?.adresseRue        ?? '',
     adresseCodePostal: initial?.adresseCodePostal ?? '',
     adresseVille:      initial?.adresseVille      ?? '',
-    taille:            initial?.taille?.toString() ?? '',
-    poids:             initial?.poids?.toString()  ?? '',
-    iban:              initial?.iban              ?? '',
-    bic:               initial?.bic               ?? '',
+    taille:               initial?.taille?.toString() ?? '',
+    poids:                initial?.poids?.toString()  ?? '',
+    villeNaissance:       initial?.villeNaissance       ?? '',
+    codePostalNaissance:  initial?.codePostalNaissance  ?? '',
+    iban:                 initial?.iban              ?? '',
+    bic:                  initial?.bic               ?? '',
   });
 
   // ── Handlers ────────────────────────────────────────────────────
@@ -230,6 +232,19 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
           <input type="date" name="dateCreation" value={form.dateCreation} onChange={handleChange} required className={CLS_INPUT} />
         </div>
       </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className={CLS_LABEL}>Ville de naissance <span className="text-gray-400 font-normal">(optionnel)</span></label>
+          <input name="villeNaissance" value={form.villeNaissance} onChange={handleChange}
+            placeholder="Nantes" className={CLS_INPUT} />
+        </div>
+        <div>
+          <label className={CLS_LABEL}>Code postal de naissance <span className="text-gray-400 font-normal">(optionnel)</span></label>
+          <input name="codePostalNaissance" value={form.codePostalNaissance} onChange={handleChange}
+            placeholder="44000" className={CLS_INPUT} />
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className={CLS_LABEL}>Email</label>
