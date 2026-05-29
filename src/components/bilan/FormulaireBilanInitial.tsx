@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getBilanEnCoursKey } from '../../hooks/useBrouillonBilan';
 import GIRWidget from './GIRWidget';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -1121,7 +1122,7 @@ export default function FormulaireBilanInitial({ participantId, onFlat, initialF
   useEffect(() => {
     if (initialFlat || restored) return;
     try {
-      const saved = localStorage.getItem(`bilan_en_cours_${participantId}`);
+      const saved = localStorage.getItem(getBilanEnCoursKey(participantId));
       if (saved) {
         const parsed = JSON.parse(saved) as {
           data: Record<string, any>;
@@ -1143,7 +1144,7 @@ export default function FormulaireBilanInitial({ participantId, onFlat, initialF
     (d: Record<string, any>, r: Record<string, OuiNon | null>) => {
       try {
         localStorage.setItem(
-          `bilan_en_cours_${participantId}`,
+          getBilanEnCoursKey(participantId),
           JSON.stringify({ data: d, reponsesClés: r, timestamp: Date.now() })
         );
       } catch {

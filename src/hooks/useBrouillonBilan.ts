@@ -14,7 +14,32 @@ export interface BrouillonBilan {
   estTermine: boolean;
 }
 
-const cle = (participantId: string) => `brouillon_bilan_${participantId}`;
+// ── Isolation par utilisateur ─────────────────────────────────────────────────
+let _currentUserId: string | null = null;
+
+export function setCurrentUserId(id: string | null): void {
+  _currentUserId = id;
+}
+
+/** Supprime tous les brouillons du localStorage (toutes clés bilan_*) */
+export function clearAllBrouillons(): void {
+  const toRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.startsWith('brouillon_bilan_') || key.startsWith('bilan_en_cours_'))) {
+      toRemove.push(key);
+    }
+  }
+  toRemove.forEach(k => localStorage.removeItem(k));
+}
+
+const cle = (participantId: string) =>
+  `brouillon_bilan_${_currentUserId ?? 'anon'}_${participantId}`;
+
+/** Clé localStorage pour le brouillon de bilan initial (FormulaireBilanInitial) */
+export function getBilanEnCoursKey(participantId: string): string {
+  return `bilan_en_cours_${_currentUserId ?? 'anon'}_${participantId}`;
+}
 
 export function calculerCompletion(data: Partial<BilanForm>): number {
   const vals = [
@@ -66,9 +91,10 @@ export function supprimerBrouillon(participantId: string): void {
 
 export function getAllBrouillons(): BrouillonBilan[] {
   const result: BrouillonBilan[] = [];
+  const prefix = `brouillon_bilan_${_currentUserId ?? 'anon'}_`;
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (!key?.startsWith('brouillon_bilan_')) continue;
+    if (!key?.startsWith(prefix)) continue;
     try {
       const raw = localStorage.getItem(key);
       if (!raw) continue;

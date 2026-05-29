@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
+import { setCurrentUserId, clearAllBrouillons } from './hooks/useBrouillonBilan';
 import { useDevice } from './hooks/useDevice';
 import AppMobile from './pages/mobile/AppMobile';
 import { Toaster } from 'react-hot-toast';
@@ -83,6 +84,7 @@ export default function App() {
         ]);
         const session = (result as { data: { session: import('@supabase/supabase-js').Session | null } }).data.session;
         if (session) {
+          setCurrentUserId(session.user.id);
           setIsLoggedIn(true);
           needsOnboarding(session.user.id).then(setShowOnboarding);
         }
@@ -100,11 +102,14 @@ export default function App() {
     // Écoute des changements d'auth (callback synchrone pour éviter les races)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
+        setCurrentUserId(session.user.id);
         localStorage.removeItem('settings_praticien');
         localStorage.removeItem('isLoggedIn');
         setIsLoggedIn(true);
         needsOnboarding(session.user.id).then(setShowOnboarding);
       } else if (event === 'SIGNED_OUT') {
+        clearAllBrouillons();
+        setCurrentUserId(null);
         localStorage.removeItem('settings_praticien');
         localStorage.removeItem('isLoggedIn');
         setIsLoggedIn(false);
@@ -121,9 +126,11 @@ export default function App() {
   }
 
   function handleLogout() {
+    clearAllBrouillons();
     if (supabase) {
       void supabase.auth.signOut();
     } else {
+      setCurrentUserId(null);
       localStorage.removeItem('isLoggedIn');
     }
     setIsLoggedIn(false);
