@@ -326,8 +326,12 @@ export default function Dashboard() {
                 onSubmit={async (data) => {
                   const p = await addParticipant(data);
                   setShowForm(false);
-                  toast.success(`${data.prenom} ${data.nom} ajouté(e) !`);
-                  navigate(`/participant/${p.id}`);
+                  if (p) {
+                    toast.success(`${data.prenom} ${data.nom} ajouté(e) !`);
+                    navigate(`/participant/${p.id}`);
+                  } else {
+                    toast.error('Erreur lors de l\'ajout du patient');
+                  }
                 }}
                 onCancel={() => setShowForm(false)}
               />

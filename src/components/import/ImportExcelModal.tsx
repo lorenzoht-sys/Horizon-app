@@ -13,10 +13,16 @@ interface ResultState {
   ignores: ImportError[];
 }
 
+interface ProgressState {
+  done: number;
+  total: number;
+}
+
 export default function ImportExcelModal({ onClose }: { onClose: () => void }) {
   const { participants, addParticipant } = useParticipants();
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [result, setResult] = useState<ResultState | null>(null);
+  const [phase, setPhase]       = useState<Phase>('idle');
+  const [result, setResult]     = useState<ResultState | null>(null);
+  const [progress, setProgress] = useState<ProgressState>({ done: 0, total: 0 });
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -27,6 +33,7 @@ export default function ImportExcelModal({ onClose }: { onClose: () => void }) {
     }
 
     setPhase('processing');
+    setProgress({ done: 0, total: 0 });
 
     try {
       const buffer = await file.arrayBuffer();
@@ -41,9 +48,27 @@ export default function ImportExcelModal({ onClose }: { onClose: () => void }) {
       );
 
       const parsed = parseExcelRows(rows as unknown[][], participants);
+      const total = parsed.succes.length;
+      setProgress({ done: 0, total });
 
-      // Création des participants (géocodage déclenché automatiquement si adresse)
-      parsed.succes.forEach(data => addParticipant(data));
+      let nbSucces = 0;
+      const erreursSupabase: ImportError[] = [];
+
+      // Insertion séquentielle avec await — chaque patient est inséré dans Supabase
+      // avant de passer au suivant, ce qui permet de suivre la progression.
+      for (let i = 0; i < parsed.succes.length; i++) {
+        const data = parsed.succes[i];
+        const added = await addParticipant(data);
+        if (added) {
+          nbSucces++;
+        } else {
+          erreursSupabase.push({
+            ligne: i + 2,
+            message: `${data.prenom} ${data.nom} — échec d'insertion (voir console)`,
+          });
+        }
+        setProgress({ done: i + 1, total });
+      }
 
       const withAddr = parsed.succes.filter(d => d.adresseRue && d.adresseVille).length;
       if (withAddr > 0) {
@@ -54,7 +79,11 @@ export default function ImportExcelModal({ onClose }: { onClose: () => void }) {
         }, 600);
       }
 
-      setResult({ succes: parsed.succes.length, erreurs: parsed.erreurs, ignores: parsed.ignores });
+      setResult({
+        succes: nbSucces,
+        erreurs: [...parsed.erreurs, ...erreursSupabase],
+        ignores: parsed.ignores,
+      });
       setPhase('result');
 
     } catch {
@@ -192,8 +221,24 @@ export default function ImportExcelModal({ onClose }: { onClose: () => void }) {
           {phase === 'processing' && (
             <div className="py-16 text-center">
               <div className="w-10 h-10 border-2 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-sm font-medium text-gray-700">Lecture du fichier en cours…</p>
-              <p className="text-xs text-gray-400 mt-1">Validation des données et création des patients</p>
+              {progress.total === 0 ? (
+                <>
+                  <p className="text-sm font-medium text-gray-700">Lecture du fichier…</p>
+                  <p className="text-xs text-gray-400 mt-1">Validation des données</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-gray-700">
+                    Import en cours… {progress.done}/{progress.total} patients
+                  </p>
+                  <div className="w-48 mx-auto mt-3 bg-gray-100 rounded-full h-1.5">
+                    <div
+                      className="bg-primary h-1.5 rounded-full transition-all duration-200"
+                      style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
+                    />
+                  </div>
+                </>
+              )}
             </div>
           )}
 
