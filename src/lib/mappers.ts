@@ -56,6 +56,7 @@ export function participantToDb(p: Omit<Participant, 'bilans' | 'programmes'>): 
     nom: p.nom,
     prenom: p.prenom,
     date_naissance: p.dateNaissance || null,
+    date_creation: p.dateCreation || null,
     email: p.email ?? null,
     telephone: p.telephone ?? null,
     pathologie: p.pathologie ?? null,

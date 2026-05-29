@@ -58,7 +58,9 @@ export function useParticipants() {
   const addParticipant = useCallback(async (data: Omit<Participant, 'id' | 'token' | 'bilans'>) => {
     const newP: Participant = { tags: [], ...data, id: uuidv4(), token: generateToken(), bilans: [] };
     if (supabase) {
-      const { error } = await supabase.from('participants').insert(participantToDb(newP));
+      const { data: { user } } = await supabase.auth.getUser();
+      const dbRow = { ...participantToDb(newP), praticien_id: user?.id ?? null };
+      const { error } = await supabase.from('participants').insert(dbRow);
       if (error) { console.error('Erreur ajout participant:', error); throw error; }
       if (hasAddress(newP)) runGeocode(newP.id, newP.adresseRue!, newP.adresseCodePostal ?? '', newP.adresseVille!);
     }
