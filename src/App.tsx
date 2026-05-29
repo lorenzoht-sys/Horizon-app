@@ -67,18 +67,35 @@ export default function App() {
       return;
     }
 
-    // Vérification de la session existante au démarrage
-    // setAuthLoading(false) est appelé immédiatement — jamais bloqué par Supabase
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
+    // Timeout de sécurité : si Supabase ne répond pas dans les 5 s → on débloque quand même
+    const safetyTimer = setTimeout(() => {
+      console.warn('[App] getSession timeout — déblocage forcé');
+      setAuthLoading(false);
+    }, 5000);
+
+    const checkSession = async () => {
+      try {
+        const result = await Promise.race([
+          supabase!.auth.getSession(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('timeout')), 4500)
+          ),
+        ]);
+        const session = (result as { data: { session: import('@supabase/supabase-js').Session | null } }).data.session;
         if (session) {
           setIsLoggedIn(true);
-          // Vérification onboarding en arrière-plan, sans bloquer l'affichage
           needsOnboarding(session.user.id).then(setShowOnboarding);
         }
+      } catch (err) {
+        console.error('[App] getSession failed:', err);
+        // Pas de session connue → on reste sur /login
+      } finally {
+        clearTimeout(safetyTimer);
         setAuthLoading(false);
-      })
-      .catch(() => setAuthLoading(false));
+      }
+    };
+
+    void checkSession();
 
     // Écoute des changements d'auth (callback synchrone pour éviter les races)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
