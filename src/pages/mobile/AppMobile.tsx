@@ -175,6 +175,7 @@ function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: 
   const { participants } = useParticipants();
   const { seances: allSeances, seancesDuJour, changerStatut } = useAgenda();
   const { contratsARenouveler } = useContrats();
+  const { notes } = useJournalSeance();
   const today = new Date().toISOString().slice(0, 10);
   const seances = seancesDuJour(today);
   const settings = (() => { try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); } catch { return {}; } })();
@@ -197,6 +198,8 @@ function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: 
   const bilansAFaire = participants.filter(p =>
     p.bilans.length === 0 || p.bilans.every(b => b.date < il90jFmt)
   );
+  const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const prochaineSeance = seances.find(s => s.statut === 'planifiee' && s.heureDebut >= currentTimeStr) ?? seances.find(s => s.statut === 'planifiee');
 
   return (
     <div>
@@ -243,27 +246,103 @@ function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: 
               </div>
             )}
           </div>
-        ) : seances.map(s => {
-          const p = participants.find(x => x.id === s.participantId);
-          return (
-            <div key={s.id} style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, opacity: s.statut === 'annulee' ? 0.5 : 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.primary, minWidth: 40, textAlign: 'center' }}>{s.heureDebut}</div>
-              <div style={{ width: 1, height: 36, background: C.border, flexShrink: 0 }} />
-              <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => p && onVoirFiche(p.id)}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{p?.prenom} {p?.nom}</div>
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>{s.dureeMinutes} min</div>
+        ) : (
+          <div>
+            {/* Prochaine séance mise en avant */}
+            {prochaineSeance && (() => {
+              const p = participants.find(x => x.id === prochaineSeance.participantId);
+              return (
+                <div style={{ background: C.dark, borderRadius: 14, padding: '14px 16px', marginBottom: 16 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.primary, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                    Prochaine séance
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: 'white', flexShrink: 0 }}>
+                      {p?.prenom?.[0]}{p?.nom?.[0]}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: 'white' }}>{p?.prenom} {p?.nom}</div>
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
+                        {prochaineSeance.heureDebut} · {prochaineSeance.dureeMinutes} min
+                        {p?.adresseVille ? ` · ${p.adresseVille}` : ''}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={() => p && onVoirFiche(p.id)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8, padding: '8px', cursor: 'pointer', color: 'white', fontSize: 16 }}>📋</button>
+                      {p?.adresseRue && (
+                        <button onClick={() => ouvrirMaps(`${p.adresseRue} ${p.adresseVille || ''}`)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8, padding: '8px', cursor: 'pointer', color: 'white', fontSize: 16 }}>🗺️</button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Timeline du jour */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                Programme du jour
               </div>
-              {s.statut === 'realisee' ? (
-                <span style={{ fontSize: 12, color: '#1D9E75', fontWeight: 700 }}>✅</span>
-              ) : (
-                <button onClick={() => { changerStatut(s.id, 'realisee'); toast.success('Séance réalisée'); }}
-                  style={{ background: '#E8F8F8', border: 'none', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 700, color: C.primary, cursor: 'pointer' }}>
-                  ✓ Fait
-                </button>
-              )}
+              {seances.map((seance, index) => {
+                const p = participants.find(x => x.id === seance.participantId);
+                const estEnCours = seance.heureDebut <= currentTimeStr && seance.heureFin > currentTimeStr;
+                return (
+                  <div key={seance.id} style={{ display: 'flex', gap: 12, marginBottom: 8, opacity: seance.statut === 'realisee' ? 0.7 : 1 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 40, flexShrink: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: estEnCours ? C.primary : C.muted }}>{seance.heureDebut}</div>
+                      <div style={{ width: 2, flex: 1, marginTop: 4, background: index < seances.length - 1 ? C.border : 'transparent' }} />
+                    </div>
+                    <div style={{ flex: 1, background: estEnCours ? '#E8F8F8' : 'white', border: `1px solid ${estEnCours ? C.primary : C.border}`, borderRadius: 12, padding: '12px 14px', marginBottom: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => p && onVoirFiche(p.id)}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{p?.prenom} {p?.nom}</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{seance.dureeMinutes} min{p?.adresseVille ? ` · ${p.adresseVille}` : ''}</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {seance.statut !== 'realisee' ? (
+                            <button onClick={() => { changerStatut(seance.id, 'realisee'); toast.success('Séance réalisée'); }} style={{ background: C.primary, color: 'white', border: 'none', borderRadius: 8, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✓ Fait</button>
+                          ) : (
+                            <span style={{ fontSize: 14, color: '#1D9E75' }}>✅</span>
+                          )}
+                          {p?.adresseRue && (
+                            <button onClick={() => ouvrirMaps(`${p.adresseRue} ${p.adresseVille || ''}`)} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 10px', fontSize: 11, cursor: 'pointer', color: C.muted }}>🗺️</button>
+                          )}
+                        </div>
+                      </div>
+                      {seance.statut === 'realisee' && !notes.some(n => n.seanceId === seance.id) && (
+                        <button onClick={onNaviguerSaisie} style={{ marginTop: 8, width: '100%', padding: '7px', background: C.bg, border: `1px dashed ${C.border}`, borderRadius: 8, fontSize: 11, color: C.muted, cursor: 'pointer' }}>
+                          + Ajouter une note de séance
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+
+            {/* Stats rapides */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
+              <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '10px', textAlign: 'center' }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>{seances.filter(s => s.statut === 'realisee').length}/{seances.length}</div>
+                <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>réalisées</div>
+              </div>
+              <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '10px', textAlign: 'center' }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>{seancesSemaine.length}</div>
+                <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>semaine</div>
+              </div>
+              <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '10px', textAlign: 'center' }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>{contratsARenouveler.length}</div>
+                <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>contrats fin</div>
+              </div>
+            </div>
+
+            {contratsARenouveler.length > 0 && (
+              <div style={{ background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 12, padding: '12px 14px', fontSize: 13, color: '#92400E', fontWeight: 600 }}>
+                ⏰ {contratsARenouveler.length} contrat{contratsARenouveler.length > 1 ? 's' : ''} à renouveler bientôt
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -330,6 +409,36 @@ function EcranSaisie({ onVoirFiche }: { onVoirFiche?: (id: string) => void }) {
   return <ChoixSaisie onNote={() => setMode('note')} onPatient={() => setMode('patient')} onBilan={() => setMode('bilan')} />;
 }
 
+function SeancesSansNote({ onSaisie }: { onSaisie: () => void }) {
+  const { seancesDuJour } = useAgenda();
+  const { notes } = useJournalSeance();
+  const { participants } = useParticipants();
+  const today = new Date().toISOString().slice(0, 10);
+  const sansNote = seancesDuJour(today).filter(s => s.statut === 'realisee' && !notes.some(n => n.seanceId === s.id));
+  if (sansNote.length === 0) return null;
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#F59E0B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+        ⏰ Notes manquantes aujourd'hui
+      </div>
+      {sansNote.map(s => {
+        const p = participants.find(x => x.id === s.participantId);
+        return (
+          <button key={s.id} onClick={onSaisie}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 10, marginBottom: 8, cursor: 'pointer', textAlign: 'left' }}>
+            <span style={{ fontSize: 20 }}>📝</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#92400E' }}>{p?.prenom} {p?.nom}</div>
+              <div style={{ fontSize: 11, color: '#B45309' }}>Séance {s.heureDebut} — note manquante</div>
+            </div>
+            <span style={{ fontSize: 12, color: '#92400E', fontWeight: 700 }}>+ Note</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ChoixSaisie({ onNote, onPatient, onBilan }: { onNote: () => void; onPatient: () => void; onBilan: () => void }) {
   const btn: React.CSSProperties = { width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: 16, background: 'white', border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 10, cursor: 'pointer', textAlign: 'left' };
   return (
@@ -350,6 +459,7 @@ function ChoixSaisie({ onNote, onPatient, onBilan }: { onNote: () => void; onPat
         <div><div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Nouveau patient</div><div style={{ fontSize: 12, color: C.muted }}>Créer une fiche patient</div></div>
         <i className="ti ti-chevron-right" style={{ fontSize: 18, color: '#D0DCDC', marginLeft: 'auto' }} />
       </button>
+      <SeancesSansNote onSaisie={onNote} />
     </div>
   );
 }
@@ -594,8 +704,36 @@ function EcranTournee() {
   return (
     <div>
       <div style={{ background: 'white', paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 4 }}>Ma tournée</div>
-        <div style={{ fontSize: 12, color: C.muted }}>{seances.length} patient{seances.length !== 1 ? 's' : ''} · {formatDateLong(new Date())}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Ma tournée</div>
+            <div style={{ fontSize: 12, color: C.muted }}>{seances.length} patient{seances.length !== 1 ? 's' : ''} · {formatDateLong(new Date())}</div>
+          </div>
+        </div>
+        {seances.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <div style={{ flex: 1, background: '#DCFCE7', borderRadius: 10, padding: '8px', textAlign: 'center' }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#166534' }}>{seances.filter(s => s.statut === 'realisee').length}/{seances.length}</div>
+              <div style={{ fontSize: 10, color: '#166534' }}>réalisées</div>
+            </div>
+            <div style={{ flex: 1, background: '#E8F8F8', borderRadius: 10, padding: '8px', textAlign: 'center' }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: C.primary }}>{seances.reduce((acc, s) => acc + s.dureeMinutes, 0)} min</div>
+              <div style={{ fontSize: 10, color: C.primary }}>durée totale</div>
+            </div>
+            <div style={{ flex: 1, background: '#FEF3C7', borderRadius: 10, padding: '8px', textAlign: 'center' }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#92400E' }}>{seances[seances.length - 1]?.heureFin ?? '—'}</div>
+              <div style={{ fontSize: 10, color: '#92400E' }}>fin estimée</div>
+            </div>
+          </div>
+        )}
+        {seances.filter(s => s.adresse).length > 1 && (
+          <button
+            onClick={() => toast('Optimisation disponible depuis l\'ordinateur 💻', { icon: 'ℹ️' })}
+            style={{ width: '100%', marginTop: 10, padding: '10px', background: C.dark, color: 'white', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <i className="ti ti-route" style={{ fontSize: 16 }} />
+            Optimiser l'itinéraire
+          </button>
+        )}
       </div>
 
       <div style={{ padding: '8px 16px' }}>
@@ -1027,6 +1165,7 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
     { id: 'infos',   label: 'Infos' },
     { id: 'sante',   label: 'Santé' },
     { id: 'bilans',  label: 'Bilans' },
+    { id: 'contrat', label: 'Contrat' },
     { id: 'journal', label: 'Journal' },
   ];
 
@@ -1186,6 +1325,41 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
                   </div>
                 </div>
               ))}
+          </div>
+        )}
+
+        {onglet === 'contrat' && (
+          <div>
+            {contrat ? (
+              <div>
+                <InfoSection titre="Contrat actif">
+                  <InfoLigne icon="ti-calendar" texte={`${contrat.joursFixe.join(', ')} à ${contrat.heureDebut} · ${contrat.dureeMinutes} min`} />
+                  <InfoLigne icon="ti-clock" texte={`${new Date(contrat.dateDebut + 'T12:00').toLocaleDateString('fr-FR')} → ${new Date(contrat.dateFin + 'T12:00').toLocaleDateString('fr-FR')}`} />
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                      <span style={{ color: C.muted }}>Progression</span>
+                      <span style={{ fontWeight: 700, color: C.text }}>{contrat.nombreSeancesRealisees}/{contrat.nombreSeancesTotal}</span>
+                    </div>
+                    <div style={{ height: 6, background: C.border, borderRadius: 3 }}>
+                      <div style={{ height: '100%', width: `${Math.min(100, (contrat.nombreSeancesRealisees / contrat.nombreSeancesTotal) * 100)}%`, background: C.primary, borderRadius: 3 }} />
+                    </div>
+                  </div>
+                </InfoSection>
+                {prochaineSeance && (
+                  <div style={{ marginTop: 12 }}>
+                    <InfoSection titre="Prochaine séance">
+                      <InfoLigne icon="ti-calendar" texte={new Date(prochaineSeance.date + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} />
+                      <InfoLigne icon="ti-clock" texte={`${prochaineSeance.heureDebut} · ${prochaineSeance.dureeMinutes} min`} />
+                    </InfoSection>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '30px 20px' }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>📋</div>
+                <div style={{ fontSize: 14, color: C.muted }}>Aucun contrat actif</div>
+              </div>
+            )}
           </div>
         )}
 
