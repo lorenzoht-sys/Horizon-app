@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { useParticipants } from '../../hooks/useParticipants';
+import type { Participant } from '../../types';
 import { downloadTemplate, exportPatientsExcel, parseExcelRows, type ImportError } from '../../utils/excelImport';
 import { X, Download, Upload, FileSpreadsheet, CheckCircle, AlertCircle, Info, FileDown } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -18,8 +18,13 @@ interface ProgressState {
   total: number;
 }
 
-export default function ImportExcelModal({ onClose }: { onClose: () => void }) {
-  const { participants, addParticipant } = useParticipants();
+interface Props {
+  onClose: () => void;
+  participants: Participant[];
+  addParticipant: (data: Omit<Participant, 'id' | 'token' | 'bilans'>) => Promise<Participant>;
+}
+
+export default function ImportExcelModal({ onClose, participants, addParticipant }: Props) {
   const [phase, setPhase]       = useState<Phase>('idle');
   const [result, setResult]     = useState<ResultState | null>(null);
   const [progress, setProgress] = useState<ProgressState>({ done: 0, total: 0 });

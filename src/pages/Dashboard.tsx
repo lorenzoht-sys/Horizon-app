@@ -341,7 +341,7 @@ export default function Dashboard() {
       )}
 
       {/* Modal import Excel */}
-      {showImport && <ImportExcelModal onClose={() => setShowImport(false)} />}
+      {showImport && <ImportExcelModal onClose={() => setShowImport(false)} participants={participants} addParticipant={addParticipant} />}
     </>
   );
 }
