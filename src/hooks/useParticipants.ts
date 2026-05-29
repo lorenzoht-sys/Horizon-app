@@ -22,32 +22,35 @@ export function useParticipants() {
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
     let cancelled = false;
-    supabase
-      .from('participants')
-      .select('*, bilans(*), programmes(*)')
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) { console.error('Erreur chargement participants:', error); setLoading(false); return; }
-        setParticipants((data ?? []).map(dbToParticipant));
-        setLoading(false);
-      });
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (!user) { setLoading(false); return; }
+      const { data, error } = await supabase
+        .from('participants')
+        .select('*, bilans(*), programmes(*)')
+        .eq('praticien_id', user.id)
+        .order('created_at', { ascending: false });
+      if (cancelled) return;
+      if (error) { console.error('Erreur chargement participants:', error); setLoading(false); return; }
+      setParticipants((data ?? []).map(dbToParticipant));
+      setLoading(false);
+    })();
     return () => { cancelled = true; };
   }, []);
 
   function runGeocode(id: string, rue: string, cp: string, ville: string) {
     void geocodeAdresse(rue, cp, ville).then(async coords => {
-      if (supabase) {
-        const update = coords
-          ? { coordonnees_lat: coords.lat, coordonnees_lng: coords.lng, coordonnees_geocodee_at: new Date().toISOString(), coordonnees_adresse_normalisee: coords.adresseNormalisee, geocode_failed: false }
-          : { geocode_failed: true };
-        await supabase.from('participants').update(update).eq('id', id);
+      if (supabase && coords) {
+        await supabase.from('participants')
+          .update({ coordonnees_lat: coords.lat, coordonnees_lng: coords.lng })
+          .eq('id', id);
       }
       setParticipants(prev =>
         prev.map(p =>
           p.id === id
             ? coords
-              ? { ...p, geocodeFailed: false, coordonnees: { lat: coords.lat, lng: coords.lng, geocodeeAt: new Date().toISOString(), adresseNormalisee: coords.adresseNormalisee } }
+              ? { ...p, geocodeFailed: false, coordonnees: { lat: coords.lat, lng: coords.lng, geocodeeAt: '' } }
               : { ...p, geocodeFailed: true }
             : p
         )
