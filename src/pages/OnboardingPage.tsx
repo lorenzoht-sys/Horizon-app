@@ -46,9 +46,8 @@ export default function OnboardingPage({ onComplete }: Props) {
     if (!user) { onComplete(); return; }
 
     const siretClean = siret.replace(/\s/g, '');
-    const { error: upsertError } = await (supabase as unknown as {
-      from: (t: string) => { upsert: (v: object) => Promise<{ error: { message: string } | null }> }
-    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: upsertError } = await (supabase as any)
       .from('praticiens')
       .upsert({
         id:      user.id,
@@ -61,7 +60,8 @@ export default function OnboardingPage({ onComplete }: Props) {
       });
 
     if (upsertError) {
-      setError('Erreur lors de l\'enregistrement. Réessayez.');
+      console.error('[Onboarding] Erreur upsert praticiens:', upsertError);
+      setError(upsertError.message ?? 'Erreur lors de l\'enregistrement. Réessayez.');
       setLoading(false);
       return;
     }

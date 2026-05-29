@@ -36,15 +36,8 @@ export default function Sidebar({ onLogout }: Props) {
     if (!supabase) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await (supabase as unknown as {
-      from: (t: string) => {
-        select: (c: string) => {
-          eq: (col: string, val: string) => {
-            single: () => Promise<{ data: PraticienInfo | null }>
-          }
-        }
-      }
-    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
       .from('praticiens')
       .select('prenom, nom, titre, siret, numero_sap')
       .eq('id', user.id)

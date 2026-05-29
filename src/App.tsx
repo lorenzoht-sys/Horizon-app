@@ -42,9 +42,8 @@ function MapFallback() {
 async function needsOnboarding(userId: string): Promise<boolean> {
   if (!supabase) return false;
   try {
-    const { data } = await (supabase as unknown as {
-      from: (t: string) => { select: (c: string) => { eq: (col: string, val: string) => { single: () => Promise<{ data: { prenom?: string } | null }> } } }
-    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
       .from('praticiens')
       .select('prenom')
       .eq('id', userId)

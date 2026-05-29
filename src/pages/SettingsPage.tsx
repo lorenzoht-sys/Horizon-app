@@ -470,7 +470,8 @@ export default function SettingsPage() {
     void (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
-      const { data } = await (supabase as unknown as { from: (t: string) => { select: (c: string) => { eq: (col: string, val: string) => { single: () => Promise<{ data: Record<string, unknown> | null }> } } } })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
         .from('praticiens')
         .select('*')
         .eq('id', user.id)
@@ -524,7 +525,8 @@ export default function SettingsPage() {
     if (supabase) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { toast.error('Utilisateur non connecté'); return; }
-      const { error } = await (supabase as unknown as { from: (t: string) => { upsert: (v: Record<string, unknown>) => Promise<{ error: { message: string } | null }> } })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
         .from('praticiens')
         .upsert({
           id:                  user.id,
