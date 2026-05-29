@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useParticipants } from '../../hooks/useParticipants';
 import { useAgenda } from '../../hooks/useAgenda';
@@ -8,6 +8,7 @@ import { RESSENTI_CONFIG } from '../../components/journal/NoteSeanceModal';
 import BilanStepper from '../../components/bilan/BilanStepper';
 import type { RessentiSeance, Bilan } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
+import { supabase } from '../../lib/supabase';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -44,6 +45,85 @@ const card: React.CSSProperties = {
   background: 'white', borderRadius: 12,
   border: `1px solid ${C.border}`, padding: '12px 14px', marginBottom: 8,
 };
+
+// ── Hook paramètres praticien (Supabase) ─────────────────────────────────────
+
+const PRATICIEN_DEFAULTS = {
+  prenom: '', nom: '', titre: 'Enseignant en Activité Physique Adaptée',
+  email: '', telephone: '', siret: '', numeroSAP: '', villeSignature: '',
+  tarifHoraire: '45', societe: '', adresseRue: '', adresseCodePostal: '', adresseVille: '',
+};
+
+type PraticienSettings = typeof PRATICIEN_DEFAULTS;
+
+function usePraticienSettings() {
+  const [settings, setSettings] = useState<PraticienSettings>(PRATICIEN_DEFAULTS);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
+        .from('praticiens')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      if (data) {
+        const s: PraticienSettings = {
+          prenom:            data.prenom            ?? '',
+          nom:               data.nom               ?? '',
+          titre:             data.titre             ?? PRATICIEN_DEFAULTS.titre,
+          email:             data.email             ?? '',
+          telephone:         data.telephone         ?? '',
+          siret:             data.siret             ?? '',
+          numeroSAP:         data.numero_sap        ?? '',
+          villeSignature:    data.ville_signature   ?? '',
+          tarifHoraire:      data.tarif_horaire     ?? '45',
+          societe:           data.societe           ?? '',
+          adresseRue:        data.adresse_rue       ?? '',
+          adresseCodePostal: data.adresse_code_postal ?? '',
+          adresseVille:      data.adresse_ville     ?? '',
+        };
+        setSettings(s);
+        // Maintenir le cache localStorage pour les composants PDF
+        localStorage.setItem('settings_praticien', JSON.stringify(s));
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  async function sauvegarderSettings(form: PraticienSettings) {
+    if (!supabase) throw new Error('Supabase non configuré');
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Non connecté');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('praticiens').upsert({
+      id:                  user.id,
+      prenom:              form.prenom,
+      nom:                 form.nom,
+      titre:               form.titre,
+      email:               form.email,
+      telephone:           form.telephone || null,
+      siret:               form.siret,
+      numero_sap:          form.numeroSAP,
+      ville_signature:     form.villeSignature,
+      tarif_horaire:       form.tarifHoraire,
+      societe:             form.societe || null,
+      adresse_rue:         form.adresseRue || null,
+      adresse_code_postal: form.adresseCodePostal || null,
+      adresse_ville:       form.adresseVille || null,
+    });
+    if (error) throw error;
+    setSettings(form);
+    localStorage.setItem('settings_praticien', JSON.stringify(form));
+    window.dispatchEvent(new Event('settings_praticien_updated'));
+  }
+
+  return { settings, loading, sauvegarderSettings };
+}
 
 // ── Composants UI réutilisables ───────────────────────────────────────────────
 
@@ -176,10 +256,10 @@ function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: 
   const { seances: allSeances, seancesDuJour, changerStatut } = useAgenda();
   const { contratsARenouveler } = useContrats();
   const { notes } = useJournalSeance();
+  const { settings: praticienSettings } = usePraticienSettings();
   const today = new Date().toISOString().slice(0, 10);
   const seances = seancesDuJour(today);
-  const settings = (() => { try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); } catch { return {}; } })();
-  const prenom = settings.prenom || 'Pierre';
+  const prenom = praticienSettings.prenom || 'Praticien';
 
   // Séances de la semaine courante
   const now = new Date();
@@ -780,24 +860,33 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
   const inp: React.CSSProperties = { width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, outline: 'none', marginBottom: 14, boxSizing: 'border-box', background: 'white' };
   const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
 
-  const [form, setForm] = useState(() => {
-    const defaults = { prenom: '', nom: '', titre: 'Enseignant en Activité Physique Adaptée', email: '', telephone: '', siret: '', numeroSAP: '', villeSignature: '', tarifHoraire: '45' };
-    try { return { ...defaults, ...JSON.parse(localStorage.getItem('settings_praticien') || '{}') }; }
-    catch { return defaults; }
-  });
+  const { settings: praticienData, loading, sauvegarderSettings } = usePraticienSettings();
+  const [form, setForm] = useState<PraticienSettings>(PRATICIEN_DEFAULTS);
+  const [saving, setSaving] = useState(false);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('anthropic_api_key') ?? '');
   const [showConfirmReset, setShowConfirmReset] = useState(false);
 
-  function set(field: string, value: string) { setForm((f: Record<string, string>) => ({ ...f, [field]: value })); }
+  // Pré-remplir le formulaire dès que Supabase a répondu
+  useEffect(() => {
+    if (!loading) setForm(praticienData);
+  }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function sauvegarder() {
+  function set(field: string, value: string) { setForm((f) => ({ ...f, [field]: value })); }
+
+  async function sauvegarder() {
     if (!form.prenom.trim() || !form.nom.trim()) { toast.error('Prénom et nom requis'); return; }
-    const existing = (() => { try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); } catch { return {}; } })();
-    localStorage.setItem('settings_praticien', JSON.stringify({ ...existing, ...form }));
-    if (apiKey.trim()) localStorage.setItem('anthropic_api_key', apiKey.trim());
-    else localStorage.removeItem('anthropic_api_key');
-    toast.success('Paramètres enregistrés ✅');
-    onBack();
+    setSaving(true);
+    try {
+      await sauvegarderSettings(form);
+      if (apiKey.trim()) localStorage.setItem('anthropic_api_key', apiKey.trim());
+      else localStorage.removeItem('anthropic_api_key');
+      toast.success('Paramètres enregistrés ✅');
+      onBack();
+    } catch {
+      toast.error('Erreur lors de l\'enregistrement');
+    } finally {
+      setSaving(false);
+    }
   }
 
   function reinitialiserDonnees() {
@@ -870,8 +959,9 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
           {apiKey && <div style={{ fontSize: 12, color: '#1D9E75', marginTop: 6 }}>✓ Clé configurée</div>}
         </InfoSection>
 
-        <button onClick={sauvegarder} style={{ width: '100%', padding: 16, background: C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginTop: 16 }}>
-          💾 Enregistrer
+        <button onClick={sauvegarder} disabled={saving || loading}
+          style={{ width: '100%', padding: 16, background: saving || loading ? '#8FA8A8' : C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: saving || loading ? 'not-allowed' : 'pointer', marginTop: 16 }}>
+          {saving ? 'Enregistrement...' : loading ? 'Chargement...' : '💾 Enregistrer'}
         </button>
 
         {/* Zone danger */}
@@ -923,7 +1013,7 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
 // ── EcranPlus ─────────────────────────────────────────────────────────────────
 
 function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout: () => void; onOuvrirSettings: () => void; onNaviguerOnglet: (id: string) => void }) {
-  const settings = (() => { try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); } catch { return {}; } })();
+  const { settings } = usePraticienSettings();
   const initiales = `${(settings.prenom || 'P')[0]}${(settings.nom || '')[0] || ''}`;
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
