@@ -29,17 +29,26 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- TABLE : praticiens  (profil du praticien connecté)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS praticiens (
-  id            UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  nom           TEXT,
-  prenom        TEXT,
-  email         TEXT,
-  telephone     TEXT,
-  adresse       TEXT,
-  siret         TEXT,
-  logo_url      TEXT,
-  couleur_theme TEXT DEFAULT '#3B6D11',
-  created_at    TIMESTAMPTZ DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ DEFAULT NOW()
+  id                   UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  prenom               TEXT,
+  nom                  TEXT,
+  titre                TEXT,
+  email                TEXT,
+  telephone            TEXT,
+  adresse_rue          TEXT,
+  adresse_code_postal  TEXT,
+  adresse_ville        TEXT,
+  siret                TEXT,
+  numero_sap           TEXT,
+  numero_tva           TEXT,
+  ville_signature      TEXT,
+  societe              TEXT,
+  logo_praticien       TEXT,
+  tarif_horaire        TEXT DEFAULT '45',
+  frais_km_defaut      TEXT DEFAULT '0.50',
+  couleur_theme        TEXT DEFAULT '#3B6D11',
+  created_at           TIMESTAMPTZ DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ DEFAULT NOW()
 );
 
 ALTER TABLE praticiens ENABLE ROW LEVEL SECURITY;
@@ -386,4 +395,28 @@ CREATE TRIGGER zones_updated_at
 
 CREATE TRIGGER zones_set_praticien
   BEFORE INSERT ON zones_geographiques
+  FOR EACH ROW EXECUTE FUNCTION set_praticien_id_from_auth();
+
+-- ============================================================
+-- TABLE : indisponibilites  (créneaux bloqués du praticien)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS indisponibilites (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  praticien_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+
+  jour         TEXT NOT NULL,
+  heure_debut  TEXT NOT NULL,
+  heure_fin    TEXT NOT NULL,
+  recurrente   BOOLEAN DEFAULT TRUE,
+  label        TEXT
+);
+
+ALTER TABLE indisponibilites ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "indispos_select" ON indisponibilites FOR SELECT USING (praticien_id = auth.uid());
+CREATE POLICY "indispos_insert" ON indisponibilites FOR INSERT WITH CHECK (praticien_id = auth.uid());
+CREATE POLICY "indispos_update" ON indisponibilites FOR UPDATE USING (praticien_id = auth.uid());
+CREATE POLICY "indispos_delete" ON indisponibilites FOR DELETE USING (praticien_id = auth.uid());
+
+CREATE TRIGGER indispos_set_praticien
+  BEFORE INSERT ON indisponibilites
   FOR EACH ROW EXECUTE FUNCTION set_praticien_id_from_auth();
