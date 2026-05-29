@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { trouverParticipantParCode, mettreAJourDernierAcces } from '../hooks/useAccesPatients';
+import { supabase } from '../lib/supabase';
+
+function calculerCode(prenom: string): string {
+  return prenom
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z]/g, '')
+    + '2026';
+}
 
 export default function PageAccesPatient() {
   const [code, setCode] = useState('');
@@ -8,22 +17,34 @@ export default function PageAccesPatient() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  function verifierCode() {
-    const codeNorm = code.trim().toLowerCase();
-    if (!codeNorm) return;
+  async function verifierCode() {
+    const codeEntre = code.trim().toLowerCase();
+    if (!codeEntre) return;
     setLoading(true);
     setErreur('');
-    setTimeout(() => {
-      const participant = trouverParticipantParCode(codeNorm);
-      if (participant) {
-        mettreAJourDernierAcces(participant.id);
-        navigate(`/patient/${participant.id}?code=${codeNorm}`);
+
+    try {
+      if (!supabase) throw new Error('no-supabase');
+
+      const { data: tousParticipants } = await supabase
+        .from('participants')
+        .select('id, prenom, nom, praticien_id');
+
+      const patient = tousParticipants?.find(p =>
+        calculerCode(p.prenom) === codeEntre
+      );
+
+      if (patient) {
+        navigate(`/patient/${patient.id}?code=${codeEntre}`);
       } else {
         setErreur('Code incorrect. Contactez votre intervenant APA.');
         setCode('');
       }
+    } catch {
+      setErreur('Erreur de connexion. Vérifiez votre réseau et réessayez.');
+    } finally {
       setLoading(false);
-    }, 600);
+    }
   }
 
   return (
@@ -86,6 +107,7 @@ export default function PageAccesPatient() {
             fontSize: 15, fontWeight: 700,
             cursor: code.trim() ? 'pointer' : 'not-allowed',
             transition: 'background 0.15s',
+            minHeight: 44,
           }}
         >
           {loading ? 'Vérification...' : 'Accéder à mon espace →'}
