@@ -1,30 +1,19 @@
-import { useState, useRef } from 'react';
-import { Save, Upload, Plus, Trash2, CloudUpload } from 'lucide-react';
+import { useState, useRef, useEffect, type ChangeEvent } from 'react';
+import { Save, Upload, Plus, Trash2, Download, FileUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { v4 as uuidv4 } from 'uuid';
 import PageWrapper from '../components/layout/PageWrapper';
-import type { IndisponibilitePierre, JourSemaine } from '../types';
+import type { IndisponibilitePierre, JourSemaine, Participant } from '../types';
 import { SectionApplication } from '../components/pwa/PWAComponents';
 import { supabase } from '../lib/supabase';
-import { participantToDb, bilanToDb, contratToDb, seanceToDb, noteSeanceToDb } from '../lib/mappers';
+import { dbToParticipant, participantToDb, bilanToDb, programmeToDb } from '../lib/mappers';
 
 const JOURS_LABELS: Record<JourSemaine | 'dim', string> = {
   lun: 'Lundi', mar: 'Mardi', mer: 'Mercredi', jeu: 'Jeudi',
   ven: 'Vendredi', sam: 'Samedi', dim: 'Dimanche',
 };
 
-function loadIndispos(): IndisponibilitePierre[] {
-  try {
-    const raw = localStorage.getItem('mouvtrack_indispos_pierre');
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function saveIndispos(indispos: IndisponibilitePierre[]) {
-  localStorage.setItem('mouvtrack_indispos_pierre', JSON.stringify(indispos));
-}
-
-// ── Section indisponibilités ────────────────────────────────────────────────────
+// ── Section indisponibilités — données Supabase ────────────────────────────────
 
 interface ModalIndispoProps {
   onSave: (item: IndisponibilitePierre) => void;
@@ -103,21 +92,50 @@ function ModalAjoutIndispo({ onSave, onClose }: ModalIndispoProps) {
 }
 
 function SectionIndisponibilites() {
-  const [indispos, setIndispos] = useState<IndisponibilitePierre[]>(loadIndispos);
+  const [indispos, setIndispos] = useState<IndisponibilitePierre[]>([]);
   const [showModal, setShowModal] = useState(false);
 
-  function handleSave(item: IndisponibilitePierre) {
-    const next = [...indispos, item];
-    setIndispos(next);
-    saveIndispos(next);
+  useEffect(() => {
+    if (!supabase) return;
+    supabase
+      .from('indisponibilites')
+      .select('*')
+      .order('jour')
+      .then(({ data, error }) => {
+        if (error) { console.error('Erreur chargement indispos:', error); return; }
+        setIndispos((data ?? []).map(row => ({
+          id: row.id,
+          jour: row.jour as IndisponibilitePierre['jour'],
+          heureDebut: row.heure_debut,
+          heureFin: row.heure_fin,
+          recurrente: row.recurrente,
+          label: row.label ?? '',
+        })));
+      });
+  }, []);
+
+  async function handleSave(item: IndisponibilitePierre) {
+    if (supabase) {
+      const { error } = await supabase.from('indisponibilites').insert({
+        id: item.id,
+        jour: item.jour,
+        heure_debut: item.heureDebut,
+        heure_fin: item.heureFin,
+        recurrente: item.recurrente,
+        label: item.label || null,
+      });
+      if (error) { toast.error('Erreur lors de la sauvegarde'); return; }
+    }
+    setIndispos(prev => [...prev, item]);
     setShowModal(false);
     toast.success('Indisponibilité ajoutée');
   }
 
-  function handleDelete(id: string) {
-    const next = indispos.filter(i => i.id !== id);
-    setIndispos(next);
-    saveIndispos(next);
+  async function handleDelete(id: string) {
+    if (supabase) {
+      await supabase.from('indisponibilites').delete().eq('id', id);
+    }
+    setIndispos(prev => prev.filter(i => i.id !== id));
   }
 
   return (
@@ -162,189 +180,194 @@ function SectionIndisponibilites() {
   );
 }
 
-// ── Section Migration Cloud ────────────────────────────────────────────────────
+// ── Section import / export JSON ───────────────────────────────────────────────
 
-function SectionMigrationCloud() {
-  const [migrating, setMigrating] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [statusMessage, setStatusMessage] = useState('');
-  const [done, setDone] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+interface ImportStats {
+  patients: number;
+  bilans: number;
+  programmes: number;
+}
 
-  async function testerConnexion(): Promise<{ ok: boolean; message: string }> {
-    if (!supabase) return { ok: false, message: 'Supabase non configuré — variables VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY manquantes.' };
+function SectionDonnees() {
+  const [exporting, setExporting]     = useState(false);
+  const [importing, setImporting]     = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [importStats, setImportStats] = useState<ImportStats | null>(null);
+  const importRef = useRef<HTMLInputElement>(null);
+
+  async function handleExport() {
+    if (!supabase) { toast.error('Supabase non configuré'); return; }
+    setExporting(true);
     try {
-      const { error } = await supabase.from('participants').select('count').limit(1);
-      if (error) return { ok: false, message: error.message };
-      return { ok: true, message: '✅ Connexion Supabase OK' };
+      const { data, error } = await supabase
+        .from('participants')
+        .select('*, bilans(*), programmes(*)')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      const mapped = (data ?? []).map(dbToParticipant);
+      const blob = new Blob([JSON.stringify(mapped, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `horizon-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Export réussi — ${mapped.length} patients`);
     } catch (err) {
-      return { ok: false, message: err instanceof Error ? err.message : String(err) };
+      toast.error('Erreur lors de l\'export');
+      console.error(err);
+    } finally {
+      setExporting(false);
     }
   }
 
-  async function handleMigrate() {
-    console.log('[Migration] Bouton cliqué. supabase =', supabase);
-    setErrorMsg('');
-    setDone(false);
-    setMigrating(true);
-    setProgress(0);
-    setStatusMessage('Test de connexion Supabase…');
-
-    // ── Test de connexion ────────────────────────────────────────────────────
-    const connexion = await testerConnexion();
-    console.log('[Migration] Test connexion :', connexion);
-    if (!connexion.ok) {
-      setErrorMsg(`❌ ${connexion.message}`);
-      setMigrating(false);
-      return;
-    }
-    setStatusMessage(`${connexion.message} — lecture des données locales…`);
-
+  async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset input pour permettre re-sélection du même fichier
+    e.target.value = '';
     try {
-      // Capture locale non-null — testerConnexion() a déjà vérifié que supabase est défini
-      const db = supabase!;
-
-      const participantsRaw = localStorage.getItem('mouvtrack_participants');
-      const contratsRaw = localStorage.getItem('mouvtrack_contrats');
-      const seancesRaw = localStorage.getItem('mouvtrack_seances');
-      const notesRaw = localStorage.getItem('notes_seances');
-
-      const participants: Record<string, unknown>[] = participantsRaw ? JSON.parse(participantsRaw) : [];
-      const contrats: Record<string, unknown>[] = contratsRaw ? JSON.parse(contratsRaw) : [];
-      const seances: Record<string, unknown>[] = seancesRaw ? JSON.parse(seancesRaw) : [];
-      const notes: Record<string, unknown>[] = notesRaw ? JSON.parse(notesRaw) : [];
-
-      console.log('[Migration] Données lues :', { participants: participants.length, contrats: contrats.length, seances: seances.length, notes: notes.length });
-
-      const totalSteps = 4;
-      let step = 0;
-
-      // ── Participants + bilans + programmes ──────────────────────────────────
-      setStatusMessage(`Migration des participants (${participants.length})…`);
-      for (const p of participants) {
-        const { bilans: _bilans, programmes: _programmes, ...pData } = p as Record<string, unknown>;
-        const { error: e1 } = await db.from('participants').upsert(
-          participantToDb({ ...pData, bilans: [], programmes: [] } as unknown as Parameters<typeof participantToDb>[0])
-        );
-        if (e1) throw new Error(`Participant ${p.id} : ${e1.message}`);
-
-        const bilansArr = Array.isArray(_bilans) ? _bilans : [];
-        for (const b of bilansArr) {
-          const { error: e2 } = await db.from('bilans').upsert(bilanToDb(p.id as string, b as Parameters<typeof bilanToDb>[1]));
-          if (e2) throw new Error(`Bilan : ${e2.message}`);
-        }
-
-        const progArr = Array.isArray(_programmes) ? _programmes : [];
-        for (const prog of progArr as Record<string, unknown>[]) {
-          const { error: e3 } = await db.from('programmes').upsert({
-            id: prog.id,
-            participant_id: p.id,
-            date_debut: prog.dateDebut,
-            date_fin: prog.dateFin ?? null,
-            titre: prog.titre,
-            objectif: prog.objectif ?? null,
-            message_motivation: prog.messageMotivation ?? null,
-            exercices: prog.exercices ?? [],
-            actif: prog.actif ?? false,
-            suivi_semaines: prog.suiviSemaines ?? [],
-            date_creation: prog.dateCreation ?? new Date().toISOString().slice(0, 10),
-          });
-          if (e3) throw new Error(`Programme : ${e3.message}`);
-        }
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!Array.isArray(data)) {
+        toast.error('Format invalide — le fichier doit être un tableau JSON Horizon');
+        return;
       }
-      step++;
-      setProgress(Math.round((step / totalSteps) * 100));
-
-      // ── Contrats ───────────────────────────────────────────────────────────
-      setStatusMessage(`Migration des contrats (${contrats.length})…`);
-      for (const c of contrats) {
-        const { error: e } = await db.from('contrats').upsert(contratToDb(c as unknown as Parameters<typeof contratToDb>[0]));
-        if (e) throw new Error(`Contrat : ${e.message}`);
-      }
-      step++;
-      setProgress(Math.round((step / totalSteps) * 100));
-
-      // ── Séances ────────────────────────────────────────────────────────────
-      setStatusMessage(`Migration des séances (${seances.length})…`);
-      for (const s of seances) {
-        const { error: e } = await db.from('seances').upsert(seanceToDb(s as Parameters<typeof seanceToDb>[0]));
-        if (e) throw new Error(`Séance : ${e.message}`);
-      }
-      step++;
-      setProgress(Math.round((step / totalSteps) * 100));
-
-      // ── Notes séances ──────────────────────────────────────────────────────
-      setStatusMessage(`Migration des notes (${notes.length})…`);
-      for (const n of notes) {
-        const { error: e } = await db.from('notes_seances').upsert(noteSeanceToDb(n as Parameters<typeof noteSeanceToDb>[0]));
-        if (e) throw new Error(`Note : ${e.message}`);
-      }
-      step++;
-      setProgress(100);
-
-      const msg = `✅ Migration terminée ! ${participants.length} participants · ${contrats.length} contrats · ${seances.length} séances · ${notes.length} notes`;
-      setStatusMessage(msg);
-      setDone(true);
-      console.log('[Migration]', msg);
-      toast.success('✅ Migration terminée !');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error('[Migration] Erreur :', msg);
-      setErrorMsg(`❌ Erreur : ${msg}`);
-      toast.error('Erreur lors de la migration');
-    } finally {
-      setMigrating(false);
+      const bilansCount = data.reduce((sum: number, p: Participant) => sum + (p.bilans?.length ?? 0), 0);
+      const progCount   = data.reduce((sum: number, p: Participant) => sum + (p.programmes?.length ?? 0), 0);
+      setPendingFile(file);
+      setImportStats({ patients: data.length, bilans: bilansCount, programmes: progCount });
+    } catch {
+      toast.error('Fichier JSON invalide');
     }
+  }
+
+  async function handleImportConfirm() {
+    if (!pendingFile || !supabase) return;
+    setImporting(true);
+    try {
+      const text = await pendingFile.text();
+      const data: Participant[] = JSON.parse(text);
+      let inserted = 0;
+
+      for (const p of data) {
+        const { bilans: pBilans, programmes: pProgs, ...rest } = p as Participant & { programmes?: unknown[] };
+        await supabase.from('participants').upsert(participantToDb(rest));
+
+        for (const b of pBilans ?? []) {
+          await supabase.from('bilans').upsert(bilanToDb(p.id, b));
+        }
+        for (const prog of (pProgs ?? []) as Parameters<typeof programmeToDb>[0][]) {
+          await supabase.from('programmes').upsert({
+            ...programmeToDb(prog),
+            date_creation: (prog as { dateCreation?: string }).dateCreation ?? new Date().toISOString().slice(0, 10),
+          });
+        }
+        inserted++;
+      }
+
+      toast.success(`Import réussi — ${inserted} patients ajoutés`);
+      setPendingFile(null);
+      setImportStats(null);
+      setTimeout(() => window.location.reload(), 800);
+    } catch (err) {
+      console.error('Erreur import:', err);
+      toast.error('Erreur lors de l\'import');
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function handleImportCancel() {
+    setPendingFile(null);
+    setImportStats(null);
   }
 
   return (
     <section>
       <div className="mb-5">
-        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Données cloud</h2>
+        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Mes données</h2>
         <div className="h-px bg-gray-100" />
       </div>
-      <p className="text-sm text-gray-500 mb-4">
-        Migre vos données locales (localStorage) vers Supabase. À utiliser une seule fois lors de la première connexion.
+
+      <div className="flex flex-wrap gap-3 mb-4">
+        {/* Export */}
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="flex items-center gap-2 border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+        >
+          <Download size={15} />
+          {exporting ? 'Export en cours…' : '📤 Exporter mes données (JSON)'}
+        </button>
+
+        {/* Import */}
+        <input
+          ref={importRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        <button
+          onClick={() => importRef.current?.click()}
+          className="flex items-center gap-2 border border-primary/40 text-primary hover:bg-primary/5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
+        >
+          <FileUp size={15} />
+          📥 Importer un fichier JSON
+        </button>
+      </div>
+
+      <p className="text-xs text-gray-400">
+        Importez un fichier <span className="font-mono">horizon-backup-*.json</span> pour restaurer vos données depuis une sauvegarde.
       </p>
 
-      {/* Progression */}
-      {migrating && (
-        <div className="mb-4">
-          <div className="w-full bg-gray-100 rounded-full h-2.5 mb-2">
-            <div
-              className="bg-primary h-2.5 rounded-full transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
+      {/* Modal confirmation import */}
+      {importStats && pendingFile && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <FileUp size={18} className="text-primary" />
+              </div>
+              <h3 className="font-heading font-bold text-dark text-lg">Confirmer l'import</h3>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-4 space-y-1">
+              <p className="text-sm text-gray-600">
+                Cette action ajoutera à votre compte :
+              </p>
+              <ul className="mt-2 space-y-1">
+                <li className="text-sm font-semibold text-dark">• {importStats.patients} patient{importStats.patients > 1 ? 's' : ''}</li>
+                <li className="text-sm font-semibold text-dark">• {importStats.bilans} bilan{importStats.bilans > 1 ? 's' : ''}</li>
+                {importStats.programmes > 0 && (
+                  <li className="text-sm font-semibold text-dark">• {importStats.programmes} programme{importStats.programmes > 1 ? 's' : ''}</li>
+                )}
+              </ul>
+              <p className="text-xs text-gray-500 mt-2">
+                Les patients existants (même identifiant) seront mis à jour.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={handleImportCancel}
+                disabled={importing}
+                className="flex-1 border border-gray-200 text-gray-600 hover:bg-gray-50 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleImportConfirm}
+                disabled={importing}
+                className="flex-1 bg-primary text-white hover:bg-dark px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {importing ? 'Import en cours…' : 'Continuer'}
+              </button>
+            </div>
           </div>
-          <p className="text-xs text-gray-500">{statusMessage}</p>
         </div>
       )}
-
-      {/* Succès */}
-      {done && !migrating && (
-        <div className="mb-4 bg-green-50 border border-green-200 rounded-xl px-4 py-4">
-          <p className="text-sm font-semibold text-green-700">{statusMessage}</p>
-          <p className="text-xs text-green-600 mt-1">
-            Vérifiez dans Supabase → Table Editor que les données sont bien présentes.
-          </p>
-        </div>
-      )}
-
-      {/* Erreur (Supabase non configuré ou erreur réseau) */}
-      {errorMsg && !migrating && (
-        <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-          <p className="text-sm font-semibold text-red-700">{errorMsg}</p>
-        </div>
-      )}
-
-      <button
-        onClick={handleMigrate}
-        disabled={migrating}
-        className="flex items-center gap-2 bg-primary text-white hover:bg-dark px-5 py-3 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-      >
-        <CloudUpload size={16} />
-        {migrating ? 'Migration en cours…' : '☁️ Migrer mes données vers Supabase'}
-      </button>
     </section>
   );
 }
@@ -428,33 +451,7 @@ function inputClass(error?: string) {
 export default function SettingsPage() {
   const [form, setForm] = useState<SettingsPraticien>(loadSettings);
   const [errors, setErrors] = useState<Partial<Record<keyof SettingsPraticien, string>>>({});
-  const [showResetModal, setShowResetModal] = useState(false);
   const logoPraticienRef = useRef<HTMLInputElement>(null);
-
-  function handleResetDemo() {
-    localStorage.setItem('mouvtrack_demo_cleared', '1');
-    const dataKeys = [
-      'mouvtrack_participants',
-      'mouvtrack_seances',
-      'mouvtrack_contrats',
-      'mouvtrack_zones',
-      'notes_seances',
-      'mouvtrack_indispos_pierre',
-      'mouvtrack_question_templates',
-    ];
-    dataKeys.forEach(k => localStorage.removeItem(k));
-    const toRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith('brouillon_bilan_') || key.startsWith('bilan_en_cours_'))) {
-        toRemove.push(key);
-      }
-    }
-    toRemove.forEach(k => localStorage.removeItem(k));
-    setShowResetModal(false);
-    toast.success('Données supprimées — rechargement en cours…');
-    setTimeout(() => window.location.reload(), 800);
-  }
 
   function set(field: keyof SettingsPraticien, value: string) {
     setForm(f => ({ ...f, [field]: value }));
@@ -676,24 +673,8 @@ export default function SettingsPage() {
           {/* ── Indisponibilités ── */}
           <SectionIndisponibilites />
 
-          {/* ── Migration vers le cloud ── */}
-          <SectionMigrationCloud />
-
-          {/* ── Données demo ── */}
-          <section>
-            <SectionTitle title="Données de démonstration" />
-            <p className="text-sm text-gray-500 mb-4">
-              Supprime définitivement tous les patients, bilans, contrats et séances.
-              Les exercices et paramètres du praticien sont conservés.
-            </p>
-            <button
-              onClick={() => setShowResetModal(true)}
-              className="flex items-center gap-2 border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
-            >
-              <Trash2 size={15} />
-              🗑️ Réinitialiser les données de démo
-            </button>
-          </section>
+          {/* ── Import / Export données ── */}
+          <SectionDonnees />
 
         </div>
 
@@ -714,7 +695,7 @@ export default function SettingsPage() {
             </div>
             <input
               type="password"
-              value={localStorage.getItem('anthropic_api_key') ?? ''}
+              defaultValue={localStorage.getItem('anthropic_api_key') ?? ''}
               onChange={e => {
                 if (e.target.value) localStorage.setItem('anthropic_api_key', e.target.value);
                 else localStorage.removeItem('anthropic_api_key');
@@ -740,32 +721,6 @@ export default function SettingsPage() {
         </div>
 
       </div>
-      {showResetModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <h3 className="font-heading font-bold text-dark text-lg">Réinitialiser les données de démo</h3>
-            <p className="text-sm text-gray-600 leading-relaxed">
-              Cette action supprime tous les patients, bilans et contrats.<br />
-              Les exercices et paramètres sont conservés.<br />
-              <span className="font-semibold text-red-600">Cette action est irréversible.</span>
-            </p>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setShowResetModal(false)}
-                className="flex-1 border border-gray-200 text-gray-600 hover:bg-gray-50 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleResetDemo}
-                className="flex-1 bg-red-600 text-white hover:bg-red-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-              >
-                Confirmer la réinitialisation
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </PageWrapper>
   );
 }

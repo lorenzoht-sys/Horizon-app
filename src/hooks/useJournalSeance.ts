@@ -4,29 +4,11 @@ import type { NoteSeance } from '../types';
 import { supabase } from '../lib/supabase';
 import { dbToNoteSeance, noteSeanceToDb } from '../lib/mappers';
 
-const LS_KEY = 'notes_seances';
-
-function loadFromLocal(): NoteSeance[] {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveToLocal(notes: NoteSeance[]) {
-  localStorage.setItem(LS_KEY, JSON.stringify(notes));
-}
-
 export function useJournalSeance() {
   const [notes, setNotes] = useState<NoteSeance[]>([]);
 
   useEffect(() => {
-    if (!supabase) {
-      setNotes(loadFromLocal());
-      return;
-    }
+    if (!supabase) return;
     let cancelled = false;
     supabase
       .from('notes_seances')
@@ -42,17 +24,11 @@ export function useJournalSeance() {
 
   async function ajouterNote(note: Omit<NoteSeance, 'id'>): Promise<NoteSeance> {
     const nouvelle: NoteSeance = { ...note, id: uuidv4() };
-    if (!supabase) {
-      setNotes(prev => {
-        const updated = [nouvelle, ...prev];
-        saveToLocal(updated);
-        return updated;
-      });
-      return nouvelle;
+    if (supabase) {
+      const { error } = await supabase.from('notes_seances').insert(noteSeanceToDb(nouvelle));
+      if (error) { console.error('Erreur ajout note séance:', error); }
     }
-    const { error } = await supabase.from('notes_seances').insert(noteSeanceToDb(nouvelle));
-    if (error) { console.error('Erreur ajout note séance:', error); }
-    else { setNotes(prev => [nouvelle, ...prev]); }
+    setNotes(prev => [nouvelle, ...prev]);
     return nouvelle;
   }
 
