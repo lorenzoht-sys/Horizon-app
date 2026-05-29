@@ -401,14 +401,25 @@ const DEFAULTS: SettingsPraticien = {
   tarifHoraire: '45', fraisKmDefaut: '0.50',
 };
 
-function loadSettings(): SettingsPraticien {
-  try {
-    const raw = localStorage.getItem('settings_praticien');
-    if (!raw) return DEFAULTS;
-    return { ...DEFAULTS, ...JSON.parse(raw) };
-  } catch {
-    return DEFAULTS;
-  }
+function rowToSettings(row: Record<string, unknown>): SettingsPraticien {
+  return {
+    prenom:            String(row.prenom            ?? ''),
+    nom:               String(row.nom               ?? ''),
+    titre:             String(row.titre             ?? DEFAULTS.titre),
+    email:             String(row.email             ?? ''),
+    telephone:         String(row.telephone         ?? ''),
+    adresseRue:        String(row.adresse_rue       ?? ''),
+    adresseCodePostal: String(row.adresse_code_postal ?? ''),
+    adresseVille:      String(row.adresse_ville     ?? ''),
+    siret:             String(row.siret             ?? ''),
+    numeroSAP:         String(row.numero_sap        ?? ''),
+    numeroTVA:         String(row.numero_tva        ?? ''),
+    villeSignature:    String(row.ville_signature   ?? ''),
+    societe:           String(row.societe           ?? ''),
+    logoPraticien:     String(row.logo_praticien    ?? ''),
+    tarifHoraire:      String(row.tarif_horaire     ?? '45'),
+    fraisKmDefaut:     String(row.frais_km_defaut   ?? '0.50'),
+  };
 }
 
 // ── Composants UI ──────────────────────────────────────────────────────────────
@@ -449,9 +460,25 @@ function inputClass(error?: string) {
 // ── Page principale ───────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const [form, setForm] = useState<SettingsPraticien>(loadSettings);
+  const [form, setForm]     = useState<SettingsPraticien>(DEFAULTS);
   const [errors, setErrors] = useState<Partial<Record<keyof SettingsPraticien, string>>>({});
+  const [loading, setLoading] = useState(true);
   const logoPraticienRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
+      const { data } = await (supabase as unknown as { from: (t: string) => { select: (c: string) => { eq: (col: string, val: string) => { single: () => Promise<{ data: Record<string, unknown> | null }> } } } })
+        .from('praticiens')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      if (data) setForm(rowToSettings(data));
+      setLoading(false);
+    })();
+  }, []);
 
   function set(field: keyof SettingsPraticien, value: string) {
     setForm(f => ({ ...f, [field]: value }));
@@ -490,12 +517,51 @@ export default function SettingsPage() {
     return Object.keys(next).length === 0;
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!validate()) { toast.error('Veuillez corriger les erreurs'); return; }
     const toSave = { ...form, siret: form.siret.replace(/\s/g, '') };
+
+    if (supabase) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { toast.error('Utilisateur non connecté'); return; }
+      const { error } = await (supabase as unknown as { from: (t: string) => { upsert: (v: Record<string, unknown>) => Promise<{ error: { message: string } | null }> } })
+        .from('praticiens')
+        .upsert({
+          id:                  user.id,
+          prenom:              toSave.prenom,
+          nom:                 toSave.nom,
+          titre:               toSave.titre,
+          email:               toSave.email,
+          telephone:           toSave.telephone || null,
+          adresse_rue:         toSave.adresseRue,
+          adresse_code_postal: toSave.adresseCodePostal,
+          adresse_ville:       toSave.adresseVille,
+          siret:               toSave.siret,
+          numero_sap:          toSave.numeroSAP,
+          numero_tva:          toSave.numeroTVA || null,
+          ville_signature:     toSave.villeSignature,
+          societe:             toSave.societe || null,
+          logo_praticien:      toSave.logoPraticien || null,
+          tarif_horaire:       toSave.tarifHoraire,
+          frais_km_defaut:     toSave.fraisKmDefaut,
+        });
+      if (error) { toast.error(`Erreur : ${error.message}`); return; }
+    }
+
+    // Cache local pour les composants PDF qui lisent encore settings_praticien
     localStorage.setItem('settings_praticien', JSON.stringify(toSave));
     window.dispatchEvent(new Event('settings_praticien_updated'));
     toast.success('Paramètres enregistrés');
+  }
+
+  if (loading) {
+    return (
+      <PageWrapper>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-sm text-gray-400">Chargement des paramètres…</div>
+        </div>
+      </PageWrapper>
+    );
   }
 
   return (
