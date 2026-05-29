@@ -2,62 +2,81 @@ import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Home, Calendar, Route, Dumbbell, Layers, Settings,
-  HelpCircle, LogOut, Map, BarChart2,
+  LogOut, Map, BarChart2,
 } from 'lucide-react';
 import { IndicateurConnexion, BoutonInstallerApp } from '../pwa/PWAComponents';
+import { supabase } from '../../lib/supabase';
 
 interface Props {
-  onShowOnboarding: () => void;
   onLogout: () => void;
 }
 
-const NAV_ITEMS = [
-  { path: '/',          icon: Home,        label: 'Tableau de bord', end: true },
-  { path: '/agenda',    icon: Calendar,    label: 'Agenda',          end: false },
-  { path: '/tournee',   icon: Route,       label: 'Tournée',         end: false },
-  { path: '/exercices', icon: Dumbbell,    label: 'Exercices',       end: false },
-  { path: '/zones',     icon: Layers,      label: 'Zones',           end: false },
-  { path: '/map',       icon: Map,         label: 'Carte',           end: false },
-  { path: '/stats',       icon: BarChart2,   label: 'Mes stats',     end: false },
-];
-
-
-function loadSettings() {
-  try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); }
-  catch { return {}; }
+interface PraticienInfo {
+  prenom: string;
+  nom: string;
+  titre: string;
+  siret: string | null;
+  numero_sap: string | null;
 }
 
-export default function Sidebar({ onShowOnboarding, onLogout }: Props) {
-  const [settings, setSettings] = useState(loadSettings);
+const NAV_ITEMS = [
+  { path: '/',          icon: Home,      label: 'Tableau de bord', end: true  },
+  { path: '/agenda',    icon: Calendar,  label: 'Agenda',          end: false },
+  { path: '/tournee',   icon: Route,     label: 'Tournée',         end: false },
+  { path: '/exercices', icon: Dumbbell,  label: 'Exercices',       end: false },
+  { path: '/zones',     icon: Layers,    label: 'Zones',           end: false },
+  { path: '/map',       icon: Map,       label: 'Carte',           end: false },
+  { path: '/stats',     icon: BarChart2, label: 'Mes stats',       end: false },
+];
+
+export default function Sidebar({ onLogout }: Props) {
+  const [praticien, setPraticien] = useState<PraticienInfo | null>(null);
+
+  async function fetchPraticien() {
+    if (!supabase) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await (supabase as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (col: string, val: string) => {
+            single: () => Promise<{ data: PraticienInfo | null }>
+          }
+        }
+      }
+    })
+      .from('praticiens')
+      .select('prenom, nom, titre, siret, numero_sap')
+      .eq('id', user.id)
+      .single();
+    if (data) setPraticien(data);
+  }
 
   useEffect(() => {
-    const handler = () => setSettings(loadSettings());
+    fetchPraticien();
+    const handler = () => fetchPraticien();
     window.addEventListener('settings_praticien_updated', handler);
     return () => window.removeEventListener('settings_praticien_updated', handler);
   }, []);
 
-  const incomplete     = !settings.siret || !settings.numeroSAP;
-  const prenom         = settings.prenom || 'P';
-  const nom            = settings.nom    || 'C';
+  const prenom         = praticien?.prenom || '';
+  const nom            = praticien?.nom    || '';
+  const titrePraticien = praticien?.titre  || 'Praticien APA';
   const initiales      = `${prenom[0] ?? 'P'}${nom[0] ?? 'C'}`.toUpperCase();
-  const titrePraticien = settings.titre  || 'Praticien APA';
+  const incomplete     = !praticien?.siret || !praticien?.numero_sap;
 
   return (
     <div
       className="fixed left-0 top-0 bottom-0 flex flex-col z-50"
       style={{ width: 220, background: '#032c28' }}
     >
-      {/* Logo — contain : affiche l'image entière, propre et nette */}
+      {/* Logo */}
       <div className="px-5 pt-5 pb-5">
         <NavLink to="/" className="block">
           <img
             src="/logo-horizon.png.png?v=2"
             alt="Horizon"
-            style={{
-              width: 160,
-              height: 'auto',
-              display: 'block',
-            }}
+            style={{ width: 160, height: 'auto', display: 'block' }}
             onError={e => {
               const img = e.target as HTMLImageElement;
               img.src = '/logo-horizon.svg';
@@ -88,7 +107,7 @@ export default function Sidebar({ onShowOnboarding, onLogout }: Props) {
           </NavLink>
         ))}
 
-        {/* Settings avec indicateur */}
+        {/* Paramètres avec indicateur de complétion */}
         <NavLink
           to="/settings"
           className={({ isActive }) =>
@@ -103,23 +122,13 @@ export default function Sidebar({ onShowOnboarding, onLogout }: Props) {
           <Settings size={17} className="flex-shrink-0" />
           Paramètres
           {incomplete && (
-            <span
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-warning"
-            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-warning" />
           )}
         </NavLink>
       </nav>
 
-      {/* Profil praticien + déconnexion */}
+      {/* Profil + déconnexion */}
       <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', padding: '16px 20px' }}>
-        <button
-          onClick={onShowOnboarding}
-          className="flex items-center gap-2.5 w-full text-left mb-3 text-white/40 hover:text-white/70 transition-colors"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, padding: 0 }}
-        >
-          <HelpCircle size={14} />
-          Voir le tutoriel
-        </button>
 
         <div className="flex items-center gap-3 mb-3">
           <div
