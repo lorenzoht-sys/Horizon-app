@@ -20,38 +20,6 @@ const labelStyle: CSSProperties = {
   letterSpacing: '0.04em', textTransform: 'uppercase',
 };
 
-function SuccessScreen() {
-  return (
-    <div style={{ textAlign: 'center', padding: '40px 0' }}>
-      <div style={{
-        width: 64, height: 64, borderRadius: '50%',
-        background: 'rgba(43,191,191,0.12)',
-        border: '2px solid rgba(43,191,191,0.3)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        margin: '0 auto 20px',
-      }}>
-        <i className="ti ti-mail-check" style={{ fontSize: 28, color: '#2BBFBF' }} aria-hidden="true" />
-      </div>
-      <div style={{ fontFamily: "'Poppins', sans-serif", fontSize: 20, fontWeight: 700, color: '#032c28', marginBottom: 10 }}>
-        Vérifiez votre boîte mail
-      </div>
-      <div style={{ fontSize: 14, color: '#8B9BB4', lineHeight: 1.6, marginBottom: 28 }}>
-        Un email de confirmation vous a été envoyé.<br />
-        Cliquez sur le lien pour activer votre compte.
-      </div>
-      <Link to="/login" style={{
-        display: 'inline-flex', alignItems: 'center', gap: 8,
-        background: '#2BBFBF', color: 'white',
-        padding: '11px 24px', borderRadius: 10,
-        fontSize: 14, fontWeight: 700, textDecoration: 'none',
-        fontFamily: "'Poppins', sans-serif",
-      }}>
-        <i className="ti ti-arrow-left" style={{ fontSize: 15 }} aria-hidden="true" />
-        Retour à la connexion
-      </Link>
-    </div>
-  );
-}
 
 export default function RegisterPage() {
   const [prenom, setPrenom]       = useState('');
@@ -63,9 +31,8 @@ export default function RegisterPage() {
   const [cabinet, setCabinet]     = useState('');
   const [showPwd, setShowPwd]     = useState(false);
   const [showConf, setShowConf]   = useState(false);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState('');
-  const [success, setSuccess]     = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -89,8 +56,9 @@ export default function RegisterPage() {
     }
 
     setLoading(true);
-    const { data, error: authError } = await supabase.auth.signUp({ email, password });
 
+    // Étape 1 — Créer le compte
+    const { data, error: authError } = await supabase.auth.signUp({ email, password });
     if (authError) {
       setError(authError.message === 'User already registered'
         ? 'Un compte existe déjà avec cet email.'
@@ -99,14 +67,24 @@ export default function RegisterPage() {
       return;
     }
 
+    // Étape 2 — Créer le profil praticien
     if (data.user) {
       await (supabase as unknown as { from: (t: string) => { insert: (v: object) => Promise<unknown> } })
         .from('praticiens')
         .insert({ id: data.user.id, prenom, nom, email, titre, cabinet });
     }
 
-    setLoading(false);
-    setSuccess(true);
+    // Étape 3 — Connecter directement si signUp n'a pas créé de session
+    // (cas où la confirmation email est activée dans Supabase)
+    if (!data.session) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        setError('Compte créé. Veuillez vous connecter.');
+        setLoading(false);
+        return;
+      }
+    }
+    // L'onAuthStateChange dans App.tsx détecte la session et redirige vers /
   };
 
   return (
@@ -120,8 +98,7 @@ export default function RegisterPage() {
         overflowY: 'auto',
       }}>
 
-        {success ? <SuccessScreen /> : (
-          <>
+        <>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#2BBFBF', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>
               Inscription gratuite
             </div>
@@ -238,8 +215,7 @@ export default function RegisterPage() {
                 Se connecter
               </Link>
             </div>
-          </>
-        )}
+        </>
 
       </div>
     </div>
