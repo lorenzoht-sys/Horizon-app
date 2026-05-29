@@ -46,10 +46,10 @@ async function needsOnboarding(userId: string): Promise<boolean> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (supabase as any)
       .from('praticiens')
-      .select('prenom')
+      .select('titre')
       .eq('id', userId)
       .single();
-    return !data?.prenom;
+    return !data?.titre;
   } catch {
     return true;
   }
@@ -173,18 +173,23 @@ export default function App() {
         <Route path="/patient" element={<PageAccesPatient />} />
         <Route path="/patient/:id" element={<EspacePatient />} />
 
+        {/* Onboarding — route protégée, uniquement si titre non encore renseigné */}
+        <Route path="/onboarding" element={
+          !isLoggedIn
+            ? <Navigate to="/login" replace />
+            : !showOnboarding
+              ? <Navigate to="/" replace />
+              : <OnboardingPage onComplete={() => setShowOnboarding(false)} />
+        } />
+
         {/* Interface pro — protégée */}
         <Route
           path="*"
           element={
             isLoggedIn ? (
-              <>
-                {/* Onboarding plein écran — affiché si le profil praticien est vide */}
-                {showOnboarding && (
-                  <OnboardingPage onComplete={() => setShowOnboarding(false)} />
-                )}
-
-                {!showOnboarding && (
+              showOnboarding ? (
+                <Navigate to="/onboarding" replace />
+              ) : (
                   isMobile ? (
                     <AppMobile onLogout={handleLogout} />
                   ) : (
@@ -232,8 +237,7 @@ export default function App() {
                       </div>
                     </div>
                   )
-                )}
-              </>
+              )
             ) : (
               <Navigate to="/login" replace />
             )

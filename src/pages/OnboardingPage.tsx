@@ -1,4 +1,5 @@
-import { useState, type FormEvent, type CSSProperties } from 'react';
+import { useState, useEffect, type FormEvent, type CSSProperties } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 interface Props {
@@ -21,29 +22,55 @@ const labelStyle: CSSProperties = {
   letterSpacing: '0.04em', textTransform: 'uppercase',
 };
 
+const TYPES_PRO = [
+  'Enseignant APA',
+  'Kinésithérapeute',
+  'Coach sportif',
+  'Éducateur sportif',
+  'Autre',
+];
+
 export default function OnboardingPage({ onComplete }: Props) {
-  const [prenom,   setPrenom]   = useState('');
-  const [nom,      setNom]      = useState('');
-  const [titre,    setTitre]    = useState('');
-  const [societe,  setSociete]  = useState('');
-  const [siret,    setSiret]    = useState('');
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState('');
+  const navigate = useNavigate();
+
+  const [prenom,  setPrenom]  = useState('');
+  const [titre,   setTitre]   = useState('');
+  const [societe, setSociete] = useState('');
+  const [siret,   setSiret]   = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
+
+  // Charger le prénom depuis la table praticiens
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any)
+        .from('praticiens')
+        .select('prenom')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }: { data: { prenom?: string } | null }) => {
+          if (data?.prenom) setPrenom(data.prenom);
+        });
+    });
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (!prenom.trim() || !nom.trim() || !titre.trim()) {
-      setError('Veuillez renseigner les champs obligatoires (*).');
+    if (!titre.trim()) {
+      setError('Veuillez sélectionner votre type de professionnel.');
       return;
     }
 
-    if (!supabase) { onComplete(); return; }
+    if (!supabase) { onComplete(); navigate('/'); return; }
 
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { onComplete(); return; }
+    if (!user) { onComplete(); navigate('/'); return; }
 
     const siretClean = siret.replace(/\s/g, '');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -51,8 +78,6 @@ export default function OnboardingPage({ onComplete }: Props) {
       .from('praticiens')
       .upsert({
         id:      user.id,
-        prenom:  prenom.trim(),
-        nom:     nom.trim(),
         titre:   titre.trim(),
         societe: societe.trim() || null,
         siret:   siretClean || null,
@@ -61,20 +86,21 @@ export default function OnboardingPage({ onComplete }: Props) {
 
     if (upsertError) {
       console.error('[Onboarding] Erreur upsert praticiens:', upsertError);
-      setError(upsertError.message ?? 'Erreur lors de l\'enregistrement. Réessayez.');
+      setError(upsertError.message ?? "Erreur lors de l'enregistrement. Réessayez.");
       setLoading(false);
       return;
     }
 
     // Mise à jour du cache localStorage pour les composants PDF
     localStorage.setItem('settings_praticien', JSON.stringify({
-      prenom: prenom.trim(), nom: nom.trim(), titre: titre.trim(),
+      prenom, titre: titre.trim(),
       societe: societe.trim(), siret: siretClean,
     }));
     window.dispatchEvent(new Event('settings_praticien_updated'));
 
     setLoading(false);
     onComplete();
+    navigate('/');
   };
 
   return (
@@ -126,7 +152,7 @@ export default function OnboardingPage({ onComplete }: Props) {
             fontSize: 26, fontWeight: 800,
             color: 'white', marginBottom: 8, letterSpacing: '-0.5px',
           }}>
-            Bienvenue sur Horizon 👋
+            {prenom ? `Bienvenue ${prenom} 👋` : 'Bienvenue 👋'}
           </div>
           <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6 }}>
             Quelques informations pour commencer
@@ -136,59 +162,41 @@ export default function OnboardingPage({ onComplete }: Props) {
         {/* Carte formulaire */}
         <div style={{
           background: 'white', borderRadius: 20,
-          padding: '32px 32px',
+          padding: '32px',
           boxShadow: '0 24px 64px rgba(0,0,0,0.35)',
         }}>
           <form onSubmit={handleSubmit}>
 
-            {/* Prénom / Nom */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-              <div>
-                <label style={labelStyle}>
-                  Prénom <span style={{ color: '#DC2626' }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Pierre"
-                  value={prenom}
-                  onChange={e => setPrenom(e.target.value)}
-                  autoComplete="given-name"
-                  autoFocus
-                  style={inputStyle}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>
-                  Nom <span style={{ color: '#DC2626' }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Clavier"
-                  value={nom}
-                  onChange={e => setNom(e.target.value)}
-                  autoComplete="family-name"
-                  style={inputStyle}
-                />
-              </div>
-            </div>
-
-            {/* Titre */}
+            {/* Type de professionnel */}
             <div style={{ marginBottom: 14 }}>
               <label style={labelStyle}>
-                Titre professionnel <span style={{ color: '#DC2626' }}>*</span>
+                Type de professionnel <span style={{ color: '#DC2626' }}>*</span>
               </label>
-              <input
-                type="text"
-                placeholder="Ex : Enseignant en APA, Kinésithérapeute…"
+              <select
                 value={titre}
                 onChange={e => setTitre(e.target.value)}
-                style={inputStyle}
-              />
+                autoFocus
+                style={{
+                  ...inputStyle,
+                  appearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234A6080' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 14px center',
+                  paddingRight: 36,
+                  cursor: 'pointer',
+                  color: titre ? '#032c28' : '#9BAABB',
+                }}
+              >
+                <option value="" disabled>Choisissez votre métier…</option>
+                {TYPES_PRO.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
             </div>
 
-            {/* Société */}
+            {/* Nom de l'entreprise / cabinet */}
             <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle}>Nom de la société / cabinet</label>
+              <label style={labelStyle}>Nom de l'entreprise / cabinet</label>
               <input
                 type="text"
                 placeholder="Ex : MouvAPA, Cabinet Santé+"
