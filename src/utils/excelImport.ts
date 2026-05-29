@@ -47,7 +47,32 @@ function parseDate(raw: unknown): string {
   // Already ISO AAAA-MM-JJ
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
+  // Numéro de série Excel (ex: 13203.0 → 1936-02-13)
+  const serial = parseFloat(s);
+  if (!isNaN(serial) && serial > 1000) {
+    const date = new Date(Math.round((serial - 25569) * 86400 * 1000));
+    if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
+  }
+
   return '';
+}
+
+function parseTelephone(v: unknown): string | undefined {
+  if (!v) return undefined;
+  const s = String(v).trim();
+  if (!s) return undefined;
+  const n = Math.round(parseFloat(s));
+  if (isNaN(n)) return s || undefined;
+  const digits = String(n);
+  return digits.length === 9 ? '0' + digits : digits;
+}
+
+function parseCodePostal(v: unknown): string | undefined {
+  if (!v) return undefined;
+  const s = String(v).trim();
+  if (!s) return undefined;
+  const n = parseFloat(s);
+  return !isNaN(n) ? String(Math.round(n)) : s;
 }
 
 const VALID_TAGS: TagPatient[] = ['senior', 'post_op', 'chronique', 'adulte_blessure'];
@@ -107,15 +132,15 @@ export function parseExcelRows(
       prenom,
       dateNaissance,
       dateCreation: new Date().toISOString().slice(0, 10),
-      telephone:            str(r[3])  || undefined,
+      telephone:            parseTelephone(r[3]),
       email:                str(r[4])  || undefined,
       adresseRue:           str(r[5])  || undefined,
-      adresseCodePostal:    str(r[6])  || undefined,
+      adresseCodePostal:    parseCodePostal(r[6]),
       adresseVille:         str(r[7])  || undefined,
       taille:               num(r[8]),
       poids:                num(r[9]),
       villeNaissance:       str(r[10]) || undefined,
-      codePostalNaissance:  str(r[11]) || undefined,
+      codePostalNaissance:  parseCodePostal(r[11]),
       tags,
       contexteClinic:       str(r[13]) || undefined,
       pathologie:           str(r[14]) || undefined,
