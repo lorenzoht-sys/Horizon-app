@@ -7,7 +7,7 @@ import ParticipantCard from '../components/participant/ParticipantCard';
 import ParticipantForm from '../components/participant/ParticipantForm';
 import ImportExcelModal from '../components/import/ImportExcelModal';
 import PageWrapper from '../components/layout/PageWrapper';
-import { Plus, Search, Users, BarChart3, FileSpreadsheet, X, CalendarDays, MapPin, ChevronRight, NotebookPen } from 'lucide-react';
+import { Plus, Search, Users, BarChart3, FileSpreadsheet, X, CalendarDays, MapPin, ChevronRight, NotebookPen, AlertCircle } from 'lucide-react';
 import { useJournalSeance } from '../hooks/useJournalSeance';
 import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
 import { getAllBrouillons } from '../hooks/useBrouillonBilan';
@@ -53,28 +53,98 @@ export default function Dashboard() {
   return (
     <>
       <PageWrapper>
+        {/* En-tête de page */}
+        <div className="mb-8">
+          <h1
+            className="font-heading font-semibold m-0"
+            style={{ fontSize: 24, color: '#0D2B2B', lineHeight: 1.2 }}
+          >
+            Tableau de bord
+          </h1>
+          <p
+            className="mt-1 m-0"
+            style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, color: '#5C7A7A' }}
+          >
+            {participants.length} patient{participants.length !== 1 ? 's' : ''} suivi{participants.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-white rounded-2xl p-5 border border-gray-100">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-500 uppercase tracking-wide">Participants</span>
-              <Users size={16} className="text-primary" />
+          <div
+            className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all"
+            style={{ border: '1px solid #E2EEEE', padding: 24 }}
+          >
+            <div
+              className="inline-flex p-2.5 rounded-xl mb-4"
+              style={{ background: '#E8F9F9' }}
+            >
+              <Users size={18} style={{ color: '#2BBFBF' }} />
             </div>
-            <div className="text-3xl font-heading font-bold text-dark">{participants.length}</div>
+            <div
+              className="font-heading font-bold"
+              style={{ fontSize: 28, color: '#0D2B2B', lineHeight: 1.2 }}
+            >
+              {participants.length}
+            </div>
+            <div
+              className="mt-1 font-semibold uppercase"
+              style={{ fontSize: 12, color: '#5C7A7A', letterSpacing: '0.5px', fontFamily: 'Nunito, sans-serif' }}
+            >
+              Participants
+            </div>
           </div>
-          <div className="bg-white rounded-2xl p-5 border border-gray-100">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-500 uppercase tracking-wide">Bilans ce mois</span>
-              <BarChart3 size={16} className="text-secondary" />
+
+          <div
+            className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all"
+            style={{ border: '1px solid #E2EEEE', padding: 24 }}
+          >
+            <div
+              className="inline-flex p-2.5 rounded-xl mb-4"
+              style={{ background: '#E8F9F9' }}
+            >
+              <BarChart3 size={18} style={{ color: '#2BBFBF' }} />
             </div>
-            <div className="text-3xl font-heading font-bold text-dark">{thisMonthBilans}</div>
+            <div
+              className="font-heading font-bold"
+              style={{ fontSize: 28, color: '#0D2B2B', lineHeight: 1.2 }}
+            >
+              {thisMonthBilans}
+            </div>
+            <div
+              className="mt-1 font-semibold uppercase"
+              style={{ fontSize: 12, color: '#5C7A7A', letterSpacing: '0.5px', fontFamily: 'Nunito, sans-serif' }}
+            >
+              Bilans ce mois
+            </div>
           </div>
-          <div className={`rounded-2xl p-5 border ${needsBilan > 0 ? 'bg-warning/10 border-warning/20' : 'bg-white border-gray-100'}`}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-500 uppercase tracking-wide">Bilans à faire</span>
-              <span className={`text-lg ${needsBilan > 0 ? 'text-warning' : 'text-gray-300'}`}>⚠</span>
+
+          <div
+            className="rounded-2xl shadow-sm hover:shadow-md transition-all"
+            style={{
+              border: `1px solid ${needsBilan > 0 ? 'rgba(243,156,18,0.30)' : '#E2EEEE'}`,
+              background: needsBilan > 0 ? 'rgba(243,156,18,0.05)' : '#FFFFFF',
+              padding: 24,
+            }}
+          >
+            <div
+              className="inline-flex p-2.5 rounded-xl mb-4"
+              style={{ background: needsBilan > 0 ? 'rgba(243,156,18,0.12)' : '#E8F9F9' }}
+            >
+              <AlertCircle size={18} style={{ color: needsBilan > 0 ? '#F39C12' : '#2BBFBF' }} />
             </div>
-            <div className={`text-3xl font-heading font-bold ${needsBilan > 0 ? 'text-warning' : 'text-dark'}`}>{needsBilan}</div>
+            <div
+              className="font-heading font-bold"
+              style={{ fontSize: 28, color: needsBilan > 0 ? '#F39C12' : '#0D2B2B', lineHeight: 1.2 }}
+            >
+              {needsBilan}
+            </div>
+            <div
+              className="mt-1 font-semibold uppercase"
+              style={{ fontSize: 12, color: '#5C7A7A', letterSpacing: '0.5px', fontFamily: 'Nunito, sans-serif' }}
+            >
+              Bilans à faire
+            </div>
           </div>
         </div>
 
@@ -112,24 +182,55 @@ export default function Dashboard() {
         {/* Toolbar */}
         <div className="flex items-center gap-3 mb-6 flex-wrap">
           <div className="relative flex-1 min-w-48">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: '#A8C0C0' }} />
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Rechercher un participant..."
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
+              className="w-full transition-all focus:outline-none"
+              style={{
+                paddingLeft: 40, paddingRight: 16, paddingTop: 11, paddingBottom: 11,
+                background: '#F4FAFA', border: '1.5px solid #E2EEEE',
+                borderRadius: 10, fontSize: 14, fontFamily: 'Nunito, sans-serif', color: '#0D2B2B',
+              }}
+              onFocus={e => {
+                e.target.style.borderColor = '#2BBFBF';
+                e.target.style.boxShadow = '0 0 0 3px rgba(43,191,191,0.12)';
+              }}
+              onBlur={e => {
+                e.target.style.borderColor = '#E2EEEE';
+                e.target.style.boxShadow = 'none';
+              }}
             />
           </div>
           <button
             onClick={() => setShowImport(true)}
-            className="flex items-center gap-2 border border-gray-200 text-gray-600 hover:bg-gray-50 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
+            className="flex items-center gap-2 text-sm font-medium transition-all"
+            style={{
+              padding: '10px 20px', background: 'transparent',
+              border: '1.5px solid #2BBFBF', borderRadius: 10,
+              color: '#2BBFBF', cursor: 'pointer', fontFamily: 'Nunito, sans-serif',
+            }}
           >
             <FileSpreadsheet size={16} />
             <span className="hidden sm:inline">Import Excel</span>
           </button>
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-dark transition-colors"
+            className="flex items-center gap-2 text-white text-sm font-semibold transition-all"
+            style={{
+              padding: '10px 20px', background: '#2BBFBF',
+              border: 'none', borderRadius: 10, cursor: 'pointer',
+              fontFamily: 'Nunito, sans-serif',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.transform = 'translateY(-1px)';
+              e.currentTarget.style.boxShadow = '0 4px 20px rgba(43,191,191,0.20)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
           >
             <Plus size={16} />
             Nouveau participant

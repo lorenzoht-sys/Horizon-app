@@ -2,6 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-primary: #2BBFBF;
+  --color-primary-light: #E8F9F9;
+  --color-primary-dark: #1E9494;
+  --color-sidebar: #0D2B2B;
+  --color-bg: #FFFFFF;
+  --color-bg-secondary: #F4FAFA;
+  --color-text: #0D2B2B;
+  --color-text-secondary: #5C7A7A;
+  --color-text-muted: #A8C0C0;
+  --color-border: #E2EEEE;
+  --color-danger: #E74C3C;
+  --color-warning: #F39C12;
+  --color-success: #27AE60;
+
+  --space-1: 4px;   --space-2: 8px;   --space-3: 12px;  --space-4: 16px;
+  --space-5: 20px;  --space-6: 24px;  --space-8: 32px;
+  --space-10: 40px; --space-12: 48px;
+
+  --radius-sm: 6px; --radius-md: 10px; --radius-lg: 16px;
+  --radius-xl: 24px; --radius-full: 9999px;
+
+  --shadow-sm:      0 1px 3px rgba(13,43,43,0.06);
+  --shadow-md:      0 4px 16px rgba(13,43,43,0.08);
+  --shadow-lg:      0 8px 32px rgba(13,43,43,0.10);
+  --shadow-primary: 0 4px 20px rgba(43,191,191,0.20);
+
+  --transition:      150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 @layer base {
   body {
     @apply font-sans bg-neutral text-dark;
@@ -20,15 +51,31 @@
 /* ── PWA safe-area ── */
 body { padding-bottom: env(safe-area-inset-bottom); }
 
-/* ── Sidebar Horizon ── */
+/* ── Sidebar navigation ── */
+.sidebar-nav-item {
+  transition: background var(--transition), color var(--transition);
+  color: rgba(255,255,255,0.55);
+}
 .sidebar-nav-item:hover {
-  background-color: #1ca48c !important;
-  color: white !important;
+  background: rgba(255,255,255,0.05) !important;
+  color: rgba(255,255,255,0.80) !important;
 }
 .sidebar-nav-active {
-  background-color: #1ca48c !important;
+  background: rgba(255,255,255,0.10) !important;
+  color: white !important;
+  box-shadow: inset 3px 0 0 0 #2BBFBF !important;
 }
 
+/* ── Online dot animation ── */
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.8); }
+}
+.online-pulse {
+  animation: pulse-green 2s ease-in-out infinite;
+}
+
+/* ── Scrollbar ── */
 @layer utilities {
   .scrollbar-hide {
     -ms-overflow-style: none;
@@ -39,7 +86,7 @@ body { padding-bottom: env(safe-area-inset-bottom); }
   }
 }
 
-/* ── Override react-big-calendar — Mouv'APA ── */
+/* ── react-big-calendar overrides ── */
 .rbc-toolbar button:hover,
 .rbc-toolbar button.rbc-active {
   background: #2BBFBF;
@@ -52,7 +99,7 @@ body { padding-bottom: env(safe-area-inset-bottom); }
   font-size: 13px;
 }
 .rbc-today {
-  background: #E8F8F8;
+  background: #E8F9F9;
 }
 .rbc-event {
   background: #2BBFBF;
@@ -68,7 +115,7 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 .rbc-header {
   font-family: 'Poppins', sans-serif;
   font-weight: 600;
-  color: #032c28;
+  color: #0D2B2B;
   padding: 8px 0;
   font-size: 13px;
 }
@@ -81,5 +128,5 @@ body { padding-bottom: env(safe-area-inset-bottom); }
   height: 2px;
 }
 .rbc-selected {
-  background: #032c28 !important;
+  background: #0D2B2B !important;
 }

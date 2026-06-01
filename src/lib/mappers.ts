@@ -1,4 +1,5 @@
 import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique } from '../types';
+import type { CompteRenduSeance } from '../types/seance';
 
 // Participant: Supabase row → TypeScript type
 export function dbToParticipant(row: any): Participant {
@@ -314,5 +315,41 @@ export function zoneToDb(z: ZoneGeographique): Record<string, unknown> {
     centroide_lat: z.centroide.lat,
     centroide_lng: z.centroide.lng,
     jours_assignes: z.joursAssignes,
+  };
+}
+
+export function dbToCompteRendu(row: any): CompteRenduSeance {
+  return {
+    id: row.id,
+    participantId: row.participant_id,
+    dateSeance: row.date_seance,
+    dureeMinutes: row.duree_minutes ?? null,
+    transcriptionBrute: row.transcription_brute ?? '',
+    exercicesRealises: row.exercices_realises ?? [],
+    observations: row.observations ?? '',
+    douleursSignalees: row.douleurs_signalees ?? null,
+    humeurPatient: row.humeur_patient ?? null,
+    progression: row.progression ?? null,
+    pointsAttention: row.points_attention ?? null,
+    prochaineSeanceNotes: row.prochaine_seance_notes ?? null,
+    createdAt: row.created_at ?? '',
+    updatedAt: row.updated_at ?? '',
+  };
+}
+
+export function compteRenduToDb(cr: CompteRenduSeance): Record<string, unknown> {
+  return {
+    id: cr.id,
+    participant_id: cr.participantId,
+    date_seance: cr.dateSeance,
+    duree_minutes: cr.dureeMinutes ?? null,
+    transcription_brute: cr.transcriptionBrute,
+    exercices_realises: cr.exercicesRealises,
+    observations: cr.observations,
+    douleurs_signalees: cr.douleursSignalees ?? null,
+    humeur_patient: cr.humeurPatient ?? null,
+    progression: cr.progression ?? null,
+    points_attention: cr.pointsAttention ?? null,
+    prochaine_seance_notes: cr.prochaineSeanceNotes ?? null,
   };
 }

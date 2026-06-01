@@ -61,15 +61,15 @@ export default function Sidebar({ onLogout }: Props) {
   return (
     <div
       className="fixed left-0 top-0 bottom-0 flex flex-col z-50"
-      style={{ width: 220, background: '#032c28' }}
+      style={{ width: 220, background: '#0D2B2B' }}
     >
       {/* Logo */}
-      <div className="px-5 pt-5 pb-5">
+      <div style={{ padding: '32px 20px 20px' }}>
         <NavLink to="/" className="block">
           <img
             src="/logo-horizon.png.png?v=2"
             alt="Horizon"
-            style={{ width: 160, height: 'auto', display: 'block' }}
+            style={{ width: 150, height: 'auto', display: 'block' }}
             onError={e => {
               const img = e.target as HTMLImageElement;
               img.src = '/logo-horizon.svg';
@@ -80,20 +80,18 @@ export default function Sidebar({ onLogout }: Props) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-2">
+      <nav className="flex-1 overflow-y-auto scrollbar-hide" style={{ padding: '0 12px 8px' }}>
         {NAV_ITEMS.map(item => (
           <NavLink
             key={item.path}
             to={item.path}
             end={item.end}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg mb-0.5 text-sm font-medium transition-all no-underline ${
-                isActive
-                  ? 'sidebar-nav-active text-white'
-                  : 'sidebar-nav-item text-white/55'
+              `sidebar-nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium no-underline${
+                isActive ? ' sidebar-nav-active' : ''
               }`
             }
-            style={{ textDecoration: 'none' }}
+            style={{ textDecoration: 'none', display: 'flex', marginBottom: 3 }}
           >
             <item.icon size={17} className="flex-shrink-0" />
             {item.label}
@@ -104,13 +102,11 @@ export default function Sidebar({ onLogout }: Props) {
         <NavLink
           to="/settings"
           className={({ isActive }) =>
-            `flex items-center gap-3 px-3 py-2.5 rounded-lg mb-0.5 text-sm font-medium transition-all relative no-underline ${
-              isActive
-                ? 'sidebar-nav-active text-white'
-                : 'sidebar-nav-item text-white/55'
+            `sidebar-nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium relative no-underline${
+              isActive ? ' sidebar-nav-active' : ''
             }`
           }
-          style={{ textDecoration: 'none' }}
+          style={{ textDecoration: 'none', display: 'flex', marginBottom: 3 }}
         >
           <Settings size={17} className="flex-shrink-0" />
           Paramètres
@@ -120,43 +116,64 @@ export default function Sidebar({ onLogout }: Props) {
         </NavLink>
       </nav>
 
-      {/* Profil + déconnexion */}
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', padding: '16px 20px' }}>
+      {/* Section praticien */}
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', padding: '16px 16px 20px' }}>
 
+        {/* Avatar + infos + dot en ligne */}
         <div className="flex items-center gap-3 mb-3">
           <div
-            className="flex-shrink-0 flex items-center justify-center font-bold text-white text-xs rounded-full"
-            style={{ width: 34, height: 34, background: '#2BBFBF', fontSize: 11 }}
+            className="flex-shrink-0 flex items-center justify-center font-bold text-white rounded-full"
+            style={{ width: 36, height: 36, background: '#2BBFBF', fontSize: 12 }}
           >
             {initiales}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-white font-semibold truncate" style={{ fontSize: 13 }}>
+            <div
+              className="text-white font-semibold truncate"
+              style={{ fontSize: 13, lineHeight: 1.3 }}
+            >
               {prenom} {nom}
             </div>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', lineHeight: 1.3 }}>
               {titrePraticien}
             </div>
           </div>
+          <span
+            className="online-pulse flex-shrink-0 rounded-full"
+            style={{ width: 7, height: 7, background: '#27AE60', display: 'inline-block' }}
+          />
         </div>
 
-        <div className="mb-2.5">
+        <div className="mb-2">
           <IndicateurConnexion />
         </div>
-
-        <div className="mb-2.5">
+        <div className="mb-3">
           <BoutonInstallerApp compact />
         </div>
 
+        {/* Déconnexion — icône seule + tooltip natif */}
         <button
           onClick={onLogout}
-          className="flex items-center gap-2 w-full text-left transition-colors"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: 12, padding: 0 }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.75)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)'; }}
+          title="Déconnexion"
+          className="flex items-center justify-center rounded-lg"
+          style={{
+            width: 32, height: 32,
+            background: 'rgba(255,255,255,0.05)',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'rgba(255,255,255,0.35)',
+            transition: 'all 150ms cubic-bezier(0.4,0,0.2,1)',
+          }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.10)';
+            (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.70)';
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)';
+            (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.35)';
+          }}
         >
-          <LogOut size={13} />
-          Déconnexion
+          <LogOut size={14} />
         </button>
       </div>
     </div>

@@ -4,12 +4,13 @@ import { differenceInDays } from 'date-fns';
 import {
   ArrowLeft, ChevronDown, Pencil, FileText, TrendingUp, Share2,
   Download, Trash2, Dumbbell, NotebookPen, Calendar, MapPin,
-  RefreshCw, X, ClipboardList,
+  RefreshCw, X, ClipboardList, Mic,
 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
 import { useAgenda } from '../hooks/useAgenda';
 import { useJournalSeance } from '../hooks/useJournalSeance';
+import { useCompteRenduSeance } from '../hooks/useCompteRenduSeance';
 import { getBrouillon } from '../hooks/useBrouillonBilan';
 import PageWrapper from '../components/layout/PageWrapper';
 import RadarChart from '../components/charts/RadarChart';
@@ -17,6 +18,7 @@ import ProgressCurve from '../components/charts/ProgressCurve';
 import BilanTimeline from '../components/bilan/BilanTimeline';
 import ContratsTab from '../components/participant/ContratsTab';
 import JournalTab from '../components/journal/JournalTab';
+import DicteePostSeance from '../components/DicteePostSeance';
 import ParticipantForm from '../components/participant/ParticipantForm';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
 import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
@@ -26,6 +28,7 @@ import { calculerNote, NORMES_SCORING } from '../data/norms';
 import { TAG_CONFIG } from '../data/profiles';
 import toast from 'react-hot-toast';
 import type { Bilan, Participant, RessentiSeance, Contrat, Seance, ProfilHandicap } from '../types';
+import type { CompteRenduSeance } from '../types/seance';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -330,6 +333,98 @@ function SectionAccordeon({ titre, badge, children }: {
   );
 }
 
+// ── HistoriqueSeancesDictees ──────────────────────────────────────────────────
+
+const PROGRESSION_CONFIG: Record<string, { emoji: string; color: string }> = {
+  'en progrès': { emoji: '📈', color: '#22C55E' },
+  'stable':     { emoji: '➡️', color: '#6B7280' },
+  'régression': { emoji: '📉', color: '#EF4444' },
+};
+
+const HUMEUR_EMOJI: Record<string, string> = {
+  'très bien': '😊', 'bien': '🙂', 'moyen': '😐', 'fatigué': '😓',
+};
+
+function HistoriqueSeancesDictees({
+  compteRendus,
+  onNouvelleSeance,
+}: {
+  compteRendus: CompteRenduSeance[];
+  onNouvelleSeance: () => void;
+}) {
+  if (compteRendus.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-400">
+        <div className="text-3xl mb-2">🎙</div>
+        <p className="text-sm font-medium">Aucune séance dictée</p>
+        <p className="text-xs mt-1">Dictez un compte-rendu après chaque séance</p>
+        <button
+          onClick={onNouvelleSeance}
+          className="mt-4 inline-flex items-center gap-1.5 border border-primary text-primary px-4 py-2 rounded-xl text-xs font-semibold hover:bg-primary/5 transition-colors"
+        >
+          <Mic size={12} /> Dicter la première séance
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs text-gray-400">{compteRendus.length} séance{compteRendus.length > 1 ? 's' : ''} enregistrée{compteRendus.length > 1 ? 's' : ''}</p>
+        <button
+          onClick={onNouvelleSeance}
+          className="flex items-center gap-1.5 bg-primary text-white px-3 py-1.5 rounded-xl text-xs font-semibold hover:bg-dark transition-colors"
+        >
+          <Mic size={11} /> Nouvelle séance
+        </button>
+      </div>
+      <div className="space-y-3">
+        {compteRendus.map(cr => {
+          const dateLabel = new Date(cr.dateSeance + 'T12:00').toLocaleDateString('fr-FR', {
+            weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+          });
+          const prog = cr.progression ? PROGRESSION_CONFIG[cr.progression] : null;
+          const humeurEmoji = cr.humeurPatient ? HUMEUR_EMOJI[cr.humeurPatient] : null;
+          return (
+            <div key={cr.id} className="border border-gray-100 rounded-xl p-4 hover:bg-gray-50 transition-colors">
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                    <span className="text-sm font-semibold text-gray-700 capitalize">{dateLabel}</span>
+                    {cr.dureeMinutes && (
+                      <span className="text-xs text-gray-400">{cr.dureeMinutes} min</span>
+                    )}
+                    {prog && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: `${prog.color}18`, color: prog.color }}>
+                        {prog.emoji} {cr.progression}
+                      </span>
+                    )}
+                    {humeurEmoji && (
+                      <span className="text-sm">{humeurEmoji}</span>
+                    )}
+                  </div>
+                  {cr.exercicesRealises.length > 0 && (
+                    <p className="text-xs text-gray-500 mb-1">
+                      🏋️ {cr.exercicesRealises.map(e => e.nom).filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                  {cr.observations && (
+                    <p className="text-sm text-dark leading-snug line-clamp-2">"{cr.observations}"</p>
+                  )}
+                  {cr.pointsAttention && (
+                    <p className="text-xs text-amber-600 mt-1">⚠️ {cr.pointsAttention}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function ParticipantProfile() {
@@ -345,12 +440,16 @@ export default function ParticipantProfile() {
   const [showEdit, setShowEdit]         = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showNoteModal, setShowNoteModal] = useState(false);
+  const [showDictee, setShowDictee]     = useState(false);
   const [geocoding, setGeocoding]       = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
   const [showProfilPicker, setShowProfilPicker] = useState(false);
   const [showEspacePatient, setShowEspacePatient] = useState(false);
 
   const participant = participants.find(p => p.id === id);
+
+  const { compteRendus, ajouterCompteRendu } = useCompteRenduSeance(participant?.id ?? '');
+
   if (!participant) return (
     <PageWrapper>
       <div className="text-center py-20 text-gray-400">Participant introuvable</div>
@@ -683,6 +782,12 @@ export default function ParticipantProfile() {
               <FileText size={11} /> {exportingPDF ? 'PDF…' : 'Fiche PDF'}
             </button>
             <button
+              onClick={() => setShowDictee(true)}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border transition-colors bg-white/10 text-white border-white/20 hover:bg-white/20"
+            >
+              <Mic size={11} /> Dicter séance
+            </button>
+            <button
               onClick={() => setShowEspacePatient(true)}
               className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border transition-colors bg-white/10 text-white border-white/20 hover:bg-white/20"
             >
@@ -722,6 +827,13 @@ export default function ParticipantProfile() {
 
       <SectionAccordeon titre="📓 Journal des séances" badge={notes.length}>
         <JournalTab participant={participant} />
+      </SectionAccordeon>
+
+      <SectionAccordeon titre="🎙 Séances dictées" badge={compteRendus.length}>
+        <HistoriqueSeancesDictees
+          compteRendus={compteRendus}
+          onNouvelleSeance={() => setShowDictee(true)}
+        />
       </SectionAccordeon>
 
       {/* ── MODALS ─────────────────────────────────────────────── */}
@@ -792,6 +904,14 @@ export default function ParticipantProfile() {
         <ModalEspacePatient
           participant={participant}
           onClose={() => setShowEspacePatient(false)}
+        />
+      )}
+
+      {showDictee && (
+        <DicteePostSeance
+          participant={participant}
+          onClose={() => setShowDictee(false)}
+          onSave={async (data) => { await ajouterCompteRendu(data); }}
         />
       )}
 

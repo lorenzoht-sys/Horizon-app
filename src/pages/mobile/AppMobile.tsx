@@ -226,25 +226,32 @@ function BottomNav({ onglet, onChange }: { onglet: string; onChange: (id: string
     <div style={{
       position: 'fixed', bottom: 0, left: 0, right: 0,
       maxWidth: 480, margin: '0 auto',
-      background: 'white', borderTop: `1px solid ${C.border}`,
+      background: 'white',
+      boxShadow: '0 -2px 20px rgba(13,43,43,0.08)',
       display: 'flex', padding: 'calc(8px + env(safe-area-inset-bottom)) 0 8px',
       zIndex: 100,
     }}>
-      {NAV.map(item => (
-        <button key={item.id} onClick={() => onChange(item.id)}
-          style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0' }}>
-          {item.principal ? (
-            <div style={{ width: 48, height: 48, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: -20, boxShadow: '0 4px 12px rgba(43,191,191,0.4)' }}>
-              <i className="ti ti-plus" style={{ fontSize: 22, color: 'white' }} />
-            </div>
-          ) : (
-            <i className={`ti ${item.icon}`} style={{ fontSize: 22, color: onglet === item.id ? C.green : C.muted }} />
-          )}
-          <span style={{ fontSize: 10, fontWeight: onglet === item.id ? 700 : 400, color: onglet === item.id ? C.green : C.muted }}>
-            {item.label}
-          </span>
-        </button>
-      ))}
+      {NAV.map(item => {
+        const isActive = onglet === item.id;
+        return (
+          <button key={item.id} onClick={() => onChange(item.id)}
+            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0' }}>
+            {item.principal ? (
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: -20, boxShadow: '0 4px 12px rgba(43,191,191,0.4)' }}>
+                <i className="ti ti-plus" style={{ fontSize: 22, color: 'white' }} />
+              </div>
+            ) : (
+              <i className={`ti ${item.icon}`} style={{ fontSize: 22, color: isActive ? C.primary : C.muted }} />
+            )}
+            <span style={{ fontSize: 10, fontWeight: isActive ? 700 : 400, color: isActive ? C.primary : C.muted }}>
+              {item.label}
+            </span>
+            {isActive && !item.principal && (
+              <span style={{ width: 4, height: 4, borderRadius: '50%', background: C.primary, marginTop: 1 }} />
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
