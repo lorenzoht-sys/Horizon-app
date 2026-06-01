@@ -215,10 +215,6 @@ function ResumeIA({ participant, bilans }: { participant: Participant; bilans: B
   const [resume, setResume] = useState<ResumeIAResult | null>(null);
 
   async function generer() {
-    const settings = (() => { try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); } catch { return {}; } })();
-    const apiKey: string = settings.anthropicApiKey ?? '';
-    if (!apiKey) { toast.error("Clé API Claude manquante — configurez-la dans Paramètres"); return; }
-
     setLoading(true);
     try {
       const premier = bilans[0];
@@ -253,24 +249,18 @@ Génère :
 Réponds UNIQUEMENT en JSON valide :
 {"resumePro":"...","messagePatient":"..."}`;
 
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/interpreter-bilan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 800,
-          messages: [{ role: 'user', content: prompt }],
-        }),
+        body: JSON.stringify({ prompt }),
       });
 
-      if (!res.ok) throw new Error(`API ${res.status}`);
+      if (!res.ok) throw new Error(`Edge Function ${res.status}`);
       const data = await res.json();
-      const texte: string = data.content?.[0]?.text ?? '';
+      const texte: string = data.text ?? '';
       const parsed = JSON.parse(texte.replace(/```json|```/g, '').trim());
       setResume({ resumePro: parsed.resumePro ?? '', messagePatient: parsed.messagePatient ?? '' });
     } catch (e) {

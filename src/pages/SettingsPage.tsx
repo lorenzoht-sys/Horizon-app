@@ -746,37 +746,6 @@ export default function SettingsPage() {
 
         </div>
 
-        {/* ── Clé API Claude ── */}
-        <div className="mt-8 border border-indigo-100 rounded-2xl overflow-hidden">
-          <div className="bg-indigo-50 px-5 py-4">
-            <div className="font-semibold text-dark text-sm flex items-center gap-2">
-              🧠 Interprétation IA — Clé API Claude
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Nécessaire pour générer les interprétations automatiques des bilans.
-              Obtenez votre clé sur <span className="font-medium text-primary">console.anthropic.com</span>.
-            </p>
-          </div>
-          <div className="p-5 space-y-3">
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-800">
-              ⚠️ La clé est stockée localement sur votre appareil et n'est jamais envoyée à nos serveurs.
-            </div>
-            <input
-              type="password"
-              defaultValue={localStorage.getItem('anthropic_api_key') ?? ''}
-              onChange={e => {
-                if (e.target.value) localStorage.setItem('anthropic_api_key', e.target.value);
-                else localStorage.removeItem('anthropic_api_key');
-              }}
-              placeholder="sk-ant-api03-..."
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-primary"
-            />
-            {localStorage.getItem('anthropic_api_key') && (
-              <p className="text-xs text-green-600">✓ Clé API configurée</p>
-            )}
-          </div>
-        </div>
-
         {/* Bouton sauvegarde */}
         <div className="mt-10 pt-6 border-t border-gray-100">
           <button

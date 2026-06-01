@@ -870,7 +870,6 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
   const { settings: praticienData, loading, sauvegarderSettings } = usePraticienSettings();
   const [form, setForm] = useState<PraticienSettings>(PRATICIEN_DEFAULTS);
   const [saving, setSaving] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('anthropic_api_key') ?? '');
   const [showConfirmReset, setShowConfirmReset] = useState(false);
 
   // Pré-remplir le formulaire dès que Supabase a répondu
@@ -885,8 +884,6 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
     setSaving(true);
     try {
       await sauvegarderSettings(form);
-      if (apiKey.trim()) localStorage.setItem('anthropic_api_key', apiKey.trim());
-      else localStorage.removeItem('anthropic_api_key');
       toast.success('Paramètres enregistrés ✅');
       onBack();
     } catch {
@@ -957,15 +954,6 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
 
         <div style={{ height: 12 }} />
 
-        <InfoSection titre="🧠 Clé API Claude (IA)">
-          <div style={{ background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#92400E', marginBottom: 10 }}>
-            Nécessaire pour les interprétations automatiques des bilans.
-          </div>
-          <label style={lbl}>Clé API (sk-ant-...)</label>
-          <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-ant-api03-..." style={{ ...inp, fontFamily: 'monospace', marginBottom: 0 }} />
-          {apiKey && <div style={{ fontSize: 12, color: '#1D9E75', marginTop: 6 }}>✓ Clé configurée</div>}
-        </InfoSection>
-
         <button onClick={sauvegarder} disabled={saving || loading}
           style={{ width: '100%', padding: 16, background: saving || loading ? '#8FA8A8' : C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: saving || loading ? 'not-allowed' : 'pointer', marginTop: 16 }}>
           {saving ? 'Enregistrement...' : loading ? 'Chargement...' : '💾 Enregistrer'}
@@ -1028,7 +1016,7 @@ function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout:
   const BACKUP_KEYS = [
     'mouvtrack_participants', 'mouvtrack_contrats', 'mouvtrack_seances',
     'notes_seances', 'mouvtrack_exercices', 'settings_praticien',
-    'anthropic_api_key', 'mouvtrack_zones', 'mouvtrack_question_templates',
+    'mouvtrack_zones', 'mouvtrack_question_templates',
   ];
 
   function exporterDonnees() {
