@@ -59,7 +59,7 @@ Extrais et structure ces informations en JSON :
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-3-5-haiku-20241022',
         max_tokens: 1500,
         system: `Tu es l'assistant de Pierre Clavier, enseignant en Activité Physique Adaptée (APA).
 Pierre vient de terminer une séance avec un patient et te dicte oralement un résumé.
@@ -71,6 +71,7 @@ Réponds UNIQUEMENT en JSON valide, sans markdown, sans explication.`,
 
     if (!claudeRes.ok) {
       const errText = await claudeRes.text();
+      console.error('Anthropic error:', errText);
       return new Response(JSON.stringify({ error: `Erreur Claude API: ${errText}` }), {
         status: 500,
         headers: { ...CORS, 'Content-Type': 'application/json' },
@@ -80,7 +81,16 @@ Réponds UNIQUEMENT en JSON valide, sans markdown, sans explication.`,
     const claudeData = await claudeRes.json();
     const rawText = claudeData.content?.[0]?.text ?? '{}';
 
-    const parsed = JSON.parse(rawText);
+    let parsed;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      console.error('JSON parse error, raw response:', rawText);
+      return new Response(JSON.stringify({ error: 'Réponse IA non JSON', raw: rawText }), {
+        status: 500,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
 
     return new Response(JSON.stringify(parsed), {
       headers: { ...CORS, 'Content-Type': 'application/json' },
