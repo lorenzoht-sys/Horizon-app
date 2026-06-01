@@ -80,13 +80,14 @@ Réponds UNIQUEMENT en JSON valide, sans markdown, sans explication.`,
 
     const claudeData = await claudeRes.json();
     const rawText = claudeData.content?.[0]?.text ?? '{}';
+    const cleanText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
     let parsed;
     try {
-      parsed = JSON.parse(rawText);
+      parsed = JSON.parse(cleanText);
     } catch {
       console.error('JSON parse error, raw response:', rawText);
-      return new Response(JSON.stringify({ error: 'Réponse IA non JSON', raw: rawText }), {
+      return new Response(JSON.stringify({ error: 'Réponse IA non JSON', raw: cleanText }), {
         status: 500,
         headers: { ...CORS, 'Content-Type': 'application/json' },
       });
