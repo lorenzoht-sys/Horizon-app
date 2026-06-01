@@ -81,22 +81,13 @@ function NoteBadge({ note }: { note: number }) {
 export default function Step_ResultsIA({ form, update, participant, previous }: Props) {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [apiKeyInput, setApiKeyInput] = useState('');
   const { enLigne } = useConnexion();
 
   const notes = useMemo(() => calculerNotes(form), [form]);
   const interpretation = form.interpretationIA ?? null;
   const hasAnyNote = Object.values(notes).some(v => v !== undefined);
 
-  const apiKey =
-    localStorage.getItem('anthropic_api_key') || apiKeyInput;
-
   async function handleGenerate() {
-    if (!apiKey) {
-      setError('Clé API Claude manquante. Entrez-la ci-dessous ou dans les Paramètres.');
-      return;
-    }
-
     setGenerating(true);
     setError(null);
     try {
@@ -125,8 +116,7 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
           douleur: null,
           fatigue: null,
           bilanPrecedentNotes: previousNotes,
-        },
-        apiKey
+        }
       );
       update({
         notesBilan: notes,
@@ -182,21 +172,6 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
           </p>
         </div>
         <div className="p-4 space-y-3">
-          {!localStorage.getItem('anthropic_api_key') && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                Clé API Anthropic <span className="text-gray-400">(ou configurez-la dans les Paramètres)</span>
-              </label>
-              <input
-                type="password"
-                value={apiKeyInput}
-                onChange={e => setApiKeyInput(e.target.value)}
-                placeholder="sk-ant-api03-..."
-                className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm font-mono focus:outline-none focus:border-primary"
-              />
-            </div>
-          )}
-
           {error && (
             <div className="flex items-start gap-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl p-3">
               <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />

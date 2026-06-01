@@ -96,38 +96,33 @@ Réponds UNIQUEMENT en JSON valide (aucun backtick, aucun commentaire) avec cett
 // ─── Appel API ────────────────────────────────────────────────────────────────
 
 export async function genererInterpretation(
-  resultats: ResultatsBilan,
-  apiKey: string
+  resultats: ResultatsBilan
 ): Promise<InterpretationIA> {
 
   const prompt = construirePrompt(resultats);
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/interpreter-bilan`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
+      'Authorization': `Bearer ${supabaseAnonKey}`,
     },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: prompt }],
-    }),
+    body: JSON.stringify({ prompt }),
   });
 
   if (!response.ok) {
     const err = await response.text().catch(() => response.statusText);
-    throw new Error(`Erreur API Claude (${response.status}): ${err}`);
+    throw new Error(`Erreur Edge Function (${response.status}): ${err}`);
   }
 
   const data = await response.json();
-  const texte: string = data.content?.[0]?.text ?? '';
+  const texte: string = data.text ?? '';
 
   try {
-    const clean = texte.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
+    const parsed = JSON.parse(texte);
     return {
       textePro:        parsed.textePro        ?? '',
       messageClient:   parsed.messageClient   ?? '',
