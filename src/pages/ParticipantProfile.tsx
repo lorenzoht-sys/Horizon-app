@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import ParticipantProfileMobile from './ParticipantProfileMobile';
 import { differenceInDays } from 'date-fns';
 import {
   ArrowLeft, Pencil, FileText, TrendingUp, Share2,
@@ -567,9 +568,14 @@ export default function ParticipantProfile() {
   const { compteRendus, ajouterCompteRendu } = useCompteRenduSeance(participant?.id ?? '');
 
   if (!participant) return (
-    <PageWrapper>
-      <div className="text-center py-20 text-gray-400">Participant introuvable</div>
-    </PageWrapper>
+    <>
+      <div className="md:hidden"><ParticipantProfileMobile /></div>
+      <div className="hidden md:block">
+        <PageWrapper>
+          <div className="text-center py-20 text-gray-400">Participant introuvable</div>
+        </PageWrapper>
+      </div>
+    </>
   );
 
   const sortedBilans   = [...participant.bilans].sort((a, b) => a.date.localeCompare(b.date));
@@ -666,6 +672,9 @@ export default function ParticipantProfile() {
   ];
 
   return (
+    <>
+    <div className="md:hidden"><ParticipantProfileMobile /></div>
+    <div className="hidden md:block">
     <PageWrapper>
       <Link to="/" className="inline-flex items-center gap-1.5 text-[13px] text-gray-400 hover:text-gray-700 mb-4 transition-colors">
         <ArrowLeft size={14} /> Tableau de bord
@@ -1098,5 +1107,7 @@ export default function ParticipantProfile() {
       )}
 
     </PageWrapper>
+    </div>
+    </>
   );
 }
