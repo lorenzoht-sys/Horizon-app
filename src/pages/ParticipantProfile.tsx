@@ -19,6 +19,7 @@ import BilanTimeline from '../components/bilan/BilanTimeline';
 import ContratsTab from '../components/participant/ContratsTab';
 import JournalTab from '../components/journal/JournalTab';
 import DicteePostSeance from '../components/DicteePostSeance';
+import AssistantCliniqueIA from '../components/AssistantCliniqueIA';
 import ParticipantForm from '../components/participant/ParticipantForm';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
 import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
@@ -834,6 +835,10 @@ export default function ParticipantProfile() {
           compteRendus={compteRendus}
           onNouvelleSeance={() => setShowDictee(true)}
         />
+      </SectionAccordeon>
+
+      <SectionAccordeon titre="🤖 Assistant clinique IA">
+        <AssistantCliniqueIA participant={participant} bilanInitial={bilanInitial} />
       </SectionAccordeon>
 
       {/* ── MODALS ─────────────────────────────────────────────── */}

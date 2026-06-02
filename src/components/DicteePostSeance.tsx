@@ -140,7 +140,7 @@ export default function DicteePostSeance({ participant, onClose, onSave }: Props
 
   const {
     isRecording, finalTranscript, interimTranscript,
-    isSupported, error: speechError,
+    isSupported, isIOS, error: speechError,
     startRecording, stopRecording, reset: resetSpeech,
   } = useSpeechRecognition();
 
@@ -311,8 +311,16 @@ export default function DicteePostSeance({ participant, onClose, onSave }: Props
                   </button>
                   <p className="text-sm font-semibold text-gray-700 mb-1">Dicter le compte-rendu</p>
                   <p className="text-xs text-gray-400 text-center max-w-xs leading-relaxed">
-                    Appuyez sur le micro et parlez librement. Claude structurera vos notes automatiquement.
+                    {isIOS
+                      ? '🎙 Appuyez pour dicter. L\'enregistrement démarre automatiquement après chaque pause.'
+                      : 'Appuyez sur le micro et parlez librement. Claude structurera vos notes automatiquement.'
+                    }
                   </p>
+                  {isIOS && (
+                    <div className="mt-2 px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-lg text-center">
+                      <p className="text-[11px] text-blue-600 font-medium">Mode Safari iOS — sessions courtes actives</p>
+                    </div>
+                  )}
                   <button
                     onClick={() => { setManualMode(true); setEtat('review'); }}
                     className="mt-5 flex items-center gap-1.5 text-xs text-gray-400 hover:text-primary transition-colors"
@@ -339,7 +347,14 @@ export default function DicteePostSeance({ participant, onClose, onSave }: Props
                 </button>
               </div>
 
-              <p className="text-sm font-bold text-red-600 mb-0.5">Enregistrement en cours… cliquer pour arrêter</p>
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="text-sm font-bold text-red-600">Enregistrement en cours… cliquer pour arrêter</p>
+                {isIOS && (
+                  <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap">
+                    Safari iOS
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-gray-400 font-mono mb-5">{formatTimer(timer)}</p>
 
               <div className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 min-h-[100px] max-h-[200px] overflow-y-auto">
