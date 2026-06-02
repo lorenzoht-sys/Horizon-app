@@ -146,19 +146,6 @@ function CarteStatMobile({ icon, label, valeur }: { icon: string; label: string;
   );
 }
 
-function BoutonActionMobile({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
-  return (
-    <button onClick={onClick} style={{
-      width: '100%', display: 'flex', alignItems: 'center', gap: 14,
-      padding: '13px 16px', background: 'white', border: `1px solid ${C.border}`,
-      borderRadius: 12, marginBottom: 8, cursor: 'pointer', textAlign: 'left',
-    }}>
-      <span style={{ fontSize: 22 }}>{icon}</span>
-      <span style={{ fontSize: 15, fontWeight: 600, color: C.text, flex: 1 }}>{label}</span>
-      <i className="ti ti-chevron-right" style={{ fontSize: 16, color: '#D0DCDC' }} />
-    </button>
-  );
-}
 
 function SectionMobile({ titre, children }: { titre: string; children: React.ReactNode }) {
   return (
@@ -332,8 +319,23 @@ function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: 
               <div style={{ fontSize: 11, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
                 Actions rapides
               </div>
-              <BoutonActionMobile icon="👤" label="Nouveau patient" onClick={onNaviguerSaisie} />
-              <BoutonActionMobile icon="📋" label="Nouveau bilan" onClick={onNaviguerSaisie} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {([
+                  { emoji: '👤', label: 'Nouveau patient' },
+                  { emoji: '📊', label: 'Nouveau bilan' },
+                  { emoji: '🎙️', label: 'Note rapide' },
+                  { emoji: '🤖', label: 'Assistant IA' },
+                ] as { emoji: string; label: string }[]).map(({ emoji, label }) => (
+                  <button key={label} onClick={onNaviguerSaisie} style={{
+                    padding: '14px 8px', background: 'white', border: `1px solid ${C.border}`,
+                    borderRadius: 12, cursor: 'pointer', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', gap: 6,
+                  }}>
+                    <span style={{ fontSize: 26 }}>{emoji}</span>
+                    <span style={{ fontSize: 12, color: C.text, fontWeight: 600, textAlign: 'center', lineHeight: 1.2 }}>{label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {contratsARenouveler.length > 0 && (
@@ -382,13 +384,18 @@ function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: 
               {seances.map((seance, index) => {
                 const p = participants.find(x => x.id === seance.participantId);
                 const estEnCours = seance.heureDebut <= currentTimeStr && seance.heureFin > currentTimeStr;
+                const estRealisee = seance.statut === 'realisee';
+                const estAnnulee = seance.statut === 'annulee';
+                const bgCard = estRealisee ? '#F0FDF4' : estAnnulee ? '#FEF2F2' : estEnCours ? '#E8F8F8' : 'white';
+                const borderCard = estRealisee ? '#86EFAC' : estAnnulee ? '#FECACA' : estEnCours ? C.primary : C.border;
+                const dotColor = estRealisee ? '#22C55E' : estAnnulee ? '#EF4444' : estEnCours ? C.primary : C.muted;
                 return (
-                  <div key={seance.id} style={{ display: 'flex', gap: 12, marginBottom: 8, opacity: seance.statut === 'realisee' ? 0.7 : 1 }}>
+                  <div key={seance.id} style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 40, flexShrink: 0 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: estEnCours ? C.primary : C.muted }}>{seance.heureDebut}</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: dotColor }}>{seance.heureDebut}</div>
                       <div style={{ width: 2, flex: 1, marginTop: 4, background: index < seances.length - 1 ? C.border : 'transparent' }} />
                     </div>
-                    <div style={{ flex: 1, background: estEnCours ? '#E8F8F8' : 'white', border: `1px solid ${estEnCours ? C.primary : C.border}`, borderRadius: 12, padding: '12px 14px', marginBottom: 4 }}>
+                    <div style={{ flex: 1, background: bgCard, border: `1px solid ${borderCard}`, borderRadius: 12, padding: '12px 14px', marginBottom: 4 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => p && onVoirFiche(p.id)}>
                           <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{p?.prenom} {p?.nom}</div>
@@ -446,34 +453,72 @@ function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: 
 
 // ── EcranPatients ─────────────────────────────────────────────────────────────
 
+type FiltrePatients = 'tous' | 'ci' | 'bilan' | 'seance';
+
 function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
   const { participants } = useParticipants();
   const { seances } = useAgenda();
   const [q, setQ] = useState('');
+  const [filtre, setFiltre] = useState<FiltrePatients>('tous');
   const today = new Date().toISOString().slice(0, 10);
+  const il90jFmt = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10); })();
 
-  const filtered = participants.filter(p =>
+  function hasCI(p: import('../../types').Participant): boolean {
+    return p.bilans.some(b => b.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui');
+  }
+
+  const baseFiltered = participants.filter(p =>
     `${p.prenom} ${p.nom}`.toLowerCase().includes(q.toLowerCase())
   );
 
+  const filtered = baseFiltered.filter(p => {
+    if (filtre === 'ci')     return hasCI(p);
+    if (filtre === 'bilan')  return p.bilans.length === 0 || p.bilans.every(b => b.date < il90jFmt);
+    if (filtre === 'seance') return seances.some(s => s.participantId === p.id && s.date === today && s.statut === 'planifiee');
+    return true;
+  });
+
+  const FILTRES: { id: FiltrePatients; label: string }[] = [
+    { id: 'tous',   label: 'Tous' },
+    { id: 'ci',     label: '⚠️ CI' },
+    { id: 'bilan',  label: '📊 Bilan' },
+    { id: 'seance', label: '📅 Aujourd\'hui' },
+  ];
+
   return (
     <div>
-      <div style={{ background: 'white', paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}`, position: 'sticky', top: 0, zIndex: 10 }}>
+      <div style={{ background: 'white', paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 12, borderBottom: `1px solid ${C.border}`, position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>Mes patients</div>
         <input type="search" placeholder="Rechercher..." value={q} onChange={e => setQ(e.target.value)}
-          style={{ width: '100%', padding: '10px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, background: C.bg, outline: 'none', boxSizing: 'border-box' }} />
+          style={{ width: '100%', padding: '10px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, background: C.bg, outline: 'none', boxSizing: 'border-box', marginBottom: 10 }} />
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
+          {FILTRES.map(f => (
+            <button key={f.id} onClick={() => setFiltre(f.id)} style={{
+              flexShrink: 0, padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
+              background: filtre === f.id ? C.primary : C.bg,
+              color: filtre === f.id ? 'white' : '#5C7A7A',
+            }}>{f.label}</button>
+          ))}
+        </div>
       </div>
 
       <div style={{ padding: '8px 16px' }}>
+        {filtered.length === 0 && (
+          <div style={{ color: C.muted, textAlign: 'center', padding: 30 }}>Aucun patient trouvé</div>
+        )}
         {filtered.map(p => {
           const prochaine = seances.filter(s => s.participantId === p.id && s.date >= today && s.statut === 'planifiee').sort((a, b) => a.date.localeCompare(b.date))[0];
+          const ci = hasCI(p);
           return (
-            <div key={p.id} onClick={() => onVoirFiche(p.id)} style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+            <div key={p.id} onClick={() => onVoirFiche(p.id)} style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', position: 'relative' }}>
               <div style={{ width: 42, height: 42, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: 'white', flexShrink: 0 }}>
                 {p.prenom[0]}{p.nom[0]}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{p.prenom} {p.nom}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.text, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {p.prenom} {p.nom}
+                  {ci && <span style={{ fontSize: 13 }} title="Contre-indications actives">⚠️</span>}
+                </div>
                 <div style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>
                   {calcAge(p.dateNaissance)} ans{prochaine ? ` · ${formatDateCourt(prochaine.date)}` : ''}
                 </div>
@@ -796,6 +841,8 @@ function EcranTournee() {
   const { seancesDuJour, changerStatut } = useAgenda();
   const today = new Date().toISOString().slice(0, 10);
   const seances = seancesDuJour(today);
+  const [dicteeParticipant, setDicteeParticipant] = useState<import('../../types').Participant | null>(null);
+  const { ajouterCompteRendu } = useCompteRenduSeance(dicteeParticipant?.id ?? '');
 
   return (
     <div>
@@ -862,10 +909,25 @@ function EcranTournee() {
                 style={{ width: '100%', padding: 9, background: s.statut === 'realisee' ? '#DCFCE7' : C.primary, color: s.statut === 'realisee' ? '#166534' : 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: s.statut === 'realisee' ? 'default' : 'pointer' }}>
                 {s.statut === 'realisee' ? '✅ Réalisée' : '✓ Marquer réalisée'}
               </button>
+              {s.statut === 'realisee' && p && (
+                <button
+                  onClick={() => setDicteeParticipant(p)}
+                  style={{ marginTop: 6, width: '100%', padding: '8px', background: C.bg, border: `1px dashed ${C.primary}`, borderRadius: 8, fontSize: 12, fontWeight: 700, color: C.primary, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  🎙️ Dicter le compte-rendu
+                </button>
+              )}
             </div>
           );
         })}
       </div>
+
+      {dicteeParticipant && (
+        <DicteePostSeance
+          participant={dicteeParticipant}
+          onClose={() => setDicteeParticipant(null)}
+          onSave={async (data) => { await ajouterCompteRendu(data); }}
+        />
+      )}
     </div>
   );
 }
