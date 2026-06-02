@@ -33,9 +33,6 @@ import type { CompteRenduSeance } from '../types/seance';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const COULEURS_NOTE: Record<number, string> = {
-  1: '#EF4444', 2: '#F97316', 3: '#F59E0B', 4: '#22C55E', 5: '#16A34A',
-};
 
 const TESTS_TABLEAU = [
   { label: 'Équilibre D', normeKey: 'equilibreUnipodal', unite: 's',     lower: false, getVal: (b: Bilan) => b.equilibre.droite },
@@ -49,6 +46,16 @@ const TESTS_TABLEAU = [
 
 const METHODE_LABEL: Record<string, string> = {
   oral_note: 'oral noté', ecrit: 'écrit', numerique: 'numérique',
+};
+
+const NORMES_LABEL: Record<string, string> = {
+  equilibreUnipodal: '≥ 40s',
+  chairStand30:      '≥ 14 rép.',
+  handGrip:          '≥ 32 kg',
+  tug3m:             '≤ 8s',
+  souplesse:         '≥ 10 cm',
+  tm6Distance:       '≥ 500 m',
+  memoire:           '4-5/5',
 };
 
 const AVATAR_COLORS = ['#1A5F9E', '#2BBFBF', '#8B5CF6', '#F59E0B', '#EF4444', '#EC4899'];
@@ -130,13 +137,15 @@ function CarteStats({ participant, contratActif, prochaineSeance }: {
           )}
         </>
       ) : (
-        <div className="text-xs text-gray-400 italic">
-          Aucun contrat actif
+        <div className="flex flex-col items-center justify-center py-4 text-center">
+          <div className="text-3xl mb-2">📋</div>
+          <p className="text-xs text-gray-600 font-medium mb-1">Aucun contrat actif</p>
+          <p className="text-[11px] text-gray-400 mb-3">Créez un contrat pour commencer le suivi</p>
           <button
             onClick={() => navigate(`/participant/${participant.id}/contrat/nouveau`)}
-            className="block mt-2 text-primary font-bold hover:underline"
+            className="inline-flex items-center gap-1.5 border border-primary/40 text-primary text-xs font-semibold px-4 py-2 rounded-xl hover:bg-primary/5 transition-colors"
           >
-            + Créer un contrat →
+            + Créer un contrat
           </button>
         </div>
       )}
@@ -219,19 +228,28 @@ function CarteProfilFonctionnel({ bilans, participant }: {
             const note = norme ? calculerNote(val, norme) : null;
             const delta = valInit !== null && valInit !== undefined ? val - valInit : null;
             const progression = delta !== null ? (test.lower ? -delta : delta) : null;
+            const dotColor = note !== null
+              ? (note >= 4 ? '#22C55E' : note === 3 ? '#F59E0B' : '#EF4444') : null;
+            const dotTitle = note !== null
+              ? (note >= 4 ? 'Dans les normes' : note === 3 ? 'À surveiller' : 'En difficulté') : '';
+            const normeText = NORMES_LABEL[test.normeKey];
             return (
               <div key={test.label} className="flex items-center gap-1.5 py-1 border-b border-gray-50 last:border-0">
                 <span className="text-[11px] text-gray-400 w-16 flex-shrink-0 truncate">{test.label}</span>
-                <span className="text-xs font-bold text-dark flex-1">
-                  {test.label === 'Souplesse' && val > 0 ? '+' : ''}{val}{test.unite}
-                </span>
-                {note !== null && (
-                  <span
-                    className="w-4 h-4 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0"
-                    style={{ fontSize: 9, background: COULEURS_NOTE[note] }}
-                  >
-                    {note}
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-bold text-dark">
+                    {test.label === 'Souplesse' && val > 0 ? '+' : ''}{val}{test.unite}
                   </span>
+                  {normeText && (
+                    <div className="text-[9px] text-gray-400 leading-none mt-0.5">{normeText}</div>
+                  )}
+                </div>
+                {note !== null && dotColor && (
+                  <span
+                    title={dotTitle}
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    style={{ background: dotColor }}
+                  />
                 )}
                 {progression !== null && (
                   <span className={`text-[10px] font-bold flex-shrink-0 ${progression > 0 ? 'text-green-600' : progression < 0 ? 'text-red-500' : 'text-gray-400'}`}>
@@ -257,16 +275,27 @@ function CarteJournal({ notes, onAjouter }: {
     <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
       <div className="flex items-center justify-between mb-3">
         <div className="text-[10px] font-bold text-primary uppercase tracking-widest">Journal récent</div>
-        <button
-          onClick={onAjouter}
-          className="bg-primary/10 text-primary text-[11px] font-bold px-2.5 py-1 rounded-lg hover:bg-primary/20 transition-colors"
-        >
-          + Note
-        </button>
+        {notes.length > 0 && (
+          <button
+            onClick={onAjouter}
+            className="bg-primary/10 text-primary text-[11px] font-bold px-2.5 py-1 rounded-lg hover:bg-primary/20 transition-colors"
+          >
+            + Note
+          </button>
+        )}
       </div>
 
       {notes.length === 0 ? (
-        <p className="text-xs text-gray-400 italic">Aucune note de séance.</p>
+        <div className="flex flex-col items-center py-5 text-center">
+          <div className="text-3xl mb-2">📝</div>
+          <p className="text-xs text-gray-500 font-medium mb-3">Aucune note de séance</p>
+          <button
+            onClick={onAjouter}
+            className="inline-flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-bold px-4 py-2 rounded-xl hover:bg-primary/20 transition-colors"
+          >
+            + Ajouter une note
+          </button>
+        </div>
       ) : (
         <div>
           {notes.map((note, i) => {
@@ -320,7 +349,7 @@ function SectionAccordeon({ titre, badge, children }: {
         <div className="flex items-center gap-2">
           <span className="font-heading font-semibold text-dark text-sm">{titre}</span>
           {badge !== undefined && badge > 0 && (
-            <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">{badge}</span>
+            <span className="bg-secondary/10 text-secondary text-[10px] font-bold px-2 py-0.5 rounded-full">{badge}</span>
           )}
         </div>
         <ChevronDown size={15} className={`text-gray-400 transition-transform duration-200 ${ouvert ? 'rotate-180' : ''}`} />
@@ -467,6 +496,7 @@ export default function ParticipantProfile() {
   const contratActif = contrats.find(c => c.participantId === participant.id && c.statut === 'actif') ?? null;
   const notes        = notesParPatient(participant.id);
   const lastNote     = derniereNote(participant.id);
+  const contratsCount = contrats.filter(c => c.participantId === participant.id).length;
   const color        = avatarColor(participant.id);
   const age          = calcAge(participant.dateNaissance);
   const today        = new Date().toISOString().slice(0, 10);
@@ -577,10 +607,22 @@ export default function ParticipantProfile() {
                   {imc && ` · IMC ${imc}`}
                 </div>
                 {(participant.telephone || participant.email) && (
-                  <div>
-                    {participant.telephone && `📞 ${participant.telephone}`}
-                    {participant.telephone && participant.email && ' · '}
-                    {participant.email && `✉️ ${participant.email}`}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {participant.telephone && (
+                      <a href={`tel:${participant.telephone}`} className="hover:text-secondary transition-colors">
+                        📞 {participant.telephone}
+                      </a>
+                    )}
+                    {participant.telephone && participant.email && <span>·</span>}
+                    {participant.email && <span>✉️ {participant.email}</span>}
+                    {!participant.rgpd?.consentementObtenu && (
+                      <button
+                        onClick={() => handleAction('rgpd')}
+                        className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold border border-red-400/60 text-red-300 hover:border-red-400 hover:text-red-200 transition-colors"
+                      >
+                        RGPD ⚠
+                      </button>
+                    )}
                   </div>
                 )}
                 {hasAddress && (
@@ -636,9 +678,9 @@ export default function ParticipantProfile() {
                 <div className="relative">
                   <button
                     onClick={() => setShowProfilPicker(v => !v)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border border-white/30 text-white/60 hover:text-white hover:border-white/50 transition-colors"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-white/30 text-white/60 hover:text-white hover:border-white/60 hover:bg-white/5 transition-colors"
                   >
-                    ♿ {participant.profilHandicap ? 'Modifier le profil' : '+ Profil handicap'}
+                    ♿ {participant.profilHandicap ? 'Modifier profil' : '+ Profil handicap'}
                   </button>
                   {showProfilPicker && (
                     <>
@@ -708,9 +750,15 @@ export default function ParticipantProfile() {
               return (
                 <button
                   onClick={() => handleAction('nouveau_bilan')}
-                  className="flex items-center gap-1.5 bg-amber-400/20 text-amber-300 text-xs font-bold px-3 py-1 rounded-full hover:bg-amber-400/30 transition-colors"
+                  className="flex items-center gap-2 border border-secondary/60 text-secondary text-xs font-bold px-3 py-1.5 rounded-full hover:bg-secondary/10 transition-colors"
                 >
-                  📋 Bilan en cours — {b.completionPct}% · Reprendre →
+                  <span>📋 Bilan en cours · Reprendre →</span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-14 h-1 bg-secondary/20 rounded-full overflow-hidden inline-block align-middle">
+                      <span className="h-full bg-secondary rounded-full block" style={{ width: `${b.completionPct}%` }} />
+                    </span>
+                    <span>{b.completionPct}%</span>
+                  </span>
                 </button>
               );
             })()}
@@ -719,14 +767,7 @@ export default function ParticipantProfile() {
                 ⏰ Bilan à planifier ({joursDepuisBilan}j)
               </span>
             )}
-            {!participant.rgpd?.consentementObtenu ? (
-              <button
-                onClick={() => handleAction('rgpd')}
-                className="bg-red-900/40 text-red-300 text-xs font-bold px-3 py-1 rounded-full hover:bg-red-900/60 transition-colors"
-              >
-                ⚠️ RGPD manquant — Régulariser
-              </button>
-            ) : (
+            {participant.rgpd?.consentementObtenu && (
               <span className="bg-green-900/30 text-green-300 text-xs px-3 py-1 rounded-full">
                 ✅ RGPD · {METHODE_LABEL[participant.rgpd.methodeConsentement] ?? participant.rgpd.methodeConsentement}
               </span>
@@ -742,59 +783,67 @@ export default function ParticipantProfile() {
           </div>
 
           {/* Ligne 3 : boutons d'action */}
-          <div className="flex flex-wrap gap-2 mt-4">
-            <button
-              onClick={() => handleAction('nouveau_bilan')}
-              className="flex items-center gap-1.5 bg-primary text-white text-xs font-bold px-3.5 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              + Nouveau bilan
-            </button>
-            <button
-              onClick={() => handleAction('programme')}
-              className="flex items-center gap-1.5 bg-white/10 text-white text-xs font-medium px-3 py-2 rounded-lg hover:bg-white/20 transition-colors border border-white/20"
-            >
-              <Dumbbell size={11} /> Programme
-            </button>
-            <button
-              onClick={() => handleAction('note_seance')}
-              className="flex items-center gap-1.5 bg-white/10 text-white text-xs font-medium px-3 py-2 rounded-lg hover:bg-white/20 transition-colors border border-white/20"
-            >
-              <NotebookPen size={11} /> Note séance
-            </button>
-            <button
-              onClick={() => handleAction('nouveau_contrat')}
-              className="flex items-center gap-1.5 bg-white/10 text-white text-xs font-medium px-3 py-2 rounded-lg hover:bg-white/20 transition-colors border border-white/20"
-            >
-              <ClipboardList size={11} /> Contrat
-            </button>
-            {participant.bilans.length >= 2 && (
+          <div className="mt-4 space-y-2">
+            {/* Groupe 1 : actions principales */}
+            <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => handleAction('evolution')}
-                className="flex items-center gap-1.5 bg-secondary/20 text-secondary text-xs font-bold px-3 py-2 rounded-lg hover:bg-secondary/30 transition-colors border border-secondary/30"
+                onClick={() => handleAction('nouveau_bilan')}
+                className="flex items-center gap-1.5 bg-secondary text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-teal-500 transition-colors"
               >
-                <TrendingUp size={11} /> Évolution
+                + Nouveau bilan
               </button>
-            )}
-            <button
-              onClick={handleExportFiche}
-              disabled={exportingPDF}
-              className="flex items-center gap-1.5 bg-white/10 text-white text-xs font-medium px-3 py-2 rounded-lg hover:bg-white/20 transition-colors border border-white/20 disabled:opacity-50"
-            >
-              <FileText size={11} /> {exportingPDF ? 'PDF…' : 'Fiche PDF'}
-            </button>
-            <button
-              onClick={() => setShowDictee(true)}
-              className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border transition-colors bg-white/10 text-white border-white/20 hover:bg-white/20"
-            >
-              <Mic size={11} /> Dicter séance
-            </button>
-            <button
-              onClick={() => setShowEspacePatient(true)}
-              className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border transition-colors bg-white/10 text-white border-white/20 hover:bg-white/20"
-            >
-              <i className="ti ti-user-circle" style={{ fontSize: 13 }} aria-hidden="true" />
-              Espace patient
-            </button>
+              <button
+                onClick={() => setShowDictee(true)}
+                className="flex items-center gap-1.5 bg-secondary text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-teal-500 transition-colors"
+              >
+                <Mic size={11} /> Dicter séance
+              </button>
+            </div>
+            {/* Groupe 2 : actions secondaires */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => handleAction('programme')}
+                className="flex items-center gap-1.5 border border-white/30 text-white/80 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                <Dumbbell size={11} /> Programme
+              </button>
+              <button
+                onClick={() => handleAction('note_seance')}
+                className="flex items-center gap-1.5 border border-white/30 text-white/80 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                <NotebookPen size={11} /> Note séance
+              </button>
+              {participant.bilans.length >= 2 && (
+                <button
+                  onClick={() => handleAction('evolution')}
+                  className="flex items-center gap-1.5 border border-white/30 text-white/80 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                >
+                  <TrendingUp size={11} /> Évolution
+                </button>
+              )}
+              <button
+                onClick={handleExportFiche}
+                disabled={exportingPDF}
+                className="flex items-center gap-1.5 border border-white/30 text-white/80 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
+              >
+                <FileText size={11} /> {exportingPDF ? 'PDF…' : 'Fiche PDF'}
+              </button>
+            </div>
+            {/* Groupe 3 : accès patient */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => handleAction('nouveau_contrat')}
+                className="flex items-center gap-1.5 text-white/40 text-xs font-medium px-3 py-1.5 rounded-lg hover:text-white/70 hover:bg-white/5 transition-colors"
+              >
+                <ClipboardList size={11} /> Contrat
+              </button>
+              <button
+                onClick={() => setShowEspacePatient(true)}
+                className="flex items-center gap-1.5 text-white/40 text-xs font-medium px-3 py-1.5 rounded-lg hover:text-white/70 hover:bg-white/5 transition-colors"
+              >
+                Espace patient
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -822,7 +871,7 @@ export default function ParticipantProfile() {
         )}
       </SectionAccordeon>
 
-      <SectionAccordeon titre="📋 Contrats de suivi">
+      <SectionAccordeon titre="📋 Contrats de suivi" badge={contratsCount}>
         <ContratsTab participantId={participant.id} />
       </SectionAccordeon>
 

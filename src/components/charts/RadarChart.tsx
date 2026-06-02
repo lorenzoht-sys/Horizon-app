@@ -5,6 +5,7 @@ import {
   PolarAngleAxis,
   ResponsiveContainer,
   Legend,
+  Tooltip,
 } from 'recharts';
 import type { Bilan, TestKey } from '../../types';
 import { useNormalize } from '../../hooks/useNormalize';
@@ -56,6 +57,21 @@ export default function RadarChart({ initial, current, testsActifs }: Props) {
       <ReRadarChart data={data}>
         <PolarGrid stroke="#E5E7EB" />
         <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: '#6B7280' }} />
+        <Tooltip
+          content={({ active, payload, label }) => {
+            if (!active || !payload?.length) return null;
+            return (
+              <div style={{ background: 'white', border: '1px solid #E5E7EB', borderRadius: 8, padding: '8px 12px', fontSize: 11, boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
+                <div style={{ fontWeight: 700, color: '#374151', marginBottom: 4 }}>{label}</div>
+                {(payload as unknown as Array<{ name: string; value: number; color: string }>).map(p => (
+                  <div key={p.name} style={{ color: p.color, fontWeight: 600 }}>
+                    {p.name} : {p.value}/100
+                  </div>
+                ))}
+              </div>
+            );
+          }}
+        />
         {initial && (
           <Radar name="Initial" dataKey="Initial"
             stroke="#94A3B8" fill="#94A3B8" fillOpacity={0.15} strokeDasharray="4 2" />
