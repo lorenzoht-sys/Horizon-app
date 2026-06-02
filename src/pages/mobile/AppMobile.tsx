@@ -4,8 +4,11 @@ import { useParticipants } from '../../hooks/useParticipants';
 import { useAgenda } from '../../hooks/useAgenda';
 import { useJournalSeance } from '../../hooks/useJournalSeance';
 import { useContrats } from '../../hooks/useContrats';
+import { useCompteRenduSeance } from '../../hooks/useCompteRenduSeance';
 import { RESSENTI_CONFIG } from '../../components/journal/NoteSeanceModal';
 import BilanStepper from '../../components/bilan/BilanStepper';
+import DicteePostSeance from '../../components/DicteePostSeance';
+import AssistantCliniqueIA from '../../components/AssistantCliniqueIA';
 import type { RessentiSeance, Bilan } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../../lib/supabase';
@@ -29,6 +32,12 @@ function formatDateCourt(d: string) {
 
 function ouvrirMaps(adresse: string) {
   window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}`, '_blank');
+}
+
+function formatPhone(tel: string): string {
+  const digits = String(tel).replace(/\D/g, '');
+  if (digits.length === 10) return digits.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5');
+  return String(tel);
 }
 
 const C = { // colors
@@ -1391,17 +1400,44 @@ function EditPatientMobile({ participant, onBack }: { participant: import('../..
 // ── Fiche patient mobile ───────────────────────────────────────────────────────
 
 function FichePatientMobile({ participantId, onBack }: { participantId: string; onBack: () => void }) {
-  const { participants } = useParticipants();
+  const { participants, addBilan } = useParticipants();
   const { notesParPatient } = useJournalSeance();
   const { seances } = useAgenda();
   const { contratActifDeParticipant } = useContrats();
+  const { ajouterCompteRendu } = useCompteRenduSeance(participantId);
   const p = participants.find(x => x.id === participantId);
   const [onglet, setOnglet] = useState('infos');
   const [bilanDetail, setBilanDetail] = useState<import('../../types').Bilan | null>(null);
   const [showEdit, setShowEdit] = useState(false);
+  const [showDictee, setShowDictee] = useState(false);
+  const [showNewBilan, setShowNewBilan] = useState(false);
   if (!p) return null;
   if (bilanDetail) return <DetailBilanMobile bilan={bilanDetail} onBack={() => setBilanDetail(null)} />;
   if (showEdit) return <EditPatientMobile participant={p} onBack={() => setShowEdit(false)} />;
+  if (showNewBilan) return (
+    <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+        <button onClick={() => setShowNewBilan(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+          <i className="ti ti-arrow-left" style={{ fontSize: 22, color: C.text }} />
+        </button>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Nouveau bilan</div>
+          <div style={{ fontSize: 12, color: C.muted }}>{p.prenom} {p.nom}</div>
+        </div>
+      </div>
+      <BilanStepper
+        participant={p}
+        onSave={(bilan: Omit<Bilan, 'id'>) => {
+          addBilan(p.id, bilan);
+          toast.success('Bilan enregistré ✅');
+          setShowNewBilan(false);
+        }}
+        onCancel={() => setShowNewBilan(false)}
+      />
+    </div>
+  );
+
+  const bilanInitial = p.bilans.find(b => b.type === 'initial') ?? null;
 
   const notes = notesParPatient(p.id);
   const sortedBilans = [...p.bilans].sort((a, b) => b.date.localeCompare(a.date));
@@ -1417,6 +1453,7 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
     { id: 'bilans',  label: 'Bilans' },
     { id: 'contrat', label: 'Contrat' },
     { id: 'journal', label: 'Journal' },
+    { id: 'ia',      label: '🤖 IA' },
   ];
 
   return (
@@ -1499,8 +1536,21 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
         {onglet === 'infos' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <InfoSection titre="Coordonnées">
-              {p.telephone && <InfoLigne icon="ti-phone" texte={p.telephone} />}
-              {p.email && <InfoLigne icon="ti-mail" texte={p.email} />}
+              {p.telephone && (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080', marginBottom: 6 }}>
+                  <i className="ti ti-phone" style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+                  <a href={`tel:+33${String(p.telephone).replace(/\D/g, '').replace(/^0/, '')}`}
+                    style={{ color: '#4A6080', textDecoration: 'none', fontWeight: 500 }}>
+                    {formatPhone(String(p.telephone))}
+                  </a>
+                </div>
+              )}
+              {p.email && (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080', marginBottom: 6 }}>
+                  <i className="ti ti-mail" style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+                  <a href={`mailto:${p.email}`} style={{ color: '#4A6080', textDecoration: 'none' }}>{p.email}</a>
+                </div>
+              )}
               {p.adresseRue && <InfoLigne icon="ti-map-pin" texte={`${p.adresseRue}, ${p.adresseCodePostal || ''} ${p.adresseVille || ''}`} />}
             </InfoSection>
 
@@ -1568,20 +1618,38 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
 
         {onglet === 'bilans' && (
           <div>
-            {sortedBilans.length === 0 ? <div style={{ color: C.muted, textAlign: 'center', padding: 30 }}>Aucun bilan</div> :
-              sortedBilans.map((b, i) => (
-                <div key={b.id} onClick={() => setBilanDetail(b)}
-                  style={{ ...card, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {sortedBilans.length === 0 ? (
+              <div style={{ color: C.muted, textAlign: 'center', padding: 30 }}>Aucun bilan</div>
+            ) : sortedBilans.map((b, i) => (
+              <div key={b.id} onClick={() => setBilanDetail(b)} style={{ ...card, cursor: 'pointer' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                   <div>
-                    <div style={{ fontWeight: 600, color: C.text }}>{b.type === 'initial' ? 'Bilan initial' : `Bilan T${b.trimestre}`}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{new Date(b.date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                    <div style={{ fontWeight: 700, color: C.text, fontSize: 14 }}>
+                      📊 {b.type === 'initial' ? 'Bilan initial' : `Bilan T${b.trimestre}`}
+                    </div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                      {new Date(b.date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {i === 0 && <span style={{ background: '#E8F8F8', color: C.primary, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>Dernier</span>}
-                    <i className="ti ti-chevron-right" style={{ fontSize: 16, color: '#D0DCDC' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                    {i === 0 && <span style={{ background: '#E8F8F8', color: C.primary, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20 }}>Récent</span>}
+                    {b.interpretationIA && <span style={{ background: '#DCFCE7', color: '#166534', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20 }}>🤖 IA</span>}
+                    <i className="ti ti-chevron-right" style={{ fontSize: 15, color: '#D0DCDC' }} />
                   </div>
                 </div>
-              ))}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {b.tug3m != null && <span style={{ fontSize: 11, color: C.muted, background: C.bg, padding: '2px 8px', borderRadius: 10 }}>TUG {b.tug3m}s</span>}
+                  {b.tm6.borgRPE != null && <span style={{ fontSize: 11, color: C.muted, background: C.bg, padding: '2px 8px', borderRadius: 10 }}>Borg {b.tm6.borgRPE}</span>}
+                  {b.chairStand30 != null && <span style={{ fontSize: 11, color: C.muted, background: C.bg, padding: '2px 8px', borderRadius: 10 }}>Chair Stand {b.chairStand30}</span>}
+                  {b.handGrip.droite != null && <span style={{ fontSize: 11, color: C.muted, background: C.bg, padding: '2px 8px', borderRadius: 10 }}>Grip {b.handGrip.droite} kg</span>}
+                </div>
+              </div>
+            ))}
+            <button
+              onClick={() => setShowNewBilan(true)}
+              style={{ width: '100%', padding: '12px 16px', marginTop: 4, background: C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              ➕ Nouveau bilan
+            </button>
           </div>
         )}
 
@@ -1622,23 +1690,63 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
 
         {onglet === 'journal' && (
           <div>
-            {notes.length === 0 ? <div style={{ color: C.muted, textAlign: 'center', padding: 30 }}>Aucune note</div> :
-              notes.slice(0, 10).map(n => {
-                const r = n.ressenti ? RESSENTI_CONFIG[n.ressenti] : null;
-                return (
-                  <div key={n.id} style={card}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      {r && <span>{r.emoji}</span>}
-                      <span style={{ fontSize: 12, color: C.muted }}>{formatDateCourt(n.date)} · {n.heureDebut}</span>
-                      {r && <span style={{ fontSize: 11, fontWeight: 700, color: r.color }}>{r.label}</span>}
-                    </div>
-                    {n.note && <div style={{ fontSize: 13, color: C.text }}>"{n.note}"</div>}
+            <button
+              onClick={() => setShowDictee(true)}
+              style={{
+                width: '100%', minHeight: 72, padding: '16px', marginBottom: 14,
+                background: C.primary, color: 'white', border: 'none', borderRadius: 14,
+                fontSize: 16, fontWeight: 700, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+                boxShadow: '0 4px 16px rgba(43,191,191,0.3)',
+              }}
+            >
+              <span style={{ fontSize: 26 }}>🎙️</span>
+              <div style={{ textAlign: 'left' }}>
+                <div>Dicter une séance</div>
+                <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 400, marginTop: 2 }}>
+                  Claude structure vos notes automatiquement
+                </div>
+              </div>
+            </button>
+
+            {notes.length > 0 && (
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                Notes récentes
+              </div>
+            )}
+
+            {notes.length === 0 ? (
+              <div style={{ color: C.muted, textAlign: 'center', padding: '16px 0' }}>
+                Aucune note — dictez votre première séance ci-dessus
+              </div>
+            ) : notes.slice(0, 10).map(n => {
+              const r = n.ressenti ? RESSENTI_CONFIG[n.ressenti] : null;
+              return (
+                <div key={n.id} style={card}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    {r && <span>{r.emoji}</span>}
+                    <span style={{ fontSize: 12, color: C.muted }}>{formatDateCourt(n.date)} · {n.heureDebut}</span>
+                    {r && <span style={{ fontSize: 11, fontWeight: 700, color: r.color }}>{r.label}</span>}
                   </div>
-                );
-              })}
+                  {n.note && <div style={{ fontSize: 13, color: C.text }}>"{n.note}"</div>}
+                </div>
+              );
+            })}
           </div>
         )}
+
+        {onglet === 'ia' && (
+          <AssistantCliniqueIA participant={p} bilanInitial={bilanInitial} />
+        )}
       </div>
+
+      {showDictee && (
+        <DicteePostSeance
+          participant={p}
+          onClose={() => setShowDictee(false)}
+          onSave={async (data) => { await ajouterCompteRendu(data); }}
+        />
+      )}
     </div>
   );
 }
