@@ -36,7 +36,7 @@ function calcAge(dateNaissance: string): number {
   return age;
 }
 
-function buildSystemPrompt(participant: Participant, bilanInitial: Bilan | null): string {
+function buildSystemContext(participant: Participant, bilanInitial: Bilan | null): string {
   const age = calcAge(participant.dateNaissance);
   const profil = bilanInitial?.profilEnrichi;
 
@@ -74,7 +74,7 @@ function buildSystemPrompt(participant: Participant, bilanInitial: Bilan | null)
       ? `- Chutes / 12 mois : ${profil.chutes12mois}`
       : null,
     profil?.anticoagulants
-      ? '- Anticoagulants : ⚠️ Oui — risque de saignement/chute à signaler'
+      ? '- Anticoagulants : ⚠️ Oui — risque de saignement/chute à signaler dans chaque suggestion'
       : null,
     participant.profilHandicap
       ? `- Profil handicap : ${PROFIL_HANDICAP_LABELS[participant.profilHandicap] ?? participant.profilHandicap}`
@@ -121,36 +121,33 @@ FORMAT DE RÉPONSE pour suggestions de programme :
 }
 
 const MODE_TEMPLATES: Record<string, string> = {
-  contre_indications:
-    'Analyser les contre-indications pour l\'exercice suivant : ',
-  programme:
-    'Suggère un programme d\'exercices adapté pour l\'objectif suivant : ',
+  contre_indications: "Analyser les contre-indications pour l'exercice suivant : ",
+  programme: 'Suggère un programme d\'exercices adapté pour l\'objectif suivant : ',
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function AssistantCliniqueIA({ participant, bilanInitial }: Props) {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [streamingText, setStreamingText] = useState('');
-  const [logs, setLogs] = useState<AssistantLog[]>([]);
+  const [messages, setMessages]     = useState<Message[]>([]);
+  const [input, setInput]           = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [logs, setLogs]             = useState<AssistantLog[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [lastResponse, setLastResponse] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { isRecording, finalTranscript, interimTranscript, isSupported, startRecording, stopRecording, reset: resetSpeech } = useSpeechRecognition();
+  const {
+    isRecording, finalTranscript, interimTranscript,
+    isSupported, startRecording, stopRecording, reset: resetSpeech,
+  } = useSpeechRecognition();
 
-  const systemPrompt = buildSystemPrompt(participant, bilanInitial);
+  const systemContext = buildSystemContext(participant, bilanInitial);
 
   // Synchronise la transcription vocale dans le champ input
   useEffect(() => {
-    if (finalTranscript) {
-      setInput(finalTranscript + (interimTranscript ? interimTranscript : ''));
-    } else if (interimTranscript) {
-      setInput(interimTranscript);
-    }
+    const text = finalTranscript + interimTranscript;
+    if (text) setInput(text);
   }, [finalTranscript, interimTranscript]);
 
   // Charger l'historique Supabase
@@ -171,16 +168,15 @@ export default function AssistantCliniqueIA({ participant, bilanInitial }: Props
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingText]);
+  }, [messages, loading]);
 
   const saveLog = useCallback(async (question: string, reponse: string) => {
     if (!supabase) return;
-    await supabase
-      .from('assistant_logs')
-      .insert({ patient_id: participant.id, question, reponse })
-      .then(({ error }) => {
-        if (error) console.error('Erreur sauvegarde log assistant:', error);
-      });
+    try {
+      await supabase
+        .from('assistant_logs')
+        .insert({ patient_id: participant.id, question, reponse });
+    } catch { /* log non bloquant */ }
   }, [participant.id]);
 
   const sendMessage = useCallback(async (text: string) => {
@@ -191,91 +187,63 @@ export default function AssistantCliniqueIA({ participant, bilanInitial }: Props
     resetSpeech();
     setMessages(prev => [...prev, { role: 'user', content: trimmed }]);
     setLoading(true);
-    setStreamingText('');
-    setLastResponse('');
 
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+    const supabaseUrl    = import.meta.env.VITE_SUPABASE_URL as string;
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      const errMsg = 'Supabase non configuré — assistant IA indisponible.';
-      setMessages(prev => [...prev, { role: 'assistant', content: errMsg }]);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Supabase non configuré — assistant IA indisponible.',
+      }]);
       setLoading(false);
       return;
     }
 
+    // Construire le prompt complet (même pattern que interpreter-bilan)
+    const prompt = `${systemContext}\n\n---\n\nQUESTION DE PIERRE :\n${trimmed}`;
+
     try {
-      const response = await fetch(`${supabaseUrl}/functions/v1/assistant-clinique`, {
+      const response = await fetch(`${supabaseUrl}/functions/v1/interpreter-bilan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${supabaseAnonKey}`,
         },
-        body: JSON.stringify({ systemPrompt, userMessage: trimmed }),
+        body: JSON.stringify({ prompt }),
       });
 
       if (!response.ok) {
-        throw new Error(`Erreur ${response.status}: ${await response.text()}`);
+        const errText = await response.text().catch(() => response.statusText);
+        throw new Error(`Erreur ${response.status}: ${errText}`);
       }
 
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let fullText = '';
-      let buffer = '';
+      const data = await response.json();
+      const responseText: string = data.text ?? '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') break;
-          try {
-            const parsed = JSON.parse(data);
-            if (
-              parsed.type === 'content_block_delta' &&
-              parsed.delta?.type === 'text_delta' &&
-              parsed.delta?.text
-            ) {
-              fullText += parsed.delta.text;
-              setStreamingText(fullText);
-            }
-          } catch {
-            // ignorer les lignes non-JSON
-          }
-        }
-      }
-
-      setStreamingText('');
-      setMessages(prev => [...prev, { role: 'assistant', content: fullText }]);
-      setLastResponse(fullText);
-      await saveLog(trimmed, fullText);
+      setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
+      setLastResponse(responseText);
+      await saveLog(trimmed, responseText);
 
       // Rafraîchir l'historique
       if (supabase) {
         try {
-          const { data } = await supabase
+          const { data: logData } = await supabase
             .from('assistant_logs')
             .select('id, question, reponse, created_at')
             .eq('patient_id', participant.id)
             .order('created_at', { ascending: false })
             .limit(5);
-          if (data) setLogs(data as AssistantLog[]);
-        } catch { /* table peut ne pas exister encore */ }
+          if (logData) setLogs(logData as AssistantLog[]);
+        } catch { /* non bloquant */ }
       }
     } catch (err) {
-      const errMsg = `Erreur de connexion à l'assistant : ${err instanceof Error ? err.message : String(err)}`;
-      setStreamingText('');
+      const errMsg = `Erreur de l'assistant : ${err instanceof Error ? err.message : String(err)}`;
       setMessages(prev => [...prev, { role: 'assistant', content: errMsg }]);
     } finally {
       setLoading(false);
     }
-  }, [loading, systemPrompt, saveLog, participant.id, resetSpeech]);
+  }, [loading, systemContext, saveLog, participant.id, resetSpeech]);
 
   function handleModeClick(mode: 'contre_indications' | 'programme') {
     setInput(MODE_TEMPLATES[mode]);
@@ -300,22 +268,23 @@ export default function AssistantCliniqueIA({ participant, bilanInitial }: Props
 
   function handleAddToProgramme() {
     navigate(`/participant/${participant.id}/programme`);
-    toast.success('Ouvrez le programme et ajoutez les exercices suggérés');
+    toast.success('Consultez le programme pour ajouter les exercices suggérés');
   }
 
-  const lastAssistantMessage = messages.filter(m => m.role === 'assistant').at(-1)?.content ?? streamingText;
   const contreIndicationsTexte =
     bilanInitial?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
       ? (bilanInitial.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail ?? null)
       : null;
 
+  const hasResponse = lastResponse || messages.some(m => m.role === 'assistant');
+
   return (
     <div className="space-y-4">
-      {/* En-tête contexte patient */}
+      {/* Contexte patient */}
       <div className="bg-teal-50 border border-teal-100 rounded-xl px-4 py-3">
         <div className="flex items-center gap-2 mb-1">
           <Bot size={14} className="text-primary" />
-          <span className="text-xs font-bold text-primary uppercase tracking-wide">Contexte patient</span>
+          <span className="text-xs font-bold text-primary uppercase tracking-wide">Contexte patient chargé</span>
         </div>
         <p className="text-xs text-gray-600">
           {participant.prenom} {participant.nom} · {calcAge(participant.dateNaissance)} ans
@@ -363,20 +332,7 @@ export default function AssistantCliniqueIA({ participant, bilanInitial }: Props
             </div>
           ))}
 
-          {/* Streaming en cours */}
-          {streamingText && (
-            <div className="flex justify-start">
-              <div
-                className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-gray-50 border border-gray-100 text-gray-800"
-                style={{ whiteSpace: 'pre-wrap' }}
-              >
-                {streamingText}
-                <span className="inline-block w-1.5 h-4 bg-primary animate-pulse ml-0.5 rounded-sm align-middle" />
-              </div>
-            </div>
-          )}
-
-          {loading && !streamingText && (
+          {loading && (
             <div className="flex justify-start">
               <div className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 flex items-center gap-2">
                 <RefreshCw size={12} className="animate-spin text-primary" />
@@ -390,7 +346,7 @@ export default function AssistantCliniqueIA({ participant, bilanInitial }: Props
       )}
 
       {/* Boutons action sur la dernière réponse */}
-      {lastAssistantMessage && !loading && (
+      {hasResponse && !loading && (
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={handleCopy}
