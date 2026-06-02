@@ -136,15 +136,6 @@ function usePraticienSettings() {
 
 // ── Composants UI réutilisables ───────────────────────────────────────────────
 
-function CarteStatMobile({ icon, label, valeur }: { icon: string; label: string; valeur: number }) {
-  return (
-    <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '12px', textAlign: 'center' }}>
-      <i className={`ti ${icon}`} style={{ fontSize: 28, color: C.primary, marginBottom: 4, display: 'block' }} />
-      <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>{valeur}</div>
-      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{label}</div>
-    </div>
-  );
-}
 
 
 function SectionMobile({ titre, children }: { titre: string; children: React.ReactNode }) {
@@ -256,7 +247,7 @@ function BottomNav({ onglet, onChange }: { onglet: string; onChange: (id: string
 
 function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: string) => void; onNaviguerSaisie: () => void }) {
   const { participants } = useParticipants();
-  const { seances: allSeances, seancesDuJour, changerStatut } = useAgenda();
+  const { seances: allSeances, seancesDuJour } = useAgenda();
   const { contratsARenouveler } = useContrats();
   const { notes } = useJournalSeance();
   const { settings: praticienSettings } = usePraticienSettings();
@@ -264,7 +255,6 @@ function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: 
   const seances = seancesDuJour(today);
   const prenom = praticienSettings.prenom || 'Praticien';
 
-  // Séances de la semaine courante
   const now = new Date();
   const lundiOffset = now.getDay() === 0 ? -6 : 1 - now.getDay();
   const lundi = new Date(now); lundi.setDate(now.getDate() + lundiOffset);
@@ -272,180 +262,179 @@ function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: 
   const seancesSemaine = allSeances.filter(s =>
     s.date >= lundi.toISOString().slice(0, 10) &&
     s.date <= dim.toISOString().slice(0, 10) &&
-    s.statut === 'planifiee'
+    s.statut !== 'annulee'
   );
 
-  // Patients sans bilan dans les 90 derniers jours
-  const il90j = new Date(); il90j.setDate(il90j.getDate() - 90);
-  const il90jFmt = il90j.toISOString().slice(0, 10);
+  const il90jFmt = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10); })();
   const bilansAFaire = participants.filter(p =>
     p.bilans.length === 0 || p.bilans.every(b => b.date < il90jFmt)
   );
+
   const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  const prochaineSeance = seances.find(s => s.statut === 'planifiee' && s.heureDebut >= currentTimeStr) ?? seances.find(s => s.statut === 'planifiee');
+  const prochaineSeance = seances.find(s => s.statut === 'planifiee' && s.heureDebut >= currentTimeStr)
+    ?? seances.find(s => s.statut === 'planifiee');
+
+  const noteManquante = seances.some(s => s.statut === 'realisee' && !notes.some(n => n.seanceId === s.id));
+
+  const statCard: React.CSSProperties = {
+    background: 'white', borderRadius: 16, padding: '16px 20px',
+    boxShadow: '0 2px 10px rgba(13,43,43,0.07)',
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+  };
+  const divider: React.CSSProperties = { width: 1, height: 36, background: C.border };
 
   return (
-    <div>
-      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+    <div style={{ minHeight: '100vh', background: '#F0F4F4' }}>
+
+      {/* ── HEADER ─────────────────────────────────────────────── */}
+      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 18px)', paddingLeft: 20, paddingRight: 20, paddingBottom: 22 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <img src="/logo-horizon.png.png?v=2" alt="Horizon" style={{ height: 24 }} onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }} />
-            <div style={{ fontSize: 18, fontWeight: 700, color: 'white', marginTop: 10 }}>Bonjour {prenom} 👋</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{formatDateLong(new Date())}</div>
+            <img src="/logo-horizon.png.png?v=2" alt="Horizon" style={{ height: 22, marginBottom: 12 }}
+              onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }} />
+            <div style={{ fontSize: 22, fontWeight: 800, color: 'white', lineHeight: 1.2 }}>Bonjour {prenom} 👋</div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 5 }}>{formatDateLong(new Date())}</div>
           </div>
-          <div style={{ background: C.primary, borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: 700, color: 'white' }}>
+          <div style={{ background: C.primary, borderRadius: 24, padding: '6px 14px', fontSize: 13, fontWeight: 700, color: 'white', marginTop: 2, flexShrink: 0 }}>
             {seances.length} séance{seances.length !== 1 ? 's' : ''}
           </div>
         </div>
       </div>
 
-      <div style={{ padding: 16 }}>
-        {seances.length === 0 ? (
-          <div>
-            {/* Stats rapides */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
-              <CarteStatMobile icon="ti-users" label="Patients" valeur={participants.length} />
-              <CarteStatMobile icon="ti-clipboard-list" label="Bilans à faire" valeur={bilansAFaire.length} />
-              <CarteStatMobile icon="ti-calendar" label="Séances semaine" valeur={seancesSemaine.length} />
-              <CarteStatMobile icon="ti-alarm" label="Contrats fin proche" valeur={contratsARenouveler.length} />
-            </div>
+      <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-            <div style={{ textAlign: 'center', padding: '16px 0 20px', color: C.muted, fontSize: 14 }}>
-              <i className="ti ti-calendar-off" style={{ fontSize: 48, color: '#8FA8A8', display: 'block', marginBottom: 8 }} />
-              Aucune séance aujourd'hui
-            </div>
-
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-                Actions rapides
+        {/* ── STATS ──────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={statCard}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 22 }}>👥</span>
+              <div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: C.primary, lineHeight: 1 }}>{participants.length}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>patients actifs</div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {([
-                  { emoji: '👤', label: 'Nouveau patient' },
-                  { emoji: '📊', label: 'Nouveau bilan' },
-                  { emoji: '🎙️', label: 'Note rapide' },
-                  { emoji: '🤖', label: 'Assistant IA' },
-                ] as { emoji: string; label: string }[]).map(({ emoji, label }) => (
-                  <button key={label} onClick={onNaviguerSaisie} style={{
-                    padding: '14px 8px', background: 'white', border: `1px solid ${C.border}`,
-                    borderRadius: 12, cursor: 'pointer', display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', gap: 6,
-                  }}>
-                    <span style={{ fontSize: 26 }}>{emoji}</span>
-                    <span style={{ fontSize: 12, color: C.text, fontWeight: 600, textAlign: 'center', lineHeight: 1.2 }}>{label}</span>
+            </div>
+            <div style={divider} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 22 }}>📊</span>
+              <div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: C.primary, lineHeight: 1 }}>{bilansAFaire.length}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>bilans à faire</div>
+              </div>
+            </div>
+          </div>
+
+          <div style={statCard}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 22 }}>📅</span>
+              <div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: C.primary, lineHeight: 1 }}>{seancesSemaine.length}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>cette semaine</div>
+              </div>
+            </div>
+            <div style={divider} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 22 }}>⏰</span>
+              <div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: contratsARenouveler.length > 0 ? '#F59E0B' : C.primary, lineHeight: 1 }}>
+                  {contratsARenouveler.length}
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>contrat fin proche</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── PROCHAINE SÉANCE ──────────────────────────────────── */}
+        {prochaineSeance && (() => {
+          const p = participants.find(x => x.id === prochaineSeance.participantId);
+          const contreIndDetail = p?.bilans.find(b => b.type === 'initial')
+            ?.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail as string | undefined;
+          const hasCI = p?.bilans.some(b => b.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui');
+          const adresse = [p?.adresseRue, p?.adresseVille].filter(Boolean).join(', ');
+          return (
+            <div style={{ background: '#E8F8F8', borderRadius: 16, padding: '16px', border: `1px solid ${C.primary}33` }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.primary, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+                Prochaine séance
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>
+                🕙 {prochaineSeance.heureDebut} · {p?.prenom} {p?.nom}
+              </div>
+              {adresse && (
+                <div style={{ fontSize: 13, color: '#5C7A7A', marginBottom: hasCI ? 8 : 14 }}>📍 {adresse}</div>
+              )}
+              {hasCI && contreIndDetail && (
+                <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '7px 10px', marginBottom: 14, fontSize: 12, color: '#B91C1C', fontWeight: 600 }}>
+                  ⚠️ {contreIndDetail}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                {adresse && (
+                  <button onClick={() => ouvrirMaps(adresse)}
+                    style={{ flex: 1, padding: '11px', background: 'white', border: `1.5px solid ${C.primary}`, borderRadius: 10, fontSize: 13, fontWeight: 700, color: C.primary, cursor: 'pointer' }}>
+                    🗺️ Itinéraire
                   </button>
-                ))}
+                )}
+                <button onClick={() => p && onVoirFiche(p.id)}
+                  style={{ flex: 1, padding: '11px', background: C.primary, border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, color: 'white', cursor: 'pointer' }}>
+                  📋 Fiche →
+                </button>
               </div>
             </div>
+          );
+        })()}
 
-            {contratsARenouveler.length > 0 && (
-              <div style={{ marginTop: 16, background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 12, padding: '12px 14px', fontSize: 13, color: '#92400E', fontWeight: 600 }}>
-                ⏰ {contratsARenouveler.length} contrat{contratsARenouveler.length > 1 ? 's' : ''} à renouveler bientôt
-              </div>
-            )}
+        {/* ── TIMELINE ou ÉTAT VIDE ─────────────────────────────── */}
+        {seances.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '36px 20px' }}>
+            <i className="ti ti-calendar-off" style={{ fontSize: 54, color: '#BDD0D0', display: 'block', marginBottom: 14 }} />
+            <div style={{ fontSize: 16, fontWeight: 600, color: '#7A9A9A', marginBottom: 6 }}>Aucune séance aujourd'hui</div>
+            <div style={{ fontSize: 13, color: C.muted }}>Profitez-en pour avancer sur vos bilans</div>
           </div>
         ) : (
           <div>
-            {/* Prochaine séance mise en avant */}
-            {prochaineSeance && (() => {
-              const p = participants.find(x => x.id === prochaineSeance.participantId);
-              return (
-                <div style={{ background: C.dark, borderRadius: 14, padding: '14px 16px', marginBottom: 16 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.primary, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-                    Prochaine séance
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: 'white', flexShrink: 0 }}>
-                      {p?.prenom?.[0]}{p?.nom?.[0]}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: 'white' }}>{p?.prenom} {p?.nom}</div>
-                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
-                        {prochaineSeance.heureDebut} · {prochaineSeance.dureeMinutes} min
-                        {p?.adresseVille ? ` · ${p.adresseVille}` : ''}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={() => p && onVoirFiche(p.id)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8, padding: '8px', cursor: 'pointer', color: 'white', fontSize: 16 }}>📋</button>
-                      {p?.adresseRue && (
-                        <button onClick={() => ouvrirMaps(`${p.adresseRue} ${p.adresseVille || ''}`)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8, padding: '8px', cursor: 'pointer', color: 'white', fontSize: 16 }}>🗺️</button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Timeline du jour */}
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-                Programme du jour
-              </div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+              Aujourd'hui
+            </div>
+            <div style={{ background: 'white', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 10px rgba(13,43,43,0.07)' }}>
               {seances.map((seance, index) => {
                 const p = participants.find(x => x.id === seance.participantId);
                 const estEnCours = seance.heureDebut <= currentTimeStr && seance.heureFin > currentTimeStr;
-                const estRealisee = seance.statut === 'realisee';
-                const estAnnulee = seance.statut === 'annulee';
-                const bgCard = estRealisee ? '#F0FDF4' : estAnnulee ? '#FEF2F2' : estEnCours ? '#E8F8F8' : 'white';
-                const borderCard = estRealisee ? '#86EFAC' : estAnnulee ? '#FECACA' : estEnCours ? C.primary : C.border;
-                const dotColor = estRealisee ? '#22C55E' : estAnnulee ? '#EF4444' : estEnCours ? C.primary : C.muted;
+                const icon = seance.statut === 'realisee' ? '✅'
+                  : seance.statut === 'annulee' ? '❌'
+                  : estEnCours ? '🔵' : '⬜';
                 return (
-                  <div key={seance.id} style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 40, flexShrink: 0 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: dotColor }}>{seance.heureDebut}</div>
-                      <div style={{ width: 2, flex: 1, marginTop: 4, background: index < seances.length - 1 ? C.border : 'transparent' }} />
+                  <div key={seance.id}>
+                    <div onClick={() => p && onVoirFiche(p.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', cursor: p ? 'pointer' : 'default', background: estEnCours ? '#F0FAFA' : 'white' }}>
+                      <span style={{ fontSize: 15, flexShrink: 0 }}>{icon}</span>
+                      <span style={{ fontSize: 13, color: C.muted, flexShrink: 0, width: 38 }}>{seance.heureDebut}</span>
+                      <span style={{ fontSize: 14, fontWeight: estEnCours ? 700 : 500, color: C.text, flex: 1 }}>
+                        {p?.prenom} {p?.nom}
+                      </span>
+                      <i className="ti ti-chevron-right" style={{ fontSize: 15, color: '#D0DCDC' }} />
                     </div>
-                    <div style={{ flex: 1, background: bgCard, border: `1px solid ${borderCard}`, borderRadius: 12, padding: '12px 14px', marginBottom: 4 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => p && onVoirFiche(p.id)}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{p?.prenom} {p?.nom}</div>
-                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{seance.dureeMinutes} min{p?.adresseVille ? ` · ${p.adresseVille}` : ''}</div>
-                        </div>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          {seance.statut !== 'realisee' ? (
-                            <button onClick={() => { changerStatut(seance.id, 'realisee'); toast.success('Séance réalisée'); }} style={{ background: C.primary, color: 'white', border: 'none', borderRadius: 8, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>✓ Fait</button>
-                          ) : (
-                            <span style={{ fontSize: 14, color: '#1D9E75' }}>✅</span>
-                          )}
-                          {p?.adresseRue && (
-                            <button onClick={() => ouvrirMaps(`${p.adresseRue} ${p.adresseVille || ''}`)} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 10px', fontSize: 11, cursor: 'pointer', color: C.muted }}>🗺️</button>
-                          )}
-                        </div>
-                      </div>
-                      {seance.statut === 'realisee' && !notes.some(n => n.seanceId === seance.id) && (
-                        <button onClick={onNaviguerSaisie} style={{ marginTop: 8, width: '100%', padding: '7px', background: C.bg, border: `1px dashed ${C.border}`, borderRadius: 8, fontSize: 11, color: C.muted, cursor: 'pointer' }}>
-                          + Ajouter une note de séance
-                        </button>
-                      )}
-                    </div>
+                    {index < seances.length - 1 && <div style={{ height: 1, background: '#F0F4F4', marginLeft: 16 }} />}
                   </div>
                 );
               })}
             </div>
-
-            {/* Stats rapides */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
-              <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>{seances.filter(s => s.statut === 'realisee').length}/{seances.length}</div>
-                <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>réalisées</div>
-              </div>
-              <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>{seancesSemaine.length}</div>
-                <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>semaine</div>
-              </div>
-              <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '10px', textAlign: 'center' }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>{contratsARenouveler.length}</div>
-                <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>contrats fin</div>
-              </div>
-            </div>
-
-            {contratsARenouveler.length > 0 && (
-              <div style={{ background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 12, padding: '12px 14px', fontSize: 13, color: '#92400E', fontWeight: 600 }}>
-                ⏰ {contratsARenouveler.length} contrat{contratsARenouveler.length > 1 ? 's' : ''} à renouveler bientôt
-              </div>
-            )}
           </div>
         )}
+
+        {/* ── ALERTES ───────────────────────────────────────────── */}
+        {contratsARenouveler.length > 0 && (
+          <div style={{ background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 12, padding: '12px 14px', fontSize: 13, color: '#92400E', fontWeight: 600 }}>
+            ⏰ {contratsARenouveler.length} contrat{contratsARenouveler.length > 1 ? 's' : ''} à renouveler bientôt
+          </div>
+        )}
+
+        {noteManquante && (
+          <button onClick={onNaviguerSaisie}
+            style={{ width: '100%', padding: '12px 16px', background: 'white', border: `1px dashed ${C.border}`, borderRadius: 12, fontSize: 13, color: C.muted, cursor: 'pointer', textAlign: 'left' }}>
+            📝 Des séances n'ont pas encore de note — Ajouter →
+          </button>
+        )}
+
       </div>
     </div>
   );
