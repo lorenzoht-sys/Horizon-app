@@ -177,6 +177,32 @@ export async function deleteBrouillonFromSupabase(
   } catch { /* non bloquant */ }
 }
 
+/** Charge TOUS les brouillons cloud d'un praticien et les restaure dans localStorage.
+ *  Appelé après SIGNED_IN pour récupérer les drafts après logout ou changement d'appareil.
+ *  Fail silently si la table bilans_brouillons n'existe pas encore. */
+export async function loadAllBrouillonsFromSupabase(praticienId: string): Promise<void> {
+  if (!supabase) return;
+  try {
+    const { data, error } = await supabase
+      .from('bilans_brouillons')
+      .select('*')
+      .eq('praticien_id', praticienId);
+    if (error || !data || data.length === 0) return;
+
+    for (const row of data) {
+      // localStorage prioritaire : ne restaurer que ce qui est absent
+      const existing = getBrouillon(row.participant_id);
+      if (!existing) {
+        sauvegarderBrouillon(
+          row.participant_id,
+          row.etape_actuelle,
+          row.donnees as Partial<BilanForm>
+        );
+      }
+    }
+  } catch { /* non bloquant */ }
+}
+
 export function getAllBrouillons(): BrouillonBilan[] {
   const result: BrouillonBilan[] = [];
   const prefix = `brouillon_bilan_${_currentUserId ?? 'anon'}_`;

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { setCurrentUserId, clearAllBrouillons } from './hooks/useBrouillonBilan';
+import { setCurrentUserId, loadAllBrouillonsFromSupabase } from './hooks/useBrouillonBilan';
 import { useDevice } from './hooks/useDevice';
 import AppMobile from './pages/mobile/AppMobile';
 import { Toaster } from 'react-hot-toast';
@@ -86,6 +86,8 @@ export default function App() {
         const session = (result as { data: { session: import('@supabase/supabase-js').Session | null } }).data.session;
         if (session) {
           setCurrentUserId(session.user.id);
+          // Restaurer les brouillons cloud dans localStorage (cross-device / après expiration)
+          void loadAllBrouillonsFromSupabase(session.user.id);
           setIsLoggedIn(true);
           needsOnboarding(session.user.id).then(setShowOnboarding);
         }
@@ -104,6 +106,8 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         setCurrentUserId(session.user.id);
+        // Restaurer les brouillons cloud dans localStorage (après logout ou changement d'appareil)
+        void loadAllBrouillonsFromSupabase(session.user.id);
         localStorage.removeItem('settings_praticien');
         localStorage.removeItem('isLoggedIn');
         setIsLoggedIn(true);
@@ -128,7 +132,8 @@ export default function App() {
   }
 
   function handleLogout() {
-    clearAllBrouillons();
+    // Ne pas effacer les brouillons : ils sont isolés par userId (brouillon_bilan_{userId}_*)
+    // et seront restaurés depuis Supabase à la prochaine connexion.
     if (supabase) {
       void supabase.auth.signOut();
     } else {
