@@ -188,28 +188,12 @@ export default function AssistantCliniqueIA({ participant, bilanInitial }: Props
     setMessages(prev => [...prev, { role: 'user', content: trimmed }]);
     setLoading(true);
 
-    const supabaseUrl    = import.meta.env.VITE_SUPABASE_URL as string;
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: 'Supabase non configuré — assistant IA indisponible.',
-      }]);
-      setLoading(false);
-      return;
-    }
-
-    // Construire le prompt complet (même pattern que interpreter-bilan)
     const prompt = `${systemContext}\n\n---\n\nQUESTION DE PIERRE :\n${trimmed}`;
 
     try {
-      const response = await fetch(`${supabaseUrl}/functions/v1/interpreter-bilan`, {
+      const response = await fetch('/api/claude', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseAnonKey}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),
       });
 
