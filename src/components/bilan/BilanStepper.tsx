@@ -1,7 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { Bilan, Participant } from '../../types';
 import { generateClientMessage } from '../../utils/generateClientMessage';
-import { sauvegarderBrouillon, supprimerBrouillon, type BrouillonBilan } from '../../hooks/useBrouillonBilan';
+import {
+  sauvegarderBrouillon, supprimerBrouillon, getBrouillon,
+  syncBrouillonToSupabase, deleteBrouillonFromSupabase,
+  type BrouillonBilan,
+} from '../../hooks/useBrouillonBilan';
+import { supabase } from '../../lib/supabase';
 import Step1_Identity from './steps/Step1_Identity';
 import Step2_Physical from './steps/Step2_Physical';
 import Step3_EnduranceMemory from './steps/Step3_EnduranceMemory';
@@ -68,24 +73,52 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
   const LAST  = STEPS.length - 1;
   const previous = participant.bilans.at(-1) ?? null;
 
-  // Autosave — debounce 800ms, skip first render
+  // ── États de sauvegarde ───────────────────────────────────────────────────
+  type SaveStatus = 'idle' | 'saving' | 'saved_local' | 'saved_cloud' | 'error';
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>(brouillon ? 'saved_cloud' : 'idle');
+  const [lastSaveTime, setLastSaveTime] = useState<Date | null>(
+    brouillon ? new Date(brouillon.dateDerniereModif) : null
+  );
+  const [praticienId, setPraticienId] = useState<string | null>(null);
+
+  // Récupérer l'ID du praticien une seule fois
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setPraticienId(user.id);
+    });
+  }, []);
+
+  // Autosave localStorage — debounce 800ms, skip first render
   const debounceRef   = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const isFirstRender = useRef(true);
-  const [sauvegardeTime, setSauvegardeTime] = useState<string | null>(
-    brouillon ? new Date(brouillon.dateDerniereModif).toTimeString().slice(0, 5) : null
-  );
 
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       sauvegarderBrouillon(participant.id, step, form);
-      setSauvegardeTime(new Date().toTimeString().slice(0, 5));
+      setLastSaveTime(new Date());
+      setSaveStatus('saved_local');
     }, 800);
     return () => clearTimeout(debounceRef.current);
   }, [form, step, participant.id]);
 
-  // Sauvegarde synchrone avant fermeture de page
+  // Sync Supabase toutes les 30 secondes
+  useEffect(() => {
+    if (!praticienId) return;
+    const interval = setInterval(async () => {
+      const current = getBrouillon(participant.id);
+      if (!current) return;
+      setSaveStatus('saving');
+      const ok = await syncBrouillonToSupabase(participant.id, current, praticienId);
+      setSaveStatus(ok ? 'saved_cloud' : 'saved_local');
+      if (ok) setLastSaveTime(new Date());
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [praticienId, participant.id]);
+
+  // Sauvegarde synchrone avant fermeture de page (localStorage)
   const stepRef = useRef(step);
   const formRef = useRef(form);
   useEffect(() => { stepRef.current = step; }, [step]);
@@ -114,7 +147,26 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
   function handleSave() {
     clearTimeout(debounceRef.current);
     supprimerBrouillon(participant.id);
+    // Nettoyage cloud (non bloquant)
+    if (praticienId) {
+      void deleteBrouillonFromSupabase(participant.id, praticienId);
+    }
     onSave(form);
+  }
+
+  // Sync immédiate à chaque changement d'étape
+  async function handleNextStep() {
+    sauvegarderBrouillon(participant.id, step + 1, form);
+    if (praticienId) {
+      setSaveStatus('saving');
+      const current = getBrouillon(participant.id);
+      if (current) {
+        const ok = await syncBrouillonToSupabase(participant.id, { ...current, etapeActuelle: step + 1 }, praticienId);
+        setSaveStatus(ok ? 'saved_cloud' : 'saved_local');
+        if (ok) setLastSaveTime(new Date());
+      }
+    }
+    setStep(s => s + 1);
   }
 
   // ── Rendu étapes ──────────────────────────────────────────────────────────
@@ -215,17 +267,29 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
           {step === 0 ? 'Annuler' : '← Retour'}
         </button>
 
-        {/* Indicateur sauvegarde automatique */}
-        {sauvegardeTime && (
-          <div className="flex items-center gap-1.5 text-xs text-gray-400 flex-1 justify-center">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
-            Sauvegardé à {sauvegardeTime}
-          </div>
-        )}
+        {/* Indicateur sauvegarde */}
+        <div className="flex items-center gap-1.5 text-xs flex-1 justify-center">
+          {saveStatus === 'saving' && (
+            <><span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            <span className="text-amber-500">Sauvegarde...</span></>
+          )}
+          {saveStatus === 'saved_cloud' && lastSaveTime && (
+            <><span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400" />
+            <span className="text-gray-400">☁️ Sauvegardé {lastSaveTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span></>
+          )}
+          {saveStatus === 'saved_local' && lastSaveTime && (
+            <><span className="inline-block w-1.5 h-1.5 rounded-full bg-green-300" />
+            <span className="text-gray-400">💾 Sauvegardé {lastSaveTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span></>
+          )}
+          {saveStatus === 'error' && (
+            <><span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400" />
+            <span className="text-orange-500">⚠️ Sauvegarde locale</span></>
+          )}
+        </div>
 
         {step < LAST ? (
           <button
-            onClick={() => setStep(s => s + 1)}
+            onClick={handleNextStep}
             className="px-6 py-2.5 bg-primary text-white rounded-xl font-semibold hover:bg-dark transition-colors"
           >
             Suivant →

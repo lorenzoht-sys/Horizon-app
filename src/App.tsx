@@ -109,7 +109,8 @@ export default function App() {
         setIsLoggedIn(true);
         needsOnboarding(session.user.id).then(setShowOnboarding);
       } else if (event === 'SIGNED_OUT') {
-        clearAllBrouillons();
+        // Ne pas effacer les brouillons ici — ils sont isolés par userId et
+        // survivent à une expiration de session pour être repris à la reconnexion.
         setCurrentUserId(null);
         localStorage.removeItem('settings_praticien');
         localStorage.removeItem('isLoggedIn');

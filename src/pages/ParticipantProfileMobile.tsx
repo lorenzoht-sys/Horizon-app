@@ -12,7 +12,6 @@ import { useJournalSeance } from '../hooks/useJournalSeance';
 import { useCompteRenduSeance } from '../hooks/useCompteRenduSeance';
 import { getBrouillon } from '../hooks/useBrouillonBilan';
 import DicteePostSeance from '../components/DicteePostSeance';
-import AssistantCliniqueIA from '../components/AssistantCliniqueIA';
 import ParticipantForm from '../components/participant/ParticipantForm';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
 import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
@@ -24,7 +23,7 @@ import type { CompteRenduSeance } from '../types/seance';
 
 // ── Constants & helpers ───────────────────────────────────────────────────────
 
-type MobileTab = 'infos' | 'sante' | 'bilans' | 'journal' | 'ia';
+type MobileTab = 'infos' | 'sante' | 'bilans' | 'journal';
 type DotColor  = 'vert' | 'orange' | 'rouge';
 
 const DOT_STYLE: Record<DotColor, { bg: string; label: string }> = {
@@ -205,7 +204,6 @@ export default function ParticipantProfileMobile() {
     { id: 'sante',   label: 'Santé'   },
     { id: 'bilans',  label: 'Bilans'  },
     { id: 'journal', label: 'Journal' },
-    { id: 'ia',      label: '🤖 IA'   },
   ];
 
   // ── TAB CONTENT ──────────────────────────────────────────────────────────────
@@ -784,11 +782,6 @@ export default function ParticipantProfileMobile() {
         {activeTab === 'sante'   && <TabSante />}
         {activeTab === 'bilans'  && <TabBilans />}
         {activeTab === 'journal' && <TabJournal />}
-        {activeTab === 'ia'      && (
-          <div className="pb-8">
-            <AssistantCliniqueIA participant={participant} bilanInitial={bilanInitial} />
-          </div>
-        )}
       </div>
 
       {/* ── MODALS ──────────────────────────────────────────── */}

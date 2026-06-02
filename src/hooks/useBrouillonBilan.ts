@@ -1,5 +1,23 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { Bilan } from '../types';
+import { supabase } from '../lib/supabase';
+
+// ── SQL Supabase à exécuter une fois (Settings → SQL Editor) ──────────────────
+//
+// CREATE TABLE IF NOT EXISTS bilans_brouillons (
+//   id              uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+//   participant_id  uuid REFERENCES participants(id) ON DELETE CASCADE NOT NULL,
+//   praticien_id    uuid NOT NULL,
+//   etape_actuelle  integer NOT NULL DEFAULT 0,
+//   donnees         jsonb NOT NULL DEFAULT '{}',
+//   completion_pct  integer NOT NULL DEFAULT 0,
+//   created_at      timestamptz DEFAULT now() NOT NULL,
+//   updated_at      timestamptz DEFAULT now() NOT NULL,
+//   UNIQUE(participant_id, praticien_id)
+// );
+// ALTER TABLE bilans_brouillons ENABLE ROW LEVEL SECURITY;
+// CREATE POLICY "own" ON bilans_brouillons FOR ALL USING (auth.uid() = praticien_id);
+// ─────────────────────────────────────────────────────────────────────────────
 
 type BilanForm = Omit<Bilan, 'id'>;
 
@@ -87,6 +105,76 @@ export function supprimerBrouillon(participantId: string): void {
   localStorage.removeItem(cle(participantId));
   // Compatibilité avec l'ancienne clé
   localStorage.removeItem(`bilan_en_cours_${participantId}`);
+}
+
+// ── Fonctions Supabase (cloud backup, fail silently si table absente) ─────────
+
+export async function syncBrouillonToSupabase(
+  participantId: string,
+  brouillon: BrouillonBilan,
+  praticienId: string
+): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('bilans_brouillons')
+      .upsert(
+        {
+          participant_id: participantId,
+          praticien_id:   praticienId,
+          etape_actuelle: brouillon.etapeActuelle,
+          donnees:        brouillon.data,
+          completion_pct: brouillon.completionPct,
+          updated_at:     new Date().toISOString(),
+        },
+        { onConflict: 'participant_id,praticien_id' }
+      );
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function loadBrouillonFromSupabase(
+  participantId: string,
+  praticienId: string
+): Promise<BrouillonBilan | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('bilans_brouillons')
+      .select('*')
+      .eq('participant_id', participantId)
+      .eq('praticien_id', praticienId)
+      .single();
+    if (error || !data) return null;
+    return {
+      id:                  data.id,
+      participantId,
+      dateCreation:        data.created_at,
+      dateDerniereModif:   data.updated_at,
+      etapeActuelle:       data.etape_actuelle,
+      data:                data.donnees as Partial<BilanForm>,
+      completionPct:       data.completion_pct,
+      estTermine:          false,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteBrouillonFromSupabase(
+  participantId: string,
+  praticienId: string
+): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase
+      .from('bilans_brouillons')
+      .delete()
+      .eq('participant_id', participantId)
+      .eq('praticien_id',   praticienId);
+  } catch { /* non bloquant */ }
 }
 
 export function getAllBrouillons(): BrouillonBilan[] {

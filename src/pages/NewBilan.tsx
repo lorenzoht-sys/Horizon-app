@@ -1,30 +1,65 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useParticipants } from '../hooks/useParticipants';
-import { getBrouillon, supprimerBrouillon, type BrouillonBilan } from '../hooks/useBrouillonBilan';
+import {
+  getBrouillon, supprimerBrouillon, sauvegarderBrouillon,
+  loadBrouillonFromSupabase, type BrouillonBilan,
+} from '../hooks/useBrouillonBilan';
 import BilanStepper from '../components/bilan/BilanStepper';
 import ModalRepriseBrouillon from '../components/bilan/ModalRepriseBrouillon';
 import PageWrapper from '../components/layout/PageWrapper';
 import { ArrowLeft } from 'lucide-react';
 import type { Bilan } from '../types';
 import toast from 'react-hot-toast';
+import { supabase } from '../lib/supabase';
 
 export default function NewBilan() {
   const { id } = useParams<{ id: string }>();
   const { participants, addBilan } = useParticipants();
   const navigate = useNavigate();
 
-  // Lecture synchrone localStorage — une seule fois au mount
-  const [brouillonSauve] = useState<BrouillonBilan | null>(() =>
+  // Lecture localStorage (synchrone, prioritaire)
+  const [brouillonSauve, setBrouillonSauve] = useState<BrouillonBilan | null>(() =>
     id ? getBrouillon(id) : null
   );
-  const [showModal, setShowModal]                         = useState(() => Boolean(brouillonSauve));
+  const [showModal, setShowModal]                         = useState(() => Boolean(id && getBrouillon(id)));
   const [brouillonPourReprise, setBrouillonPourReprise]   = useState<BrouillonBilan | null>(null);
+  const [checkingCloud, setCheckingCloud]                 = useState(false);
+
+  // Si pas de brouillon localStorage → vérifier Supabase (cross-device recovery)
+  useEffect(() => {
+    if (!id || brouillonSauve || !supabase) return;
+    setCheckingCloud(true);
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const cloudDraft = await loadBrouillonFromSupabase(id, user.id);
+        if (cloudDraft) {
+          // Restaurer dans localStorage pour les saves suivantes
+          sauvegarderBrouillon(id, cloudDraft.etapeActuelle, cloudDraft.data);
+          setBrouillonSauve(cloudDraft);
+          setShowModal(true);
+        }
+      } catch { /* non bloquant */ } finally {
+        setCheckingCloud(false);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const participant = participants.find(p => p.id === id);
   if (!participant) return (
     <PageWrapper>
       <div className="text-center py-20 text-gray-400">Participant introuvable</div>
+    </PageWrapper>
+  );
+
+  if (checkingCloud) return (
+    <PageWrapper>
+      <div className="text-center py-20">
+        <div className="text-gray-400 text-sm">☁️ Vérification d'un brouillon sauvegardé…</div>
+      </div>
     </PageWrapper>
   );
 
