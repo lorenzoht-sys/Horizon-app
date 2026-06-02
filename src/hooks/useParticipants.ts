@@ -126,6 +126,17 @@ export function useParticipants() {
     ));
   }, []);
 
+  const deleteBilan = useCallback(async (participantId: string, bilanId: string) => {
+    if (supabase) {
+      await supabase.from('bilans').delete().eq('id', bilanId);
+    }
+    setParticipants(prev => prev.map(p =>
+      p.id === participantId
+        ? { ...p, bilans: p.bilans.filter(b => b.id !== bilanId) }
+        : p
+    ));
+  }, []);
+
   const getByToken = useCallback((token: string) => {
     return participants.find(p => p.token === token) ?? null;
   }, [participants]);
@@ -149,6 +160,7 @@ export function useParticipants() {
     geocodeParticipant,
     addBilan,
     updateBilan,
+    deleteBilan,
     getByToken,
     exportJSON,
   };

@@ -20,6 +20,7 @@ import ClientView from './pages/ClientView';
 
 // Lazy load : pages lourdes chargées à la demande
 const AssistantPage      = lazy(() => import('./pages/AssistantPage'));
+const EditBilan          = lazy(() => import('./pages/EditBilan'));
 const MapPage            = lazy(() => import('./pages/MapPage'));
 const AgendaPage         = lazy(() => import('./pages/AgendaPage'));
 const TourneePage        = lazy(() => import('./pages/TourneePage'));
@@ -211,6 +212,9 @@ export default function App() {
                           } />
                           <Route path="/participant/:id/bilan/:bilanId" element={
                             <Suspense fallback={<MapFallback />}><BilanDetail /></Suspense>
+                          } />
+                          <Route path="/participant/:id/bilan/:bilanId/edit" element={
+                            <Suspense fallback={<MapFallback />}><EditBilan /></Suspense>
                           } />
                           <Route path="/participant/:id/programme" element={
                             <Suspense fallback={<MapFallback />}><ProgrammePage /></Suspense>

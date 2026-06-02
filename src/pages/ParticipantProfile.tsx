@@ -545,7 +545,7 @@ function TabsSection({ activeTab, setActiveTab, tabs, children }: {
 
 export default function ParticipantProfile() {
   const { id } = useParams<{ id: string }>();
-  const { participants, updateParticipant, deleteParticipant, geocodeParticipant } = useParticipants();
+  const { participants, updateParticipant, deleteParticipant, deleteBilan, geocodeParticipant } = useParticipants();
   const { contrats } = useContrats();
   const { seances } = useAgenda();
   const { notesParPatient } = useJournalSeance();
@@ -996,7 +996,11 @@ export default function ParticipantProfile() {
       <TabsSection activeTab={activeTab} setActiveTab={setActiveTab} tabs={TABS}>
         {activeTab === 'bilans' && (
           <div>
-            <BilanTimeline bilans={participant.bilans} participantId={participant.id} />
+            <BilanTimeline
+              bilans={participant.bilans}
+              participantId={participant.id}
+              onDelete={(bilanId) => deleteBilan(participant.id, bilanId)}
+            />
             {sortedBilans.length > 1 && (
               <div className="mt-5 pt-5 border-t border-gray-100">
                 <div className="text-[12px] font-semibold text-gray-500 mb-3">Courbes de progression</div>
