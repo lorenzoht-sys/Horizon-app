@@ -185,18 +185,6 @@ function InfoLigne({ icon, texte }: { icon: string; texte: string }) {
   );
 }
 
-function BoutonRapide({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
-  return (
-    <button onClick={onClick} style={{
-      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-      padding: '8px 4px', background: C.bg, border: `1px solid ${C.border}`,
-      borderRadius: 10, cursor: 'pointer',
-    }}>
-      <i className={`ti ${icon}`} style={{ fontSize: 18, color: C.primary }} aria-hidden="true" />
-      <span style={{ fontSize: 10, color: '#5C7A7A', fontWeight: 600 }}>{label}</span>
-    </button>
-  );
-}
 
 // ── Bottom Nav ────────────────────────────────────────────────────────────────
 
@@ -1489,6 +1477,10 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
   );
 
   const bilanInitial = p.bilans.find(b => b.type === 'initial') ?? null;
+  const contreIndicationsTexte: string | null =
+    bilanInitial?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
+      ? ((bilanInitial.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail as string | undefined) ?? null)
+      : null;
 
   const notes = notesParPatient(p.id);
   const sortedBilans = [...p.bilans].sort((a, b) => b.date.localeCompare(a.date));
@@ -1507,76 +1499,84 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
     { id: 'ia',      label: '🤖 IA' },
   ];
 
-  return (
-    <div>
-      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', marginBottom: 12, padding: 0 }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} aria-hidden="true" />
-        </button>
+  const actionBtn: React.CSSProperties = {
+    flex: 1, minHeight: 64,
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5,
+    background: 'white', border: `1px solid ${C.border}`, borderRadius: 12, cursor: 'pointer',
+    boxShadow: '0 1px 4px rgba(13,43,43,0.06)',
+  };
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-          <div style={{ width: 48, height: 48, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: 'white', flexShrink: 0 }}>
+  return (
+    <div style={{ minHeight: '100vh', background: '#F0F4F4' }}>
+      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+
+        {/* Ligne 1 : flèche + avatar + nom + crayon */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}>
+            <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.6)' }} aria-hidden="true" />
+          </button>
+          <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: 'white', flexShrink: 0 }}>
             {p.prenom[0]}{p.nom[0]}
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: 'white' }}>{p.prenom} {p.nom}</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
-              {calcAge(p.dateNaissance)} ans
-              {p.taille ? ` · ${p.taille} cm` : ''}
-              {p.poids ? ` · ${p.poids} kg` : ''}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {p.prenom} {p.nom}
             </div>
-            {(p.contexteClinic || p.pathologie) && (
-              <div style={{ marginTop: 6, background: 'rgba(43,191,191,0.2)', border: '1px solid rgba(43,191,191,0.3)', borderRadius: 20, padding: '2px 10px', fontSize: 11, color: C.primary, display: 'inline-block' }}>
-                {p.contexteClinic || p.pathologie}
-              </div>
-            )}
           </div>
-          <button
-            onClick={() => setShowEdit(true)}
-            style={{ background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 10, padding: '8px 12px', cursor: 'pointer', color: 'white', fontSize: 16, flexShrink: 0 }}
-            aria-label="Modifier la fiche"
-          >
-            ✏️
+          <button onClick={() => setShowEdit(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, flexShrink: 0 }} aria-label="Modifier">
+            <i className="ti ti-pencil" style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)' }} />
           </button>
         </div>
 
-        {/* Stats rapides */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          {contrat && (
-            <div style={{ flex: 1, background: 'rgba(255,255,255,0.08)', borderRadius: 10, padding: '8px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: 'white' }}>{contrat.nombreSeancesRealisees}/{contrat.nombreSeancesTotal}</div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>séances</div>
-            </div>
-          )}
-          {sortedBilans[0] && (
-            <div style={{ flex: 1, background: 'rgba(255,255,255,0.08)', borderRadius: 10, padding: '8px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: 'white' }}>{formatDateCourt(sortedBilans[0].date)}</div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>dernier bilan</div>
-            </div>
-          )}
-          {prochaineSeance && (
-            <div style={{ flex: 1, background: 'rgba(43,191,191,0.2)', borderRadius: 10, padding: '8px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: C.primary }}>{prochaineSeance.heureDebut}</div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{formatDateCourt(prochaineSeance.date)}</div>
-            </div>
-          )}
+        {/* Ligne 2 : âge · taille · poids */}
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 7, paddingLeft: 68 }}>
+          {calcAge(p.dateNaissance)} ans
+          {p.taille ? ` · ${p.taille} cm` : ''}
+          {p.poids ? ` · ${p.poids} kg` : ''}
         </div>
-      </div>
 
-      {/* Actions rapides */}
-      <div style={{ display: 'flex', gap: 8, padding: '12px 16px', background: 'white', borderBottom: `1px solid ${C.border}` }}>
-        <BoutonRapide icon="ti-clipboard" label="Bilan" onClick={() => {}} />
-        <BoutonRapide icon="ti-notes" label="Note" onClick={() => {}} />
-        {p.adresseRue && (
-          <BoutonRapide icon="ti-map-pin" label="Maps" onClick={() => ouvrirMaps(`${p.adresseRue} ${p.adresseVille || ''}`)} />
+        {/* Badge CI */}
+        {contreIndicationsTexte && (
+          <div style={{ marginTop: 8, paddingLeft: 68 }}>
+            <div style={{ display: 'inline-block', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '5px 10px', fontSize: 12, color: '#FCA5A5', fontWeight: 600 }}>
+              ⚠️ {contreIndicationsTexte}
+            </div>
+          </div>
+        )}
+
+        {/* Dernier bilan discret */}
+        {sortedBilans[0] && (
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', marginTop: 6, paddingLeft: 68 }}>
+            Dernier bilan : {new Date(sortedBilans[0].date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
+          </div>
         )}
       </div>
 
-      {/* Onglets */}
-      <div style={{ display: 'flex', background: 'white', borderBottom: `1px solid ${C.border}`, position: 'sticky', top: 0, zIndex: 10 }}>
+      {/* Actions rapides */}
+      <div style={{ display: 'flex', gap: 10, padding: '14px 16px', background: 'white', borderBottom: `1px solid ${C.border}` }}>
+        <button onClick={() => setOnglet('bilans')} style={actionBtn}>
+          <i className="ti ti-clipboard-list" style={{ fontSize: 22, color: C.primary }} />
+          <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>Bilan</span>
+        </button>
+        <button onClick={() => { setOnglet('journal'); setShowDictee(true); }} style={actionBtn}>
+          <i className="ti ti-microphone" style={{ fontSize: 22, color: C.primary }} />
+          <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>Note</span>
+        </button>
+        {(p.adresseRue || p.adresseVille) && (
+          <button
+            onClick={() => ouvrirMaps([p.adresseRue, p.adresseCodePostal, p.adresseVille].filter(Boolean).join(' '))}
+            style={actionBtn}>
+            <i className="ti ti-map-pin" style={{ fontSize: 22, color: C.primary }} />
+            <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>Maps</span>
+          </button>
+        )}
+      </div>
+
+      {/* Onglets scrollables */}
+      <div style={{ display: 'flex', background: 'white', borderBottom: `1px solid ${C.border}`, position: 'sticky', top: 0, zIndex: 10, overflowX: 'auto' }}>
         {ONGLETS.map(o => (
           <button key={o.id} onClick={() => setOnglet(o.id)}
-            style={{ flex: 1, padding: '11px 2px', background: 'none', border: 'none', borderBottom: `2px solid ${onglet === o.id ? C.primary : 'transparent'}`, color: onglet === o.id ? C.primary : C.muted, fontWeight: onglet === o.id ? 700 : 400, fontSize: 12, cursor: 'pointer' }}>
+            style={{ flexShrink: 0, padding: '12px 16px', background: 'none', border: 'none', borderBottom: `2px solid ${onglet === o.id ? C.primary : 'transparent'}`, color: onglet === o.id ? C.primary : '#9CA3AF', fontWeight: onglet === o.id ? 700 : 400, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' }}>
             {o.label}
           </button>
         ))}
@@ -1586,59 +1586,73 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
 
         {onglet === 'infos' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
             <InfoSection titre="Coordonnées">
               {p.telephone && (
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080', marginBottom: 6 }}>
-                  <i className="ti ti-phone" style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080', marginBottom: 8 }}>
+                  <i className="ti ti-phone" style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 1 }} />
                   <a href={`tel:+33${String(p.telephone).replace(/\D/g, '').replace(/^0/, '')}`}
                     style={{ color: '#4A6080', textDecoration: 'none', fontWeight: 500 }}>
                     {formatPhone(String(p.telephone))}
                   </a>
                 </div>
               )}
+              {(p.adresseRue || p.adresseVille) && (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080', marginBottom: 8 }}>
+                  <i className="ti ti-map-pin" style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 1 }} />
+                  <a href={`https://maps.google.com/?q=${encodeURIComponent([p.adresseRue, p.adresseCodePostal, p.adresseVille].filter(Boolean).join(' '))}`}
+                    target="_blank" rel="noreferrer" style={{ color: '#4A6080', textDecoration: 'none' }}>
+                    {[p.adresseRue, p.adresseCodePostal, p.adresseVille].filter(Boolean).join(', ')}
+                  </a>
+                </div>
+              )}
               {p.email && (
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080', marginBottom: 6 }}>
-                  <i className="ti ti-mail" style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080' }}>
+                  <i className="ti ti-mail" style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 1 }} />
                   <a href={`mailto:${p.email}`} style={{ color: '#4A6080', textDecoration: 'none' }}>{p.email}</a>
                 </div>
               )}
-              {p.adresseRue && <InfoLigne icon="ti-map-pin" texte={`${p.adresseRue}, ${p.adresseCodePostal || ''} ${p.adresseVille || ''}`} />}
+              {!p.telephone && !p.email && !p.adresseRue && (
+                <div style={{ fontSize: 13, color: C.muted, fontStyle: 'italic' }}>Aucune coordonnée renseignée</div>
+              )}
             </InfoSection>
 
-            {contrat && (
-              <InfoSection titre="Contrat actif">
-                <InfoLigne icon="ti-calendar" texte={`${contrat.joursFixe.join(', ')} à ${contrat.heureDebut} · ${contrat.dureeMinutes} min`} />
-                <InfoLigne icon="ti-clock" texte={`${new Date(contrat.dateDebut + 'T12:00').toLocaleDateString('fr-FR')} → ${new Date(contrat.dateFin + 'T12:00').toLocaleDateString('fr-FR')}`} />
-                <div style={{ marginTop: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                    <span style={{ color: C.muted }}>Progression</span>
-                    <span style={{ fontWeight: 700, color: C.text }}>{contrat.nombreSeancesRealisees}/{contrat.nombreSeancesTotal}</span>
+            <InfoSection titre="Informations">
+              <InfoLigne icon="ti-calendar" texte={`Né(e) le ${new Date(p.dateNaissance).toLocaleDateString('fr-FR')} · ${calcAge(p.dateNaissance)} ans`} />
+              {p.taille && p.poids && (() => {
+                const imc = Math.round((p.poids / ((p.taille / 100) ** 2)) * 10) / 10;
+                const imcColor = imc < 18.5 ? '#3B82F6' : imc < 25 ? '#22C55E' : imc < 30 ? '#F59E0B' : '#EF4444';
+                const imcLabel = imc < 18.5 ? 'Insuf. pond.' : imc < 25 ? 'Normal' : imc < 30 ? 'Surpoids' : 'Obésité';
+                return (
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13, color: '#4A6080', marginBottom: 6 }}>
+                    <i className="ti ti-weight" style={{ fontSize: 16, color: C.primary, flexShrink: 0 }} />
+                    <span>{p.taille} cm · {p.poids} kg · IMC {imc}</span>
+                    <span style={{ background: `${imcColor}20`, color: imcColor, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, flexShrink: 0 }}>
+                      {imcLabel}
+                    </span>
                   </div>
-                  <div style={{ height: 5, background: C.border, borderRadius: 3 }}>
-                    <div style={{ height: '100%', width: `${(contrat.nombreSeancesRealisees / contrat.nombreSeancesTotal) * 100}%`, background: C.primary, borderRadius: 3 }} />
-                  </div>
+                );
+              })()}
+              {(p.contexteClinic || p.pathologie) && (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080', marginTop: p.taille && p.poids ? 0 : 0 }}>
+                  <i className="ti ti-stethoscope" style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 1 }} />
+                  <span>{p.contexteClinic || p.pathologie}</span>
                 </div>
-              </InfoSection>
-            )}
+              )}
+            </InfoSection>
 
             {(p.activitesSouhaitees?.length || p.objectifsPatient) && (
-              <InfoSection titre="Objectifs">
+              <InfoSection titre="Objectifs APA">
                 {p.objectifsPatient && (Array.isArray(p.objectifsPatient) ? p.objectifsPatient.length > 0 : true) && (
-                  <div style={{ fontSize: 13, color: '#4A6080', marginBottom: 4 }}>
+                  <div style={{ marginBottom: 6 }}>
                     {(Array.isArray(p.objectifsPatient) ? p.objectifsPatient : [p.objectifsPatient]).map((o, i) => (
-                      <span key={i} style={{ display: 'inline-block', background: '#E6F7F5', color: '#0F7265', borderRadius: 12, padding: '2px 8px', margin: '2px', fontSize: 12 }}>{o}</span>
+                      <span key={i} style={{ display: 'inline-block', background: '#E6F7F5', color: '#0F7265', borderRadius: 10, padding: '2px 8px', margin: '2px', fontSize: 12, fontWeight: 600 }}>{o}</span>
                     ))}
                   </div>
                 )}
                 {p.activitesSouhaitees?.length ? (
                   <div style={{ fontSize: 13, color: '#4A6080' }}>🎯 {p.activitesSouhaitees.join(' · ')}</div>
                 ) : null}
-              </InfoSection>
-            )}
-
-            {p.pathologie && !p.contexteClinic && (
-              <InfoSection titre="Pathologie">
-                <div style={{ fontSize: 13, color: '#4A6080' }}>{p.pathologie}</div>
               </InfoSection>
             )}
           </div>
