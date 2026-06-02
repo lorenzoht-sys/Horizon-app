@@ -19,7 +19,6 @@ import ProgressCurve from '../components/charts/ProgressCurve';
 import BilanTimeline from '../components/bilan/BilanTimeline';
 import ContratsTab from '../components/participant/ContratsTab';
 import DicteePostSeance from '../components/DicteePostSeance';
-import AssistantCliniqueIA from '../components/AssistantCliniqueIA';
 import ParticipantForm from '../components/participant/ParticipantForm';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
 import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
@@ -1023,7 +1022,21 @@ export default function ParticipantProfile() {
           <ContratsTab participantId={participant.id} />
         )}
         {activeTab === 'ia' && (
-          <AssistantCliniqueIA participant={participant} bilanInitial={bilanInitial} />
+          <div className="flex flex-col items-center py-10 text-center max-w-sm mx-auto">
+            <div className="text-5xl mb-4">🤖</div>
+            <div className="text-[17px] font-bold text-gray-900 mb-2">Mon assistant</div>
+            <p className="text-[13px] text-gray-500 mb-6 leading-relaxed">
+              Posez vos questions cliniques APA avec le profil de{' '}
+              <strong>{participant.prenom}</strong> automatiquement chargé.
+            </p>
+            <button
+              onClick={() => navigate('/assistant', { state: { patientId: participant.id } })}
+              className="w-full flex items-center justify-center gap-2 text-white text-[14px] font-bold py-3 rounded-xl transition-opacity hover:opacity-90"
+              style={{ background: '#2BBFBF' }}
+            >
+              Ouvrir l'assistant →
+            </button>
+          </div>
         )}
       </TabsSection>
 

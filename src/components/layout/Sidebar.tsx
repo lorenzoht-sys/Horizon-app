@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Home, Calendar, Route, Dumbbell, Layers, Settings,
-  LogOut, Map, BarChart2,
+  LogOut, Map, BarChart2, Bot,
 } from 'lucide-react';
 import { IndicateurConnexion, BoutonInstallerApp } from '../pwa/PWAComponents';
 import { supabase } from '../../lib/supabase';
@@ -23,8 +23,9 @@ const NAV_ITEMS = [
   { path: '/',          icon: Home,      label: 'Tableau de bord', end: true  },
   { path: '/agenda',    icon: Calendar,  label: 'Agenda',          end: false },
   { path: '/tournee',   icon: Route,     label: 'Tournée',         end: false },
-  { path: '/exercices', icon: Dumbbell,  label: 'Exercices',       end: false },
-  { path: '/zones',     icon: Layers,    label: 'Zones',           end: false },
+  { path: '/exercices',  icon: Dumbbell,  label: 'Exercices',       end: false },
+  { path: '/assistant',  icon: Bot,       label: 'Mon assistant',   end: false },
+  { path: '/zones',      icon: Layers,    label: 'Zones',           end: false },
   { path: '/map',       icon: Map,       label: 'Carte',           end: false },
   { path: '/stats',     icon: BarChart2, label: 'Mes stats',       end: false },
 ];

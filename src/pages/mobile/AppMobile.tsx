@@ -8,7 +8,6 @@ import { useCompteRenduSeance } from '../../hooks/useCompteRenduSeance';
 import { RESSENTI_CONFIG } from '../../components/journal/NoteSeanceModal';
 import BilanStepper from '../../components/bilan/BilanStepper';
 import DicteePostSeance from '../../components/DicteePostSeance';
-import AssistantCliniqueIA from '../../components/AssistantCliniqueIA';
 import type { RessentiSeance, Bilan } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../../lib/supabase';
@@ -189,11 +188,11 @@ function InfoLigne({ icon, texte }: { icon: string; texte: string }) {
 // ── Bottom Nav ────────────────────────────────────────────────────────────────
 
 const NAV = [
-  { id: 'aujourdhui', icon: 'ti-home', label: 'Accueil' },
-  { id: 'patients',   icon: 'ti-users',           label: 'Patients' },
-  { id: 'saisie',     icon: 'ti-plus',            label: 'Saisie', principal: true },
-  { id: 'tournee',    icon: 'ti-route',           label: 'Tournée' },
-  { id: 'plus',       icon: 'ti-dots',            label: 'Plus' },
+  { id: 'aujourdhui', icon: 'ti-home',       label: 'Accueil' },
+  { id: 'patients',   icon: 'ti-users',      label: 'Patients' },
+  { id: 'saisie',     icon: 'ti-plus',       label: 'Saisie', principal: true },
+  { id: 'tournee',    icon: 'ti-route',      label: 'Tournée' },
+  { id: 'assistant',  icon: 'ti-robot',      label: 'Assistant' },
 ];
 
 function BottomNav({ onglet, onChange }: { onglet: string; onChange: (id: string) => void }) {
@@ -1438,7 +1437,7 @@ function EditPatientMobile({ participant, onBack }: { participant: import('../..
 
 // ── Fiche patient mobile ───────────────────────────────────────────────────────
 
-function FichePatientMobile({ participantId, onBack }: { participantId: string; onBack: () => void }) {
+function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { participantId: string; onBack: () => void; onOpenAssistant?: (id: string) => void }) {
   const { participants, addBilan } = useParticipants();
   const { notesParPatient } = useJournalSeance();
   const { seances } = useAgenda();
@@ -1801,7 +1800,18 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
         )}
 
         {onglet === 'ia' && (
-          <AssistantCliniqueIA participant={p} bilanInitial={bilanInitial} />
+          <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+            <div style={{ fontSize: 44, marginBottom: 14 }}>🤖</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 8 }}>Mon assistant</div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 24, lineHeight: 1.6, maxWidth: 280, margin: '0 auto 24px' }}>
+              Posez vos questions cliniques APA avec le profil de <strong>{p.prenom}</strong> automatiquement chargé.
+            </div>
+            <button
+              onClick={() => onOpenAssistant?.(p.id)}
+              style={{ width: '100%', padding: '15px', background: C.primary, color: 'white', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              Ouvrir l'assistant →
+            </button>
+          </div>
         )}
       </div>
 
@@ -1816,6 +1826,286 @@ function FichePatientMobile({ participantId, onBack }: { participantId: string; 
   );
 }
 
+// ── EcranAssistant ────────────────────────────────────────────────────────────
+
+function buildAssistantPrompt(patient: import('../../types').Participant | null, history: { role: string; content: string }[], question: string): string {
+  const base = `Tu es un assistant clinique expert en Activité Physique Adaptée (APA), spécialisé dans l'accompagnement des enseignants APA libéraux en France.
+Tu réponds UNIQUEMENT en français. Tu es concis, professionnel, pratique.
+Tu ne fais jamais de diagnostic médical.`;
+
+  const patientCtx = patient
+    ? (() => {
+        const age = calcAge(patient.dateNaissance);
+        const bi = patient.bilans.find(b => b.type === 'initial') ?? null;
+        const ci = bi?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
+          ? (bi.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail ?? 'non précisées')
+          : 'aucune';
+        const pathologies = [patient.pathologie, patient.antecedentsMedicaux].filter(Boolean).join(' / ') || 'non renseigné';
+        return `\n\nPATIENT : ${patient.prenom} ${patient.nom}, ${age} ans. Pathologies : ${pathologies}. Contre-indications : ${ci}.`;
+      })()
+    : '';
+
+  const prior = history.length > 0
+    ? '\n\nÉCHANGES PRÉCÉDENTS:\n' + history.map(m => `${m.role === 'user' ? 'Q' : 'R'}: ${m.content}`).join('\n')
+    : '';
+
+  return `${base}${patientCtx}${prior}\n\n---\nQUESTION:\n${question}`;
+}
+
+function EcranAssistant({
+  preSelectedPatientId,
+  onOuvrirSettings,
+}: {
+  preSelectedPatientId?: string | null;
+  onOuvrirSettings: () => void;
+}) {
+  const { participants } = useParticipants();
+  type Msg = { role: 'user' | 'assistant'; content: string };
+  const [selectedPatient, setSelectedPatient] = useState<import('../../types').Participant | null>(null);
+  const [messages, setMessages] = useState<Msg[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showSheet, setShowSheet] = useState(false);
+  const [searchQ, setSearchQ] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (preSelectedPatientId && participants.length > 0) {
+      const p = participants.find(x => x.id === preSelectedPatientId);
+      if (p) setSelectedPatient(p);
+    }
+  }, [preSelectedPatientId, participants]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
+
+  async function sendMessage(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || loading) return;
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', content: trimmed }]);
+    setLoading(true);
+    try {
+      const prompt = buildAssistantPrompt(selectedPatient, messages, trimmed);
+      const res = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await res.json();
+      const responseText: string = data.text ?? (data.error ? `Erreur : ${data.error}` : 'Pas de réponse.');
+      setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
+      if (supabase) {
+        try {
+          await supabase.from('assistant_logs').insert({
+            patient_id: selectedPatient?.id ?? null,
+            question: trimmed,
+            reponse: responseText,
+          });
+        } catch { /* non bloquant */ }
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'assistant', content: `Erreur : ${err instanceof Error ? err.message : String(err)}` }]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const filteredPatients = searchQ.trim()
+    ? participants.filter(p => `${p.prenom} ${p.nom}`.toLowerCase().includes(searchQ.toLowerCase())).slice(0, 8)
+    : participants.slice(0, 10);
+
+  const ciTexte = selectedPatient
+    ? (() => {
+        const bi = selectedPatient.bilans.find(b => b.type === 'initial') ?? null;
+        return bi?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
+          ? bi.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail ?? null
+          : null;
+      })()
+    : null;
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: C.bg }}>
+
+      {/* Header */}
+      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 14, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: 'white' }}>🤖 Mon assistant</div>
+          <button
+            onClick={onOuvrirSettings}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', padding: 6 }}
+          >
+            <i className="ti ti-settings" style={{ fontSize: 18 }} />
+          </button>
+        </div>
+        {/* Sélecteur patient */}
+        <button
+          onClick={() => setShowSheet(true)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '10px 12px', background: selectedPatient ? 'rgba(43,191,191,0.15)' : 'rgba(255,255,255,0.07)',
+            border: `1px solid ${selectedPatient ? 'rgba(43,191,191,0.4)' : 'rgba(255,255,255,0.12)'}`,
+            borderRadius: 10, cursor: 'pointer', color: 'white',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            {selectedPatient ? (
+              <>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'white', flexShrink: 0 }}>
+                  {selectedPatient.prenom[0]}{selectedPatient.nom[0]}
+                </div>
+                <div style={{ textAlign: 'left', minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'white' }}>{selectedPatient.prenom} {selectedPatient.nom}</div>
+                  {ciTexte && <div style={{ fontSize: 11, color: '#F87171' }}>⚠️ CI active</div>}
+                </div>
+              </>
+            ) : (
+              <>
+                <i className="ti ti-search" style={{ fontSize: 15, color: 'rgba(255,255,255,0.4)' }} />
+                <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Sélectionner un patient (optionnel)</span>
+              </>
+            )}
+          </div>
+          {selectedPatient ? (
+            <button
+              onClick={e => { e.stopPropagation(); setSelectedPatient(null); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', padding: 4, flexShrink: 0 }}
+            >
+              ✕
+            </button>
+          ) : (
+            <i className="ti ti-chevron-right" style={{ fontSize: 14, color: 'rgba(255,255,255,0.3)' }} />
+          )}
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {messages.length === 0 && !loading && (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: C.muted }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🤖</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 6 }}>Mon assistant APA</div>
+            <div style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 20 }}>
+              {selectedPatient
+                ? `Contexte : ${selectedPatient.prenom} ${selectedPatient.nom}. Posez votre question.`
+                : 'Posez une question générale ou sélectionnez un patient pour un contexte personnalisé.'}
+            </div>
+            {[
+              '💊 Analyser les contre-indications',
+              '🏋️ Suggérer un programme',
+              '📊 Interpréter un test',
+            ].map((s, i) => (
+              <button key={i} onClick={() => setInput(s.slice(3))}
+                style={{ display: 'block', width: '100%', padding: '10px 14px', marginBottom: 6, background: 'white', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 13, color: C.text, cursor: 'pointer', textAlign: 'left' }}>
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+        {messages.map((msg, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+            <div style={{
+              maxWidth: '82%', padding: '11px 14px', fontSize: 14, lineHeight: 1.6,
+              borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+              background: msg.role === 'user' ? C.primary : 'white',
+              color: msg.role === 'user' ? 'white' : C.text,
+              border: msg.role === 'assistant' ? `1px solid ${C.border}` : 'none',
+              whiteSpace: 'pre-wrap',
+            }}>
+              {msg.content}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+            <div style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: '12px 12px 12px 2px', padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 18, animation: 'spin 1s linear infinite' }}>⟳</span>
+              <span style={{ fontSize: 13, color: C.muted }}>Réflexion en cours…</span>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Zone saisie */}
+      <div style={{ background: 'white', borderTop: `1px solid ${C.border}`, padding: '10px 14px', paddingBottom: 'calc(10px + env(safe-area-inset-bottom, 0px))', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <textarea
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
+            placeholder="Posez votre question…"
+            rows={1}
+            disabled={loading}
+            style={{
+              flex: 1, padding: '10px 12px', border: `1px solid ${C.border}`, borderRadius: 10,
+              fontSize: 14, outline: 'none', resize: 'none', fontFamily: 'inherit',
+              background: C.bg, lineHeight: 1.5, maxHeight: 100,
+            }}
+          />
+          <button
+            onClick={() => sendMessage(input)}
+            disabled={!input.trim() || loading}
+            style={{
+              width: 44, height: 44, borderRadius: 10, border: 'none', cursor: 'pointer',
+              background: input.trim() && !loading ? C.primary : '#D0DCDC',
+              color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}
+          >
+            <i className="ti ti-send" style={{ fontSize: 17 }} />
+          </button>
+        </div>
+      </div>
+
+      {/* Bottom sheet sélecteur patient */}
+      {showSheet && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200 }}
+          onClick={() => setShowSheet(false)}>
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'white', borderRadius: '20px 20px 0 0', maxHeight: '70vh', display: 'flex', flexDirection: 'column' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '16px 16px 8px' }}>
+              <div style={{ width: 40, height: 4, borderRadius: 2, background: '#E5E7EB', margin: '0 auto 14px' }} />
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 10 }}>Sélectionner un patient</div>
+              <input
+                type="search"
+                value={searchQ}
+                onChange={e => setSearchQ(e.target.value)}
+                placeholder="Rechercher…"
+                autoFocus
+                style={{ width: '100%', padding: '10px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, background: C.bg, outline: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1, padding: '0 16px 20px', paddingBottom: 'calc(20px + env(safe-area-inset-bottom, 0px))' }}>
+              {selectedPatient && (
+                <button
+                  onClick={() => { setSelectedPatient(null); setShowSheet(false); }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', marginBottom: 6, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, cursor: 'pointer', textAlign: 'left' }}
+                >
+                  <span style={{ fontSize: 16 }}>✕</span>
+                  <span style={{ fontSize: 13, color: '#DC2626', fontWeight: 600 }}>Retirer le contexte patient</span>
+                </button>
+              )}
+              {filteredPatients.map(p => (
+                <button key={p.id} onClick={() => { setSelectedPatient(p); setSearchQ(''); setShowSheet(false); }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', marginBottom: 4, background: selectedPatient?.id === p.id ? '#E8F8F8' : 'white', border: `1px solid ${selectedPatient?.id === p.id ? C.primary : C.border}`, borderRadius: 10, cursor: 'pointer', textAlign: 'left' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: 'white', flexShrink: 0 }}>
+                    {p.prenom[0]}{p.nom[0]}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{p.prenom} {p.nom}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{calcAge(p.dateNaissance)} ans{p.pathologie ? ` · ${p.pathologie.slice(0, 20)}` : ''}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── App Mobile principal ──────────────────────────────────────────────────────
 
 interface Props { onLogout: () => void }
@@ -1824,6 +2114,7 @@ export default function AppMobile({ onLogout }: Props) {
   const [onglet, setOnglet] = useState('aujourdhui');
   const [ficheId, setFicheId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [assistantPatientId, setAssistantPatientId] = useState<string | null>(null);
 
   const shell: React.CSSProperties = { maxWidth: 480, margin: '0 auto', minHeight: '100vh', background: C.bg, fontFamily: "'Nunito',sans-serif" };
 
@@ -1832,19 +2123,44 @@ export default function AppMobile({ onLogout }: Props) {
   }
 
   if (ficheId) {
-    return <div style={shell}><FichePatientMobile participantId={ficheId} onBack={() => setFicheId(null)} /></div>;
+    return (
+      <div style={shell}>
+        <FichePatientMobile
+          participantId={ficheId}
+          onBack={() => setFicheId(null)}
+          onOpenAssistant={(patientId: string) => {
+            setAssistantPatientId(patientId);
+            setFicheId(null);
+            setOnglet('assistant');
+          }}
+        />
+      </div>
+    );
+  }
+
+  function handleChangeOnglet(id: string) {
+    setOnglet(id);
+    if (id !== 'assistant') setAssistantPatientId(null);
   }
 
   return (
     <div style={{ ...shell, display: 'flex', flexDirection: 'column' }}>
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 80 }}>
-        {onglet === 'aujourdhui' && <EcranAujourdhui onVoirFiche={setFicheId} onNaviguerSaisie={() => setOnglet('saisie')} />}
+        {onglet === 'aujourdhui' && <EcranAujourdhui onVoirFiche={setFicheId} onNaviguerSaisie={() => handleChangeOnglet('saisie')} />}
         {onglet === 'patients'   && <EcranPatients onVoirFiche={setFicheId} />}
         {onglet === 'saisie'     && <EcranSaisie onVoirFiche={setFicheId} />}
         {onglet === 'tournee'    && <EcranTournee />}
-        {onglet === 'plus'       && <EcranPlus onLogout={onLogout} onOuvrirSettings={() => setShowSettings(true)} onNaviguerOnglet={setOnglet} />}
+        {onglet === 'assistant'  && (
+          <EcranAssistant
+            preSelectedPatientId={assistantPatientId}
+            onOuvrirSettings={() => setShowSettings(true)}
+          />
+        )}
+        {onglet === 'plus' && (
+          <EcranPlus onLogout={onLogout} onOuvrirSettings={() => setShowSettings(true)} onNaviguerOnglet={handleChangeOnglet} />
+        )}
       </div>
-      <BottomNav onglet={onglet} onChange={setOnglet} />
+      <BottomNav onglet={onglet} onChange={handleChangeOnglet} />
     </div>
   );
 }

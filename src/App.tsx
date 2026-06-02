@@ -19,6 +19,7 @@ import { BandeauHorsLigne, NotificationMiseAJour } from './components/pwa/PWACom
 import ClientView from './pages/ClientView';
 
 // Lazy load : pages lourdes chargées à la demande
+const AssistantPage      = lazy(() => import('./pages/AssistantPage'));
 const MapPage            = lazy(() => import('./pages/MapPage'));
 const AgendaPage         = lazy(() => import('./pages/AgendaPage'));
 const TourneePage        = lazy(() => import('./pages/TourneePage'));
@@ -213,6 +214,9 @@ export default function App() {
                           } />
                           <Route path="/participant/:id/comparaison" element={
                             <Suspense fallback={<MapFallback />}><ComparaisonPage /></Suspense>
+                          } />
+                          <Route path="/assistant" element={
+                            <Suspense fallback={<MapFallback />}><AssistantPage /></Suspense>
                           } />
                           <Route path="/exercices" element={
                             <Suspense fallback={<MapFallback />}><ExercicesPage /></Suspense>
