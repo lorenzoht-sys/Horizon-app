@@ -27,6 +27,8 @@ const TourneePage        = lazy(() => import('./pages/TourneePage'));
 const ZonesPage          = lazy(() => import('./pages/ZonesPage'));
 const ExercicesPage      = lazy(() => import('./pages/ExercicesPage'));
 const StatsPage          = lazy(() => import('./pages/StatsPage'));
+const StructureDetail    = lazy(() => import('./pages/StructureDetail'));
+const PortailStructure   = lazy(() => import('./pages/PortailStructure'));
 const ComparaisonPage    = lazy(() => import('./pages/ComparaisonPage'));
 const ContratNouveauPage = lazy(() => import('./pages/ContratNouveauPage'));
 const BilanDetail        = lazy(() => import('./pages/BilanDetail'));
@@ -181,6 +183,14 @@ export default function App() {
         <Route path="/patient" element={<PageAccesPatient />} />
         <Route path="/patient/:id" element={<EspacePatient />} />
 
+        {/* Portail structure — public, sans auth praticien */}
+        <Route path="/structure/:token" element={
+          <Suspense fallback={null}><PortailStructure /></Suspense>
+        } />
+        <Route path="/structure/:token/patient/:patientId" element={
+          <Suspense fallback={null}><PortailStructure /></Suspense>
+        } />
+
         {/* Onboarding — route protégée, uniquement si titre non encore renseigné */}
         <Route path="/onboarding" element={
           !isLoggedIn
@@ -233,6 +243,9 @@ export default function App() {
                           } />
                           <Route path="/stats" element={
                             <Suspense fallback={<MapFallback />}><StatsPage /></Suspense>
+                          } />
+                          <Route path="/structures/:id" element={
+                            <Suspense fallback={<MapFallback />}><StructureDetail /></Suspense>
                           } />
                           <Route path="/settings" element={<SettingsPage />} />
                           <Route path="/zones" element={

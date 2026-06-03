@@ -3,26 +3,196 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useParticipants } from '../hooks/useParticipants';
 import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
+import { useStructures } from '../hooks/useStructures';
 import ParticipantCard from '../components/participant/ParticipantCard';
 import ParticipantForm from '../components/participant/ParticipantForm';
 import ImportExcelModal from '../components/import/ImportExcelModal';
 import PageWrapper from '../components/layout/PageWrapper';
-import { Plus, Search, Users, BarChart3, FileSpreadsheet, X, CalendarDays, MapPin, ChevronRight, NotebookPen, AlertCircle } from 'lucide-react';
+import { Plus, Search, Users, BarChart3, FileSpreadsheet, X, CalendarDays, MapPin, ChevronRight, NotebookPen, AlertCircle, Building2, Settings } from 'lucide-react';
 import { useJournalSeance } from '../hooks/useJournalSeance';
 import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
 import { getAllBrouillons } from '../hooks/useBrouillonBilan';
 import toast from 'react-hot-toast';
+import type { Structure } from '../types';
+
+const TYPE_LABELS: Record<string, string> = {
+  ehpad: 'EHPAD', centre: 'Centre de soins', association: 'Association',
+  entreprise: 'Entreprise', autre: 'Autre',
+};
+
+// ── Modal création structure ──────────────────────────────────────────────────
+
+function ModalCreationStructure({ onClose, onCreer }: {
+  onClose: () => void;
+  onCreer: (data: Omit<Structure, 'id' | 'praticienId' | 'tokenAcces' | 'actif' | 'createdAt'>) => Promise<void>;
+}) {
+  const [form, setForm] = useState({
+    nom: '', type: '' as Structure['type'] | '',
+    adresse: '', contactNom: '', contactEmail: '', contactTelephone: '',
+    tarifSeance: 45, frequenceFacturation: 'mensuelle' as Structure['frequenceFacturation'],
+  });
+  const [loading, setLoading] = useState(false);
+  const CLS = 'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary';
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.nom.trim() || !form.contactEmail.trim()) { toast.error('Nom et email contact requis'); return; }
+    setLoading(true);
+    try {
+      await onCreer({
+        nom: form.nom.trim(),
+        type: form.type || undefined,
+        adresse: form.adresse || undefined,
+        contactNom: form.contactNom || undefined,
+        contactEmail: form.contactEmail.trim(),
+        contactTelephone: form.contactTelephone || undefined,
+        tarifSeance: form.tarifSeance,
+        frequenceFacturation: form.frequenceFacturation,
+      });
+      onClose();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[1100] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
+          <h2 className="font-heading font-bold text-dark text-lg">Créer une structure</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-dark"><X size={20} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Nom de la structure *</label>
+              <input className={CLS} value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))} placeholder="EHPAD Les Rosiers" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Type</label>
+              <select className={CLS} value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as Structure['type'] }))}>
+                <option value="">— Choisir —</option>
+                {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Adresse</label>
+              <input className={CLS} value={form.adresse} onChange={e => setForm(f => ({ ...f, adresse: e.target.value }))} placeholder="12 rue des Acacias, Nantes" />
+            </div>
+          </div>
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Contact</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Nom du contact</label>
+                <input className={CLS} value={form.contactNom} onChange={e => setForm(f => ({ ...f, contactNom: e.target.value }))} placeholder="Marie Durand" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email *</label>
+                <input type="email" className={CLS} value={form.contactEmail} onChange={e => setForm(f => ({ ...f, contactEmail: e.target.value }))} placeholder="m.durand@ehpad.fr" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Téléphone</label>
+                <input className={CLS} value={form.contactTelephone} onChange={e => setForm(f => ({ ...f, contactTelephone: e.target.value }))} placeholder="02 40 XX XX XX" />
+              </div>
+            </div>
+          </div>
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Facturation</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Tarif séance (€) *</label>
+                <input type="number" className={CLS} value={form.tarifSeance} min={0} onChange={e => setForm(f => ({ ...f, tarifSeance: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Fréquence</label>
+                <select className={CLS} value={form.frequenceFacturation} onChange={e => setForm(f => ({ ...f, frequenceFacturation: e.target.value as Structure['frequenceFacturation'] }))}>
+                  <option value="mensuelle">Mensuelle</option>
+                  <option value="bimensuelle">Bimensuelle</option>
+                  <option value="a_la_seance">À la séance</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={loading} className="flex-1 bg-primary text-white rounded-xl py-2.5 font-semibold text-sm hover:bg-dark transition-colors disabled:opacity-50">
+              {loading ? 'Création…' : 'Créer la structure'}
+            </button>
+            <button type="button" onClick={onClose} className="px-5 border border-gray-200 rounded-xl text-gray-600 text-sm hover:bg-gray-50">Annuler</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Carte structure ───────────────────────────────────────────────────────────
+
+function CarteStructure({ structure, nbPatients, derniereSeance }: {
+  structure: Structure;
+  nbPatients: number;
+  derniereSeance?: string;
+}) {
+  const navigate = useNavigate();
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <Building2 size={18} style={{ color: '#2BBFBF' }} />
+          </div>
+          <div>
+            <div className="font-heading font-semibold text-dark text-sm">{structure.nom}</div>
+            {structure.type && <div className="text-xs text-gray-400">{TYPE_LABELS[structure.type] ?? structure.type}</div>}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-xl font-bold text-primary">{nbPatients}</div>
+          <div className="text-xs text-gray-400">patient{nbPatients !== 1 ? 's' : ''}</div>
+        </div>
+      </div>
+      {structure.contactNom && (
+        <div className="text-xs text-gray-500 mb-1">Contact : {structure.contactNom}</div>
+      )}
+      {derniereSeance && (
+        <div className="text-xs text-gray-400 mb-3">
+          Dernière séance : {new Date(derniereSeance + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
+        </div>
+      )}
+      <div className="flex gap-2 mt-3">
+        <button
+          onClick={() => navigate(`/structures/${structure.id}`, { state: { structure } })}
+          className="flex-1 text-xs font-semibold text-primary border border-primary/30 hover:bg-primary/5 px-3 py-2 rounded-lg transition-colors text-center"
+        >
+          Voir les patients →
+        </button>
+        <button
+          onClick={() => navigate(`/structures/${structure.id}`, { state: { structure } })}
+          className="text-xs text-gray-500 border border-gray-200 hover:bg-gray-50 px-2.5 py-2 rounded-lg transition-colors"
+          title="Gérer la structure"
+        >
+          <Settings size={13} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const MiniMap = lazy(() => import('../components/map/MiniMap'));
 
+type DashTab = 'tous' | 'independants' | 'structures';
+
 export default function Dashboard() {
   const { participants, addParticipant } = useParticipants();
-  const { seancesDuJour, patientsARelancer } = useAgenda();
+  const { seancesDuJour, patientsARelancer, seances } = useAgenda();
   const { contratsARenouveler } = useContrats();
+  const { structures, creerStructure } = useStructures();
   const { notes } = useJournalSeance();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showCreateStructure, setShowCreateStructure] = useState(false);
+  const [activeTab, setActiveTab] = useState<DashTab>('tous');
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -33,9 +203,10 @@ export default function Dashboard() {
     }
   }, [location.state, navigate]);
 
-  const filtered = participants.filter(p =>
-    `${p.prenom} ${p.nom}`.toLowerCase().includes(search.toLowerCase())
-  );
+  const independants = participants.filter(p => !p.structureId);
+
+  const filtered = (activeTab === 'independants' ? independants : participants)
+    .filter(p => `${p.prenom} ${p.nom}`.toLowerCase().includes(search.toLowerCase()));
 
   const needsBilan = participants.filter(p => {
     const last = p.bilans.at(-1);
@@ -67,6 +238,25 @@ export default function Dashboard() {
           >
             {participants.length} patient{participants.length !== 1 ? 's' : ''} suivi{participants.length !== 1 ? 's' : ''}
           </p>
+        </div>
+
+        {/* Onglets */}
+        <div className="flex gap-1 mb-6 bg-gray-100 rounded-xl p-1 w-fit">
+          {([
+            ['tous', `👥 Tous (${participants.length})`],
+            ['independants', `🏠 Indépendants (${independants.length})`],
+            ['structures', `🏢 Structures (${structures.length})`],
+          ] as [DashTab, string][]).map(([tab, label]) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === tab ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* Stats */}
@@ -179,77 +369,83 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Toolbar */}
-        <div className="flex items-center gap-3 mb-6 flex-wrap">
-          <div className="relative flex-1 min-w-48">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: '#A8C0C0' }} />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Rechercher un participant..."
-              className="w-full transition-all focus:outline-none"
-              style={{
-                paddingLeft: 40, paddingRight: 16, paddingTop: 11, paddingBottom: 11,
-                background: '#F4FAFA', border: '1.5px solid #E2EEEE',
-                borderRadius: 10, fontSize: 14, fontFamily: 'Nunito, sans-serif', color: '#0D2B2B',
-              }}
-              onFocus={e => {
-                e.target.style.borderColor = '#2BBFBF';
-                e.target.style.boxShadow = '0 0 0 3px rgba(43,191,191,0.12)';
-              }}
-              onBlur={e => {
-                e.target.style.borderColor = '#E2EEEE';
-                e.target.style.boxShadow = 'none';
-              }}
-            />
-          </div>
-          <button
-            onClick={() => setShowImport(true)}
-            className="flex items-center gap-2 text-sm font-medium transition-all"
-            style={{
-              padding: '10px 20px', background: 'transparent',
-              border: '1.5px solid #2BBFBF', borderRadius: 10,
-              color: '#2BBFBF', cursor: 'pointer', fontFamily: 'Nunito, sans-serif',
-            }}
-          >
-            <FileSpreadsheet size={16} />
-            <span className="hidden sm:inline">Import Excel</span>
-          </button>
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 text-white text-sm font-semibold transition-all"
-            style={{
-              padding: '10px 20px', background: '#2BBFBF',
-              border: 'none', borderRadius: 10, cursor: 'pointer',
-              fontFamily: 'Nunito, sans-serif',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.transform = 'translateY(-1px)';
-              e.currentTarget.style.boxShadow = '0 4px 20px rgba(43,191,191,0.20)';
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
-          >
-            <Plus size={16} />
-            Nouveau participant
-          </button>
-        </div>
-
-        {/* Grid participants */}
-        {filtered.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">
-            <Users size={56} className="mx-auto mb-4 opacity-20" />
-            <p className="font-medium text-lg">Aucun participant trouvé</p>
-            <p className="text-sm mt-1">
-              {search ? 'Essayez un autre nom' : 'Commencez par ajouter un participant'}
-            </p>
-          </div>
+        {/* Contenu selon onglet actif */}
+        {activeTab === 'structures' ? (
+          <>
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={() => setShowCreateStructure(true)}
+                className="flex items-center gap-2 text-white text-sm font-semibold px-4 py-2.5 bg-primary rounded-xl hover:bg-dark transition-colors"
+              >
+                <Plus size={16} /> Créer une structure
+              </button>
+            </div>
+            {structures.length === 0 ? (
+              <div className="text-center py-20 text-gray-400">
+                <Building2 size={56} className="mx-auto mb-4 opacity-20" />
+                <p className="font-medium text-lg">Aucune structure</p>
+                <p className="text-sm mt-1">Créez une structure pour regrouper vos patients d'EHPAD, centres...</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {structures.map(s => {
+                  const patientsStr = participants.filter(p => p.structureId === s.id);
+                  const seancesStr = seances.filter(se => patientsStr.some(p => p.id === se.participantId) && se.statut === 'realisee');
+                  const derniere = seancesStr.sort((a: any, b: any) => b.date.localeCompare(a.date))[0]?.date;
+                  return (
+                    <CarteStructure
+                      key={s.id}
+                      structure={s}
+                      nbPatients={patientsStr.length}
+                      derniereSeance={derniere}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.map(p => <ParticipantCard key={p.id} participant={p} />)}
-          </div>
+          <>
+            {/* Toolbar participants */}
+            <div className="flex items-center gap-3 mb-6 flex-wrap">
+              <div className="relative flex-1 min-w-48">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: '#A8C0C0' }} />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Rechercher un participant..."
+                  className="w-full transition-all focus:outline-none"
+                  style={{
+                    paddingLeft: 40, paddingRight: 16, paddingTop: 11, paddingBottom: 11,
+                    background: '#F4FAFA', border: '1.5px solid #E2EEEE',
+                    borderRadius: 10, fontSize: 14, fontFamily: 'Nunito, sans-serif', color: '#0D2B2B',
+                  }}
+                  onFocus={e => { e.target.style.borderColor = '#2BBFBF'; e.target.style.boxShadow = '0 0 0 3px rgba(43,191,191,0.12)'; }}
+                  onBlur={e => { e.target.style.borderColor = '#E2EEEE'; e.target.style.boxShadow = 'none'; }}
+                />
+              </div>
+              <button onClick={() => setShowImport(true)} className="flex items-center gap-2 text-sm font-medium transition-all" style={{ padding: '10px 20px', background: 'transparent', border: '1.5px solid #2BBFBF', borderRadius: 10, color: '#2BBFBF', cursor: 'pointer', fontFamily: 'Nunito, sans-serif' }}>
+                <FileSpreadsheet size={16} />
+                <span className="hidden sm:inline">Import Excel</span>
+              </button>
+              <button onClick={() => setShowForm(true)} className="flex items-center gap-2 text-white text-sm font-semibold transition-all" style={{ padding: '10px 20px', background: '#2BBFBF', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'Nunito, sans-serif' }}>
+                <Plus size={16} /> Nouveau participant
+              </button>
+            </div>
+
+            {/* Grid participants */}
+            {filtered.length === 0 ? (
+              <div className="text-center py-20 text-gray-400">
+                <Users size={56} className="mx-auto mb-4 opacity-20" />
+                <p className="font-medium text-lg">Aucun participant trouvé</p>
+                <p className="text-sm mt-1">{search ? 'Essayez un autre nom' : 'Commencez par ajouter un participant'}</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filtered.map(p => <ParticipantCard key={p.id} participant={p} />)}
+              </div>
+            )}
+          </>
         )}
 
         {/* Widget agenda */}
@@ -443,6 +639,22 @@ export default function Dashboard() {
 
       {/* Modal import Excel */}
       {showImport && <ImportExcelModal onClose={() => setShowImport(false)} participants={participants} addParticipant={addParticipant} />}
+
+      {/* Modal création structure */}
+      {showCreateStructure && (
+        <ModalCreationStructure
+          onClose={() => setShowCreateStructure(false)}
+          onCreer={async (data) => {
+            const s = await creerStructure(data);
+            if (s) {
+              toast.success(`Structure "${s.nom}" créée !`);
+              navigate(`/structures/${s.id}`, { state: { structure: s } });
+            } else {
+              toast.error('Erreur lors de la création');
+            }
+          }}
+        />
+      )}
     </>
   );
 }
