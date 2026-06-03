@@ -7,7 +7,9 @@ import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import toast from 'react-hot-toast';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-// pdfmake est chargé dynamiquement dans downloadPDF
+import pdfMake from 'pdfmake/build/pdfmake';
+import pdfFonts from 'pdfmake/build/vfs_fonts';
+(pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs ?? (pdfFonts as any).default?.pdfMake?.vfs;
 import type { Participant, Bilan } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -137,15 +139,8 @@ function mdToPdfMake(md: string): object[] {
   return content;
 }
 
-async function downloadPDF(patientNom: string, type: ActionType, markdownContent: string) {
-  // Chargement dynamique — ne bloque pas le démarrage de l'app
-  const [{ default: pdfMake }, pdfFonts] = await Promise.all([
-    import('pdfmake/build/pdfmake'),
-    import('pdfmake/build/vfs_fonts'),
-  ]);
-  const vfs = (pdfFonts as any).default?.pdfMake?.vfs ?? (pdfFonts as any).pdfMake?.vfs;
-  if (vfs) (pdfMake as any).vfs = vfs;
-
+function downloadPDF(patientNom: string, type: ActionType, markdownContent: string) {
+  try {
   const date    = new Date().toISOString().split('T')[0];
   const dateStr = new Date().toLocaleDateString('fr-FR');
   const label   = type === 'compte_rendu' ? 'CR-medecin' : 'CR-famille';
@@ -186,6 +181,10 @@ async function downloadPDF(patientNom: string, type: ActionType, markdownContent
   };
 
   pdfMake.createPdf(docDefinition as any).download(filename);
+  } catch (err) {
+    console.error('Erreur PDF:', err);
+    toast.error('Erreur lors de la génération du PDF. Réessayez.');
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1001,7 +1000,7 @@ export default function AssistantPage() {
                 {showPdfBar && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                     <button
-                      onClick={() => void downloadPDF(selectedPatient ? `${selectedPatient.prenom}-${selectedPatient.nom}` : 'patient', actionType!, msg.content)}
+                      onClick={() => downloadPDF(selectedPatient ? `${selectedPatient.prenom}-${selectedPatient.nom}` : 'patient', actionType!, msg.content)}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#2BBFBF', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                       📄 Télécharger en PDF
                     </button>
