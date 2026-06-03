@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS structures (
   contact_nom TEXT,
   contact_email TEXT NOT NULL,
   contact_telephone TEXT,
-  token_acces TEXT UNIQUE DEFAULT encode(gen_random_bytes(32), 'hex'),
+  token_acces TEXT UNIQUE,          -- généré côté client (pas de dépendance pgcrypto)
   tarif_seance DECIMAL(10,2) DEFAULT 45,
   frequence_facturation TEXT DEFAULT 'mensuelle'
     CHECK (frequence_facturation IN ('mensuelle', 'bimensuelle', 'a_la_seance')),
@@ -23,9 +23,10 @@ ALTER TABLE structures ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "praticien_gere_structures" ON structures;
 CREATE POLICY "praticien_gere_structures" ON structures
-  FOR ALL USING (praticien_id = auth.uid());
+  FOR ALL
+  USING (praticien_id = auth.uid())
+  WITH CHECK (praticien_id = auth.uid());
 
--- Lecture publique par token (pour le portail structure)
 DROP POLICY IF EXISTS "lecture_publique_token" ON structures;
 CREATE POLICY "lecture_publique_token" ON structures
   FOR SELECT USING (actif = true);
@@ -37,10 +38,8 @@ ALTER TABLE participants
 CREATE INDEX IF NOT EXISTS idx_participants_structure ON participants(structure_id);
 
 -- ── Factures structure dans factures_suivi ────────────────────────────────────
--- Rendre participant_id nullable pour les factures globales par structure
 ALTER TABLE factures_suivi ALTER COLUMN participant_id DROP NOT NULL;
 
--- Ajouter structure_id pour identifier les factures de structure
 ALTER TABLE factures_suivi
   ADD COLUMN IF NOT EXISTS structure_id UUID REFERENCES structures(id) ON DELETE CASCADE;
 

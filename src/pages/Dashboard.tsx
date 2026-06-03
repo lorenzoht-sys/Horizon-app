@@ -650,7 +650,7 @@ export default function Dashboard() {
               toast.success(`Structure "${s.nom}" créée !`);
               navigate(`/structures/${s.id}`, { state: { structure: s } });
             } else {
-              toast.error('Erreur lors de la création');
+              toast.error('Erreur : vérifiez que la table Supabase "structures" existe (voir console)');
             }
           }}
         />

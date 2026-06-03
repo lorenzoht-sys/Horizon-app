@@ -37,6 +37,12 @@ export function useStructures() {
     if (praticienId) void charger();
   }, [praticienId, charger]);
 
+  function genToken(): string {
+    const arr = new Uint8Array(32);
+    crypto.getRandomValues(arr);
+    return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
   async function creerStructure(data: {
     nom: string;
     type?: Structure['type'];
@@ -47,18 +53,25 @@ export function useStructures() {
     tarifSeance?: number;
     frequenceFacturation?: Structure['frequenceFacturation'];
   }): Promise<Structure | null> {
-    if (!supabase || !praticienId) return null;
+    if (!supabase || !praticienId) {
+      console.error('[useStructures] pas de supabase ou praticienId:', { supabase: !!supabase, praticienId });
+      return null;
+    }
     const row = {
       ...structureToDb({ ...data, tarifSeance: data.tarifSeance ?? 45 }),
       id: uuidv4(),
       praticien_id: praticienId,
+      token_acces: genToken(),  // généré côté client, pas de dépendance pgcrypto
     };
     const { data: inserted, error } = await supabase
       .from('structures')
       .insert(row)
       .select()
       .single();
-    if (error) { console.error('[useStructures] create error:', error); return null; }
+    if (error) {
+      console.error('[useStructures] create error:', error.message, error.details, error.hint);
+      return null;
+    }
     const s = dbToStructure(inserted);
     setStructures(prev => [...prev, s].sort((a, b) => a.nom.localeCompare(b.nom)));
     return s;
