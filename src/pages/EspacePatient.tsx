@@ -144,11 +144,13 @@ function EcranAccueil({
   const premierBilan = sortedBilans[0] ?? null;
   const dernierBilan = sortedBilans[sortedBilans.length - 1] ?? null;
 
-  // Dernière note de séance ou compte-rendu
-  const derniereNote = notesSeances
+  // Dernière note de séance ou compte-rendu (tri défensif)
+  const derniereNote = [...notesSeances]
+    .filter(n => n.date)
     .sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
-  const dernierCR = compteRendus
-    .sort((a, b) => b.dateSeance.localeCompare(a.dateSeance))[0] ?? null;
+  const dernierCR = [...compteRendus]
+    .filter(cr => cr.dateSeance)
+    .sort((a, b) => (b.dateSeance ?? '').localeCompare(a.dateSeance ?? ''))[0] ?? null;
 
   // Programme actif
   const programmeActif = programmes.filter(p => p.actif)
@@ -837,27 +839,48 @@ export default function EspacePatient() {
     if (!id || !supabase) { setLoading(false); return; }
 
     async function charger() {
-      try {
-        const [pRes, bRes, sRes, prRes, nRes, crRes] = await Promise.all([
-          supabase!.from('participants').select('*').eq('id', id).single(),
-          supabase!.from('bilans').select('*').eq('participant_id', id).order('date'),
-          supabase!.from('seances').select('*').eq('participant_id', id).order('date'),
-          supabase!.from('programmes').select('*').eq('participant_id', id),
-          supabase!.from('notes_seances').select('*').eq('participant_id', id).order('date', { ascending: false }).limit(10),
-          supabase!.from('comptes_rendus_seances').select('*').eq('participant_id', id).order('date_seance', { ascending: false }).limit(5),
-        ]);
+      // allSettled : si une requête échoue, les autres continuent
+      const [pRes, bRes, sRes, prRes, nRes, crRes] = await Promise.allSettled([
+        supabase!.from('participants').select('*').eq('id', id).single(),
+        supabase!.from('bilans').select('*').eq('participant_id', id).order('date'),
+        supabase!.from('seances').select('*').eq('participant_id', id).order('date'),
+        supabase!.from('programmes').select('*').eq('participant_id', id),
+        // Sélectionner uniquement date + note + ressenti (champs stables)
+        supabase!.from('notes_seances')
+          .select('id, date, note, ressenti, participant_id')
+          .eq('participant_id', id)
+          .order('date', { ascending: false })
+          .limit(10),
+        // Remapper manuellement date_seance → dateSeance
+        supabase!.from('comptes_rendus_seances')
+          .select('id, date_seance, observations, progression, participant_id')
+          .eq('participant_id', id)
+          .order('date_seance', { ascending: false })
+          .limit(5),
+      ]);
 
-        if (pRes.data)  setParticipant(dbToParticipant(pRes.data));
-        if (bRes.data)  setBilans(bRes.data.map(dbToBilan));
-        if (sRes.data)  setSeances(sRes.data.map(dbToSeance));
-        if (prRes.data) setProgrammes(prRes.data.map(dbToProgramme));
-        if (nRes.data)  setNotesSeances(nRes.data as NoteSeance[]);
-        if (crRes.data) setCompteRendus(crRes.data as CompteRenduSeance[]);
-      } catch (err) {
-        console.error('[EspacePatient]', err);
-      } finally {
-        setLoading(false);
+      if (pRes.status === 'fulfilled' && pRes.value.data)
+        setParticipant(dbToParticipant(pRes.value.data));
+      if (bRes.status === 'fulfilled' && bRes.value.data)
+        setBilans(bRes.value.data.map(dbToBilan));
+      if (sRes.status === 'fulfilled' && sRes.value.data)
+        setSeances(sRes.value.data.map(dbToSeance));
+      if (prRes.status === 'fulfilled' && prRes.value.data)
+        setProgrammes(prRes.value.data.map(dbToProgramme));
+      if (nRes.status === 'fulfilled' && nRes.value.data)
+        setNotesSeances(nRes.value.data as unknown as NoteSeance[]);
+      if (crRes.status === 'fulfilled' && crRes.value.data) {
+        // Remapper snake_case → camelCase pour les champs qu'on utilise
+        setCompteRendus(
+          crRes.value.data.map((r: any) => ({
+            ...r,
+            dateSeance: r.date_seance ?? '',
+            participantId: r.participant_id ?? '',
+          })) as CompteRenduSeance[]
+        );
       }
+
+      setLoading(false);
     }
 
     void charger();
