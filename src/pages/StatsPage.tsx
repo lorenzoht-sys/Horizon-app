@@ -8,6 +8,7 @@ import {
 } from 'chart.js';
 import { Chart, Line, Doughnut } from 'react-chartjs-2';
 import { TrendingUp, TrendingDown, Edit3, ChevronDown, ChevronUp, CheckCircle, RefreshCw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../components/layout/PageWrapper';
 import { useParticipants } from '../hooks/useParticipants';
 import { useAgenda } from '../hooks/useAgenda';
@@ -443,6 +444,262 @@ function GraphiqueSeances({ seances }: { seances: any[] }) {
   return (
     <div style={{ height: 220 }}>
       <Line data={data} options={options} />
+    </div>
+  );
+}
+
+// ─── Section Alertes ─────────────────────────────────────────────────────────
+
+interface Alerte {
+  type: 'rouge' | 'orange' | 'bleu';
+  emoji: string;
+  texte: string;
+  action: string;
+  href: string;
+}
+
+function SectionAlertes({
+  participants, seances, contrats, contratActif,
+}: {
+  participants: Participant[];
+  seances: any[];
+  contrats: any[];
+  contratActif: (id: string) => any;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const dans30j = new Date(now); dans30j.setDate(now.getDate() + 30);
+  const il90j = new Date(now);   il90j.setDate(now.getDate() - 90);
+  const il14j = new Date(now);   il14j.setDate(now.getDate() - 14);
+
+  const alertes: Alerte[] = [];
+
+  // 🔴 Factures en retard → géré via useFactures dans SectionFactures (ici on recalcule sommairement)
+  // (nb calculé depuis la liste des factures n'est pas accessible ici — on skip pour ne pas dupliquer le hook)
+
+  // 🟡 Bilans > 3 mois (90 jours)
+  const bilansEnRetard = participants.filter(p => {
+    const last = p.bilans.at(-1);
+    if (!last) return true; // aucun bilan
+    return new Date(last.date) < il90j;
+  });
+  if (bilansEnRetard.length > 0) {
+    alertes.push({
+      type: 'orange',
+      emoji: '🟡',
+      texte: `${bilansEnRetard.length} bilan${bilansEnRetard.length > 1 ? 's' : ''} à faire (> 3 mois)`,
+      action: 'Voir les patients',
+      href: '/',
+    });
+  }
+
+  // 🟡 Contrats expirant dans 30 jours
+  const contratsExpirants = contrats.filter(c => {
+    if (c.statut !== 'actif' || c.dureeIndeterminee) return false;
+    const fin = c.dateFin;
+    return fin >= today && fin <= dans30j.toISOString().slice(0, 10);
+  });
+  if (contratsExpirants.length > 0) {
+    alertes.push({
+      type: 'orange',
+      emoji: '🟡',
+      texte: `${contratsExpirants.length} contrat${contratsExpirants.length > 1 ? 's' : ''} expirant${contratsExpirants.length > 1 ? '' : ''} ce mois`,
+      action: 'Voir les contrats',
+      href: '/',
+    });
+  }
+
+  // 🔵 Patients sans séance depuis > 14 jours
+  const patientsInactifs = participants.filter(p => {
+    if (!contratActif(p.id)) return false;
+    const derniereSeance = seances
+      .filter(s => s.participantId === p.id && s.statut === 'realisee')
+      .sort((a: any, b: any) => b.date.localeCompare(a.date))[0];
+    if (!derniereSeance) return true;
+    return new Date(derniereSeance.date) < il14j;
+  });
+  if (patientsInactifs.length > 0) {
+    alertes.push({
+      type: 'bleu',
+      emoji: '🔵',
+      texte: `${patientsInactifs.length} patient${patientsInactifs.length > 1 ? 's' : ''} sans séance depuis > 2 semaines`,
+      action: 'Voir les patients',
+      href: '/',
+    });
+  }
+
+  if (alertes.length === 0) {
+    return (
+      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mb-4 flex items-center gap-3">
+        <div className="text-2xl">✅</div>
+        <div className="text-sm font-medium text-emerald-800">Tout est à jour — aucune alerte active !</div>
+      </div>
+    );
+  }
+
+  const nbRouges  = alertes.filter(a => a.type === 'rouge').length;
+  const COLOR: Record<Alerte['type'], string> = {
+    rouge:  'border-red-200 bg-red-50',
+    orange: 'border-amber-200 bg-amber-50',
+    bleu:   'border-blue-100 bg-blue-50',
+  };
+  const TEXT: Record<Alerte['type'], string> = {
+    rouge: 'text-red-700', orange: 'text-amber-700', bleu: 'text-blue-700',
+  };
+  const LINK: Record<Alerte['type'], string> = {
+    rouge: 'text-red-500 hover:text-red-700', orange: 'text-amber-600 hover:text-amber-800', bleu: 'text-blue-500 hover:text-blue-700',
+  };
+
+  return (
+    <div className={`rounded-2xl border p-4 mb-4 ${nbRouges > 0 ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-base">⚠️</span>
+        <div className="text-sm font-bold text-gray-900">
+          {alertes.length} alerte{alertes.length > 1 ? 's' : ''} à traiter
+        </div>
+        {nbRouges > 0 && (
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+            {nbRouges} urgente{nbRouges > 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+      <div className="space-y-2">
+        {alertes.map((a, i) => (
+          <div key={i} className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 border ${COLOR[a.type]}`}>
+            <div className={`text-sm font-medium ${TEXT[a.type]}`}>
+              {a.emoji} {a.texte}
+            </div>
+            <a href={a.href} className={`text-xs font-semibold flex-shrink-0 underline ${LINK[a.type]}`}>
+              {a.action} →
+            </a>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Section Santé du portefeuille ──────────────────────────────────────────
+
+function SectionSantePortefeuille({
+  participants, seances, contrats, contratActif,
+}: {
+  participants: Participant[];
+  seances: any[];
+  contrats: any[];
+  contratActif: (id: string) => any;
+}) {
+  const navigate = useNavigate();
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const il90j = new Date(now);   il90j.setDate(now.getDate() - 90);
+  const il14j = new Date(now);   il14j.setDate(now.getDate() - 14);
+  const dans30j = new Date(now); dans30j.setDate(now.getDate() + 30);
+
+  const bilansEnRetard = participants
+    .map(p => {
+      const last = [...p.bilans].sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
+      const enRetard = !last || new Date(last.date) < il90j;
+      return enRetard ? { p, dernierBilan: last?.date ?? null } : null;
+    })
+    .filter(Boolean) as { p: Participant; dernierBilan: string | null }[];
+
+  const contratsExpirants = contrats
+    .filter(c => c.statut === 'actif' && !c.dureeIndeterminee && c.dateFin >= today && c.dateFin <= dans30j.toISOString().slice(0, 10))
+    .map(c => ({
+      contrat: c,
+      patient: participants.find(p => p.id === c.participantId),
+    }))
+    .filter(x => x.patient);
+
+  const patientsInactifs = participants
+    .filter(p => !!contratActif(p.id))
+    .map(p => {
+      const derniere = seances
+        .filter(s => s.participantId === p.id && s.statut === 'realisee')
+        .sort((a: any, b: any) => b.date.localeCompare(a.date))[0] ?? null;
+      const inactif = !derniere || new Date(derniere.date) < il14j;
+      return inactif ? { p, derniereSeance: derniere?.date ?? null } : null;
+    })
+    .filter(Boolean) as { p: Participant; derniereSeance: string | null }[];
+
+  const patientsActifs = participants.filter(p => !!contratActif(p.id)).length;
+
+  const rowCls = 'flex items-center justify-between gap-3 py-2.5 border-b border-gray-50 last:border-0 group cursor-pointer hover:bg-gray-50/50 rounded-lg px-1 -mx-1 transition-colors';
+  const btnCls = 'text-xs font-semibold text-primary opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0';
+
+  if (bilansEnRetard.length + contratsExpirants.length + patientsInactifs.length === 0) {
+    return null; // Tout va bien, on n'affiche pas la section
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-4">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-base">🏥</span>
+        <div className="text-sm font-bold text-gray-900">Santé du portefeuille</div>
+        <div className="text-xs text-gray-400">{patientsActifs} patient{patientsActifs !== 1 ? 's' : ''} actif{patientsActifs !== 1 ? 's' : ''}</div>
+      </div>
+
+      {bilansEnRetard.length > 0 && (
+        <div className="mb-5">
+          <div className="text-xs font-bold text-orange-700 uppercase tracking-wide mb-2">
+            🟡 Bilans en retard (&gt; 3 mois) — {bilansEnRetard.length}
+          </div>
+          {bilansEnRetard.map(({ p, dernierBilan }) => (
+            <div key={p.id} className={rowCls} onClick={() => navigate(`/participant/${p.id}`)}>
+              <div>
+                <span className="text-sm font-medium text-gray-800">{p.prenom} {p.nom}</span>
+                <span className="text-xs text-gray-400 ml-2">
+                  {dernierBilan
+                    ? `Dernier bilan : ${new Date(dernierBilan + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`
+                    : 'Aucun bilan'}
+                </span>
+              </div>
+              <span className={btnCls}>Faire bilan →</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {contratsExpirants.length > 0 && (
+        <div className="mb-5">
+          <div className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-2">
+            🟡 Contrats expirant ce mois — {contratsExpirants.length}
+          </div>
+          {contratsExpirants.map(({ contrat, patient }) => (
+            <div key={contrat.id} className={rowCls} onClick={() => navigate(`/participant/${patient!.id}`)}>
+              <div>
+                <span className="text-sm font-medium text-gray-800">{patient!.prenom} {patient!.nom}</span>
+                <span className="text-xs text-gray-400 ml-2">
+                  Expire le {new Date(contrat.dateFin + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                </span>
+              </div>
+              <span className={btnCls}>Renouveler →</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {patientsInactifs.length > 0 && (
+        <div>
+          <div className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">
+            🔵 Patients inactifs (&gt; 2 semaines) — {patientsInactifs.length}
+          </div>
+          {patientsInactifs.map(({ p, derniereSeance }) => (
+            <div key={p.id} className={rowCls} onClick={() => navigate(`/participant/${p.id}`)}>
+              <div>
+                <span className="text-sm font-medium text-gray-800">{p.prenom} {p.nom}</span>
+                <span className="text-xs text-gray-400 ml-2">
+                  {derniereSeance
+                    ? `Dernière séance : ${new Date(derniereSeance + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`
+                    : 'Aucune séance'}
+                </span>
+              </div>
+              <span className={btnCls}>Contacter →</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1051,8 +1308,24 @@ export default function StatsPage() {
         />
       </div>
 
+      {/* ── Alertes ────────────────────────────────────────────────── */}
+      <SectionAlertes
+        participants={participants}
+        seances={seances}
+        contrats={contrats}
+        contratActif={contratActifDeParticipant}
+      />
+
       {/* ── Factures à envoyer ─────────────────────────────────────── */}
       <SectionFactures
+        participants={participants}
+        seances={seances}
+        contrats={contrats}
+        contratActif={contratActifDeParticipant}
+      />
+
+      {/* ── Santé du portefeuille ──────────────────────────────────── */}
+      <SectionSantePortefeuille
         participants={participants}
         seances={seances}
         contrats={contrats}
