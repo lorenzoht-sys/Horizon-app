@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams, Navigate } from 'react-router-dom';
 import type { Participant, Seance, Bilan, Programme } from '../types';
-import type { NoteSeance } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
 import { supabase } from '../lib/supabase';
 import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/mappers';
@@ -123,12 +122,11 @@ function BannierePWA() {
 // ── ÉCRAN 1 — Accueil ─────────────────────────────────────────────────────────
 
 function EcranAccueil({
-  participant, seances, bilans, notesSeances, compteRendus, programmes,
+  participant, seances, bilans, compteRendus, programmes,
 }: {
   participant: Participant;
   seances: Seance[];
   bilans: Bilan[];
-  notesSeances: NoteSeance[];
   compteRendus: CompteRenduSeance[];
   programmes: Programme[];
 }) {
@@ -144,19 +142,16 @@ function EcranAccueil({
   const premierBilan = sortedBilans[0] ?? null;
   const dernierBilan = sortedBilans[sortedBilans.length - 1] ?? null;
 
-  // Dernière note de séance ou compte-rendu (tri défensif)
-  const derniereNote = [...notesSeances]
-    .filter(n => n.date)
-    .sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
+  // Dernier compte-rendu rédigé par Pierre pour le patient
   const dernierCR = [...compteRendus]
-    .filter(cr => cr.dateSeance)
+    .filter(cr => cr.dateSeance && cr.observations)
     .sort((a, b) => (b.dateSeance ?? '').localeCompare(a.dateSeance ?? ''))[0] ?? null;
 
   // Programme actif
   const programmeActif = programmes.filter(p => p.actif)
     .sort((a, b) => b.dateCreation.localeCompare(a.dateCreation))[0] ?? null;
 
-  // Message de Pierre depuis le dernier bilan
+  // Message personnalisé = messageClient du dernier bilan
   const messagePierre = dernierBilan?.messageClient;
 
   return (
@@ -208,27 +203,29 @@ function EcranAccueil({
         </div>
       </div>
 
-      {/* Dernière note de séance / compte-rendu */}
-      {(derniereNote?.note || dernierCR?.observations) && (
+      {/* Retour de votre enseignant (compte-rendu rédigé pour le patient) */}
+      {dernierCR && (
         <div style={{
           background: 'white', border: `1px solid ${C.border}`,
           borderRadius: 18, padding: '18px 16px',
         }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
-            Votre dernière séance
-          </div>
-          <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>
-            {dernierCR ? fmtCourt(dernierCR.dateSeance) : derniereNote ? fmtCourt(derniereNote.date) : ''}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+              Retour de {praticien.nom.split(' ')[0]}
+            </div>
+            <div style={{ fontSize: 12, color: C.muted }}>
+              {fmtCourt(dernierCR.dateSeance)}
+            </div>
           </div>
           <div style={{
             background: C.bg, borderRadius: 12, padding: '14px',
-            fontSize: 14, color: C.text, lineHeight: 1.7, fontStyle: 'italic',
+            fontSize: 14, color: C.text, lineHeight: 1.7,
           }}>
-            💬 "{dernierCR?.observations ?? derniereNote?.note}"
+            {dernierCR.observations}
           </div>
-          {dernierCR?.progression && (
+          {dernierCR.progression === 'en progrès' && (
             <div style={{ marginTop: 8, fontSize: 13, color: C.green, fontWeight: 700 }}>
-              {dernierCR.progression === 'en progrès' ? '📈 En progrès' : dernierCR.progression === 'stable' ? '➡️ Stable' : ''}
+              📈 En progrès
             </div>
           )}
         </div>
@@ -831,7 +828,6 @@ export default function EspacePatient() {
   const [seances, setSeances]           = useState<Seance[]>([]);
   const [bilans, setBilans]             = useState<Bilan[]>([]);
   const [programmes, setProgrammes]     = useState<Programme[]>([]);
-  const [notesSeances, setNotesSeances] = useState<NoteSeance[]>([]);
   const [compteRendus, setCompteRendus] = useState<CompteRenduSeance[]>([]);
   const [tab, setTab]                   = useState<Tab>('accueil');
 
@@ -840,23 +836,17 @@ export default function EspacePatient() {
 
     async function charger() {
       // allSettled : si une requête échoue, les autres continuent
-      const [pRes, bRes, sRes, prRes, nRes, crRes] = await Promise.allSettled([
+      const [pRes, bRes, sRes, prRes, crRes] = await Promise.allSettled([
         supabase!.from('participants').select('*').eq('id', id).single(),
         supabase!.from('bilans').select('*').eq('participant_id', id).order('date'),
         supabase!.from('seances').select('*').eq('participant_id', id).order('date'),
         supabase!.from('programmes').select('*').eq('participant_id', id),
-        // Sélectionner uniquement date + note + ressenti (champs stables)
-        supabase!.from('notes_seances')
-          .select('id, date, note, ressenti, participant_id')
-          .eq('participant_id', id)
-          .order('date', { ascending: false })
-          .limit(10),
         // Remapper manuellement date_seance → dateSeance
         supabase!.from('comptes_rendus_seances')
           .select('id, date_seance, observations, progression, participant_id')
           .eq('participant_id', id)
           .order('date_seance', { ascending: false })
-          .limit(5),
+          .limit(10),
       ]);
 
       if (pRes.status === 'fulfilled' && pRes.value.data)
@@ -867,10 +857,7 @@ export default function EspacePatient() {
         setSeances(sRes.value.data.map(dbToSeance));
       if (prRes.status === 'fulfilled' && prRes.value.data)
         setProgrammes(prRes.value.data.map(dbToProgramme));
-      if (nRes.status === 'fulfilled' && nRes.value.data)
-        setNotesSeances(nRes.value.data as unknown as NoteSeance[]);
       if (crRes.status === 'fulfilled' && crRes.value.data) {
-        // Remapper snake_case → camelCase pour les champs qu'on utilise
         setCompteRendus(
           crRes.value.data.map((r: any) => ({
             ...r,
@@ -949,7 +936,6 @@ export default function EspacePatient() {
             participant={participant}
             seances={seances}
             bilans={bilans}
-            notesSeances={notesSeances}
             compteRendus={compteRendus}
             programmes={programmes}
           />
