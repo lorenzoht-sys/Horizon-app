@@ -39,11 +39,10 @@ interface PatientExtras {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const ACTIONS: { id: ActionType; emoji: string; title: string; subtitle: string }[] = [
-  { id: 'contre_indications',   emoji: '💊',    title: 'Vérifier les contre-indications',  subtitle: 'CI actives + recommandations APA' },
-  { id: 'compte_rendu',         emoji: '📋',    title: 'Rédiger un compte-rendu médecin',  subtitle: 'Basé sur le dernier bilan + séances' },
-  { id: 'compte_rendu_famille', emoji: '👨‍👩‍👧', title: 'Compte-rendu famille',              subtitle: 'Langage accessible, progrès + vigilance' },
-  { id: 'programme',            emoji: '🏋️',   title: "Suggérer un programme d'exercices", subtitle: 'Adapté au profil et aux CI' },
-  { id: 'interpretation',       emoji: '📊',    title: 'Interpréter un résultat de test',  subtitle: 'Analyse clinique des derniers scores' },
+  { id: 'contre_indications', emoji: '💊',  title: 'Vérifier les contre-indications',  subtitle: 'CI actives + recommandations APA' },
+  { id: 'compte_rendu',       emoji: '📋',  title: 'Rédiger un compte-rendu',          subtitle: 'Médecin prescripteur ou famille' },
+  { id: 'programme',          emoji: '🏋️', title: "Suggérer un programme d'exercices", subtitle: 'Adapté au profil et aux CI' },
+  { id: 'interpretation',     emoji: '📊',  title: 'Interpréter un résultat de test',  subtitle: 'Analyse clinique des derniers scores' },
 ];
 
 const ACTION_LABELS: Record<ActionType, string> = {
@@ -556,6 +555,7 @@ export default function AssistantPage() {
   const [loading, setLoading]           = useState(false);
   const [logs, setLogs]                 = useState<AssistantLog[]>([]);
   const [logSearch, setLogSearch]       = useState('');
+  const [expandedCard, setExpandedCard] = useState<ActionType | null>(null);
 
   const praticienPrenom = loadPraticienPrenom();
   const messagesEndRef  = useRef<HTMLDivElement>(null);
@@ -791,7 +791,7 @@ export default function AssistantPage() {
   }
 
   function resetToHome() {
-    setPhase('home'); setActionType(null); setMessages([]); setAwaitingPatient(false); setInput('');
+    setPhase('home'); setActionType(null); setMessages([]); setAwaitingPatient(false); setInput(''); setExpandedCard(null);
   }
 
   const sharedLeftColumn = (
@@ -819,16 +819,56 @@ export default function AssistantPage() {
               </p>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
-              {ACTIONS.map(action => (
-                <button key={action.id} onClick={() => handleStartAction(action.id)}
-                  style={{ padding: '20px 18px', background: 'white', border: '1.5px solid #E5E7EB', borderRadius: 14, cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s, box-shadow 0.15s' }}
-                  onMouseOver={e => { (e.currentTarget as HTMLElement).style.borderColor = '#2BBFBF'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(43,191,191,0.12)'; }}
-                  onMouseOut={e => { (e.currentTarget as HTMLElement).style.borderColor = '#E5E7EB'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}>
-                  <div style={{ fontSize: 28, marginBottom: 10 }}>{action.emoji}</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', lineHeight: 1.4, marginBottom: 5 }}>{action.title}</div>
-                  <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.4 }}>{action.subtitle}</div>
-                </button>
-              ))}
+              {ACTIONS.map(action => {
+                if (action.id === 'compte_rendu' && expandedCard === 'compte_rendu') {
+                  return (
+                    <div key={action.id} style={{ gridColumn: '1 / -1', padding: '20px 18px', background: 'white', border: '1.5px solid #2BBFBF', borderRadius: 14, boxShadow: '0 4px 16px rgba(43,191,191,0.12)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                        <span style={{ fontSize: 24 }}>{action.emoji}</span>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>{action.title}</div>
+                          <div style={{ fontSize: 12, color: '#6B7280' }}>Choisissez le destinataire</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <button
+                          onClick={() => { setExpandedCard(null); handleStartAction('compte_rendu'); }}
+                          style={{ flex: 1, padding: '12px 14px', background: '#F0F9F9', border: '1.5px solid #2BBFBF', borderRadius: 10, cursor: 'pointer', textAlign: 'left' }}
+                          onMouseOver={e => (e.currentTarget.style.background = '#E0F5F5')}
+                          onMouseOut={e => (e.currentTarget.style.background = '#F0F9F9')}>
+                          <div style={{ fontSize: 18, marginBottom: 4 }}>👨‍⚕️</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>Médecin prescripteur</div>
+                          <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Vocabulaire clinique, valeurs exactes</div>
+                        </button>
+                        <button
+                          onClick={() => { setExpandedCard(null); handleStartAction('compte_rendu_famille'); }}
+                          style={{ flex: 1, padding: '12px 14px', background: '#F0F9F9', border: '1.5px solid #2BBFBF', borderRadius: 10, cursor: 'pointer', textAlign: 'left' }}
+                          onMouseOver={e => (e.currentTarget.style.background = '#E0F5F5')}
+                          onMouseOut={e => (e.currentTarget.style.background = '#F0F9F9')}>
+                          <div style={{ fontSize: 18, marginBottom: 4 }}>👨‍👩‍👧</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>Famille</div>
+                          <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Langage accessible, conseils pratiques</div>
+                        </button>
+                      </div>
+                      <button onClick={() => setExpandedCard(null)}
+                        style={{ marginTop: 10, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#9CA3AF' }}>
+                        ✕ Annuler
+                      </button>
+                    </div>
+                  );
+                }
+                return (
+                  <button key={action.id}
+                    onClick={() => action.id === 'compte_rendu' ? setExpandedCard('compte_rendu') : handleStartAction(action.id)}
+                    style={{ padding: '20px 18px', background: 'white', border: '1.5px solid #E5E7EB', borderRadius: 14, cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s, box-shadow 0.15s' }}
+                    onMouseOver={e => { (e.currentTarget as HTMLElement).style.borderColor = '#2BBFBF'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(43,191,191,0.12)'; }}
+                    onMouseOut={e => { (e.currentTarget as HTMLElement).style.borderColor = '#E5E7EB'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}>
+                    <div style={{ fontSize: 28, marginBottom: 10 }}>{action.emoji}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', lineHeight: 1.4, marginBottom: 5 }}>{action.title}</div>
+                    <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.4 }}>{action.subtitle}</div>
+                  </button>
+                );
+              })}
             </div>
             <div style={{ textAlign: 'center' }}>
               <button onClick={() => handleStartAction('libre')}
@@ -847,6 +887,9 @@ export default function AssistantPage() {
   // ── CHAT ──────────────────────────────────────────────────────────────────
 
   const currentAction = actionType ? ACTIONS.find(a => a.id === actionType) : null;
+  const chatTitle = actionType === 'compte_rendu_famille'
+    ? '👨‍👩‍👧 Compte-rendu famille'
+    : currentAction ? `${currentAction.emoji} ${currentAction.title}` : 'Mon assistant';
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#F8FAFA' }}>
@@ -858,7 +901,7 @@ export default function AssistantPage() {
             <Bot size={18} style={{ color: '#2BBFBF', flexShrink: 0 }} />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>
-                {currentAction ? `${currentAction.emoji} ${currentAction.title}` : 'Mon assistant'}
+                {chatTitle}
               </div>
               {selectedPatient && (
                 <div style={{ fontSize: 12, color: '#2BBFBF' }}>
