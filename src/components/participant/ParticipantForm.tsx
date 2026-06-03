@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical } from '../../types';
 import { TAG_CONFIG, TAG_ORDER, ALL_TESTS, TEST_LABELS, buildTestsActifs } from '../../data/profiles';
+import { useStructures } from '../../hooks/useStructures';
 import { Save, X, ChevronDown, ChevronUp } from 'lucide-react';
 
 function genId() {
@@ -151,6 +152,11 @@ const CLS_INPUT = 'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm 
 const CLS_LABEL = 'block text-sm font-medium text-gray-700 mb-1.5';
 
 export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) {
+  const { structures } = useStructures();
+
+  // ── Rattachement structure ──────────────────────────────────────
+  const [structureId, setStructureId] = useState<string | undefined>(initial?.structureId);
+
   // ── Traitements & antécédents structurés ───────────────────────
   const [traitements, setTraitements] = useState<TraitementPatient[]>(initial?.traitements ?? []);
   const [antecedents, setAntecedents] = useState<AntecedentMedical[]>(initial?.antecedentsMedicauxStructures ?? []);
@@ -230,6 +236,7 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
       tags, testsActifs, rgpd,
       traitements: traitements.length > 0 ? traitements : undefined,
       antecedentsMedicauxStructures: antecedents.length > 0 ? antecedents : undefined,
+      structureId: structureId || undefined,
       profil:         initial?.profil,
       coordonnees:    initial?.coordonnees,
       geocodeFailed:  initial?.geocodeFailed,
@@ -454,6 +461,40 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
           </div>
         </div>
       </div>
+
+      {/* ── RATTACHEMENT STRUCTURE ── */}
+      {structures.length > 0 && (
+        <div className="border border-gray-100 rounded-2xl overflow-hidden">
+          <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
+            <span className="text-lg">🏢</span>
+            <div>
+              <div className="font-semibold text-dark text-sm">Rattachement</div>
+              <div className="text-xs text-gray-500">Patient indépendant ou rattaché à une structure</div>
+            </div>
+          </div>
+          <div className="p-4">
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="rattachement" checked={!structureId} onChange={() => setStructureId(undefined)} className="accent-primary" />
+                <span className="text-sm text-gray-700">Patient indépendant</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="rattachement" checked={!!structureId} onChange={() => setStructureId(structures[0]?.id)} className="accent-primary" />
+                <span className="text-sm text-gray-700">Rattaché à une structure</span>
+              </label>
+              {structureId && (
+                <select
+                  value={structureId}
+                  onChange={e => setStructureId(e.target.value)}
+                  className="mt-1 w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
+                >
+                  {structures.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
+                </select>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── TRAITEMENTS ── */}
       <div className="border border-gray-100 rounded-2xl overflow-hidden">
