@@ -983,6 +983,55 @@ function SectionFactures({
   );
 }
 
+// ─── Section Kilométrage ──────────────────────────────────────────────────────
+
+function SectionKilometrage({ seances }: {
+  seances: any[];
+  participants?: Participant[];
+}) {
+  const BAREME_KM = 0.41; // barème 2026
+  const now = new Date();
+  const moisKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  // Calcul simplifié : on groupe par ville du participant (approximation)
+  // Dans une implémentation complète, on utiliserait les zones géographiques
+  const seancesMois = seances.filter(s => s.date.startsWith(moisKey) && s.statut === 'realisee');
+
+  // Estimation distance si pas de coordonnées : 10 km aller-retour par défaut
+  const DISTANCE_DEFAUT_KM = 10;
+  const kmTotal = seancesMois.length * DISTANCE_DEFAUT_KM;
+  const indemnite = kmTotal * BAREME_KM;
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+      <div className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+        🚗 Kilométrage — {MOIS_LONGS[now.getMonth()]} {now.getFullYear()}
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="bg-gray-50 rounded-xl p-3 text-center">
+          <div className="text-xl font-bold text-gray-800">{seancesMois.length}</div>
+          <div className="text-xs text-gray-500 mt-0.5">séances à domicile</div>
+        </div>
+        <div className="bg-gray-50 rounded-xl p-3 text-center">
+          <div className="text-xl font-bold text-primary">{kmTotal} km</div>
+          <div className="text-xs text-gray-500 mt-0.5">estimés ce mois</div>
+        </div>
+        <div className="bg-emerald-50 rounded-xl p-3 text-center">
+          <div className="text-xl font-bold text-emerald-700">{indemnite.toFixed(0)} €</div>
+          <div className="text-xs text-emerald-600 mt-0.5">déduction estimée</div>
+        </div>
+      </div>
+
+      <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-3 py-2">
+        <span className="font-medium">Barème 2026 :</span> {BAREME_KM}€/km · Basé sur {DISTANCE_DEFAUT_KM} km moyen par séance
+        <br />
+        ⚠️ Estimation indicative — à valider avec votre comptable
+      </div>
+    </div>
+  );
+}
+
 // ─── Progression par test ─────────────────────────────────────────────────────
 
 const LABELS_TESTS: Record<string, string> = {
@@ -1363,7 +1412,7 @@ export default function StatsPage() {
       </div>
 
       {/* ── Progression + Assiduité + Répartition ──────────────────── */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <div className="text-sm font-semibold text-gray-800 mb-3">Progression moyenne par test</div>
           <ErrorBoundary>
@@ -1391,6 +1440,50 @@ export default function StatsPage() {
             Total : <span className="font-semibold text-gray-700">{participants.length} patient{participants.length > 1 ? 's' : ''}</span>
           </div>
         </div>
+      </div>
+
+      {/* ── Projection + Objectif + Kilométrage ────────────────────── */}
+      <div className="grid gap-4 mb-4" style={{ gridTemplateColumns: '2fr 1fr' }}>
+        {/* Objectif + projection */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <div className="text-sm font-semibold text-gray-800 mb-3">📊 Objectif mensuel</div>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                style={{ width: `${Math.min(100, pct)}%`, background: pct >= 100 ? '#1D9E75' : pct >= 80 ? '#2BBFBF' : '#F59E0B' }}
+                className="h-full rounded-full transition-all"
+              />
+            </div>
+            <span className="text-sm font-bold text-gray-700">{pct}%</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="text-center">
+              <div className="text-lg font-bold text-gray-900">{caMois.toLocaleString('fr-FR')} €</div>
+              <div className="text-xs text-gray-400">CA ce mois</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-gray-500">{(statsPro.objectifMensuel ?? 0).toLocaleString('fr-FR')} €</div>
+              <div className="text-xs text-gray-400">Objectif</div>
+            </div>
+          </div>
+          {/* Projection mois suivant */}
+          {patientsActifs > 0 && (
+            <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
+              <div className="text-xs font-semibold text-blue-700 mb-0.5">
+                Projection {MOIS_COURTS[(now.getMonth() + 1) % 12]}
+              </div>
+              <div className="text-sm font-bold text-blue-800">
+                ~{(patientsActifs * (parseFloat(loadSettingsPro().tarifHoraire) || 45) * 4).toLocaleString('fr-FR')} €
+              </div>
+              <div className="text-xs text-blue-500 mt-0.5">
+                Basé sur {patientsActifs} patients actifs × ~4 séances/mois
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Kilométrage */}
+        <SectionKilometrage seances={seances} participants={participants} />
       </div>
     </PageWrapper>
   );
