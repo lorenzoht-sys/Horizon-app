@@ -26,7 +26,7 @@ export default function StructureDetail() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { structures, supprimerStructure, regenererToken } = useStructures();
+  const { structures, mettreAJour, supprimerStructure, regenererToken } = useStructures();
   const { participants } = useParticipants();
   const { seances } = useAgenda();
   const { factures, creerOuMettreAJourStructure, marquerEnvoyee } = useFactures();
@@ -46,6 +46,11 @@ export default function StructureDetail() {
   }, [id, hookStructure, locationStructure]);
 
   const [confirmSuppr, setConfirmSuppr] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({
+    nom: '', contactNom: '', contactEmail: '', contactTelephone: '', adresse: '',
+    tarifSeance: 45, frequenceFacturation: 'mensuelle' as Structure['frequenceFacturation'],
+  });
   const [genLoading, setGenLoading] = useState(false);
   const [modalEnvoi, setModalEnvoi] = useState<string | null>(null);
   const [dateEnvoi, setDateEnvoi] = useState(new Date().toISOString().slice(0, 10));
@@ -237,13 +242,95 @@ export default function StructureDetail() {
         <div className="space-y-5">
           {/* Infos & portail */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <div className="text-sm font-bold text-gray-800 mb-4">⚙️ Informations</div>
-            <div className="space-y-2 text-sm mb-4">
-              {structure.contactEmail && <div><span className="text-gray-400">Email : </span><span>{structure.contactEmail}</span></div>}
-              {structure.contactTelephone && <div><span className="text-gray-400">Tél : </span><span>{structure.contactTelephone}</span></div>}
-              {structure.adresse && <div><span className="text-gray-400">Adresse : </span><span>{structure.adresse}</span></div>}
-              <div><span className="text-gray-400">Tarif : </span><span className="font-medium">{structure.tarifSeance}€/séance</span></div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-sm font-bold text-gray-800">⚙️ Informations</div>
+              {!editMode && (
+                <button
+                  onClick={() => {
+                    setEditForm({
+                      nom: structure.nom,
+                      contactNom: structure.contactNom ?? '',
+                      contactEmail: structure.contactEmail,
+                      contactTelephone: structure.contactTelephone ?? '',
+                      adresse: structure.adresse ?? '',
+                      tarifSeance: structure.tarifSeance,
+                      frequenceFacturation: structure.frequenceFacturation,
+                    });
+                    setEditMode(true);
+                  }}
+                  className="text-xs font-medium text-primary border border-primary/30 hover:bg-primary/5 px-2.5 py-1.5 rounded-lg"
+                >
+                  ✏️ Modifier
+                </button>
+              )}
             </div>
+
+            {editMode ? (
+              <div className="space-y-3 mb-4">
+                {[
+                  { label: 'Nom', key: 'nom', placeholder: 'EHPAD Les Rosiers' },
+                  { label: 'Contact', key: 'contactNom', placeholder: 'Marie Durand' },
+                  { label: 'Email', key: 'contactEmail', placeholder: 'contact@structure.fr' },
+                  { label: 'Téléphone', key: 'contactTelephone', placeholder: '02 40 XX XX XX' },
+                  { label: 'Adresse', key: 'adresse', placeholder: '12 rue des Acacias' },
+                ].map(({ label, key, placeholder }) => (
+                  <div key={key}>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
+                    <input
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                      value={editForm[key as keyof typeof editForm] as string}
+                      onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
+                      placeholder={placeholder}
+                    />
+                  </div>
+                ))}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Tarif (€)</label>
+                    <input type="number" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                      value={editForm.tarifSeance} onChange={e => setEditForm(f => ({ ...f, tarifSeance: Number(e.target.value) }))} min={0} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Fréquence</label>
+                    <select className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                      value={editForm.frequenceFacturation} onChange={e => setEditForm(f => ({ ...f, frequenceFacturation: e.target.value as Structure['frequenceFacturation'] }))}>
+                      <option value="mensuelle">Mensuelle</option>
+                      <option value="bimensuelle">Bimensuelle</option>
+                      <option value="a_la_seance">À la séance</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      await mettreAJour(structure.id, {
+                        nom: editForm.nom,
+                        contactNom: editForm.contactNom || undefined,
+                        contactEmail: editForm.contactEmail,
+                        contactTelephone: editForm.contactTelephone || undefined,
+                        adresse: editForm.adresse || undefined,
+                        tarifSeance: editForm.tarifSeance,
+                        frequenceFacturation: editForm.frequenceFacturation,
+                      });
+                      toast.success('Structure mise à jour');
+                      setEditMode(false);
+                    }}
+                    className="flex-1 bg-primary text-white rounded-xl py-2 text-sm font-semibold hover:bg-dark"
+                  >
+                    Enregistrer
+                  </button>
+                  <button onClick={() => setEditMode(false)} className="px-4 border border-gray-200 rounded-xl text-gray-600 text-sm">Annuler</button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2 text-sm mb-4">
+                {structure.contactEmail && <div><span className="text-gray-400">Email : </span><span>{structure.contactEmail}</span></div>}
+                {structure.contactTelephone && <div><span className="text-gray-400">Tél : </span><span>{structure.contactTelephone}</span></div>}
+                {structure.adresse && <div><span className="text-gray-400">Adresse : </span><span>{structure.adresse}</span></div>}
+                <div><span className="text-gray-400">Tarif : </span><span className="font-medium">{structure.tarifSeance}€/séance</span></div>
+                <div><span className="text-gray-400">Facturation : </span><span className="font-medium">{structure.frequenceFacturation}</span></div>
+              </div>
+            )}
 
             <div className="border-t border-gray-100 pt-4">
               <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Accès portail</div>
