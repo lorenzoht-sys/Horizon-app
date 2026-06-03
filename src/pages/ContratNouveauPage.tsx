@@ -54,6 +54,7 @@ export default function ContratNouveauPage() {
     d.setMonth(d.getMonth() + 3);
     return d.toISOString().split('T')[0];
   });
+  const [dureeIndeterminee, setDureeIndeterminee] = useState(false);
   const [nbSeancesPrescrites, setNbSeancesPrescrites] = useState(12);
   const [notes, setNotes] = useState('');
 
@@ -76,13 +77,21 @@ export default function ContratNouveauPage() {
 
   const seancesParSemaine = joursFixe.length;
 
+  // Pour "durée indéterminée", générer 6 mois de séances par défaut
+  const dateFinPourGeneration = (() => {
+    if (mode !== 'duree' || !dureeIndeterminee) return dateFin;
+    const d = new Date(dateDebut);
+    d.setMonth(d.getMonth() + 6);
+    return d.toISOString().split('T')[0];
+  })();
+
   const nbSeances = mode === 'duree'
-    ? (dateDebut && dateFin ? calculerNombreSeances(dateDebut, dateFin, joursFixe) : 0)
+    ? (dateDebut && dateFinPourGeneration ? calculerNombreSeances(dateDebut, dateFinPourGeneration, joursFixe) : 0)
     : nbSeancesPrescrites;
 
   const dateFinEffective = mode === 'seances'
     ? calculerDateFin(dateDebut, joursFixe, nbSeancesPrescrites)
-    : dateFin;
+    : dateFinPourGeneration;
 
   function heureFinCalc(): string {
     const [h, m] = heureDebut.split(':').map(Number);
@@ -122,6 +131,7 @@ export default function ContratNouveauPage() {
         dureeMinutes,
         statut: 'actif',
         notes: notes || undefined,
+        dureeIndeterminee: dureeIndeterminee || undefined,
       },
       adresse,
       coordonnees
@@ -228,14 +238,32 @@ export default function ContratNouveauPage() {
 
               {mode === 'duree' ? (
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1.5">Date de fin *</label>
-                  <input
-                    type="date"
-                    value={dateFin}
-                    onChange={e => setDateFin(e.target.value)}
-                    required
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
-                  />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs text-gray-500">Date de fin</label>
+                    <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
+                      <input type="checkbox" checked={dureeIndeterminee} onChange={e => setDureeIndeterminee(e.target.checked)}
+                        className="accent-primary rounded" />
+                      Durée indéterminée
+                    </label>
+                  </div>
+                  {dureeIndeterminee ? (
+                    <div className="w-full border border-dashed border-gray-300 rounded-xl px-4 py-2.5 text-sm text-gray-400 bg-gray-50 text-center">
+                      Sans terme défini
+                    </div>
+                  ) : (
+                    <input
+                      type="date"
+                      value={dateFin}
+                      onChange={e => setDateFin(e.target.value)}
+                      required={!dureeIndeterminee}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
+                    />
+                  )}
+                  {dureeIndeterminee && (
+                    <div className="text-xs text-gray-400 mt-1">
+                      6 mois de séances générées initialement
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div>
@@ -327,7 +355,7 @@ export default function ContratNouveauPage() {
                 onChange={e => setDureeMinutes(Number(e.target.value))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
               >
-                {[30, 45, 60, 90].map(d => (
+                {[30, 45, 60, 90, 120].map(d => (
                   <option key={d} value={d}>{d} min</option>
                 ))}
               </select>

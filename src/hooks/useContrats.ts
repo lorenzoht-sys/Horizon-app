@@ -15,6 +15,7 @@ interface CreerContratData {
   dureeMinutes: number;
   statut?: StatutContrat;
   notes?: string;
+  dureeIndeterminee?: boolean;
 }
 
 export function useContrats() {

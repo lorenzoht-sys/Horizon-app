@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Bot, Send, Mic, MicOff, Copy, ArrowLeft, RefreshCw, Search } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
+import { useContrats } from '../hooks/useContrats';
 import { supabase } from '../lib/supabase';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import toast from 'react-hot-toast';
@@ -262,7 +263,8 @@ function buildEvolution(ancien: Bilan, recent: Bilan): string {
 /** Construit le prompt système enrichi avec TOUTES les données du patient. */
 function buildSystemPrompt(
   patient: Participant | null,
-  extras: PatientExtras | null
+  extras: PatientExtras | null,
+  contratInfo?: { dureeMinutes: number; seancesParSemaine: number } | null
 ): string {
   const base = `Tu es un assistant clinique expert en Activité Physique Adaptée (APA), spécialisé dans l'accompagnement des enseignants APA libéraux en France.
 Tu réponds UNIQUEMENT en français. Tu es concis, professionnel et pratique.
@@ -344,17 +346,25 @@ ${notesText}
 ${crText ? `\nSÉANCES DICTÉES RÉCENTES :\n${crText}` : ''}
 
 ═══════════════════════════════════════
+ORGANISATION DES SÉANCES
+═══════════════════════════════════════
+${contratInfo
+  ? `Durée de séance : ${contratInfo.dureeMinutes} minutes\nFréquence : ${contratInfo.seancesParSemaine} séance${contratInfo.seancesParSemaine > 1 ? 's' : ''} par semaine\n⚠️ Respecter impérativement cette durée et cette fréquence dans TOUS les programmes générés.`
+  : 'Durée et fréquence non renseignées — adapter le programme à la situation réelle.'}
+
+═══════════════════════════════════════
 RÈGLES ABSOLUES
 ═══════════════════════════════════════
 1. Toujours vérifier les CI avant toute suggestion
 2. Citer les valeurs exactes des tests dans chaque recommandation
 3. Comparer systématiquement avec les bilans précédents si disponibles
 4. Si anticoagulants → signaler le risque choc/chute dans CHAQUE proposition
-5. Ne jamais faire de diagnostic médical`;
+5. Ne jamais faire de diagnostic médical
+6. Respecter strictement la durée et la fréquence de séance du contrat actif`;
 }
 
-function buildActionPrompt(action: ActionType, patient: Participant, extras: PatientExtras | null): string {
-  const sys = buildSystemPrompt(patient, extras);
+function buildActionPrompt(action: ActionType, patient: Participant, extras: PatientExtras | null, contratInfo?: { dureeMinutes: number; seancesParSemaine: number } | null): string {
+  const sys = buildSystemPrompt(patient, extras, contratInfo);
   switch (action) {
     case 'contre_indications':
       return `${sys}\n\n---\nQUESTION:\nEffectue une analyse complète des contre-indications à l'effort pour ce patient.\nPour chaque contre-indication identifiée :\n1. Décris le risque spécifique en APA\n2. Donne les précautions à respecter\n3. Liste les types d'exercices à éviter absolument\n4. Propose des alternatives adaptées et sécurisées`;
@@ -587,6 +597,7 @@ function LeftColumn({
 
 export default function AssistantPage() {
   const { participants } = useParticipants();
+  const { contratActifDeParticipant } = useContrats();
   const location = useLocation();
 
   const [phase, setPhase]               = useState<Phase>('home');
@@ -732,9 +743,15 @@ export default function AssistantPage() {
     await runAction(actionType, patient, extras);
   }
 
+  function getContratInfo(patient: Participant) {
+    const c = contratActifDeParticipant(patient.id);
+    if (!c) return null;
+    return { dureeMinutes: c.dureeMinutes, seancesParSemaine: c.joursFixe.length };
+  }
+
   async function runAction(action: ActionType, patient: Participant, extras: PatientExtras) {
     setLoading(true);
-    const prompt = buildActionPrompt(action, patient, extras);
+    const prompt = buildActionPrompt(action, patient, extras, getContratInfo(patient));
     // console.log('[AssistantPage] prompt:', prompt); // Décommenter pour débugger
     try {
       const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
@@ -763,7 +780,7 @@ export default function AssistantPage() {
 
     if (actionType === 'programme' && selectedPatient) {
       const extras = patientExtras ?? { notes: [], compteRendus: [], loading: false };
-      const sys = buildSystemPrompt(selectedPatient, extras);
+      const sys = buildSystemPrompt(selectedPatient, extras, getContratInfo(selectedPatient));
       const prompt = `${sys}\n\n---\nQUESTION:\nGénère un programme d'exercices APA pour l'objectif suivant : "${trimmed}"\n\n## Objectif\n### Exercices recommandés\n- **Nom** — durée/répétitions\n  Précautions : ...\n### Points de vigilance\n### À éviter absolument`;
       try {
         const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
@@ -778,7 +795,7 @@ export default function AssistantPage() {
     }
 
     const extras = patientExtras ?? { notes: [], compteRendus: [], loading: false };
-    const sys = buildSystemPrompt(selectedPatient, extras);
+    const sys = buildSystemPrompt(selectedPatient, extras, selectedPatient ? getContratInfo(selectedPatient) : null);
     const history = messages.filter(m => m.role === 'user' || m.role === 'assistant').map(m => `${m.role === 'user' ? 'Q' : 'R'}: ${m.content}`).join('\n\n');
     const fullPrompt = history
       ? `${sys}\n\n---\nÉCHANGES PRÉCÉDENTS:\n${history}\n\n---\nQUESTION:\n${trimmed}`
@@ -793,7 +810,7 @@ export default function AssistantPage() {
     } catch (err) {
       setMessages(prev => [...prev, { id: newId(), role: 'assistant', content: `Erreur : ${err instanceof Error ? err.message : String(err)}` }]);
     } finally { setLoading(false); }
-  }, [loading, messages, selectedPatient, actionType, patientExtras, resetSpeech]);
+  }, [loading, messages, selectedPatient, actionType, patientExtras, resetSpeech, contratActifDeParticipant]);
 
   async function saveLog(question: string, reponse: string, patientId: string | null, action: ActionType) {
     if (!supabase) return;

@@ -215,6 +215,7 @@ export function dbToContrat(row: any): Contrat {
     dateCreation: row.date_creation,
     nombreSeancesTotal: row.nombre_seances_total,
     nombreSeancesRealisees: row.nombre_seances_realisees,
+    dureeIndeterminee: row.duree_indeterminee ?? false,
   };
 }
 
@@ -232,6 +233,7 @@ export function contratToDb(c: Contrat): Record<string, unknown> {
     date_creation: c.dateCreation || null,
     nombre_seances_total: c.nombreSeancesTotal,
     nombre_seances_realisees: c.nombreSeancesRealisees,
+    duree_indeterminee: c.dureeIndeterminee ?? false,
   };
 }
 
