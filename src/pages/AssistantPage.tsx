@@ -76,6 +76,24 @@ const MD_COMPONENTS = {
 
 // ── PDF export ────────────────────────────────────────────────────────────────
 
+/** Supprime tous les marqueurs Markdown + décode les entités HTML */
+function cleanText(text: string): string {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '$1') // **bold** → bold (paires fermées)
+    .replace(/\*\*/g, '')             // ** résiduels (non fermés)
+    .replace(/\*(.*?)\*/g, '$1')      // *italic* → italic
+    .replace(/\*/g, '')               // * résiduels
+    .replace(/`(.*?)`/g, '$1')        // `code` → code
+    .replace(/`/g, '')                // ` résiduels
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .trim();
+}
+
 /** Convertit le Markdown en tableau de blocs pdfmake */
 function mdToPdfMake(md: string): object[] {
   const content: object[] = [];
@@ -86,20 +104,21 @@ function mdToPdfMake(md: string): object[] {
     if (!t) { i++; continue; }
 
     if (/^# [^#]/.test(t)) {
-      content.push({ text: t.slice(2), style: 'h1', margin: [0, 10, 0, 6] });
+      content.push({ text: cleanText(t.slice(2)), style: 'h1', margin: [0, 10, 0, 6] });
     } else if (/^## [^#]/.test(t)) {
-      content.push({ text: t.slice(3), style: 'h2', margin: [0, 10, 0, 4] });
+      content.push({ text: cleanText(t.slice(3)), style: 'h2', margin: [0, 10, 0, 4] });
     } else if (/^### /.test(t)) {
-      content.push({ text: t.slice(4), style: 'h3', margin: [0, 6, 0, 3] });
+      content.push({ text: cleanText(t.slice(4)), style: 'h3', margin: [0, 6, 0, 3] });
     } else if (t === '---') {
-      content.push({ canvas: [{ type: 'line', x1: 0, y1: 2, x2: 528, y2: 2, lineWidth: 0.5, lineColor: '#DCE4E4' }], margin: [0, 5, 0, 5] });
+      content.push({ canvas: [{ type: 'line', x1: 0, y1: 2, x2: 515, y2: 2, lineWidth: 0.5, lineColor: '#DCE4E4' }], margin: [0, 5, 0, 5] });
     } else if (t.startsWith('|') && t.endsWith('|')) {
       const tLines: string[] = [];
       while (i < lines.length && lines[i].trim().startsWith('|')) { tLines.push(lines[i].trim()); i++; }
       const rows = tLines
         .filter(l => l.replace(/[| :-]/g, '').trim().length > 0)
         .map((l, ri) => l.split('|').filter(c => c !== '').map(c => ({
-          text: c.trim().replace(/\*\*/g, ''),
+          text: cleanText(c),
+          fontSize: 8,
           style: ri === 0 ? 'th' : 'td',
         })));
       if (rows.length > 0) {
@@ -107,11 +126,11 @@ function mdToPdfMake(md: string): object[] {
       }
       continue;
     } else if (/^[-*] /.test(t)) {
-      content.push({ text: '•  ' + t.slice(2).replace(/\*\*(.*?)\*\*/g, '$1'), style: 'body', margin: [10, 1, 0, 1] });
-    } else if (t.startsWith('**') && t.endsWith('**')) {
-      content.push({ text: t.slice(2, -2), style: 'bold', margin: [0, 2, 0, 1] });
+      content.push({ text: '•  ' + cleanText(t.slice(2)), style: 'body', margin: [10, 1, 0, 1] });
+    } else if (t.startsWith('**') && t.endsWith('**') && t.length > 4) {
+      content.push({ text: cleanText(t.slice(2, -2)), style: 'bold', margin: [0, 2, 0, 1] });
     } else {
-      content.push({ text: t.replace(/\*\*(.*?)\*\*/g, '$1'), style: 'body', margin: [0, 1, 0, 1] });
+      content.push({ text: cleanText(t), style: 'body', margin: [0, 1, 0, 1] });
     }
     i++;
   }
@@ -133,20 +152,21 @@ async function downloadPDF(patientNom: string, type: ActionType, markdownContent
   const filename = `${label}_${patientNom.replace(/ /g, '-')}_${date}.pdf`;
 
   const docDefinition = {
-    pageMargins: [16, 32, 16, 28] as [number, number, number, number],
+    // Marges en points (1mm ≈ 2.835pt) : 40pt ≈ 14mm, 55pt ≈ 19mm, 45pt ≈ 16mm
+    pageMargins: [40, 55, 40, 45] as [number, number, number, number],
 
     header: () => ({
       columns: [
-        { text: 'Horizon — APA', bold: true, fontSize: 10, color: 'white', margin: [16, 10, 0, 0] },
-        { text: `Généré le ${dateStr}`, alignment: 'right', fontSize: 8, color: '#a0d8d8', margin: [0, 12, 16, 0] },
+        { text: 'Horizon — APA', bold: true, fontSize: 10, color: 'white', margin: [40, 12, 0, 0] },
+        { text: `Généré le ${dateStr}`, alignment: 'right', fontSize: 8, color: '#a0d8d8', margin: [0, 14, 40, 0] },
       ],
       fillColor: '#0D2B2B',
     }),
 
     footer: (currentPage: number, pageCount: number) => ({
       columns: [
-        { text: 'Document généré par Horizon — Outil de suivi APA', fontSize: 7, color: '#969696', margin: [16, 6, 0, 0] },
-        { text: `Page ${currentPage} / ${pageCount}`, alignment: 'right', fontSize: 7, color: '#969696', margin: [0, 6, 16, 0] },
+        { text: 'Document généré par Horizon — Outil de suivi APA', fontSize: 7, color: '#969696', margin: [40, 8, 0, 0] },
+        { text: `Page ${currentPage} / ${pageCount}`, alignment: 'right', fontSize: 7, color: '#969696', margin: [0, 8, 40, 0] },
       ],
     }),
 
