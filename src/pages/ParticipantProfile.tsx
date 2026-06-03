@@ -10,6 +10,7 @@ import {
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
 import { useContrats } from '../hooks/useContrats';
+import { useStructures } from '../hooks/useStructures';
 import { useAgenda } from '../hooks/useAgenda';
 import { useJournalSeance } from '../hooks/useJournalSeance';
 import { useCompteRenduSeance } from '../hooks/useCompteRenduSeance';
@@ -482,6 +483,7 @@ export default function ParticipantProfile() {
   const { participants, updateParticipant, deleteParticipant, deleteBilan, geocodeParticipant } = useParticipants();
   const { programmeActif, deleteProgramme } = useProgramme(id ?? '');
   const { contrats } = useContrats();
+  const { structures } = useStructures();
   const { seances } = useAgenda();
   useJournalSeance(); // conservé pour ne pas casser le hook
   const navigate = useNavigate();
@@ -753,6 +755,22 @@ export default function ParticipantProfile() {
                   Dernier bilan : {formatDate(latestBilan.date)}
                 </div>
               )}
+
+              {/* Structure de rattachement */}
+              {participant.structureId && (() => {
+                const str = structures.find(s => s.id === participant.structureId);
+                return str ? (
+                  <div className="mt-1.5">
+                    <Link
+                      to={`/structures/${str.id}`}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full hover:opacity-80 transition-opacity"
+                      style={{ background: '#EEF2FF', color: '#4F46E5' }}
+                    >
+                      🏢 {str.nom}
+                    </Link>
+                  </div>
+                ) : null;
+              })()}
 
               {/* Contexte clinique */}
               {participant.contexteClinic && (

@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
 import type { Participant } from '../../types';
-import { Calendar, AlertCircle, ChevronRight, Phone } from 'lucide-react';
+import { Calendar, AlertCircle, ChevronRight, Phone, Building2 } from 'lucide-react';
 
 interface Props {
   participant: Participant;
+  structureNom?: string;
 }
 
 function calcAge(dateNaissance: string): number {
@@ -32,7 +33,7 @@ function avatarColor(id: string): string {
   return AVATAR_COLORS[id.charCodeAt(0) % AVATAR_COLORS.length];
 }
 
-export default function ParticipantCard({ participant }: Props) {
+export default function ParticipantCard({ participant, structureNom }: Props) {
   const age = calcAge(participant.dateNaissance);
   const lastBilan = participant.bilans.at(-1);
   const needsBilan = lastBilan ? daysSince(lastBilan.date) > 85 : true;
@@ -117,15 +118,16 @@ export default function ParticipantCard({ participant }: Props) {
       >
         <span
           className="rounded-full"
-          style={{
-            background: '#E8F9F9',
-            color: '#2BBFBF',
-            padding: '2px 8px',
-            fontSize: 12,
-          }}
+          style={{ background: '#E8F9F9', color: '#2BBFBF', padding: '2px 8px', fontSize: 12 }}
         >
           {participant.bilans.length} bilan{participant.bilans.length !== 1 ? 's' : ''}
         </span>
+        {(participant.structureId || structureNom) && (
+          <span className="flex items-center gap-1 rounded-full" style={{ background: '#EEF2FF', color: '#4F46E5', padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>
+            <Building2 size={10} />
+            {structureNom ?? 'Structure'}
+          </span>
+        )}
         {participant.telephone && (
           <span className="flex items-center gap-1">
             <Phone size={10} />
