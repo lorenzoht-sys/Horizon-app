@@ -8,6 +8,7 @@ import {
   RefreshCw, X, ClipboardList, Mic, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
+import { useProgramme } from '../hooks/useProgramme';
 import { useContrats } from '../hooks/useContrats';
 import { useAgenda } from '../hooks/useAgenda';
 import { useJournalSeance } from '../hooks/useJournalSeance';
@@ -546,6 +547,7 @@ function TabsSection({ activeTab, setActiveTab, tabs, children }: {
 export default function ParticipantProfile() {
   const { id } = useParams<{ id: string }>();
   const { participants, updateParticipant, deleteParticipant, deleteBilan, geocodeParticipant } = useParticipants();
+  const { programmeActif, deleteProgramme } = useProgramme(id ?? '');
   const { contrats } = useContrats();
   const { seances } = useAgenda();
   const { notesParPatient } = useJournalSeance();
@@ -555,6 +557,7 @@ export default function ParticipantProfile() {
   const [menuOuvert, setMenuOuvert]         = useState(false);
   const [showEdit, setShowEdit]             = useState(false);
   const [confirmDelete, setConfirmDelete]   = useState(false);
+  const [confirmDeleteProg, setConfirmDeleteProg] = useState(false);
   const [showNoteModal, setShowNoteModal]   = useState(false);
   const [showDictee, setShowDictee]         = useState(false);
   const [geocoding, setGeocoding]           = useState(false);
@@ -992,6 +995,52 @@ export default function ParticipantProfile() {
         </div>
       </div>
 
+      {/* ── PROGRAMME EN COURS ─────────────────────────────────── */}
+      {programmeActif && (
+        <div className="bg-white rounded-xl border border-gray-200/50 shadow-sm mb-4 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-1">Programme en cours</div>
+              <div className="font-heading font-semibold text-dark text-[15px]">{programmeActif.titre}</div>
+              <div className="text-[12px] text-gray-400 mt-0.5">
+                Généré le {new Date(programmeActif.dateCreation).toLocaleDateString('fr-FR')}
+                {programmeActif.exercices.length > 0 && ` · ${programmeActif.exercices.length} exercice${programmeActif.exercices.length > 1 ? 's' : ''}`}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate(`/participant/${id}/programme`)}
+                className="text-xs font-medium text-primary border border-primary/30 hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Voir complet →
+              </button>
+              <button
+                onClick={() => setConfirmDeleteProg(true)}
+                className="text-xs text-red-400 hover:text-red-600 border border-red-200 hover:border-red-400 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+              >
+                <Trash2 size={12} /> Supprimer
+              </button>
+            </div>
+          </div>
+          {programmeActif.exercices.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              {programmeActif.exercices.slice(0, 4).map(ep => (
+                <div key={ep.exerciceId} className="flex items-center gap-2 text-[13px] text-gray-600">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary/50 flex-shrink-0" />
+                  <span>{ep.exerciceId.replace(/-/g, ' ')}</span>
+                </div>
+              ))}
+              {programmeActif.exercices.length > 4 && (
+                <div className="text-[12px] text-gray-400 pl-3.5">+ {programmeActif.exercices.length - 4} autre(s)</div>
+              )}
+            </div>
+          )}
+          {programmeActif.objectif && (
+            <div className="mt-2 text-[12px] text-gray-500 italic">🎯 {programmeActif.objectif}</div>
+          )}
+        </div>
+      )}
+
       {/* ── TABS ───────────────────────────────────────────────── */}
       <TabsSection activeTab={activeTab} setActiveTab={setActiveTab} tabs={TABS}>
         {activeTab === 'bilans' && (
@@ -1041,6 +1090,32 @@ export default function ParticipantProfile() {
             </div>
             <div className="p-6">
               <ParticipantForm initial={participant} onSubmit={handleEditSubmit} onCancel={() => setShowEdit(false)} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation suppression programme */}
+      {confirmDeleteProg && programmeActif && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[1100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 size={18} className="text-red-500" />
+              </div>
+              <h2 className="font-heading font-bold text-gray-900 text-lg">Supprimer le programme ?</h2>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Le programme <strong>"{programmeActif.titre}"</strong> sera définitivement supprimé.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={async () => { await deleteProgramme(programmeActif.id); setConfirmDeleteProg(false); toast.success('Programme supprimé'); }}
+                className="flex-1 bg-red-500 text-white rounded-xl py-2.5 font-semibold text-sm hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
+              >
+                <Trash2 size={14} /> Supprimer
+              </button>
+              <button onClick={() => setConfirmDeleteProg(false)} className="px-4 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 text-sm">Annuler</button>
             </div>
           </div>
         </div>

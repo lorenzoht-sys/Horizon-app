@@ -95,6 +95,7 @@ export type ProfilPatient =
 export type TagPatient = 'senior' | 'post_op' | 'chronique' | 'adulte_blessure';
 
 export type ProfilHandicap = 'fauteuil_roulant' | 'avc_hemiplegie' | 'parkinson' | 'sep';
+export type ProfilPathologie = 'obesite' | 'diabete' | 'prothese_hanche' | 'prothese_genou';
 
 export type TestKey = 'equilibre' | 'chairStand' | 'handGrip' | 'tug' | 'souplesse' | 'tm6' | 'memoire';
 
@@ -181,7 +182,7 @@ export interface Exercice {
   materielNecessaire?: string;
   dureeEstimeeMinutes: number;
   custom?: boolean;
-  profilsCompatibles?: (ProfilHandicap | 'tous')[];
+  profilsCompatibles?: (ProfilHandicap | ProfilPathologie | 'tous')[];
   adaptations?: Partial<Record<ProfilHandicap, string>>;
   positionRequise?: 'debout' | 'assis' | 'couche' | 'fauteuil' | 'tous';
   niveauMobilite?: 'minimal' | 'modere' | 'complet';

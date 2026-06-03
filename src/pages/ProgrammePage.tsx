@@ -47,6 +47,7 @@ export default function ProgrammePage() {
     programmes,
     programmeActif,
     createProgramme,
+    deleteProgramme,
     addExerciceToProgramme,
     removeExerciceFromProgramme,
     calcAdherence,
@@ -56,6 +57,7 @@ export default function ProgrammePage() {
   const participant = participants.find(p => p.id === id);
   const exercices = useMemo(() => loadExercices(), []);
 
+  const [confirmDeleteProg, setConfirmDeleteProg] = useState(false);
   const [catFilter, setCatFilter] = useState<CategorieExercice | 'all'>('all');
   const [profilFilter, setProfilFilter] = useState<ProfilHandicap | null>(participant?.profilHandicap ?? null);
   const [positionFilter, setPositionFilter] = useState('tous');
@@ -314,6 +316,12 @@ export default function ProgrammePage() {
               <div className="bg-white rounded-2xl border border-gray-100 p-5">
                 <div className="flex items-start justify-between mb-1">
                   <h2 className="font-heading font-semibold text-dark">{programmeActif.titre}</h2>
+                  <button
+                    onClick={() => setConfirmDeleteProg(true)}
+                    className="flex items-center gap-1 text-xs text-red-400 hover:text-red-600 border border-red-200 hover:border-red-400 px-2.5 py-1 rounded-lg transition-colors"
+                  >
+                    <Trash2 size={12} /> Supprimer
+                  </button>
                 </div>
                 {programmeActif.objectif && (
                   <p className="text-xs text-gray-500 mb-3">🎯 {programmeActif.objectif}</p>
@@ -466,6 +474,41 @@ export default function ProgrammePage() {
                 <span className="text-xs text-gray-400">{new Date(p.dateCreation).toLocaleDateString('fr-FR')}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation suppression programme */}
+      {confirmDeleteProg && programmeActif && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[1100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 size={18} className="text-red-500" />
+              </div>
+              <h2 className="font-heading font-bold text-gray-900 text-lg">Supprimer ce programme ?</h2>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Le programme <strong>"{programmeActif.titre}"</strong> sera définitivement supprimé. Cette action est irréversible.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={async () => {
+                  await deleteProgramme(programmeActif.id);
+                  setConfirmDeleteProg(false);
+                  toast.success('Programme supprimé');
+                }}
+                className="flex-1 bg-red-500 text-white rounded-xl py-2.5 font-semibold text-sm hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
+              >
+                <Trash2 size={14} /> Supprimer définitivement
+              </button>
+              <button
+                onClick={() => setConfirmDeleteProg(false)}
+                className="px-4 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors text-sm"
+              >
+                Annuler
+              </button>
+            </div>
           </div>
         </div>
       )}

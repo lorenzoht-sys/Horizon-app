@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { loadExercices, saveCustomExercice } from '../data/exercices';
 import PageWrapper from '../components/layout/PageWrapper';
 import ExerciceCard from '../programme/ExerciceCard';
-import type { CategorieExercice, Exercice, ProfilHandicap } from '../types';
+import type { CategorieExercice, Exercice, ProfilHandicap, ProfilPathologie } from '../types';
 import { Plus, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import toast from 'react-hot-toast';
@@ -23,6 +23,13 @@ const PROFILS_HANDICAP: { id: ProfilHandicap; label: string; emoji: string; colo
   { id: 'avc_hemiplegie',   label: 'AVC / Hémiplégie',    emoji: '🧠', color: '#8B5CF6' },
   { id: 'parkinson',        label: 'Parkinson',            emoji: '🫸', color: '#F59E0B' },
   { id: 'sep',              label: 'Sclérose en plaques',  emoji: '🎗️', color: '#1D9E75' },
+];
+
+const PROFILS_PATHOLOGIE: { id: ProfilPathologie; label: string; emoji: string; color: string }[] = [
+  { id: 'obesite',         label: 'Obésité',              emoji: '⚖️', color: '#EF8C00' },
+  { id: 'diabete',         label: 'Diabète (T1/T2)',       emoji: '🩸', color: '#E85050' },
+  { id: 'prothese_hanche', label: 'Prothèse hanche',      emoji: '🦴', color: '#6B7280' },
+  { id: 'prothese_genou',  label: 'Prothèse genou',       emoji: '🦿', color: '#059669' },
 ];
 
 const POSITIONS: { id: string; label: string }[] = [
@@ -46,7 +53,7 @@ const EMPTY_EX: Omit<Exercice, 'id'> = {
 export default function ExercicesPage() {
   const [exercices, setExercices] = useState(() => loadExercices());
   const [catFilter, setCatFilter] = useState<CategorieExercice | 'all'>('all');
-  const [profilFilter, setProfilFilter] = useState<ProfilHandicap | null>(null);
+  const [profilFilter, setProfilFilter] = useState<ProfilHandicap | ProfilPathologie | null>(null);
   const [positionFilter, setPositionFilter] = useState('tous');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<Omit<Exercice, 'id'>>(EMPTY_EX);
@@ -93,7 +100,7 @@ export default function ExercicesPage() {
     return { compatible: comp, incompatibles: incompat };
   }, [exercices, catFilter, profilFilter, positionFilter]);
 
-  function handleProfilChange(profil: ProfilHandicap) {
+  function handleProfilChange(profil: ProfilHandicap | ProfilPathologie) {
     if (profilFilter === profil) {
       setProfilFilter(null);
       setPositionFilter('tous');
@@ -133,8 +140,28 @@ export default function ExercicesPage() {
       </div>
 
       {/* Filtres profil handicap */}
-      <div className="flex gap-1 flex-wrap mb-2">
+      <div className="flex gap-1 flex-wrap mb-1">
+        <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide self-center mr-1">Profil handicap :</span>
         {PROFILS_HANDICAP.map(p => (
+          <button
+            key={p.id}
+            onClick={() => handleProfilChange(p.id)}
+            style={profilFilter === p.id ? { background: p.color, color: 'white', border: 'none' } : {}}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${
+              profilFilter === p.id
+                ? ''
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-transparent'
+            }`}
+          >
+            {p.emoji} {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Filtres profil pathologique */}
+      <div className="flex gap-1 flex-wrap mb-2">
+        <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide self-center mr-1">Pathologie :</span>
+        {PROFILS_PATHOLOGIE.map(p => (
           <button
             key={p.id}
             onClick={() => handleProfilChange(p.id)}
@@ -224,7 +251,11 @@ export default function ExercicesPage() {
           <ExerciceCard
             key={ex.id}
             exercice={ex}
-            profilHandicap={profilFilter ?? undefined}
+            profilHandicap={
+              profilFilter && ['fauteuil_roulant','avc_hemiplegie','parkinson','sep'].includes(profilFilter)
+                ? profilFilter as ProfilHandicap
+                : undefined
+            }
           />
         ))}
       </div>
