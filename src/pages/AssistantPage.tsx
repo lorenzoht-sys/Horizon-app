@@ -7,7 +7,7 @@ import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import toast from 'react-hot-toast';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import jsPDF from 'jspdf';
+// pdfmake est chargé dynamiquement dans downloadPDF
 import type { Participant, Bilan } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -76,191 +76,96 @@ const MD_COMPONENTS = {
 
 // ── PDF export ────────────────────────────────────────────────────────────────
 
-function downloadPDF(patientNom: string, type: ActionType, markdownContent: string) {
-  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-  const PW   = 210;
-  const PH   = 297;
-  const ML   = 16;
-  const MR   = 16;
-  const MTOP = 26;  // y de départ sous le header
-  const MBOT = 24;  // marge basse avant footer
-  const CW   = PW - ML - MR;
-  const LH   = 5;   // hauteur d'une ligne 9.5pt en mm
-
-  let y       = MTOP;
-  let pageNum = 1;
-
-  const T:  [number,number,number] = [43,  191, 191]; // turquoise
-  const DG: [number,number,number] = [13,  43,  43];  // dark green
-  const D:  [number,number,number] = [26,  26,  26];  // texte foncé
-  const M:  [number,number,number] = [80,  80,  80];  // texte moyen
-  const BD: [number,number,number] = [220, 228, 228]; // bordures
-
-  const addHeader = () => {
-    pdf.setFillColor(...DG);
-    pdf.rect(0, 0, PW, 18, 'F');
-    pdf.setTextColor(255, 255, 255);
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Horizon — APA', ML, 11);
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(8);
-    pdf.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, PW - MR - 34, 11);
-    pdf.setDrawColor(...T);
-    pdf.setLineWidth(0.6);
-    pdf.line(0, 18, PW, 18);
-  };
-
-  const addFooter = () => {
-    pdf.setDrawColor(...BD);
-    pdf.setLineWidth(0.3);
-    pdf.line(ML, PH - 14, PW - MR, PH - 14);
-    pdf.setTextColor(150, 150, 150);
-    pdf.setFontSize(7);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text('Document généré par Horizon — Outil de suivi APA', ML, PH - 9);
-    pdf.text(`Page ${pageNum}`, PW - MR - 8, PH - 9);
-  };
-
-  // Vérifie avant chaque ligne individuelle — jamais de débordement
-  const chk = (need = LH) => {
-    if (y + need > PH - MBOT) {
-      addFooter();
-      pdf.addPage();
-      pageNum++;
-      addHeader();
-      y = MTOP;
-    }
-  };
-
-  // Écrit un bloc de lignes (résultat de splitTextToSize) une par une
-  const putLines = (wrappedLines: string[], x: number, lh = LH) => {
-    for (const line of wrappedLines) {
-      chk(lh);
-      pdf.text(line, x, y);
-      y += lh;
-    }
-  };
-
-  addHeader();
-
-  const rawLines = markdownContent.split('\n');
+/** Convertit le Markdown en tableau de blocs pdfmake */
+function mdToPdfMake(md: string): object[] {
+  const content: object[] = [];
+  const lines = md.split('\n');
   let i = 0;
+  while (i < lines.length) {
+    const t = lines[i].trim();
+    if (!t) { i++; continue; }
 
-  while (i < rawLines.length) {
-    const t = rawLines[i].trim();
-
-    if (!t) { y += 2.5; i++; continue; }
-
-    // ── H1
     if (/^# [^#]/.test(t)) {
-      chk(16);
-      pdf.setFontSize(15); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...DG);
-      pdf.text(t.slice(2), ML, y);
-      y += 7;
-      pdf.setDrawColor(...T); pdf.setLineWidth(0.8);
-      pdf.line(ML, y - 1, ML + 90, y - 1);
-      y += 4;
-    }
-    // ── H2
-    else if (/^## [^#]/.test(t)) {
-      chk(14);
-      y += 2;
-      pdf.setFontSize(12); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...T);
-      pdf.text(t.slice(3), ML, y);
-      y += 6;
-      pdf.setDrawColor(...BD); pdf.setLineWidth(0.3);
-      pdf.line(ML, y - 1, PW - MR, y - 1);
-      y += 2;
-    }
-    // ── H3
-    else if (/^### /.test(t)) {
-      chk(10);
-      y += 1;
-      pdf.setFontSize(10.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...D);
-      pdf.text(t.slice(4), ML, y);
-      y += 6;
-    }
-    // ── HR
-    else if (t === '---') {
-      chk(8);
-      y += 2;
-      pdf.setDrawColor(...BD); pdf.setLineWidth(0.3);
-      pdf.line(ML, y, PW - MR, y);
-      y += 5;
-    }
-    // ── Tableau
-    else if (t.startsWith('|') && t.endsWith('|')) {
+      content.push({ text: t.slice(2), style: 'h1', margin: [0, 10, 0, 6] });
+    } else if (/^## [^#]/.test(t)) {
+      content.push({ text: t.slice(3), style: 'h2', margin: [0, 10, 0, 4] });
+    } else if (/^### /.test(t)) {
+      content.push({ text: t.slice(4), style: 'h3', margin: [0, 6, 0, 3] });
+    } else if (t === '---') {
+      content.push({ canvas: [{ type: 'line', x1: 0, y1: 2, x2: 528, y2: 2, lineWidth: 0.5, lineColor: '#DCE4E4' }], margin: [0, 5, 0, 5] });
+    } else if (t.startsWith('|') && t.endsWith('|')) {
       const tLines: string[] = [];
-      while (i < rawLines.length && rawLines[i].trim().startsWith('|')) {
-        tLines.push(rawLines[i].trim());
-        i++;
-      }
+      while (i < lines.length && lines[i].trim().startsWith('|')) { tLines.push(lines[i].trim()); i++; }
       const rows = tLines
         .filter(l => l.replace(/[| :-]/g, '').trim().length > 0)
-        .map(l => l.split('|').filter(c => c !== '').map(c => c.trim().replace(/\*\*/g, '')));
+        .map((l, ri) => l.split('|').filter(c => c !== '').map(c => ({
+          text: c.trim().replace(/\*\*/g, ''),
+          style: ri === 0 ? 'th' : 'td',
+        })));
       if (rows.length > 0) {
-        const cols = Math.max(...rows.map(r => r.length));
-        const colW = CW / cols;
-        const rowH = 7;
-        for (let ri = 0; ri < rows.length; ri++) {
-          chk(rowH + 1);
-          if (ri === 0) { pdf.setFillColor(240, 245, 245); pdf.rect(ML, y - 5.5, CW, rowH, 'F'); }
-          pdf.setDrawColor(...BD); pdf.setLineWidth(0.2); pdf.rect(ML, y - 5.5, CW, rowH);
-          for (let ci = 0; ci < rows[ri].length; ci++) {
-            pdf.setFontSize(8.5);
-            if (ri === 0) { pdf.setFont('helvetica', 'bold');   pdf.setTextColor(...M); }
-            else           { pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...D); }
-            const cell = pdf.splitTextToSize(rows[ri][ci], colW - 4);
-            pdf.text(cell[0] || '', ML + ci * colW + 2, y);
-          }
-          y += rowH;
-        }
-        y += 3;
+        content.push({ table: { headerRows: 1, widths: Array(rows[0].length).fill('*'), body: rows }, layout: 'lightHorizontalLines', margin: [0, 4, 0, 8] });
       }
       continue;
+    } else if (/^[-*] /.test(t)) {
+      content.push({ text: '•  ' + t.slice(2).replace(/\*\*(.*?)\*\*/g, '$1'), style: 'body', margin: [10, 1, 0, 1] });
+    } else if (t.startsWith('**') && t.endsWith('**')) {
+      content.push({ text: t.slice(2, -2), style: 'bold', margin: [0, 2, 0, 1] });
+    } else {
+      content.push({ text: t.replace(/\*\*(.*?)\*\*/g, '$1'), style: 'body', margin: [0, 1, 0, 1] });
     }
-    // ── Bullet — setFontSize AVANT splitTextToSize
-    else if (/^[-*] /.test(t)) {
-      const text = t.slice(2).replace(/\*\*/g, '');
-      pdf.setFontSize(9.5); pdf.setFont('helvetica', 'normal');
-      const wrapped = pdf.splitTextToSize(text, CW - 8);
-      // première ligne + puce
-      chk(LH);
-      pdf.setFillColor(...T); pdf.circle(ML + 1.5, y - 1.5, 1, 'F');
-      pdf.setTextColor(...M); pdf.text(wrapped[0], ML + 6, y);
-      y += LH;
-      // lignes de continuation
-      for (let wi = 1; wi < wrapped.length; wi++) {
-        chk(LH); pdf.text(wrapped[wi], ML + 6, y); y += LH;
-      }
-    }
-    // ── Gras — setFontSize AVANT splitTextToSize
-    else if (t.includes('**')) {
-      const cleaned = t.replace(/\*\*/g, '');
-      pdf.setFontSize(9.5); pdf.setFont('helvetica', t.startsWith('**') ? 'bold' : 'normal');
-      pdf.setTextColor(...D);
-      putLines(pdf.splitTextToSize(cleaned, CW), ML);
-      y += 1;
-    }
-    // ── Texte normal — setFontSize AVANT splitTextToSize
-    else {
-      const cleaned = t.replace(/\*\*/g, '');
-      pdf.setFontSize(9.5); pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(...M);
-      putLines(pdf.splitTextToSize(cleaned, CW), ML);
-      y += 1;
-    }
-
     i++;
   }
+  return content;
+}
 
-  addFooter();
+async function downloadPDF(patientNom: string, type: ActionType, markdownContent: string) {
+  // Chargement dynamique — ne bloque pas le démarrage de l'app
+  const [{ default: pdfMake }, pdfFonts] = await Promise.all([
+    import('pdfmake/build/pdfmake'),
+    import('pdfmake/build/vfs_fonts'),
+  ]);
+  const vfs = (pdfFonts as any).default?.pdfMake?.vfs ?? (pdfFonts as any).pdfMake?.vfs;
+  if (vfs) (pdfMake as any).vfs = vfs;
 
-  const date  = new Date().toISOString().split('T')[0];
-  const label = type === 'compte_rendu' ? 'CR-medecin' : 'CR-famille';
-  pdf.save(`${label}_${patientNom.replace(/ /g, '-')}_${date}.pdf`);
+  const date    = new Date().toISOString().split('T')[0];
+  const dateStr = new Date().toLocaleDateString('fr-FR');
+  const label   = type === 'compte_rendu' ? 'CR-medecin' : 'CR-famille';
+  const filename = `${label}_${patientNom.replace(/ /g, '-')}_${date}.pdf`;
+
+  const docDefinition = {
+    pageMargins: [16, 32, 16, 28] as [number, number, number, number],
+
+    header: () => ({
+      columns: [
+        { text: 'Horizon — APA', bold: true, fontSize: 10, color: 'white', margin: [16, 10, 0, 0] },
+        { text: `Généré le ${dateStr}`, alignment: 'right', fontSize: 8, color: '#a0d8d8', margin: [0, 12, 16, 0] },
+      ],
+      fillColor: '#0D2B2B',
+    }),
+
+    footer: (currentPage: number, pageCount: number) => ({
+      columns: [
+        { text: 'Document généré par Horizon — Outil de suivi APA', fontSize: 7, color: '#969696', margin: [16, 6, 0, 0] },
+        { text: `Page ${currentPage} / ${pageCount}`, alignment: 'right', fontSize: 7, color: '#969696', margin: [0, 6, 16, 0] },
+      ],
+    }),
+
+    content: mdToPdfMake(markdownContent),
+
+    defaultStyle: { font: 'Roboto', fontSize: 10, lineHeight: 1.45, color: '#505050' },
+
+    styles: {
+      h1:   { fontSize: 16, bold: true,  color: '#0D2B2B', lineHeight: 1.3 },
+      h2:   { fontSize: 12, bold: true,  color: '#2BBFBF', lineHeight: 1.3 },
+      h3:   { fontSize: 10.5, bold: true, color: '#1A1A1A', lineHeight: 1.3 },
+      body: { fontSize: 10, color: '#505050', lineHeight: 1.45 },
+      bold: { fontSize: 10, bold: true, color: '#1A1A1A', lineHeight: 1.45 },
+      th:   { fontSize: 9, bold: true, color: '#505050', fillColor: '#F0F5F5' },
+      td:   { fontSize: 9, color: '#1A1A1A' },
+    },
+  };
+
+  pdfMake.createPdf(docDefinition as any).download(filename);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1076,7 +981,7 @@ export default function AssistantPage() {
                 {showPdfBar && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                     <button
-                      onClick={() => downloadPDF(selectedPatient ? `${selectedPatient.prenom}-${selectedPatient.nom}` : 'patient', actionType!, msg.content)}
+                      onClick={() => void downloadPDF(selectedPatient ? `${selectedPatient.prenom}-${selectedPatient.nom}` : 'patient', actionType!, msg.content)}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#2BBFBF', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                       📄 Télécharger en PDF
                     </button>
