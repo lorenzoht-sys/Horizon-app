@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bot, Send, Copy, Plus, ChevronDown, Mic, MicOff, RefreshCw, AlertCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { Participant, Bilan } from '../types';
 import { supabase } from '../lib/supabase';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
@@ -130,6 +131,16 @@ const MD_COMPONENTS_LIGHT = {
   ul: ({children}: any) => <ul style={{paddingLeft:'16px', marginBottom:'6px'}}>{children}</ul>,
   li: ({children}: any) => <li style={{fontSize:'13px', lineHeight:'1.7', color:'#374151', marginBottom:'3px'}}>{children}</li>,
   hr: () => <hr style={{border:'none', borderTop:'0.5px solid #E5E7EB', margin:'10px 0'}} />,
+  table: ({children}: any) => (
+    <div style={{overflowX:'auto', marginBottom:'16px', marginTop:'8px'}}>
+      <table style={{width:'100%', borderCollapse:'collapse', fontSize:'13px', border:'0.5px solid #E5E7EB', borderRadius:'8px', overflow:'hidden'}}>{children}</table>
+    </div>
+  ),
+  thead: ({children}: any) => <thead style={{background:'#F9FAFB'}}>{children}</thead>,
+  tbody: ({children}: any) => <tbody>{children}</tbody>,
+  tr: ({children}: any) => <tr style={{borderBottom:'0.5px solid #E5E7EB'}}>{children}</tr>,
+  th: ({children}: any) => <th style={{padding:'8px 12px', fontWeight:'500', color:'#6B7280', textAlign:'left', fontSize:'12px', letterSpacing:'0.03em'}}>{children}</th>,
+  td: ({children}: any) => <td style={{padding:'8px 12px', color:'#374151', fontSize:'13px', verticalAlign:'top'}}>{children}</td>,
 };
 
 const MODE_TEMPLATES: Record<string, string> = {
@@ -325,7 +336,7 @@ export default function AssistantCliniqueIA({ participant, bilanInitial }: Props
               >
                 {msg.role === 'user'
                   ? msg.content
-                  : <ReactMarkdown components={MD_COMPONENTS_LIGHT}>{msg.content}</ReactMarkdown>
+                  : <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS_LIGHT}>{msg.content}</ReactMarkdown>
                 }
               </div>
             </div>
