@@ -28,7 +28,7 @@ export default function PageAccesPatient() {
 
       const { data: tousParticipants } = await supabase
         .from('participants')
-        .select('id, prenom, nom, praticien_id');
+        .select('id, prenom, nom');
 
       const patient = tousParticipants?.find(p =>
         calculerCode(p.prenom) === codeEntre
@@ -37,7 +37,7 @@ export default function PageAccesPatient() {
       if (patient) {
         navigate(`/patient/${patient.id}?code=${codeEntre}`);
       } else {
-        setErreur('Code incorrect. Contactez votre intervenant APA.');
+        setErreur('Ce code ne correspond à aucun compte. Contactez votre enseignant APA.');
         setCode('');
       }
     } catch {
@@ -49,83 +49,146 @@ export default function PageAccesPatient() {
 
   return (
     <div style={{
-      minHeight: '100vh', background: '#0D2B2B',
-      display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center', padding: '20px',
+      minHeight: '100vh',
+      background: 'white',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '20px',
+      fontFamily: "'Nunito', sans-serif",
     }}>
 
-      <img src="/logo-horizon.png" style={{ height: 40, marginBottom: 32 }} alt="Horizon" />
+      {/* Logo */}
+      <img
+        src="/logo-horizon.png"
+        style={{ height: 44, marginBottom: 40 }}
+        alt="Horizon"
+        onError={e => {
+          (e.target as HTMLImageElement).style.display = 'none';
+        }}
+      />
 
       <div style={{
-        background: 'white', borderRadius: 16,
-        padding: '32px 28px', width: '100%', maxWidth: 380, textAlign: 'center',
+        width: '100%', maxWidth: 380, textAlign: 'center',
       }}>
-        <div style={{ fontSize: 36, marginBottom: 12 }}>🔑</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: '#0D2B2B', marginBottom: 6 }}>
-          Votre espace personnel
+
+        {/* Titre */}
+        <div style={{ fontSize: 22, fontWeight: 800, color: '#0D2B2B', marginBottom: 8 }}>
+          Bienvenue sur votre espace santé
         </div>
-        <div style={{ fontSize: 14, color: '#8FA8A8', marginBottom: 28, lineHeight: 1.5 }}>
-          Saisissez le code fourni<br />par votre intervenant APA
+        <div style={{ fontSize: 15, color: '#8FA8A8', marginBottom: 36, lineHeight: 1.6 }}>
+          Suivez vos progrès et retrouvez votre programme d'exercices.
         </div>
 
-        <input
-          type="text"
-          value={code}
-          onChange={e => setCode(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && verifierCode()}
-          placeholder="Ex : marie2026"
-          autoFocus
-          style={{
-            width: '100%', padding: '14px 16px',
-            fontSize: 20, fontWeight: 700, textAlign: 'center',
-            border: '2px solid', borderColor: code ? '#2BBFBF' : '#E0EEEE',
-            borderRadius: 10, color: '#0D2B2B', outline: 'none',
-            fontFamily: 'monospace', letterSpacing: '0.05em',
-            boxSizing: 'border-box', marginBottom: 16,
-            transition: 'border-color 0.15s',
-          }}
-        />
+        {/* Champ code */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{
+            display: 'block', fontSize: 13, fontWeight: 700,
+            color: '#5C7A7A', marginBottom: 8, textAlign: 'left',
+            textTransform: 'uppercase', letterSpacing: '0.06em',
+          }}>
+            Votre code d'accès
+          </label>
+          <input
+            type="text"
+            value={code}
+            onChange={e => { setCode(e.target.value); setErreur(''); }}
+            onKeyDown={e => e.key === 'Enter' && verifierCode()}
+            placeholder="Entrez votre code…"
+            autoFocus
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            style={{
+              width: '100%',
+              padding: '16px 18px',
+              fontSize: 22,
+              fontWeight: 700,
+              textAlign: 'center',
+              border: '2px solid',
+              borderColor: erreur ? '#FECACA' : code ? '#2BBFBF' : '#E0EEEE',
+              borderRadius: 14,
+              color: '#0D2B2B',
+              outline: 'none',
+              letterSpacing: '0.04em',
+              boxSizing: 'border-box',
+              transition: 'border-color 0.2s',
+              background: 'white',
+            }}
+          />
+        </div>
 
+        {/* Erreur */}
         {erreur && (
           <div style={{
-            background: '#FEE2E2', border: '1px solid #FECACA',
-            borderRadius: 8, padding: '10px 14px',
-            fontSize: 13, color: '#991B1B', marginBottom: 16,
+            background: '#FFF5F5',
+            border: '1px solid #FECACA',
+            borderRadius: 10,
+            padding: '12px 16px',
+            fontSize: 14,
+            color: '#B91C1C',
+            marginBottom: 16,
+            lineHeight: 1.5,
+            textAlign: 'left',
           }}>
-            {erreur}
+            😕 {erreur}
           </div>
         )}
 
+        {/* Bouton */}
         <button
           onClick={verifierCode}
           disabled={!code.trim() || loading}
           style={{
-            width: '100%', padding: '14px',
-            background: code.trim() ? '#2BBFBF' : '#E0EEEE',
+            width: '100%',
+            padding: '16px',
+            background: loading
+              ? '#8FA8A8'
+              : code.trim() ? '#2BBFBF' : '#E0EEEE',
             color: code.trim() ? 'white' : '#8FA8A8',
-            border: 'none', borderRadius: 10,
-            fontSize: 15, fontWeight: 700,
-            cursor: code.trim() ? 'pointer' : 'not-allowed',
-            transition: 'background 0.15s',
-            minHeight: 44,
+            border: 'none',
+            borderRadius: 14,
+            fontSize: 16,
+            fontWeight: 800,
+            cursor: code.trim() && !loading ? 'pointer' : 'not-allowed',
+            transition: 'background 0.2s, transform 0.1s',
+            minHeight: 54,
+            letterSpacing: '0.01em',
           }}
         >
-          {loading ? 'Vérification...' : 'Accéder à mon espace →'}
+          {loading ? '⏳ Vérification…' : 'Accéder à mon espace →'}
         </button>
 
-        <div style={{ marginTop: 20, fontSize: 12, color: '#8FA8A8', lineHeight: 1.6 }}>
-          Vous n'avez pas de code ?<br />Contactez votre intervenant APA.
+        {/* Aide */}
+        <div style={{
+          marginTop: 28,
+          padding: '16px',
+          background: '#F4FAFA',
+          borderRadius: 12,
+          fontSize: 13,
+          color: '#5C7A7A',
+          lineHeight: 1.6,
+        }}>
+          🔑 Votre code vous a été remis par votre enseignant APA.<br />
+          Si vous ne le retrouvez pas, contactez-le directement.
         </div>
+
       </div>
 
-      <div style={{ marginTop: 20 }}>
-        <a
-          href="/login"
-          style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }}
-        >
-          Connexion praticien →
-        </a>
-      </div>
+      {/* Lien praticien discret */}
+      <a
+        href="/login"
+        style={{
+          position: 'fixed',
+          bottom: 16,
+          fontSize: 11,
+          color: '#C9DCDC',
+          textDecoration: 'none',
+        }}
+      >
+        Connexion praticien
+      </a>
     </div>
   );
 }
