@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 
 // mode 'up-MMSScc'  : chrono montant MM:SS.cc (équilibre, TUG)
 // mode 'down-6min'  : compte à rebours 6 min MM:SS, beep à la fin
+// mode 'down-30s'   : compte à rebours 30 sec, beep à la fin (variante TM6)
 
-type Mode = 'up-MMSScc' | 'down-6min';
+type Mode = 'up-MMSScc' | 'down-6min' | 'down-30s';
 
 interface Props {
   mode: Mode;
@@ -12,7 +13,8 @@ interface Props {
 }
 
 export default function ChronoWidget({ mode, onStop, onEnd }: Props) {
-  const INITIAL = mode === 'down-6min' ? 360_000 : 0;
+  const INITIAL = mode === 'down-6min' ? 360_000 : mode === 'down-30s' ? 30_000 : 0;
+  const isCountdown = mode === 'down-6min' || mode === 'down-30s';
 
   const [ms, setMs]       = useState(INITIAL);
   const [status, setStatus] = useState<'idle' | 'running' | 'paused' | 'done'>('idle');
@@ -27,7 +29,7 @@ export default function ChronoWidget({ mode, onStop, onEnd }: Props) {
 
   function tick() {
     const elapsed = performance.now() - startRef.current;
-    if (mode === 'down-6min') {
+    if (isCountdown) {
       const current = baseRef.current - elapsed;
       if (current <= 0) {
         setMs(0);
@@ -53,14 +55,13 @@ export default function ChronoWidget({ mode, onStop, onEnd }: Props) {
   function stop() {
     if (timerRef.current) clearInterval(timerRef.current);
     const elapsed = performance.now() - startRef.current;
-    const current =
-      mode === 'down-6min'
-        ? Math.max(0, baseRef.current - elapsed)
-        : baseRef.current + elapsed;
+    const current = isCountdown
+      ? Math.max(0, baseRef.current - elapsed)
+      : baseRef.current + elapsed;
     baseRef.current = current;
     setMs(current);
     setStatus('paused');
-    if (mode !== 'down-6min') {
+    if (!isCountdown) {
       onStopRef.current?.(parseFloat((current / 1000).toFixed(2)));
     }
   }
@@ -96,7 +97,7 @@ export default function ChronoWidget({ mode, onStop, onEnd }: Props) {
     >
       <div style={{ fontFamily: 'monospace', color: 'white', display: 'flex', alignItems: 'baseline' }}>
         <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: 2 }}>{mmss}</span>
-        {mode !== 'down-6min' && (
+        {!isCountdown && (
           <span style={{ fontSize: 24, fontWeight: 700 }}>.{cc}</span>
         )}
       </div>

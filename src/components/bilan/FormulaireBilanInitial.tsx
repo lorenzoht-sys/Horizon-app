@@ -127,7 +127,8 @@ const BLOCS: BlocConditionnel[] = [
     questionCle: { label: 'A-t-il fait des chutes dans les 12 derniers mois ?', field: 'aChutes' },
     afficherSi: 'oui',
     questions: [
-      { id: 'nombreChutes', label: 'Combien de chutes ?', type: 'number' },
+      { id: 'nombreChutes', label: 'Nombre de chutes', type: 'number' },
+      { id: 'circonstances', label: 'Circonstances', type: 'textarea', placeholder: 'Bain, escaliers, sol glissant, vertige, nuit...' },
       {
         id: 'derniereChute',
         label: 'La dernière chute remonte à quand ?',
@@ -143,10 +144,11 @@ const BLOCS: BlocConditionnel[] = [
         alerteSi: ["Il y a moins d'une semaine", "Il y a moins d'un mois"],
         alerteMessage: "Adapter les exercices d'équilibre en priorité. Travailler près d'un appui lors des premières séances.",
       },
-      { id: 'chutesAvecConsequences', label: 'Avec conséquences (blessure, hospitalisation) ?', type: 'oui-non' },
+      { id: 'blessureOccasionnee', label: 'Blessure occasionnée ?', type: 'oui-non' },
+      { id: 'blessureDetail', label: 'Laquelle ?', type: 'text', placeholder: 'Fracture poignet, contusion, point de suture...', conditionnelSi: 'blessureOccasionnee_oui' },
       {
         id: 'confianceDeplacements',
-        label: 'Confiance en vous lors des déplacements (1-5)',
+        label: 'Confiance lors des déplacements (1-5)',
         type: 'echelle-5',
         aide: '1 = Très peu confiant · 5 = Totalement confiant',
       },
@@ -1037,18 +1039,32 @@ function BlocQuestions({
   bloc,
   data,
   onChange,
+  gateValue,
+  onGateChange,
 }: {
   bloc: BlocConditionnel;
   data: Record<string, any>;
   onChange: (field: string, value: any) => void;
+  gateValue?: OuiNon | null;
+  onGateChange?: (v: OuiNon) => void;
 }) {
+  const showContent = !bloc.questionCle || gateValue === 'oui';
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
       <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-5 py-3.5 border-b border-gray-100">
         <h3 className="font-heading font-semibold text-dark text-[15px]">{bloc.titre}</h3>
       </div>
       <div className="p-5 flex flex-col gap-4">
-        {bloc.questions.map(q => (
+        {bloc.questionCle && (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <span className="text-sm text-gray-700 flex-1">{bloc.questionCle.label}</span>
+            <div className="flex-shrink-0">
+              <BoutonOuiNon value={gateValue ?? null} onChange={onGateChange!} />
+            </div>
+          </div>
+        )}
+        {showContent && bloc.questions.map(q => (
           <RenduQuestion
             key={q.id}
             question={q}
@@ -1167,22 +1183,17 @@ export default function FormulaireBilanInitial({ participantId, onFlat, initialF
     setData(prev => ({ ...prev, [field]: value }));
   }
 
-  const blocsActifs = BLOCS.filter(bloc => {
-    if (!bloc.questionCle) return true;
-    return reponsesClés[bloc.questionCle.field] === bloc.afficherSi;
-  });
-
-  const blocsConditionnels = BLOCS.filter(b => b.questionCle);
-
-  // Complétion sur les types simples uniquement (les listes dynamiques sont exclues)
-  const questionsVisibles = blocsActifs.flatMap(b =>
-    b.questions.filter(q => {
+  // Complétion : inclut les blocs conditionnels dont le gate est "oui"
+  const questionsVisibles = BLOCS.flatMap(b => {
+    const gateOk = !b.questionCle || reponsesClés[b.questionCle.field] === 'oui';
+    if (!gateOk) return [];
+    return b.questions.filter(q => {
       if (!TYPES_SIMPLES.includes(q.type)) return false;
       if (!q.conditionnelSi) return true;
       const [field, valeur] = q.conditionnelSi.split('_');
       return data[field] === valeur;
-    })
-  );
+    });
+  });
   const filled = questionsVisibles.filter(q => {
     const v = data[q.id];
     if (v === null || v === undefined || v === '') return false;
@@ -1194,32 +1205,16 @@ export default function FormulaireBilanInitial({ participantId, onFlat, initialF
     <div className="flex flex-col gap-5">
       <IndicateurCompletion filled={filled} total={questionsVisibles.length} />
 
-      {/* Pré-sélection — questions conditionnelles */}
-      <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5">
-        <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-4">
-          Questions préliminaires
-        </p>
-        <div className="flex flex-col gap-4">
-          {blocsConditionnels.map(bloc => (
-            <div
-              key={bloc.id}
-              className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
-            >
-              <span className="text-sm text-gray-700 flex-1">{bloc.questionCle!.label}</span>
-              <div className="flex-shrink-0">
-                <BoutonOuiNon
-                  value={reponsesClés[bloc.questionCle!.field]}
-                  onChange={v => setClé(bloc.questionCle!.field, v)}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Blocs de questions */}
-      {blocsActifs.map(bloc => (
-        <BlocQuestions key={bloc.id} bloc={bloc} data={data} onChange={setField} />
+      {/* Blocs de questions — les blocs conditionnels affichent leur gate inline */}
+      {BLOCS.map(bloc => (
+        <BlocQuestions
+          key={bloc.id}
+          bloc={bloc}
+          data={data}
+          onChange={setField}
+          gateValue={bloc.questionCle ? reponsesClés[bloc.questionCle.field] : undefined}
+          onGateChange={bloc.questionCle ? v => setClé(bloc.questionCle!.field, v) : undefined}
+        />
       ))}
     </div>
   );

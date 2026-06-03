@@ -64,10 +64,11 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
   const setMem = (patch: Partial<typeof mem>) => update({ memoire: { ...mem, ...patch } });
 
   const active = testsActifs
-    ? [...new Set([...testsActifs.filter(k => ENDO_TESTS.includes(k)), ...extras])]
+    ? [...new Set(['memoire' as TestKey, ...testsActifs.filter(k => ENDO_TESTS.includes(k)), ...extras])]
     : ENDO_TESTS;
 
-  const addable = ENDO_TESTS.filter(k => !active.includes(k));
+  // memoire est toujours obligatoire, ne pas proposer de l'ajouter
+  const addable = ENDO_TESTS.filter(k => !active.includes(k) && k !== 'memoire');
   const hasAny = active.length > 0;
 
   return (
@@ -86,19 +87,47 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
         <section>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">TM6 — Test de Marche de 6 minutes</h3>
-            <DeltaIndicator delta={d.tm6Distance} unit="m" />
+            {(tm6.mode ?? 'standard') === 'standard' && <DeltaIndicator delta={d.tm6Distance} unit="m" />}
           </div>
 
-          {/* Chrono 6 minutes */}
+          {/* Sélecteur mode */}
           <div className="mb-4">
-            <p className="text-xs font-medium text-gray-600 mb-2">Chronomètre 6 minutes</p>
-            <ChronoWidget mode="down-6min" />
+            <p className="text-xs font-medium text-gray-600 mb-2">Mode du test</p>
+            <div className="flex gap-2">
+              {([
+                ['standard', '🚶 Marche 6 minutes standard'],
+                ['assis_debout', '🪑 Variante : montées de genoux assis-debout (30s)'],
+              ] as const).map(([val, label]) => (
+                <button key={val} type="button"
+                  onClick={() => setTm6({ mode: val })}
+                  className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-medium border transition-colors text-left ${
+                    (tm6.mode ?? 'standard') === val
+                      ? 'bg-primary text-white border-primary'
+                      : 'border-gray-200 text-gray-600 hover:border-primary/50 hover:bg-gray-50'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Distance */}
+          {/* Chrono */}
           <div className="mb-4">
-            <Num label="Distance parcourue" value={tm6.distanceMetres} unit="m" min={0} max={1000}
-              onChange={v => setTm6({ distanceMetres: v })} />
+            <p className="text-xs font-medium text-gray-600 mb-2">
+              {(tm6.mode ?? 'standard') === 'standard' ? 'Chronomètre 6 minutes' : 'Chronomètre 30 secondes'}
+            </p>
+            <ChronoWidget mode={(tm6.mode ?? 'standard') === 'standard' ? 'down-6min' : 'down-30s'} />
+          </div>
+
+          {/* Distance ou Répétitions */}
+          <div className="mb-4">
+            {(tm6.mode ?? 'standard') === 'standard' ? (
+              <Num label="Distance parcourue" value={tm6.distanceMetres} unit="m" min={0} max={1000}
+                onChange={v => setTm6({ distanceMetres: v })} />
+            ) : (
+              <Num label="Nombre de répétitions (en 30s)" value={tm6.repetitions ?? null} unit="rép." min={0} max={60}
+                onChange={v => setTm6({ repetitions: v })} />
+            )}
           </div>
 
           {/* Grille 3 colonnes AVANT / JUSTE APRÈS / 2 MIN APRÈS */}
@@ -202,11 +231,12 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
         </section>
       )}
 
-      {/* Mémoire */}
+      {/* Mémoire — toujours obligatoire */}
       {active.includes('memoire') && (
         <section>
           <div className="flex items-center gap-3 mb-3">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Mémoire — Test Dubois MIS</h3>
+            <span className="text-[10px] font-bold text-white bg-primary px-2 py-0.5 rounded-full uppercase tracking-wide">Obligatoire</span>
             {mem.dubois?.scoreMIS != null && (
               <DeltaIndicator delta={d.memoireMIS} unit="/10" />
             )}

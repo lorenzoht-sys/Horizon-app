@@ -24,7 +24,9 @@ export interface Bilan {
   };
 
   tm6: {
+    mode?: 'standard' | 'assis_debout';
     distanceMetres: number | null;
+    repetitions?: number | null;
     fcAvant: number | null;
     fcApres: number | null;
     fc2min: number | null;
