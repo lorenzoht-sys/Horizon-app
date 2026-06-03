@@ -8,7 +8,6 @@ import toast from 'react-hot-toast';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import type { Participant, Bilan } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -77,70 +76,198 @@ const MD_COMPONENTS = {
 
 // ── PDF export ────────────────────────────────────────────────────────────────
 
-async function downloadPDF(patientNom: string, type: ActionType) {
-  const element = document.getElementById('assistant-response');
-  if (!element) return;
+function downloadPDF(patientNom: string, type: ActionType, markdownContent: string) {
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  const clone = element.cloneNode(true) as HTMLElement;
-  clone.style.cssText = `
-    position: fixed; top: -9999px; left: 0; width: 750px;
-    padding: 40px; background: white;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 13px; line-height: 1.6; color: #1a1a1a;
-  `;
-  document.body.appendChild(clone);
+  const pageWidth    = 210;
+  const pageHeight   = 297;
+  const marginLeft   = 16;
+  const marginRight  = 16;
+  const marginTop    = 24;
+  const marginBottom = 20;
+  const contentWidth = pageWidth - marginLeft - marginRight;
+  let y        = marginTop;
+  let pageNum  = 1;
 
-  try {
-    const canvas = await html2canvas(clone, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+  const turquoise:     [number, number, number] = [43,  191, 191];
+  const darkGreen:     [number, number, number] = [13,  43,  43 ];
+  const textPrimary:   [number, number, number] = [26,  26,  26 ];
+  const textSecondary: [number, number, number] = [80,  80,  80 ];
+  const borderColor:   [number, number, number] = [220, 228, 228];
 
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-    pdf.setFillColor(13, 43, 43);
-    pdf.rect(0, 0, 210, 18, 'F');
+  const addHeader = () => {
+    pdf.setFillColor(...darkGreen);
+    pdf.rect(0, 0, pageWidth, 16, 'F');
     pdf.setTextColor(255, 255, 255);
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Horizon — APA', 14, 12);
-    pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(9);
-    pdf.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, 150, 12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Horizon — APA', marginLeft, 10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, pageWidth - marginRight - 30, 10);
+    pdf.setDrawColor(...turquoise);
+    pdf.setLineWidth(0.5);
+    pdf.line(0, 16, pageWidth, 16);
+  };
 
-    const imgData = canvas.toDataURL('image/png');
-    const imgWidth = 210 - 28;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    const pageHeight = 297 - 30;
-    let heightLeft = imgHeight;
-    let position = 22;
+  const addFooter = () => {
+    const fy = pageHeight - 8;
+    pdf.setDrawColor(...borderColor);
+    pdf.setLineWidth(0.3);
+    pdf.line(marginLeft, fy - 4, pageWidth - marginRight, fy - 4);
+    pdf.setTextColor(...textSecondary);
+    pdf.setFontSize(7);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Document généré par Horizon — Outil de suivi APA', marginLeft, fy);
+    pdf.text(`Page ${pageNum}`, pageWidth - marginRight - 10, fy);
+  };
 
-    pdf.addImage(imgData, 'PNG', 14, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-
-    while (heightLeft >= 0) {
-      position = heightLeft - imgHeight + 22;
+  const checkNewPage = (needed: number) => {
+    if (y + needed > pageHeight - marginBottom) {
+      addFooter();
       pdf.addPage();
-      pdf.setFillColor(13, 43, 43);
-      pdf.rect(0, 0, 210, 18, 'F');
-      pdf.addImage(imgData, 'PNG', 14, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      pageNum++;
+      addHeader();
+      y = marginTop;
+    }
+  };
+
+  addHeader();
+
+  const lines = markdownContent.split('\n');
+  let i = 0;
+
+  while (i < lines.length) {
+    const trimmed = lines[i].trim();
+
+    if (!trimmed) { y += 3; i++; continue; }
+
+    // H1
+    if (/^# [^#]/.test(trimmed)) {
+      checkNewPage(14);
+      pdf.setTextColor(...darkGreen);
+      pdf.setFontSize(14);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(trimmed.slice(2), marginLeft, y);
+      y += 8;
+      pdf.setDrawColor(...turquoise);
+      pdf.setLineWidth(0.8);
+      pdf.line(marginLeft, y - 2, marginLeft + 80, y - 2);
+      y += 3;
+    }
+    // H2
+    else if (/^## [^#]/.test(trimmed)) {
+      checkNewPage(10);
+      pdf.setTextColor(...turquoise);
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(trimmed.slice(3), marginLeft, y);
+      y += 7;
+    }
+    // H3
+    else if (/^### /.test(trimmed)) {
+      checkNewPage(8);
+      pdf.setTextColor(...textPrimary);
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(trimmed.slice(4), marginLeft, y);
+      y += 6;
+    }
+    // Séparateur
+    else if (trimmed === '---') {
+      checkNewPage(6);
+      pdf.setDrawColor(...borderColor);
+      pdf.setLineWidth(0.3);
+      pdf.line(marginLeft, y, pageWidth - marginRight, y);
+      y += 5;
+    }
+    // Tableau
+    else if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        tableLines.push(lines[i].trim());
+        i++;
+      }
+      const rows = tableLines
+        .filter(l => l.replace(/[| :-]/g, '').trim().length > 0)
+        .map(l => l.split('|').filter(c => c !== '').map(c => c.trim().replace(/\*\*/g, '')));
+
+      if (rows.length > 0) {
+        const colCount = Math.max(...rows.map(r => r.length));
+        const colWidth = contentWidth / colCount;
+        const rowH = 7;
+        rows.forEach((row, ri) => {
+          checkNewPage(rowH + 2);
+          if (ri === 0) {
+            pdf.setFillColor(240, 244, 244);
+            pdf.rect(marginLeft, y - 5, contentWidth, rowH, 'F');
+          }
+          pdf.setDrawColor(...borderColor);
+          pdf.setLineWidth(0.2);
+          pdf.rect(marginLeft, y - 5, contentWidth, rowH);
+          row.forEach((cell, ci) => {
+            const cx = marginLeft + ci * colWidth + 2;
+            pdf.setFontSize(8.5);
+            if (ri === 0) {
+              pdf.setTextColor(...textSecondary);
+              pdf.setFont('helvetica', 'bold');
+            } else {
+              pdf.setTextColor(...textPrimary);
+              pdf.setFont('helvetica', 'normal');
+            }
+            const w = pdf.splitTextToSize(cell, colWidth - 4);
+            pdf.text(w[0] || '', cx, y);
+          });
+          y += rowH;
+        });
+        y += 3;
+      }
+      continue;
+    }
+    // Bullet
+    else if (/^[-*] /.test(trimmed)) {
+      const text = trimmed.slice(2).replace(/\*\*/g, '');
+      const wrapped = pdf.splitTextToSize(text, contentWidth - 8);
+      checkNewPage(wrapped.length * 5 + 2);
+      pdf.setFillColor(...turquoise);
+      pdf.circle(marginLeft + 1.5, y - 1.5, 1, 'F');
+      pdf.setTextColor(...textSecondary);
+      pdf.setFontSize(9.5);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(wrapped, marginLeft + 6, y);
+      y += wrapped.length * 5 + 1;
+    }
+    // Ligne avec gras
+    else if (trimmed.includes('**')) {
+      const cleaned = trimmed.replace(/\*\*/g, '');
+      const isBold  = trimmed.startsWith('**');
+      const wrapped = pdf.splitTextToSize(cleaned, contentWidth);
+      checkNewPage(wrapped.length * 5 + 2);
+      pdf.setTextColor(...textPrimary);
+      pdf.setFontSize(9.5);
+      pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+      pdf.text(wrapped, marginLeft, y);
+      y += wrapped.length * 5 + 2;
+    }
+    // Texte normal
+    else {
+      const cleaned = trimmed.replace(/\*\*/g, '');
+      const wrapped = pdf.splitTextToSize(cleaned, contentWidth);
+      checkNewPage(wrapped.length * 5 + 2);
+      pdf.setTextColor(...textSecondary);
+      pdf.setFontSize(9.5);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(wrapped, marginLeft, y);
+      y += wrapped.length * 5 + 2;
     }
 
-    const totalPages = pdf.getNumberOfPages();
-    for (let i = 1; i <= totalPages; i++) {
-      pdf.setPage(i);
-      pdf.setFillColor(240, 244, 244);
-      pdf.rect(0, 285, 210, 12, 'F');
-      pdf.setTextColor(100, 100, 100);
-      pdf.setFontSize(8);
-      pdf.text('Document généré par Horizon — Outil de suivi APA', 14, 292);
-      pdf.text(`Page ${i}/${totalPages}`, 185, 292);
-    }
-
-    const date = new Date().toISOString().split('T')[0];
-    const typeLabel = type === 'compte_rendu' ? 'Compte-rendu-medecin' : 'Compte-rendu-famille';
-    pdf.save(`${typeLabel}_${patientNom.replace(' ', '-')}_${date}.pdf`);
-  } finally {
-    document.body.removeChild(clone);
+    i++;
   }
+
+  addFooter();
+
+  const date      = new Date().toISOString().split('T')[0];
+  const typeLabel = type === 'compte_rendu' ? 'CR-medecin' : 'CR-famille';
+  pdf.save(`${typeLabel}_${patientNom.replace(' ', '-')}_${date}.pdf`);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -939,7 +1066,6 @@ export default function AssistantPage() {
               <div key={msg.id}>
                 <div style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
                   <div
-                    id={isLastAssistant ? 'assistant-response' : undefined}
                     style={{
                       maxWidth: '74%', padding: '12px 16px', fontSize: 14, lineHeight: 1.7,
                       borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
@@ -957,7 +1083,7 @@ export default function AssistantPage() {
                 {showPdfBar && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                     <button
-                      onClick={() => downloadPDF(selectedPatient ? `${selectedPatient.prenom}-${selectedPatient.nom}` : 'patient', actionType!)}
+                      onClick={() => downloadPDF(selectedPatient ? `${selectedPatient.prenom}-${selectedPatient.nom}` : 'patient', actionType!, msg.content)}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#2BBFBF', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                       📄 Télécharger en PDF
                     </button>

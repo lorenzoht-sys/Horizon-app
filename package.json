@@ -19,7 +19,6 @@
     "buffer": "^6.0.3",
     "chart.js": "^4.5.1",
     "date-fns": "^4.2.1",
-    "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.14.0",
