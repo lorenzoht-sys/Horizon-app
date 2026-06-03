@@ -7,11 +7,13 @@ import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import toast from 'react-hot-toast';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import type { Participant, Bilan } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ActionType = 'contre_indications' | 'compte_rendu' | 'programme' | 'interpretation' | 'libre';
+type ActionType = 'contre_indications' | 'compte_rendu' | 'compte_rendu_famille' | 'programme' | 'interpretation' | 'libre';
 type Phase = 'home' | 'chat';
 
 interface Message {
@@ -37,18 +39,20 @@ interface PatientExtras {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const ACTIONS: { id: ActionType; emoji: string; title: string; subtitle: string }[] = [
-  { id: 'contre_indications', emoji: '💊', title: 'Vérifier les contre-indications', subtitle: 'CI actives + recommandations APA' },
-  { id: 'compte_rendu',       emoji: '📋', title: 'Rédiger un compte-rendu médecin', subtitle: 'Basé sur le dernier bilan + séances' },
-  { id: 'programme',          emoji: '🏋️', title: "Suggérer un programme d'exercices", subtitle: 'Adapté au profil et aux CI' },
-  { id: 'interpretation',     emoji: '📊', title: 'Interpréter un résultat de test',  subtitle: 'Analyse clinique des derniers scores' },
+  { id: 'contre_indications',   emoji: '💊',    title: 'Vérifier les contre-indications',  subtitle: 'CI actives + recommandations APA' },
+  { id: 'compte_rendu',         emoji: '📋',    title: 'Rédiger un compte-rendu médecin',  subtitle: 'Basé sur le dernier bilan + séances' },
+  { id: 'compte_rendu_famille', emoji: '👨‍👩‍👧', title: 'Compte-rendu famille',              subtitle: 'Langage accessible, progrès + vigilance' },
+  { id: 'programme',            emoji: '🏋️',   title: "Suggérer un programme d'exercices", subtitle: 'Adapté au profil et aux CI' },
+  { id: 'interpretation',       emoji: '📊',    title: 'Interpréter un résultat de test',  subtitle: 'Analyse clinique des derniers scores' },
 ];
 
 const ACTION_LABELS: Record<ActionType, string> = {
-  contre_indications: 'vérifier les contre-indications',
-  compte_rendu:       'rédiger un compte-rendu médecin',
-  programme:          "suggérer un programme d'exercices",
-  interpretation:     'interpréter les résultats de test',
-  libre:              'poser une question',
+  contre_indications:   'vérifier les contre-indications',
+  compte_rendu:         'rédiger un compte-rendu médecin',
+  compte_rendu_famille: 'rédiger un compte-rendu famille',
+  programme:            "suggérer un programme d'exercices",
+  interpretation:       'interpréter les résultats de test',
+  libre:                'poser une question',
 };
 
 const MD_COMPONENTS = {
@@ -71,6 +75,74 @@ const MD_COMPONENTS = {
   th: ({children}: any) => <th style={{padding:'8px 12px', fontWeight:'500', color:'#6B7280', textAlign:'left', fontSize:'12px', letterSpacing:'0.03em'}}>{children}</th>,
   td: ({children}: any) => <td style={{padding:'8px 12px', color:'#374151', fontSize:'13px', verticalAlign:'top'}}>{children}</td>,
 };
+
+// ── PDF export ────────────────────────────────────────────────────────────────
+
+async function downloadPDF(patientNom: string, type: ActionType) {
+  const element = document.getElementById('assistant-response');
+  if (!element) return;
+
+  const clone = element.cloneNode(true) as HTMLElement;
+  clone.style.cssText = `
+    position: fixed; top: -9999px; left: 0; width: 750px;
+    padding: 40px; background: white;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px; line-height: 1.6; color: #1a1a1a;
+  `;
+  document.body.appendChild(clone);
+
+  try {
+    const canvas = await html2canvas(clone, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    pdf.setFillColor(13, 43, 43);
+    pdf.rect(0, 0, 210, 18, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Horizon — APA', 14, 12);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, 150, 12);
+
+    const imgData = canvas.toDataURL('image/png');
+    const imgWidth = 210 - 28;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const pageHeight = 297 - 30;
+    let heightLeft = imgHeight;
+    let position = 22;
+
+    pdf.addImage(imgData, 'PNG', 14, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft >= 0) {
+      position = heightLeft - imgHeight + 22;
+      pdf.addPage();
+      pdf.setFillColor(13, 43, 43);
+      pdf.rect(0, 0, 210, 18, 'F');
+      pdf.addImage(imgData, 'PNG', 14, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+
+    const totalPages = pdf.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      pdf.setPage(i);
+      pdf.setFillColor(240, 244, 244);
+      pdf.rect(0, 285, 210, 12, 'F');
+      pdf.setTextColor(100, 100, 100);
+      pdf.setFontSize(8);
+      pdf.text('Document généré par Horizon — Outil de suivi APA', 14, 292);
+      pdf.text(`Page ${i}/${totalPages}`, 185, 292);
+    }
+
+    const date = new Date().toISOString().split('T')[0];
+    const typeLabel = type === 'compte_rendu' ? 'Compte-rendu-medecin' : 'Compte-rendu-famille';
+    pdf.save(`${typeLabel}_${patientNom.replace(' ', '-')}_${date}.pdf`);
+  } finally {
+    document.body.removeChild(clone);
+  }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -245,6 +317,8 @@ function buildActionPrompt(action: ActionType, patient: Participant, extras: Pat
       return `${sys}\n\n---\nQUESTION:\nEffectue une analyse complète des contre-indications à l'effort pour ce patient.\nPour chaque contre-indication identifiée :\n1. Décris le risque spécifique en APA\n2. Donne les précautions à respecter\n3. Liste les types d'exercices à éviter absolument\n4. Propose des alternatives adaptées et sécurisées`;
     case 'compte_rendu':
       return `${sys}\n\n---\nQUESTION:\nGénère un compte-rendu médecin professionnel et structuré à envoyer au médecin prescripteur.\nFormat :\n## Compte-rendu APA — ${patient.prenom} ${patient.nom}\n**Date :** ${new Date().toLocaleDateString('fr-FR')}\n### Bilan fonctionnel\n### Évolution constatée\n### Programme réalisé\n### Recommandations pour la suite\n### Points de vigilance\nRédige ce compte-rendu en citant les valeurs exactes des tests.`;
+    case 'compte_rendu_famille':
+      return `${sys}\n\n---\nQUESTION:\nRédige un compte-rendu destiné à la famille de ${patient.prenom} ${patient.nom}, en langage simple et accessible (sans jargon médical).\nFormat :\n## Bilan pour la famille — ${patient.prenom} ${patient.nom}\n**Date :** ${new Date().toLocaleDateString('fr-FR')}\n### Comment se porte ${patient.prenom} ?\n### Les progrès observés\n### Le programme en cours\n### Ce qu'il faut surveiller à la maison\n### Nos conseils pour accompagner ${patient.prenom} au quotidien\nRédige de façon chaleureuse, positive et concrète. Explique chaque résultat en termes simples (ex : "le test de marche montre que…" plutôt que des chiffres bruts).`;
     case 'interpretation':
       return `${sys}\n\n---\nQUESTION:\nAnalyse et interprète les derniers résultats de bilans de ce patient.\nPour chaque test disponible :\n- Compare aux normes pour l'âge (cite les références HAS / SFP-APA)\n- Indique si le résultat est satisfaisant, à surveiller, ou préoccupant\n- Explique les implications pratiques pour les séances APA\n- Identifie les priorités de travail\nConclude sur le profil fonctionnel global.`;
     case 'programme':
@@ -814,21 +888,43 @@ export default function AssistantPage() {
             if (msg.role === 'patient_select') {
               return <div key={msg.id} style={{ maxWidth: 520 }}><PatientChips participants={participants} onSelect={handlePatientSelected} /></div>;
             }
+            const lastAssistantId = messages.filter(m => m.role === 'assistant').at(-1)?.id;
+            const isLastAssistant = msg.role === 'assistant' && msg.id === lastAssistantId;
+            const showPdfBar = isLastAssistant && !loading &&
+              (actionType === 'compte_rendu' || actionType === 'compte_rendu_famille');
             return (
-              <div key={msg.id} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                <div style={{
-                  maxWidth: '74%', padding: '12px 16px', fontSize: 14, lineHeight: 1.7,
-                  borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-                  background: msg.role === 'user' ? '#2BBFBF' : 'white',
-                  color: msg.role === 'user' ? 'white' : '#111827',
-                  border: msg.role === 'assistant' ? '0.5px solid #E5E7EB' : 'none',
-                  whiteSpace: msg.role === 'user' ? 'pre-wrap' : undefined,
-                }}>
-                  {msg.role === 'user'
-                    ? msg.content
-                    : <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{msg.content}</ReactMarkdown>
-                  }
+              <div key={msg.id}>
+                <div style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                  <div
+                    id={isLastAssistant ? 'assistant-response' : undefined}
+                    style={{
+                      maxWidth: '74%', padding: '12px 16px', fontSize: 14, lineHeight: 1.7,
+                      borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                      background: msg.role === 'user' ? '#2BBFBF' : 'white',
+                      color: msg.role === 'user' ? 'white' : '#111827',
+                      border: msg.role === 'assistant' ? '0.5px solid #E5E7EB' : 'none',
+                      whiteSpace: msg.role === 'user' ? 'pre-wrap' : undefined,
+                    }}>
+                    {msg.role === 'user'
+                      ? msg.content
+                      : <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{msg.content}</ReactMarkdown>
+                    }
+                  </div>
                 </div>
+                {showPdfBar && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    <button
+                      onClick={() => downloadPDF(selectedPatient ? `${selectedPatient.prenom}-${selectedPatient.nom}` : 'patient', actionType!)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#2BBFBF', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      📄 Télécharger en PDF
+                    </button>
+                    <button
+                      onClick={handleCopyLast}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: 'white', border: '0.5px solid #E5E7EB', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#374151' }}>
+                      📋 Copier le texte
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
