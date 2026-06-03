@@ -370,12 +370,34 @@ export interface Participant {
   allergies?: string;
   traitements?: TraitementPatient[];
   antecedentsMedicauxStructures?: AntecedentMedical[];
+  structureId?: string;
   activitesSouhaitees?: string[];
   objectifsPatient?: string | string[];
   // Coordonnées bancaires (SAP)
   iban?: string;
   bic?: string;
   droitImage?: boolean;
+}
+
+// ── STRUCTURES ────────────────────────────────────────────────────────────────
+
+export type TypeStructure = 'ehpad' | 'centre' | 'association' | 'entreprise' | 'autre';
+export type FrequenceFacturation = 'mensuelle' | 'bimensuelle' | 'a_la_seance';
+
+export interface Structure {
+  id: string;
+  praticienId: string;
+  nom: string;
+  type?: TypeStructure;
+  adresse?: string;
+  contactNom?: string;
+  contactEmail: string;
+  contactTelephone?: string;
+  tokenAcces: string;
+  tarifSeance: number;
+  frequenceFacturation: FrequenceFacturation;
+  actif: boolean;
+  createdAt: string;
 }
 
 // ── TRAITEMENTS & ANTÉCÉDENTS STRUCTURÉS ─────────────────────────────────────

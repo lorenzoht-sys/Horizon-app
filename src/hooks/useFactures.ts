@@ -4,7 +4,8 @@ import { supabase } from '../lib/supabase';
 export interface FactureSuivi {
   id: string;
   praticienId: string | null;
-  participantId: string;
+  participantId: string | null;   // null pour les factures de structure
+  structureId?: string | null;    // présent pour les factures de structure globale
   periodeMois: number;   // 1-12
   periodeAnnee: number;
   nbSeances: number;
@@ -20,7 +21,8 @@ function dbToFacture(row: any): FactureSuivi {
   return {
     id: row.id,
     praticienId: row.praticien_id ?? null,
-    participantId: row.participant_id,
+    participantId: row.participant_id ?? null,
+    structureId: row.structure_id ?? null,
     periodeMois: row.periode_mois,
     periodeAnnee: row.periode_annee,
     nbSeances: row.nb_seances ?? 0,
@@ -74,6 +76,46 @@ export function useFactures() {
   useEffect(() => {
     if (praticienId) chargerFactures();
   }, [praticienId, chargerFactures]);
+
+  // Créer ou mettre à jour une facture pour une structure/mois donné
+  async function creerOuMettreAJourStructure(data: {
+    structureId: string;
+    periodeMois: number;
+    periodeAnnee: number;
+    nbSeances: number;
+    montantTotal: number;
+    dateEcheance?: string;
+  }): Promise<FactureSuivi | null> {
+    if (!supabase || !praticienId) return null;
+    const today = new Date().toISOString().slice(0, 10);
+    const statut: FactureSuivi['statut'] =
+      data.dateEcheance && data.dateEcheance < today ? 'en_retard' : 'a_envoyer';
+    const row = {
+      praticien_id: praticienId,
+      structure_id: data.structureId,
+      participant_id: null,
+      periode_mois: data.periodeMois,
+      periode_annee: data.periodeAnnee,
+      nb_seances: data.nbSeances,
+      montant_total: data.montantTotal,
+      statut,
+      date_echeance: data.dateEcheance ?? null,
+    };
+    const { data: inserted, error } = await supabase
+      .from('factures_suivi')
+      .upsert(row, { onConflict: 'structure_id,periode_annee,periode_mois' })
+      .select()
+      .single();
+    if (error) { console.error('[useFactures] erreur structure upsert:', error); return null; }
+    const facture = dbToFacture(inserted);
+    setFactures(prev => {
+      const idx = prev.findIndex(
+        f => f.structureId === data.structureId && f.periodeMois === data.periodeMois && f.periodeAnnee === data.periodeAnnee
+      );
+      return idx >= 0 ? prev.map((f, i) => i === idx ? facture : f) : [...prev, facture];
+    });
+    return facture;
+  }
 
   // Créer ou mettre à jour une facture pour un patient/mois donné
   async function creerOuMettreAJour(data: {
@@ -154,6 +196,7 @@ export function useFactures() {
     loading,
     praticienId,
     creerOuMettreAJour,
+    creerOuMettreAJourStructure,
     marquerEnvoyee,
     supprimerFacture,
     recharger: chargerFactures,

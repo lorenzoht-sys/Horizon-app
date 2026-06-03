@@ -785,8 +785,8 @@ function SectionFactures({
   }
 
   function genererPDF(f: typeof factures[0]) {
-    const p = participants.find(x => x.id === f.participantId);
-    const c = contratActif(f.participantId);
+    const p = f.participantId ? participants.find(x => x.id === f.participantId) : undefined;
+    const c = f.participantId ? contratActif(f.participantId) : undefined;
     const tarif = c?.tarifSeance ?? tarifDefaut;
     exportFacturePDF({
       nomPatient: p ? `${p.prenom} ${p.nom}` : '—',
@@ -806,9 +806,9 @@ function SectionFactures({
   const CARD_CLS = 'border rounded-xl p-4 mb-3';
 
   function CartFacture({ f, showRappel }: { f: typeof factures[0]; showRappel?: boolean }) {
-    const nom = nomPatient(f.participantId);
+    const nom = f.participantId ? nomPatient(f.participantId) : 'Facture structure';
     const periode = nomMoisAnnee(f.periodeMois, f.periodeAnnee);
-    const c = contratActif(f.participantId);
+    const c = f.participantId ? contratActif(f.participantId) : undefined;
     const tarif = c?.tarifSeance ?? tarifDefaut;
     return (
       <div className={`${CARD_CLS} ${showRappel ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'}`}>
@@ -843,7 +843,7 @@ function SectionFactures({
           </button>
           {showRappel && (
             <button
-              onClick={() => envoyerRappelEmail(f.id, f.participantId, f.periodeMois, f.periodeAnnee)}
+              onClick={() => f.participantId && envoyerRappelEmail(f.id, f.participantId, f.periodeMois, f.periodeAnnee)}
               className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-amber-300 text-amber-700 hover:bg-amber-50 transition-colors"
             >
               📧 Rappel
@@ -937,7 +937,7 @@ function SectionFactures({
                 <div className="mt-2">
                   {envoyees.map(f => (
                     <div key={f.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 text-xs text-gray-500">
-                      <span>{nomPatient(f.participantId)} — {nomMoisAnnee(f.periodeMois, f.periodeAnnee)}</span>
+                      <span>{f.participantId ? nomPatient(f.participantId) : 'Structure'} — {nomMoisAnnee(f.periodeMois, f.periodeAnnee)}</span>
                       <span className="font-medium text-emerald-600">{f.montantTotal.toFixed(0)} € ✅</span>
                     </div>
                   ))}

@@ -1,4 +1,4 @@
-import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique } from '../types';
+import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
 
 // Participant: Supabase row → TypeScript type
@@ -40,6 +40,7 @@ export function dbToParticipant(row: any): Participant {
     allergies: row.allergies ?? undefined,
     traitements: row.traitements ?? undefined,
     antecedentsMedicauxStructures: row.antecedents_structures ?? undefined,
+    structureId: row.structure_id ?? undefined,
     activitesSouhaitees: row.activites_souhaitees ?? undefined,
     objectifsPatient: row.objectifs_patient ?? undefined,
     iban: row.iban ?? undefined,
@@ -86,6 +87,7 @@ export function participantToDb(p: Omit<Participant, 'bilans' | 'programmes'>): 
     allergies: p.allergies ?? null,
     traitements: p.traitements ?? null,
     antecedents_structures: p.antecedentsMedicauxStructures ?? null,
+    structure_id: p.structureId ?? null,
     activites_souhaitees: p.activitesSouhaitees ?? null,
     objectifs_patient: p.objectifsPatient ?? null,
     iban: p.iban ?? null,
@@ -359,5 +361,39 @@ export function compteRenduToDb(cr: CompteRenduSeance): Record<string, unknown> 
     progression: cr.progression ?? null,
     points_attention: cr.pointsAttention ?? null,
     prochaine_seance_notes: cr.prochaineSeanceNotes ?? null,
+  };
+}
+
+export function dbToStructure(row: any): Structure {
+  return {
+    id: row.id,
+    praticienId: row.praticien_id,
+    nom: row.nom,
+    type: row.type ?? undefined,
+    adresse: row.adresse ?? undefined,
+    contactNom: row.contact_nom ?? undefined,
+    contactEmail: row.contact_email,
+    contactTelephone: row.contact_telephone ?? undefined,
+    tokenAcces: row.token_acces,
+    tarifSeance: Number(row.tarif_seance ?? 45),
+    frequenceFacturation: row.frequence_facturation ?? 'mensuelle',
+    actif: row.actif ?? true,
+    createdAt: row.created_at ?? '',
+  };
+}
+
+export function structureToDb(s: Partial<Structure> & { nom: string; contactEmail: string }): Record<string, unknown> {
+  return {
+    ...(s.id ? { id: s.id } : {}),
+    ...(s.praticienId ? { praticien_id: s.praticienId } : {}),
+    nom: s.nom,
+    type: s.type ?? null,
+    adresse: s.adresse ?? null,
+    contact_nom: s.contactNom ?? null,
+    contact_email: s.contactEmail,
+    contact_telephone: s.contactTelephone ?? null,
+    tarif_seance: s.tarifSeance ?? 45,
+    frequence_facturation: s.frequenceFacturation ?? 'mensuelle',
+    actif: s.actif ?? true,
   };
 }

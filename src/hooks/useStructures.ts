@@ -1,0 +1,119 @@
+import { useState, useEffect, useCallback } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import { supabase } from '../lib/supabase';
+import { dbToStructure, structureToDb } from '../lib/mappers';
+import type { Structure } from '../types';
+
+export type { Structure };
+
+export function useStructures() {
+  const [structures, setStructures] = useState<Structure[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [praticienId, setPraticienId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setPraticienId(user.id);
+    });
+  }, []);
+
+  const charger = useCallback(async () => {
+    if (!supabase || !praticienId) return;
+    setLoading(true);
+    try {
+      const { data } = await supabase
+        .from('structures')
+        .select('*')
+        .eq('praticien_id', praticienId)
+        .order('nom');
+      if (data) setStructures(data.map(dbToStructure));
+    } finally {
+      setLoading(false);
+    }
+  }, [praticienId]);
+
+  useEffect(() => {
+    if (praticienId) void charger();
+  }, [praticienId, charger]);
+
+  async function creerStructure(data: {
+    nom: string;
+    type?: Structure['type'];
+    adresse?: string;
+    contactNom?: string;
+    contactEmail: string;
+    contactTelephone?: string;
+    tarifSeance?: number;
+    frequenceFacturation?: Structure['frequenceFacturation'];
+  }): Promise<Structure | null> {
+    if (!supabase || !praticienId) return null;
+    const row = {
+      ...structureToDb({ ...data, tarifSeance: data.tarifSeance ?? 45 }),
+      id: uuidv4(),
+      praticien_id: praticienId,
+    };
+    const { data: inserted, error } = await supabase
+      .from('structures')
+      .insert(row)
+      .select()
+      .single();
+    if (error) { console.error('[useStructures] create error:', error); return null; }
+    const s = dbToStructure(inserted);
+    setStructures(prev => [...prev, s].sort((a, b) => a.nom.localeCompare(b.nom)));
+    return s;
+  }
+
+  async function mettreAJour(id: string, data: Partial<Omit<Structure, 'id' | 'praticienId' | 'tokenAcces' | 'createdAt'>>): Promise<void> {
+    if (!supabase) return;
+    const { error } = await supabase.from('structures').update(structureToDb(data as any)).eq('id', id);
+    if (!error) {
+      setStructures(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
+    }
+  }
+
+  async function supprimerStructure(id: string): Promise<void> {
+    if (!supabase) return;
+    await supabase.from('structures').delete().eq('id', id);
+    setStructures(prev => prev.filter(s => s.id !== id));
+  }
+
+  async function regenererToken(id: string): Promise<string | null> {
+    if (!supabase) return null;
+    // Générer un nouveau token côté client (hex 32 bytes via crypto API)
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    const token = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
+    const { error } = await supabase.from('structures').update({ token_acces: token }).eq('id', id);
+    if (!error) {
+      setStructures(prev => prev.map(s => s.id === id ? { ...s, tokenAcces: token } : s));
+      return token;
+    }
+    return null;
+  }
+
+  return {
+    structures,
+    loading,
+    praticienId,
+    creerStructure,
+    mettreAJour,
+    supprimerStructure,
+    regenererToken,
+    recharger: charger,
+  };
+}
+
+// Accès public : vérification token (sans auth)
+export async function verifierTokenStructure(token: string): Promise<{
+  id: string; nom: string; actif: boolean; praticienId: string;
+} | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('structures')
+    .select('id, nom, actif, praticien_id')
+    .eq('token_acces', token)
+    .single();
+  if (error || !data || !data.actif) return null;
+  return { id: data.id, nom: data.nom, actif: data.actif, praticienId: data.praticien_id };
+}
