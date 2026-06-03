@@ -1,7 +1,113 @@
 import { useState } from 'react';
-import type { Participant, TagPatient, TestKey, RgpdConsent } from '../../types';
+import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical } from '../../types';
 import { TAG_CONFIG, TAG_ORDER, ALL_TESTS, TEST_LABELS, buildTestsActifs } from '../../data/profiles';
 import { Save, X, ChevronDown, ChevronUp } from 'lucide-react';
+
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+const CLS_CELL = 'border border-gray-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-primary w-full';
+
+function ListeTraitementsForm({
+  value,
+  onChange,
+}: {
+  value: TraitementPatient[];
+  onChange: (v: TraitementPatient[]) => void;
+}) {
+  const items = value ?? [];
+  const add = () => onChange([...items, { id: genId(), nom: '' }]);
+  const remove = (id: string) => onChange(items.filter(i => i.id !== id));
+  const upd = (id: string, patch: Partial<TraitementPatient>) =>
+    onChange(items.map(i => (i.id === id ? { ...i, ...patch } : i)));
+
+  return (
+    <div>
+      {items.length > 0 && (
+        <div className="mb-2">
+          <div className="grid grid-cols-3 gap-1.5 mb-1">
+            <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1">Médicament</span>
+            <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1">Dose</span>
+            <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1">Effet secondaire notable</span>
+          </div>
+          {items.map(item => (
+            <div key={item.id} className="grid grid-cols-3 gap-1.5 mb-1.5 items-center">
+              <input type="text" value={item.nom} onChange={e => upd(item.id, { nom: e.target.value })}
+                placeholder="Metformine" className={CLS_CELL} />
+              <input type="text" value={item.dose ?? ''} onChange={e => upd(item.id, { dose: e.target.value })}
+                placeholder="500mg × 2/j" className={CLS_CELL} />
+              <div className="flex gap-1">
+                <input type="text" value={item.effetSecondaire ?? ''} onChange={e => upd(item.id, { effetSecondaire: e.target.value })}
+                  placeholder="Troubles digestifs" className={`${CLS_CELL} flex-1`} />
+                <button type="button" onClick={() => remove(item.id)}
+                  className="text-red-400 hover:text-red-600 px-1 flex-shrink-0">✕</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <button type="button" onClick={add}
+        className="w-full flex items-center justify-center gap-2 text-primary border border-dashed border-primary/40 hover:border-primary hover:bg-primary/5 px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+        + Ajouter un traitement
+      </button>
+    </div>
+  );
+}
+
+function ListeAntecedentsForm({
+  value,
+  onChange,
+}: {
+  value: AntecedentMedical[];
+  onChange: (v: AntecedentMedical[]) => void;
+}) {
+  const items = value ?? [];
+  const add = () => onChange([...items, { id: genId(), type: '' }]);
+  const remove = (id: string) => onChange(items.filter(i => i.id !== id));
+  const upd = (id: string, patch: Partial<AntecedentMedical>) =>
+    onChange(items.map(i => (i.id === id ? { ...i, ...patch } : i)));
+
+  return (
+    <div>
+      {items.length > 0 && (
+        <div className="mb-2">
+          <div className="grid grid-cols-3 gap-1.5 mb-1">
+            <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1">Type d'antécédent</span>
+            <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1">Date / Année</span>
+            <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1">Douleur liée</span>
+          </div>
+          {items.map(item => (
+            <div key={item.id} className="grid grid-cols-3 gap-1.5 mb-1.5 items-center">
+              <input type="text" value={item.type} onChange={e => upd(item.id, { type: e.target.value })}
+                placeholder="Op. jambe droite" className={CLS_CELL} />
+              <input type="text" value={item.date ?? ''} onChange={e => upd(item.id, { date: e.target.value })}
+                placeholder="2019" className={CLS_CELL} />
+              <div className="flex gap-1 items-center">
+                {(['oui', 'non'] as const).map(v => (
+                  <button key={v} type="button" onClick={() => upd(item.id, { douleur: item.douleur === v ? undefined : v })}
+                    className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+                      item.douleur === v
+                        ? v === 'oui' ? 'bg-red-400 text-white border-red-400' : 'bg-emerald-500 text-white border-emerald-500'
+                        : 'border-gray-200 text-gray-600 bg-white'
+                    }`}>
+                    {v === 'oui' ? 'Oui' : 'Non'}
+                  </button>
+                ))}
+                <button type="button" onClick={() => remove(item.id)}
+                  className="text-red-400 hover:text-red-600 px-1 flex-shrink-0 ml-0.5">✕</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <button type="button" onClick={add}
+        className="w-full flex items-center justify-center gap-2 text-primary border border-dashed border-primary/40 hover:border-primary hover:bg-primary/5 px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+        + Ajouter un antécédent
+      </button>
+    </div>
+  );
+}
 
 // ─── IBAN ─────────────────────────────────────────────────────────────────────
 
@@ -45,6 +151,10 @@ const CLS_INPUT = 'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm 
 const CLS_LABEL = 'block text-sm font-medium text-gray-700 mb-1.5';
 
 export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) {
+  // ── Traitements & antécédents structurés ───────────────────────
+  const [traitements, setTraitements] = useState<TraitementPatient[]>(initial?.traitements ?? []);
+  const [antecedents, setAntecedents] = useState<AntecedentMedical[]>(initial?.antecedentsMedicauxStructures ?? []);
+
   // ── Tags / tests ────────────────────────────────────────────────
   const [tags, setTags] = useState<TagPatient[]>(initial?.tags ?? []);
   const [testsActifs, setTestsActifs] = useState<TestKey[]>(
@@ -118,6 +228,8 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
       disponibilites:          initial?.disponibilites,
       droitImage,
       tags, testsActifs, rgpd,
+      traitements: traitements.length > 0 ? traitements : undefined,
+      antecedentsMedicauxStructures: antecedents.length > 0 ? antecedents : undefined,
       profil:         initial?.profil,
       coordonnees:    initial?.coordonnees,
       geocodeFailed:  initial?.geocodeFailed,
@@ -168,11 +280,9 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
                     <p className="text-xs text-gray-400 pl-6">{cfg.description}</p>
                   </div>
                   {selected && (
-                    <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[11px] font-bold"
                       style={{ backgroundColor: cfg.color }}>
-                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
+                      ✕
                     </div>
                   )}
                 </div>
@@ -342,6 +452,34 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
               className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 font-mono tracking-wide"
             />
           </div>
+        </div>
+      </div>
+
+      {/* ── TRAITEMENTS ── */}
+      <div className="border border-gray-100 rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-amber-50 to-yellow-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
+          <span className="text-lg">💊</span>
+          <div>
+            <div className="font-semibold text-dark text-sm">Traitements médicamenteux</div>
+            <div className="text-xs text-gray-500">Nom · Dose · Effet secondaire notable</div>
+          </div>
+        </div>
+        <div className="p-4">
+          <ListeTraitementsForm value={traitements} onChange={setTraitements} />
+        </div>
+      </div>
+
+      {/* ── ANTÉCÉDENTS MÉDICAUX ── */}
+      <div className="border border-gray-100 rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-50 to-slate-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
+          <span className="text-lg">🏥</span>
+          <div>
+            <div className="font-semibold text-dark text-sm">Antécédents médicaux</div>
+            <div className="text-xs text-gray-500">Type · Date / Année · Douleur liée</div>
+          </div>
+        </div>
+        <div className="p-4">
+          <ListeAntecedentsForm value={antecedents} onChange={setAntecedents} />
         </div>
       </div>
 

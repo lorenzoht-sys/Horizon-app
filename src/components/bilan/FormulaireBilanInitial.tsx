@@ -724,13 +724,16 @@ function ChoixMultiple({
             key={opt}
             type="button"
             onClick={() => toggle(opt)}
-            className={`px-3 py-1.5 rounded-xl text-sm font-medium border transition-colors ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium border transition-colors ${
               predefined.includes(opt)
                 ? 'bg-primary text-white border-primary'
                 : 'border-gray-200 text-gray-600 hover:border-primary/50 hover:bg-gray-50'
             }`}
           >
             {opt}
+            {predefined.includes(opt) && (
+              <span className="text-white/80 text-xs leading-none">✕</span>
+            )}
           </button>
         ))}
       </div>
@@ -928,14 +931,17 @@ function RenduInput({
               <button
                 key={opt}
                 type="button"
-                onClick={() => onChange(opt)}
-                className={`px-3 py-1.5 rounded-xl text-sm font-medium border transition-colors ${
+                onClick={() => onChange(value === opt ? null : opt)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium border transition-colors ${
                   value === opt
                     ? 'bg-primary text-white border-primary'
                     : 'border-gray-200 text-gray-600 hover:border-primary/50 hover:bg-gray-50'
                 }`}
               >
                 {opt}
+                {value === opt && (
+                  <span className="text-white/80 text-xs leading-none">✕</span>
+                )}
               </button>
             ))}
           </div>

@@ -365,12 +365,30 @@ export interface Participant {
   antecedentsMedicaux?: string;
   antecedentsChirurgicaux?: string;
   allergies?: string;
+  traitements?: TraitementPatient[];
+  antecedentsMedicauxStructures?: AntecedentMedical[];
   activitesSouhaitees?: string[];
   objectifsPatient?: string | string[];
   // Coordonnées bancaires (SAP)
   iban?: string;
   bic?: string;
   droitImage?: boolean;
+}
+
+// ── TRAITEMENTS & ANTÉCÉDENTS STRUCTURÉS ─────────────────────────────────────
+
+export interface TraitementPatient {
+  id: string;
+  nom: string;
+  dose?: string;
+  effetSecondaire?: string;
+}
+
+export interface AntecedentMedical {
+  id: string;
+  type: string;
+  date?: string;
+  douleur?: 'oui' | 'non';
 }
 
 // ── ESPACE PATIENT ────────────────────────────────────────────────────────────
