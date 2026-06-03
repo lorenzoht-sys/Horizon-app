@@ -5,6 +5,7 @@ import { useParticipants } from '../hooks/useParticipants';
 import { supabase } from '../lib/supabase';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import toast from 'react-hot-toast';
+import ReactMarkdown from 'react-markdown';
 import type { Participant, Bilan } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -47,6 +48,20 @@ const ACTION_LABELS: Record<ActionType, string> = {
   programme:          "suggérer un programme d'exercices",
   interpretation:     'interpréter les résultats de test',
   libre:              'poser une question',
+};
+
+const MD_COMPONENTS = {
+  h1: ({children}: any) => <h1 style={{fontSize:'18px', fontWeight:'600', color:'var(--color-text-primary,#111827)', marginBottom:'12px', marginTop:'16px'}}>{children}</h1>,
+  h2: ({children}: any) => <h2 style={{fontSize:'15px', fontWeight:'600', color:'var(--color-text-primary,#111827)', marginBottom:'8px', marginTop:'14px'}}>{children}</h2>,
+  h3: ({children}: any) => <h3 style={{fontSize:'14px', fontWeight:'500', color:'#2BBFBF', marginBottom:'6px', marginTop:'12px'}}>{children}</h3>,
+  p: ({children}: any) => <p style={{fontSize:'14px', lineHeight:'1.7', color:'#374151', marginBottom:'8px'}}>{children}</p>,
+  strong: ({children}: any) => <strong style={{fontWeight:'600', color:'#111827'}}>{children}</strong>,
+  ul: ({children}: any) => <ul style={{paddingLeft:'18px', marginBottom:'8px'}}>{children}</ul>,
+  li: ({children}: any) => <li style={{fontSize:'14px', lineHeight:'1.7', color:'#374151', marginBottom:'4px'}}>{children}</li>,
+  hr: () => <hr style={{border:'none', borderTop:'0.5px solid #E5E7EB', margin:'12px 0'}} />,
+  table: ({children}: any) => <div style={{overflowX:'auto', marginBottom:'12px'}}><table style={{width:'100%', borderCollapse:'collapse', fontSize:'13px'}}>{children}</table></div>,
+  th: ({children}: any) => <th style={{padding:'8px 12px', background:'#F9FAFB', color:'#6B7280', fontWeight:'500', textAlign:'left', borderBottom:'0.5px solid #E5E7EB'}}>{children}</th>,
+  td: ({children}: any) => <td style={{padding:'8px 12px', borderBottom:'0.5px solid #E5E7EB', color:'#374151'}}>{children}</td>,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -799,8 +814,13 @@ export default function AssistantPage() {
                   background: msg.role === 'user' ? '#2BBFBF' : 'white',
                   color: msg.role === 'user' ? 'white' : '#111827',
                   border: msg.role === 'assistant' ? '0.5px solid #E5E7EB' : 'none',
-                  whiteSpace: 'pre-wrap',
-                }}>{msg.content}</div>
+                  whiteSpace: msg.role === 'user' ? 'pre-wrap' : undefined,
+                }}>
+                  {msg.role === 'user'
+                    ? msg.content
+                    : <ReactMarkdown components={MD_COMPONENTS}>{msg.content}</ReactMarkdown>
+                  }
+                </div>
               </div>
             );
           })}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
 import { useParticipants } from '../hooks/useParticipants';
 import PageWrapper from '../components/layout/PageWrapper';
 import RadarChart from '../components/charts/RadarChart';
@@ -135,7 +136,14 @@ export default function BilanDetail() {
             <MessageSquare size={16} />
             <h3 className="font-semibold text-sm">Message pour le patient</h3>
           </div>
-          <p className="text-dark text-sm leading-relaxed">{bilan.messageClient}</p>
+          <ReactMarkdown
+            components={{
+              p: ({children}: any) => <p style={{fontSize:'14px', lineHeight:'1.7', color:'#111827', marginBottom:'8px'}}>{children}</p>,
+              strong: ({children}: any) => <strong style={{fontWeight:'600', color:'#111827'}}>{children}</strong>,
+              ul: ({children}: any) => <ul style={{paddingLeft:'18px', marginBottom:'8px'}}>{children}</ul>,
+              li: ({children}: any) => <li style={{fontSize:'14px', lineHeight:'1.7', color:'#111827', marginBottom:'4px'}}>{children}</li>,
+            }}
+          >{bilan.messageClient}</ReactMarkdown>
         </div>
       )}
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bot, Send, Copy, Plus, ChevronDown, Mic, MicOff, RefreshCw, AlertCircle } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import type { Participant, Bilan } from '../types';
 import { supabase } from '../lib/supabase';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
@@ -119,6 +120,17 @@ FORMAT DE RÉPONSE pour suggestions de programme :
 ### Points de vigilance
 ### Ce qu'il faut éviter pour ce patient`;
 }
+
+const MD_COMPONENTS_LIGHT = {
+  h1: ({children}: any) => <h1 style={{fontSize:'16px', fontWeight:'600', color:'#111827', marginBottom:'10px', marginTop:'14px'}}>{children}</h1>,
+  h2: ({children}: any) => <h2 style={{fontSize:'14px', fontWeight:'600', color:'#111827', marginBottom:'8px', marginTop:'12px'}}>{children}</h2>,
+  h3: ({children}: any) => <h3 style={{fontSize:'13px', fontWeight:'500', color:'#2BBFBF', marginBottom:'6px', marginTop:'10px'}}>{children}</h3>,
+  p: ({children}: any) => <p style={{fontSize:'13px', lineHeight:'1.7', color:'#374151', marginBottom:'6px'}}>{children}</p>,
+  strong: ({children}: any) => <strong style={{fontWeight:'600', color:'#111827'}}>{children}</strong>,
+  ul: ({children}: any) => <ul style={{paddingLeft:'16px', marginBottom:'6px'}}>{children}</ul>,
+  li: ({children}: any) => <li style={{fontSize:'13px', lineHeight:'1.7', color:'#374151', marginBottom:'3px'}}>{children}</li>,
+  hr: () => <hr style={{border:'none', borderTop:'0.5px solid #E5E7EB', margin:'10px 0'}} />,
+};
 
 const MODE_TEMPLATES: Record<string, string> = {
   contre_indications: "Analyser les contre-indications pour l'exercice suivant : ",
@@ -309,9 +321,12 @@ export default function AssistantCliniqueIA({ participant, bilanInitial }: Props
                     ? 'bg-primary text-white'
                     : 'bg-gray-50 border border-gray-100 text-gray-800'
                 }`}
-                style={{ whiteSpace: 'pre-wrap' }}
+                style={{ whiteSpace: msg.role === 'user' ? 'pre-wrap' : undefined }}
               >
-                {msg.content}
+                {msg.role === 'user'
+                  ? msg.content
+                  : <ReactMarkdown components={MD_COMPONENTS_LIGHT}>{msg.content}</ReactMarkdown>
+                }
               </div>
             </div>
           ))}
