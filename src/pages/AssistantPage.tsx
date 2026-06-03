@@ -79,185 +79,178 @@ const MD_COMPONENTS = {
 function downloadPDF(patientNom: string, type: ActionType, markdownContent: string) {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  const pageWidth    = 210;
-  const pageHeight   = 297;
-  const marginLeft   = 16;
-  const marginRight  = 16;
-  const marginTop    = 24;
-  const marginBottom = 20;
-  const contentWidth = pageWidth - marginLeft - marginRight;
-  let y        = marginTop;
-  let pageNum  = 1;
+  const PW   = 210;
+  const PH   = 297;
+  const ML   = 16;
+  const MR   = 16;
+  const MTOP = 26;  // y de départ sous le header
+  const MBOT = 24;  // marge basse avant footer
+  const CW   = PW - ML - MR;
+  const LH   = 5;   // hauteur d'une ligne 9.5pt en mm
 
-  const turquoise:     [number, number, number] = [43,  191, 191];
-  const darkGreen:     [number, number, number] = [13,  43,  43 ];
-  const textPrimary:   [number, number, number] = [26,  26,  26 ];
-  const textSecondary: [number, number, number] = [80,  80,  80 ];
-  const borderColor:   [number, number, number] = [220, 228, 228];
+  let y       = MTOP;
+  let pageNum = 1;
+
+  const T:  [number,number,number] = [43,  191, 191]; // turquoise
+  const DG: [number,number,number] = [13,  43,  43];  // dark green
+  const D:  [number,number,number] = [26,  26,  26];  // texte foncé
+  const M:  [number,number,number] = [80,  80,  80];  // texte moyen
+  const BD: [number,number,number] = [220, 228, 228]; // bordures
 
   const addHeader = () => {
-    pdf.setFillColor(...darkGreen);
-    pdf.rect(0, 0, pageWidth, 16, 'F');
+    pdf.setFillColor(...DG);
+    pdf.rect(0, 0, PW, 18, 'F');
     pdf.setTextColor(255, 255, 255);
-    pdf.setFontSize(9);
+    pdf.setFontSize(10);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('Horizon — APA', marginLeft, 10);
+    pdf.text('Horizon — APA', ML, 11);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, pageWidth - marginRight - 30, 10);
-    pdf.setDrawColor(...turquoise);
-    pdf.setLineWidth(0.5);
-    pdf.line(0, 16, pageWidth, 16);
+    pdf.setFontSize(8);
+    pdf.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, PW - MR - 34, 11);
+    pdf.setDrawColor(...T);
+    pdf.setLineWidth(0.6);
+    pdf.line(0, 18, PW, 18);
   };
 
   const addFooter = () => {
-    const fy = pageHeight - 8;
-    pdf.setDrawColor(...borderColor);
+    pdf.setDrawColor(...BD);
     pdf.setLineWidth(0.3);
-    pdf.line(marginLeft, fy - 4, pageWidth - marginRight, fy - 4);
-    pdf.setTextColor(...textSecondary);
+    pdf.line(ML, PH - 14, PW - MR, PH - 14);
+    pdf.setTextColor(150, 150, 150);
     pdf.setFontSize(7);
     pdf.setFont('helvetica', 'normal');
-    pdf.text('Document généré par Horizon — Outil de suivi APA', marginLeft, fy);
-    pdf.text(`Page ${pageNum}`, pageWidth - marginRight - 10, fy);
+    pdf.text('Document généré par Horizon — Outil de suivi APA', ML, PH - 9);
+    pdf.text(`Page ${pageNum}`, PW - MR - 8, PH - 9);
   };
 
-  const checkNewPage = (needed: number) => {
-    if (y + needed > pageHeight - marginBottom) {
+  // Vérifie avant chaque ligne individuelle — jamais de débordement
+  const chk = (need = LH) => {
+    if (y + need > PH - MBOT) {
       addFooter();
       pdf.addPage();
       pageNum++;
       addHeader();
-      y = marginTop;
+      y = MTOP;
+    }
+  };
+
+  // Écrit un bloc de lignes (résultat de splitTextToSize) une par une
+  const putLines = (wrappedLines: string[], x: number, lh = LH) => {
+    for (const line of wrappedLines) {
+      chk(lh);
+      pdf.text(line, x, y);
+      y += lh;
     }
   };
 
   addHeader();
 
-  const lines = markdownContent.split('\n');
+  const rawLines = markdownContent.split('\n');
   let i = 0;
 
-  while (i < lines.length) {
-    const trimmed = lines[i].trim();
+  while (i < rawLines.length) {
+    const t = rawLines[i].trim();
 
-    if (!trimmed) { y += 3; i++; continue; }
+    if (!t) { y += 2.5; i++; continue; }
 
-    // H1
-    if (/^# [^#]/.test(trimmed)) {
-      checkNewPage(14);
-      pdf.setTextColor(...darkGreen);
-      pdf.setFontSize(14);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(trimmed.slice(2), marginLeft, y);
-      y += 8;
-      pdf.setDrawColor(...turquoise);
-      pdf.setLineWidth(0.8);
-      pdf.line(marginLeft, y - 2, marginLeft + 80, y - 2);
-      y += 3;
-    }
-    // H2
-    else if (/^## [^#]/.test(trimmed)) {
-      checkNewPage(10);
-      pdf.setTextColor(...turquoise);
-      pdf.setFontSize(11);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(trimmed.slice(3), marginLeft, y);
+    // ── H1
+    if (/^# [^#]/.test(t)) {
+      chk(16);
+      pdf.setFontSize(15); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...DG);
+      pdf.text(t.slice(2), ML, y);
       y += 7;
+      pdf.setDrawColor(...T); pdf.setLineWidth(0.8);
+      pdf.line(ML, y - 1, ML + 90, y - 1);
+      y += 4;
     }
-    // H3
-    else if (/^### /.test(trimmed)) {
-      checkNewPage(8);
-      pdf.setTextColor(...textPrimary);
-      pdf.setFontSize(10);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(trimmed.slice(4), marginLeft, y);
+    // ── H2
+    else if (/^## [^#]/.test(t)) {
+      chk(14);
+      y += 2;
+      pdf.setFontSize(12); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...T);
+      pdf.text(t.slice(3), ML, y);
+      y += 6;
+      pdf.setDrawColor(...BD); pdf.setLineWidth(0.3);
+      pdf.line(ML, y - 1, PW - MR, y - 1);
+      y += 2;
+    }
+    // ── H3
+    else if (/^### /.test(t)) {
+      chk(10);
+      y += 1;
+      pdf.setFontSize(10.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...D);
+      pdf.text(t.slice(4), ML, y);
       y += 6;
     }
-    // Séparateur
-    else if (trimmed === '---') {
-      checkNewPage(6);
-      pdf.setDrawColor(...borderColor);
-      pdf.setLineWidth(0.3);
-      pdf.line(marginLeft, y, pageWidth - marginRight, y);
+    // ── HR
+    else if (t === '---') {
+      chk(8);
+      y += 2;
+      pdf.setDrawColor(...BD); pdf.setLineWidth(0.3);
+      pdf.line(ML, y, PW - MR, y);
       y += 5;
     }
-    // Tableau
-    else if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
-      const tableLines: string[] = [];
-      while (i < lines.length && lines[i].trim().startsWith('|')) {
-        tableLines.push(lines[i].trim());
+    // ── Tableau
+    else if (t.startsWith('|') && t.endsWith('|')) {
+      const tLines: string[] = [];
+      while (i < rawLines.length && rawLines[i].trim().startsWith('|')) {
+        tLines.push(rawLines[i].trim());
         i++;
       }
-      const rows = tableLines
+      const rows = tLines
         .filter(l => l.replace(/[| :-]/g, '').trim().length > 0)
         .map(l => l.split('|').filter(c => c !== '').map(c => c.trim().replace(/\*\*/g, '')));
-
       if (rows.length > 0) {
-        const colCount = Math.max(...rows.map(r => r.length));
-        const colWidth = contentWidth / colCount;
+        const cols = Math.max(...rows.map(r => r.length));
+        const colW = CW / cols;
         const rowH = 7;
-        rows.forEach((row, ri) => {
-          checkNewPage(rowH + 2);
-          if (ri === 0) {
-            pdf.setFillColor(240, 244, 244);
-            pdf.rect(marginLeft, y - 5, contentWidth, rowH, 'F');
-          }
-          pdf.setDrawColor(...borderColor);
-          pdf.setLineWidth(0.2);
-          pdf.rect(marginLeft, y - 5, contentWidth, rowH);
-          row.forEach((cell, ci) => {
-            const cx = marginLeft + ci * colWidth + 2;
+        for (let ri = 0; ri < rows.length; ri++) {
+          chk(rowH + 1);
+          if (ri === 0) { pdf.setFillColor(240, 245, 245); pdf.rect(ML, y - 5.5, CW, rowH, 'F'); }
+          pdf.setDrawColor(...BD); pdf.setLineWidth(0.2); pdf.rect(ML, y - 5.5, CW, rowH);
+          for (let ci = 0; ci < rows[ri].length; ci++) {
             pdf.setFontSize(8.5);
-            if (ri === 0) {
-              pdf.setTextColor(...textSecondary);
-              pdf.setFont('helvetica', 'bold');
-            } else {
-              pdf.setTextColor(...textPrimary);
-              pdf.setFont('helvetica', 'normal');
-            }
-            const w = pdf.splitTextToSize(cell, colWidth - 4);
-            pdf.text(w[0] || '', cx, y);
-          });
+            if (ri === 0) { pdf.setFont('helvetica', 'bold');   pdf.setTextColor(...M); }
+            else           { pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...D); }
+            const cell = pdf.splitTextToSize(rows[ri][ci], colW - 4);
+            pdf.text(cell[0] || '', ML + ci * colW + 2, y);
+          }
           y += rowH;
-        });
+        }
         y += 3;
       }
       continue;
     }
-    // Bullet
-    else if (/^[-*] /.test(trimmed)) {
-      const text = trimmed.slice(2).replace(/\*\*/g, '');
-      const wrapped = pdf.splitTextToSize(text, contentWidth - 8);
-      checkNewPage(wrapped.length * 5 + 2);
-      pdf.setFillColor(...turquoise);
-      pdf.circle(marginLeft + 1.5, y - 1.5, 1, 'F');
-      pdf.setTextColor(...textSecondary);
-      pdf.setFontSize(9.5);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(wrapped, marginLeft + 6, y);
-      y += wrapped.length * 5 + 1;
+    // ── Bullet — setFontSize AVANT splitTextToSize
+    else if (/^[-*] /.test(t)) {
+      const text = t.slice(2).replace(/\*\*/g, '');
+      pdf.setFontSize(9.5); pdf.setFont('helvetica', 'normal');
+      const wrapped = pdf.splitTextToSize(text, CW - 8);
+      // première ligne + puce
+      chk(LH);
+      pdf.setFillColor(...T); pdf.circle(ML + 1.5, y - 1.5, 1, 'F');
+      pdf.setTextColor(...M); pdf.text(wrapped[0], ML + 6, y);
+      y += LH;
+      // lignes de continuation
+      for (let wi = 1; wi < wrapped.length; wi++) {
+        chk(LH); pdf.text(wrapped[wi], ML + 6, y); y += LH;
+      }
     }
-    // Ligne avec gras
-    else if (trimmed.includes('**')) {
-      const cleaned = trimmed.replace(/\*\*/g, '');
-      const isBold  = trimmed.startsWith('**');
-      const wrapped = pdf.splitTextToSize(cleaned, contentWidth);
-      checkNewPage(wrapped.length * 5 + 2);
-      pdf.setTextColor(...textPrimary);
-      pdf.setFontSize(9.5);
-      pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
-      pdf.text(wrapped, marginLeft, y);
-      y += wrapped.length * 5 + 2;
+    // ── Gras — setFontSize AVANT splitTextToSize
+    else if (t.includes('**')) {
+      const cleaned = t.replace(/\*\*/g, '');
+      pdf.setFontSize(9.5); pdf.setFont('helvetica', t.startsWith('**') ? 'bold' : 'normal');
+      pdf.setTextColor(...D);
+      putLines(pdf.splitTextToSize(cleaned, CW), ML);
+      y += 1;
     }
-    // Texte normal
+    // ── Texte normal — setFontSize AVANT splitTextToSize
     else {
-      const cleaned = trimmed.replace(/\*\*/g, '');
-      const wrapped = pdf.splitTextToSize(cleaned, contentWidth);
-      checkNewPage(wrapped.length * 5 + 2);
-      pdf.setTextColor(...textSecondary);
-      pdf.setFontSize(9.5);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(wrapped, marginLeft, y);
-      y += wrapped.length * 5 + 2;
+      const cleaned = t.replace(/\*\*/g, '');
+      pdf.setFontSize(9.5); pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(...M);
+      putLines(pdf.splitTextToSize(cleaned, CW), ML);
+      y += 1;
     }
 
     i++;
@@ -265,9 +258,9 @@ function downloadPDF(patientNom: string, type: ActionType, markdownContent: stri
 
   addFooter();
 
-  const date      = new Date().toISOString().split('T')[0];
-  const typeLabel = type === 'compte_rendu' ? 'CR-medecin' : 'CR-famille';
-  pdf.save(`${typeLabel}_${patientNom.replace(' ', '-')}_${date}.pdf`);
+  const date  = new Date().toISOString().split('T')[0];
+  const label = type === 'compte_rendu' ? 'CR-medecin' : 'CR-famille';
+  pdf.save(`${label}_${patientNom.replace(/ /g, '-')}_${date}.pdf`);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
