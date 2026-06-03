@@ -1,4 +1,4 @@
-import { useState, useEffect, Component } from 'react';
+import { useState, useEffect, Component, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import {
   Chart as ChartJS,
@@ -7,13 +7,16 @@ import {
   BarController, LineController, DoughnutController,
 } from 'chart.js';
 import { Chart, Line, Doughnut } from 'react-chartjs-2';
-import { TrendingUp, TrendingDown, Edit3, ChevronDown, ChevronUp } from 'lucide-react';
+import { TrendingUp, TrendingDown, Edit3, ChevronDown, ChevronUp, CheckCircle, RefreshCw } from 'lucide-react';
 import PageWrapper from '../components/layout/PageWrapper';
 import { useParticipants } from '../hooks/useParticipants';
 import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import { useStatsPro, type StatsPro } from '../hooks/useStatsPro';
-import type { Participant } from '../types';
+import { useFactures } from '../hooks/useFactures';
+import type { Participant, Contrat } from '../types';
+import toast from 'react-hot-toast';
+import jsPDF from 'jspdf';
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -95,6 +98,111 @@ function getLast12Weeks(): { label: string; debut: Date; fin: Date }[] {
 
 function formatMoisAnnee(d: Date) {
   return `${MOIS_LONGS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// ─── Helpers supplémentaires ─────────────────────────────────────────────────
+
+function loadSettingsPro() {
+  try {
+    return {
+      prenom: '', nom: '', telephone: '', email: '',
+      tarifHoraire: '45', societe: "Mouv'APA",
+      ...JSON.parse(localStorage.getItem('settings_praticien') ?? '{}')
+    };
+  } catch {
+    return { prenom: '', nom: '', telephone: '', email: '', tarifHoraire: '45', societe: '' };
+  }
+}
+
+function premierJourMois(annee: number, mois: number): string {
+  return `${annee}-${String(mois).padStart(2, '0')}-01`;
+}
+
+function dernierJourMois(annee: number, mois: number): string {
+  const date = new Date(annee, mois, 0); // dernier jour du mois
+  return date.toISOString().slice(0, 10);
+}
+
+function nomMoisAnnee(mois: number, annee: number): string {
+  return `${MOIS_LONGS[mois - 1]} ${annee}`;
+}
+
+function moisPrecedent(annee: number, mois: number): { annee: number; mois: number } {
+  return mois === 1 ? { annee: annee - 1, mois: 12 } : { annee, mois: mois - 1 };
+}
+
+function exportFacturePDF(data: {
+  nomPatient: string;
+  periode: string;
+  nbSeances: number;
+  tarifSeance: number;
+  montantTotal: number;
+  praticien: { nom: string; societe: string; email: string; telephone: string };
+}) {
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const now = new Date().toLocaleDateString('fr-FR');
+  let y = 25;
+
+  doc.setFontSize(22);
+  doc.setTextColor(13, 43, 43);
+  doc.text('FACTURE', 20, y);
+
+  doc.setFontSize(10);
+  doc.setTextColor(100, 100, 100);
+  y += 8;
+  doc.text(`Émise le : ${now}`, 20, y);
+
+  y += 16;
+  doc.setFontSize(11);
+  doc.setTextColor(13, 43, 43);
+  doc.text('Prestataire :', 20, y);
+  doc.setFontSize(10);
+  doc.setTextColor(60, 60, 60);
+  y += 6;
+  doc.text(data.praticien.nom || data.praticien.societe, 20, y);
+  if (data.praticien.email) { y += 5; doc.text(data.praticien.email, 20, y); }
+  if (data.praticien.telephone) { y += 5; doc.text(data.praticien.telephone, 20, y); }
+
+  y += 16;
+  doc.setFontSize(11);
+  doc.setTextColor(13, 43, 43);
+  doc.text('Bénéficiaire :', 20, y);
+  doc.setFontSize(10);
+  doc.setTextColor(60, 60, 60);
+  y += 6;
+  doc.text(data.nomPatient, 20, y);
+
+  y += 16;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(20, y, 190, y);
+  y += 8;
+
+  doc.setFontSize(12);
+  doc.setTextColor(13, 43, 43);
+  doc.text(`Séances APA — ${data.periode}`, 20, y);
+
+  y += 10;
+  doc.setFontSize(10);
+  doc.setTextColor(60, 60, 60);
+  doc.text(`Nombre de séances : ${data.nbSeances}`, 20, y);
+  y += 7;
+  doc.text(`Tarif par séance : ${data.tarifSeance.toFixed(2)} €`, 20, y);
+  y += 12;
+
+  doc.setDrawColor(200, 200, 200);
+  doc.line(20, y, 190, y);
+  y += 8;
+
+  doc.setFontSize(14);
+  doc.setTextColor(43, 191, 191);
+  doc.text(`TOTAL : ${data.montantTotal.toFixed(2)} €`, 20, y);
+
+  y += 20;
+  doc.setFontSize(9);
+  doc.setTextColor(130, 130, 130);
+  doc.text('Règlement à réception. Service à la Personne — Attestation disponible sur demande.', 20, y);
+
+  doc.save(`Facture_${data.nomPatient.replace(/\s+/g, '_')}_${data.periode.replace(/\s+/g, '_')}.pdf`);
 }
 
 // ─── MetricCard ───────────────────────────────────────────────────────────────
@@ -335,6 +443,285 @@ function GraphiqueSeances({ seances }: { seances: any[] }) {
   return (
     <div style={{ height: 220 }}>
       <Line data={data} options={options} />
+    </div>
+  );
+}
+
+// ─── Section Factures ────────────────────────────────────────────────────────
+
+function SectionFactures({
+  participants, seances, contratActif,
+}: {
+  participants: Participant[];
+  seances: any[];
+  contrats?: Contrat[];
+  contratActif: (id: string) => Contrat | undefined;
+}) {
+  const { factures, enRetard, aEnvoyer, envoyees, creerOuMettreAJour, marquerEnvoyee, loading, praticienId } = useFactures();
+  const settings = loadSettingsPro();
+  const tarifDefaut = parseFloat(settings.tarifHoraire) || 45;
+  const now = new Date();
+  const { annee: anneePrec, mois: moisPrec } = moisPrecedent(now.getFullYear(), now.getMonth() + 1);
+
+  const [genLoading, setGenLoading] = useState(false);
+  const [modalEnvoi, setModalEnvoi] = useState<{ id: string; nom: string } | null>(null);
+  const [dateEnvoiInput, setDateEnvoiInput] = useState(now.toISOString().slice(0, 10));
+  const [showEnvoyees, setShowEnvoyees] = useState(false);
+  const [dejaGenere, setDejaGenere] = useState(false);
+
+  // Auto-génération au chargement (une seule fois, mois précédent)
+  const genererMois = useCallback(async (annee: number, mois: number) => {
+    if (!praticienId || genLoading) return;
+    setGenLoading(true);
+    const debut = premierJourMois(annee, mois);
+    const fin = dernierJourMois(annee, mois);
+    const echeance = premierJourMois(now.getFullYear(), now.getMonth() + 1); // 1er du mois courant
+
+    for (const p of participants) {
+      const c = contratActif(p.id);
+      if (!c) continue;
+      const seancesPatient = seances.filter(s =>
+        s.participantId === p.id &&
+        s.statut === 'realisee' &&
+        s.date >= debut && s.date <= fin
+      );
+      if (seancesPatient.length === 0) continue;
+      // Vérifie si une facture existe déjà
+      const existe = factures.some(
+        f => f.participantId === p.id && f.periodeMois === mois && f.periodeAnnee === annee
+      );
+      if (existe) continue;
+      const tarif = c.tarifSeance ?? tarifDefaut;
+      await creerOuMettreAJour({
+        participantId: p.id,
+        periodeMois: mois,
+        periodeAnnee: annee,
+        nbSeances: seancesPatient.length,
+        montantTotal: seancesPatient.length * tarif,
+        dateEcheance: echeance,
+      });
+    }
+    setGenLoading(false);
+  }, [praticienId, participants, seances, contratActif, factures, creerOuMettreAJour, tarifDefaut, genLoading]);
+
+  useEffect(() => {
+    if (!loading && !dejaGenere && praticienId && participants.length > 0) {
+      setDejaGenere(true);
+      void genererMois(anneePrec, moisPrec);
+    }
+  }, [loading, dejaGenere, praticienId, participants.length, genererMois, anneePrec, moisPrec]);
+
+  function nomPatient(participantId: string): string {
+    const p = participants.find(x => x.id === participantId);
+    return p ? `${p.prenom} ${p.nom}` : '—';
+  }
+
+  function envoyerRappelEmail(_factureId: string, participantId: string, periodeMois: number, periodeAnnee: number) {
+    const p = participants.find(x => x.id === participantId);
+    if (!p?.email) { toast.error('Aucun email renseigné pour ce patient'); return; }
+    const periode = nomMoisAnnee(periodeMois, periodeAnnee);
+    const subject = encodeURIComponent(`Facture APA — ${periode}`);
+    const body = encodeURIComponent(
+      `Bonjour ${p.prenom},\n\nVeuillez trouver ci-joint ma facture pour les séances du mois de ${periode}.\n\nCordialement,\n${settings.prenom} ${settings.nom}`
+    );
+    window.open(`mailto:${p.email}?subject=${subject}&body=${body}`);
+  }
+
+  function genererPDF(f: typeof factures[0]) {
+    const p = participants.find(x => x.id === f.participantId);
+    const c = contratActif(f.participantId);
+    const tarif = c?.tarifSeance ?? tarifDefaut;
+    exportFacturePDF({
+      nomPatient: p ? `${p.prenom} ${p.nom}` : '—',
+      periode: nomMoisAnnee(f.periodeMois, f.periodeAnnee),
+      nbSeances: f.nbSeances,
+      tarifSeance: tarif,
+      montantTotal: f.montantTotal,
+      praticien: {
+        nom: `${settings.prenom} ${settings.nom}`.trim() || settings.societe,
+        societe: settings.societe,
+        email: settings.email,
+        telephone: settings.telephone,
+      },
+    });
+  }
+
+  const CARD_CLS = 'border rounded-xl p-4 mb-3';
+
+  function CartFacture({ f, showRappel }: { f: typeof factures[0]; showRappel?: boolean }) {
+    const nom = nomPatient(f.participantId);
+    const periode = nomMoisAnnee(f.periodeMois, f.periodeAnnee);
+    const c = contratActif(f.participantId);
+    const tarif = c?.tarifSeance ?? tarifDefaut;
+    return (
+      <div className={`${CARD_CLS} ${showRappel ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'}`}>
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div>
+            <div className="font-semibold text-gray-900 text-sm">{nom}</div>
+            <div className="text-xs text-gray-500 mt-0.5">
+              {periode} · {f.nbSeances} séance{f.nbSeances > 1 ? 's' : ''} × {tarif}€
+            </div>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <div className="font-bold text-base text-gray-900">{f.montantTotal.toFixed(0)} €</div>
+            {f.dateEcheance && (
+              <div className={`text-xs mt-0.5 ${showRappel ? 'text-red-600 font-medium' : 'text-gray-400'}`}>
+                {showRappel ? `⚠️ Due le ${new Date(f.dateEcheance + 'T12:00').toLocaleDateString('fr-FR')}` : `Échéance : ${new Date(f.dateEcheance + 'T12:00').toLocaleDateString('fr-FR')}`}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => { setModalEnvoi({ id: f.id, nom }); setDateEnvoiInput(now.toISOString().slice(0, 10)); }}
+            className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
+          >
+            ✅ Marquer envoyée
+          </button>
+          <button
+            onClick={() => genererPDF(f)}
+            className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            📄 PDF
+          </button>
+          {showRappel && (
+            <button
+              onClick={() => envoyerRappelEmail(f.id, f.participantId, f.periodeMois, f.periodeAnnee)}
+              className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-amber-300 text-amber-700 hover:bg-amber-50 transition-colors"
+            >
+              📧 Rappel
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const totalEnAttente = enRetard.reduce((s, f) => s + f.montantTotal, 0) +
+                         aEnvoyer.reduce((s, f) => s + f.montantTotal, 0);
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-4">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
+            💶 Factures à envoyer
+            {(enRetard.length + aEnvoyer.length) > 0 && (
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                {enRetard.length + aEnvoyer.length} en attente
+              </span>
+            )}
+          </div>
+          {totalEnAttente > 0 && (
+            <div className="text-xs text-gray-400 mt-0.5">{totalEnAttente.toFixed(0)} € à encaisser</div>
+          )}
+        </div>
+        <button
+          onClick={() => { setDejaGenere(false); }}
+          disabled={genLoading || loading}
+          className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+        >
+          <RefreshCw size={12} className={genLoading ? 'animate-spin' : ''} />
+          Actualiser
+        </button>
+      </div>
+
+      {loading || genLoading ? (
+        <div className="text-center py-6 text-sm text-gray-400">
+          <RefreshCw size={20} className="animate-spin mx-auto mb-2" />
+          Chargement des factures…
+        </div>
+      ) : (enRetard.length + aEnvoyer.length + envoyees.length) === 0 ? (
+        <div className="text-center py-8 text-sm text-gray-400">
+          <div className="text-3xl mb-2">✅</div>
+          Aucune facture en attente — tout est à jour !
+        </div>
+      ) : (
+        <>
+          {/* En retard */}
+          {enRetard.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-2 h-2 rounded-full bg-red-500" />
+                <div className="text-xs font-bold text-red-700 uppercase tracking-wide">
+                  En retard ({enRetard.length})
+                </div>
+              </div>
+              {enRetard.map(f => <CartFacture key={f.id} f={f} showRappel />)}
+            </div>
+          )}
+
+          {/* À envoyer */}
+          {aEnvoyer.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-2 h-2 rounded-full bg-amber-400" />
+                <div className="text-xs font-bold text-amber-700 uppercase tracking-wide">
+                  À envoyer ce mois ({aEnvoyer.length})
+                </div>
+              </div>
+              {aEnvoyer.map(f => <CartFacture key={f.id} f={f} />)}
+            </div>
+          )}
+
+          {/* Envoyées (collapsable) */}
+          {envoyees.length > 0 && (
+            <div>
+              <button
+                onClick={() => setShowEnvoyees(v => !v)}
+                className="flex items-center gap-2 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <CheckCircle size={13} className="text-emerald-500" />
+                Envoyées ce mois ({envoyees.length})
+                {showEnvoyees ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+              {showEnvoyees && (
+                <div className="mt-2">
+                  {envoyees.map(f => (
+                    <div key={f.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 text-xs text-gray-500">
+                      <span>{nomPatient(f.participantId)} — {nomMoisAnnee(f.periodeMois, f.periodeAnnee)}</span>
+                      <span className="font-medium text-emerald-600">{f.montantTotal.toFixed(0)} € ✅</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Modal confirmation envoi */}
+      {modalEnvoi && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="text-base font-bold text-gray-900 mb-1">Facture envoyée ?</div>
+            <div className="text-sm text-gray-500 mb-4">Confirmer l'envoi à {modalEnvoi.nom}</div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Date d'envoi</label>
+            <input
+              type="date"
+              value={dateEnvoiInput}
+              onChange={e => setDateEnvoiInput(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mb-4 focus:outline-none focus:border-primary"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={async () => {
+                  await marquerEnvoyee(modalEnvoi.id, dateEnvoiInput);
+                  toast.success('Facture marquée comme envoyée');
+                  setModalEnvoi(null);
+                }}
+                className="flex-1 bg-emerald-500 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-emerald-600 transition-colors"
+              >
+                Confirmer
+              </button>
+              <button onClick={() => setModalEnvoi(null)} className="px-4 border border-gray-200 rounded-xl text-gray-600 text-sm hover:bg-gray-50">
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -581,11 +968,12 @@ function SectionRepartition({ participants }: { participants: Participant[] }) {
 export default function StatsPage() {
   const { participants: rawParticipants } = useParticipants();
   const { seances: rawSeances } = useAgenda();
-  const { contratActifDeParticipant } = useContrats();
+  const { contratActifDeParticipant, contrats: rawContrats } = useContrats();
   const { statsPro, sauvegarder } = useStatsPro();
 
   const participants = rawParticipants ?? [];
   const seances = rawSeances ?? [];
+  const contrats = rawContrats ?? [];
   const caParMois = statsPro?.caParMois ?? {};
 
   const now = new Date();
@@ -662,6 +1050,14 @@ export default function StatsPage() {
           deltaPositif={tauxPresence >= 85}
         />
       </div>
+
+      {/* ── Factures à envoyer ─────────────────────────────────────── */}
+      <SectionFactures
+        participants={participants}
+        seances={seances}
+        contrats={contrats}
+        contratActif={contratActifDeParticipant}
+      />
 
       {/* ── Graphiques CA + Séances ─────────────────────────────────── */}
       <div className="grid gap-4 mb-4" style={{ gridTemplateColumns: '3fr 2fr' }}>
