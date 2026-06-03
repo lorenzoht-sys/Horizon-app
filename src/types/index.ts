@@ -281,6 +281,7 @@ export interface Contrat {
   nombreSeancesTotal: number;
   nombreSeancesRealisees: number;
   dureeIndeterminee?: boolean;
+  tarifSeance?: number;
 }
 
 export interface Seance {
