@@ -33,7 +33,6 @@ interface AssistantLog {
 }
 
 interface PatientExtras {
-  notes:        { date: string; note: string; ressenti: string | null }[];
   compteRendus: { dateSeance: string; observations: string; progression: string | null }[];
   loading:      boolean;
 }
@@ -299,10 +298,6 @@ Tu cites les recommandations HAS ou SFP-APA quand pertinent.`;
     profil?.objectifsPersonnels ? `- Objectifs personnels : ${profil.objectifsPersonnels}` : null,
   ].filter(Boolean).join('\n');
 
-  const notesText = extras?.notes.length
-    ? extras.notes.slice(0, 8).map(n => `· ${n.date}${n.ressenti ? ` [${n.ressenti}]` : ''} : ${n.note}`).join('\n')
-    : 'Aucune note de séance';
-
   const crText = extras?.compteRendus.length
     ? extras.compteRendus.slice(0, 5).map(cr => `· ${cr.dateSeance}${cr.progression ? ` [${cr.progression}]` : ''} : ${cr.observations}`).join('\n')
     : null;
@@ -340,10 +335,9 @@ BILAN ANTÉRIEUR — ${fmt(sortedBilans[2].date)}
 ${buildBilanText(sortedBilans[2])}
 ` : ''}
 ═══════════════════════════════════════
-NOTES DE SÉANCES RÉCENTES
+SÉANCES DICTÉES RÉCENTES
 ═══════════════════════════════════════
-${notesText}
-${crText ? `\nSÉANCES DICTÉES RÉCENTES :\n${crText}` : ''}
+${crText ?? 'Aucune séance dictée'}
 
 ═══════════════════════════════════════
 ORGANISATION DES SÉANCES
@@ -428,7 +422,7 @@ function ContextIndicator({ patient, extras }: { patient: Participant; extras: P
   const items = [
     { ok: !!(patient.pathologie || patient.antecedentsMedicaux), label: 'Profil médical', detail: '' },
     { ok: hasBilans, label: hasBilans ? `${patient.bilans.length} bilan${patient.bilans.length > 1 ? 's' : ''} chargé${patient.bilans.length > 1 ? 's' : ''}` : 'Aucun bilan', detail: hasBilans && dernierBilan ? `dernier : ${fmt(dernierBilan.date)}` : '' },
-    { ok: extras.notes.length > 0, label: extras.notes.length > 0 ? `${extras.notes.length} note${extras.notes.length > 1 ? 's' : ''} de séances` : 'Aucune note de séance', detail: '' },
+    { ok: extras.compteRendus.length > 0, label: extras.compteRendus.length > 0 ? `${extras.compteRendus.length} séance${extras.compteRendus.length > 1 ? 's' : ''} dictée${extras.compteRendus.length > 1 ? 's' : ''}` : 'Aucune séance dictée', detail: '' },
     { ok: hasObjectif, label: 'Objectifs renseignés', detail: '' },
   ];
 
@@ -654,20 +648,16 @@ export default function AssistantPage() {
     } catch { /* non bloquant */ }
   }
 
-  /** Charge notes + compte-rendus depuis Supabase pour l'indicateur et le prompt. */
+  /** Charge les séances dictées depuis Supabase pour le prompt IA. */
   async function loadPatientExtras(patientId: string) {
-    setPatientExtras({ notes: [], compteRendus: [], loading: true });
-    const [notesRes, crRes] = await Promise.allSettled([
-      supabase ? supabase.from('notes_seances').select('date, note, ressenti').eq('participant_id', patientId).order('date', { ascending: false }).limit(10) : Promise.resolve({ data: null }),
-      supabase ? supabase.from('comptes_rendus_seances').select('date_seance, observations, progression').eq('participant_id', patientId).order('date_seance', { ascending: false }).limit(5) : Promise.resolve({ data: null }),
-    ]);
-    const notes = notesRes.status === 'fulfilled' && notesRes.value.data
-      ? (notesRes.value.data as { date: string; note: string; ressenti: string | null }[])
+    setPatientExtras({ compteRendus: [], loading: true });
+    const crRes = await (supabase
+      ? supabase.from('comptes_rendus_seances').select('date_seance, observations, progression').eq('participant_id', patientId).order('date_seance', { ascending: false }).limit(5)
+      : Promise.resolve({ data: null }));
+    const crs = crRes.data
+      ? (crRes.data as { date_seance: string; observations: string; progression: string | null }[]).map(r => ({ dateSeance: r.date_seance, observations: r.observations, progression: r.progression }))
       : [];
-    const crs = crRes.status === 'fulfilled' && crRes.value.data
-      ? (crRes.value.data as { date_seance: string; observations: string; progression: string | null }[]).map(r => ({ dateSeance: r.date_seance, observations: r.observations, progression: r.progression }))
-      : [];
-    setPatientExtras({ notes, compteRendus: crs, loading: false });
+    setPatientExtras({ compteRendus: crs, loading: false });
   }
 
   function selectPatient(p: Participant) {
@@ -724,14 +714,12 @@ export default function AssistantPage() {
     }
 
     // Charger les extras avant de lancer l'action (légère attente)
-    let extras: PatientExtras = { notes: [], compteRendus: [], loading: false };
+    let extras: PatientExtras = { compteRendus: [], loading: false };
     if (supabase) {
-      const [nr, cr] = await Promise.allSettled([
-        supabase.from('notes_seances').select('date, note, ressenti').eq('participant_id', patient.id).order('date', { ascending: false }).limit(10),
+      const [cr] = await Promise.allSettled([
         supabase.from('comptes_rendus_seances').select('date_seance, observations, progression').eq('participant_id', patient.id).order('date_seance', { ascending: false }).limit(5),
       ]);
       extras = {
-        notes: nr.status === 'fulfilled' && nr.value.data ? (nr.value.data as { date: string; note: string; ressenti: string | null }[]) : [],
         compteRendus: cr.status === 'fulfilled' && cr.value.data
           ? (cr.value.data as { date_seance: string; observations: string; progression: string | null }[]).map(r => ({ dateSeance: r.date_seance, observations: r.observations, progression: r.progression }))
           : [],
@@ -779,7 +767,7 @@ export default function AssistantPage() {
     setLoading(true);
 
     if (actionType === 'programme' && selectedPatient) {
-      const extras = patientExtras ?? { notes: [], compteRendus: [], loading: false };
+      const extras = patientExtras ?? { compteRendus: [], loading: false };
       const sys = buildSystemPrompt(selectedPatient, extras, getContratInfo(selectedPatient));
       const prompt = `${sys}\n\n---\nQUESTION:\nGénère un programme d'exercices APA pour l'objectif suivant : "${trimmed}"\n\n## Objectif\n### Exercices recommandés\n- **Nom** — durée/répétitions\n  Précautions : ...\n### Points de vigilance\n### À éviter absolument`;
       try {
@@ -794,7 +782,7 @@ export default function AssistantPage() {
       return;
     }
 
-    const extras = patientExtras ?? { notes: [], compteRendus: [], loading: false };
+    const extras = patientExtras ?? { compteRendus: [], loading: false };
     const sys = buildSystemPrompt(selectedPatient, extras, selectedPatient ? getContratInfo(selectedPatient) : null);
     const history = messages.filter(m => m.role === 'user' || m.role === 'assistant').map(m => `${m.role === 'user' ? 'Q' : 'R'}: ${m.content}`).join('\n\n');
     const fullPrompt = history
@@ -967,7 +955,7 @@ export default function AssistantPage() {
               {selectedPatient && (
                 <div style={{ fontSize: 12, color: '#2BBFBF' }}>
                   Contexte : {selectedPatient.prenom} {selectedPatient.nom} · {selectedPatient.bilans.length} bilan(s)
-                  {patientExtras && !patientExtras.loading && patientExtras.notes.length > 0 && ` · ${patientExtras.notes.length} notes`}
+                  {patientExtras && !patientExtras.loading && patientExtras.compteRendus.length > 0 && ` · ${patientExtras.compteRendus.length} dictée(s)`}
                 </div>
               )}
             </div>
@@ -996,6 +984,8 @@ export default function AssistantPage() {
             const isLastAssistant = msg.role === 'assistant' && msg.id === lastAssistantId;
             const showPdfBar = isLastAssistant && !loading &&
               (actionType === 'compte_rendu' || actionType === 'compte_rendu_famille');
+            const showPartagerBtn = isLastAssistant && !loading &&
+              actionType === 'compte_rendu_famille' && selectedPatient != null;
             return (
               <div key={msg.id}>
                 <div style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
@@ -1015,7 +1005,7 @@ export default function AssistantPage() {
                   </div>
                 </div>
                 {showPdfBar && (
-                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                     <button
                       onClick={() => downloadPDF(selectedPatient ? `${selectedPatient.prenom}-${selectedPatient.nom}` : 'patient', actionType!, msg.content)}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#2BBFBF', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
@@ -1026,6 +1016,24 @@ export default function AssistantPage() {
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: 'white', border: '0.5px solid #E5E7EB', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#374151' }}>
                       📋 Copier le texte
                     </button>
+                    {showPartagerBtn && (
+                      <button
+                        onClick={async () => {
+                          if (!supabase || !selectedPatient) return;
+                          const date = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+                          const { error } = await supabase.from('documents_patient').insert({
+                            participant_id: selectedPatient.id,
+                            titre: `Compte-rendu du ${date}`,
+                            contenu: msg.content,
+                            type: 'compte_rendu_famille',
+                          });
+                          if (!error) toast.success(`Document partagé avec ${selectedPatient.prenom} ✅`);
+                          else toast.error('Erreur lors du partage');
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#0D2B2B', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                        👁️ Partager avec le patient
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

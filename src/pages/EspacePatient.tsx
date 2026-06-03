@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams, Navigate } from 'react-router-dom';
 import type { Participant, Seance, Bilan, Programme } from '../types';
-import type { CompteRenduSeance } from '../types/seance';
 import { supabase } from '../lib/supabase';
 import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/mappers';
 import { loadExercices } from '../data/exercices';
@@ -122,12 +121,11 @@ function BannierePWA() {
 // ── ÉCRAN 1 — Accueil ─────────────────────────────────────────────────────────
 
 function EcranAccueil({
-  participant, seances, bilans, compteRendus, programmes,
+  participant, seances, bilans, programmes,
 }: {
   participant: Participant;
   seances: Seance[];
   bilans: Bilan[];
-  compteRendus: CompteRenduSeance[];
   programmes: Programme[];
 }) {
   const praticien = loadPraticien();
@@ -141,11 +139,6 @@ function EcranAccueil({
   const sortedBilans = [...bilans].sort((a, b) => a.date.localeCompare(b.date));
   const premierBilan = sortedBilans[0] ?? null;
   const dernierBilan = sortedBilans[sortedBilans.length - 1] ?? null;
-
-  // Dernier compte-rendu rédigé par Pierre pour le patient
-  const dernierCR = [...compteRendus]
-    .filter(cr => cr.dateSeance && cr.observations)
-    .sort((a, b) => (b.dateSeance ?? '').localeCompare(a.dateSeance ?? ''))[0] ?? null;
 
   // Programme actif
   const programmeActif = programmes.filter(p => p.actif)
@@ -202,34 +195,6 @@ function EcranAccueil({
           )}
         </div>
       </div>
-
-      {/* Retour de votre enseignant (compte-rendu rédigé pour le patient) */}
-      {dernierCR && (
-        <div style={{
-          background: 'white', border: `1px solid ${C.border}`,
-          borderRadius: 18, padding: '18px 16px',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-              Retour de {praticien.nom.split(' ')[0]}
-            </div>
-            <div style={{ fontSize: 12, color: C.muted }}>
-              {fmtCourt(dernierCR.dateSeance)}
-            </div>
-          </div>
-          <div style={{
-            background: C.bg, borderRadius: 12, padding: '14px',
-            fontSize: 14, color: C.text, lineHeight: 1.7,
-          }}>
-            {dernierCR.observations}
-          </div>
-          {dernierCR.progression === 'en progrès' && (
-            <div style={{ marginTop: 8, fontSize: 13, color: C.green, fontWeight: 700 }}>
-              📈 En progrès
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Prochain RDV */}
       {prochaine && (
@@ -720,14 +685,16 @@ function EcranProgramme({ participant, programmes }: {
 
 // ── ÉCRAN 4 — Documents ───────────────────────────────────────────────────────
 
-function EcranDocuments({ bilans }: {
+function EcranDocuments({ bilans, documentsPatient }: {
   bilans: Bilan[];
   participant: Participant;
+  documentsPatient: { id: string; titre: string; contenu: string; date_creation: string }[];
 }) {
   const praticien = loadPraticien();
-  const sorted = [...bilans].sort((a, b) => b.date.localeCompare(a.date));
+  const sortedBilans = [...bilans].sort((a, b) => b.date.localeCompare(a.date));
+  const hasContent = documentsPatient.length > 0 || sortedBilans.length > 0;
 
-  if (sorted.length === 0) {
+  if (!hasContent) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px' }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
@@ -735,7 +702,7 @@ function EcranDocuments({ bilans }: {
           Pas encore de documents
         </div>
         <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>
-          Vos comptes-rendus de bilan<br />apparaîtront ici après chaque évaluation.
+          Les documents que {praticien.nom.split(' ')[0]} partage avec vous<br />apparaîtront ici.
         </div>
       </div>
     );
@@ -744,63 +711,92 @@ function EcranDocuments({ bilans }: {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', paddingLeft: 2 }}>
-        Vos documents ({sorted.length})
-      </div>
-
-      {sorted.map((bilan, i) => {
-        const isInitial = bilan.type === 'initial';
-        return (
-          <div key={bilan.id} style={{
-            background: 'white', border: `1px solid ${C.border}`,
-            borderRadius: 18, padding: '16px',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>
-                  📄 {isInitial ? 'Bilan initial' : `Bilan de suivi n°${i + 1}`}
-                </div>
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-                  {fmtCourt(bilan.date)} · Évaluation par {praticien.nom.split(' ')[0]}
-                </div>
-              </div>
-              {i === 0 && (
-                <span style={{
-                  fontSize: 10, fontWeight: 700, background: '#E8F8F8',
-                  color: C.teal, padding: '3px 8px', borderRadius: 20,
-                }}>
-                  Le plus récent
-                </span>
-              )}
-            </div>
-
-            {/* Résumé en langage patient */}
-            <div style={{ fontSize: 13, color: '#5C7A7A', lineHeight: 1.6, marginBottom: bilan.messageClient ? 10 : 0 }}>
-              {[
-                bilan.equilibre?.droite != null && `Équilibre : ${bilan.equilibre.droite.toFixed(1)} s`,
-                bilan.chairStand30 != null && `Force jambes : ${bilan.chairStand30} lever${bilan.chairStand30 > 1 ? 's' : ''}`,
-                bilan.handGrip?.droite != null && `Force des mains : ${bilan.handGrip.droite.toFixed(1)} kg`,
-                bilan.tug3m != null && `Marche : ${bilan.tug3m.toFixed(1)} s`,
-                bilan.tm6?.distanceMetres != null && `Endurance : ${bilan.tm6.distanceMetres} m`,
-              ].filter(Boolean).map((line, j) => (
-                <div key={j} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ color: C.teal }}>·</span> {line}
-                </div>
-              ))}
-            </div>
-
-            {/* Message de Pierre */}
-            {bilan.messageClient && (
-              <div style={{
-                background: C.bg, borderRadius: 10, padding: '10px 12px',
-                fontSize: 13, color: C.text, fontStyle: 'italic', lineHeight: 1.6,
-              }}>
-                💬 "{bilan.messageClient}"
-              </div>
-            )}
+      {/* Documents partagés explicitement par Pierre */}
+      {documentsPatient.length > 0 && (
+        <>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', paddingLeft: 2 }}>
+            Partagé par {praticien.nom.split(' ')[0]} ({documentsPatient.length})
           </div>
-        );
-      })}
+          {documentsPatient.map(doc => (
+            <div key={doc.id} style={{
+              background: 'white', border: `1.5px solid rgba(43,191,191,0.3)`,
+              borderRadius: 18, padding: '18px 16px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>
+                    📝 {doc.titre}
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                    {fmtCourt(doc.date_creation?.slice(0, 10) ?? '')} · {praticien.nom.split(' ')[0]}
+                  </div>
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(43,191,191,0.1)', color: C.teal, padding: '3px 8px', borderRadius: 20 }}>
+                  Partagé
+                </span>
+              </div>
+              <div style={{
+                fontSize: 13, color: C.text, lineHeight: 1.7,
+                whiteSpace: 'pre-wrap', maxHeight: 200, overflow: 'hidden',
+              }}>
+                {doc.contenu.slice(0, 400)}{doc.contenu.length > 400 ? '…' : ''}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Bilans — résumé en langage patient */}
+      {sortedBilans.length > 0 && (
+        <>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', paddingLeft: 2, marginTop: documentsPatient.length > 0 ? 8 : 0 }}>
+            Vos bilans ({sortedBilans.length})
+          </div>
+          {sortedBilans.map((bilan, i) => {
+            const isInitial = bilan.type === 'initial';
+            return (
+              <div key={bilan.id} style={{
+                background: 'white', border: `1px solid ${C.border}`,
+                borderRadius: 18, padding: '16px',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>
+                      📊 {isInitial ? 'Bilan initial' : `Bilan de suivi n°${sortedBilans.length - i}`}
+                    </div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                      {fmtCourt(bilan.date)} · Évaluation par {praticien.nom.split(' ')[0]}
+                    </div>
+                  </div>
+                  {i === 0 && (
+                    <span style={{ fontSize: 10, fontWeight: 700, background: '#E8F8F8', color: C.teal, padding: '3px 8px', borderRadius: 20 }}>
+                      Le plus récent
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 13, color: '#5C7A7A', lineHeight: 1.6, marginBottom: bilan.messageClient ? 10 : 0 }}>
+                  {[
+                    bilan.equilibre?.droite != null && `Équilibre : ${bilan.equilibre.droite.toFixed(1)} s`,
+                    bilan.chairStand30 != null && `Force jambes : ${bilan.chairStand30} lever${bilan.chairStand30 > 1 ? 's' : ''}`,
+                    bilan.handGrip?.droite != null && `Force des mains : ${bilan.handGrip.droite.toFixed(1)} kg`,
+                    bilan.tug3m != null && `Marche : ${bilan.tug3m.toFixed(1)} s`,
+                    bilan.tm6?.distanceMetres != null && `Endurance : ${bilan.tm6.distanceMetres} m`,
+                  ].filter(Boolean).map((line, j) => (
+                    <div key={j} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ color: C.teal }}>·</span> {String(line)}
+                    </div>
+                  ))}
+                </div>
+                {bilan.messageClient && (
+                  <div style={{ background: C.bg, borderRadius: 10, padding: '10px 12px', fontSize: 13, color: C.text, fontStyle: 'italic', lineHeight: 1.6 }}>
+                    💬 "{bilan.messageClient}"
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }
@@ -828,7 +824,7 @@ export default function EspacePatient() {
   const [seances, setSeances]           = useState<Seance[]>([]);
   const [bilans, setBilans]             = useState<Bilan[]>([]);
   const [programmes, setProgrammes]     = useState<Programme[]>([]);
-  const [compteRendus, setCompteRendus] = useState<CompteRenduSeance[]>([]);
+  const [documentsPatient, setDocumentsPatient] = useState<{ id: string; titre: string; contenu: string; date_creation: string }[]>([]);
   const [tab, setTab]                   = useState<Tab>('accueil');
 
   useEffect(() => {
@@ -836,17 +832,16 @@ export default function EspacePatient() {
 
     async function charger() {
       // allSettled : si une requête échoue, les autres continuent
-      const [pRes, bRes, sRes, prRes, crRes] = await Promise.allSettled([
+      const [pRes, bRes, sRes, prRes, docRes] = await Promise.allSettled([
         supabase!.from('participants').select('*').eq('id', id).single(),
         supabase!.from('bilans').select('*').eq('participant_id', id).order('date'),
         supabase!.from('seances').select('*').eq('participant_id', id).order('date'),
         supabase!.from('programmes').select('*').eq('participant_id', id),
-        // Remapper manuellement date_seance → dateSeance
-        supabase!.from('comptes_rendus_seances')
-          .select('id, date_seance, observations, progression, participant_id')
+        // Documents explicitement partagés par Pierre
+        supabase!.from('documents_patient')
+          .select('id, titre, contenu, date_creation')
           .eq('participant_id', id)
-          .order('date_seance', { ascending: false })
-          .limit(10),
+          .order('date_creation', { ascending: false }),
       ]);
 
       if (pRes.status === 'fulfilled' && pRes.value.data)
@@ -857,15 +852,8 @@ export default function EspacePatient() {
         setSeances(sRes.value.data.map(dbToSeance));
       if (prRes.status === 'fulfilled' && prRes.value.data)
         setProgrammes(prRes.value.data.map(dbToProgramme));
-      if (crRes.status === 'fulfilled' && crRes.value.data) {
-        setCompteRendus(
-          crRes.value.data.map((r: any) => ({
-            ...r,
-            dateSeance: r.date_seance ?? '',
-            participantId: r.participant_id ?? '',
-          })) as CompteRenduSeance[]
-        );
-      }
+      if (docRes.status === 'fulfilled' && docRes.value.data)
+        setDocumentsPatient(docRes.value.data as { id: string; titre: string; contenu: string; date_creation: string }[]);
 
       setLoading(false);
     }
@@ -936,7 +924,6 @@ export default function EspacePatient() {
             participant={participant}
             seances={seances}
             bilans={bilans}
-            compteRendus={compteRendus}
             programmes={programmes}
           />
         )}
@@ -945,7 +932,7 @@ export default function EspacePatient() {
           <EcranProgramme participant={participant} programmes={programmes} />
         )}
         {tab === 'documents' && (
-          <EcranDocuments bilans={bilans} participant={participant} />
+          <EcranDocuments bilans={bilans} participant={participant} documentsPatient={documentsPatient} />
         )}
       </div>
 

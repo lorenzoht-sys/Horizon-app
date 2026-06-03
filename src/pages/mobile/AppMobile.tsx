@@ -2,13 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useParticipants } from '../../hooks/useParticipants';
 import { useAgenda } from '../../hooks/useAgenda';
-import { useJournalSeance } from '../../hooks/useJournalSeance';
 import { useContrats } from '../../hooks/useContrats';
 import { useCompteRenduSeance } from '../../hooks/useCompteRenduSeance';
-import { RESSENTI_CONFIG } from '../../components/journal/NoteSeanceModal';
 import BilanStepper from '../../components/bilan/BilanStepper';
 import DicteePostSeance from '../../components/DicteePostSeance';
-import type { RessentiSeance, Bilan } from '../../types';
+import type { Bilan } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../../lib/supabase';
 
@@ -232,11 +230,10 @@ function BottomNav({ onglet, onChange }: { onglet: string; onChange: (id: string
 
 // ── EcranAujourdhui ───────────────────────────────────────────────────────────
 
-function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: string) => void; onNaviguerSaisie: () => void }) {
+function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; onNaviguerSaisie?: () => void }) {
   const { participants } = useParticipants();
   const { seances: allSeances, seancesDuJour } = useAgenda();
   const { contratsARenouveler } = useContrats();
-  const { notes } = useJournalSeance();
   const { settings: praticienSettings } = usePraticienSettings();
   const today = new Date().toISOString().slice(0, 10);
   const seances = seancesDuJour(today);
@@ -260,8 +257,6 @@ function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: 
   const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const prochaineSeance = seances.find(s => s.statut === 'planifiee' && s.heureDebut >= currentTimeStr)
     ?? seances.find(s => s.statut === 'planifiee');
-
-  const noteManquante = seances.some(s => s.statut === 'realisee' && !notes.some(n => n.seanceId === s.id));
 
   const statCard: React.CSSProperties = {
     background: 'white', borderRadius: 16, padding: '16px 20px',
@@ -415,13 +410,6 @@ function EcranAujourdhui({ onVoirFiche, onNaviguerSaisie }: { onVoirFiche: (id: 
           </div>
         )}
 
-        {noteManquante && (
-          <button onClick={onNaviguerSaisie}
-            style={{ width: '100%', padding: '12px 16px', background: 'white', border: `1px dashed ${C.border}`, borderRadius: 12, fontSize: 13, color: C.muted, cursor: 'pointer', textAlign: 'left' }}>
-            📝 Des séances n'ont pas encore de note — Ajouter →
-          </button>
-        )}
-
       </div>
     </div>
   );
@@ -515,57 +503,23 @@ function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
 
 // ── EcranSaisie ───────────────────────────────────────────────────────────────
 
-type ModeSaisie = 'choix' | 'note' | 'patient' | 'bilan';
+type ModeSaisie = 'choix' | 'patient' | 'bilan';
 
 function EcranSaisie({ onVoirFiche }: { onVoirFiche?: (id: string) => void }) {
   const [mode, setMode] = useState<ModeSaisie>('choix');
   const back = () => setMode('choix');
-  if (mode === 'note')    return <NoteRapide onBack={back} />;
   if (mode === 'patient') return <NouveauPatientMobile onBack={back} />;
   if (mode === 'bilan')   return <NouveauBilanMobile onBack={back} onVoirFiche={onVoirFiche} />;
-  return <ChoixSaisie onNote={() => setMode('note')} onPatient={() => setMode('patient')} onBilan={() => setMode('bilan')} />;
+  return <ChoixSaisie onPatient={() => setMode('patient')} onBilan={() => setMode('bilan')} />;
 }
 
-function SeancesSansNote({ onSaisie }: { onSaisie: () => void }) {
-  const { seancesDuJour } = useAgenda();
-  const { notes } = useJournalSeance();
-  const { participants } = useParticipants();
-  const today = new Date().toISOString().slice(0, 10);
-  const sansNote = seancesDuJour(today).filter(s => s.statut === 'realisee' && !notes.some(n => n.seanceId === s.id));
-  if (sansNote.length === 0) return null;
-  return (
-    <div style={{ marginTop: 8 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#F59E0B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-        ⏰ Notes manquantes aujourd'hui
-      </div>
-      {sansNote.map(s => {
-        const p = participants.find(x => x.id === s.participantId);
-        return (
-          <button key={s.id} onClick={onSaisie}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 10, marginBottom: 8, cursor: 'pointer', textAlign: 'left' }}>
-            <span style={{ fontSize: 20 }}>📝</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#92400E' }}>{p?.prenom} {p?.nom}</div>
-              <div style={{ fontSize: 11, color: '#B45309' }}>Séance {s.heureDebut} — note manquante</div>
-            </div>
-            <span style={{ fontSize: 12, color: '#92400E', fontWeight: 700 }}>+ Note</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
-function ChoixSaisie({ onNote, onPatient, onBilan }: { onNote: () => void; onPatient: () => void; onBilan: () => void }) {
+
+function ChoixSaisie({ onPatient, onBilan }: { onPatient: () => void; onBilan: () => void }) {
   const btn: React.CSSProperties = { width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: 16, background: 'white', border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 10, cursor: 'pointer', textAlign: 'left' };
   return (
     <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 20, paddingRight: 20, paddingBottom: 20 }}>
       <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 20 }}>Que saisir ?</div>
-      <button onClick={onNote} style={btn}>
-        <span style={{ fontSize: 28 }}>📝</span>
-        <div><div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Note de séance</div><div style={{ fontSize: 12, color: C.muted }}>Note rapide après une séance</div></div>
-        <i className="ti ti-chevron-right" style={{ fontSize: 18, color: '#D0DCDC', marginLeft: 'auto' }} />
-      </button>
       <button onClick={onBilan} style={btn}>
         <span style={{ fontSize: 28 }}>📋</span>
         <div><div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Nouveau bilan</div><div style={{ fontSize: 12, color: C.muted }}>Bilan initial ou trimestriel</div></div>
@@ -576,7 +530,6 @@ function ChoixSaisie({ onNote, onPatient, onBilan }: { onNote: () => void; onPat
         <div><div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Nouveau patient</div><div style={{ fontSize: 12, color: C.muted }}>Créer une fiche patient</div></div>
         <i className="ti ti-chevron-right" style={{ fontSize: 18, color: '#D0DCDC', marginLeft: 'auto' }} />
       </button>
-      <SeancesSansNote onSaisie={onNote} />
     </div>
   );
 }
@@ -703,108 +656,6 @@ function NouveauBilanMobile({ onBack, onVoirFiche }: { onBack: () => void; onVoi
         disabled={!participantId}
         style={{ width: '100%', padding: 16, background: participantId ? C.primary : '#D0DCDC', color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: participantId ? 'pointer' : 'not-allowed' }}>
         Commencer le bilan →
-      </button>
-    </div>
-  );
-}
-
-function NoteRapide({ onBack }: { onBack: () => void }) {
-  const { participants } = useParticipants();
-  const { seancesDuJour } = useAgenda();
-  const { ajouterNote } = useJournalSeance();
-  const [patientId, setPatientId] = useState('');
-  const [ressenti, setRessenti] = useState<RessentiSeance | null>(null);
-  const [note, setNote] = useState('');
-  const [alertes, setAlertes] = useState<string[]>([]);
-  const today = new Date().toISOString().slice(0, 10);
-  const seancesAuj = seancesDuJour(today);
-
-  const RESSENTIS = Object.entries(RESSENTI_CONFIG) as [RessentiSeance, typeof RESSENTI_CONFIG[RessentiSeance]][];
-  const ALERTES_OPT = [
-    { id: 'douleurSignalee', label: '⚠️ Douleur signalée' },
-    { id: 'fatiguePlusQueHabitude', label: '😓 Fatigue inhabituelle' },
-    { id: 'progressionNotable', label: '🎉 Progression notable' },
-    { id: 'pointARevoir', label: '👁️ Point à revoir' },
-  ];
-
-  function sauvegarder() {
-    if (!patientId || !ressenti) return;
-    ajouterNote({
-      seanceId: seancesAuj.find(s => s.participantId === patientId)?.id ?? '',
-      participantId: patientId,
-      date: today,
-      heureDebut: new Date().toTimeString().slice(0, 5),
-      ressenti,
-      note,
-      alertes: {
-        douleurSignalee: alertes.includes('douleurSignalee'),
-        fatiguePlusQueHabitude: alertes.includes('fatiguePlusQueHabitude'),
-        progressionNotable: alertes.includes('progressionNotable'),
-        pointARevoir: alertes.includes('pointARevoir'),
-      },
-    });
-    toast.success('Note enregistrée ✅');
-    onBack();
-  }
-
-  const label: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
-
-  return (
-    <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 22, color: C.text }} />
-        </button>
-        <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Note de séance</div>
-      </div>
-
-      <div style={{ marginBottom: 16 }}>
-        <label style={label}>Patient</label>
-        <select value={patientId} onChange={e => setPatientId(e.target.value)}
-          style={{ width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, background: 'white', color: C.text, outline: 'none' }}>
-          <option value="">Choisir un patient...</option>
-          {seancesAuj.map(s => {
-            const p = participants.find(x => x.id === s.participantId);
-            return p ? <option key={s.id} value={s.participantId}>{p.prenom} {p.nom} — {s.heureDebut}</option> : null;
-          })}
-          {participants.filter(p => !seancesAuj.some(s => s.participantId === p.id)).map(p => (
-            <option key={p.id} value={p.id}>{p.prenom} {p.nom}</option>
-          ))}
-        </select>
-      </div>
-
-      <div style={{ marginBottom: 16 }}>
-        <label style={label}>Comment s'est passée la séance ?</label>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {RESSENTIS.map(([id, cfg]) => (
-            <button key={id} onClick={() => setRessenti(id)}
-              style={{ flex: 1, padding: '10px 4px', border: `1.5px solid ${ressenti === id ? C.primary : C.border}`, background: ressenti === id ? '#E8F8F8' : 'white', borderRadius: 10, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: 22 }}>{cfg.emoji}</span>
-              <span style={{ fontSize: 9, color: ressenti === id ? C.primary : C.muted, fontWeight: 600 }}>{cfg.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 16 }}>
-        <label style={label}>Points à noter</label>
-        {ALERTES_OPT.map(a => (
-          <button key={a.id} onClick={() => setAlertes(prev => prev.includes(a.id) ? prev.filter(x => x !== a.id) : [...prev, a.id])}
-            style={{ width: '100%', padding: '10px 14px', marginBottom: 6, border: `1.5px solid ${alertes.includes(a.id) ? C.primary : C.border}`, background: alertes.includes(a.id) ? '#E8F8F8' : 'white', borderRadius: 10, cursor: 'pointer', textAlign: 'left', fontSize: 14, color: C.text }}>
-            {a.label}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ marginBottom: 20 }}>
-        <label style={label}>Note libre</label>
-        <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Observations..." rows={3}
-          style={{ width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, fontFamily: "'Nunito',sans-serif", resize: 'none', outline: 'none', boxSizing: 'border-box' }} />
-      </div>
-
-      <button onClick={sauvegarder} disabled={!patientId || !ressenti}
-        style={{ width: '100%', padding: 16, background: (!patientId || !ressenti) ? '#D0DCDC' : C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: (!patientId || !ressenti) ? 'not-allowed' : 'pointer' }}>
-        💾 Enregistrer la note
       </button>
     </div>
   );
@@ -1439,10 +1290,9 @@ function EditPatientMobile({ participant, onBack }: { participant: import('../..
 
 function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { participantId: string; onBack: () => void; onOpenAssistant?: (id: string) => void }) {
   const { participants, addBilan } = useParticipants();
-  const { notesParPatient } = useJournalSeance();
   const { seances } = useAgenda();
   const { contratActifDeParticipant } = useContrats();
-  const { ajouterCompteRendu } = useCompteRenduSeance(participantId);
+  const { ajouterCompteRendu, compteRendus } = useCompteRenduSeance(participantId);
   const p = participants.find(x => x.id === participantId);
   const [onglet, setOnglet] = useState('infos');
   const [bilanDetail, setBilanDetail] = useState<import('../../types').Bilan | null>(null);
@@ -1481,7 +1331,6 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
       ? ((bilanInitial.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail as string | undefined) ?? null)
       : null;
 
-  const notes = notesParPatient(p.id);
   const sortedBilans = [...p.bilans].sort((a, b) => b.date.localeCompare(a.date));
   const contrat = contratActifDeParticipant(participantId);
   const today = new Date().toISOString().slice(0, 10);
@@ -1773,29 +1622,26 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
               </div>
             </button>
 
-            {notes.length > 0 && (
+            {compteRendus.length > 0 && (
               <div style={{ fontSize: 11, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-                Notes récentes
+                Séances dictées
               </div>
             )}
 
-            {notes.length === 0 ? (
+            {compteRendus.length === 0 ? (
               <div style={{ color: C.muted, textAlign: 'center', padding: '16px 0' }}>
-                Aucune note — dictez votre première séance ci-dessus
+                Aucune séance dictée — utilisez le bouton ci-dessus
               </div>
-            ) : notes.slice(0, 10).map(n => {
-              const r = n.ressenti ? RESSENTI_CONFIG[n.ressenti] : null;
-              return (
-                <div key={n.id} style={card}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    {r && <span>{r.emoji}</span>}
-                    <span style={{ fontSize: 12, color: C.muted }}>{formatDateCourt(n.date)} · {n.heureDebut}</span>
-                    {r && <span style={{ fontSize: 11, fontWeight: 700, color: r.color }}>{r.label}</span>}
-                  </div>
-                  {n.note && <div style={{ fontSize: 13, color: C.text }}>"{n.note}"</div>}
+            ) : compteRendus.slice(0, 10).map(cr => (
+              <div key={cr.id} style={card}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontSize: 10, background: '#E8F8F8', color: C.primary, fontWeight: 700, padding: '2px 6px', borderRadius: 6 }}>🎙️ Dictée</span>
+                  <span style={{ fontSize: 12, color: C.muted }}>{formatDateCourt(cr.dateSeance)}</span>
+                  {cr.progression && <span style={{ fontSize: 11, fontWeight: 700, color: cr.progression === 'en progrès' ? '#16A34A' : C.muted }}>{cr.progression === 'en progrès' ? '📈' : '➡️'} {cr.progression}</span>}
                 </div>
-              );
-            })}
+                {cr.observations && <div style={{ fontSize: 13, color: C.text }}>"{cr.observations}"</div>}
+              </div>
+            ))}
           </div>
         )}
 

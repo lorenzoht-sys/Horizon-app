@@ -21,14 +21,12 @@ import BilanTimeline from '../components/bilan/BilanTimeline';
 import ContratsTab from '../components/participant/ContratsTab';
 import DicteePostSeance from '../components/DicteePostSeance';
 import ParticipantForm from '../components/participant/ParticipantForm';
-import NoteSeanceModal from '../components/journal/NoteSeanceModal';
-import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
 import ModalEspacePatient from '../components/participant/ModalEspacePatient';
 import { exportFichePatientPDF } from '../utils/exportFichePatientPDF';
 import { calculerNote, NORMES_SCORING } from '../data/norms';
 import { TAG_CONFIG } from '../data/profiles';
 import toast from 'react-hot-toast';
-import type { Bilan, Participant, RessentiSeance, Contrat, Seance, ProfilHandicap } from '../types';
+import type { Bilan, Participant, Contrat, Seance, ProfilHandicap } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -332,22 +330,17 @@ function CarteProfilFonctionnel({ bilans }: {
 
 // ── CarteJournalFusion ────────────────────────────────────────────────────────
 
-type JournalEntry =
-  | { type: 'note';   date: string; data: import('../types').NoteSeance }
-  | { type: 'dictee'; date: string; data: CompteRenduSeance };
+type JournalEntry = { type: 'dictee'; date: string; data: CompteRenduSeance };
 
-function CarteJournalFusion({ notes, compteRendus, onAjouterNote, onDicter }: {
-  notes: import('../types').NoteSeance[];
+function CarteJournalFusion({ compteRendus, onDicter }: {
   compteRendus: CompteRenduSeance[];
-  onAjouterNote: () => void;
   onDicter: () => void;
 }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-  const entries: JournalEntry[] = [
-    ...notes.map(n  => ({ type: 'note'   as const, date: n.date,      data: n  })),
-    ...compteRendus.map(cr => ({ type: 'dictee' as const, date: cr.dateSeance, data: cr })),
-  ].sort((a, b) => b.date.localeCompare(a.date));
+  const entries: JournalEntry[] = compteRendus
+    .map(cr => ({ type: 'dictee' as const, date: cr.dateSeance, data: cr }))
+    .sort((a, b) => b.date.localeCompare(a.date));
 
   function toggle(id: string) {
     setExpandedIds(prev => {
@@ -361,21 +354,12 @@ function CarteJournalFusion({ notes, compteRendus, onAjouterNote, onDicter }: {
     <div className="bg-white rounded-xl border border-gray-200/60 p-4 shadow-sm">
       <div className="flex items-center justify-between mb-3">
         <SectionLabel>Journal des séances</SectionLabel>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onDicter}
-            className="inline-flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            <Mic size={11} style={{ color: '#2BBFBF' }} /> Dicter
-          </button>
-          <button
-            onClick={onAjouterNote}
-            className="inline-flex items-center gap-1 text-[12px] font-semibold px-2.5 py-1.5 rounded-lg border transition-colors hover:bg-teal-50"
-            style={{ borderColor: '#2BBFBF', color: '#2BBFBF' }}
-          >
-            + Note
-          </button>
-        </div>
+        <button
+          onClick={onDicter}
+          className="inline-flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          <Mic size={11} style={{ color: '#2BBFBF' }} /> Dicter
+        </button>
       </div>
 
       {entries.length === 0 ? (
@@ -383,70 +367,19 @@ function CarteJournalFusion({ notes, compteRendus, onAjouterNote, onDicter }: {
           <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mb-3">
             <NotebookPen size={18} className="text-gray-400" />
           </div>
-          <p className="text-[13px] text-gray-500 font-medium mb-1">Aucune note de séance</p>
-          <p className="text-[12px] text-gray-400 mb-3">Dictez ou saisissez un compte-rendu après chaque séance</p>
-          <div className="flex gap-2">
-            <button
-              onClick={onDicter}
-              className="inline-flex items-center gap-1.5 border border-gray-200 text-gray-600 text-[12px] font-medium px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <Mic size={12} style={{ color: '#2BBFBF' }} /> Dicter
-            </button>
-            <button
-              onClick={onAjouterNote}
-              className="inline-flex items-center gap-1.5 text-[12px] font-semibold px-3 py-2 rounded-lg border transition-colors hover:bg-teal-50"
-              style={{ borderColor: '#2BBFBF', color: '#2BBFBF' }}
-            >
-              + Ajouter une note
-            </button>
-          </div>
+          <p className="text-[13px] text-gray-500 font-medium mb-1">Aucune séance dictée</p>
+          <p className="text-[12px] text-gray-400 mb-3">Dictez un compte-rendu après chaque séance</p>
+          <button
+            onClick={onDicter}
+            className="inline-flex items-center gap-1.5 border border-gray-200 text-gray-600 text-[12px] font-medium px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Mic size={12} style={{ color: '#2BBFBF' }} /> Dicter une séance
+          </button>
         </div>
       ) : (
         <div className="space-y-2">
           {entries.slice(0, 5).map((entry) => {
             const expanded = expandedIds.has(entry.data.id);
-
-            if (entry.type === 'note') {
-              const n = entry.data;
-              const r = n.ressenti ? RESSENTI_CONFIG[n.ressenti as RessentiSeance] : null;
-              const alertes = Object.entries(n.alertes).filter(([, v]) => v);
-              const ALERT_EMOJI: Record<string, string> = {
-                douleurSignalee: '⚠️', fatiguePlusQueHabitude: '😓',
-                progressionNotable: '🎉', pointARevoir: '📌',
-              };
-              return (
-                <div key={n.id} className="border border-gray-100 rounded-lg px-3 py-2.5 hover:bg-gray-50/50 transition-colors">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[12px] font-semibold text-gray-700">{formatDateCourt(n.date)}</span>
-                      {n.heureDebut && <span className="text-[11px] text-gray-400">{n.heureDebut}</span>}
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">✏️ Manuelle</span>
-                      {r && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white"
-                          style={{ background: r.color }}>{r.label}</span>
-                      )}
-                      {alertes.map(([key]) => (
-                        <span key={key} className="text-[11px]">{ALERT_EMOJI[key]}</span>
-                      ))}
-                    </div>
-                  </div>
-                  {n.note && (
-                    <p className={`text-[12px] text-gray-600 leading-snug ${expanded ? '' : 'line-clamp-2'}`}>
-                      "{n.note}"
-                    </p>
-                  )}
-                  {n.note && n.note.length > 120 && (
-                    <button
-                      onClick={() => toggle(n.id)}
-                      className="mt-1 text-[11px] text-gray-400 hover:text-gray-600 flex items-center gap-0.5"
-                    >
-                      {expanded ? <><ChevronUp size={10} /> Réduire</> : <><ChevronDown size={10} /> Voir complet</>}
-                    </button>
-                  )}
-                </div>
-              );
-            }
-
             const cr = entry.data;
             const prog = cr.progression ? PROGRESSION_CONFIG[cr.progression] : null;
             const humeurEmoji = cr.humeurPatient ? HUMEUR_EMOJI[cr.humeurPatient] : null;
@@ -550,7 +483,7 @@ export default function ParticipantProfile() {
   const { programmeActif, deleteProgramme } = useProgramme(id ?? '');
   const { contrats } = useContrats();
   const { seances } = useAgenda();
-  const { notesParPatient } = useJournalSeance();
+  useJournalSeance(); // conservé pour ne pas casser le hook
   const navigate = useNavigate();
   const settings = loadSettings();
 
@@ -558,7 +491,6 @@ export default function ParticipantProfile() {
   const [showEdit, setShowEdit]             = useState(false);
   const [confirmDelete, setConfirmDelete]   = useState(false);
   const [confirmDeleteProg, setConfirmDeleteProg] = useState(false);
-  const [showNoteModal, setShowNoteModal]   = useState(false);
   const [showDictee, setShowDictee]         = useState(false);
   const [geocoding, setGeocoding]           = useState(false);
   const [exportingPDF, setExportingPDF]     = useState(false);
@@ -588,7 +520,6 @@ export default function ParticipantProfile() {
       : null;
   const latestBilan    = sortedBilans[sortedBilans.length - 1] ?? null;
   const contratActif   = contrats.find(c => c.participantId === participant.id && c.statut === 'actif') ?? null;
-  const notes          = notesParPatient(participant.id);
   const contratsCount  = contrats.filter(c => c.participantId === participant.id).length;
   const color          = avatarColor(participant.id);
   const age            = calcAge(participant.dateNaissance);
@@ -614,7 +545,6 @@ export default function ParticipantProfile() {
       case 'supprimer':       setConfirmDelete(true); break;
       case 'programme':       navigate(`/participant/${id}/programme`); break;
       case 'nouveau_bilan':   navigate(`/participant/${id}/bilan/new`); break;
-      case 'note_seance':     setShowNoteModal(true); break;
       case 'nouveau_contrat': navigate(`/participant/${id}/contrat/nouveau`); break;
       case 'rgpd':            setShowEdit(true); break;
     }
@@ -929,12 +859,6 @@ export default function ParticipantProfile() {
             </button>
 
             {/* Groupe 2 : secondaires */}
-            <button
-              onClick={() => handleAction('note_seance')}
-              className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <NotebookPen size={13} /> Note séance
-            </button>
             {participant.bilans.length >= 2 && (
               <button
                 onClick={() => handleAction('evolution')}
@@ -987,9 +911,7 @@ export default function ParticipantProfile() {
         <div className="flex flex-col gap-3">
           {latestBilan && <CarteProfilFonctionnel bilans={participant.bilans} />}
           <CarteJournalFusion
-            notes={notes.slice(0, 5)}
             compteRendus={compteRendus.slice(0, 5)}
-            onAjouterNote={() => handleAction('note_seance')}
             onDicter={() => setShowDictee(true)}
           />
         </div>
@@ -1155,14 +1077,6 @@ export default function ParticipantProfile() {
             </div>
           </div>
         </div>
-      )}
-
-      {showNoteModal && (
-        <NoteSeanceModal
-          participantId={participant.id}
-          participantNom={`${participant.prenom} ${participant.nom}`}
-          onClose={() => setShowNoteModal(false)}
-        />
       )}
 
       {showEspacePatient && (
