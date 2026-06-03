@@ -78,6 +78,7 @@ export function useFactures() {
   }, [praticienId, chargerFactures]);
 
   // Créer ou mettre à jour une facture pour une structure/mois donné
+  // N'utilise pas upsert pour éviter la dépendance à une contrainte unique
   async function creerOuMettreAJourStructure(data: {
     structureId: string;
     periodeMois: number;
@@ -90,7 +91,15 @@ export function useFactures() {
     const today = new Date().toISOString().slice(0, 10);
     const statut: FactureSuivi['statut'] =
       data.dateEcheance && data.dateEcheance < today ? 'en_retard' : 'a_envoyer';
-    const row = {
+
+    // Chercher si une facture existe déjà pour cette structure/période
+    const existante = factures.find(
+      f => f.structureId === data.structureId &&
+           f.periodeMois === data.periodeMois &&
+           f.periodeAnnee === data.periodeAnnee
+    );
+
+    const payload = {
       praticien_id: praticienId,
       structure_id: data.structureId,
       participant_id: null,
@@ -101,17 +110,19 @@ export function useFactures() {
       statut,
       date_echeance: data.dateEcheance ?? null,
     };
-    const { data: inserted, error } = await supabase
-      .from('factures_suivi')
-      .upsert(row, { onConflict: 'structure_id,periode_annee,periode_mois' })
-      .select()
-      .single();
-    if (error) { console.error('[useFactures] erreur structure upsert:', error); return null; }
-    const facture = dbToFacture(inserted);
+
+    let result;
+    if (existante) {
+      result = await supabase.from('factures_suivi').update(payload).eq('id', existante.id).select().single();
+    } else {
+      result = await supabase.from('factures_suivi').insert(payload).select().single();
+    }
+
+    const { data: saved, error } = result;
+    if (error) { console.error('[useFactures] erreur structure facture:', error); return null; }
+    const facture = dbToFacture(saved);
     setFactures(prev => {
-      const idx = prev.findIndex(
-        f => f.structureId === data.structureId && f.periodeMois === data.periodeMois && f.periodeAnnee === data.periodeAnnee
-      );
+      const idx = prev.findIndex(f => f.id === facture.id);
       return idx >= 0 ? prev.map((f, i) => i === idx ? facture : f) : [...prev, facture];
     });
     return facture;

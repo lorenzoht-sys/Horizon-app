@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useLocation, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Copy, Mail, RefreshCw, Check, Trash2 } from 'lucide-react';
 import { useStructures } from '../hooks/useStructures';
 import { useParticipants } from '../hooks/useParticipants';
 import { useAgenda } from '../hooks/useAgenda';
 import { useFactures } from '../hooks/useFactures';
+import { supabase } from '../lib/supabase';
+import { dbToStructure } from '../lib/mappers';
 import PageWrapper from '../components/layout/PageWrapper';
 import ParticipantCard from '../components/participant/ParticipantCard';
 import toast from 'react-hot-toast';
@@ -29,7 +31,19 @@ export default function StructureDetail() {
   const { seances } = useAgenda();
   const { factures, creerOuMettreAJourStructure, marquerEnvoyee } = useFactures();
 
-  const structure: Structure | undefined = structures.find(s => s.id === id) ?? (location.state?.structure as Structure | undefined);
+  // Structure depuis le hook ou location.state ou fetch direct
+  const [structureFetchee, setStructureFetchee] = useState<Structure | null>(null);
+  const hookStructure = structures.find(s => s.id === id);
+  const locationStructure = location.state?.structure as Structure | undefined;
+  const structure: Structure | undefined = hookStructure ?? locationStructure ?? structureFetchee ?? undefined;
+
+  // Fetch direct si pas encore dans le hook (chargement initial ou navigation directe)
+  useEffect(() => {
+    if (hookStructure || locationStructure || !id || !supabase) return;
+    supabase.from('structures').select('*').eq('id', id).single().then(({ data }) => {
+      if (data) setStructureFetchee(dbToStructure(data));
+    });
+  }, [id, hookStructure, locationStructure]);
 
   const [confirmSuppr, setConfirmSuppr] = useState(false);
   const [genLoading, setGenLoading] = useState(false);
