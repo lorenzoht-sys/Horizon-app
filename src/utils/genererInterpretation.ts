@@ -101,21 +101,15 @@ export async function genererInterpretation(
 
   const prompt = construirePrompt(resultats);
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-  const response = await fetch(`${supabaseUrl}/functions/v1/interpreter-bilan`, {
+  const response = await fetch('/api/claude', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${supabaseAnonKey}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt }),
   });
 
   if (!response.ok) {
     const err = await response.text().catch(() => response.statusText);
-    throw new Error(`Erreur Edge Function (${response.status}): ${err}`);
+    throw new Error(`Erreur API Claude (${response.status}): ${err}`);
   }
 
   const data = await response.json();

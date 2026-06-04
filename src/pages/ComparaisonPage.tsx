@@ -249,16 +249,13 @@ Génère :
 Réponds UNIQUEMENT en JSON valide :
 {"resumePro":"...","messagePatient":"..."}`;
 
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/interpreter-bilan`, {
+      const res = await fetch('/api/claude', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),
       });
 
-      if (!res.ok) throw new Error(`Edge Function ${res.status}`);
+      if (!res.ok) throw new Error(`Erreur API Claude ${res.status}`);
       const data = await res.json();
       const texte: string = data.text ?? '';
       const parsed = JSON.parse(texte.replace(/```json|```/g, '').trim());
