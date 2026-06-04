@@ -1404,9 +1404,12 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
 
       {/* Actions rapides */}
       <div style={{ display: 'flex', gap: 10, padding: '14px 16px', background: 'white', borderBottom: `1px solid ${C.border}` }}>
-        <button onClick={() => setShowEspacePatient(true)} style={actionBtn}>
-          <i className="ti ti-qrcode" style={{ fontSize: 22, color: C.primary }} />
-          <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>QR</span>
+        <button onClick={() => setShowEspacePatient(true)} style={{ ...actionBtn, background: C.primary, border: 'none' }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+            <rect x="3" y="14" width="7" height="7"/><path d="M14 14h7v7"/>
+          </svg>
+          <span style={{ fontSize: 11, color: 'white', fontWeight: 700 }}>Espace patient</span>
         </button>
         <button onClick={() => { setOnglet('journal'); setShowDictee(true); }} style={actionBtn}>
           <i className="ti ti-microphone" style={{ fontSize: 22, color: C.primary }} />
