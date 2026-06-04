@@ -84,16 +84,28 @@ function ListeAntecedentsForm({
               <input type="text" value={item.date ?? ''} onChange={e => upd(item.id, { date: e.target.value })}
                 placeholder="2019" className={CLS_CELL} />
               <div className="flex gap-1 items-center">
-                {(['oui', 'non'] as const).map(v => (
+                {(['oui', 'non'] as const).map(v => {
+                  const isActive = item.douleur === v;
+                  const activeColor = v === 'oui' ? '#F87171' : '#22C55E';
+                  return (
                   <button key={v} type="button" onClick={() => upd(item.id, { douleur: item.douleur === v ? undefined : v })}
-                    className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors ${
-                      item.douleur === v
-                        ? v === 'oui' ? 'bg-red-400 text-white border-red-400' : 'bg-emerald-500 text-white border-emerald-500'
-                        : 'border-gray-200 text-gray-600 bg-white'
-                    }`}>
+                    style={{
+                      flex: 1,
+                      padding: '8px 4px',
+                      borderRadius: '8px',
+                      border: '1.5px solid',
+                      borderColor: isActive ? activeColor : '#E5E7EB',
+                      background: isActive ? activeColor : 'white',
+                      color: isActive ? 'white' : '#4B5563',
+                      fontWeight: isActive ? '600' : '400',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}>
                     {v === 'oui' ? 'Oui' : 'Non'}
                   </button>
-                ))}
+                  );
+                })}
                 <button type="button" onClick={() => remove(item.id)}
                   className="text-red-400 hover:text-red-600 px-1 flex-shrink-0 ml-0.5">✕</button>
               </div>

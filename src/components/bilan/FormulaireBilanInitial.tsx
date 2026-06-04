@@ -475,22 +475,36 @@ function ListeOperations({
                 <button
                   type="button"
                   onClick={() => upd(op.id, { complication: true })}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                    op.complication === true
-                      ? 'bg-red-400 text-white border-red-400'
-                      : 'border-gray-200 text-gray-600'
-                  }`}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    border: '1.5px solid',
+                    borderColor: op.complication === true ? '#F87171' : '#E5E7EB',
+                    background: op.complication === true ? '#F87171' : 'white',
+                    color: op.complication === true ? 'white' : '#4B5563',
+                    fontWeight: op.complication === true ? '600' : '400',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
                 >
                   Oui
                 </button>
                 <button
                   type="button"
                   onClick={() => upd(op.id, { complication: false, complicationDetail: '' })}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                    op.complication === false
-                      ? 'bg-emerald-500 text-white border-emerald-500'
-                      : 'border-gray-200 text-gray-600'
-                  }`}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    border: '1.5px solid',
+                    borderColor: op.complication === false ? '#22C55E' : '#E5E7EB',
+                    background: op.complication === false ? '#22C55E' : 'white',
+                    color: op.complication === false ? 'white' : '#4B5563',
+                    fontWeight: op.complication === false ? '600' : '400',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
                 >
                   Non
                 </button>
@@ -657,23 +671,32 @@ function BoutonOuiNon({
   onChange: (v: OuiNon) => void;
 }) {
   return (
-    <div className="flex gap-2">
-      {(['oui', 'non'] as OuiNon[]).map(v => (
-        <button
-          key={v}
-          type="button"
-          onClick={() => onChange(v)}
-          className={`px-4 py-1.5 rounded-xl text-sm font-semibold border transition-colors ${
-            value === v
-              ? v === 'oui'
-                ? 'bg-emerald-500 text-white border-emerald-500'
-                : 'bg-red-400 text-white border-red-400'
-              : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
-          }`}
-        >
-          {v === 'oui' ? 'Oui' : 'Non'}
-        </button>
-      ))}
+    <div style={{ display: 'flex', gap: '8px' }}>
+      {(['oui', 'non'] as OuiNon[]).map(v => {
+        const isActive = value === v;
+        const activeColor = v === 'oui' ? '#22C55E' : '#F87171';
+        return (
+          <button
+            key={v}
+            type="button"
+            onClick={() => onChange(v)}
+            style={{
+              padding: '6px 16px',
+              borderRadius: '12px',
+              border: '1.5px solid',
+              borderColor: isActive ? activeColor : '#E5E7EB',
+              background: isActive ? activeColor : 'white',
+              color: isActive ? 'white' : '#4B5563',
+              fontWeight: isActive ? '600' : '400',
+              fontSize: '14px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {v === 'oui' ? 'Oui' : 'Non'}
+          </button>
+        );
+      })}
     </div>
   );
 }
