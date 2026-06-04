@@ -726,11 +726,12 @@ export default function ParticipantProfileMobile() {
             </div>
           )}
           <button
-            onClick={() => navigate(`/participant/${id}/bilan/new`)}
-            className="flex-1 flex items-center justify-center gap-1.5 rounded-lg text-white text-[12px] font-bold"
-            style={{ background: 'var(--color-teal)', height: 36 }}
+            onClick={() => setShowEspacePatient(true)}
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-lg text-[12px] font-bold"
+            style={{ background: 'var(--color-teal)', color: 'white', height: 36 }}
           >
-            <ClipboardList size={13} /> Bilan
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h7v7"/></svg>
+            QR
           </button>
         </div>
       </div>
@@ -744,7 +745,6 @@ export default function ParticipantProfileMobile() {
             { icon: <FileText size={13} className="text-gray-500" />,   label: exportingPDF ? 'PDF…' : 'PDF', action: handleExportFiche },
             { icon: <NotebookPen size={13} className="text-gray-500" />,label: 'Note',      action: () => setShowNoteModal(true) },
             { icon: <ClipboardList size={13} className="text-gray-500" />, label: 'Contrat', action: () => navigate(`/participant/${id}/contrat/nouveau`) },
-            { icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--color-teal)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h7v7"/></svg>, label: 'QR Patient', action: () => setShowEspacePatient(true) },
           ].map(btn => (
             <button
               key={btn.label}
