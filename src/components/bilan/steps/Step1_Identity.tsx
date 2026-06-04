@@ -18,6 +18,7 @@ export default function Step1_Identity({ form, update, nextTrimestre }: Props) {
         <input
           type="date"
           value={form.date}
+          max={new Date().toISOString().split('T')[0]}
           onChange={e => update({ date: e.target.value })}
           className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
         />

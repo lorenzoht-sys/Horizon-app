@@ -175,6 +175,18 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
     switch (step) {
       case 0: return (
         <div className="space-y-4">
+          {/* Date du bilan */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Date du bilan</label>
+            <input
+              type="date"
+              value={form.date}
+              max={new Date().toISOString().split('T')[0]}
+              onChange={e => update({ date: e.target.value })}
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
+            />
+            <p className="text-xs text-gray-400 mt-1.5">Par défaut : aujourd'hui. Modifiable pour dater un bilan antérieur.</p>
+          </div>
           {/* Résumé patient lecture seule */}
           <div className="bg-primary/8 border border-primary/20 rounded-xl px-4 py-3 flex items-center gap-3">
             <div
