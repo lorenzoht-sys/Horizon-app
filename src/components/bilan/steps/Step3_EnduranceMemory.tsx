@@ -236,7 +236,6 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
         <section>
           <div className="flex items-center gap-3 mb-3">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Mémoire — Test Dubois MIS</h3>
-            <span className="text-[10px] font-bold text-white bg-primary px-2 py-0.5 rounded-full uppercase tracking-wide">Obligatoire</span>
             {mem.dubois?.scoreMIS != null && (
               <DeltaIndicator delta={d.memoireMIS} unit="/10" />
             )}

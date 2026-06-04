@@ -249,7 +249,6 @@ export default function DuboisMISWidget({ value, onChange }: Props) {
       >
         <span>🧠</span>
         <span>Réaliser le test Dubois (MIS)</span>
-        <span className="text-gray-400 font-normal ml-auto text-xs">optionnel</span>
       </button>
     );
   }
