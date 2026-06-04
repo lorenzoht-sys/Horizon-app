@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical } from '../../types';
-import { TAG_CONFIG, TAG_ORDER, ALL_TESTS, TEST_LABELS, buildTestsActifs } from '../../data/profiles';
 import { useStructures } from '../../hooks/useStructures';
-import { Save, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Save, X } from 'lucide-react';
 
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -162,11 +161,8 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
   const [antecedents, setAntecedents] = useState<AntecedentMedical[]>(initial?.antecedentsMedicauxStructures ?? []);
 
   // ── Tags / tests ────────────────────────────────────────────────
-  const [tags, setTags] = useState<TagPatient[]>(initial?.tags ?? []);
-  const [testsActifs, setTestsActifs] = useState<TestKey[]>(
-    initial?.testsActifs ?? (initial?.tags?.length ? buildTestsActifs(initial.tags) : [])
-  );
-  const [showTestAdjust, setShowTestAdjust] = useState(false);
+  const [tags] = useState<TagPatient[]>(initial?.tags ?? []);
+  const [testsActifs] = useState<TestKey[]>(initial?.testsActifs ?? []);
 
   // ── RGPD + droit à l'image ──────────────────────────────────────
   const [rgpd, setRgpd] = useState<RgpdConsent>({
@@ -203,17 +199,6 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }));
-  }
-
-  function toggleTag(tag: TagPatient) {
-    const next = tags.includes(tag) ? tags.filter(t => t !== tag) : [...tags, tag];
-    setTags(next);
-    setTestsActifs(next.length > 0 ? buildTestsActifs(next) : []);
-    setShowTestAdjust(false);
-  }
-
-  function toggleTest(key: TestKey) {
-    setTestsActifs(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -261,72 +246,6 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
   // ──────────────────────────────────────────────────────────────────────────
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-
-      {/* ── TAGS ── */}
-      <div>
-        <p className="text-sm font-semibold text-dark mb-1">Profil(s) du patient</p>
-        <p className="text-xs text-gray-400 mb-3">Plusieurs choix possibles</p>
-        <div className="grid grid-cols-2 gap-2">
-          {TAG_ORDER.map(tag => {
-            const cfg = TAG_CONFIG[tag];
-            const selected = tags.includes(tag);
-            return (
-              <button key={tag} type="button" onClick={() => toggleTag(tag)}
-                style={selected ? { borderColor: cfg.color, backgroundColor: `${cfg.color}10` } : undefined}
-                className={`text-left p-3 rounded-xl border-2 transition-all ${
-                  selected ? 'shadow-sm' : 'border-gray-200 hover:border-gray-300 bg-white'
-                }`}>
-                <div className="flex items-start justify-between gap-1">
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="text-base">{cfg.emoji}</span>
-                      <span className="text-sm font-semibold text-dark" style={selected ? { color: cfg.color } : undefined}>
-                        {cfg.label}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-400 pl-6">{cfg.description}</p>
-                  </div>
-                  {selected && (
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[11px] font-bold"
-                      style={{ backgroundColor: cfg.color }}>
-                      ✕
-                    </div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-        <div className="mt-3 bg-gray-50 rounded-xl p-3">
-          <button type="button" onClick={() => setShowTestAdjust(!showTestAdjust)}
-            className="w-full flex items-center justify-between text-xs text-gray-600 hover:text-dark transition-colors">
-            <span>
-              <span className="font-semibold">Tests activés :</span>{' '}
-              {testsActifs.length > 0 ? testsActifs.map(k => TEST_LABELS[k]).join(' · ') : 'aucun'}
-            </span>
-            {showTestAdjust ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
-          {showTestAdjust && (
-            <div className="mt-3 grid grid-cols-2 gap-1.5">
-              {ALL_TESTS.map(key => (
-                <label key={key} className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer select-none">
-                  <input type="checkbox" checked={testsActifs.includes(key)} onChange={() => toggleTest(key)} className="accent-primary rounded" />
-                  {TEST_LABELS[key]}
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── CONTEXTE CLINIQUE ── */}
-      <div>
-        <label className={CLS_LABEL}>Contexte clinique <span className="text-gray-400 font-normal">(optionnel — 1 ligne)</span></label>
-        <input name="contexteClinic" value={form.contexteClinic} onChange={handleChange}
-          placeholder="ex: PTH droite + diabète type 2 — opéré le 15/01/2025"
-          className={CLS_INPUT} />
-        <p className="text-xs text-gray-400 mt-1">Résumé rapide. Les détails cliniques sont saisis dans le bilan initial.</p>
-      </div>
 
       {/* ── IDENTITÉ ── */}
       <div className="grid grid-cols-2 gap-4">

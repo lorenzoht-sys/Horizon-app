@@ -180,7 +180,7 @@ function CarteStructure({ structure, nbPatients, derniereSeance }: {
 
 const MiniMap = lazy(() => import('../components/map/MiniMap'));
 
-type DashTab = 'tous' | 'independants' | 'structures';
+type DashTab = 'independants' | 'structures';
 
 export default function Dashboard() {
   const { participants, addParticipant } = useParticipants();
@@ -192,20 +192,25 @@ export default function Dashboard() {
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showCreateStructure, setShowCreateStructure] = useState(false);
-  const [activeTab, setActiveTab] = useState<DashTab>('tous');
+  const [activeTab, setActiveTab] = useState<DashTab>('independants');
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
     if (location.state?.openNewParticipant) {
       setShowForm(true);
+    }
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab as DashTab);
+    }
+    if (location.state?.openNewParticipant || location.state?.activeTab) {
       navigate('/', { replace: true, state: {} });
     }
   }, [location.state, navigate]);
 
   const independants = participants.filter(p => !p.structureId);
 
-  const filtered = (activeTab === 'independants' ? independants : participants)
+  const filtered = independants
     .filter(p => `${p.prenom} ${p.nom}`.toLowerCase().includes(search.toLowerCase()));
 
   const needsBilan = participants.filter(p => {
@@ -243,7 +248,6 @@ export default function Dashboard() {
         {/* Onglets */}
         <div className="flex gap-1 mb-6 bg-gray-100 rounded-xl p-1 w-fit">
           {([
-            ['tous', `👥 Tous (${participants.length})`],
             ['independants', `🏠 Indépendants (${independants.length})`],
             ['structures', `🏢 Structures (${structures.length})`],
           ] as [DashTab, string][]).map(([tab, label]) => (

@@ -135,8 +135,9 @@ export default function StructureDetail() {
   return (
     <PageWrapper>
       <div className="flex items-center gap-3 mb-6">
-        <Link to="/" className="text-gray-400 hover:text-gray-700">
-          <ArrowLeft size={18} />
+        <Link to="/" state={{ activeTab: 'structures' }} className="flex items-center gap-1.5 text-gray-400 hover:text-gray-700 text-sm font-medium">
+          <ArrowLeft size={16} />
+          Structures
         </Link>
         <div>
           <h1 className="font-heading font-bold text-dark text-xl">{structure.nom}</h1>
