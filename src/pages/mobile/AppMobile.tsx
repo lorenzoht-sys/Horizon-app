@@ -34,8 +34,16 @@ function ouvrirMaps(adresse: string) {
 
 function formatPhone(tel: string): string {
   const digits = String(tel).replace(/\D/g, '');
-  if (digits.length === 10) return digits.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5');
+  // Normalise +33XXXXXXXXX → 0XXXXXXXXX
+  const norm = digits.startsWith('33') && digits.length === 11 ? '0' + digits.slice(2) : digits;
+  if (norm.length === 10) return norm.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5');
   return String(tel);
+}
+
+function telHref(tel: string): string {
+  const digits = String(tel).replace(/\D/g, '');
+  const local = digits.startsWith('33') && digits.length === 11 ? digits.slice(2) : digits.replace(/^0/, '');
+  return `tel:+33${local}`;
 }
 
 const C = { // colors
@@ -1444,7 +1452,7 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
               {p.telephone && (
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080', marginBottom: 8 }}>
                   <i className="ti ti-phone" style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 1 }} />
-                  <a href={`tel:+33${String(p.telephone).replace(/\D/g, '').replace(/^0/, '')}`}
+                  <a href={telHref(String(p.telephone))}
                     style={{ color: '#4A6080', textDecoration: 'none', fontWeight: 500 }}>
                     {formatPhone(String(p.telephone))}
                   </a>
