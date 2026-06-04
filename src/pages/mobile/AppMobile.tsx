@@ -6,6 +6,7 @@ import { useContrats } from '../../hooks/useContrats';
 import { useCompteRenduSeance } from '../../hooks/useCompteRenduSeance';
 import BilanStepper from '../../components/bilan/BilanStepper';
 import DicteePostSeance from '../../components/DicteePostSeance';
+import ModalEspacePatient from '../../components/participant/ModalEspacePatient';
 import type { Bilan } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../../lib/supabase';
@@ -1299,6 +1300,7 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
   const [showEdit, setShowEdit] = useState(false);
   const [showDictee, setShowDictee] = useState(false);
   const [showNewBilan, setShowNewBilan] = useState(false);
+  const [showEspacePatient, setShowEspacePatient] = useState(false);
   if (!p) return null;
   if (bilanDetail) return <DetailBilanMobile bilan={bilanDetail} onBack={() => setBilanDetail(null)} />;
   if (showEdit) return <EditPatientMobile participant={p} onBack={() => setShowEdit(false)} />;
@@ -1402,9 +1404,9 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
 
       {/* Actions rapides */}
       <div style={{ display: 'flex', gap: 10, padding: '14px 16px', background: 'white', borderBottom: `1px solid ${C.border}` }}>
-        <button onClick={() => setOnglet('bilans')} style={actionBtn}>
-          <i className="ti ti-clipboard-list" style={{ fontSize: 22, color: C.primary }} />
-          <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>Bilan</span>
+        <button onClick={() => setShowEspacePatient(true)} style={actionBtn}>
+          <i className="ti ti-qrcode" style={{ fontSize: 22, color: C.primary }} />
+          <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>QR</span>
         </button>
         <button onClick={() => { setOnglet('journal'); setShowDictee(true); }} style={actionBtn}>
           <i className="ti ti-microphone" style={{ fontSize: 22, color: C.primary }} />
@@ -1666,6 +1668,13 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
           participant={p}
           onClose={() => setShowDictee(false)}
           onSave={async (data) => { await ajouterCompteRendu(data); }}
+        />
+      )}
+
+      {showEspacePatient && (
+        <ModalEspacePatient
+          participant={p}
+          onClose={() => setShowEspacePatient(false)}
         />
       )}
     </div>
