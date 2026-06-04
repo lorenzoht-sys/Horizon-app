@@ -17,7 +17,7 @@ import { useCompteRenduSeance } from '../hooks/useCompteRenduSeance';
 import { getBrouillon } from '../hooks/useBrouillonBilan';
 import PageWrapper from '../components/layout/PageWrapper';
 import RadarChart from '../components/charts/RadarChart';
-import ProgressCurve from '../components/charts/ProgressCurve';
+import BilanEvolutionCharts from '../components/charts/BilanEvolutionCharts';
 import BilanTimeline from '../components/bilan/BilanTimeline';
 import ContratsTab from '../components/participant/ContratsTab';
 import DicteePostSeance from '../components/DicteePostSeance';
@@ -990,10 +990,9 @@ export default function ParticipantProfile() {
               participantId={participant.id}
               onDelete={(bilanId) => deleteBilan(participant.id, bilanId)}
             />
-            {sortedBilans.length > 1 && (
+            {sortedBilans.length >= 1 && (
               <div className="mt-5 pt-5 border-t border-gray-100">
-                <div className="text-[12px] font-semibold text-gray-500 mb-3">Courbes de progression</div>
-                <ProgressCurve bilans={sortedBilans} />
+                <BilanEvolutionCharts bilans={sortedBilans} />
               </div>
             )}
             {latestBilan && (
