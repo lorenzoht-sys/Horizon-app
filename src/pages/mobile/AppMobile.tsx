@@ -1450,13 +1450,14 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
 
             <InfoSection titre="Coordonnées">
               {p.telephone && (
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13, color: '#4A6080', marginBottom: 8 }}>
-                  <i className="ti ti-phone" style={{ fontSize: 16, color: C.primary, flexShrink: 0 }} />
-                  <a href={telHref(String(p.telephone))}
-                    style={{ color: '#4A6080', textDecoration: 'none', fontWeight: 500, flex: 1, minWidth: 0, wordBreak: 'break-all' }}>
+                <a href={telHref(String(p.telephone))} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13, color: '#4A6080', marginBottom: 8, textDecoration: 'none' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.72 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.63 1.4h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.29 6.29l1.88-1.88a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                  </svg>
+                  <span style={{ flex: 1, minWidth: 0, wordBreak: 'break-all', fontWeight: 500 }}>
                     {formatPhone(String(p.telephone))}
-                  </a>
-                </div>
+                  </span>
+                </a>
               )}
               {(p.adresseRue || p.adresseVille) && (
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080', marginBottom: 8 }}>
