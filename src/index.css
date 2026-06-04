@@ -4,8 +4,36 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Gradient mesh background ── */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.45;
+}
+
+body::before {
+  width: 600px;
+  height: 600px;
+  top: -120px;
+  left: -100px;
+  background: radial-gradient(circle, rgba(43, 184, 154, 0.18) 0%, transparent 70%);
+}
+
+body::after {
+  width: 500px;
+  height: 500px;
+  bottom: -80px;
+  right: -80px;
+  background: radial-gradient(circle, rgba(43, 130, 220, 0.10) 0%, transparent 70%);
+}
+
 :root {
-  /* ── Aliases backward-compat (code existant) ── */
+  /* ── Aliases backward-compat ── */
   --color-primary:        var(--color-teal);
   --color-primary-light:  var(--color-teal-light);
   --color-primary-dark:   var(--color-teal-dark);
@@ -23,7 +51,6 @@
   --space-10: 40px; --space-12: 48px;
 
   --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
-  --shadow-lg:       0 8px 32px rgba(0,0,0,0.10);
   --shadow-primary:  var(--shadow-teal);
 }
 
@@ -40,6 +67,8 @@
     @apply font-heading;
   }
   #root {
+    position: relative;
+    z-index: 1;
     width: 100%;
     min-height: 100vh;
     text-align: left;
@@ -52,19 +81,34 @@
 /* ── PWA safe-area ── */
 body { padding-bottom: env(safe-area-inset-bottom); }
 
-/* ── Sidebar navigation ── */
+/* ── Sidebar navigation — Variante C ── */
 .sidebar-nav-item {
-  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px 9px 14px;
+  border-radius: 0 9px 9px 0;
+  font-size: 13px;
+  font-weight: 400;
   color: rgba(255,255,255,0.55);
+  cursor: pointer;
+  border-left: 2.5px solid transparent;
+  text-decoration: none;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 .sidebar-nav-item:hover {
+  color: rgba(255,255,255,0.85) !important;
   background: rgba(255,255,255,0.05) !important;
-  color: rgba(255,255,255,0.80) !important;
 }
 .sidebar-nav-active {
-  background: rgba(255,255,255,0.10) !important;
-  color: white !important;
-  box-shadow: inset 3px 0 0 0 var(--color-teal) !important;
+  color: #5FF5CE !important;
+  font-weight: 600 !important;
+  border-left-color: #2BB89A !important;
+  background: transparent !important;
+}
+.sidebar-nav-active svg {
+  color: #5FF5CE;
+  opacity: 1;
 }
 
 /* ── Online dot animation ── */
@@ -85,6 +129,12 @@ body { padding-bottom: env(safe-area-inset-bottom); }
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* ── Skeleton shimmer ── */
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* ── react-big-calendar overrides ── */

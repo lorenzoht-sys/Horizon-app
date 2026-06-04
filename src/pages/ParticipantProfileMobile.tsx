@@ -17,7 +17,7 @@ import NoteSeanceModal from '../components/journal/NoteSeanceModal';
 import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
 import { exportFichePatientPDF } from '../utils/exportFichePatientPDF';
 import { TAG_CONFIG } from '../data/profiles';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import type { Bilan, Participant, RessentiSeance } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
 

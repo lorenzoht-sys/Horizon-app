@@ -10,7 +10,7 @@ import PageWrapper from '../components/layout/PageWrapper';
 import { NORMS } from '../data/norms';
 import { exportRapportEvolutionPDF } from '../utils/exportRapportEvolutionPDF';
 import type { Bilan, Participant } from '../types';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

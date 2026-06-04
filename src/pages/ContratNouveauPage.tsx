@@ -5,7 +5,7 @@ import { useContrats } from '../hooks/useContrats';
 import { useAgenda } from '../hooks/useAgenda';
 import PageWrapper from '../components/layout/PageWrapper';
 import { ArrowLeft, Check, Calendar, Hash } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import type { JourSemaine } from '../types';
 import { calculerNombreSeances, calculerDateFin, LABELS_JOURS_LONG } from '../utils/horaires';
 

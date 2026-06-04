@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { useParticipants } from '../../hooks/useParticipants';
 import { useAgenda } from '../../hooks/useAgenda';
 import { useContrats } from '../../hooks/useContrats';

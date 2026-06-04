@@ -14,7 +14,9 @@ import { Plus, Search, Users, BarChart3, FileSpreadsheet, X, CalendarDays, MapPi
 import { useJournalSeance } from '../hooks/useJournalSeance';
 import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
 import { getAllBrouillons } from '../hooks/useBrouillonBilan';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
+import { DashboardSkeleton } from '../components/skeletons/DashboardSkeleton';
+import { AnimatedNumber } from '../components/ui/AnimatedNumber';
 import type { Structure } from '../types';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -185,7 +187,7 @@ const MiniMap = lazy(() => import('../components/map/MiniMap'));
 type DashTab = 'independants' | 'structures';
 
 export default function Dashboard() {
-  const { participants, addParticipant } = useParticipants();
+  const { participants, loading: participantsLoading, addParticipant } = useParticipants();
   const { seancesDuJour, patientsARelancer, seances } = useAgenda();
   const { contratsARenouveler } = useContrats();
   const { structures, creerStructure } = useStructures();
@@ -195,8 +197,14 @@ export default function Dashboard() {
   const [showImport, setShowImport] = useState(false);
   const [showCreateStructure, setShowCreateStructure] = useState(false);
   const [activeTab, setActiveTab] = useState<DashTab>('independants');
+  const [minLoadDone, setMinLoadDone] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    const t = setTimeout(() => setMinLoadDone(true), 900);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (location.state?.openNewParticipant) {
@@ -227,6 +235,10 @@ export default function Dashboard() {
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length;
   }, 0);
+
+  if (participantsLoading || !minLoadDone) {
+    return <PageWrapper><DashboardSkeleton /></PageWrapper>;
+  }
 
   return (
     <>
@@ -282,7 +294,7 @@ export default function Dashboard() {
               className="font-heading font-bold"
               style={{ fontSize: 28, color: 'var(--color-ink)', lineHeight: 1.2 }}
             >
-              {participants.length}
+              <AnimatedNumber value={participants.length} duration={0.8} />
             </div>
             <div
               className="mt-1 font-semibold uppercase"
@@ -308,7 +320,7 @@ export default function Dashboard() {
               className="font-heading font-bold"
               style={{ fontSize: 28, color: 'var(--color-ink)', lineHeight: 1.2 }}
             >
-              {thisMonthBilans}
+              <AnimatedNumber value={thisMonthBilans} duration={1.0} />
             </div>
             <div
               className="mt-1 font-semibold uppercase"
@@ -338,7 +350,7 @@ export default function Dashboard() {
               className="font-heading font-bold"
               style={{ fontSize: 28, color: needsBilan > 0 ? '#F39C12' : 'var(--color-ink)', lineHeight: 1.2 }}
             >
-              {needsBilan}
+              <AnimatedNumber value={needsBilan} duration={0.6} />
             </div>
             <div
               className="mt-1 font-semibold uppercase"

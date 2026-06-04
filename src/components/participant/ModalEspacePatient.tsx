@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import type { AccesPatient, Participant } from '../../types';
 import { calculerCode, getAccesPatient, sauvegarderAccesPatient } from '../../hooks/useAccesPatients';
 

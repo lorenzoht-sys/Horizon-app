@@ -11,7 +11,7 @@ import SuiviCalendar from '../programme/SuiviCalendar';
 import { exportProgrammePDF } from '../utils/exportPDF';
 import type { Exercice, ExerciceProgramme, CategorieExercice, ProfilHandicap } from '../types';
 import { ArrowLeft, Trash2, Edit2, Save, Plus, Activity, FileDown, Loader2 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 const CATEGORIES: { value: CategorieExercice | 'all'; label: string }[] = [
   { value: 'all', label: 'Tous' },

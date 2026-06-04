@@ -49,12 +49,13 @@ export default function ParticipantCard({ participant, structureNom }: Props) {
     >
     <Link
       to={`/participant/${participant.id}`}
-      className="bg-white flex flex-col gap-4 shadow-sm group"
+      className="bg-white flex flex-col gap-4 group ring-1 ring-black/[0.05] ring-inset"
       style={{
         borderRadius: 16,
         padding: 24,
         textDecoration: 'none',
         display: 'flex',
+        boxShadow: 'var(--shadow-sm)',
       }}
     >
       <div className="flex items-start gap-3">

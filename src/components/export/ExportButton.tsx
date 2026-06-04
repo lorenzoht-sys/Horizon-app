@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FileDown, Loader2 } from 'lucide-react';
 import { exportPDF } from '../../utils/exportPDF';
 import type { Participant, Bilan } from '../../types';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface Props {
   participant: Participant;

@@ -4,7 +4,7 @@ import { useContrats } from '../../hooks/useContrats';
 import { useAgenda } from '../../hooks/useAgenda';
 import { useParticipants } from '../../hooks/useParticipants';
 import { Plus, PauseCircle, XCircle, RefreshCw, FileText } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import type { Contrat } from '../../types';
 import { LABELS_JOURS_LONG } from '../../utils/horaires';
 import ModalGenerationContrat from './ModalGenerationContrat';

@@ -4,7 +4,7 @@ import type { Participant } from '../types';
 import type { ExerciceRealise, CompteRenduSeanceInsert } from '../types/seance';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { supabase } from '../lib/supabase';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface Props {
   participant: Participant;

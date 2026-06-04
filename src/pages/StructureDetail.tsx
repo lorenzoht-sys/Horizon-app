@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase';
 import { dbToStructure } from '../lib/mappers';
 import PageWrapper from '../components/layout/PageWrapper';
 import ParticipantCard from '../components/participant/ParticipantCard';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import type { Structure } from '../types';
 import jsPDF from 'jspdf';
 

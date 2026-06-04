@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import {
   Home, Calendar, Route, Dumbbell, Layers, Settings,
   LogOut, Map, BarChart2, Bot,
@@ -63,10 +62,17 @@ export default function Sidebar({ onLogout }: Props) {
   return (
     <div
       className="fixed left-0 top-0 bottom-0 flex flex-col z-50"
-      style={{ width: 220, background: 'var(--color-ink)' }}
+      style={{
+        width: 220,
+        background: 'rgba(26, 35, 50, 0.82)',
+        backdropFilter: 'blur(20px) saturate(150%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(150%)',
+        borderRight: '0.5px solid rgba(255,255,255,0.07)',
+        boxShadow: '1px 0 0 rgba(0,0,0,0.08), 4px 0 20px rgba(0,0,0,0.10)',
+      }}
     >
       {/* Logo */}
-      <div style={{ padding: '32px 20px 20px' }}>
+      <div style={{ padding: '32px 20px 20px 16px' }}>
         <NavLink to="/" className="block">
           <img
             src="/logo-horizon.png.png?v=2"
@@ -82,48 +88,37 @@ export default function Sidebar({ onLogout }: Props) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto scrollbar-hide" style={{ padding: '0 12px 8px' }}>
+      <nav className="flex-1 overflow-y-auto scrollbar-hide" style={{ padding: '0 8px 8px 0' }}>
         {NAV_ITEMS.map(item => (
-          <motion.div
-            key={item.path}
-            whileHover={{ x: 3 }}
-            transition={{ duration: 0.15 }}
-            style={{ marginBottom: 3 }}
-          >
+          <div key={item.path} style={{ marginBottom: 2 }}>
             <NavLink
               to={item.path}
               end={item.end}
               className={({ isActive }) =>
-                `sidebar-nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium no-underline${
-                  isActive ? ' sidebar-nav-active' : ''
-                }`
+                `sidebar-nav-item no-underline${isActive ? ' sidebar-nav-active' : ''}`
               }
-              style={{ textDecoration: 'none', display: 'flex' }}
             >
-              <item.icon size={17} className="flex-shrink-0" />
+              <item.icon size={16} className="flex-shrink-0" />
               {item.label}
             </NavLink>
-          </motion.div>
+          </div>
         ))}
 
         {/* Paramètres avec indicateur de complétion */}
-        <motion.div whileHover={{ x: 3 }} transition={{ duration: 0.15 }} style={{ marginBottom: 3 }}>
-        <NavLink
-          to="/settings"
-          className={({ isActive }) =>
-            `sidebar-nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium relative no-underline${
-              isActive ? ' sidebar-nav-active' : ''
-            }`
-          }
-          style={{ textDecoration: 'none', display: 'flex' }}
-        >
-          <Settings size={17} className="flex-shrink-0" />
-          Paramètres
-          {incomplete && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-warning" />
-          )}
-        </NavLink>
-        </motion.div>
+        <div style={{ marginBottom: 2 }}>
+          <NavLink
+            to="/settings"
+            className={({ isActive }) =>
+              `sidebar-nav-item relative no-underline${isActive ? ' sidebar-nav-active' : ''}`
+            }
+          >
+            <Settings size={16} className="flex-shrink-0" />
+            Paramètres
+            {incomplete && (
+              <span className="absolute w-1.5 h-1.5 rounded-full bg-warning" style={{ right: 10, top: '50%', transform: 'translateY(-50%)' }} />
+            )}
+          </NavLink>
+        </div>
       </nav>
 
       {/* Section praticien */}

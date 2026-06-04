@@ -6,7 +6,7 @@ import { useZones } from '../hooks/useZones';
 import { useParticipants } from '../hooks/useParticipants';
 import PageWrapper from '../components/layout/PageWrapper';
 import { MapPin, Save, RefreshCw, Pencil, Check, Users } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import type { JourSemaine, ZoneGeographique } from '../types';
 import { Link } from 'react-router-dom';
 

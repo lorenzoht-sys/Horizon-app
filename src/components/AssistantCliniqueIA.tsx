@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm';
 import type { Participant, Bilan } from '../types';
 import { supabase } from '../lib/supabase';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface AssistantLog {
   id: string;

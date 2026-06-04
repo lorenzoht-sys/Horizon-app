@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { X, Download, Loader } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import type { Contrat, Participant } from '../../types';
 import type { ContratPDFData } from '../export/ContratPDF';
 import { exportContratPDF } from '../../utils/exportContratPDF';

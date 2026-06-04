@@ -5,7 +5,7 @@ import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
 import { supabase } from '../lib/supabase';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import pdfMake from 'pdfmake/build/pdfmake';

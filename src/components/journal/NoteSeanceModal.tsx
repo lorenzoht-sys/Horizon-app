@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { X, Mic, MicOff } from 'lucide-react';
 import type { NoteSeance, RessentiSeance } from '../../types';
 import { useJournalSeance } from '../../hooks/useJournalSeance';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface Props {
   participantId: string;

@@ -8,7 +8,7 @@ import { useContrats } from '../hooks/useContrats';
 import PageWrapper from '../components/layout/PageWrapper';
 import { Route, MapPin, Clock, Navigation, CalendarPlus, Home, AlertCircle, Loader, CheckCircle, XCircle, ChevronDown, ChevronUp, NotebookPen } from 'lucide-react';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import type { Participant, Seance, IndisponibilitePierre, JourSemaine, CreneauPreference } from '../types';
 import { geocodeAdresse } from '../utils/geocodeAdresse';
 import { Link, useNavigate } from 'react-router-dom';

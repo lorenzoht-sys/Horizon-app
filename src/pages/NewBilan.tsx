@@ -10,7 +10,7 @@ import ModalRepriseBrouillon from '../components/bilan/ModalRepriseBrouillon';
 import PageWrapper from '../components/layout/PageWrapper';
 import { ArrowLeft } from 'lucide-react';
 import type { Bilan } from '../types';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 
 export default function NewBilan() {

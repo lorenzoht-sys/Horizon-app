@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import type { Participant } from '../../types';
 import { downloadTemplate, exportPatientsExcel, parseExcelRows, type ImportError } from '../../utils/excelImport';
 import { X, Download, Upload, FileSpreadsheet, CheckCircle, AlertCircle, Info, FileDown } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 type Phase = 'idle' | 'processing' | 'result';
 

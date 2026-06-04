@@ -5,7 +5,7 @@ import BilanStepper from '../components/bilan/BilanStepper';
 import PageWrapper from '../components/layout/PageWrapper';
 import { ArrowLeft, AlertTriangle } from 'lucide-react';
 import type { Bilan } from '../types';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 
 type BilanForm = Omit<Bilan, 'id'>;

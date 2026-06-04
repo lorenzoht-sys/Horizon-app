@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { PageTransition } from './components/ui/PageTransition';
@@ -6,7 +6,7 @@ import { supabase } from './lib/supabase';
 import { setCurrentUserId, loadAllBrouillonsFromSupabase } from './hooks/useBrouillonBilan';
 import { useDevice } from './hooks/useDevice';
 import AppMobile from './pages/mobile/AppMobile';
-import { Toaster } from 'react-hot-toast';
+import { Toaster } from 'sonner';
 import Sidebar from './components/layout/Sidebar';
 import Dashboard from './pages/Dashboard';
 import ParticipantProfile from './pages/ParticipantProfile';
@@ -39,10 +39,37 @@ const ProgrammePage      = lazy(() => import('./pages/ProgrammePage'));
 
 function DesktopContent({ onLogout }: { onLogout: () => void }) {
   const location = useLocation();
+  const [scrolled, setScrolled] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => setScrolled(el.scrollTop > 8);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
   return (
     <div className="flex min-h-screen" style={{ background: 'var(--color-bg)' }}>
       <Sidebar onLogout={onLogout} />
-      <div style={{ marginLeft: 220, flex: 1, minHeight: '100vh', background: '#FFFFFF' }}>
+      <div
+        ref={scrollRef}
+        style={{ marginLeft: 220, flex: 1, height: '100vh', overflowY: 'auto', background: 'var(--color-bg)', position: 'relative' }}
+      >
+        {/* Topbar scroll effect */}
+        <div
+          className="sticky top-0 z-40 transition-all duration-200 pointer-events-none"
+          style={{
+            height: 56,
+            background: scrolled ? 'rgba(255,255,255,0.80)' : 'transparent',
+            backdropFilter: scrolled ? 'blur(16px) saturate(180%)' : 'none',
+            WebkitBackdropFilter: scrolled ? 'blur(16px) saturate(180%)' : 'none',
+            borderBottom: scrolled ? '1px solid rgba(0,0,0,0.06)' : '1px solid transparent',
+            boxShadow: scrolled ? 'var(--shadow-xs)' : 'none',
+            marginBottom: -56,
+          }}
+        />
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
             <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
@@ -197,7 +224,21 @@ export default function App() {
     <BrowserRouter>
       <BandeauHorsLigne />
       <NotificationMiseAJour />
-      <Toaster position="top-right" toastOptions={{ style: { borderRadius: 12, fontSize: 14 } }} />
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          style: {
+            background: '#1C2B24',
+            border: '0.5px solid rgba(43,184,154,0.25)',
+            color: '#fff',
+            fontFamily: 'Plus Jakarta Sans, sans-serif',
+            fontSize: '13px',
+            borderRadius: '12px',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+          },
+        }}
+        richColors
+      />
       <Routes>
         {/* Pages d'authentification */}
         <Route path="/login" element={

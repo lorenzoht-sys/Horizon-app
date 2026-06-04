@@ -5,7 +5,7 @@ import ExerciceCard from '../programme/ExerciceCard';
 import type { CategorieExercice, Exercice, ProfilHandicap, ProfilPathologie } from '../types';
 import { Plus, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { extractYoutubeId } from '../utils/extractYoutubeId';
 
 const CATEGORIES: { value: CategorieExercice | 'all'; label: string }[] = [

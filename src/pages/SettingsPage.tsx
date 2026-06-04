@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type ChangeEvent } from 'react';
 import { Save, Upload, Plus, Trash2, Download, FileUp } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import PageWrapper from '../components/layout/PageWrapper';
 import type { IndisponibilitePierre, JourSemaine, Participant } from '../types';

@@ -16,7 +16,7 @@ import { useContrats } from '../hooks/useContrats';
 import { useStatsPro, type StatsPro } from '../hooks/useStatsPro';
 import { useFactures } from '../hooks/useFactures';
 import type { Participant, Contrat } from '../types';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 
 ChartJS.register(

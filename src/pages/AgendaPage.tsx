@@ -10,7 +10,7 @@ import PageWrapper from '../components/layout/PageWrapper';
 import { useNavigate } from 'react-router-dom';
 import { Plus, X, Trash2, MapPin, ExternalLink, RotateCcw, Check, NotebookPen } from 'lucide-react';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import type { Seance, TypeSeance, StatutSeance } from '../types';
 
 const localizer = dateFnsLocalizer({

@@ -26,7 +26,7 @@ import ModalEspacePatient from '../components/participant/ModalEspacePatient';
 import { exportFichePatientPDF } from '../utils/exportFichePatientPDF';
 import { calculerNote, NORMES_SCORING } from '../data/norms';
 import { TAG_CONFIG } from '../data/profiles';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import type { Bilan, Participant, Contrat, Seance, ProfilHandicap } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
 
