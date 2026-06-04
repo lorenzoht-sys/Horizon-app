@@ -73,22 +73,22 @@ export default function AuthLeftPanel() {
             border: '1px solid rgba(43,191,191,0.4)',
             borderRadius: 20, padding: '5px 14px',
             fontSize: 11, fontWeight: 600,
-            color: '#2BBFBF', letterSpacing: '0.04em',
+            color: 'var(--color-teal)', letterSpacing: '0.04em',
             marginBottom: 18,
           }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2BBFBF', flexShrink: 0 }} />
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-teal)', flexShrink: 0 }} />
             Outil professionnel de suivi patient
           </div>
 
           <div style={{
-            fontFamily: "'Poppins', sans-serif",
+            fontFamily: "var(--font-sans)",
             fontSize: 32, fontWeight: 800,
             color: 'white', lineHeight: 1.18,
             letterSpacing: '-0.8px', marginBottom: 12,
           }}>
             Le lien entre<br />
             vos séances et<br />
-            <span style={{ color: '#2BBFBF' }}>leurs progrès.</span>
+            <span style={{ color: 'var(--color-teal)' }}>leurs progrès.</span>
           </div>
 
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.7, marginBottom: 20 }}>
@@ -102,7 +102,7 @@ export default function AuthLeftPanel() {
               <div key={s.label} style={{ display: 'flex', alignItems: 'center' }}>
                 {i > 0 && <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.12)', marginRight: 24 }} />}
                 <div>
-                  <div style={{ fontFamily: "'Poppins', sans-serif", fontSize: 20, fontWeight: 700, color: 'white', lineHeight: 1 }}>
+                  <div style={{ fontFamily: "var(--font-sans)", fontSize: 20, fontWeight: 700, color: 'white', lineHeight: 1 }}>
                     {s.value}
                   </div>
                   <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -132,14 +132,14 @@ export default function AuthLeftPanel() {
                 borderRadius: 10, flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <i className={`ti ${f.icon}`} style={{ fontSize: 19, color: '#2BBFBF' }} aria-hidden="true" />
+                <i className={`ti ${f.icon}`} style={{ fontSize: 19, color: 'var(--color-teal)' }} aria-hidden="true" />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'white', lineHeight: 1.2 }}>{f.title}</div>
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>{f.desc}</div>
               </div>
               <div style={{
-                fontSize: 10, fontWeight: 700, color: '#2BBFBF',
+                fontSize: 10, fontWeight: 700, color: 'var(--color-teal)',
                 background: 'rgba(43,191,191,0.15)',
                 border: '1px solid rgba(43,191,191,0.25)',
                 borderRadius: 20, padding: '2px 8px',

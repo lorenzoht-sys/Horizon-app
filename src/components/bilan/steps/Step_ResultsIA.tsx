@@ -51,7 +51,7 @@ function calcAge(dateNaissance: string): number {
 // ─── Affichage note /5 ────────────────────────────────────────────────────────
 
 const NOTE_COLORS: Record<number, string> = {
-  1: '#EF4444', 2: '#F59E0B', 3: '#F59E0B', 4: '#3B6D11', 5: '#2BBFBF',
+  1: '#EF4444', 2: '#F59E0B', 3: '#F59E0B', 4: '#3B6D11', 5: 'var(--color-teal)',
 };
 const NOTE_LABELS: Record<number, string> = {
   1: 'Très insuffisant', 2: 'Insuffisant', 3: 'Moyen', 4: 'Bien', 5: 'Excellent',

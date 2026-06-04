@@ -57,13 +57,13 @@ export function IndicateurConnexion() {
       <div style={{
         width: 7, height: 7,
         borderRadius: '50%',
-        background: enLigne ? '#2BBFBF' : '#F59E0B',
+        background: enLigne ? 'var(--color-teal)' : '#F59E0B',
         animation: enLigne ? 'none' : 'pulse 2s infinite',
       }} />
       <span style={{
         fontSize: 11,
         fontWeight: 600,
-        color: enLigne ? '#2BBFBF' : '#F59E0B',
+        color: enLigne ? 'var(--color-teal)' : '#F59E0B',
       }}>
         {enLigne ? 'En ligne' : 'Hors ligne'}
       </span>
@@ -108,7 +108,7 @@ export function NotificationMiseAJour() {
       <button
         onClick={() => window.location.reload()}
         style={{
-          background: '#2BBFBF',
+          background: 'var(--color-teal)',
           color: 'white',
           border: 'none',
           borderRadius: 8,
@@ -160,7 +160,7 @@ export function BoutonInstallerApp({ compact = false }: { compact?: boolean }) {
       style={{
         display: 'flex', alignItems: 'center', gap: 6,
         padding: compact ? '6px 12px' : '10px 16px',
-        background: '#2BBFBF',
+        background: 'var(--color-teal)',
         color: 'white', border: 'none',
         borderRadius: 10,
         fontSize: compact ? 11 : 13,

@@ -1098,7 +1098,7 @@ function IndicateurCompletion({ filled, total }: { filled: number; total: number
         <div
           style={{
             width: `${pct}%`,
-            backgroundColor: pct >= 70 ? '#2BBFBF' : '#1A5F9E',
+            backgroundColor: pct >= 70 ? 'var(--color-teal)' : '#1A5F9E',
             transition: 'width 0.3s',
           }}
           className="h-full rounded-full"

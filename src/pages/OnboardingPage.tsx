@@ -10,7 +10,7 @@ const inputStyle: CSSProperties = {
   width: '100%', padding: '11px 16px',
   border: '1.5px solid #E2EEF9',
   borderRadius: 10, fontSize: 14,
-  fontFamily: "'Nunito', sans-serif",
+  fontFamily: "var(--font-sans)",
   color: '#032c28', background: '#FAFCFF',
   outline: 'none', boxSizing: 'border-box',
   transition: 'border-color 0.2s, box-shadow 0.2s',
@@ -106,10 +106,10 @@ export default function OnboardingPage({ onComplete }: Props) {
   return (
     <div style={{
       position: 'fixed', inset: 0,
-      background: '#0D2B2B',
+      background: 'var(--color-ink)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       zIndex: 100,
-      fontFamily: "'Nunito', sans-serif",
+      fontFamily: "var(--font-sans)",
       overflowY: 'auto',
       padding: '24px',
     }}>
@@ -148,7 +148,7 @@ export default function OnboardingPage({ onComplete }: Props) {
             />
           </div>
           <div style={{
-            fontFamily: "'Poppins', sans-serif",
+            fontFamily: "var(--font-sans)",
             fontSize: 26, fontWeight: 800,
             color: 'white', marginBottom: 8, letterSpacing: '-0.5px',
           }}>
@@ -236,10 +236,10 @@ export default function OnboardingPage({ onComplete }: Props) {
               disabled={loading}
               style={{
                 width: '100%', padding: 14,
-                background: loading ? '#7DD9D9' : '#2BBFBF',
+                background: loading ? '#7DD9D9' : 'var(--color-teal)',
                 color: 'white', border: 'none', borderRadius: 10,
                 fontSize: 15, fontWeight: 700,
-                fontFamily: "'Poppins', sans-serif",
+                fontFamily: "var(--font-sans)",
                 cursor: loading ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
                 transition: 'background 0.2s',

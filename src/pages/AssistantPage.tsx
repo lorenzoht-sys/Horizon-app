@@ -58,7 +58,7 @@ const ACTION_LABELS: Record<ActionType, string> = {
 const MD_COMPONENTS = {
   h1: ({children}: any) => <h1 style={{fontSize:'18px', fontWeight:'600', color:'#111827', marginBottom:'12px', marginTop:'16px'}}>{children}</h1>,
   h2: ({children}: any) => <h2 style={{fontSize:'15px', fontWeight:'600', color:'#111827', marginBottom:'8px', marginTop:'14px'}}>{children}</h2>,
-  h3: ({children}: any) => <h3 style={{fontSize:'14px', fontWeight:'500', color:'#2BBFBF', marginBottom:'6px', marginTop:'12px'}}>{children}</h3>,
+  h3: ({children}: any) => <h3 style={{fontSize:'14px', fontWeight:'500', color:'var(--color-teal)', marginBottom:'6px', marginTop:'12px'}}>{children}</h3>,
   p: ({children}: any) => <p style={{fontSize:'14px', lineHeight:'1.7', color:'#374151', marginBottom:'8px'}}>{children}</p>,
   strong: ({children}: any) => <strong style={{fontWeight:'600', color:'#111827'}}>{children}</strong>,
   ul: ({children}: any) => <ul style={{paddingLeft:'18px', marginBottom:'8px'}}>{children}</ul>,
@@ -155,7 +155,7 @@ function downloadPDF(patientNom: string, type: ActionType, markdownContent: stri
         { text: 'Horizon — APA', bold: true, fontSize: 10, color: 'white', margin: [40, 12, 0, 0] },
         { text: `Généré le ${dateStr}`, alignment: 'right', fontSize: 8, color: '#a0d8d8', margin: [0, 14, 40, 0] },
       ],
-      fillColor: '#0D2B2B',
+      fillColor: 'var(--color-ink)',
     }),
 
     footer: (currentPage: number, pageCount: number) => ({
@@ -170,8 +170,8 @@ function downloadPDF(patientNom: string, type: ActionType, markdownContent: stri
     defaultStyle: { font: 'Roboto', fontSize: 10, lineHeight: 1.45, color: '#505050' },
 
     styles: {
-      h1:   { fontSize: 16, bold: true,  color: '#0D2B2B', lineHeight: 1.3 },
-      h2:   { fontSize: 12, bold: true,  color: '#2BBFBF', lineHeight: 1.3 },
+      h1:   { fontSize: 16, bold: true,  color: 'var(--color-ink)', lineHeight: 1.3 },
+      h2:   { fontSize: 12, bold: true,  color: 'var(--color-teal)', lineHeight: 1.3 },
       h3:   { fontSize: 10.5, bold: true, color: '#1A1A1A', lineHeight: 1.3 },
       body: { fontSize: 10, color: '#505050', lineHeight: 1.45 },
       bold: { fontSize: 10, bold: true, color: '#1A1A1A', lineHeight: 1.45 },
@@ -396,9 +396,9 @@ function PatientChips({ participants, onSelect }: { participants: Participant[];
         {filtered.map(p => (
           <button key={p.id} onClick={() => onSelect(p)}
             style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'white', border: '1px solid #E5E7EB', borderRadius: 10, cursor: 'pointer', textAlign: 'left' }}
-            onMouseOver={e => (e.currentTarget.style.borderColor = '#2BBFBF')}
+            onMouseOver={e => (e.currentTarget.style.borderColor = 'var(--color-teal)')}
             onMouseOut={e => (e.currentTarget.style.borderColor = '#E5E7EB')}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#2BBFBF', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--color-teal)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
               {p.prenom[0]}{p.nom[0]}
             </div>
             <div style={{ minWidth: 0 }}>
@@ -542,7 +542,7 @@ function LeftColumn({
                   style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: 'none', border: 'none', cursor: 'pointer', borderBottom: '1px solid #F9FAFB', textAlign: 'left' }}
                   onMouseOver={e => (e.currentTarget.style.background = '#F0F9F9')}
                   onMouseOut={e => (e.currentTarget.style.background = 'none')}>
-                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#2BBFBF', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--color-teal)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
                     {p.prenom[0]}{p.nom[0]}
                   </div>
                   <div><div style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{p.prenom} {p.nom}</div>
@@ -910,7 +910,7 @@ export default function AssistantPage() {
                   <button key={action.id}
                     onClick={() => action.id === 'compte_rendu' ? setExpandedCard('compte_rendu') : handleStartAction(action.id)}
                     style={{ padding: '20px 18px', background: 'white', border: '1.5px solid #E5E7EB', borderRadius: 14, cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s, box-shadow 0.15s' }}
-                    onMouseOver={e => { (e.currentTarget as HTMLElement).style.borderColor = '#2BBFBF'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(43,191,191,0.12)'; }}
+                    onMouseOver={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-teal)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(43,191,191,0.12)'; }}
                     onMouseOut={e => { (e.currentTarget as HTMLElement).style.borderColor = '#E5E7EB'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}>
                     <div style={{ fontSize: 28, marginBottom: 10 }}>{action.emoji}</div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', lineHeight: 1.4, marginBottom: 5 }}>{action.title}</div>
@@ -922,7 +922,7 @@ export default function AssistantPage() {
             <div style={{ textAlign: 'center' }}>
               <button onClick={() => handleStartAction('libre')}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#6B7280', padding: '8px 16px', borderRadius: 8 }}
-                onMouseOver={e => (e.currentTarget as HTMLElement).style.color = '#2BBFBF'}
+                onMouseOver={e => (e.currentTarget as HTMLElement).style.color = 'var(--color-teal)'}
                 onMouseOut={e => (e.currentTarget as HTMLElement).style.color = '#6B7280'}>
                 ou ✏️ Poser une question libre…
               </button>
@@ -947,13 +947,13 @@ export default function AssistantPage() {
         {/* Header */}
         <div style={{ background: 'white', borderBottom: '0.5px solid #E5E7EB', padding: '13px 22px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-            <Bot size={18} style={{ color: '#2BBFBF', flexShrink: 0 }} />
+            <Bot size={18} style={{ color: 'var(--color-teal)', flexShrink: 0 }} />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>
                 {chatTitle}
               </div>
               {selectedPatient && (
-                <div style={{ fontSize: 12, color: '#2BBFBF' }}>
+                <div style={{ fontSize: 12, color: 'var(--color-teal)' }}>
                   Contexte : {selectedPatient.prenom} {selectedPatient.nom} · {selectedPatient.bilans.length} bilan(s)
                   {patientExtras && !patientExtras.loading && patientExtras.compteRendus.length > 0 && ` · ${patientExtras.compteRendus.length} dictée(s)`}
                 </div>
@@ -993,7 +993,7 @@ export default function AssistantPage() {
                     style={{
                       maxWidth: '74%', padding: '12px 16px', fontSize: 14, lineHeight: 1.7,
                       borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-                      background: msg.role === 'user' ? '#2BBFBF' : 'white',
+                      background: msg.role === 'user' ? 'var(--color-teal)' : 'white',
                       color: msg.role === 'user' ? 'white' : '#111827',
                       border: msg.role === 'assistant' ? '0.5px solid #E5E7EB' : 'none',
                       whiteSpace: msg.role === 'user' ? 'pre-wrap' : undefined,
@@ -1008,7 +1008,7 @@ export default function AssistantPage() {
                   <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                     <button
                       onClick={() => downloadPDF(selectedPatient ? `${selectedPatient.prenom}-${selectedPatient.nom}` : 'patient', actionType!, msg.content)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#2BBFBF', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: 'var(--color-teal)', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                       📄 Télécharger en PDF
                     </button>
                     <button
@@ -1030,7 +1030,7 @@ export default function AssistantPage() {
                           if (!error) toast.success(`Document partagé avec ${selectedPatient.prenom} ✅`);
                           else toast.error('Erreur lors du partage');
                         }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#0D2B2B', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: 'var(--color-ink)', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                         👁️ Partager avec le patient
                       </button>
                     )}
@@ -1042,7 +1042,7 @@ export default function AssistantPage() {
           {loading && (
             <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
               <div style={{ background: 'white', border: '0.5px solid #E5E7EB', borderRadius: '12px 12px 12px 2px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <RefreshCw size={12} className="animate-spin" style={{ color: '#2BBFBF' }} />
+                <RefreshCw size={12} className="animate-spin" style={{ color: 'var(--color-teal)' }} />
                 <span style={{ fontSize: 13, color: '#9CA3AF' }}>L'assistant analyse les données du patient…</span>
               </div>
             </div>
@@ -1071,7 +1071,7 @@ export default function AssistantPage() {
                 )}
               </div>
               <button onClick={() => sendMessage(input)} disabled={!input.trim() || loading}
-                style={{ width: 44, height: 44, borderRadius: 10, border: 'none', cursor: 'pointer', background: input.trim() && !loading ? '#2BBFBF' : '#E5E7EB', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                style={{ width: 44, height: 44, borderRadius: 10, border: 'none', cursor: 'pointer', background: input.trim() && !loading ? 'var(--color-teal)' : '#E5E7EB', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <Send size={16} />
               </button>
             </div>

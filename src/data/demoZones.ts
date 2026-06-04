@@ -17,7 +17,7 @@ export const DEMO_ZONES: ZoneGeographique[] = [
   {
     id: 'zone-demo-2',
     nom: 'Nord Loire',
-    couleur: '#2BBFBF',
+    couleur: 'var(--color-teal)',
     participantIds: ['demo-5', 'demo-6', 'demo-7'],
     centroide: { lat: 47.322, lng: -1.402 },
     joursAssignes: ['mar', 'jeu'],

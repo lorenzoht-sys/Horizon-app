@@ -5,6 +5,8 @@ import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import { useStructures } from '../hooks/useStructures';
 import ParticipantCard from '../components/participant/ParticipantCard';
+import { FadeInCard } from '../components/ui/FadeInCard';
+import { motion } from 'framer-motion';
 import ParticipantForm from '../components/participant/ParticipantForm';
 import ImportExcelModal from '../components/import/ImportExcelModal';
 import PageWrapper from '../components/layout/PageWrapper';
@@ -139,7 +141,7 @@ function CarteStructure({ structure, nbPatients, derniereSeance }: {
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <Building2 size={18} style={{ color: '#2BBFBF' }} />
+            <Building2 size={18} style={{ color: 'var(--color-teal)' }} />
           </div>
           <div>
             <div className="font-heading font-semibold text-dark text-sm">{structure.nom}</div>
@@ -233,13 +235,13 @@ export default function Dashboard() {
         <div className="mb-8">
           <h1
             className="font-heading font-semibold m-0"
-            style={{ fontSize: 24, color: '#0D2B2B', lineHeight: 1.2 }}
+            style={{ fontSize: 24, color: 'var(--color-ink)', lineHeight: 1.2 }}
           >
             Tableau de bord
           </h1>
           <p
             className="mt-1 m-0"
-            style={{ fontFamily: 'Nunito, sans-serif', fontSize: 14, color: '#5C7A7A' }}
+            style={{ fontFamily: 'var(--font-sans)', fontSize: 14, color: 'var(--color-ink-2)' }}
           >
             {participants.length} patient{participants.length !== 1 ? 's' : ''} suivi{participants.length !== 1 ? 's' : ''}
           </p>
@@ -265,81 +267,87 @@ export default function Dashboard() {
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-8">
+          <FadeInCard delay={0}>
           <div
             className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all"
             style={{ border: '1px solid #E2EEEE', padding: 24 }}
           >
             <div
               className="inline-flex p-2.5 rounded-xl mb-4"
-              style={{ background: '#E8F9F9' }}
+              style={{ background: 'var(--color-teal-light)' }}
             >
-              <Users size={18} style={{ color: '#2BBFBF' }} />
+              <Users size={18} style={{ color: 'var(--color-teal)' }} />
             </div>
             <div
               className="font-heading font-bold"
-              style={{ fontSize: 28, color: '#0D2B2B', lineHeight: 1.2 }}
+              style={{ fontSize: 28, color: 'var(--color-ink)', lineHeight: 1.2 }}
             >
               {participants.length}
             </div>
             <div
               className="mt-1 font-semibold uppercase"
-              style={{ fontSize: 12, color: '#5C7A7A', letterSpacing: '0.5px', fontFamily: 'Nunito, sans-serif' }}
+              style={{ fontSize: 12, color: 'var(--color-ink-2)', letterSpacing: '0.5px', fontFamily: 'var(--font-sans)' }}
             >
               Participants
             </div>
           </div>
+          </FadeInCard>
 
+          <FadeInCard delay={0.05}>
           <div
             className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all"
             style={{ border: '1px solid #E2EEEE', padding: 24 }}
           >
             <div
               className="inline-flex p-2.5 rounded-xl mb-4"
-              style={{ background: '#E8F9F9' }}
+              style={{ background: 'var(--color-teal-light)' }}
             >
-              <BarChart3 size={18} style={{ color: '#2BBFBF' }} />
+              <BarChart3 size={18} style={{ color: 'var(--color-teal)' }} />
             </div>
             <div
               className="font-heading font-bold"
-              style={{ fontSize: 28, color: '#0D2B2B', lineHeight: 1.2 }}
+              style={{ fontSize: 28, color: 'var(--color-ink)', lineHeight: 1.2 }}
             >
               {thisMonthBilans}
             </div>
             <div
               className="mt-1 font-semibold uppercase"
-              style={{ fontSize: 12, color: '#5C7A7A', letterSpacing: '0.5px', fontFamily: 'Nunito, sans-serif' }}
+              style={{ fontSize: 12, color: 'var(--color-ink-2)', letterSpacing: '0.5px', fontFamily: 'var(--font-sans)' }}
             >
               Bilans ce mois
             </div>
           </div>
+          </FadeInCard>
 
+          <FadeInCard delay={0.10}>
           <div
             className="rounded-2xl shadow-sm hover:shadow-md transition-all"
             style={{
-              border: `1px solid ${needsBilan > 0 ? 'rgba(243,156,18,0.30)' : '#E2EEEE'}`,
+              border: `1px solid ${needsBilan > 0 ? 'rgba(243,156,18,0.30)' : 'var(--color-border)'}`,
               background: needsBilan > 0 ? 'rgba(243,156,18,0.05)' : '#FFFFFF',
               padding: 24,
             }}
           >
             <div
               className="inline-flex p-2.5 rounded-xl mb-4"
-              style={{ background: needsBilan > 0 ? 'rgba(243,156,18,0.12)' : '#E8F9F9' }}
+              style={{ background: needsBilan > 0 ? 'rgba(243,156,18,0.12)' : 'var(--color-teal-light)' }}
             >
-              <AlertCircle size={18} style={{ color: needsBilan > 0 ? '#F39C12' : '#2BBFBF' }} />
+              <AlertCircle size={18} style={{ color: needsBilan > 0 ? '#F39C12' : 'var(--color-teal)' }} />
             </div>
             <div
               className="font-heading font-bold"
-              style={{ fontSize: 28, color: needsBilan > 0 ? '#F39C12' : '#0D2B2B', lineHeight: 1.2 }}
+              style={{ fontSize: 28, color: needsBilan > 0 ? '#F39C12' : 'var(--color-ink)', lineHeight: 1.2 }}
             >
               {needsBilan}
             </div>
             <div
               className="mt-1 font-semibold uppercase"
-              style={{ fontSize: 12, color: '#5C7A7A', letterSpacing: '0.5px', fontFamily: 'Nunito, sans-serif' }}
+              style={{ fontSize: 12, color: 'var(--color-ink-2)', letterSpacing: '0.5px', fontFamily: 'var(--font-sans)' }}
             >
               Bilans à faire
             </div>
           </div>
+          </FadeInCard>
         </div>
 
         {/* Alertes contrats à renouveler */}
@@ -413,7 +421,7 @@ export default function Dashboard() {
             {/* Toolbar participants */}
             <div className="flex items-center gap-3 mb-6 flex-wrap">
               <div className="relative flex-1 min-w-48">
-                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: '#A8C0C0' }} />
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-ink-3)' }} />
                 <input
                   value={search}
                   onChange={e => setSearch(e.target.value)}
@@ -421,20 +429,30 @@ export default function Dashboard() {
                   className="w-full transition-all focus:outline-none"
                   style={{
                     paddingLeft: 40, paddingRight: 16, paddingTop: 11, paddingBottom: 11,
-                    background: '#F4FAFA', border: '1.5px solid #E2EEEE',
-                    borderRadius: 10, fontSize: 14, fontFamily: 'Nunito, sans-serif', color: '#0D2B2B',
+                    background: 'var(--color-bg)', border: '1.5px solid #E2EEEE',
+                    borderRadius: 10, fontSize: 14, fontFamily: 'var(--font-sans)', color: 'var(--color-ink)',
                   }}
-                  onFocus={e => { e.target.style.borderColor = '#2BBFBF'; e.target.style.boxShadow = '0 0 0 3px rgba(43,191,191,0.12)'; }}
-                  onBlur={e => { e.target.style.borderColor = '#E2EEEE'; e.target.style.boxShadow = 'none'; }}
+                  onFocus={e => { e.target.style.borderColor = 'var(--color-teal)'; e.target.style.boxShadow = '0 0 0 3px rgba(43,191,191,0.12)'; }}
+                  onBlur={e => { e.target.style.borderColor = 'var(--color-border)'; e.target.style.boxShadow = 'none'; }}
                 />
               </div>
-              <button onClick={() => setShowImport(true)} className="flex items-center gap-2 text-sm font-medium transition-all" style={{ padding: '10px 20px', background: 'transparent', border: '1.5px solid #2BBFBF', borderRadius: 10, color: '#2BBFBF', cursor: 'pointer', fontFamily: 'Nunito, sans-serif' }}>
+              <motion.button
+                onClick={() => setShowImport(true)}
+                className="flex items-center gap-2 text-sm font-medium"
+                style={{ padding: '10px 20px', background: 'transparent', border: '1.5px solid var(--color-teal)', borderRadius: 10, color: 'var(--color-teal)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.1 }}
+              >
                 <FileSpreadsheet size={16} />
                 <span className="hidden sm:inline">Import Excel</span>
-              </button>
-              <button onClick={() => setShowForm(true)} className="flex items-center gap-2 text-white text-sm font-semibold transition-all" style={{ padding: '10px 20px', background: '#2BBFBF', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'Nunito, sans-serif' }}>
+              </motion.button>
+              <motion.button
+                onClick={() => setShowForm(true)}
+                className="flex items-center gap-2 text-white text-sm font-semibold"
+                style={{ padding: '10px 20px', background: 'var(--color-teal)', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.1 }}
+              >
                 <Plus size={16} /> Nouveau participant
-              </button>
+              </motion.button>
             </div>
 
             {/* Grid participants */}
@@ -446,12 +464,13 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filtered.map(p => (
-                  <ParticipantCard
-                    key={p.id}
-                    participant={p}
-                    structureNom={p.structureId ? structures.find(s => s.id === p.structureId)?.nom : undefined}
-                  />
+                {filtered.map((p, i) => (
+                  <FadeInCard key={p.id} delay={0.15 + i * 0.05}>
+                    <ParticipantCard
+                      participant={p}
+                      structureNom={p.structureId ? structures.find(s => s.id === p.structureId)?.nom : undefined}
+                    />
+                  </FadeInCard>
                 ))}
               </div>
             )}
@@ -465,6 +484,7 @@ export default function Dashboard() {
           const aRelancer = patientsARelancer(21);
           if (seancesAujourdhui.length === 0 && aRelancer.length === 0) return null;
           return (
+            <FadeInCard delay={0.25}>
             <div className="mt-8 bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -506,6 +526,7 @@ export default function Dashboard() {
                 </p>
               )}
             </div>
+            </FadeInCard>
           );
         })()}
 
@@ -514,6 +535,7 @@ export default function Dashboard() {
           const brouillons = getAllBrouillons();
           if (brouillons.length === 0) return null;
           return (
+            <FadeInCard delay={0.30}>
             <div className="mt-6 bg-white rounded-2xl border border-amber-200 p-5 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-base">📋</span>
@@ -537,7 +559,12 @@ export default function Dashboard() {
                           {b.completionPct}% complété · Étape {b.etapeActuelle + 1} · {modifLabel}
                         </div>
                         <div className="h-1 bg-gray-100 rounded-full mt-1.5 w-24 overflow-hidden">
-                          <div className="h-full rounded-full bg-amber-400" style={{ width: `${b.completionPct}%` }} />
+                          <motion.div
+                            className="h-full rounded-full bg-amber-400"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${b.completionPct}%` }}
+                            transition={{ duration: 0.8, delay: 0.4, ease: [0.25, 0.1, 0.25, 1] as const }}
+                          />
                         </div>
                       </div>
                       {p && (
@@ -553,6 +580,7 @@ export default function Dashboard() {
                 })}
               </div>
             </div>
+            </FadeInCard>
           );
         })()}
 
@@ -565,6 +593,7 @@ export default function Dashboard() {
           if (notesAujourdhui.length === 0) return null;
           const alertesDouleur = notesAujourdhui.filter(n => n.alertes.douleurSignalee);
           return (
+            <FadeInCard delay={0.35}>
             <div className="mt-8 bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -605,6 +634,7 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+            </FadeInCard>
           );
         })()}
 

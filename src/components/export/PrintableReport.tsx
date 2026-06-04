@@ -30,14 +30,14 @@ export default function PrintableReport({ participant, bilan, initial }: Props) 
   return (
     <div
       id="printable-report"
-      style={{ display: 'none', width: '794px', padding: '40px', fontFamily: 'Nunito, sans-serif', background: '#fff' }}
+      style={{ display: 'none', width: '794px', padding: '40px', fontFamily: 'var(--font-sans)', background: '#fff' }}
     >
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottom: '2px solid #1A5F9E' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0D2B4B', borderRadius: 10, padding: '6px 14px' }}>
           <img src="/logo.png" alt="Mouv'APA" style={{ height: 48, width: 'auto', display: 'block' }} />
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#ffffff', fontFamily: 'Poppins, sans-serif', lineHeight: 1.2 }}>Mouv'APA - Suivis</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#ffffff', fontFamily: 'var(--font-sans)', lineHeight: 1.2 }}>Mouv'APA - Suivis</div>
             <div style={{ fontSize: 11, color: '#2BBFBF' }}>Activité Physique Adaptée</div>
           </div>
         </div>

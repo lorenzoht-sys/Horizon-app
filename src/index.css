@@ -1,42 +1,40 @@
+@import './styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --color-primary: #2BBFBF;
-  --color-primary-light: #E8F9F9;
-  --color-primary-dark: #1E9494;
-  --color-sidebar: #0D2B2B;
-  --color-bg: #FFFFFF;
-  --color-bg-secondary: #F4FAFA;
-  --color-text: #0D2B2B;
-  --color-text-secondary: #5C7A7A;
-  --color-text-muted: #A8C0C0;
-  --color-border: #E2EEEE;
-  --color-danger: #E74C3C;
-  --color-warning: #F39C12;
-  --color-success: #27AE60;
+  /* ── Aliases backward-compat (code existant) ── */
+  --color-primary:        var(--color-teal);
+  --color-primary-light:  var(--color-teal-light);
+  --color-primary-dark:   var(--color-teal-dark);
+  --color-sidebar:        var(--color-ink);
+  --color-bg-secondary:   var(--color-surface-2);
+  --color-text:           var(--color-ink);
+  --color-text-secondary: var(--color-ink-2);
+  --color-text-muted:     var(--color-ink-3);
+  --color-danger:         var(--color-red);
+  --color-warning:        var(--color-amber);
+  --color-success:        #27AE60;
 
   --space-1: 4px;   --space-2: 8px;   --space-3: 12px;  --space-4: 16px;
   --space-5: 20px;  --space-6: 24px;  --space-8: 32px;
   --space-10: 40px; --space-12: 48px;
 
-  --radius-sm: 6px; --radius-md: 10px; --radius-lg: 16px;
-  --radius-xl: 24px; --radius-full: 9999px;
-
-  --shadow-sm:      0 1px 3px rgba(13,43,43,0.06);
-  --shadow-md:      0 4px 16px rgba(13,43,43,0.08);
-  --shadow-lg:      0 8px 32px rgba(13,43,43,0.10);
-  --shadow-primary: 0 4px 20px rgba(43,191,191,0.20);
-
-  --transition:      150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --shadow-lg:       0 8px 32px rgba(0,0,0,0.10);
+  --shadow-primary:  var(--shadow-teal);
 }
 
 @layer base {
   body {
-    @apply font-sans bg-neutral text-dark;
+    @apply font-sans;
     margin: 0;
+    background: var(--color-bg);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   h1, h2, h3, h4, h5 {
     @apply font-heading;
@@ -46,6 +44,9 @@
     min-height: 100vh;
     text-align: left;
   }
+  button { cursor: pointer; transition: var(--transition); }
+  a      { cursor: pointer; transition: var(--transition); }
+  input, textarea, select { transition: var(--transition); }
 }
 
 /* ── PWA safe-area ── */
@@ -53,7 +54,7 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 
 /* ── Sidebar navigation ── */
 .sidebar-nav-item {
-  transition: background var(--transition), color var(--transition);
+  transition: var(--transition);
   color: rgba(255,255,255,0.55);
 }
 .sidebar-nav-item:hover {
@@ -63,7 +64,7 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 .sidebar-nav-active {
   background: rgba(255,255,255,0.10) !important;
   color: white !important;
-  box-shadow: inset 3px 0 0 0 #2BBFBF !important;
+  box-shadow: inset 3px 0 0 0 var(--color-teal) !important;
 }
 
 /* ── Online dot animation ── */
@@ -89,22 +90,23 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 /* ── react-big-calendar overrides ── */
 .rbc-toolbar button:hover,
 .rbc-toolbar button.rbc-active {
-  background: #2BBFBF;
+  background: var(--color-teal);
   color: white;
-  border-color: #2BBFBF;
+  border-color: var(--color-teal);
 }
 .rbc-toolbar button {
-  border-radius: 8px;
-  font-family: 'Nunito', sans-serif;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
   font-size: 13px;
+  transition: var(--transition);
 }
 .rbc-today {
-  background: #E8F9F9;
+  background: var(--color-teal-light);
 }
 .rbc-event {
-  background: #2BBFBF;
-  border-radius: 6px !important;
-  font-family: 'Nunito', sans-serif;
+  background: var(--color-teal);
+  border-radius: var(--radius-sm) !important;
+  font-family: var(--font-sans);
   font-size: 12px;
   border: none !important;
   padding: 2px 6px !important;
@@ -113,20 +115,20 @@ body { padding-bottom: env(safe-area-inset-bottom); }
   outline: none;
 }
 .rbc-header {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-sans);
   font-weight: 600;
-  color: #0D2B2B;
+  color: var(--color-ink);
   padding: 8px 0;
   font-size: 13px;
 }
 .rbc-time-slot {
   font-size: 11px;
-  color: #9CA3AF;
+  color: var(--color-ink-3);
 }
 .rbc-current-time-indicator {
-  background-color: #2BBFBF;
+  background-color: var(--color-teal);
   height: 2px;
 }
 .rbc-selected {
-  background: #0D2B2B !important;
+  background: var(--color-ink) !important;
 }

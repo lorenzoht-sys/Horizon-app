@@ -239,7 +239,7 @@ function PopupSeance({ seance, rang, totalContrat, onClose, onDelete, onStatut, 
               <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all"
-                  style={{ width: `${progression}%`, background: '#2BBFBF' }}
+                  style={{ width: `${progression}%`, background: 'var(--color-teal)' }}
                 />
               </div>
             </div>
@@ -430,7 +430,7 @@ export default function AgendaPage() {
         border: 'none',
         color: 'white',
         fontSize: '12px',
-        fontFamily: 'Nunito, sans-serif',
+        fontFamily: 'var(--font-sans)',
       },
     };
   }, []);

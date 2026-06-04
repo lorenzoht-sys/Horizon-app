@@ -230,7 +230,7 @@ export interface Programme {
 // ── ZONES GÉOGRAPHIQUES ───────────────────────────────────────────────────────
 
 export const COULEURS_ZONES = [
-  '#1A5F9E', '#2BBFBF', '#F59E0B', '#3B6D11', '#8B5CF6', '#EF4444',
+  '#1A5F9E', 'var(--color-teal)', '#F59E0B', '#3B6D11', '#8B5CF6', '#EF4444',
 ];
 
 export interface ZoneGeographique {

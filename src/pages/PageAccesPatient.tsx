@@ -56,7 +56,7 @@ export default function PageAccesPatient() {
       alignItems: 'center',
       justifyContent: 'center',
       padding: '20px',
-      fontFamily: "'Nunito', sans-serif",
+      fontFamily: "var(--font-sans)",
     }}>
 
       {/* Logo */}
@@ -74,7 +74,7 @@ export default function PageAccesPatient() {
       }}>
 
         {/* Titre */}
-        <div style={{ fontSize: 22, fontWeight: 800, color: '#0D2B2B', marginBottom: 8 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-ink)', marginBottom: 8 }}>
           Bienvenue sur votre espace santé
         </div>
         <div style={{ fontSize: 15, color: '#8FA8A8', marginBottom: 36, lineHeight: 1.6 }}>
@@ -85,7 +85,7 @@ export default function PageAccesPatient() {
         <div style={{ marginBottom: 12 }}>
           <label style={{
             display: 'block', fontSize: 13, fontWeight: 700,
-            color: '#5C7A7A', marginBottom: 8, textAlign: 'left',
+            color: 'var(--color-ink-2)', marginBottom: 8, textAlign: 'left',
             textTransform: 'uppercase', letterSpacing: '0.06em',
           }}>
             Votre code d'accès
@@ -107,9 +107,9 @@ export default function PageAccesPatient() {
               fontWeight: 700,
               textAlign: 'center',
               border: '2px solid',
-              borderColor: erreur ? '#FECACA' : code ? '#2BBFBF' : '#E0EEEE',
+              borderColor: erreur ? '#FECACA' : code ? 'var(--color-teal)' : '#E0EEEE',
               borderRadius: 14,
-              color: '#0D2B2B',
+              color: 'var(--color-ink)',
               outline: 'none',
               letterSpacing: '0.04em',
               boxSizing: 'border-box',
@@ -145,7 +145,7 @@ export default function PageAccesPatient() {
             padding: '16px',
             background: loading
               ? '#8FA8A8'
-              : code.trim() ? '#2BBFBF' : '#E0EEEE',
+              : code.trim() ? 'var(--color-teal)' : '#E0EEEE',
             color: code.trim() ? 'white' : '#8FA8A8',
             border: 'none',
             borderRadius: 14,
@@ -164,10 +164,10 @@ export default function PageAccesPatient() {
         <div style={{
           marginTop: 28,
           padding: '16px',
-          background: '#F4FAFA',
+          background: 'var(--color-bg)',
           borderRadius: 12,
           fontSize: 13,
-          color: '#5C7A7A',
+          color: 'var(--color-ink-2)',
           lineHeight: 1.6,
         }}>
           🔑 Votre code vous a été remis par votre enseignant APA.<br />

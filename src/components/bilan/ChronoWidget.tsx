@@ -92,7 +92,7 @@ export default function ChronoWidget({ mode, onStop, onEnd }: Props) {
 
   return (
     <div
-      style={{ background: '#0D2B2B' }}
+      style={{ background: 'var(--color-ink)' }}
       className="rounded-xl p-4 flex flex-col items-center gap-3"
     >
       <div style={{ fontFamily: 'monospace', color: 'white', display: 'flex', alignItems: 'baseline' }}>

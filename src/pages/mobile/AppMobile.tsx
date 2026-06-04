@@ -38,10 +38,10 @@ function formatPhone(tel: string): string {
 }
 
 const C = { // colors
-  dark:    '#0D2B2B',
-  primary: '#2BBFBF',
+  dark:    'var(--color-ink)',
+  primary: 'var(--color-teal)',
   green:   '#1ca48c',
-  bg:      '#F4FAFA',
+  bg:      'var(--color-bg)',
   border:  '#E0EEEE',
   text:    '#032c28',
   muted:   '#8FA8A8',
@@ -138,7 +138,7 @@ function usePraticienSettings() {
 function SectionMobile({ titre, children }: { titre: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, paddingLeft: 4 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, paddingLeft: 4 }}>
         {titre}
       </div>
       <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
@@ -342,7 +342,7 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
                 🕙 {prochaineSeance.heureDebut} · {p?.prenom} {p?.nom}
               </div>
               {adresse && (
-                <div style={{ fontSize: 13, color: '#5C7A7A', marginBottom: hasCI ? 8 : 14 }}>📍 {adresse}</div>
+                <div style={{ fontSize: 13, color: 'var(--color-ink-2)', marginBottom: hasCI ? 8 : 14 }}>📍 {adresse}</div>
               )}
               {hasCI && contreIndDetail && (
                 <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '7px 10px', marginBottom: 14, fontSize: 12, color: '#B91C1C', fontWeight: 600 }}>
@@ -374,7 +374,7 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
           </div>
         ) : (
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
               Aujourd'hui
             </div>
             <div style={{ background: 'white', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 10px rgba(13,43,43,0.07)' }}>
@@ -460,7 +460,7 @@ function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
             <button key={f.id} onClick={() => setFiltre(f.id)} style={{
               flexShrink: 0, padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
               background: filtre === f.id ? C.primary : C.bg,
-              color: filtre === f.id ? 'white' : '#5C7A7A',
+              color: filtre === f.id ? 'white' : 'var(--color-ink-2)',
             }}>{f.label}</button>
           ))}
         </div>
@@ -487,7 +487,7 @@ function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
                   {calcAge(p.dateNaissance)} ans{prochaine ? ` · ${formatDateCourt(prochaine.date)}` : ''}
                 </div>
                 {(p.contexteClinic || p.pathologie) && (
-                  <div style={{ fontSize: 11, color: '#5C7A7A', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: 11, color: 'var(--color-ink-2)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {p.contexteClinic || p.pathologie}
                   </div>
                 )}
@@ -539,7 +539,7 @@ function ChoixSaisie({ onPatient, onBilan }: { onPatient: () => void; onBilan: (
 function NouveauPatientMobile({ onBack }: { onBack: () => void }) {
   const { addParticipant } = useParticipants();
   const [form, setForm] = useState({ prenom: '', nom: '', dateNaissance: '', telephone: '', pathologie: '' });
-  const label: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
+  const label: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
   const input: React.CSSProperties = { width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, outline: 'none', marginBottom: 14, boxSizing: 'border-box' };
 
   function sauvegarder() {
@@ -631,7 +631,7 @@ function NouveauBilanMobile({ onBack, onVoirFiche }: { onBack: () => void; onVoi
     );
   }
 
-  const label: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
+  const label: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
 
   return (
     <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
@@ -763,7 +763,7 @@ function EcranTournee() {
 
 function EcranSettings({ onBack }: { onBack: () => void }) {
   const inp: React.CSSProperties = { width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, outline: 'none', marginBottom: 14, boxSizing: 'border-box', background: 'white' };
-  const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
+  const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
 
   const { settings: praticienData, loading, sauvegarderSettings } = usePraticienSettings();
   const [form, setForm] = useState<PraticienSettings>(PRATICIEN_DEFAULTS);
@@ -1179,12 +1179,12 @@ function EditPatientMobile({ participant, onBack }: { participant: import('../..
     boxSizing: 'border-box', marginBottom: 12, fontFamily: 'inherit',
   };
   const lbl: React.CSSProperties = {
-    fontSize: 11, fontWeight: 700, color: '#5C7A7A',
+    fontSize: 11, fontWeight: 700, color: 'var(--color-ink-2)',
     textTransform: 'uppercase', letterSpacing: '0.04em',
     display: 'block', marginBottom: 5,
   };
   const sec: React.CSSProperties = {
-    fontSize: 11, fontWeight: 700, color: '#5C7A7A',
+    fontSize: 11, fontWeight: 700, color: 'var(--color-ink-2)',
     textTransform: 'uppercase', letterSpacing: '0.06em',
     marginBottom: 8, paddingLeft: 4,
   };
@@ -1623,7 +1623,7 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
             </button>
 
             {compteRendus.length > 0 && (
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#5C7A7A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
                 Séances dictées
               </div>
             )}
@@ -1962,7 +1962,7 @@ export default function AppMobile({ onLogout }: Props) {
   const [showSettings, setShowSettings] = useState(false);
   const [assistantPatientId, setAssistantPatientId] = useState<string | null>(null);
 
-  const shell: React.CSSProperties = { maxWidth: 480, margin: '0 auto', minHeight: '100vh', background: C.bg, fontFamily: "'Nunito',sans-serif" };
+  const shell: React.CSSProperties = { maxWidth: 480, margin: '0 auto', minHeight: '100vh', background: C.bg, fontFamily: "var(--font-sans)" };
 
   if (showSettings) {
     return <div style={shell}><EcranSettings onBack={() => setShowSettings(false)} /></div>;

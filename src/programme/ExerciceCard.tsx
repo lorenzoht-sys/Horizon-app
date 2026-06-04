@@ -57,7 +57,7 @@ export default function ExerciceCard({ exercice, onAdd, compact, profilHandicap,
     && !(exercice.profilsCompatibles?.includes('tous') ?? true)
     && (exercice.profilsCompatibles?.includes(profilHandicap) ?? false);
 
-  const badgeCouleur = profilHandicap ? COULEURS_PROFILS[profilHandicap] : '#0D2B2B';
+  const badgeCouleur = profilHandicap ? COULEURS_PROFILS[profilHandicap] : 'var(--color-ink)';
 
   if (incompatible) {
     return (
@@ -89,7 +89,7 @@ export default function ExerciceCard({ exercice, onAdd, compact, profilHandicap,
     <>
       <div style={{
         background: '#ffffff',
-        border: `1px solid ${estSpecifique ? '#2BBFBF' : '#E8F4FD'}`,
+        border: `1px solid ${estSpecifique ? 'var(--color-teal)' : '#E8F4FD'}`,
         borderRadius: 12,
         padding: '12px 16px',
         marginBottom: 8,
@@ -184,7 +184,7 @@ export default function ExerciceCard({ exercice, onAdd, compact, profilHandicap,
             {exercice.videoYoutubeId && (
               <span
                 onClick={() => setShowVideo(true)}
-                style={{ fontSize: 12, color: '#2BBFBF', cursor: 'pointer', display: 'inline-block', marginTop: 4 }}
+                style={{ fontSize: 12, color: 'var(--color-teal)', cursor: 'pointer', display: 'inline-block', marginTop: 4 }}
               >
                 ▶ Voir la démonstration
               </span>

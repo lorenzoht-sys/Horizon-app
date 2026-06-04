@@ -46,7 +46,7 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
     window.open(`sms:${participant.telephone}?body=${msg}`);
   }
 
-  const C = { dark: '#0D2B2B', teal: '#2BBFBF', muted: '#8FA8A8', bg: '#F4FAFA', border: '#E0EEEE' };
+  const C = { dark: 'var(--color-ink)', teal: 'var(--color-teal)', muted: '#8FA8A8', bg: 'var(--color-bg)', border: '#E0EEEE' };
 
   return (
     <div
@@ -105,7 +105,7 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
             <button onClick={envoyerSMS} style={{
               flex: 1, padding: '10px', background: C.bg,
               border: `1px solid ${C.border}`, borderRadius: 8,
-              fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#5C7A7A',
+              fontSize: 13, fontWeight: 600, cursor: 'pointer', color: 'var(--color-ink-2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}>
               <i className="ti ti-message" style={{ fontSize: 15 }} aria-hidden="true" />
@@ -117,7 +117,7 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
         {/* Visibilité */}
         <div style={{ marginBottom: 14 }}>
           <div style={{
-            fontSize: 11, fontWeight: 700, color: '#5C7A7A',
+            fontSize: 11, fontWeight: 700, color: 'var(--color-ink-2)',
             textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8,
           }}>
             Ce que {participant.prenom} peut voir
@@ -143,7 +143,7 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
         {local.visibilite.messagePierre && (
           <div>
             <div style={{
-              fontSize: 11, fontWeight: 700, color: '#5C7A7A',
+              fontSize: 11, fontWeight: 700, color: 'var(--color-ink-2)',
               textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6,
             }}>
               Message pour {participant.prenom}

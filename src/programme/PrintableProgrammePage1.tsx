@@ -41,7 +41,7 @@ export default function PrintableProgrammePage1({ participant, programme, exerci
         display: 'none',
         width: '794px',
         padding: '40px',
-        fontFamily: 'Nunito, sans-serif',
+        fontFamily: 'var(--font-sans)',
         background: '#ffffff',
         boxSizing: 'border-box',
         color: '#111827',

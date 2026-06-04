@@ -62,7 +62,7 @@ const DOT_COLORS = {
   rouge:  '#E24B4A',
 };
 
-const AVATAR_COLORS = ['#1A5F9E', '#2BBFBF', '#8B5CF6', '#F59E0B', '#EF4444', '#EC4899'];
+const AVATAR_COLORS = ['#1A5F9E', 'var(--color-teal)', '#8B5CF6', '#F59E0B', '#EF4444', '#EC4899'];
 function avatarColor(id: string): string {
   return AVATAR_COLORS[id.charCodeAt(0) % AVATAR_COLORS.length];
 }
@@ -159,7 +159,7 @@ function CarteStats({ participant, contratActif, prochaineSeance }: {
               className="h-full rounded-full transition-all"
               style={{
                 width: `${Math.min(100, Math.round((contratActif.nombreSeancesRealisees / contratActif.nombreSeancesTotal) * 100))}%`,
-                background: '#2BBFBF',
+                background: 'var(--color-teal)',
               }}
             />
           </div>
@@ -191,7 +191,7 @@ function CarteStats({ participant, contratActif, prochaineSeance }: {
           <button
             onClick={() => navigate(`/participant/${participant.id}/contrat/nouveau`)}
             className="inline-flex items-center gap-1.5 border text-[13px] font-semibold px-4 py-2 rounded-lg transition-colors hover:bg-teal-50"
-            style={{ borderColor: '#2BBFBF', color: '#2BBFBF' }}
+            style={{ borderColor: 'var(--color-teal)', color: 'var(--color-teal)' }}
           >
             + Créer un contrat
           </button>
@@ -359,7 +359,7 @@ function CarteJournalFusion({ compteRendus, onDicter }: {
           onClick={onDicter}
           className="inline-flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
         >
-          <Mic size={11} style={{ color: '#2BBFBF' }} /> Dicter
+          <Mic size={11} style={{ color: 'var(--color-teal)' }} /> Dicter
         </button>
       </div>
 
@@ -374,7 +374,7 @@ function CarteJournalFusion({ compteRendus, onDicter }: {
             onClick={onDicter}
             className="inline-flex items-center gap-1.5 border border-gray-200 text-gray-600 text-[12px] font-medium px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            <Mic size={12} style={{ color: '#2BBFBF' }} /> Dicter une séance
+            <Mic size={12} style={{ color: 'var(--color-teal)' }} /> Dicter une séance
           </button>
         </div>
       ) : (
@@ -462,7 +462,7 @@ function TabsSection({ activeTab, setActiveTab, tabs, children }: {
                 </span>
               )}
               {active && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ background: '#2BBFBF' }} />
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ background: 'var(--color-teal)' }} />
               )}
             </button>
           );
@@ -716,7 +716,7 @@ export default function ParticipantProfile() {
                         ? <MapPin size={10} className="text-green-500" />
                         : !geocoding
                           ? <button onClick={e => { e.preventDefault(); handleGeocode(); }} className="text-[#2BBFBF] underline text-[11px]">Localiser</button>
-                          : <RefreshCw size={10} className="animate-spin" style={{ color: '#2BBFBF' }} />
+                          : <RefreshCw size={10} className="animate-spin" style={{ color: 'var(--color-teal)' }} />
                       }
                     </a>
                   </>
@@ -737,9 +737,9 @@ export default function ParticipantProfile() {
                 >
                   <span className="text-[12px] text-gray-500">Bilan en cours</span>
                   <span className="w-[140px] h-1 rounded-full overflow-hidden" style={{ background: '#E6F8F8' }}>
-                    <span className="h-full rounded-full block" style={{ width: `${brouillon.completionPct}%`, background: '#2BBFBF' }} />
+                    <span className="h-full rounded-full block" style={{ width: `${brouillon.completionPct}%`, background: 'var(--color-teal)' }} />
                   </span>
-                  <span className="text-[12px] font-semibold" style={{ color: '#2BBFBF' }}>{brouillon.completionPct}%</span>
+                  <span className="text-[12px] font-semibold" style={{ color: 'var(--color-teal)' }}>{brouillon.completionPct}%</span>
                   <span className="text-[12px] text-gray-400">· Reprendre →</span>
                 </button>
               )}
@@ -865,7 +865,7 @@ export default function ParticipantProfile() {
             <button
               onClick={() => handleAction('nouveau_bilan')}
               className="flex items-center gap-1.5 text-white text-[13px] font-semibold px-3.5 py-[7px] rounded-lg transition-colors hover:opacity-90"
-              style={{ background: '#2BBFBF' }}
+              style={{ background: 'var(--color-teal)' }}
             >
               + Nouveau bilan
             </button>
@@ -873,7 +873,7 @@ export default function ParticipantProfile() {
               onClick={() => setShowDictee(true)}
               className="flex items-center gap-1.5 bg-white border border-gray-200 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors"
             >
-              <Mic size={13} style={{ color: '#2BBFBF' }} /> Dicter séance
+              <Mic size={13} style={{ color: 'var(--color-teal)' }} /> Dicter séance
             </button>
 
             {/* Groupe 2 : secondaires */}

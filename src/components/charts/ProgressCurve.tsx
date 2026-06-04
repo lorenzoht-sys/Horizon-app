@@ -20,7 +20,7 @@ interface CurveConfig {
 
 const CURVES: CurveConfig[] = [
   { key: 'equD', label: 'Équilibre D', unit: 's', color: '#1A5F9E', getValue: b => b.equilibre.droite },
-  { key: 'equG', label: 'Équilibre G', unit: 's', color: '#2BBFBF', getValue: b => b.equilibre.gauche },
+  { key: 'equG', label: 'Équilibre G', unit: 's', color: 'var(--color-teal)', getValue: b => b.equilibre.gauche },
   { key: 'cs', label: 'Chair Stand', unit: 'rép.', color: '#22C55E', getValue: b => b.chairStand30 },
   { key: 'tug', label: 'TUG 3m', unit: 's', color: '#F59E0B', getValue: b => b.tug3m },
   { key: 'tm6', label: 'TM6', unit: 'm', color: '#EF4444', getValue: b => b.tm6.distanceMetres },

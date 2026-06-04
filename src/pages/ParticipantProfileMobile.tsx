@@ -220,7 +220,7 @@ export default function ParticipantProfileMobile() {
                   href={`tel:${participant.telephone}`}
                   className="flex items-center gap-3 py-2.5 border-b border-gray-100"
                 >
-                  <Phone size={14} style={{ color: '#2BBFBF', flexShrink: 0 }} />
+                  <Phone size={14} style={{ color: 'var(--color-teal)', flexShrink: 0 }} />
                   <span className="text-[13px] text-gray-800">{participant.telephone}</span>
                 </a>
               )}
@@ -231,7 +231,7 @@ export default function ParticipantProfileMobile() {
                   rel="noopener noreferrer"
                   className="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0"
                 >
-                  <Navigation size={14} style={{ color: '#2BBFBF', flexShrink: 0 }} />
+                  <Navigation size={14} style={{ color: 'var(--color-teal)', flexShrink: 0 }} />
                   <span className="text-[13px] text-gray-800">{adresseComplete}</span>
                 </a>
               )}
@@ -240,7 +240,7 @@ export default function ParticipantProfileMobile() {
                   href={`mailto:${participant.email}`}
                   className="flex items-center gap-3 py-2.5 last:border-0"
                 >
-                  <span style={{ color: '#2BBFBF', fontSize: 14, flexShrink: 0 }}>✉️</span>
+                  <span style={{ color: 'var(--color-teal)', fontSize: 14, flexShrink: 0 }}>✉️</span>
                   <span className="text-[13px] text-gray-800">{participant.email}</span>
                 </a>
               )}
@@ -292,12 +292,12 @@ export default function ParticipantProfileMobile() {
                   className="h-full rounded-full"
                   style={{
                     width: `${Math.min(100, Math.round(contratActif.nombreSeancesRealisees / contratActif.nombreSeancesTotal * 100))}%`,
-                    background: '#2BBFBF',
+                    background: 'var(--color-teal)',
                   }}
                 />
               </div>
               {prochaineSeance && (
-                <div className="mt-2 text-[12px]" style={{ color: '#2BBFBF' }}>
+                <div className="mt-2 text-[12px]" style={{ color: 'var(--color-teal)' }}>
                   📆 Prochain RDV : {formatDateCourt(prochaineSeance.date)} · {prochaineSeance.heureDebut}
                 </div>
               )}
@@ -454,7 +454,7 @@ export default function ParticipantProfileMobile() {
                     <button
                       onClick={() => navigate(`/participant/${id}/bilan/${bilan.id}`)}
                       className="text-[12px] font-medium"
-                      style={{ color: '#2BBFBF' }}
+                      style={{ color: 'var(--color-teal)' }}
                     >
                       Voir le détail →
                     </button>
@@ -469,7 +469,7 @@ export default function ParticipantProfileMobile() {
           <button
             onClick={() => navigate(`/participant/${id}/bilan/new`)}
             className="w-full flex items-center justify-center gap-1.5 border rounded-xl py-2.5 text-[13px] font-semibold mb-3"
-            style={{ borderColor: '#2BBFBF', color: '#2BBFBF' }}
+            style={{ borderColor: 'var(--color-teal)', color: 'var(--color-teal)' }}
           >
             📋 Reprendre le bilan en cours ({brouillon.completionPct}%)
           </button>
@@ -478,7 +478,7 @@ export default function ParticipantProfileMobile() {
         <button
           onClick={() => navigate(`/participant/${id}/bilan/new`)}
           className="w-full flex items-center justify-center gap-1.5 border rounded-xl py-3 text-[13px] font-semibold"
-          style={{ borderColor: '#2BBFBF', color: '#2BBFBF', minHeight: 44 }}
+          style={{ borderColor: 'var(--color-teal)', color: 'var(--color-teal)', minHeight: 44 }}
         >
           ➕ Nouveau bilan
         </button>
@@ -494,7 +494,7 @@ export default function ParticipantProfileMobile() {
         <button
           onClick={() => setShowDictee(true)}
           className="w-full flex flex-col items-center justify-center gap-1 rounded-xl mb-2 text-white"
-          style={{ background: '#2BBFBF', minHeight: 64, borderRadius: 12 }}
+          style={{ background: 'var(--color-teal)', minHeight: 64, borderRadius: 12 }}
         >
           <div className="flex items-center gap-2">
             <Mic size={20} />
@@ -508,7 +508,7 @@ export default function ParticipantProfileMobile() {
           <button
             onClick={() => setShowNoteModal(true)}
             className="text-[13px] font-medium"
-            style={{ color: '#2BBFBF' }}
+            style={{ color: 'var(--color-teal)' }}
           >
             ou ✏️ Saisir manuellement
           </button>
@@ -617,7 +617,7 @@ export default function ParticipantProfileMobile() {
     <div style={{ background: '#F0F4F4', minHeight: '100vh' }}>
 
       {/* ── HEADER #0D2B2B ──────────────────────────────────── */}
-      <div style={{ background: '#0D2B2B', paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}>
+      <div style={{ background: 'var(--color-ink)', paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}>
 
         {/* Retour */}
         <div className="px-4 pb-2">
@@ -630,7 +630,7 @@ export default function ParticipantProfileMobile() {
         <div className="px-4 pb-3 flex items-start gap-3">
           <div
             className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0"
-            style={{ background: '#2BBFBF', fontSize: 15 }}
+            style={{ background: 'var(--color-teal)', fontSize: 15 }}
           >
             {participant.prenom[0]}{participant.nom[0]}
           </div>
@@ -699,12 +699,12 @@ export default function ParticipantProfileMobile() {
               className="flex-1 flex items-center justify-center gap-1.5 rounded-lg text-[12px] font-medium"
               style={{ background: '#1D4040', color: '#9FE1CB', height: 36 }}
             >
-              <Phone size={13} style={{ color: '#2BBFBF' }} /> Appeler
+              <Phone size={13} style={{ color: 'var(--color-teal)' }} /> Appeler
             </a>
           ) : (
             <div className="flex-1 flex items-center justify-center gap-1.5 rounded-lg text-[12px] opacity-40"
               style={{ background: '#1D4040', color: '#9FE1CB', height: 36 }}>
-              <Phone size={13} style={{ color: '#2BBFBF' }} /> Appeler
+              <Phone size={13} style={{ color: 'var(--color-teal)' }} /> Appeler
             </div>
           )}
           {hasAddress ? (
@@ -715,18 +715,18 @@ export default function ParticipantProfileMobile() {
               className="flex-1 flex items-center justify-center gap-1.5 rounded-lg text-[12px] font-medium"
               style={{ background: '#1D4040', color: '#9FE1CB', height: 36 }}
             >
-              <Navigation size={13} style={{ color: '#2BBFBF' }} /> Itinéraire
+              <Navigation size={13} style={{ color: 'var(--color-teal)' }} /> Itinéraire
             </a>
           ) : (
             <div className="flex-1 flex items-center justify-center gap-1.5 rounded-lg text-[12px] opacity-40"
               style={{ background: '#1D4040', color: '#9FE1CB', height: 36 }}>
-              <Navigation size={13} style={{ color: '#2BBFBF' }} /> Itinéraire
+              <Navigation size={13} style={{ color: 'var(--color-teal)' }} /> Itinéraire
             </div>
           )}
           <button
             onClick={() => navigate(`/participant/${id}/bilan/new`)}
             className="flex-1 flex items-center justify-center gap-1.5 rounded-lg text-white text-[12px] font-bold"
-            style={{ background: '#2BBFBF', height: 36 }}
+            style={{ background: 'var(--color-teal)', height: 36 }}
           >
             <ClipboardList size={13} /> Bilan
           </button>
@@ -737,7 +737,7 @@ export default function ParticipantProfileMobile() {
       <div className="bg-white border-b overflow-x-auto" style={{ borderColor: '#E5E7EB' }}>
         <div className="flex gap-2 px-3 py-2" style={{ width: 'max-content' }}>
           {[
-            { icon: <Mic size={13} style={{ color: '#2BBFBF' }} />,    label: 'Dicter',    action: () => setShowDictee(true) },
+            { icon: <Mic size={13} style={{ color: 'var(--color-teal)' }} />,    label: 'Dicter',    action: () => setShowDictee(true) },
             { icon: <TrendingUp size={13} className="text-gray-500" />, label: 'Évolution', action: () => { if (participant.bilans.length >= 2) navigate(`/participant/${id}/comparaison`); else toast('Nécessite 2 bilans'); } },
             { icon: <FileText size={13} className="text-gray-500" />,   label: exportingPDF ? 'PDF…' : 'PDF', action: handleExportFiche },
             { icon: <NotebookPen size={13} className="text-gray-500" />,label: 'Note',      action: () => setShowNoteModal(true) },
@@ -765,7 +765,7 @@ export default function ParticipantProfileMobile() {
               onClick={() => setActiveTab(tab.id)}
               className="px-[14px] py-[10px] text-[13px] flex-shrink-0 relative transition-colors"
               style={{
-                color: activeTab === tab.id ? '#2BBFBF' : '#6B7280',
+                color: activeTab === tab.id ? 'var(--color-teal)' : '#6B7280',
                 fontWeight: activeTab === tab.id ? 500 : 400,
                 borderBottom: activeTab === tab.id ? '2px solid #2BBFBF' : '2px solid transparent',
               }}

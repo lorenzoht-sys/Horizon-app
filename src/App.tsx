@@ -1,5 +1,7 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
+import { PageTransition } from './components/ui/PageTransition';
 import { supabase } from './lib/supabase';
 import { setCurrentUserId, loadAllBrouillonsFromSupabase } from './hooks/useBrouillonBilan';
 import { useDevice } from './hooks/useDevice';
@@ -34,6 +36,38 @@ const ContratNouveauPage = lazy(() => import('./pages/ContratNouveauPage'));
 const BilanDetail        = lazy(() => import('./pages/BilanDetail'));
 const NewBilan           = lazy(() => import('./pages/NewBilan'));
 const ProgrammePage      = lazy(() => import('./pages/ProgrammePage'));
+
+function DesktopContent({ onLogout }: { onLogout: () => void }) {
+  const location = useLocation();
+  return (
+    <div className="flex min-h-screen" style={{ background: 'var(--color-bg)' }}>
+      <Sidebar onLogout={onLogout} />
+      <div style={{ marginLeft: 220, flex: 1, minHeight: '100vh', background: '#FFFFFF' }}>
+        <AnimatePresence mode="wait">
+          <Routes location={location} key={location.pathname}>
+            <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
+            <Route path="/participant/:id" element={<PageTransition><ParticipantProfile /></PageTransition>} />
+            <Route path="/participant/:id/bilan/new" element={<PageTransition><Suspense fallback={<MapFallback />}><NewBilan /></Suspense></PageTransition>} />
+            <Route path="/participant/:id/bilan/:bilanId" element={<PageTransition><Suspense fallback={<MapFallback />}><BilanDetail /></Suspense></PageTransition>} />
+            <Route path="/participant/:id/bilan/:bilanId/edit" element={<PageTransition><Suspense fallback={<MapFallback />}><EditBilan /></Suspense></PageTransition>} />
+            <Route path="/participant/:id/programme" element={<PageTransition><Suspense fallback={<MapFallback />}><ProgrammePage /></Suspense></PageTransition>} />
+            <Route path="/participant/:id/contrat/nouveau" element={<PageTransition><Suspense fallback={<MapFallback />}><ContratNouveauPage /></Suspense></PageTransition>} />
+            <Route path="/participant/:id/comparaison" element={<PageTransition><Suspense fallback={<MapFallback />}><ComparaisonPage /></Suspense></PageTransition>} />
+            <Route path="/assistant" element={<PageTransition><Suspense fallback={<MapFallback />}><AssistantPage /></Suspense></PageTransition>} />
+            <Route path="/exercices" element={<PageTransition><Suspense fallback={<MapFallback />}><ExercicesPage /></Suspense></PageTransition>} />
+            <Route path="/stats" element={<PageTransition><Suspense fallback={<MapFallback />}><StatsPage /></Suspense></PageTransition>} />
+            <Route path="/structures/:id" element={<PageTransition><Suspense fallback={<MapFallback />}><StructureDetail /></Suspense></PageTransition>} />
+            <Route path="/settings" element={<PageTransition><SettingsPage /></PageTransition>} />
+            <Route path="/zones" element={<PageTransition><Suspense fallback={<MapFallback />}><ZonesPage /></Suspense></PageTransition>} />
+            <Route path="/agenda" element={<PageTransition><Suspense fallback={<MapFallback />}><AgendaPage /></Suspense></PageTransition>} />
+            <Route path="/tournee" element={<PageTransition><Suspense fallback={<MapFallback />}><TourneePage /></Suspense></PageTransition>} />
+            <Route path="/map" element={<PageTransition><Suspense fallback={<MapFallback />}><MapPage /></Suspense></PageTransition>} />
+          </Routes>
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
 
 function MapFallback() {
   return (
@@ -149,10 +183,10 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#0D2B2B' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--color-ink)' }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>🌊</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: '#2BBFBF', marginBottom: 8 }}>Horizon</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-teal)', marginBottom: 8 }}>Horizon</div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>Chargement…</div>
         </div>
       </div>
@@ -211,58 +245,7 @@ export default function App() {
                   isMobile ? (
                     <AppMobile onLogout={handleLogout} />
                   ) : (
-                    <div className="flex min-h-screen" style={{ background: '#F4FAFA' }}>
-                      <Sidebar onLogout={handleLogout} />
-                      <div style={{ marginLeft: 220, flex: 1, minHeight: '100vh', background: '#FFFFFF' }}>
-                        <Routes>
-                          <Route path="/" element={<Dashboard />} />
-                          <Route path="/participant/:id" element={<ParticipantProfile />} />
-                          <Route path="/participant/:id/bilan/new" element={
-                            <Suspense fallback={<MapFallback />}><NewBilan /></Suspense>
-                          } />
-                          <Route path="/participant/:id/bilan/:bilanId" element={
-                            <Suspense fallback={<MapFallback />}><BilanDetail /></Suspense>
-                          } />
-                          <Route path="/participant/:id/bilan/:bilanId/edit" element={
-                            <Suspense fallback={<MapFallback />}><EditBilan /></Suspense>
-                          } />
-                          <Route path="/participant/:id/programme" element={
-                            <Suspense fallback={<MapFallback />}><ProgrammePage /></Suspense>
-                          } />
-                          <Route path="/participant/:id/contrat/nouveau" element={
-                            <Suspense fallback={<MapFallback />}><ContratNouveauPage /></Suspense>
-                          } />
-                          <Route path="/participant/:id/comparaison" element={
-                            <Suspense fallback={<MapFallback />}><ComparaisonPage /></Suspense>
-                          } />
-                          <Route path="/assistant" element={
-                            <Suspense fallback={<MapFallback />}><AssistantPage /></Suspense>
-                          } />
-                          <Route path="/exercices" element={
-                            <Suspense fallback={<MapFallback />}><ExercicesPage /></Suspense>
-                          } />
-                          <Route path="/stats" element={
-                            <Suspense fallback={<MapFallback />}><StatsPage /></Suspense>
-                          } />
-                          <Route path="/structures/:id" element={
-                            <Suspense fallback={<MapFallback />}><StructureDetail /></Suspense>
-                          } />
-                          <Route path="/settings" element={<SettingsPage />} />
-                          <Route path="/zones" element={
-                            <Suspense fallback={<MapFallback />}><ZonesPage /></Suspense>
-                          } />
-                          <Route path="/agenda" element={
-                            <Suspense fallback={<MapFallback />}><AgendaPage /></Suspense>
-                          } />
-                          <Route path="/tournee" element={
-                            <Suspense fallback={<MapFallback />}><TourneePage /></Suspense>
-                          } />
-                          <Route path="/map" element={
-                            <Suspense fallback={<MapFallback />}><MapPage /></Suspense>
-                          } />
-                        </Routes>
-                      </div>
-                    </div>
+                    <DesktopContent onLogout={handleLogout} />
                   )
               )
             ) : (

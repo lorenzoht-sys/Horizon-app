@@ -49,9 +49,9 @@ function loadPraticien() {
 // ── Couleurs ──────────────────────────────────────────────────────────────────
 
 const C = {
-  dark:    '#0D2B2B',
-  teal:    '#2BBFBF',
-  bg:      '#F4FAFA',
+  dark:    'var(--color-ink)',
+  teal:    'var(--color-teal)',
+  bg:      'var(--color-bg)',
   border:  '#E0EEEE',
   muted:   '#8FA8A8',
   text:    '#1A3A3A',
@@ -774,7 +774,7 @@ function EcranDocuments({ bilans, documentsPatient }: {
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 13, color: '#5C7A7A', lineHeight: 1.6, marginBottom: bilan.messageClient ? 10 : 0 }}>
+                <div style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.6, marginBottom: bilan.messageClient ? 10 : 0 }}>
                   {[
                     bilan.equilibre?.droite != null && `Équilibre : ${bilan.equilibre.droite.toFixed(1)} s`,
                     bilan.chairStand30 != null && `Force jambes : ${bilan.chairStand30} lever${bilan.chairStand30 > 1 ? 's' : ''}`,
@@ -868,7 +868,7 @@ export default function EspacePatient() {
       <div style={{
         minHeight: '100vh', background: C.dark,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: "'Nunito', sans-serif",
+        fontFamily: "var(--font-sans)",
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 36, marginBottom: 12 }}>🌊</div>
@@ -887,7 +887,7 @@ export default function EspacePatient() {
       maxWidth: 600, margin: '0 auto',
       minHeight: '100vh',
       background: C.bg,
-      fontFamily: "'Nunito', sans-serif",
+      fontFamily: "var(--font-sans)",
       fontSize: 14,
       paddingBottom: 72, // espace pour la nav bas
     }}>

@@ -125,7 +125,7 @@ FORMAT DE RÉPONSE pour suggestions de programme :
 const MD_COMPONENTS_LIGHT = {
   h1: ({children}: any) => <h1 style={{fontSize:'16px', fontWeight:'600', color:'#111827', marginBottom:'10px', marginTop:'14px'}}>{children}</h1>,
   h2: ({children}: any) => <h2 style={{fontSize:'14px', fontWeight:'600', color:'#111827', marginBottom:'8px', marginTop:'12px'}}>{children}</h2>,
-  h3: ({children}: any) => <h3 style={{fontSize:'13px', fontWeight:'500', color:'#2BBFBF', marginBottom:'6px', marginTop:'10px'}}>{children}</h3>,
+  h3: ({children}: any) => <h3 style={{fontSize:'13px', fontWeight:'500', color:'var(--color-teal)', marginBottom:'6px', marginTop:'10px'}}>{children}</h3>,
   p: ({children}: any) => <p style={{fontSize:'13px', lineHeight:'1.7', color:'#374151', marginBottom:'6px'}}>{children}</p>,
   strong: ({children}: any) => <strong style={{fontWeight:'600', color:'#111827'}}>{children}</strong>,
   ul: ({children}: any) => <ul style={{paddingLeft:'16px', marginBottom:'6px'}}>{children}</ul>,

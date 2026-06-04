@@ -154,7 +154,7 @@ function TableauComparaison({ bilans }: { bilans: Bilan[] }) {
 
 const LIGNES_CHART = [
   { key: 'Équilibre', couleur: '#1A5F9E' },
-  { key: 'Force',     couleur: '#2BBFBF' },
+  { key: 'Force',     couleur: 'var(--color-teal)' },
   { key: 'Mobilité',  couleur: '#F59E0B' },
   { key: 'Souplesse', couleur: '#8B5CF6' },
   { key: 'Endurance', couleur: '#3B6D11' },

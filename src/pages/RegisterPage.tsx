@@ -8,7 +8,7 @@ const inputStyle: CSSProperties = {
   width: '100%', padding: '11px 16px',
   border: '1.5px solid #E2EEF9',
   borderRadius: 10, fontSize: 14,
-  fontFamily: "'Nunito', sans-serif",
+  fontFamily: "var(--font-sans)",
   color: '#032c28', background: '#FAFCFF',
   outline: 'none', boxSizing: 'border-box',
   transition: 'border-color 0.2s, box-shadow 0.2s',
@@ -103,7 +103,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'Nunito', sans-serif" }}>
+    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "var(--font-sans)" }}>
       <AuthLeftPanel />
 
       <div className="login-right" style={{
@@ -113,13 +113,13 @@ export default function RegisterPage() {
         overflowY: 'auto',
       }}>
         <div style={{
-          fontSize: 10, fontWeight: 700, color: '#2BBFBF',
+          fontSize: 10, fontWeight: 700, color: 'var(--color-teal)',
           letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10,
         }}>
           Inscription gratuite
         </div>
         <div style={{
-          fontFamily: "'Poppins', sans-serif",
+          fontFamily: "var(--font-sans)",
           fontSize: 24, fontWeight: 700, color: '#032c28',
           marginBottom: 6, letterSpacing: '-0.3px',
         }}>
@@ -245,10 +245,10 @@ export default function RegisterPage() {
             disabled={loading}
             style={{
               width: '100%', padding: 13,
-              background: loading ? '#7DD9D9' : '#2BBFBF',
+              background: loading ? '#7DD9D9' : 'var(--color-teal)',
               color: 'white', border: 'none', borderRadius: 10,
               fontSize: 14, fontWeight: 700,
-              fontFamily: "'Poppins', sans-serif",
+              fontFamily: "var(--font-sans)",
               cursor: loading ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
               marginBottom: 20, transition: 'background 0.2s',
@@ -272,7 +272,7 @@ export default function RegisterPage() {
 
         <div style={{ textAlign: 'center', fontSize: 13, color: '#8B9BB4' }}>
           Déjà un compte ?{' '}
-          <Link to="/login" style={{ color: '#2BBFBF', fontWeight: 700, textDecoration: 'none' }}>
+          <Link to="/login" style={{ color: 'var(--color-teal)', fontWeight: 700, textDecoration: 'none' }}>
             Se connecter
           </Link>
         </div>

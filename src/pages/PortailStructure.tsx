@@ -67,8 +67,8 @@ function VueProgressPatient({ p, seances }: { p: Participant; seances: Seance[] 
   const programmeActif = p.programmes?.filter(pr => pr.actif).sort((a, b) => b.dateCreation.localeCompare(a.dateCreation))[0] ?? null;
 
   return (
-    <div style={{ padding: 16, maxWidth: 600, margin: '0 auto', fontFamily: "'Nunito', sans-serif" }}>
-      <div style={{ background: '#0D2B2B', borderRadius: 16, padding: '18px 16px', marginBottom: 14 }}>
+    <div style={{ padding: 16, maxWidth: 600, margin: '0 auto', fontFamily: "var(--font-sans)" }}>
+      <div style={{ background: 'var(--color-ink)', borderRadius: 16, padding: '18px 16px', marginBottom: 14 }}>
         <div style={{ fontSize: 18, fontWeight: 800, color: 'white' }}>{p.prenom} {p.nom}</div>
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
           {p.dateNaissance && `${calcAge(p.dateNaissance)} ans`}
@@ -98,9 +98,9 @@ function VueProgressPatient({ p, seances }: { p: Participant; seances: Seance[] 
                 const ok = delta > 0;
                 return (
                   <tr key={r.key} style={{ borderBottom: '1px solid #F4FAFA' }}>
-                    <td style={{ padding: '8px 0', color: '#0D2B2B', fontWeight: 600 }}>{r.label}</td>
+                    <td style={{ padding: '8px 0', color: 'var(--color-ink)', fontWeight: 600 }}>{r.label}</td>
                     <td style={{ textAlign: 'center', color: '#94A3B8' }}>{r.v0.toFixed(1)}{r.unite}</td>
-                    <td style={{ textAlign: 'center', color: '#0D2B2B', fontWeight: 700 }}>{r.v1.toFixed(1)}{r.unite}</td>
+                    <td style={{ textAlign: 'center', color: 'var(--color-ink)', fontWeight: 700 }}>{r.v1.toFixed(1)}{r.unite}</td>
                     <td style={{ textAlign: 'center' }}>
                       <span style={{ color: ok ? '#22C55E' : '#6B7280', fontWeight: 700 }}>{ok ? '✅' : '➡️'}</span>
                     </td>
@@ -120,7 +120,7 @@ function VueProgressPatient({ p, seances }: { p: Participant; seances: Seance[] 
           </div>
           {seancesPatient.slice(0, 5).map(s => (
             <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F4FAFA', fontSize: 13 }}>
-              <span style={{ color: '#0D2B2B' }}>· {fmtCourt(s.date)}</span>
+              <span style={{ color: 'var(--color-ink)' }}>· {fmtCourt(s.date)}</span>
               <span style={{ color: '#22C55E', fontWeight: 700 }}>✅ Réalisée</span>
             </div>
           ))}
@@ -133,8 +133,8 @@ function VueProgressPatient({ p, seances }: { p: Participant; seances: Seance[] 
           <div style={{ fontSize: 11, fontWeight: 700, color: '#8FA8A8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
             Programme en cours
           </div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#0D2B2B', marginBottom: 8 }}>🏋️ {programmeActif.titre}</div>
-          {programmeActif.objectif && <div style={{ fontSize: 13, color: '#5C7A7A', fontStyle: 'italic' }}>🎯 {programmeActif.objectif}</div>}
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-ink)', marginBottom: 8 }}>🏋️ {programmeActif.titre}</div>
+          {programmeActif.objectif && <div style={{ fontSize: 13, color: 'var(--color-ink-2)', fontStyle: 'italic' }}>🎯 {programmeActif.objectif}</div>}
         </div>
       )}
     </div>
@@ -201,10 +201,10 @@ export default function PortailStructure() {
     }
   }, [patientId, participants]);
 
-  const C = { dark: '#0D2B2B', teal: '#2BBFBF', bg: '#F4FAFA', border: '#E0EEEE', muted: '#8FA8A8' };
+  const C = { dark: 'var(--color-ink)', teal: 'var(--color-teal)', bg: 'var(--color-bg)', border: '#E0EEEE', muted: '#8FA8A8' };
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: C.dark, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Nunito', sans-serif" }}>
+    <div style={{ minHeight: '100vh', background: C.dark, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "var(--font-sans)" }}>
       <div style={{ textAlign: 'center', color: C.teal }}>
         <div style={{ fontSize: 32, marginBottom: 12 }}>🌊</div>
         <div style={{ fontSize: 18, fontWeight: 700 }}>Chargement…</div>
@@ -213,7 +213,7 @@ export default function PortailStructure() {
   );
 
   if (erreur || !structure) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Nunito', sans-serif", background: '#F4FAFA' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "var(--font-sans)", background: 'var(--color-bg)' }}>
       <div style={{ textAlign: 'center', padding: '40px 20px' }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
         <div style={{ fontSize: 20, fontWeight: 700, color: C.dark, marginBottom: 8 }}>Accès non autorisé</div>
@@ -227,7 +227,7 @@ export default function PortailStructure() {
 
   // Vue progrès individuelle
   if (selectedPatient) return (
-    <div style={{ maxWidth: 600, margin: '0 auto', background: C.bg, minHeight: '100vh', fontFamily: "'Nunito', sans-serif" }}>
+    <div style={{ maxWidth: 600, margin: '0 auto', background: C.bg, minHeight: '100vh', fontFamily: "var(--font-sans)" }}>
       <div style={{ background: C.dark, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, position: 'sticky', top: 0, zIndex: 20 }}>
         <button onClick={() => setSelectedPatient(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 22 }}>←</button>
         <div style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>{selectedPatient.prenom} {selectedPatient.nom}</div>
@@ -255,7 +255,7 @@ export default function PortailStructure() {
   ];
 
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto', background: C.bg, minHeight: '100vh', fontFamily: "'Nunito', sans-serif", paddingBottom: 24 }}>
+    <div style={{ maxWidth: 600, margin: '0 auto', background: C.bg, minHeight: '100vh', fontFamily: "var(--font-sans)", paddingBottom: 24 }}>
 
       {/* Header */}
       <div style={{ background: C.dark, padding: '16px', position: 'sticky', top: 0, zIndex: 20 }}>

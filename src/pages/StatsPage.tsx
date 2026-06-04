@@ -1218,7 +1218,7 @@ function SectionRepartition({ participants }: { participants: Participant[] }) {
 
   filteredLabels = Object.keys(counts).filter(k => counts[k] > 0);
   filteredData   = filteredLabels.map(k => counts[k]);
-  const COLORS = ['#1A5F9E','#2BBFBF','#F59E0B','#1D9E75','#888780'];
+  const COLORS = ['#1A5F9E','var(--color-teal)','#F59E0B','#1D9E75','#888780'];
 
   if (filteredData.length === 0) {
     return <p className="text-xs text-gray-400 italic py-4">Aucun patient enregistré.</p>;
@@ -1450,7 +1450,7 @@ export default function StatsPage() {
           <div className="flex items-center gap-3 mb-3">
             <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
               <div
-                style={{ width: `${Math.min(100, pct)}%`, background: pct >= 100 ? '#1D9E75' : pct >= 80 ? '#2BBFBF' : '#F59E0B' }}
+                style={{ width: `${Math.min(100, pct)}%`, background: pct >= 100 ? '#1D9E75' : pct >= 80 ? 'var(--color-teal)' : '#F59E0B' }}
                 className="h-full rounded-full transition-all"
               />
             </div>

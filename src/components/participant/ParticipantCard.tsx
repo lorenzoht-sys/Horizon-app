@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import type { Participant } from '../../types';
 import { Calendar, AlertCircle, ChevronRight, Phone, Building2 } from 'lucide-react';
 
@@ -25,7 +26,7 @@ function getInitials(nom: string, prenom: string): string {
 }
 
 const AVATAR_COLORS = [
-  '#2BBFBF', '#1D9E9E', '#7D3C98', '#E67E22',
+  'var(--color-teal)', '#1D9E9E', '#7D3C98', '#E67E22',
   '#E91E8C', '#1A7F5A',
 ];
 
@@ -40,12 +41,17 @@ export default function ParticipantCard({ participant, structureNom }: Props) {
   const bgColor = avatarColor(participant.id);
 
   return (
+    <motion.div
+      whileHover={{ y: -3, boxShadow: 'var(--shadow-md)', borderColor: 'rgba(43,184,154,0.3)' }}
+      whileTap={{ scale: 0.99 }}
+      transition={{ duration: 0.15 }}
+      style={{ borderRadius: 16, border: '1px solid #E2EEEE' }}
+    >
     <Link
       to={`/participant/${participant.id}`}
-      className="bg-white flex flex-col gap-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 group"
+      className="bg-white flex flex-col gap-4 shadow-sm group"
       style={{
         borderRadius: 16,
-        border: '1px solid #E2EEEE',
         padding: 24,
         textDecoration: 'none',
         display: 'flex',
@@ -61,19 +67,19 @@ export default function ParticipantCard({ participant, structureNom }: Props) {
         <div className="flex-1 min-w-0">
           <h3
             className="font-heading font-semibold truncate m-0"
-            style={{ color: '#0D2B2B', fontSize: 15, lineHeight: 1.3 }}
+            style={{ color: 'var(--color-ink)', fontSize: 15, lineHeight: 1.3 }}
           >
             {participant.prenom} {participant.nom}
           </h3>
-          <p className="mt-0.5 m-0" style={{ fontSize: 13, color: '#5C7A7A' }}>
+          <p className="mt-0.5 m-0" style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>
             {age} ans
           </p>
           {participant.pathologie ? (
-            <p className="mt-0.5 m-0 truncate" style={{ fontSize: 12, color: '#A8C0C0' }}>
+            <p className="mt-0.5 m-0 truncate" style={{ fontSize: 12, color: 'var(--color-ink-3)' }}>
               {participant.pathologie}
             </p>
           ) : participant.contexteClinic ? (
-            <p className="mt-0.5 m-0 truncate" style={{ fontSize: 12, color: '#A8C0C0' }}>
+            <p className="mt-0.5 m-0 truncate" style={{ fontSize: 12, color: 'var(--color-ink-3)' }}>
               {participant.contexteClinic}
             </p>
           ) : null}
@@ -81,12 +87,12 @@ export default function ParticipantCard({ participant, structureNom }: Props) {
         <ChevronRight
           size={16}
           className="flex-shrink-0 mt-1 transition-colors"
-          style={{ color: '#A8C0C0' }}
+          style={{ color: 'var(--color-ink-3)' }}
         />
       </div>
 
       <div className="flex items-center justify-between" style={{ fontSize: 12 }}>
-        <div className="flex items-center gap-1.5" style={{ color: '#5C7A7A' }}>
+        <div className="flex items-center gap-1.5" style={{ color: 'var(--color-ink-2)' }}>
           <Calendar size={12} />
           {lastBilan
             ? new Date(lastBilan.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -114,11 +120,11 @@ export default function ParticipantCard({ participant, structureNom }: Props) {
 
       <div
         className="flex items-center gap-2 pt-3"
-        style={{ borderTop: '1px solid #E2EEEE', fontSize: 12, color: '#A8C0C0' }}
+        style={{ borderTop: '1px solid #E2EEEE', fontSize: 12, color: 'var(--color-ink-3)' }}
       >
         <span
           className="rounded-full"
-          style={{ background: '#E8F9F9', color: '#2BBFBF', padding: '2px 8px', fontSize: 12 }}
+          style={{ background: 'var(--color-teal-light)', color: 'var(--color-teal)', padding: '2px 8px', fontSize: 12 }}
         >
           {participant.bilans.length} bilan{participant.bilans.length !== 1 ? 's' : ''}
         </span>
@@ -136,5 +142,6 @@ export default function ParticipantCard({ participant, structureNom }: Props) {
         )}
       </div>
     </Link>
+    </motion.div>
   );
 }

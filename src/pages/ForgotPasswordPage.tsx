@@ -8,7 +8,7 @@ const inputStyle: CSSProperties = {
   width: '100%', padding: '11px 16px',
   border: '1.5px solid #E2EEF9',
   borderRadius: 10, fontSize: 14,
-  fontFamily: "'Nunito', sans-serif",
+  fontFamily: "var(--font-sans)",
   color: '#032c28', background: '#FAFCFF',
   outline: 'none', boxSizing: 'border-box',
   transition: 'border-color 0.2s, box-shadow 0.2s',
@@ -30,9 +30,9 @@ function SuccessScreen({ email }: { email: string }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         margin: '0 auto 20px',
       }}>
-        <i className="ti ti-send" style={{ fontSize: 28, color: '#2BBFBF' }} aria-hidden="true" />
+        <i className="ti ti-send" style={{ fontSize: 28, color: 'var(--color-teal)' }} aria-hidden="true" />
       </div>
-      <div style={{ fontFamily: "'Poppins', sans-serif", fontSize: 20, fontWeight: 700, color: '#032c28', marginBottom: 10 }}>
+      <div style={{ fontFamily: "var(--font-sans)", fontSize: 20, fontWeight: 700, color: '#032c28', marginBottom: 10 }}>
         Lien envoyé !
       </div>
       <div style={{ fontSize: 14, color: '#8B9BB4', lineHeight: 1.6, marginBottom: 6 }}>
@@ -46,10 +46,10 @@ function SuccessScreen({ email }: { email: string }) {
       </div>
       <Link to="/login" style={{
         display: 'inline-flex', alignItems: 'center', gap: 8,
-        background: '#2BBFBF', color: 'white',
+        background: 'var(--color-teal)', color: 'white',
         padding: '11px 24px', borderRadius: 10,
         fontSize: 14, fontWeight: 700, textDecoration: 'none',
-        fontFamily: "'Poppins', sans-serif",
+        fontFamily: "var(--font-sans)",
       }}>
         <i className="ti ti-arrow-left" style={{ fontSize: 15 }} aria-hidden="true" />
         Retour à la connexion
@@ -93,7 +93,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'Nunito', sans-serif" }}>
+    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "var(--font-sans)" }}>
       <AuthLeftPanel />
 
       <div className="login-right" style={{
@@ -104,10 +104,10 @@ export default function ForgotPasswordPage() {
 
         {success ? <SuccessScreen email={email} /> : (
           <>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#2BBFBF', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-teal)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>
               Récupération de compte
             </div>
-            <div style={{ fontFamily: "'Poppins', sans-serif", fontSize: 24, fontWeight: 700, color: '#032c28', marginBottom: 6, letterSpacing: '-0.3px' }}>
+            <div style={{ fontFamily: "var(--font-sans)", fontSize: 24, fontWeight: 700, color: '#032c28', marginBottom: 6, letterSpacing: '-0.3px' }}>
               Mot de passe oublié ?
             </div>
             <div style={{ fontSize: 13, color: '#8B9BB4', marginBottom: 32, lineHeight: 1.5 }}>
@@ -141,10 +141,10 @@ export default function ForgotPasswordPage() {
                 disabled={loading}
                 style={{
                   width: '100%', padding: 13,
-                  background: loading ? '#7DD9D9' : '#2BBFBF',
+                  background: loading ? '#7DD9D9' : 'var(--color-teal)',
                   color: 'white', border: 'none', borderRadius: 10,
                   fontSize: 14, fontWeight: 700,
-                  fontFamily: "'Poppins', sans-serif",
+                  fontFamily: "var(--font-sans)",
                   cursor: loading ? 'not-allowed' : 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
                   marginBottom: 24, transition: 'background 0.2s',
@@ -161,7 +161,7 @@ export default function ForgotPasswordPage() {
             </form>
 
             <div style={{ textAlign: 'center', fontSize: 13, color: '#8B9BB4' }}>
-              <Link to="/login" style={{ color: '#2BBFBF', fontWeight: 700, textDecoration: 'none' }}>
+              <Link to="/login" style={{ color: 'var(--color-teal)', fontWeight: 700, textDecoration: 'none' }}>
                 <i className="ti ti-arrow-left" style={{ fontSize: 13, marginRight: 4 }} aria-hidden="true" />
                 Retour à la connexion
               </Link>

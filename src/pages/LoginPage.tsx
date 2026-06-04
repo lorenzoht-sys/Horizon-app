@@ -25,7 +25,7 @@ function RightPanel({
     width: '100%', padding: '11px 16px',
     border: '1.5px solid #E2EEF9',
     borderRadius: 10, fontSize: 14,
-    fontFamily: "'Nunito', sans-serif",
+    fontFamily: "var(--font-sans)",
     color: '#032c28', background: '#FAFCFF',
     outline: 'none', boxSizing: 'border-box',
     transition: 'border-color 0.2s, box-shadow 0.2s',
@@ -53,10 +53,10 @@ function RightPanel({
       justifyContent: 'center',
     }}>
 
-      <div style={{ fontSize: 10, fontWeight: 700, color: '#2BBFBF', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-teal)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>
         Connexion sécurisée
       </div>
-      <div style={{ fontFamily: "'Poppins', sans-serif", fontSize: 24, fontWeight: 700, color: '#032c28', marginBottom: 6, letterSpacing: '-0.3px' }}>
+      <div style={{ fontFamily: "var(--font-sans)", fontSize: 24, fontWeight: 700, color: '#032c28', marginBottom: 6, letterSpacing: '-0.3px' }}>
         Bon retour 👋
       </div>
       <div style={{ fontSize: 13, color: '#8B9BB4', marginBottom: 32, lineHeight: 1.5 }}>
@@ -104,7 +104,7 @@ function RightPanel({
         </div>
 
         <div style={{ textAlign: 'right', marginBottom: 22 }}>
-          <Link to="/forgot-password" style={{ fontSize: 12, color: '#2BBFBF', fontWeight: 600, textDecoration: 'none' }}>
+          <Link to="/forgot-password" style={{ fontSize: 12, color: 'var(--color-teal)', fontWeight: 600, textDecoration: 'none' }}>
             Mot de passe oublié ?
           </Link>
         </div>
@@ -122,10 +122,10 @@ function RightPanel({
           disabled={loading}
           style={{
             width: '100%', padding: 13,
-            background: loading ? '#7DD9D9' : '#2BBFBF',
+            background: loading ? '#7DD9D9' : 'var(--color-teal)',
             color: 'white', border: 'none', borderRadius: 10,
             fontSize: 14, fontWeight: 700,
-            fontFamily: "'Poppins', sans-serif",
+            fontFamily: "var(--font-sans)",
             cursor: loading ? 'not-allowed' : 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
             marginBottom: 20, transition: 'background 0.2s',
@@ -162,7 +162,7 @@ function RightPanel({
             flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
             padding: '10px 8px', background: '#F8FBFF', borderRadius: 10, border: '1px solid #E2EEF9',
           }}>
-            <i className={`ti ${t.icon}`} style={{ fontSize: 17, color: '#2BBFBF' }} aria-hidden="true" />
+            <i className={`ti ${t.icon}`} style={{ fontSize: 17, color: 'var(--color-teal)' }} aria-hidden="true" />
             <div style={{
               fontSize: 9, color: '#8B9BB4', fontWeight: 700, textAlign: 'center',
               textTransform: 'uppercase', letterSpacing: '0.03em', lineHeight: 1.3, whiteSpace: 'pre-line',
@@ -174,7 +174,7 @@ function RightPanel({
       {/* Lien inscription */}
       <div style={{ textAlign: 'center', fontSize: 13, color: '#8B9BB4' }}>
         Pas encore de compte ?{' '}
-        <Link to="/register" style={{ color: '#2BBFBF', fontWeight: 700, textDecoration: 'none' }}>
+        <Link to="/register" style={{ color: 'var(--color-teal)', fontWeight: 700, textDecoration: 'none' }}>
           Créer un compte
         </Link>
       </div>
@@ -225,7 +225,7 @@ export default function LoginPage({ onLogin }: Props) {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'Nunito', sans-serif" }}>
+    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "var(--font-sans)" }}>
       <AuthLeftPanel />
       <RightPanel
         email={email} setEmail={setEmail}
