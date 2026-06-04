@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import type { AccesPatient, Participant } from '../../types';
 import { calculerCode, getAccesPatient, sauvegarderAccesPatient } from '../../hooks/useAccesPatients';
@@ -20,7 +21,9 @@ interface Props {
 
 export default function ModalEspacePatient({ participant, onClose }: Props) {
   const code = calculerCode(participant.prenom);
+  const patientUrl = `${window.location.origin}/patient/${participant.id}?code=${code}`;
   const [local, setLocal] = useState<AccesPatient>(() => getAccesPatient(participant.id));
+  const [copiedLink, setCopiedLink] = useState(false);
 
   function toggleVisibilite(key: keyof AccesPatient['visibilite'], val: boolean) {
     const updated: AccesPatient = { ...local, visibilite: { ...local.visibilite, [key]: val } };
@@ -37,6 +40,25 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
   function copier() {
     navigator.clipboard.writeText(code);
     toast('Code copié !');
+  }
+
+  function copierLien() {
+    navigator.clipboard.writeText(patientUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+    toast('Lien copié !');
+  }
+
+  function partager() {
+    if (navigator.share) {
+      navigator.share({
+        title: `Horizon — Portail de ${participant.prenom}`,
+        text: `Voici votre accès à votre suivi Horizon`,
+        url: patientUrl,
+      });
+    } else {
+      copierLien();
+    }
   }
 
   function envoyerSMS() {
@@ -74,8 +96,9 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
 
         {/* Code affiché */}
         <div style={{
-          background: C.dark, borderRadius: 12,
-          padding: '20px', textAlign: 'center', marginBottom: 16,
+          background: C.dark, borderRadius: '12px 12px 0 0',
+          padding: '20px', textAlign: 'center',
+          borderBottom: '1px solid rgba(255,255,255,0.07)',
         }}>
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 8, letterSpacing: '0.1em' }}>
             CODE D'ACCÈS DE {participant.prenom.toUpperCase()}
@@ -91,7 +114,53 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
           </div>
         </div>
 
-        {/* Boutons */}
+        {/* ── QR Code ─────────────────────────────────────────── */}
+        <div style={{
+          background: C.dark,
+          borderRadius: '0 0 12px 12px',
+          padding: '20px 16px',
+          textAlign: 'center',
+          marginBottom: 12,
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 12 }}>
+            QR Code — scan = accès direct
+          </div>
+          <div style={{ background: '#fff', borderRadius: 10, padding: 10, display: 'inline-block', boxShadow: '0 0 0 1px rgba(43,184,154,0.2)' }}>
+            <QRCodeSVG
+              value={patientUrl}
+              size={160}
+              bgColor="#ffffff"
+              fgColor="#1C2B24"
+              level="M"
+            />
+          </div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 10, lineHeight: 1.4 }}>
+            Le patient scanne → ouvre son suivi<br/>sans saisir le code ✓
+          </div>
+        </div>
+
+        {/* Boutons lien */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <button onClick={partager} style={{
+            flex: 1, padding: '10px', background: '#2BB89A', color: 'white',
+            border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}>
+            <i className="ti ti-share" style={{ fontSize: 15 }} aria-hidden="true" />
+            Envoyer
+          </button>
+          <button onClick={copierLien} style={{
+            flex: 1, padding: '10px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+            cursor: 'pointer', transition: 'all 0.2s',
+            background: copiedLink ? 'rgba(43,184,154,0.12)' : 'rgba(0,0,0,0.04)',
+            color: copiedLink ? '#1D9E75' : 'var(--color-ink-2)',
+            border: `1px solid ${copiedLink ? 'rgba(43,184,154,0.3)' : C.border}`,
+          }}>
+            {copiedLink ? '✓ Copié' : 'Copier le lien'}
+          </button>
+        </div>
+
+        {/* Boutons code */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button onClick={copier} style={{
             flex: 1, padding: '10px', background: C.teal, color: 'white',

@@ -26,6 +26,7 @@
     "pdfmake": "^0.3.9",
     "postcss": "^8.5.14",
     "qrcode": "^1.5.4",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.6",
     "react-big-calendar": "^1.19.4",
     "react-chartjs-2": "^5.3.1",
