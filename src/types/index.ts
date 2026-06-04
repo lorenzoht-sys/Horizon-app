@@ -24,7 +24,7 @@ export interface Bilan {
   };
 
   tm6: {
-    mode?: 'standard' | 'assis_debout' | 'marche_sur_place';
+    mode?: 'standard' | 'marche_sur_place';
     distanceMetres: number | null;
     repetitions?: number | null;
     fcAvant: number | null;

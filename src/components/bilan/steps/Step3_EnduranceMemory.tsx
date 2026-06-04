@@ -87,8 +87,7 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
         <section>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">TM6 — Test de Marche de 6 minutes</h3>
-            {(tm6.mode ?? 'standard') === 'standard' && <DeltaIndicator delta={d.tm6Distance} unit="m" />}
-            {(tm6.mode ?? 'standard') === 'marche_sur_place' && <DeltaIndicator delta={d.tm6Distance} unit="rép." />}
+            <DeltaIndicator delta={d.tm6Distance} unit={(tm6.mode ?? 'standard') === 'marche_sur_place' ? 'pas' : 'm'} />
           </div>
 
           {/* Sélecteur mode */}
@@ -96,9 +95,8 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
             <p className="text-xs font-medium text-gray-600 mb-2">Mode du test</p>
             <div className="flex gap-2">
               {([
-                ['standard', '🚶 Marche 6 minutes standard'],
-                ['marche_sur_place', '🚶 Variante : marche sur place (6 min)'],
-                ['assis_debout', '🪑 Variante : montées de genoux assis-debout (30s)'],
+                ['standard',         '🚶 Marche 6 minutes'],
+                ['marche_sur_place', '🚶 Marche sur place (6 min)'],
               ] as const).map(([val, label]) => (
                 <button key={val} type="button"
                   onClick={() => setTm6({ mode: val })}
@@ -115,23 +113,18 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
 
           {/* Chrono */}
           <div className="mb-4">
-            <p className="text-xs font-medium text-gray-600 mb-2">
-              {(tm6.mode ?? 'standard') === 'assis_debout' ? 'Chronomètre 30 secondes' : 'Chronomètre 6 minutes'}
-            </p>
-            <ChronoWidget mode={(tm6.mode ?? 'standard') === 'assis_debout' ? 'down-30s' : 'down-6min'} />
+            <p className="text-xs font-medium text-gray-600 mb-2">Chronomètre 6 minutes</p>
+            <ChronoWidget mode="down-6min" />
           </div>
 
-          {/* Distance ou Répétitions */}
+          {/* Distance ou Pas */}
           <div className="mb-4">
-            {(tm6.mode ?? 'standard') === 'standard' ? (
-              <Num label="Distance parcourue" value={tm6.distanceMetres} unit="m" min={0} max={1000}
-                onChange={v => setTm6({ distanceMetres: v })} />
-            ) : (tm6.mode ?? 'standard') === 'marche_sur_place' ? (
+            {(tm6.mode ?? 'standard') === 'marche_sur_place' ? (
               <Num label="Nombre de pas (en 6 min)" value={tm6.repetitions ?? null} unit="pas" min={0} max={2000}
                 onChange={v => setTm6({ repetitions: v })} />
             ) : (
-              <Num label="Nombre de répétitions (en 30s)" value={tm6.repetitions ?? null} unit="rép." min={0} max={60}
-                onChange={v => setTm6({ repetitions: v })} />
+              <Num label="Distance parcourue" value={tm6.distanceMetres} unit="m" min={0} max={1000}
+                onChange={v => setTm6({ distanceMetres: v })} />
             )}
           </div>
 
