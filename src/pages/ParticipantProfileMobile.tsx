@@ -223,7 +223,7 @@ export default function ParticipantProfileMobile() {
                   className="flex items-center gap-3 py-2.5 border-b border-gray-100"
                 >
                   <Phone size={14} style={{ color: 'var(--color-teal)', flexShrink: 0 }} />
-                  <span className="text-[13px] text-gray-800">{participant.telephone}</span>
+                  <span className="text-[13px] text-gray-800 flex-1 min-w-0 break-all">{participant.telephone}</span>
                 </a>
               )}
               {hasAddress && (
