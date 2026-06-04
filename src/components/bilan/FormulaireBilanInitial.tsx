@@ -479,9 +479,9 @@ function ListeOperations({
                     padding: '6px 12px',
                     borderRadius: '8px',
                     border: '1.5px solid',
-                    borderColor: op.complication === true ? '#F87171' : '#E5E7EB',
-                    background: op.complication === true ? '#F87171' : 'white',
-                    color: op.complication === true ? 'white' : '#4B5563',
+                    borderColor: op.complication === true ? '#2BBFBF' : '#D1D5DB',
+                    background: op.complication === true ? '#2BBFBF' : '#FFFFFF',
+                    color: op.complication === true ? '#FFFFFF' : '#374151',
                     fontWeight: op.complication === true ? '600' : '400',
                     fontSize: '12px',
                     cursor: 'pointer',
@@ -497,9 +497,9 @@ function ListeOperations({
                     padding: '6px 12px',
                     borderRadius: '8px',
                     border: '1.5px solid',
-                    borderColor: op.complication === false ? '#22C55E' : '#E5E7EB',
-                    background: op.complication === false ? '#22C55E' : 'white',
-                    color: op.complication === false ? 'white' : '#4B5563',
+                    borderColor: op.complication === false ? '#2BBFBF' : '#D1D5DB',
+                    background: op.complication === false ? '#2BBFBF' : '#FFFFFF',
+                    color: op.complication === false ? '#FFFFFF' : '#374151',
                     fontWeight: op.complication === false ? '600' : '400',
                     fontSize: '12px',
                     cursor: 'pointer',
@@ -667,14 +667,19 @@ function BoutonOuiNon({
   value,
   onChange,
 }: {
-  value: OuiNon | null;
+  value: OuiNon | boolean | null | undefined;
   onChange: (v: OuiNon) => void;
 }) {
+  // Normalise boolean/string legacy values : true → 'oui', false → 'non'
+  const normalized: OuiNon | null =
+    value === 'oui' || value === true  ? 'oui' :
+    value === 'non' || value === false ? 'non' :
+    null;
+
   return (
     <div style={{ display: 'flex', gap: '8px' }}>
       {(['oui', 'non'] as OuiNon[]).map(v => {
-        const isActive = value === v;
-        const activeColor = v === 'oui' ? '#22C55E' : '#F87171';
+        const isActive = normalized === v;
         return (
           <button
             key={v}
@@ -684,9 +689,9 @@ function BoutonOuiNon({
               padding: '6px 16px',
               borderRadius: '12px',
               border: '1.5px solid',
-              borderColor: isActive ? activeColor : '#E5E7EB',
-              background: isActive ? activeColor : 'white',
-              color: isActive ? 'white' : '#4B5563',
+              borderColor: isActive ? '#2BBFBF' : '#D1D5DB',
+              background: isActive ? '#2BBFBF' : '#FFFFFF',
+              color: isActive ? '#FFFFFF' : '#374151',
               fontWeight: isActive ? '600' : '400',
               fontSize: '14px',
               cursor: 'pointer',

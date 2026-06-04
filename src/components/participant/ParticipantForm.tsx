@@ -86,7 +86,6 @@ function ListeAntecedentsForm({
               <div className="flex gap-1 items-center">
                 {(['oui', 'non'] as const).map(v => {
                   const isActive = item.douleur === v;
-                  const activeColor = v === 'oui' ? '#F87171' : '#22C55E';
                   return (
                   <button key={v} type="button" onClick={() => upd(item.id, { douleur: item.douleur === v ? undefined : v })}
                     style={{
@@ -94,9 +93,9 @@ function ListeAntecedentsForm({
                       padding: '8px 4px',
                       borderRadius: '8px',
                       border: '1.5px solid',
-                      borderColor: isActive ? activeColor : '#E5E7EB',
-                      background: isActive ? activeColor : 'white',
-                      color: isActive ? 'white' : '#4B5563',
+                      borderColor: isActive ? '#2BBFBF' : '#D1D5DB',
+                      background: isActive ? '#2BBFBF' : '#FFFFFF',
+                      color: isActive ? '#FFFFFF' : '#374151',
                       fontWeight: isActive ? '600' : '400',
                       fontSize: '12px',
                       cursor: 'pointer',
