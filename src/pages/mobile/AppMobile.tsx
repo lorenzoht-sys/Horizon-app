@@ -1450,27 +1450,31 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
 
             <InfoSection titre="Coordonnées">
               {p.telephone && (
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080', marginBottom: 8 }}>
-                  <i className="ti ti-phone" style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 1 }} />
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13, color: '#4A6080', marginBottom: 8 }}>
+                  <i className="ti ti-phone" style={{ fontSize: 16, color: C.primary, flexShrink: 0 }} />
                   <a href={telHref(String(p.telephone))}
-                    style={{ color: '#4A6080', textDecoration: 'none', fontWeight: 500 }}>
+                    style={{ color: '#4A6080', textDecoration: 'none', fontWeight: 500, flex: 1, minWidth: 0, wordBreak: 'break-all' }}>
                     {formatPhone(String(p.telephone))}
                   </a>
                 </div>
               )}
               {(p.adresseRue || p.adresseVille) && (
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080', marginBottom: 8 }}>
-                  <i className="ti ti-map-pin" style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 1 }} />
+                  <i className="ti ti-map-pin" style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 2 }} />
                   <a href={`https://maps.google.com/?q=${encodeURIComponent([p.adresseRue, p.adresseCodePostal, p.adresseVille].filter(Boolean).join(' '))}`}
-                    target="_blank" rel="noreferrer" style={{ color: '#4A6080', textDecoration: 'none' }}>
+                    target="_blank" rel="noreferrer"
+                    style={{ color: '#4A6080', textDecoration: 'none', flex: 1, minWidth: 0 }}>
                     {[p.adresseRue, p.adresseCodePostal, p.adresseVille].filter(Boolean).join(', ')}
                   </a>
                 </div>
               )}
               {p.email && (
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080' }}>
-                  <i className="ti ti-mail" style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 1 }} />
-                  <a href={`mailto:${p.email}`} style={{ color: '#4A6080', textDecoration: 'none' }}>{p.email}</a>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13, color: '#4A6080' }}>
+                  <i className="ti ti-mail" style={{ fontSize: 16, color: C.primary, flexShrink: 0 }} />
+                  <a href={`mailto:${p.email}`}
+                    style={{ color: '#4A6080', textDecoration: 'none', flex: 1, minWidth: 0, wordBreak: 'break-all' }}>
+                    {p.email}
+                  </a>
                 </div>
               )}
               {!p.telephone && !p.email && !p.adresseRue && (
