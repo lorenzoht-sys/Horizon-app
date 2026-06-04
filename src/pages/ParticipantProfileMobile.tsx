@@ -13,6 +13,7 @@ import { useCompteRenduSeance } from '../hooks/useCompteRenduSeance';
 import { getBrouillon } from '../hooks/useBrouillonBilan';
 import DicteePostSeance from '../components/DicteePostSeance';
 import ParticipantForm from '../components/participant/ParticipantForm';
+import ModalEspacePatient from '../components/participant/ModalEspacePatient';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
 import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
 import { exportFichePatientPDF } from '../utils/exportFichePatientPDF';
@@ -129,6 +130,7 @@ export default function ParticipantProfileMobile() {
   const [confirmDelete, setConfirmDelete]   = useState(false);
   const [showNoteModal, setShowNoteModal]   = useState(false);
   const [showDictee, setShowDictee]         = useState(false);
+  const [showEspacePatient, setShowEspacePatient] = useState(false);
   const [exportingPDF, setExportingPDF]     = useState(false);
   const [expandedIds, setExpandedIds]       = useState<Set<string>>(new Set());
 
@@ -742,6 +744,7 @@ export default function ParticipantProfileMobile() {
             { icon: <FileText size={13} className="text-gray-500" />,   label: exportingPDF ? 'PDF…' : 'PDF', action: handleExportFiche },
             { icon: <NotebookPen size={13} className="text-gray-500" />,label: 'Note',      action: () => setShowNoteModal(true) },
             { icon: <ClipboardList size={13} className="text-gray-500" />, label: 'Contrat', action: () => navigate(`/participant/${id}/contrat/nouveau`) },
+            { icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--color-teal)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h7v7"/></svg>, label: 'QR Patient', action: () => setShowEspacePatient(true) },
           ].map(btn => (
             <button
               key={btn.label}
@@ -843,6 +846,13 @@ export default function ParticipantProfileMobile() {
           participant={participant}
           onClose={() => setShowDictee(false)}
           onSave={async (data) => { await ajouterCompteRendu(data); }}
+        />
+      )}
+
+      {showEspacePatient && (
+        <ModalEspacePatient
+          participant={participant}
+          onClose={() => setShowEspacePatient(false)}
         />
       )}
 
