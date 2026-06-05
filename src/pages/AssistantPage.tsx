@@ -34,7 +34,13 @@ interface AssistantLog {
 
 interface PatientExtras {
   compteRendus: { dateSeance: string; observations: string; progression: string | null }[];
-  loading:      boolean;
+  adherence?: {
+    taux30j: number | null;
+    nbSeances30j: number;
+    derniereSeance: string | null;
+    commentairesRecents: string[];
+  };
+  loading: boolean;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -347,6 +353,14 @@ ${buildBilanText(sortedBilans[2])}
 SÉANCES DICTÉES RÉCENTES
 ═══════════════════════════════════════
 ${crText ?? 'Aucune séance dictée'}
+${extras?.adherence ? `
+═══════════════════════════════════════
+ASSIDUITÉ PROGRAMMES (30 derniers jours)
+═══════════════════════════════════════
+Taux de réalisation des exercices : ${extras.adherence.taux30j !== null ? extras.adherence.taux30j + '%' : 'non calculé (aucun exercice enregistré)'}
+Séances enregistrées par le patient : ${extras.adherence.nbSeances30j}
+Dernière séance côté patient : ${extras.adherence.derniereSeance ? new Date(extras.adherence.derniereSeance + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : 'inconnue'}
+${extras.adherence.commentairesRecents.length > 0 ? 'Commentaires récents du patient :\n' + extras.adherence.commentairesRecents.map(c => `· ${c}`).join('\n') : ''}` : ''}
 
 ═══════════════════════════════════════
 ORGANISATION DES SÉANCES
@@ -657,16 +671,44 @@ export default function AssistantPage() {
     } catch { /* non bloquant */ }
   }
 
-  /** Charge les séances dictées depuis Supabase pour le prompt IA. */
+  /** Charge les séances dictées + assiduité depuis Supabase pour le prompt IA. */
   async function loadPatientExtras(patientId: string) {
     setPatientExtras({ compteRendus: [], loading: true });
-    const crRes = await (supabase
-      ? supabase.from('comptes_rendus_seances').select('date_seance, observations, progression').eq('participant_id', patientId).order('date_seance', { ascending: false }).limit(5)
-      : Promise.resolve({ data: null }));
-    const crs = crRes.data
-      ? (crRes.data as { date_seance: string; observations: string; progression: string | null }[]).map(r => ({ dateSeance: r.date_seance, observations: r.observations, progression: r.progression }))
+    const [crRes, spRes] = await Promise.allSettled([
+      supabase ? supabase.from('comptes_rendus_seances').select('date_seance, observations, progression').eq('participant_id', patientId).order('date_seance', { ascending: false }).limit(5) : Promise.resolve({ data: null }),
+      supabase ? supabase.from('seances_patient').select('id, date_seance, commentaire_patient').eq('participant_id', patientId).order('date_seance', { ascending: false }).limit(30) : Promise.resolve({ data: null }),
+    ]);
+    const crs = crRes.status === 'fulfilled' && crRes.value.data
+      ? (crRes.value.data as { date_seance: string; observations: string; progression: string | null }[]).map(r => ({ dateSeance: r.date_seance, observations: r.observations, progression: r.progression }))
       : [];
-    setPatientExtras({ compteRendus: crs, loading: false });
+
+    let adherence: PatientExtras['adherence'] = undefined;
+    const spData = spRes.status === 'fulfilled' ? (spRes.value.data as Record<string, unknown>[] | null) ?? [] : [];
+    if (spData.length > 0) {
+      const j30 = new Date(); j30.setDate(j30.getDate() - 30);
+      const sp30 = spData.filter(s => new Date(s.date_seance as string) >= j30);
+      let taux30j: number | null = null;
+      if (supabase && sp30.length > 0) {
+        const erRes = await supabase.from('exercices_realises')
+          .select('seance_patient_id, realise')
+          .in('seance_patient_id', sp30.map(s => s.id));
+        const erRows = (erRes.data ?? []) as { seance_patient_id: string; realise: boolean }[];
+        const total = erRows.length;
+        const realises = erRows.filter(e => e.realise).length;
+        taux30j = total > 0 ? Math.round((realises / total) * 100) : null;
+      }
+      adherence = {
+        taux30j,
+        nbSeances30j: sp30.length,
+        derniereSeance: (spData[0]?.date_seance as string | null) ?? null,
+        commentairesRecents: spData
+          .filter(s => s.commentaire_patient)
+          .slice(0, 3)
+          .map(s => `${s.date_seance as string} : "${s.commentaire_patient as string}"`),
+      };
+    }
+
+    setPatientExtras({ compteRendus: crs, adherence, loading: false });
   }
 
   function selectPatient(p: Participant) {
@@ -722,18 +764,35 @@ export default function AssistantPage() {
       return;
     }
 
-    // Charger les extras avant de lancer l'action (légère attente)
+    // Charger les extras avant de lancer l'action
     let extras: PatientExtras = { compteRendus: [], loading: false };
     if (supabase) {
-      const [cr] = await Promise.allSettled([
+      const [cr, sp] = await Promise.allSettled([
         supabase.from('comptes_rendus_seances').select('date_seance, observations, progression').eq('participant_id', patient.id).order('date_seance', { ascending: false }).limit(5),
+        supabase.from('seances_patient').select('id, date_seance, commentaire_patient').eq('participant_id', patient.id).order('date_seance', { ascending: false }).limit(30),
       ]);
-      extras = {
-        compteRendus: cr.status === 'fulfilled' && cr.value.data
-          ? (cr.value.data as { date_seance: string; observations: string; progression: string | null }[]).map(r => ({ dateSeance: r.date_seance, observations: r.observations, progression: r.progression }))
-          : [],
-        loading: false,
-      };
+      const crs = cr.status === 'fulfilled' && cr.value.data
+        ? (cr.value.data as { date_seance: string; observations: string; progression: string | null }[]).map(r => ({ dateSeance: r.date_seance, observations: r.observations, progression: r.progression }))
+        : [];
+      let adherence: PatientExtras['adherence'] = undefined;
+      const spData = sp.status === 'fulfilled' ? (sp.value.data as Record<string, unknown>[] | null) ?? [] : [];
+      if (spData.length > 0) {
+        const j30 = new Date(); j30.setDate(j30.getDate() - 30);
+        const sp30 = spData.filter(s => new Date(s.date_seance as string) >= j30);
+        let taux30j: number | null = null;
+        if (sp30.length > 0) {
+          const erRes = await supabase.from('exercices_realises').select('seance_patient_id, realise').in('seance_patient_id', sp30.map(s => s.id));
+          const erRows = (erRes.data ?? []) as { seance_patient_id: string; realise: boolean }[];
+          const total = erRows.length;
+          taux30j = total > 0 ? Math.round((erRows.filter(e => e.realise).length / total) * 100) : null;
+        }
+        adherence = {
+          taux30j, nbSeances30j: sp30.length,
+          derniereSeance: (spData[0]?.date_seance as string | null) ?? null,
+          commentairesRecents: spData.filter(s => s.commentaire_patient).slice(0, 3).map(s => `${s.date_seance as string} : "${s.commentaire_patient as string}"`),
+        };
+      }
+      extras = { compteRendus: crs, adherence, loading: false };
       setPatientExtras(extras);
     }
 

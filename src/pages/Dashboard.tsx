@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense, useEffect } from 'react';
+import { useState, lazy, Suspense, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useParticipants } from '../hooks/useParticipants';
 import { useAgenda } from '../hooks/useAgenda';
@@ -17,6 +17,7 @@ import { getAllBrouillons } from '../hooks/useBrouillonBilan';
 import { toast } from 'sonner';
 import { DashboardSkeleton } from '../components/skeletons/DashboardSkeleton';
 import { AnimatedNumber } from '../components/ui/AnimatedNumber';
+import { supabase } from '../lib/supabase';
 import type { Structure } from '../types';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -198,12 +199,52 @@ export default function Dashboard() {
   const [showCreateStructure, setShowCreateStructure] = useState(false);
   const [activeTab, setActiveTab] = useState<DashTab>('independants');
   const [minLoadDone, setMinLoadDone] = useState(false);
+  const [assiduite, setAssiduite] = useState<Record<string, { nb: number; taux: number | null; derniere: string | null }>>({});
+  const assiduiteLoaded = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
     const t = setTimeout(() => setMinLoadDone(true), 900);
     return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!supabase || assiduiteLoaded.current) return;
+    assiduiteLoaded.current = true;
+    async function loadAssiduite() {
+      const j7 = new Date(); j7.setDate(j7.getDate() - 7);
+      const isoJ7 = j7.toISOString().split('T')[0];
+      const spRes = await supabase!.from('seances_patient')
+        .select('id, participant_id, date_seance')
+        .gte('date_seance', isoJ7)
+        .order('date_seance', { ascending: false });
+      if (!spRes.data || spRes.data.length === 0) return;
+      const erRes = await supabase!.from('exercices_realises')
+        .select('seance_patient_id, realise')
+        .in('seance_patient_id', spRes.data.map((s: Record<string, unknown>) => s.id));
+      const erRows = (erRes.data ?? []) as { seance_patient_id: string; realise: boolean }[];
+      const byPatient: Record<string, { nb: number; taux: number | null; derniere: string | null }> = {};
+      const grouped: Record<string, { spId: string; date: string }[]> = {};
+      for (const sp of spRes.data as Record<string, unknown>[]) {
+        const pid = sp.participant_id as string;
+        if (!grouped[pid]) grouped[pid] = [];
+        grouped[pid].push({ spId: sp.id as string, date: sp.date_seance as string });
+      }
+      for (const [pid, sessions] of Object.entries(grouped)) {
+        const allItems = erRows.filter(e => sessions.some(s => s.spId === e.seance_patient_id));
+        const realises = allItems.filter(e => e.realise).length;
+        const total = allItems.length;
+        const derniere = sessions.sort((a, b) => b.date.localeCompare(a.date))[0]?.date ?? null;
+        byPatient[pid] = {
+          nb: sessions.length,
+          taux: total > 0 ? Math.round((realises / total) * 100) : null,
+          derniere,
+        };
+      }
+      setAssiduite(byPatient);
+    }
+    void loadAssiduite();
   }, []);
 
   useEffect(() => {
@@ -591,6 +632,60 @@ export default function Dashboard() {
                   );
                 })}
               </div>
+            </div>
+            </FadeInCard>
+          );
+        })()}
+
+        {/* Widget assiduité programmes */}
+        {Object.keys(assiduite).length > 0 && (() => {
+          const lignes = Object.entries(assiduite)
+            .map(([pid, stats]) => {
+              const p = participants.find(x => x.id === pid);
+              return p ? { p, ...stats } : null;
+            })
+            .filter(Boolean)
+            .sort((a, b) => (b!.nb ?? 0) - (a!.nb ?? 0))
+            .slice(0, 6) as { p: (typeof participants)[0]; nb: number; taux: number | null; derniere: string | null }[];
+          if (lignes.length === 0) return null;
+          const alertes = lignes.filter(l => l.taux !== null && l.taux < 50);
+          return (
+            <FadeInCard delay={0.32}>
+            <div className="mt-6 bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">📊</span>
+                  <h2 className="font-heading font-semibold text-dark">Assiduité programmes</h2>
+                </div>
+                <span className="text-xs text-gray-400">Cette semaine</span>
+              </div>
+              <div className="space-y-2">
+                {lignes.map(({ p, nb, taux, derniere }) => {
+                  const couleur = taux === null ? '#94A3B8' : taux >= 70 ? '#16A34A' : taux >= 50 ? '#EA580C' : '#DC2626';
+                  const dateLabel = derniere
+                    ? new Date(derniere + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+                    : null;
+                  return (
+                    <Link key={p.id} to={`/participant/${p.id}`} className="flex items-center gap-3 py-1.5 hover:bg-gray-50 rounded-lg px-1 -mx-1 transition-colors">
+                      <span className="text-sm font-semibold text-dark w-36 truncate flex-shrink-0">{p.prenom} {p.nom}</span>
+                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${taux ?? 0}%`, background: couleur, transition: 'width 0.6s ease' }} />
+                      </div>
+                      <span className="text-xs font-bold w-9 text-right flex-shrink-0" style={{ color: couleur }}>
+                        {taux !== null ? `${taux}%` : '—'}
+                      </span>
+                      <span className="text-[11px] text-gray-400 w-20 text-right flex-shrink-0">
+                        {nb} séance{nb > 1 ? 's' : ''}{dateLabel ? ` · ${dateLabel}` : ''}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+              {alertes.length > 0 && (
+                <div className="mt-3 rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700 font-medium">
+                  📉 {alertes.length} patient{alertes.length > 1 ? 's' : ''} avec un taux de réalisation &lt; 50% cette semaine
+                </div>
+              )}
             </div>
             </FadeInCard>
           );

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ParticipantProfileMobile from './ParticipantProfileMobile';
 import { differenceInDays } from 'date-fns';
@@ -28,6 +28,7 @@ import { calculerNote, NORMES_SCORING } from '../data/norms';
 import { TAG_CONFIG } from '../data/profiles';
 import { getSedProfil, getFSSProfil } from '../components/bilan/FormulaireBilanInitial';
 import { toast } from 'sonner';
+import { supabase } from '../lib/supabase';
 import type { Bilan, Participant, Contrat, Seance, ProfilHandicap } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
 
@@ -463,7 +464,21 @@ function CarteJournalFusion({ compteRendus, onDicter }: {
 
 // ── TabsSection ───────────────────────────────────────────────────────────────
 
-type TabId = 'bilans' | 'contrats';
+type TabId = 'bilans' | 'contrats' | 'assiduite';
+
+// ── Types assiduité ───────────────────────────────────────────────────────────
+
+interface SeancePatientStat {
+  id: string;
+  seanceId: string;
+  programmeId: string;
+  dateSeance: string;
+  statut: string;
+  commentairePatient: string | null;
+  dureeMinutes: number | null;
+  nbRealises: number;
+  nbTotal: number;
+}
 
 function TabsSection({ activeTab, setActiveTab, tabs, children }: {
   activeTab: TabId;
@@ -529,6 +544,38 @@ export default function ParticipantProfile() {
   const [showProfilPicker, setShowProfilPicker] = useState(false);
   const [showEspacePatient, setShowEspacePatient] = useState(false);
   const [activeTab, setActiveTab]           = useState<TabId>('bilans');
+  const [seancesStats, setSeancesStats]     = useState<SeancePatientStat[]>([]);
+
+  useEffect(() => {
+    if (!id || !supabase) return;
+    async function loadAssiduite() {
+      const spRes = await supabase!.from('seances_patient')
+        .select('id, seance_id, programme_id, date_seance, statut, commentaire_patient, duree_minutes')
+        .eq('participant_id', id)
+        .order('date_seance', { ascending: false })
+        .limit(30);
+      if (!spRes.data || spRes.data.length === 0) return;
+      const erRes = await supabase!.from('exercices_realises')
+        .select('seance_patient_id, realise')
+        .in('seance_patient_id', spRes.data.map((s: Record<string, unknown>) => s.id));
+      const erRows = (erRes.data ?? []) as { seance_patient_id: string; realise: boolean }[];
+      setSeancesStats(spRes.data.map((sp: Record<string, unknown>) => {
+        const items = erRows.filter(e => e.seance_patient_id === sp.id);
+        return {
+          id: sp.id as string,
+          seanceId: sp.seance_id as string,
+          programmeId: sp.programme_id as string,
+          dateSeance: sp.date_seance as string,
+          statut: sp.statut as string,
+          commentairePatient: (sp.commentaire_patient as string | null) ?? null,
+          dureeMinutes: (sp.duree_minutes as number | null) ?? null,
+          nbRealises: items.filter(e => e.realise).length,
+          nbTotal: items.length,
+        };
+      }));
+    }
+    void loadAssiduite();
+  }, [id]);
 
   const participant = participants.find(p => p.id === id);
   const { compteRendus, ajouterCompteRendu } = useCompteRenduSeance(participant?.id ?? '');
@@ -630,8 +677,9 @@ export default function ParticipantProfile() {
   ];
 
   const TABS: { id: TabId; label: string; count?: number }[] = [
-    { id: 'bilans',   label: 'Historique bilans',   count: participant.bilans.length },
-    { id: 'contrats', label: 'Contrats de suivi',   count: contratsCount },
+    { id: 'bilans',    label: 'Historique bilans',   count: participant.bilans.length },
+    { id: 'contrats',  label: 'Contrats de suivi',   count: contratsCount },
+    { id: 'assiduite', label: '📊 Assiduité',        count: seancesStats.length > 0 ? seancesStats.length : undefined },
   ];
 
   return (
@@ -1046,6 +1094,145 @@ export default function ParticipantProfile() {
         {activeTab === 'contrats' && (
           <ContratsTab participantId={participant.id} />
         )}
+        {activeTab === 'assiduite' && (() => {
+          if (seancesStats.length === 0) return (
+            <div className="text-center py-12 text-gray-400">
+              <div className="text-4xl mb-3">📊</div>
+              <p className="font-medium">Aucune séance enregistrée</p>
+              <p className="text-sm mt-1">Les séances faites par le patient via l'espace patient apparaîtront ici.</p>
+            </div>
+          );
+
+          const now = new Date();
+          const j30 = new Date(now); j30.setDate(j30.getDate() - 30);
+          const j14 = new Date(now); j14.setDate(j14.getDate() - 14);
+          const j7  = new Date(now); j7.setDate(j7.getDate() - 7);
+
+          const s30 = seancesStats.filter(s => new Date(s.dateSeance) >= j30);
+          const s14 = seancesStats.filter(s => new Date(s.dateSeance) >= j14);
+
+          const totalRealises30 = s30.reduce((a, s) => a + s.nbRealises, 0);
+          const totalEx30       = s30.reduce((a, s) => a + s.nbTotal, 0);
+          const taux30          = totalEx30 > 0 ? Math.round((totalRealises30 / totalEx30) * 100) : null;
+
+          const totalRealises14 = s14.reduce((a, s) => a + s.nbRealises, 0);
+          const totalEx14       = s14.reduce((a, s) => a + s.nbTotal, 0);
+          const taux14          = totalEx14 > 0 ? Math.round((totalRealises14 / totalEx14) * 100) : null;
+
+          const derniereSeance  = seancesStats[0];
+          const joursInactivite = derniereSeance
+            ? Math.floor((now.getTime() - new Date(derniereSeance.dateSeance).getTime()) / 86400000)
+            : null;
+
+          const alerteDouleur = seancesStats.slice(0, 5).find(s =>
+            s.commentairePatient?.toLowerCase().match(/douleur|mal|fait mal|douloureux/)
+          );
+
+          return (
+            <div className="space-y-5">
+              {/* Alertes */}
+              {(joursInactivite !== null && joursInactivite >= 5 || alerteDouleur || (taux14 !== null && taux14 < 50)) && (
+                <div className="space-y-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">Alertes</div>
+                  {joursInactivite !== null && joursInactivite >= 5 && (
+                    <div className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium" style={{ background: '#FFF7E6', color: '#B45309' }}>
+                      ⏰ Inactivité : {joursInactivite} jours sans séance
+                    </div>
+                  )}
+                  {alerteDouleur && (
+                    <div className="flex items-start gap-2.5 rounded-lg px-3 py-2.5 text-sm" style={{ background: '#FCEBEB', color: '#A32D2D' }}>
+                      <span className="font-bold flex-shrink-0">⚠️</span>
+                      <div>
+                        <div className="font-semibold">Douleur signalée</div>
+                        <div className="text-[12px] mt-0.5 opacity-80">
+                          Le {new Date(alerteDouleur.dateSeance + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} : "{alerteDouleur.commentairePatient}"
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {taux14 !== null && taux14 < 50 && (
+                    <div className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium" style={{ background: '#FCEBEB', color: '#A32D2D' }}>
+                      📉 Taux de réalisation faible sur 14 jours : {taux14}%
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Statistiques */}
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-3">Statistiques</div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-xl border border-gray-200/70 p-3 text-center">
+                    <div className="text-2xl font-bold" style={{ color: taux30 !== null && taux30 >= 70 ? '#16A34A' : taux30 !== null && taux30 >= 50 ? '#EA580C' : '#DC2626' }}>
+                      {taux30 !== null ? `${taux30}%` : '—'}
+                    </div>
+                    <div className="text-[11px] text-gray-400 mt-0.5">Taux 30j</div>
+                  </div>
+                  <div className="rounded-xl border border-gray-200/70 p-3 text-center">
+                    <div className="text-2xl font-bold text-gray-800">{s30.length}</div>
+                    <div className="text-[11px] text-gray-400 mt-0.5">Séances 30j</div>
+                  </div>
+                  <div className="rounded-xl border border-gray-200/70 p-3 text-center">
+                    <div className="text-2xl font-bold text-gray-800">{seancesStats.length}</div>
+                    <div className="text-[11px] text-gray-400 mt-0.5">Total</div>
+                  </div>
+                </div>
+                {taux30 !== null && (
+                  <div className="mt-3">
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${taux30}%`,
+                          background: taux30 >= 70 ? '#16A34A' : taux30 >= 50 ? '#EA580C' : '#DC2626',
+                        }}
+                      />
+                    </div>
+                    <div className="text-[11px] text-gray-400 mt-1 text-right">{totalRealises30}/{totalEx30} exercices réalisés sur 30j</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Historique */}
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-3">Détail des séances</div>
+                <div className="space-y-2">
+                  {seancesStats.slice(0, 15).map(sp => {
+                    const emoji = sp.statut === 'terminee' ? '✅' : sp.statut === 'partielle' ? '⚠️' : '🔄';
+                    const dateLabel = new Date(sp.dateSeance + 'T12:00').toLocaleDateString('fr-FR', {
+                      weekday: 'short', day: 'numeric', month: 'short',
+                    });
+                    return (
+                      <div key={sp.id} className="flex items-start gap-2.5 rounded-lg border border-gray-100 px-3 py-2.5">
+                        <span className="text-sm flex-shrink-0 mt-0.5">{emoji}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[13px] font-semibold text-gray-800">{dateLabel}</span>
+                            {sp.nbTotal > 0 && (
+                              <span className="text-[12px] font-medium px-1.5 py-0.5 rounded-full"
+                                style={{
+                                  background: sp.nbRealises === sp.nbTotal ? '#DCFCE7' : '#FEF3C7',
+                                  color: sp.nbRealises === sp.nbTotal ? '#16A34A' : '#B45309',
+                                }}>
+                                {sp.nbRealises}/{sp.nbTotal} ex.
+                              </span>
+                            )}
+                            {sp.dureeMinutes && (
+                              <span className="text-[11px] text-gray-400">{sp.dureeMinutes} min</span>
+                            )}
+                          </div>
+                          {sp.commentairePatient && (
+                            <div className="text-[12px] text-gray-400 italic mt-0.5 truncate">"{sp.commentairePatient}"</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </TabsSection>
 
       {/* ── MODALS ─────────────────────────────────────────────── */}

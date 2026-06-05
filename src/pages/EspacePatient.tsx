@@ -38,6 +38,24 @@ function fmtMoisAnnee(iso: string): string {
 
 function fmtHeure(h: string): string { return h.slice(0, 5); }
 
+function fmtHistoDate(iso: string): string {
+  return new Date(iso + 'T12:00').toLocaleDateString('fr-FR', {
+    weekday: 'short', day: 'numeric', month: 'short',
+  });
+}
+
+interface SeancePatientRecord {
+  id: string;
+  programmeId: string;
+  seanceId: string;
+  dateSeance: string;
+  statut: 'terminee' | 'partielle' | 'en_cours';
+  commentairePatient: string | null;
+  dureeMinutes: number | null;
+  nbRealises: number;
+  nbTotal: number;
+}
+
 function loadPraticien() {
   try {
     const s = JSON.parse(localStorage.getItem('settings_praticien') ?? '{}');
@@ -917,10 +935,11 @@ function ModeSeance({
 
 // ── ÉCRAN 3 — Programme ───────────────────────────────────────────────────────
 
-function EcranProgramme({ participant, programmes, programmesV2 }: {
+function EcranProgramme({ participant, programmes, programmesV2, historiqueSeances }: {
   participant: Participant;
   programmes: Programme[];
   programmesV2: ProgrammeV2[];
+  historiqueSeances: SeancePatientRecord[];
 }) {
   const [selectedProgId, setSelectedProgId] = useState<string | null>(null);
   const [modeSeance, setModeSeance] = useState<SeanceActive | null>(null);
@@ -1126,6 +1145,45 @@ function EcranProgramme({ participant, programmes, programmesV2 }: {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Dernières séances */}
+      {historiqueSeances.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+            Vos dernières séances
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {historiqueSeances.map(sp => {
+              const prog = programmesV2.find(p => p.id === sp.programmeId);
+              const seance = prog?.seances.find(s => s.id === sp.seanceId);
+              const emoji = sp.statut === 'terminee' ? '✅' : sp.statut === 'partielle' ? '⚠️' : '🔄';
+              return (
+                <div key={sp.id} style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 14, padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{emoji}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.dark }}>
+                        {fmtHistoDate(sp.dateSeance)}
+                        {seance && <span style={{ fontWeight: 400, color: C.muted, marginLeft: 6 }}>· {seance.nom}</span>}
+                        {sp.nbTotal > 0 && (
+                          <span style={{ fontWeight: 600, color: sp.nbRealises === sp.nbTotal ? C.green : C.orange, marginLeft: 6 }}>
+                            · {sp.nbRealises}/{sp.nbTotal}
+                          </span>
+                        )}
+                      </div>
+                      {sp.commentairePatient && (
+                        <div style={{ fontSize: 12, color: C.muted, fontStyle: 'italic', marginTop: 3 }}>
+                          "{sp.commentairePatient}"
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -1403,6 +1461,7 @@ export default function EspacePatient() {
   const [programmes, setProgrammes]     = useState<Programme[]>([]);
   const [programmesV2, setProgrammesV2] = useState<ProgrammeV2[]>([]);
   const [documentsPatient, setDocumentsPatient] = useState<{ id: string; titre: string; contenu: string; date_creation: string }[]>([]);
+  const [seancesPatient, setSeancesPatient]     = useState<SeancePatientRecord[]>([]);
   const [tab, setTab]                   = useState<Tab>('accueil');
 
   useEffect(() => {
@@ -1503,6 +1562,33 @@ export default function EspacePatient() {
       if (docRes.status === 'fulfilled' && docRes.value.data)
         setDocumentsPatient(docRes.value.data as { id: string; titre: string; contenu: string; date_creation: string }[]);
 
+      // Charger historique des séances patient (dernières 15)
+      const spRes = await supabase!.from('seances_patient')
+        .select('id, programme_id, seance_id, date_seance, statut, commentaire_patient, duree_minutes')
+        .eq('participant_id', id)
+        .order('date_seance', { ascending: false })
+        .limit(15);
+      if (spRes.data && spRes.data.length > 0) {
+        const erRes = await supabase!.from('exercices_realises')
+          .select('seance_patient_id, realise')
+          .in('seance_patient_id', spRes.data.map((s: Record<string, unknown>) => s.id));
+        const erRows = (erRes.data ?? []) as { seance_patient_id: string; realise: boolean }[];
+        setSeancesPatient(spRes.data.map((sp: Record<string, unknown>) => {
+          const items = erRows.filter(e => e.seance_patient_id === sp.id);
+          return {
+            id: sp.id as string,
+            programmeId: sp.programme_id as string,
+            seanceId: sp.seance_id as string,
+            dateSeance: sp.date_seance as string,
+            statut: (sp.statut as SeancePatientRecord['statut']) ?? 'en_cours',
+            commentairePatient: (sp.commentaire_patient as string | null) ?? null,
+            dureeMinutes: (sp.duree_minutes as number | null) ?? null,
+            nbRealises: items.filter(e => e.realise).length,
+            nbTotal: items.length,
+          };
+        }));
+      }
+
       setLoading(false);
     }
 
@@ -1578,7 +1664,7 @@ export default function EspacePatient() {
         )}
         {tab === 'progres' && <EcranProgres bilans={bilans} />}
         {tab === 'programme' && (
-          <EcranProgramme participant={participant} programmes={programmes} programmesV2={programmesV2} />
+          <EcranProgramme participant={participant} programmes={programmes} programmesV2={programmesV2} historiqueSeances={seancesPatient} />
         )}
         {tab === 'documents' && (
           <EcranDocuments bilans={bilans} participant={participant} documentsPatient={documentsPatient} />
