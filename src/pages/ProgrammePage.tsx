@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { CSSProperties } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { ArrowLeft, Plus, Bot, Trash2, ChevronRight, ChevronLeft, X, Activity } from 'lucide-react';
+import { ArrowLeft, Plus, Bot, Trash2, ChevronRight, ChevronLeft, X, Activity, Search } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
 import { useProgrammeV2 } from '../hooks/useProgrammeV2';
 import PageWrapper from '../components/layout/PageWrapper';
 import { toast } from 'sonner';
-import type { TypeProgramme, JourProgramme, ProgrammeV2 } from '../types';
+import type { TypeProgramme, JourProgramme, ProgrammeV2, Participant } from '../types';
 import { TYPE_PROGRAMME_LABELS as TPL, JOURS_PROGRAMME as JP, CATEGORIE_EXERCICE_LABELS as CEL } from '../types';
+import { loadExercices, saveCustomExercice } from '../data/exercices';
+import type { Exercice } from '../types';
 
 // ── Types wizard ─────────────────────────────────────────────────────────────
 
@@ -65,6 +67,260 @@ function newExercice(): FormExercice {
 
 function newSeance(label: string): FormSeance {
   return { tempId: uuidv4(), nom: label, exercices: [] };
+}
+
+// ── Bibliothèque : helpers ────────────────────────────────────────────────────
+
+const CAT_DB_TO_LABEL: Record<string, string> = {
+  equilibre: 'Équilibre', force: 'Force', mobilite: 'Souplesse',
+  souplesse: 'Souplesse', endurance: 'Endurance', memoire: 'Coordination',
+};
+
+function defaultsFromLibrary(ex: Exercice): Omit<FormExercice, 'tempId'> {
+  const c = ex.categorie;
+  const isTotal = c === 'endurance' || c === 'memoire';
+  const isDuree = c === 'equilibre' || c === 'souplesse' || c === 'mobilite';
+  return {
+    nom: ex.nom,
+    categorie: CAT_DB_TO_LABEL[c] ?? 'Équilibre',
+    description: ex.description ?? '',
+    conseilSecurite: ex.consigneSecurite ?? '',
+    mode: isTotal ? 'total' : isDuree ? 'duree' : 'reps',
+    series: isTotal ? 1 : 3,
+    repetitions: 10,
+    dureeSecondes: isDuree ? 30 : 60,
+  };
+}
+
+const PROFILE_CHIPS = [
+  { value: 'tous',            label: 'Tous' },
+  { value: 'fauteuil_roulant', label: '♿ Fauteuil' },
+  { value: 'avc_hemiplegie',  label: 'AVC' },
+  { value: 'parkinson',       label: 'Parkinson' },
+  { value: 'sep',             label: 'SEP' },
+];
+
+const CAT_CHIPS = ['Tous', 'Équilibre', 'Force', 'Endurance', 'Souplesse', 'Coordination'];
+
+const CAT_TO_DB: Record<string, string[]> = {
+  'Équilibre':    ['equilibre'],
+  'Force':        ['force'],
+  'Endurance':    ['endurance'],
+  'Souplesse':    ['souplesse', 'mobilite'],
+  'Coordination': ['memoire'],
+};
+
+// ── Modale de sélection d'exercice ────────────────────────────────────────────
+
+function ExercicePickerModal({
+  onAdd,
+  onAddManual,
+  onClose,
+  participant,
+}: {
+  onAdd: (ex: FormExercice) => void;
+  onAddManual: (ex: FormExercice, saveToLib: boolean) => void;
+  onClose: () => void;
+  participant?: Participant;
+}) {
+  const [tab, setTab] = useState<'biblio' | 'manual'>('biblio');
+  const [search, setSearch] = useState('');
+  const [catFilter, setCatFilter] = useState('Tous');
+  const [profileFilter, setProfileFilter] = useState(
+    participant?.profilHandicap ?? 'tous'
+  );
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const [manualEx, setManualEx] = useState<FormExercice>(newExercice());
+  const [saveToLib, setSaveToLib] = useState(false);
+
+  const allExercices = useMemo(() => loadExercices(), []);
+
+  const patientAge = participant?.dateNaissance
+    ? Math.floor((Date.now() - new Date(participant.dateNaissance).getTime()) / (365.25 * 24 * 3600 * 1000))
+    : null;
+  const isSenior = patientAge != null && patientAge >= 65;
+  const suggestLabel =
+    participant && (participant.profilHandicap || isSenior)
+      ? `Filtré pour ${participant.prenom} ${participant.nom}${patientAge ? ` (${patientAge} ans)` : ''}`
+      : null;
+
+  const filtered = useMemo(() => allExercices.filter(ex => {
+    if (search) {
+      const q = search.toLowerCase();
+      if (!ex.nom.toLowerCase().includes(q) && !(ex.description ?? '').toLowerCase().includes(q)) return false;
+    }
+    if (catFilter !== 'Tous') {
+      const allowed = CAT_TO_DB[catFilter] ?? [];
+      if (!allowed.includes(ex.categorie)) return false;
+    }
+    if (profileFilter !== 'tous') {
+      if (ex.profilsCompatibles && ex.profilsCompatibles.length > 0) {
+        if (!ex.profilsCompatibles.includes(profileFilter as 'fauteuil_roulant' | 'avc_hemiplegie' | 'parkinson' | 'sep')) return false;
+      }
+    }
+    return true;
+  }), [allExercices, search, catFilter, profileFilter]);
+
+  const chipBtn = (active: boolean, dark?: boolean): CSSProperties => ({
+    padding: '4px 10px', fontSize: 12, fontWeight: 600, borderRadius: 20,
+    cursor: 'pointer', border: 'none',
+    background: active ? (dark ? '#0D2B2B' : 'var(--color-teal)') : '#F1F5F9',
+    color: active ? 'white' : '#374151',
+  });
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px 16px', overflowY: 'auto' }}>
+      <div style={{ background: 'white', borderRadius: 20, width: '100%', maxWidth: 560, boxShadow: '0 24px 60px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', maxHeight: '88vh' }}>
+
+        {/* Header */}
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #E0EEEE', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#0D2B2B' }}>Ajouter un exercice</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+            <X size={18} color="#94A3B8" />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', borderBottom: '1px solid #E0EEEE', flexShrink: 0 }}>
+          {(['biblio', 'manual'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)} style={{
+              flex: 1, padding: '11px', fontSize: 13, fontWeight: 600, background: 'none', border: 'none',
+              cursor: 'pointer',
+              color: tab === t ? 'var(--color-teal)' : '#94A3B8',
+              borderBottom: tab === t ? '2px solid var(--color-teal)' : '2px solid transparent',
+            }}>
+              {t === 'biblio' ? '📚 Bibliothèque' : '✏️ Créer manuellement'}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'biblio' ? (
+          <>
+            {/* Filtres */}
+            <div style={{ padding: '12px 18px', borderBottom: '1px solid #E0EEEE', flexShrink: 0 }}>
+              <div style={{ position: 'relative', marginBottom: 10 }}>
+                <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', pointerEvents: 'none' }} />
+                <input
+                  autoFocus
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Rechercher un exercice..."
+                  style={{ ...inputStyle, paddingLeft: 32 }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 10, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Catégorie</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 5 }}>
+                  {CAT_CHIPS.map(c => (
+                    <button key={c} onClick={() => setCatFilter(c)} style={chipBtn(catFilter === c)}>{c}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 10, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Profil patient</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 5 }}>
+                  {PROFILE_CHIPS.map(p => (
+                    <button key={p.value} onClick={() => setProfileFilter(p.value)} style={chipBtn(profileFilter === p.value, true)}>{p.label}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Suggestion */}
+            {suggestLabel && (
+              <div style={{ padding: '7px 18px', background: '#F0F9F9', borderBottom: '1px solid #E0EEEE', fontSize: 12, color: 'var(--color-teal)', fontWeight: 600, flexShrink: 0 }}>
+                ⭐ {suggestLabel} — {filtered.length} exercice{filtered.length > 1 ? 's' : ''}
+              </div>
+            )}
+
+            {/* Liste */}
+            <div style={{ overflowY: 'auto', flex: 1, padding: '10px 18px' }}>
+              {filtered.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94A3B8', fontSize: 14 }}>
+                  Aucun exercice correspondant
+                </div>
+              ) : filtered.map(ex => {
+                const wasAdded = addedIds.has(ex.id);
+                return (
+                  <div key={ex.id} style={{
+                    background: wasAdded ? '#F0F9F9' : 'white',
+                    border: `1px solid ${wasAdded ? 'rgba(43,191,191,0.3)' : '#E0EEEE'}`,
+                    borderRadius: 12, padding: '11px 14px', marginBottom: 8,
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#0D2B2B', marginBottom: 2 }}>{ex.nom}</div>
+                      <div style={{ fontSize: 11, color: 'var(--color-teal)', fontWeight: 600, marginBottom: ex.niveaux?.intermediaire ? 3 : 0 }}>
+                        {CAT_DB_TO_LABEL[ex.categorie] ?? ex.categorie}
+                        {ex.profilsCompatibles && ex.profilsCompatibles.length > 0 && (
+                          <span style={{ color: '#94A3B8', fontWeight: 400, marginLeft: 6 }}>
+                            · {ex.profilsCompatibles.slice(0, 2).join(', ')}
+                          </span>
+                        )}
+                      </div>
+                      {ex.niveaux?.intermediaire && (
+                        <div style={{ fontSize: 11, color: '#6B7280', lineHeight: 1.4 }}>{ex.niveaux.intermediaire}</div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        const formEx: FormExercice = { tempId: uuidv4(), ...defaultsFromLibrary(ex) };
+                        onAdd(formEx);
+                        setAddedIds(prev => new Set(prev).add(ex.id));
+                      }}
+                      style={{
+                        flexShrink: 0, padding: '6px 12px', fontSize: 12, fontWeight: 700, borderRadius: 8,
+                        cursor: 'pointer', border: 'none', whiteSpace: 'nowrap' as const,
+                        background: wasAdded ? '#DCFCE7' : 'var(--color-teal)',
+                        color: wasAdded ? '#166534' : 'white',
+                      }}
+                    >
+                      {wasAdded ? '✓ Ajouté' : '+ Ajouter'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 18px', borderTop: '1px solid #E0EEEE', flexShrink: 0 }}>
+              <button onClick={onClose} style={{ ...btnSecondary, width: '100%', justifyContent: 'center' }}>
+                Fermer {addedIds.size > 0 ? `(${addedIds.size} ajouté${addedIds.size > 1 ? 's' : ''})` : ''}
+              </button>
+            </div>
+          </>
+        ) : (
+          /* Onglet manuel */
+          <div style={{ padding: '18px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <ExerciceForm
+              ex={manualEx}
+              onChange={patch => setManualEx(prev => ({ ...prev, ...patch }))}
+            />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: '#374151' }}>
+              <input
+                type="checkbox"
+                checked={saveToLib}
+                onChange={e => setSaveToLib(e.target.checked)}
+                style={{ accentColor: 'var(--color-teal)', width: 16, height: 16 }}
+              />
+              Sauvegarder aussi dans ma bibliothèque
+            </label>
+            <button
+              onClick={() => {
+                if (!manualEx.nom.trim()) { toast.error("Donnez un nom à l'exercice"); return; }
+                onAddManual(manualEx, saveToLib);
+              }}
+              style={{ ...btnPrimary, justifyContent: 'center' }}
+            >
+              <Plus size={14} /> Ajouter au bloc
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ── Affichage des jours ───────────────────────────────────────────────────────
@@ -127,7 +383,7 @@ function Step1({ data, onChange }: {
 function ExerciceForm({ ex, onChange, onDelete }: {
   ex: FormExercice;
   onChange: (d: Partial<FormExercice>) => void;
-  onDelete: () => void;
+  onDelete?: () => void;
 }) {
   return (
     <div style={{ background: '#F8FAFA', border: '1px solid #E0EEEE', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
@@ -141,9 +397,11 @@ function ExerciceForm({ ex, onChange, onDelete }: {
         <select value={ex.categorie} onChange={e => onChange({ categorie: e.target.value })} style={{ ...inputStyle, flex: 1 }}>
           {CEL.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <button onClick={onDelete} style={btnDeleteSmall} title="Supprimer">
-          <Trash2 size={13} />
-        </button>
+        {onDelete && (
+          <button onClick={onDelete} style={btnDeleteSmall} title="Supprimer">
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
       <input
         value={ex.description}
@@ -190,10 +448,13 @@ function ExerciceForm({ ex, onChange, onDelete }: {
   );
 }
 
-function Step2({ data, onChange }: {
+function Step2({ data, onChange, participant }: {
   data: WizardData;
   onChange: (d: Partial<WizardData>) => void;
+  participant?: Participant;
 }) {
+  const [pickerFor, setPickerFor] = useState<number | null>(null);
+
   function updateSeance(idx: number, patch: Partial<FormSeance>) {
     const seances = data.seances.map((s, i) => i === idx ? { ...s, ...patch } : s);
     onChange({ seances });
@@ -215,9 +476,9 @@ function Step2({ data, onChange }: {
     onChange({ seances, planning });
   }
 
-  function addExercice(seanceIdx: number) {
+  function addExerciceToSeance(seanceIdx: number, ex: FormExercice) {
     const seances = data.seances.map((s, i) =>
-      i === seanceIdx ? { ...s, exercices: [...s.exercices, newExercice()] } : s
+      i === seanceIdx ? { ...s, exercices: [...s.exercices, ex] } : s
     );
     onChange({ seances });
   }
@@ -267,7 +528,7 @@ function Step2({ data, onChange }: {
               onDelete={() => deleteExercice(sIdx, exIdx)}
             />
           ))}
-          <button onClick={() => addExercice(sIdx)} style={btnSecondary}>
+          <button onClick={() => setPickerFor(sIdx)} style={btnSecondary}>
             <Plus size={13} /> Ajouter un exercice
           </button>
         </div>
@@ -275,6 +536,30 @@ function Step2({ data, onChange }: {
       <button onClick={addSeance} style={btnPrimary}>
         <Plus size={15} /> Ajouter un bloc de séance
       </button>
+
+      {pickerFor !== null && (
+        <ExercicePickerModal
+          participant={participant}
+          onAdd={ex => addExerciceToSeance(pickerFor, ex)}
+          onAddManual={(ex, toLib) => {
+            if (toLib) {
+              saveCustomExercice({
+                id: uuidv4(),
+                nom: ex.nom,
+                categorie: (Object.keys(CAT_DB_TO_LABEL).find(k => CAT_DB_TO_LABEL[k] === ex.categorie) ?? 'equilibre') as 'equilibre' | 'force' | 'mobilite' | 'souplesse' | 'endurance' | 'memoire',
+                description: ex.description,
+                consigneSecurite: ex.conseilSecurite || undefined,
+                niveaux: { debutant: '', intermediaire: ex.description, avance: '' },
+                dureeEstimeeMinutes: 5,
+              });
+              toast.success('Exercice sauvegardé dans la bibliothèque !');
+            }
+            addExerciceToSeance(pickerFor, { ...ex, tempId: uuidv4() });
+            setPickerFor(null);
+          }}
+          onClose={() => setPickerFor(null)}
+        />
+      )}
     </div>
   );
 }
@@ -766,7 +1051,7 @@ export default function ProgrammePage() {
             {/* Contenu de l'étape */}
             <div style={{ padding: '24px', maxHeight: '60vh', overflowY: 'auto' }}>
               {step === 1 && <Step1 data={wizardData} onChange={updateWizard} />}
-              {step === 2 && <Step2 data={wizardData} onChange={updateWizard} />}
+              {step === 2 && <Step2 data={wizardData} onChange={updateWizard} participant={participant} />}
               {step === 3 && <Step3 data={wizardData} onChange={updateWizard} />}
               {step === 4 && <Step4 data={wizardData} />}
             </div>
