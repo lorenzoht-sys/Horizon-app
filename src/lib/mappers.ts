@@ -168,6 +168,12 @@ export function bilanToDb(participantId: string, b: Omit<Bilan, 'id'> & { id?: s
     bilan_initial_data: b.bilanInitialData ?? null,
     notes_bilan: b.notesBilan ?? null,
     interpretation_ia: b.interpretationIA ?? null,
+    sedentarite_score: b.bilanInitialData?.formulaireFlat?.data?.sedentariteScore ?? null,
+    sedentarite_profil: b.bilanInitialData?.formulaireFlat?.data?.sedentariteProfil ?? null,
+    fatigue_score: b.bilanInitialData?.formulaireFlat?.data?.fatigueScore ?? null,
+    fatigue_profil: b.bilanInitialData?.formulaireFlat?.data?.fatigueProfil ?? null,
+    sedentarite_reponses: b.bilanInitialData?.formulaireFlat?.data?.sedentariteReponses ?? null,
+    fatigue_reponses: b.bilanInitialData?.formulaireFlat?.data?.fatigueReponses ?? null,
   };
 }
 
@@ -178,7 +184,7 @@ export function dbToProgramme(row: any): Programme {
     dateCreation: row.date_creation,
     dateDebut: row.date_debut,
     dateFin: row.date_fin ?? undefined,
-    titre: row.titre,
+    titre: row.titre ?? row.nom ?? '',
     objectif: row.objectif ?? '',
     messageMotivation: row.message_motivation ?? '',
     exercices: row.exercices ?? [],

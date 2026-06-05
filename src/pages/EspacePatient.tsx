@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams, Navigate } from 'react-router-dom';
-import type { Participant, Seance, Bilan, Programme } from '../types';
+import type { Participant, Seance, Bilan, Programme, ProgrammeV2, ProgrammeSeanceV2, JourProgramme } from '../types';
+import { JOURS_PROGRAMME } from '../types';
 import { supabase } from '../lib/supabase';
 import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/mappers';
 import { loadExercices } from '../data/exercices';
@@ -121,12 +122,13 @@ function BannierePWA() {
 // ── ÉCRAN 1 — Accueil ─────────────────────────────────────────────────────────
 
 function EcranAccueil({
-  participant, seances, bilans, programmes,
+  participant, seances, bilans, programmes, programmesV2,
 }: {
   participant: Participant;
   seances: Seance[];
   bilans: Bilan[];
   programmes: Programme[];
+  programmesV2: ProgrammeV2[];
 }) {
   const praticien = loadPraticien();
   const today = new Date().toISOString().split('T')[0];
@@ -140,7 +142,8 @@ function EcranAccueil({
   const premierBilan = sortedBilans[0] ?? null;
   const dernierBilan = sortedBilans[sortedBilans.length - 1] ?? null;
 
-  // Programme actif
+  // Programme actif (V2 en priorité, V1 en fallback)
+  const progsV2Actifs = programmesV2.filter(p => p.actif);
   const programmeActif = programmes.filter(p => p.actif)
     .sort((a, b) => b.dateCreation.localeCompare(a.dateCreation))[0] ?? null;
 
@@ -213,8 +216,36 @@ function EcranAccueil({
         </div>
       )}
 
-      {/* Programme en cours */}
-      {programmeActif && (
+      {/* Programmes en cours — V2 */}
+      {progsV2Actifs.length > 0 && (
+        <div style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 18, padding: '18px 16px' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+            Vos programmes
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {progsV2Actifs.map(prog => {
+              const totalEx = prog.seances.reduce((sum, s) => sum + s.exercices.length, 0);
+              const joursActifs = [...new Set(prog.planning.map(p => p.jour))];
+              return (
+                <div key={prog.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.dark }}>🏋️ {prog.nom}</div>
+                    {joursActifs.length > 0 && (
+                      <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                        {joursActifs.length} jour{joursActifs.length > 1 ? 's' : ''}/semaine · {totalEx} exercice{totalEx > 1 ? 's' : ''}
+                      </div>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 11, background: 'rgba(43,191,191,0.12)', color: C.teal, fontWeight: 700, padding: '3px 8px', borderRadius: 8 }}>Actif</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Programme en cours — V1 fallback */}
+      {progsV2Actifs.length === 0 && programmeActif && (
         <div style={{
           background: 'white', border: `1px solid ${C.border}`,
           borderRadius: 18, padding: '18px 16px',
@@ -395,6 +426,9 @@ function EcranProgres({ bilans }: { bilans: Bilan[] }) {
   const sorted = [...bilans].sort((a, b) => a.date.localeCompare(b.date));
   const bilanInitial = sorted.find(b => b.type === 'initial') ?? sorted[0] ?? null;
   const dernierBilan = sorted[sorted.length - 1] ?? null;
+  const flatData = bilanInitial?.bilanInitialData?.formulaireFlat?.data;
+  const sedProfil = flatData?.sedentariteProfil as string | null ?? null;
+  const fssProfil = flatData?.fatigueProfil as string | null ?? null;
 
   const hasDeux = bilanInitial && dernierBilan && bilanInitial.id !== dernierBilan.id;
   const progressions = hasDeux ? calculerProgressions(bilanInitial!, dernierBilan!) : [];
@@ -457,6 +491,40 @@ function EcranProgres({ bilans }: { bilans: Bilan[] }) {
         <CarteProgression key={item.key} item={item} />
       ))}
 
+      {/* Activité physique & Fatigue */}
+      {(sedProfil || fssProfil) && (
+        <div style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 18, padding: '16px 16px' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.dark, marginBottom: 10 }}>
+            Votre profil de forme
+          </div>
+          {sedProfil && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 13, color: C.muted }}>Votre niveau d'activité</span>
+              <span style={{
+                fontSize: 13, fontWeight: 600,
+                color: sedProfil === 'inactif' ? '#E24B4A' : sedProfil === 'actif' ? '#BA7517' : '#0F6E56',
+              }}>
+                {sedProfil === 'inactif' ? 'Faible 🔴' : sedProfil === 'actif' ? 'Modéré 🟡' : 'Élevé 🟢'}
+              </span>
+            </div>
+          )}
+          {fssProfil && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 13, color: C.muted }}>Votre fatigue</span>
+              <span style={{
+                fontSize: 13, fontWeight: 600,
+                color: fssProfil === 'pas_de_fatigue' ? '#0F6E56' : '#A32D2D',
+              }}>
+                {fssProfil === 'pas_de_fatigue' ? 'Légère 🟢' : 'À surveiller 🔴'}
+              </span>
+            </div>
+          )}
+          <p style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>
+            Votre praticien adapte vos séances en conséquence.
+          </p>
+        </div>
+      )}
+
       {/* Message d'encouragement global */}
       {progressions.length > 0 && (
         <div style={{
@@ -485,37 +553,132 @@ function EcranProgres({ bilans }: { bilans: Bilan[] }) {
   );
 }
 
+// ── Helpers planning V2 ───────────────────────────────────────────────────────
+
+const JOURS_JS_TO_FR: JourProgramme[] = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+const JOUR_COURT_FR: Record<JourProgramme, string> = {
+  lundi: 'Lun', mardi: 'Mar', mercredi: 'Mer', jeudi: 'Jeu',
+  vendredi: 'Ven', samedi: 'Sam', dimanche: 'Dim',
+};
+
+function getTodayJour(): JourProgramme {
+  return JOURS_JS_TO_FR[new Date().getDay()];
+}
+
+function getSeancesAujourdHuiV2(prog: ProgrammeV2): ProgrammeSeanceV2[] {
+  const today = getTodayJour();
+  const seanceIds = prog.planning.filter(p => p.jour === today).map(p => p.seanceId);
+  return prog.seances.filter(s => seanceIds.includes(s.id));
+}
+
+function getJoursActifsV2(prog: ProgrammeV2): JourProgramme[] {
+  const active = new Set(prog.planning.map(p => p.jour));
+  return JOURS_PROGRAMME.filter(j => active.has(j));
+}
+
+// ── Carte exercice patient ────────────────────────────────────────────────────
+
+function CarteExercicePatient({ ex, index }: { ex: ProgrammeV2['seances'][0]['exercices'][0]; index: number }) {
+  return (
+    <div style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden', marginBottom: 12 }}>
+      <div style={{
+        background: C.bg, padding: '12px 16px',
+        display: 'flex', alignItems: 'center', gap: 12,
+        borderBottom: `1px solid ${C.border}`,
+      }}>
+        <div style={{
+          width: 30, height: 30, borderRadius: '50%', background: C.teal,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 13, fontWeight: 700, color: 'white', flexShrink: 0,
+        }}>
+          {index + 1}
+        </div>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>{ex.nom}</div>
+          {ex.categorie && (
+            <div style={{ fontSize: 12, color: C.teal, fontWeight: 600, marginTop: 1 }}>{ex.categorie}</div>
+          )}
+        </div>
+      </div>
+      <div style={{ padding: '14px 16px' }}>
+        {/* Compteurs */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+          {ex.series != null && ex.series > 0 && (
+            <div style={{ background: '#E8F8F8', borderRadius: 10, padding: '8px 12px', textAlign: 'center', flex: 1, minWidth: 60 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: C.teal }}>{ex.series}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>série{ex.series > 1 ? 's' : ''}</div>
+            </div>
+          )}
+          {ex.repetitions != null && (
+            <div style={{ background: '#E8F8F8', borderRadius: 10, padding: '8px 12px', textAlign: 'center', flex: 1, minWidth: 60 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: C.teal }}>{ex.repetitions}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>répétitions</div>
+            </div>
+          )}
+          {ex.dureeSecondes != null && (
+            <div style={{ background: '#E8F8F8', borderRadius: 10, padding: '8px 12px', textAlign: 'center', flex: 1, minWidth: 60 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: C.teal }}>{ex.dureeSecondes}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>secondes</div>
+            </div>
+          )}
+        </div>
+        {ex.description && (
+          <div style={{ fontSize: 13, color: '#4A6080', lineHeight: 1.7, marginBottom: 8 }}>{ex.description}</div>
+        )}
+        {ex.conseilSecurite && (
+          <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#92400E', lineHeight: 1.5 }}>
+            💡 {ex.conseilSecurite}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── ÉCRAN 3 — Programme ───────────────────────────────────────────────────────
 
-function EcranProgramme({ participant, programmes }: {
+function EcranProgramme({ participant, programmes, programmesV2 }: {
   participant: Participant;
   programmes: Programme[];
+  programmesV2: ProgrammeV2[];
 }) {
+  const [selectedProgId, setSelectedProgId] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const praticien = loadPraticien();
-  const programme = programmes
-    .filter(p => p.actif)
-    .sort((a, b) => b.dateCreation.localeCompare(a.dateCreation))[0] ?? null;
   const exercicesCatalog = loadExercices();
 
+  const progsV2Actifs = programmesV2.filter(p => p.actif);
+  const today = getTodayJour();
+  const todayFR = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  // V1 fallback
+  const programmeV1 = programmes.filter(p => p.actif).sort((a, b) => b.dateCreation.localeCompare(a.dateCreation))[0] ?? null;
+
+  // Séances du jour (V2)
+  const seancesAujourdHui = progsV2Actifs.flatMap(prog =>
+    getSeancesAujourdHuiV2(prog).map(s => ({ ...s, progNom: prog.nom, progId: prog.id }))
+  );
+
+  // Programme sélectionné pour le détail
+  const selectedProg = selectedProgId ? progsV2Actifs.find(p => p.id === selectedProgId) : null;
+
+  // PDF pour programme V1
   async function telechargerPDF() {
-    if (!programme) return;
+    if (!programmeV1) return;
     setPdfLoading(true);
     try {
       await exportProgrammePDF(
-        { programme, exercices: exercicesCatalog, participant, settings: { prenom: praticien.nom, nom: '', email: '', telephone: '', societe: praticien.societe } },
+        { programme: programmeV1, exercices: exercicesCatalog, participant, settings: { prenom: praticien.nom, nom: '', email: '', telephone: '', societe: praticien.societe } },
         `programme-${participant.prenom.toLowerCase()}.pdf`
       );
     } finally { setPdfLoading(false); }
   }
 
-  if (!programme) {
+  if (progsV2Actifs.length === 0 && !programmeV1) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px' }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🏋️</div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: C.dark, marginBottom: 8 }}>
-          Programme à venir
-        </div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.dark, marginBottom: 8 }}>Programme à venir</div>
         <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.7 }}>
           Votre programme d'exercices sera bientôt<br />
           disponible ici. {praticien.nom.split(' ')[0]} le préparera<br />
@@ -525,160 +688,263 @@ function EcranProgramme({ participant, programmes }: {
     );
   }
 
-  return (
-    <div>
-      {/* En-tête programme */}
-      <div style={{ background: C.dark, borderRadius: 18, padding: '18px 16px', marginBottom: 14 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.teal, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
-          Votre programme
+  // Vue détail d'un programme V2
+  if (selectedProg) {
+    const seancesAujourdHuiDetail = getSeancesAujourdHuiV2(selectedProg);
+    const joursActifs = getJoursActifsV2(selectedProg);
+
+    return (
+      <div>
+        <button
+          onClick={() => setSelectedProgId(null)}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: C.muted, marginBottom: 14, padding: 0 }}
+        >
+          ← Tous les programmes
+        </button>
+
+        {/* En-tête */}
+        <div style={{ background: C.dark, borderRadius: 18, padding: '18px 16px', marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.teal, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Votre programme</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: 'white', marginBottom: 4 }}>🏋️ {selectedProg.nom}</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>
+            Établi par {praticien.nom.split(' ')[0]}
+          </div>
+          {selectedProg.objectif && (
+            <div style={{ marginTop: 10, background: 'rgba(43,191,191,0.15)', border: '1px solid rgba(43,191,191,0.3)', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic' }}>
+              🎯 {selectedProg.objectif}
+            </div>
+          )}
+          {selectedProg.messageMotivation && (
+            <div style={{ marginTop: 8, background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: 'rgba(255,255,255,0.65)', fontStyle: 'italic' }}>
+              💬 "{selectedProg.messageMotivation}"
+            </div>
+          )}
         </div>
-        <div style={{ fontSize: 18, fontWeight: 800, color: 'white', marginBottom: 4 }}>
-          {programme.titre}
-        </div>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>
-          Établi par {praticien.nom.split(' ')[0]} · mis à jour le {fmtCourt(programme.dateCreation)}
-        </div>
-        {programme.objectif && (
-          <div style={{
-            marginTop: 12, background: 'rgba(43,191,191,0.15)',
-            border: '1px solid rgba(43,191,191,0.3)',
-            borderRadius: 10, padding: '10px 12px',
-            fontSize: 13, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic',
-          }}>
-            🎯 {programme.objectif}
+
+        {/* Planning semaine */}
+        {joursActifs.length > 0 && (
+          <div style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 16, padding: '14px 16px', marginBottom: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Planning</div>
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+              {JOURS_PROGRAMME.map(jour => {
+                const actif = joursActifs.includes(jour);
+                const isToday = jour === today;
+                return (
+                  <div key={jour} style={{ textAlign: 'center', flex: 1 }}>
+                    <div style={{ fontSize: 10, color: isToday ? C.teal : C.muted, marginBottom: 4, fontWeight: isToday ? 700 : 400 }}>
+                      {JOUR_COURT_FR[jour]}
+                    </div>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: '50%', margin: '0 auto',
+                      background: actif ? (isToday ? C.teal : C.dark) : C.bg,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 12,
+                    }}>
+                      {actif ? '●' : '○'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
-        {programme.messageMotivation && (
-          <div style={{
-            marginTop: 8, background: 'rgba(255,255,255,0.07)',
-            borderRadius: 10, padding: '10px 12px',
-            fontSize: 13, color: 'rgba(255,255,255,0.65)', fontStyle: 'italic',
-          }}>
-            💬 "{programme.messageMotivation}"
+
+        {/* Séances du jour ou repos */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+            Séance d'aujourd'hui — {todayFR}
+          </div>
+          {seancesAujourdHuiDetail.length === 0 ? (
+            <div style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px', textAlign: 'center', color: C.muted, fontSize: 14 }}>
+              😌 Repos aujourd'hui
+            </div>
+          ) : seancesAujourdHuiDetail.map(seance => (
+            <div key={seance.id} style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.dark, marginBottom: 8 }}>{seance.nom}</div>
+              {seance.exercices.sort((a, b) => a.ordre - b.ordre).map((ex, i) => (
+                <CarteExercicePatient key={ex.id} ex={ex} index={i} />
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* Toutes les séances */}
+        {selectedProg.seances.length > 0 && (
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+              Tous les exercices
+            </div>
+            {selectedProg.seances.map(seance => (
+              <div key={seance.id} style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.dark, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>{seance.nom}</span>
+                  <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>
+                    {seance.exercices.length} exercice{seance.exercices.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+                {seance.exercices.sort((a, b) => a.ordre - b.ordre).map((ex, i) => (
+                  <CarteExercicePatient key={ex.id} ex={ex} index={i} />
+                ))}
+              </div>
+            ))}
           </div>
         )}
       </div>
+    );
+  }
 
-      {/* Exercices */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
-        {programme.exercices
-          .sort((a, b) => a.ordre - b.ordre)
-          .map((ep, index) => {
-            const ex = exercicesCatalog.find(e => e.id === ep.exerciceId);
-            if (!ex) return null;
-            // Traduction catégorie
-            const catLabel: Record<string, string> = {
-              equilibre: 'Équilibre', force: 'Force', mobilite: 'Mobilité',
-              souplesse: 'Souplesse', endurance: 'Endurance', memoire: 'Mémoire',
-            };
-            return (
-              <div key={ep.exerciceId} style={{
-                background: 'white', border: `1px solid ${C.border}`,
-                borderRadius: 18, overflow: 'hidden',
-              }}>
-                {/* Header */}
-                <div style={{
-                  background: C.bg, padding: '12px 16px',
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  borderBottom: `1px solid ${C.border}`,
-                }}>
+  // Vue liste de tous les programmes
+  return (
+    <div>
+      {/* Aujourd'hui — V2 */}
+      {progsV2Actifs.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+            Aujourd'hui — {todayFR}
+          </div>
+          {seancesAujourdHui.length === 0 ? (
+            <div style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px', textAlign: 'center', color: C.muted, fontSize: 14 }}>
+              😌 Repos aujourd'hui
+            </div>
+          ) : seancesAujourdHui.map(s => (
+            <div key={s.id} style={{ background: 'white', border: `1px solid rgba(43,191,191,0.3)`, borderRadius: 16, padding: '14px 16px', marginBottom: 10, cursor: 'pointer' }}
+              onClick={() => setSelectedProgId(s.progId)}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>🏋️ {s.nom} · {s.progNom}</div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+                {s.exercices.length} exercice{s.exercices.length > 1 ? 's' : ''} · Voir les exercices →
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Planning semaine — V2 */}
+      {progsV2Actifs.length > 0 && (
+        <div style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 16, padding: '14px 16px', marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Cette semaine</div>
+          <div style={{ display: 'flex', gap: 4, justifyContent: 'space-between' }}>
+            {JOURS_PROGRAMME.map(jour => {
+              const actif = progsV2Actifs.some(p => p.planning.some(pl => pl.jour === jour));
+              const isToday = jour === today;
+              return (
+                <div key={jour} style={{ textAlign: 'center', flex: 1 }}>
+                  <div style={{ fontSize: 10, color: isToday ? C.teal : C.muted, marginBottom: 3, fontWeight: isToday ? 700 : 400 }}>
+                    {JOUR_COURT_FR[jour]}
+                  </div>
                   <div style={{
-                    width: 32, height: 32, borderRadius: '50%', background: C.teal,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 14, fontWeight: 700, color: 'white', flexShrink: 0,
+                    fontSize: 16, color: actif ? C.teal : C.border,
+                    fontWeight: 700,
                   }}>
-                    {index + 1}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>{ex.nom}</div>
-                    <div style={{ fontSize: 12, color: C.teal, fontWeight: 600, marginTop: 1 }}>
-                      {catLabel[ex.categorie] ?? ex.categorie}
-                    </div>
+                    {actif ? '●' : '○'}
                   </div>
                 </div>
-                {/* Corps */}
-                <div style={{ padding: '14px 16px' }}>
-                  {/* Compteurs */}
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-                    {ep.series > 0 && (
-                      <div style={{ background: '#E8F8F8', borderRadius: 10, padding: '8px 12px', textAlign: 'center', flex: 1, minWidth: 65 }}>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: C.teal }}>{ep.series}</div>
-                        <div style={{ fontSize: 11, color: C.muted }}>série{ep.series > 1 ? 's' : ''}</div>
-                      </div>
-                    )}
-                    {ep.repetitions != null && (
-                      <div style={{ background: '#E8F8F8', borderRadius: 10, padding: '8px 12px', textAlign: 'center', flex: 1, minWidth: 65 }}>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: C.teal }}>{ep.repetitions}</div>
-                        <div style={{ fontSize: 11, color: C.muted }}>répétitions</div>
-                      </div>
-                    )}
-                    {ep.dureeSecondes != null && (
-                      <div style={{ background: '#E8F8F8', borderRadius: 10, padding: '8px 12px', textAlign: 'center', flex: 1, minWidth: 65 }}>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: C.teal }}>{ep.dureeSecondes}</div>
-                        <div style={{ fontSize: 11, color: C.muted }}>secondes</div>
-                      </div>
-                    )}
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Tous vos programmes — V2 */}
+      {progsV2Actifs.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+            Tous vos programmes
+          </div>
+          {progsV2Actifs.map(prog => {
+            const joursActifs = getJoursActifsV2(prog);
+            const totalEx = prog.seances.reduce((sum, s) => sum + s.exercices.length, 0);
+            return (
+              <div
+                key={prog.id}
+                onClick={() => setSelectedProgId(prog.id)}
+                style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 16, padding: '14px 16px', marginBottom: 10, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>🏋️ {prog.nom}</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
+                    {joursActifs.length > 0 ? joursActifs.map(j => JOUR_COURT_FR[j]).join(' · ') : 'Pas de planning'}
+                    {totalEx > 0 && ` · ${totalEx} exercice${totalEx > 1 ? 's' : ''}`}
                   </div>
-                  {/* Description */}
-                  {ex.description && (
-                    <div style={{ fontSize: 13, color: '#4A6080', lineHeight: 1.7, marginBottom: 10 }}>
-                      {ex.description}
-                    </div>
-                  )}
-                  {/* Conseil sécurité 💡 */}
-                  {ex.consigneSecurite && (
-                    <div style={{
-                      background: '#FFFBEB', border: '1px solid #FDE68A',
-                      borderRadius: 10, padding: '10px 12px',
-                      fontSize: 13, color: '#92400E', lineHeight: 1.5, marginBottom: 8,
-                    }}>
-                      💡 {ex.consigneSecurite}
-                    </div>
-                  )}
-                  {/* Note de Pierre */}
-                  {ep.notePersonnalisee && (
-                    <div style={{
-                      background: '#EAF3DE', border: '1px solid #C0DD97',
-                      borderRadius: 10, padding: '10px 12px',
-                      fontSize: 13, color: '#3B6D11', lineHeight: 1.5,
-                    }}>
-                      📝 {ep.notePersonnalisee}
-                    </div>
-                  )}
-                  {/* Vidéo */}
-                  {ex.videoYoutubeId && (
-                    <button
-                      onClick={() => window.open(`https://youtube.com/watch?v=${ex.videoYoutubeId}`, '_blank')}
-                      style={{
-                        marginTop: 8, width: '100%', padding: '10px',
-                        background: '#FEE2E2', border: '1px solid #FECACA',
-                        borderRadius: 10, fontSize: 13, fontWeight: 700,
-                        color: '#991B1B', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        minHeight: 44,
-                      }}
-                    >
-                      ▶ Voir la vidéo de démonstration
-                    </button>
-                  )}
                 </div>
+                <span style={{ fontSize: 16, color: C.muted }}>›</span>
               </div>
             );
           })}
-      </div>
+        </div>
+      )}
 
-      {/* Bouton PDF */}
-      <button onClick={telechargerPDF} disabled={pdfLoading} style={{
-        width: '100%', padding: '16px',
-        background: pdfLoading ? C.muted : C.dark,
-        color: 'white', border: 'none', borderRadius: 14,
-        fontSize: 15, fontWeight: 700,
-        cursor: pdfLoading ? 'not-allowed' : 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        minHeight: 52,
-      }}>
-        {pdfLoading ? '⏳ Génération…' : '📄 Télécharger mon programme PDF'}
-      </button>
+      {/* Fallback programme V1 */}
+      {programmeV1 && progsV2Actifs.length === 0 && (
+        <div>
+          <div style={{ background: C.dark, borderRadius: 18, padding: '18px 16px', marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.teal, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Votre programme</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'white', marginBottom: 4 }}>{programmeV1.titre}</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>
+              Établi par {praticien.nom.split(' ')[0]} · mis à jour le {fmtCourt(programmeV1.dateCreation)}
+            </div>
+            {programmeV1.objectif && (
+              <div style={{ marginTop: 10, background: 'rgba(43,191,191,0.15)', border: '1px solid rgba(43,191,191,0.3)', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic' }}>
+                🎯 {programmeV1.objectif}
+              </div>
+            )}
+            {programmeV1.messageMotivation && (
+              <div style={{ marginTop: 8, background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: 'rgba(255,255,255,0.65)', fontStyle: 'italic' }}>
+                💬 "{programmeV1.messageMotivation}"
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+            {programmeV1.exercices.sort((a, b) => a.ordre - b.ordre).map((ep, index) => {
+              const ex = exercicesCatalog.find(e => e.id === ep.exerciceId);
+              if (!ex) return null;
+              return (
+                <div key={ep.exerciceId} style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
+                  <div style={{ background: C.bg, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: `1px solid ${C.border}` }}>
+                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: C.teal, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: 'white', flexShrink: 0 }}>
+                      {index + 1}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>{ex.nom}</div>
+                      <div style={{ fontSize: 12, color: C.teal, fontWeight: 600, marginTop: 1 }}>{ex.categorie}</div>
+                    </div>
+                  </div>
+                  <div style={{ padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                      {ep.series > 0 && (
+                        <div style={{ background: '#E8F8F8', borderRadius: 10, padding: '8px 12px', textAlign: 'center', flex: 1, minWidth: 60 }}>
+                          <div style={{ fontSize: 20, fontWeight: 700, color: C.teal }}>{ep.series}</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>séries</div>
+                        </div>
+                      )}
+                      {ep.repetitions != null && (
+                        <div style={{ background: '#E8F8F8', borderRadius: 10, padding: '8px 12px', textAlign: 'center', flex: 1, minWidth: 60 }}>
+                          <div style={{ fontSize: 20, fontWeight: 700, color: C.teal }}>{ep.repetitions}</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>répétitions</div>
+                        </div>
+                      )}
+                      {ep.dureeSecondes != null && (
+                        <div style={{ background: '#E8F8F8', borderRadius: 10, padding: '8px 12px', textAlign: 'center', flex: 1, minWidth: 60 }}>
+                          <div style={{ fontSize: 20, fontWeight: 700, color: C.teal }}>{ep.dureeSecondes}</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>secondes</div>
+                        </div>
+                      )}
+                    </div>
+                    {ex.description && <div style={{ fontSize: 13, color: '#4A6080', lineHeight: 1.7, marginBottom: 8 }}>{ex.description}</div>}
+                    {ex.consigneSecurite && (
+                      <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#92400E', lineHeight: 1.5 }}>
+                        💡 {ex.consigneSecurite}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <button onClick={telechargerPDF} disabled={pdfLoading} style={{ width: '100%', padding: '16px', background: pdfLoading ? C.muted : C.dark, color: 'white', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: pdfLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52 }}>
+            {pdfLoading ? '⏳ Génération…' : '📄 Télécharger mon programme PDF'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -824,6 +1090,7 @@ export default function EspacePatient() {
   const [seances, setSeances]           = useState<Seance[]>([]);
   const [bilans, setBilans]             = useState<Bilan[]>([]);
   const [programmes, setProgrammes]     = useState<Programme[]>([]);
+  const [programmesV2, setProgrammesV2] = useState<ProgrammeV2[]>([]);
   const [documentsPatient, setDocumentsPatient] = useState<{ id: string; titre: string; contenu: string; date_creation: string }[]>([]);
   const [tab, setTab]                   = useState<Tab>('accueil');
 
@@ -850,8 +1117,78 @@ export default function EspacePatient() {
         setBilans(bRes.value.data.map(dbToBilan));
       if (sRes.status === 'fulfilled' && sRes.value.data)
         setSeances(sRes.value.data.map(dbToSeance));
-      if (prRes.status === 'fulfilled' && prRes.value.data)
-        setProgrammes(prRes.value.data.map(dbToProgramme));
+      if (prRes.status === 'fulfilled' && prRes.value.data) {
+        const allProgs = prRes.value.data;
+        setProgrammes(allProgs.map(dbToProgramme));
+
+        // Charger les programmes V2 (avec type != null) + leurs séances/planning/exercices
+        const v2Rows = allProgs.filter((p: Record<string, unknown>) => p.type != null);
+        if (v2Rows.length > 0) {
+          const [seancesRes, planningRes] = await Promise.allSettled([
+            supabase!.from('programme_seances').select('*').in('programme_id', v2Rows.map((p: Record<string, unknown>) => p.id)).order('ordre'),
+            supabase!.from('programme_planning').select('*').in('programme_id', v2Rows.map((p: Record<string, unknown>) => p.id)),
+          ]);
+          const seanceRows = seancesRes.status === 'fulfilled' ? (seancesRes.value.data ?? []) : [];
+          const planningRows = planningRes.status === 'fulfilled' ? (planningRes.value.data ?? []) : [];
+
+          let exerciceRows: Record<string, unknown>[] = [];
+          if (seanceRows.length > 0) {
+            const exRes = await supabase!.from('programme_exercices').select('*')
+              .in('seance_id', seanceRows.map((s: Record<string, unknown>) => s.id)).order('ordre');
+            exerciceRows = exRes.data ?? [];
+          }
+
+          const v2Programmes: ProgrammeV2[] = v2Rows.map((progRow: Record<string, unknown>) => {
+            const progSeances = seanceRows
+              .filter((s: Record<string, unknown>) => s.programme_id === progRow.id)
+              .map((s: Record<string, unknown>) => ({
+                id: s.id as string,
+                programmeId: s.programme_id as string,
+                nom: (s.nom as string) ?? '',
+                description: (s.description as string | null) ?? undefined,
+                ordre: (s.ordre as number) ?? 0,
+                exercices: exerciceRows
+                  .filter((e: Record<string, unknown>) => e.seance_id === s.id)
+                  .map((e: Record<string, unknown>) => ({
+                    id: e.id as string,
+                    seanceId: e.seance_id as string,
+                    nom: (e.nom as string) ?? '',
+                    categorie: (e.categorie as string | null) ?? undefined,
+                    description: (e.description as string | null) ?? undefined,
+                    conseilSecurite: (e.conseil_securite as string | null) ?? undefined,
+                    series: (e.series as number | null) ?? undefined,
+                    repetitions: (e.repetitions as number | null) ?? undefined,
+                    dureeSecondes: (e.duree_secondes as number | null) ?? undefined,
+                    ordre: (e.ordre as number) ?? 0,
+                  })),
+              })) as ProgrammeSeanceV2[];
+
+            const progPlanning = planningRows
+              .filter((p: Record<string, unknown>) => p.programme_id === progRow.id)
+              .map((p: Record<string, unknown>) => ({
+                id: p.id as string,
+                programmeId: p.programme_id as string,
+                seanceId: p.seance_id as string,
+                jour: p.jour as JourProgramme,
+              }));
+
+            return {
+              id: progRow.id as string,
+              participantId: progRow.participant_id as string,
+              nom: (progRow.nom as string | null) ?? (progRow.titre as string | null) ?? '',
+              objectif: (progRow.objectif as string | null) ?? undefined,
+              messageMotivation: (progRow.message_motivation as string | null) ?? undefined,
+              type: ((progRow.type as string) ?? 'domicile') as ProgrammeV2['type'],
+              actif: (progRow.actif as boolean) ?? true,
+              createdAt: (progRow.created_at as string | null) ?? (progRow.date_creation as string | null) ?? '',
+              seances: progSeances,
+              planning: progPlanning,
+            } as ProgrammeV2;
+          });
+
+          setProgrammesV2(v2Programmes);
+        }
+      }
       if (docRes.status === 'fulfilled' && docRes.value.data)
         setDocumentsPatient(docRes.value.data as { id: string; titre: string; contenu: string; date_creation: string }[]);
 
@@ -925,11 +1262,12 @@ export default function EspacePatient() {
             seances={seances}
             bilans={bilans}
             programmes={programmes}
+            programmesV2={programmesV2}
           />
         )}
         {tab === 'progres' && <EcranProgres bilans={bilans} />}
         {tab === 'programme' && (
-          <EcranProgramme participant={participant} programmes={programmes} />
+          <EcranProgramme participant={participant} programmes={programmes} programmesV2={programmesV2} />
         )}
         {tab === 'documents' && (
           <EcranDocuments bilans={bilans} participant={participant} documentsPatient={documentsPatient} />

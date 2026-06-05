@@ -431,3 +431,63 @@ export interface AccesPatient {
   dernierAcces?: string;
 }
 
+// ── PROGRAMME V2 (structure relationnelle) ────────────────────────────────────
+
+export type TypeProgramme = 'seance' | 'domicile' | 'quotidien' | 'recuperation';
+export type JourProgramme = 'lundi' | 'mardi' | 'mercredi' | 'jeudi' | 'vendredi' | 'samedi' | 'dimanche';
+
+export const JOURS_PROGRAMME: JourProgramme[] = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+
+export const TYPE_PROGRAMME_LABELS: Record<TypeProgramme, string> = {
+  domicile:   'Domicile',
+  seance:     'Séance avec praticien',
+  quotidien:  'Quotidien',
+  recuperation: 'Récupération',
+};
+
+export const CATEGORIE_EXERCICE_LABELS: string[] = [
+  'Équilibre', 'Force', 'Endurance', 'Souplesse', 'Coordination', 'Respiration',
+];
+
+export interface ProgrammeExerciceV2 {
+  id: string;
+  seanceId: string;
+  nom: string;
+  categorie?: string;
+  description?: string;
+  conseilSecurite?: string;
+  series?: number;
+  repetitions?: number;
+  dureeSecondes?: number;
+  ordre: number;
+}
+
+export interface ProgrammeSeanceV2 {
+  id: string;
+  programmeId: string;
+  nom: string;
+  description?: string;
+  ordre: number;
+  exercices: ProgrammeExerciceV2[];
+}
+
+export interface ProgrammePlanningV2 {
+  id: string;
+  programmeId: string;
+  seanceId: string;
+  jour: JourProgramme;
+}
+
+export interface ProgrammeV2 {
+  id: string;
+  participantId: string;
+  nom: string;
+  objectif?: string;
+  messageMotivation?: string;
+  type: TypeProgramme;
+  actif: boolean;
+  createdAt: string;
+  seances: ProgrammeSeanceV2[];
+  planning: ProgrammePlanningV2[];
+}
+

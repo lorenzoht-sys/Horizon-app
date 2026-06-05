@@ -26,6 +26,7 @@ import ModalEspacePatient from '../components/participant/ModalEspacePatient';
 import { exportFichePatientPDF } from '../utils/exportFichePatientPDF';
 import { calculerNote, NORMES_SCORING } from '../data/norms';
 import { TAG_CONFIG } from '../data/profiles';
+import { getSedProfil, getFSSProfil } from '../components/bilan/FormulaireBilanInitial';
 import { toast } from 'sonner';
 import type { Bilan, Participant, Contrat, Seance, ProfilHandicap } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
@@ -246,6 +247,13 @@ function CarteProfilFonctionnel({ bilans }: {
   const current = sorted[sorted.length - 1] ?? null;
   if (!current) return null;
 
+  const flatData = initial?.bilanInitialData?.formulaireFlat?.data;
+  const sedScore = flatData?.sedentariteScore as number | null ?? null;
+  const fssScore = flatData?.fatigueScore as number | null ?? null;
+
+  const sedInfo = sedScore !== null ? getSedProfil(sedScore) : null;
+  const fssInfo = fssScore !== null ? getFSSProfil(fssScore) : null;
+
   const testsAvecValeur = TESTS_TABLEAU.map(test => {
     const val = test.getVal(current);
     if (val === null || val === undefined) return null;
@@ -325,6 +333,28 @@ function CarteProfilFonctionnel({ bilans }: {
           </span>
         ))}
       </div>
+
+      {/* Activité physique & Fatigue du bilan initial */}
+      {(sedInfo || fssInfo) && (
+        <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-1.5">
+          {sedInfo && (
+            <div className="flex items-center justify-between text-[12px]">
+              <span className="text-gray-500">Activité physique</span>
+              <span style={{ color: sedInfo.color, fontWeight: 600 }}>
+                {sedInfo.label}{sedScore !== null ? ` (${sedScore}/55)` : ''}
+              </span>
+            </div>
+          )}
+          {fssInfo && (
+            <div className="flex items-center justify-between text-[12px]">
+              <span className="text-gray-500">Fatigue perçue</span>
+              <span style={{ color: fssInfo.color, fontWeight: 600 }}>
+                {fssInfo.label}{fssScore !== null ? ` (FSS ${fssScore}/63)` : ''}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

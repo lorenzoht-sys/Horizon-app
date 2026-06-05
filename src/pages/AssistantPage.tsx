@@ -289,6 +289,13 @@ Tu cites les recommandations HAS ou SFP-APA quand pertinent.`;
   const dernierBilan   = sortedBilans[0] ?? null;
   const bilanPrecedent = sortedBilans[1] ?? null;
 
+  const flatData = bilanInitial?.bilanInitialData?.formulaireFlat?.data;
+  const sedProfilLabel = flatData?.sedentariteProfil === 'inactif' ? 'Inactif'
+    : flatData?.sedentariteProfil === 'actif' ? 'Actif'
+    : flatData?.sedentariteProfil === 'tres_actif' ? 'Très actif' : null;
+  const fssProfilLabel = flatData?.fatigueProfil === 'pas_de_fatigue' ? 'Pas de fatigue significative'
+    : flatData?.fatigueProfil === 'fatigue_probable' ? 'Fatigue probable' : null;
+
   const extra = [
     profil?.douleursNiveau != null ? `- Douleur habituelle : ${profil.douleursNiveau}/10${profil.douleursLocalisation ? ` (${profil.douleursLocalisation})` : ''}` : null,
     profil?.chutes12mois != null ? `- Chutes / 12 mois : ${profil.chutes12mois}` : null,
@@ -296,6 +303,8 @@ Tu cites les recommandations HAS ou SFP-APA quand pertinent.`;
     patient.antecedentsChirurgicaux ? `- ATCD chirurgicaux : ${patient.antecedentsChirurgicaux}` : null,
     patient.allergies ? `- Allergies : ${patient.allergies}` : null,
     profil?.objectifsPersonnels ? `- Objectifs personnels : ${profil.objectifsPersonnels}` : null,
+    sedProfilLabel ? `- Niveau d'activité physique : ${sedProfilLabel} (score ${flatData?.sedentariteScore ?? '?'}/55 — Ricci & Gagnon)` : null,
+    fssProfilLabel ? `- Fatigue perçue : ${fssProfilLabel} (FSS ${flatData?.fatigueScore ?? '?'}/63)` : null,
   ].filter(Boolean).join('\n');
 
   const crText = extras?.compteRendus.length
