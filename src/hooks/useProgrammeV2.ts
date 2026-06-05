@@ -222,6 +222,96 @@ export function useProgrammeV2(participantId: string) {
     return true;
   }, [participantId, load]);
 
+  // ── Update ───────────────────────────────────────────────────────────────────
+
+  const updateProgramme = useCallback(async (
+    id: string,
+    data: {
+      nom: string;
+      objectif?: string;
+      messageMotivation?: string;
+      type: TypeProgramme;
+      seances: Array<{
+        tempId: string;
+        nom: string;
+        description?: string;
+        exercices: Array<{
+          nom: string;
+          categorie?: string;
+          description?: string;
+          conseilSecurite?: string;
+          series?: number;
+          repetitions?: number;
+          dureeSecondes?: number;
+        }>;
+      }>;
+      planning: Partial<Record<JourProgramme, string | null>>;
+    }
+  ): Promise<boolean> => {
+    if (!supabase) return false;
+
+    // 1. Mettre à jour les infos du programme
+    const { error: progError } = await supabase.from('programmes').update({
+      nom: data.nom,
+      titre: data.nom,
+      objectif: data.objectif ?? null,
+      message_motivation: data.messageMotivation ?? null,
+      type: data.type,
+    }).eq('id', id);
+    if (progError) { console.error('Erreur update programme:', progError); return false; }
+
+    // 2. Récupérer les IDs des séances existantes pour supprimer leurs exercices
+    const { data: existingSeances } = await supabase
+      .from('programme_seances').select('id').eq('programme_id', id);
+    if (existingSeances && existingSeances.length > 0) {
+      await supabase.from('programme_exercices')
+        .delete().in('seance_id', existingSeances.map(s => s.id));
+    }
+
+    // 3. Supprimer planning et séances existants
+    await supabase.from('programme_planning').delete().eq('programme_id', id);
+    await supabase.from('programme_seances').delete().eq('programme_id', id);
+
+    // 4. Re-créer séances + exercices
+    const tempIdToRealId: Record<string, string> = {};
+    for (let i = 0; i < data.seances.length; i++) {
+      const seance = data.seances[i];
+      const seanceId = uuidv4();
+      tempIdToRealId[seance.tempId] = seanceId;
+
+      await supabase.from('programme_seances').insert({
+        id: seanceId, programme_id: id, nom: seance.nom,
+        description: seance.description ?? null, ordre: i + 1,
+      });
+
+      for (let j = 0; j < seance.exercices.length; j++) {
+        const ex = seance.exercices[j];
+        await supabase.from('programme_exercices').insert({
+          id: uuidv4(), seance_id: seanceId, nom: ex.nom,
+          categorie: ex.categorie ?? null, description: ex.description ?? null,
+          conseil_securite: ex.conseilSecurite ?? null,
+          series: ex.series ?? null, repetitions: ex.repetitions ?? null,
+          duree_secondes: ex.dureeSecondes ?? null, ordre: j + 1,
+        });
+      }
+    }
+
+    // 5. Re-créer le planning
+    const JOURS: JourProgramme[] = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+    for (const jour of JOURS) {
+      const tempId = data.planning[jour];
+      if (!tempId) continue;
+      const seanceId = tempIdToRealId[tempId];
+      if (!seanceId) continue;
+      await supabase.from('programme_planning').insert({
+        id: uuidv4(), programme_id: id, seance_id: seanceId, jour,
+      });
+    }
+
+    await load();
+    return true;
+  }, [load]);
+
   // ── Toggle actif ─────────────────────────────────────────────────────────────
 
   const toggleActif = useCallback(async (id: string, actif: boolean) => {
@@ -263,6 +353,7 @@ export function useProgrammeV2(participantId: string) {
     programmes,
     loading,
     createProgramme,
+    updateProgramme,
     toggleActif,
     deleteProgrammeV2,
     reload: load,

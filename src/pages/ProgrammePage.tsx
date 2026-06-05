@@ -51,6 +51,46 @@ const EMPTY_WIZARD: WizardData = {
   planning: {},
 };
 
+function progV2ToWizard(prog: ProgrammeV2): WizardData {
+  const seances: FormSeance[] = prog.seances
+    .sort((a, b) => a.ordre - b.ordre)
+    .map(s => ({
+      tempId: s.id,
+      nom: s.nom,
+      exercices: s.exercices
+        .sort((a, b) => a.ordre - b.ordre)
+        .map(ex => ({
+          tempId: ex.id,
+          nom: ex.nom,
+          categorie: ex.categorie ?? 'Équilibre',
+          description: ex.description ?? '',
+          conseilSecurite: ex.conseilSecurite ?? '',
+          mode: (ex.dureeSecondes != null && (ex.series == null || ex.series === undefined))
+            ? 'total'
+            : ex.dureeSecondes != null
+            ? 'duree'
+            : 'reps',
+          series: ex.series ?? 3,
+          repetitions: ex.repetitions ?? 10,
+          dureeSecondes: ex.dureeSecondes ?? 30,
+        })),
+    }));
+
+  const planning: Partial<Record<JourProgramme, string | null>> = {};
+  for (const p of prog.planning) {
+    planning[p.jour] = p.seanceId;
+  }
+
+  return {
+    nom: prog.nom,
+    type: prog.type,
+    objectif: prog.objectif ?? '',
+    messageMotivation: prog.messageMotivation ?? '',
+    seances,
+    planning,
+  };
+}
+
 function newExercice(): FormExercice {
   return {
     tempId: uuidv4(),
@@ -662,10 +702,11 @@ function Step4({ data }: { data: WizardData }) {
 
 // ── Carte programme V2 ───────────────────────────────────────────────────────
 
-function ProgrammeCard({ prog, onToggle, onDelete }: {
+function ProgrammeCard({ prog, onToggle, onDelete, onEdit }: {
   prog: ProgrammeV2;
   onToggle: () => void;
   onDelete: () => void;
+  onEdit: () => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const jourActifs = JP.filter(j => prog.planning.some(p => p.jour === j));
@@ -704,6 +745,9 @@ function ProgrammeCard({ prog, onToggle, onDelete }: {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+        <button onClick={onEdit} style={{ ...btnSmall, background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
+          ✏️ Modifier
+        </button>
         <button onClick={onToggle} style={{
           ...btnSmall,
           background: prog.actif ? '#FEF3C7' : '#DCFCE7',
@@ -835,7 +879,7 @@ export default function ProgrammePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { participants } = useParticipants();
-  const { programmes: progsV2, loading, createProgramme, toggleActif, deleteProgrammeV2 } = useProgrammeV2(id!);
+  const { programmes: progsV2, loading, createProgramme, updateProgramme, toggleActif, deleteProgrammeV2 } = useProgrammeV2(id!);
   const { programmes: progsV1, programmeActif: progV1Actif } = useProgramme(id!);
 
   const participant = participants.find(p => p.id === id);
@@ -844,6 +888,7 @@ export default function ProgrammePage() {
   const [step, setStep] = useState(1);
   const [wizardData, setWizardData] = useState<WizardData>(EMPTY_WIZARD);
   const [saving, setSaving] = useState(false);
+  const [editingProgId, setEditingProgId] = useState<string | null>(null);
 
   function updateWizard(patch: Partial<WizardData>) {
     setWizardData(prev => ({ ...prev, ...patch }));
@@ -851,12 +896,21 @@ export default function ProgrammePage() {
 
   function openWizard() {
     setWizardData(EMPTY_WIZARD);
+    setEditingProgId(null);
+    setStep(1);
+    setShowWizard(true);
+  }
+
+  function openEditWizard(prog: ProgrammeV2) {
+    setWizardData(progV2ToWizard(prog));
+    setEditingProgId(prog.id);
     setStep(1);
     setShowWizard(true);
   }
 
   function closeWizard() {
     setShowWizard(false);
+    setEditingProgId(null);
     setStep(1);
   }
 
@@ -895,12 +949,23 @@ export default function ProgrammePage() {
         })),
         planning: wizardData.planning,
       };
-      const ok = await createProgramme(payload);
-      if (ok) {
-        toast.success('Programme créé et partagé avec le patient !');
-        closeWizard();
+
+      if (editingProgId) {
+        const ok = await updateProgramme(editingProgId, payload);
+        if (ok) {
+          toast.success('Programme mis à jour !');
+          closeWizard();
+        } else {
+          toast.error('Erreur lors de la mise à jour');
+        }
       } else {
-        toast.error('Erreur lors de la création du programme');
+        const ok = await createProgramme(payload);
+        if (ok) {
+          toast.success('Programme créé et partagé avec le patient !');
+          closeWizard();
+        } else {
+          toast.error('Erreur lors de la création du programme');
+        }
       }
     } finally {
       setSaving(false);
@@ -968,6 +1033,7 @@ export default function ProgrammePage() {
                   prog={prog}
                   onToggle={() => toggleActif(prog.id, false)}
                   onDelete={() => deleteProgrammeV2(prog.id).then(() => toast.success('Programme supprimé'))}
+                  onEdit={() => openEditWizard(prog)}
                 />
               ))}
             </section>
@@ -984,6 +1050,7 @@ export default function ProgrammePage() {
                   prog={prog}
                   onToggle={() => toggleActif(prog.id, true)}
                   onDelete={() => deleteProgrammeV2(prog.id).then(() => toast.success('Programme supprimé'))}
+                  onEdit={() => openEditWizard(prog)}
                 />
               ))}
             </section>
@@ -1032,7 +1099,7 @@ export default function ProgrammePage() {
             <div style={{ background: 'var(--color-ink)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: 'white' }}>
-                  Nouveau programme — Étape {step}/{STEP_LABELS.length}
+                  {editingProgId ? 'Modifier le programme' : 'Nouveau programme'} — Étape {step}/{STEP_LABELS.length}
                 </div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
                   {STEP_LABELS[step - 1]}
@@ -1078,7 +1145,7 @@ export default function ProgrammePage() {
                 </button>
               ) : (
                 <button onClick={handleSave} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.7 : 1 }}>
-                  {saving ? 'Sauvegarde…' : '✅ Sauvegarder et partager'}
+                  {saving ? 'Sauvegarde…' : editingProgId ? '✅ Enregistrer les modifications' : '✅ Sauvegarder et partager'}
                 </button>
               )}
             </div>
