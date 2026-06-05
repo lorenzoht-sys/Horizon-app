@@ -635,6 +635,286 @@ function CarteExercicePatient({ ex, index }: { ex: ProgrammeV2['seances'][0]['ex
   );
 }
 
+// ── Mode séance ──────────────────────────────────────────────────────────────
+
+interface SeanceActive {
+  seance: ProgrammeSeanceV2;
+  progId: string;
+  progNom: string;
+}
+
+interface ExState {
+  id: string;
+  realise: boolean | null;
+  commentaire: string;
+}
+
+function ModeSeance({
+  seanceActive,
+  participantId,
+  onTermine,
+}: {
+  seanceActive: SeanceActive;
+  participantId: string;
+  onTermine: () => void;
+}) {
+  const { seance, progId } = seanceActive;
+  const exercices = [...seance.exercices].sort((a, b) => a.ordre - b.ordre);
+
+  const [idx, setIdx] = useState(0);
+  const [states, setStates] = useState<ExState[]>(
+    exercices.map(ex => ({ id: ex.id, realise: null, commentaire: '' }))
+  );
+  const [showComment, setShowComment] = useState(false);
+  const [showFin, setShowFin] = useState(false);
+  const [commentaireGlobal, setCommentaireGlobal] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [startTime] = useState(() => Date.now());
+
+  const ex = exercices[idx];
+  const exState = states[idx];
+  const realises = states.filter(s => s.realise === true).length;
+  const passes  = states.filter(s => s.realise === false).length;
+
+  function marquer(realise: boolean) {
+    const newStates = states.map((s, i) => i === idx ? { ...s, realise } : s);
+    setStates(newStates);
+    setShowComment(false);
+    if (idx < exercices.length - 1) {
+      setIdx(idx + 1);
+    } else {
+      setShowFin(true);
+    }
+  }
+
+  function updateComment(c: string) {
+    setStates(prev => prev.map((s, i) => i === idx ? { ...s, commentaire: c } : s));
+  }
+
+  async function sauvegarder() {
+    if (!supabase) { onTermine(); return; }
+    setSaving(true);
+    try {
+      const total = exercices.length;
+      const statut = realises === total ? 'terminee' : 'partielle';
+      const dureeMins = Math.max(1, Math.round((Date.now() - startTime) / 60000));
+
+      const { data: sp, error: spErr } = await supabase
+        .from('seances_patient')
+        .insert({
+          participant_id: participantId,
+          programme_id: progId,
+          seance_id: seance.id,
+          date_seance: new Date().toISOString().split('T')[0],
+          statut,
+          commentaire_patient: commentaireGlobal.trim() || null,
+          duree_minutes: dureeMins,
+        })
+        .select()
+        .single();
+
+      if (spErr || !sp) { console.error('seance_patient insert:', spErr); setSaving(false); return; }
+
+      for (const es of states) {
+        await supabase.from('exercices_realises').insert({
+          seance_patient_id: sp.id,
+          exercice_id: es.id,
+          realise: es.realise ?? false,
+          commentaire: es.commentaire.trim() || null,
+        });
+      }
+      onTermine();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ── Écran de fin ────────────────────────────────────────────────────────────
+  if (showFin) {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, background: C.bg, zIndex: 200,
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'center', padding: '32px 24px',
+        maxWidth: 600, margin: '0 auto',
+        fontFamily: 'var(--font-sans)',
+      }}>
+        <div style={{ fontSize: 64, marginBottom: 16 }}>🎉</div>
+        <div style={{ fontSize: 24, fontWeight: 800, color: C.dark, marginBottom: 6, textAlign: 'center' }}>
+          Séance terminée !
+        </div>
+        <div style={{ fontSize: 14, color: C.muted, marginBottom: 24, textAlign: 'center' }}>
+          {seance.nom} · {progId && seanceActive.progNom}
+        </div>
+
+        {/* Barre de résultat */}
+        <div style={{ width: '100%', marginBottom: 16 }}>
+          <div style={{ height: 8, background: '#E0EEEE', borderRadius: 10, overflow: 'hidden', marginBottom: 8 }}>
+            <div style={{ height: '100%', background: C.teal, borderRadius: 10, width: `${(realises / exercices.length) * 100}%`, transition: 'width 0.6s ease' }} />
+          </div>
+          <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 600, color: C.dark }}>
+            {realises}/{exercices.length} exercices réalisés
+          </div>
+        </div>
+
+        {passes > 0 && (
+          <div style={{ width: '100%', marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ fontSize: 13, color: C.green }}>✅ {realises} exercice{realises > 1 ? 's' : ''} réalisé{realises > 1 ? 's' : ''}</div>
+            <div style={{ fontSize: 13, color: C.orange }}>⏭️ {passes} exercice{passes > 1 ? 's' : ''} passé{passes > 1 ? 's' : ''}</div>
+          </div>
+        )}
+
+        {/* Commentaire global */}
+        <div style={{ width: '100%', marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.dark, marginBottom: 8 }}>
+            Un mot sur votre séance ? <span style={{ color: C.muted, fontWeight: 400 }}>(optionnel)</span>
+          </div>
+          <textarea
+            value={commentaireGlobal}
+            onChange={e => setCommentaireGlobal(e.target.value.slice(0, 300))}
+            rows={3}
+            placeholder="Comment s'est passée cette séance ?"
+            style={{ width: '100%', border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px', fontSize: 14, resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none', background: 'white' }}
+          />
+        </div>
+
+        <button
+          onClick={sauvegarder}
+          disabled={saving}
+          style={{ width: '100%', padding: '18px', background: saving ? C.muted : C.teal, color: 'white', border: 'none', borderRadius: 16, fontSize: 16, fontWeight: 800, cursor: saving ? 'not-allowed' : 'pointer', marginBottom: 12 }}
+        >
+          {saving ? '⏳ Enregistrement…' : '💾 Valider et enregistrer'}
+        </button>
+
+        <button
+          onClick={onTermine}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: C.muted, padding: 8 }}
+        >
+          ← Retour au programme
+        </button>
+      </div>
+    );
+  }
+
+  // ── Exercice en cours ────────────────────────────────────────────────────────
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: C.bg, zIndex: 200,
+      display: 'flex', flexDirection: 'column',
+      maxWidth: 600, margin: '0 auto',
+      fontFamily: 'var(--font-sans)',
+    }}>
+      {/* Header */}
+      <div style={{ background: C.dark, padding: '14px 18px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <button
+            onClick={onTermine}
+            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 13 }}
+          >
+            ✕ Quitter
+          </button>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'white', textAlign: 'center', flex: 1, padding: '0 8px' }}>{seance.nom}</div>
+          <div style={{ fontSize: 13, color: C.teal, fontWeight: 700 }}>{realises}/{exercices.length} ✅</div>
+        </div>
+        {/* Progression */}
+        <div style={{ height: 4, background: 'rgba(255,255,255,0.15)', borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ height: '100%', background: C.teal, borderRadius: 10, width: `${(idx / exercices.length) * 100}%`, transition: 'width 0.3s ease' }} />
+        </div>
+      </div>
+
+      {/* Corps scrollable */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 0' }}>
+        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+          <span style={{ fontSize: 12, color: C.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            {idx + 1} sur {exercices.length}
+          </span>
+        </div>
+
+        {/* Carte exercice */}
+        <div style={{ background: 'white', borderRadius: 20, padding: '22px 20px', marginBottom: 16, boxShadow: '0 4px 20px rgba(13,43,43,0.07)' }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.dark, marginBottom: 4 }}>{ex.nom}</div>
+          {ex.categorie && (
+            <div style={{ fontSize: 11, color: C.teal, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>
+              {ex.categorie}
+            </div>
+          )}
+
+          {/* Compteurs */}
+          {(ex.series != null || ex.repetitions != null || ex.dureeSecondes != null) && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+              {ex.series != null && (
+                <div style={{ flex: 1, background: '#E8F8F8', borderRadius: 14, padding: '14px 10px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: C.teal }}>{ex.series}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>série{ex.series > 1 ? 's' : ''}</div>
+                </div>
+              )}
+              {ex.repetitions != null && (
+                <div style={{ flex: 1, background: '#E8F8F8', borderRadius: 14, padding: '14px 10px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: C.teal }}>{ex.repetitions}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>répétitions</div>
+                </div>
+              )}
+              {ex.dureeSecondes != null && (
+                <div style={{ flex: 1, background: '#E8F8F8', borderRadius: 14, padding: '14px 10px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: C.teal }}>{ex.dureeSecondes}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>secondes</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {ex.description && (
+            <div style={{ fontSize: 14, color: '#4A6080', lineHeight: 1.7, marginBottom: 12 }}>
+              {ex.description}
+            </div>
+          )}
+
+          {ex.conseilSecurite && (
+            <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 12, padding: '12px 14px', fontSize: 13, color: '#92400E', lineHeight: 1.5 }}>
+              💡 {ex.conseilSecurite}
+            </div>
+          )}
+        </div>
+
+        {/* Commentaire optionnel */}
+        {showComment ? (
+          <textarea
+            autoFocus
+            value={exState.commentaire}
+            onChange={e => updateComment(e.target.value.slice(0, 200))}
+            rows={3}
+            placeholder="Comment ça s'est passé ? Douleur ? Difficulté ?"
+            style={{ width: '100%', border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px', fontSize: 14, resize: 'none', marginBottom: 12, boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none', background: 'white' }}
+          />
+        ) : (
+          <button
+            onClick={() => setShowComment(true)}
+            style={{ width: '100%', background: 'white', border: `1px dashed ${C.border}`, borderRadius: 12, padding: '12px 16px', fontSize: 13, color: C.muted, textAlign: 'left', cursor: 'pointer', marginBottom: 12 }}
+          >
+            💬 Ajouter un commentaire...
+          </button>
+        )}
+      </div>
+
+      {/* Boutons d'action */}
+      <div style={{ padding: '14px 20px 32px', background: 'white', borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
+        <button
+          onClick={() => marquer(true)}
+          style={{ width: '100%', padding: '18px', background: C.teal, color: 'white', border: 'none', borderRadius: 16, fontSize: 16, fontWeight: 800, cursor: 'pointer', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
+        >
+          ✅ J'ai fait cet exercice
+        </button>
+        <button
+          onClick={() => marquer(false)}
+          style={{ width: '100%', padding: '13px', background: 'white', color: C.muted, border: `1px solid ${C.border}`, borderRadius: 14, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+        >
+          ⏭️ Passer cet exercice
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── ÉCRAN 3 — Programme ───────────────────────────────────────────────────────
 
 function EcranProgramme({ participant, programmes, programmesV2 }: {
@@ -643,6 +923,7 @@ function EcranProgramme({ participant, programmes, programmesV2 }: {
   programmesV2: ProgrammeV2[];
 }) {
   const [selectedProgId, setSelectedProgId] = useState<string | null>(null);
+  const [modeSeance, setModeSeance] = useState<SeanceActive | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const praticien = loadPraticien();
   const exercicesCatalog = loadExercices();
@@ -672,6 +953,17 @@ function EcranProgramme({ participant, programmes, programmesV2 }: {
         `programme-${participant.prenom.toLowerCase()}.pdf`
       );
     } finally { setPdfLoading(false); }
+  }
+
+  // Mode séance plein écran
+  if (modeSeance) {
+    return (
+      <ModeSeance
+        seanceActive={modeSeance}
+        participantId={participant.id}
+        onTermine={() => setModeSeance(null)}
+      />
+    );
   }
 
   if (progsV2Actifs.length === 0 && !programmeV1) {
@@ -806,15 +1098,34 @@ function EcranProgramme({ participant, programmes, programmesV2 }: {
             <div style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px', textAlign: 'center', color: C.muted, fontSize: 14 }}>
               😌 Repos aujourd'hui
             </div>
-          ) : seancesAujourdHui.map(s => (
-            <div key={s.id} style={{ background: 'white', border: `1px solid rgba(43,191,191,0.3)`, borderRadius: 16, padding: '14px 16px', marginBottom: 10, cursor: 'pointer' }}
-              onClick={() => setSelectedProgId(s.progId)}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>🏋️ {s.nom} · {s.progNom}</div>
-              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
-                {s.exercices.length} exercice{s.exercices.length > 1 ? 's' : ''} · Voir les exercices →
+          ) : seancesAujourdHui.map(s => {
+            const dureeEstimee = s.exercices.length * 5;
+            return (
+              <div key={s.id} style={{ background: 'white', border: '2px solid rgba(43,191,191,0.35)', borderRadius: 18, padding: '18px 16px', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                  <span style={{ fontSize: 22 }}>🏋️</span>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>{s.nom} · {s.progNom}</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                      {s.exercices.length} exercice{s.exercices.length > 1 ? 's' : ''} · ~{dureeEstimee} min
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setModeSeance({ seance: s, progId: s.progId, progNom: s.progNom })}
+                  style={{ width: '100%', padding: '16px', background: C.teal, color: 'white', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 10 }}
+                >
+                  ▶️ COMMENCER LA SÉANCE
+                </button>
+                <button
+                  onClick={() => setSelectedProgId(s.progId)}
+                  style={{ width: '100%', padding: '11px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 12, fontSize: 13, color: C.muted, cursor: 'pointer' }}
+                >
+                  Voir les exercices
+                </button>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
