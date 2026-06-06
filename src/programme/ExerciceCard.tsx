@@ -208,6 +208,15 @@ export default function ExerciceCard({ exercice, onAdd, compact, profilHandicap,
             )}
           </>
         )}
+
+        {/* Badges niveaux de difficulté */}
+        {exercice.niveau_config && (
+          <div style={{ display: 'flex', gap: 4, marginTop: compact ? 6 : 10, justifyContent: 'flex-end' }}>
+            <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 10, background: '#D1FAE5', color: '#065F46', fontWeight: 700 }}>🟢 N1</span>
+            <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 10, background: '#FEF3C7', color: '#92400E', fontWeight: 700 }}>🟡 N2</span>
+            <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 10, background: '#FEE2E2', color: '#991B1B', fontWeight: 700 }}>🔴 N3</span>
+          </div>
+        )}
       </div>
 
       {/* Modal vidéo */}

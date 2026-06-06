@@ -1266,15 +1266,26 @@ function EcranProgramme({ participant, programmes, programmesV2, historiqueSeanc
             {programmeV1.exercices.sort((a, b) => a.ordre - b.ordre).map((ep, index) => {
               const ex = exercicesCatalog.find(e => e.id === ep.exerciceId);
               if (!ex) return null;
+              const niveauNum = ep.niveau === 'debutant' ? '1' : ep.niveau === 'intermediaire' ? '2' : '3';
+              const niveauCfg = ex.niveau_config?.[niveauNum];
+              const niveauEmoji = ep.niveau === 'debutant' ? '🟢' : ep.niveau === 'intermediaire' ? '🟡' : '🔴';
+              const niveauLabel = ep.niveau === 'debutant' ? 'Facile' : ep.niveau === 'intermediaire' ? 'Modéré' : 'Intense';
+              const niveauBg = ep.niveau === 'debutant' ? '#D1FAE5' : ep.niveau === 'intermediaire' ? '#FEF3C7' : '#FEE2E2';
+              const niveauColor = ep.niveau === 'debutant' ? '#065F46' : ep.niveau === 'intermediaire' ? '#92400E' : '#991B1B';
               return (
                 <div key={ep.exerciceId} style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
                   <div style={{ background: C.bg, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: `1px solid ${C.border}` }}>
                     <div style={{ width: 30, height: 30, borderRadius: '50%', background: C.teal, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: 'white', flexShrink: 0 }}>
                       {index + 1}
                     </div>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>{ex.nom}</div>
-                      <div style={{ fontSize: 12, color: C.teal, fontWeight: 600, marginTop: 1 }}>{ex.categorie}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                        <div style={{ fontSize: 12, color: C.teal, fontWeight: 600 }}>{ex.categorie}</div>
+                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: niveauBg, color: niveauColor, fontWeight: 700 }}>
+                          {niveauEmoji} {niveauLabel}{niveauCfg ? ` — ${niveauCfg.description}` : ''}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div style={{ padding: '14px 16px' }}>

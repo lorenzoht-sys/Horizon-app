@@ -15,6 +15,11 @@ export const EXERCICES_BASE: Exercice[] = [
     },
     materielNecessaire: 'Chaise stable',
     dureeEstimeeMinutes: 5,
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 10, description: 'Avec appui (main sur chaise)', conseil: 'Ne lâchez l\'appui que si vous vous sentez stable' },
+      "2": { series: 3, repetitions: null, duree_secondes: 20, description: 'Sans appui yeux ouverts', conseil: 'Regard fixe sur un point devant vous' },
+      "3": { series: 3, repetitions: null, duree_secondes: 30, description: 'Sans appui yeux fermés', conseil: 'Appui disponible à portée de main en cas de déséquilibre' },
+    },
   },
   {
     id: 'eq-tandem',
@@ -28,6 +33,11 @@ export const EXERCICES_BASE: Exercice[] = [
       avance: '15 pas les yeux fermés',
     },
     dureeEstimeeMinutes: 5,
+    niveau_config: {
+      "1": { series: 2, repetitions: 5,  duree_secondes: null, description: 'Le long d\'un mur', conseil: 'Touchez le mur si besoin' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Sans appui', conseil: 'Regard fixé droit devant' },
+      "3": { series: 3, repetitions: 10, duree_secondes: null, description: 'Sans appui + compter à voix haute', conseil: 'Double tâche — ralentissez si vous perdez l\'équilibre' },
+    },
   },
   {
     id: 'eq-transfert',
@@ -41,6 +51,11 @@ export const EXERCICES_BASE: Exercice[] = [
       avance: '20 transferts en levant les bras de chaque côté',
     },
     dureeEstimeeMinutes: 4,
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 15, description: 'Appui possible', conseil: 'Gardez une main sur la chaise' },
+      "2": { series: 3, repetitions: null, duree_secondes: 25, description: 'Sans appui', conseil: 'Abdominaux légèrement contractés' },
+      "3": { series: 3, repetitions: null, duree_secondes: 40, description: 'Sans appui yeux fermés', conseil: 'Concentrez-vous sur vos sensations plantaires' },
+    },
   },
   {
     id: 'eq-marche-talon',
@@ -54,6 +69,11 @@ export const EXERCICES_BASE: Exercice[] = [
       avance: '10 mètres en tournant la tête de gauche à droite',
     },
     dureeEstimeeMinutes: 5,
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 10, description: 'Débutant avec appui', conseil: 'Gardez un appui à portée de main' },
+      "2": { series: 3, repetitions: null, duree_secondes: 20, description: 'Intermédiaire sans appui', conseil: 'Regard fixe sur un point immobile' },
+      "3": { series: 3, repetitions: null, duree_secondes: 35, description: 'Avancé yeux fermés', conseil: 'Supervision recommandée' },
+    },
   },
 
   // FORCE MEMBRES INFÉRIEURS
@@ -70,6 +90,11 @@ export const EXERCICES_BASE: Exercice[] = [
     },
     materielNecessaire: 'Chaise robuste',
     dureeEstimeeMinutes: 5,
+    niveau_config: {
+      "1": { series: 2, repetitions: 5,  duree_secondes: null, description: 'Avec aide des bras', conseil: 'Aidez-vous des accoudoirs pour démarrer' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Sans aide des bras', conseil: 'Gardez le dos droit, pieds à plat' },
+      "3": { series: 3, repetitions: 15, duree_secondes: null, description: 'Sans aide, pause courte 45s', conseil: 'Contrôlez la descente lentement en 3 secondes' },
+    },
   },
   {
     id: 'force-demi-squat',
@@ -83,6 +108,11 @@ export const EXERCICES_BASE: Exercice[] = [
       avance: '12 répétitions, descente lente 3 secondes',
     },
     dureeEstimeeMinutes: 5,
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Descente à 30°, appui chaise', conseil: 'Restez au-dessus de la position assise' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Descente à 60°', conseil: 'Genoux dans l\'axe des orteils' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Descente lente 3 secondes', conseil: 'Contrôlez la descente, expirez en montant' },
+    },
   },
   {
     id: 'force-pont-fessier',
@@ -96,6 +126,11 @@ export const EXERCICES_BASE: Exercice[] = [
     },
     materielNecessaire: 'Tapis de sol',
     dureeEstimeeMinutes: 6,
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 10, description: 'Pause au sol, genou fléchi', conseil: 'Mouvement lent et contrôlé' },
+      "2": { series: 3, repetitions: null, duree_secondes: 10, description: 'Amplitude complète', conseil: 'Serrez les fessiers en haut' },
+      "3": { series: 4, repetitions: null, duree_secondes: 10, description: '+ maintien 2s en haut', conseil: 'Contrôlez la descente lentement' },
+    },
   },
   {
     id: 'force-montee-marche',
@@ -110,6 +145,11 @@ export const EXERCICES_BASE: Exercice[] = [
     },
     materielNecessaire: 'Marche ou step stable',
     dureeEstimeeMinutes: 6,
+    niveau_config: {
+      "1": { series: 2, repetitions: 10, duree_secondes: null, description: 'Avec appui, même jambe', conseil: 'Tenez-vous à la rampe' },
+      "2": { series: 3, repetitions: 15, duree_secondes: null, description: 'Alternance sans appui', conseil: 'Pied entier sur la marche' },
+      "3": { series: 3, repetitions: 20, duree_secondes: null, description: 'Rythme soutenu', conseil: 'Maintenez un rythme régulier' },
+    },
   },
 
   // FORCE MEMBRES SUPÉRIEURS
@@ -125,6 +165,11 @@ export const EXERCICES_BASE: Exercice[] = [
     },
     materielNecessaire: 'Optionnel : bouteilles d\'eau',
     dureeEstimeeMinutes: 4,
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Amplitude réduite, lent', conseil: 'Cercles doux sans forcer l\'amplitude' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Amplitude modérée', conseil: 'Respirez régulièrement' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Amplitude maximale contrôlée', conseil: 'Alternez sens horaire et antihoraire' },
+    },
   },
   {
     id: 'force-elevation-bras',
@@ -138,6 +183,11 @@ export const EXERCICES_BASE: Exercice[] = [
     },
     materielNecessaire: 'Optionnel : bouteilles ou élastique',
     dureeEstimeeMinutes: 4,
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Assis sans charge', conseil: 'Amplitude sans douleur uniquement' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Avec charge légère 500ml', conseil: 'Commencez lentement' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Avec charge 1L ou élastique', conseil: 'Contrôlez la descente' },
+    },
   },
   {
     id: 'force-serrage-balle',
@@ -151,6 +201,11 @@ export const EXERCICES_BASE: Exercice[] = [
     },
     materielNecessaire: 'Balle en mousse ou éponge',
     dureeEstimeeMinutes: 3,
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: 8, description: 'Assis, coussin souple', conseil: 'Respirez normalement, ne bloquez pas' },
+      "2": { series: 3, repetitions: 10, duree_secondes: 8, description: 'Assis, coussin ferme', conseil: 'Contractez fort, relâchez complètement' },
+      "3": { series: 3, repetitions: 10, duree_secondes: 8, description: '+ lever talons simultané', conseil: 'Coordination adducteurs + mollets' },
+    },
   },
 
   // MOBILITÉ
@@ -165,6 +220,11 @@ export const EXERCICES_BASE: Exercice[] = [
       avance: '10 rotations avec bras tendus devant',
     },
     dureeEstimeeMinutes: 4,
+    niveau_config: {
+      "1": { series: 2, repetitions: 5,  duree_secondes: null, description: 'Assis, amplitude réduite', conseil: 'Mouvement doux, sans forcer' },
+      "2": { series: 3, repetitions: 8,  duree_secondes: null, description: 'Assis, amplitude modérée', conseil: 'Expirez dans la rotation' },
+      "3": { series: 3, repetitions: 10, duree_secondes: null, description: 'Debout, amplitude maximale', conseil: 'Gardez les hanches face avant' },
+    },
   },
   {
     id: 'mob-cercles-chevilles',
@@ -177,6 +237,11 @@ export const EXERCICES_BASE: Exercice[] = [
       avance: '20 cercles, pied tenu 30 secondes surélevé après',
     },
     dureeEstimeeMinutes: 3,
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Amplitude réduite, lent', conseil: 'Cercles doux sans forcer l\'amplitude' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Amplitude modérée', conseil: 'Respirez régulièrement' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Amplitude maximale contrôlée', conseil: 'Alternez sens horaire et antihoraire' },
+    },
   },
   {
     id: 'mob-flexion-genou',
@@ -189,6 +254,11 @@ export const EXERCICES_BASE: Exercice[] = [
       avance: '20 mouvements, ajouter légère résistance avec la main',
     },
     dureeEstimeeMinutes: 4,
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Amplitude réduite, lent', conseil: 'Mouvement doux sans forcer' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Amplitude complète', conseil: 'Tenez 2s en extension' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Avec légère résistance', conseil: 'Contrôlez chaque mouvement' },
+    },
   },
 
   // SOUPLESSE
@@ -205,6 +275,11 @@ export const EXERCICES_BASE: Exercice[] = [
     },
     materielNecessaire: 'Mur stable',
     dureeEstimeeMinutes: 4,
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 15, description: 'Assis avec serviette', conseil: 'Arrêtez à la sensation d\'étirement, jamais de douleur' },
+      "2": { series: 3, repetitions: null, duree_secondes: 20, description: 'Debout face au mur', conseil: 'Talon bien posé au sol' },
+      "3": { series: 3, repetitions: null, duree_secondes: 30, description: 'Genou avant fléchi', conseil: 'Étirez les deux mollets — le profond et le superficiel' },
+    },
   },
   {
     id: 'soup-quadriceps',
@@ -219,6 +294,11 @@ export const EXERCICES_BASE: Exercice[] = [
     },
     materielNecessaire: 'Chaise pour s\'appuyer',
     dureeEstimeeMinutes: 4,
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 15, description: 'Assis, inclinaison légère', conseil: 'Dos droit, penchez depuis les hanches' },
+      "2": { series: 3, repetitions: null, duree_secondes: 20, description: 'Debout, pied surélevé', conseil: 'Genou de la jambe d\'appui légèrement fléchi' },
+      "3": { series: 3, repetitions: null, duree_secondes: 30, description: 'Amplitude complète', conseil: 'Respirez profondément pour relâcher davantage' },
+    },
   },
   {
     id: 'soup-dos-chat',
@@ -232,6 +312,11 @@ export const EXERCICES_BASE: Exercice[] = [
     },
     materielNecessaire: 'Tapis de sol',
     dureeEstimeeMinutes: 5,
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 15, description: 'Débutant, mouvement lent', conseil: 'Arrêtez à la première sensation d\'étirement' },
+      "2": { series: 3, repetitions: null, duree_secondes: 25, description: 'Avec pause à chaque position', conseil: 'Respirez profondément dans l\'étirement' },
+      "3": { series: 3, repetitions: null, duree_secondes: 35, description: 'Respiration synchronisée', conseil: 'Allez progressivement plus loin à chaque expiration' },
+    },
   },
 
   // ENDURANCE
@@ -246,6 +331,11 @@ export const EXERCICES_BASE: Exercice[] = [
       avance: '6 minutes, bras qui balancent, rythme soutenu',
     },
     dureeEstimeeMinutes: 6,
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 600,  description: 'Allure confortable Borg 9-11', conseil: 'Vous devez pouvoir parler sans essoufflement' },
+      "2": { series: 1, repetitions: null, duree_secondes: 1200, description: 'Allure modérée Borg 11-13', conseil: 'Légère transpiration attendue' },
+      "3": { series: 1, repetitions: null, duree_secondes: 1800, description: 'Allure soutenue Borg 13-15', conseil: 'Surveillez la FC si prescrite' },
+    },
   },
   {
     id: 'end-stepping',
@@ -260,6 +350,11 @@ export const EXERCICES_BASE: Exercice[] = [
     },
     materielNecessaire: 'Step ou marche basse',
     dureeEstimeeMinutes: 8,
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 20, description: 'Appui bilatéral', conseil: 'Tenez-vous à une chaise stable des deux côtés' },
+      "2": { series: 3, repetitions: null, duree_secondes: 30, description: 'Appui unilatéral', conseil: 'Une main sur la chaise suffit' },
+      "3": { series: 3, repetitions: null, duree_secondes: 45, description: 'Sans appui', conseil: 'Supervision directe recommandée' },
+    },
   },
   {
     id: 'end-velo-air',
@@ -273,6 +368,11 @@ export const EXERCICES_BASE: Exercice[] = [
     },
     materielNecessaire: 'Tapis de sol',
     dureeEstimeeMinutes: 5,
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 30,  description: 'Effort léger Borg 9-11', conseil: 'Conversation possible sans essoufflement' },
+      "2": { series: 2, repetitions: null, duree_secondes: 60,  description: 'Effort modéré Borg 11-13', conseil: 'Légère transpiration normale' },
+      "3": { series: 3, repetitions: null, duree_secondes: 120, description: 'Effort soutenu, variation rythme', conseil: 'Surveillez votre fréquence cardiaque' },
+    },
   },
 
   // MÉMOIRE / DOUBLE TÂCHE
@@ -287,6 +387,11 @@ export const EXERCICES_BASE: Exercice[] = [
       avance: 'Compter de 7 en 7 à partir de 100, 4 minutes',
     },
     dureeEstimeeMinutes: 4,
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 300, description: 'Marche lente + compter à voix haute', conseil: 'Ralentissez si vous perdez le fil' },
+      "2": { series: 1, repetitions: null, duree_secondes: 600, description: 'Marche modérée + nommer des objets', conseil: 'La qualité de marche prime sur la tâche cognitive' },
+      "3": { series: 1, repetitions: null, duree_secondes: 900, description: 'Marche rapide + calcul mental', conseil: 'Arrêtez-vous si déséquilibre' },
+    },
   },
   {
     id: 'mem-jeu-paires',
@@ -299,6 +404,11 @@ export const EXERCICES_BASE: Exercice[] = [
       avance: '7 paires de mots avec délai de 10 minutes',
     },
     dureeEstimeeMinutes: 10,
+    niveau_config: {
+      "1": { series: 1, repetitions: 3, duree_secondes: null, description: '3 paires de mots simples', conseil: 'Répétez immédiatement après l\'annonce' },
+      "2": { series: 1, repetitions: 5, duree_secondes: null, description: '5 paires de mots variés', conseil: 'Répétez après 2 minutes' },
+      "3": { series: 1, repetitions: 7, duree_secondes: null, description: '7 paires, délai de 10 minutes', conseil: 'Essayez des associations mentales' },
+    },
   },
 
   // ── FAUTEUIL ROULANT ──────────────────────────────────────────────────────────
@@ -317,6 +427,11 @@ export const EXERCICES_BASE: Exercice[] = [
     adaptations: { fauteuil_roulant: 'Fixer le fauteuil avant de commencer. Utiliser des élastiques si pas de lest.' },
     positionRequise: 'fauteuil',
     niveauMobilite: 'minimal',
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Assis sans charge', conseil: 'Amplitude sans douleur uniquement' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Avec élastique léger', conseil: 'Commencez lentement' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Avec lest 500g–1kg', conseil: 'Contrôlez chaque mouvement' },
+    },
   },
   {
     id: 'fr_02',
@@ -336,6 +451,11 @@ export const EXERCICES_BASE: Exercice[] = [
     },
     positionRequise: 'fauteuil',
     niveauMobilite: 'minimal',
+    niveau_config: {
+      "1": { series: 2, repetitions: 5,  duree_secondes: null, description: 'Assis, amplitude réduite', conseil: 'Mouvement doux, sans forcer' },
+      "2": { series: 3, repetitions: 8,  duree_secondes: null, description: 'Assis, amplitude modérée', conseil: 'Expirez dans la rotation' },
+      "3": { series: 3, repetitions: 10, duree_secondes: null, description: 'Bras tendus, amplitude maximale', conseil: 'Gardez les hanches face avant' },
+    },
   },
   {
     id: 'fr_03',
@@ -352,6 +472,11 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['fauteuil_roulant', 'avc_hemiplegie'],
     positionRequise: 'fauteuil',
     niveauMobilite: 'modere',
+    niveau_config: {
+      "1": { series: 2, repetitions: 5,  duree_secondes: null, description: 'Avec aide des deux bras', conseil: 'Aidez-vous des accoudoirs pour démarrer' },
+      "2": { series: 3, repetitions: 8,  duree_secondes: null, description: 'Avec aide d\'un bras', conseil: 'Gardez le dos droit, pieds à plat' },
+      "3": { series: 3, repetitions: 10, duree_secondes: null, description: 'Sans aide', conseil: 'Contrôlez la descente lentement en 3 secondes' },
+    },
   },
 
   // ── AVC / HÉMIPLÉGIE ─────────────────────────────────────────────────────────
@@ -370,6 +495,11 @@ export const EXERCICES_BASE: Exercice[] = [
     adaptations: { avc_hemiplegie: 'Travailler dans les amplitudes indolores. Surveiller la spasticité.' },
     positionRequise: 'assis',
     niveauMobilite: 'minimal',
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Mobilisation passive, amplitude réduite', conseil: 'Travailler dans les amplitudes indolores' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Mobilisation active-aidée', conseil: 'Respirez régulièrement' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Mobilisation active, résistance légère', conseil: 'Surveiller la spasticité' },
+    },
   },
   {
     id: 'avc_02',
@@ -385,6 +515,11 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['avc_hemiplegie', 'parkinson', 'sep'],
     positionRequise: 'assis',
     niveauMobilite: 'minimal',
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 20, description: 'Appui bilatéral disponible', conseil: 'Tenez-vous à une chaise stable des deux côtés' },
+      "2": { series: 3, repetitions: null, duree_secondes: 30, description: 'Appui unilatéral', conseil: 'Une main sur la chaise suffit' },
+      "3": { series: 3, repetitions: null, duree_secondes: 45, description: 'Sans appui', conseil: 'Supervision directe recommandée' },
+    },
   },
   {
     id: 'avc_03',
@@ -405,6 +540,11 @@ export const EXERCICES_BASE: Exercice[] = [
     },
     positionRequise: 'debout',
     niveauMobilite: 'modere',
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 20, description: 'Appui bilatéral, rythme lent', conseil: 'Tenez-vous à une chaise stable des deux côtés' },
+      "2": { series: 3, repetitions: null, duree_secondes: 30, description: 'Appui unilatéral', conseil: 'Une main sur la chaise suffit' },
+      "3": { series: 3, repetitions: null, duree_secondes: 45, description: 'Sans appui', conseil: 'Supervision directe recommandée' },
+    },
   },
 
   // ── PARKINSON ─────────────────────────────────────────────────────────────────
@@ -424,6 +564,11 @@ export const EXERCICES_BASE: Exercice[] = [
     adaptations: { parkinson: 'Commencer à 80–100 bpm. Augmenter progressivement. Arrêter si freezing.' },
     positionRequise: 'debout',
     niveauMobilite: 'modere',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 600,  description: 'Allure confortable 80 bpm', conseil: 'Vous devez pouvoir parler sans essoufflement' },
+      "2": { series: 1, repetitions: null, duree_secondes: 1200, description: 'Allure modérée 90 bpm', conseil: 'Légère transpiration attendue' },
+      "3": { series: 1, repetitions: null, duree_secondes: 1800, description: 'Allure soutenue 100 bpm + variations', conseil: 'Surveillez la FC si prescrite' },
+    },
   },
   {
     id: 'pk_02',
@@ -439,6 +584,11 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['parkinson'],
     positionRequise: 'assis',
     niveauMobilite: 'minimal',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 300, description: 'Projection vocale simple 5 min', conseil: 'Volume modéré, sans tension' },
+      "2": { series: 1, repetitions: null, duree_secondes: 480, description: 'Avec articulation et déglutition 8 min', conseil: 'Travaillez l\'amplitude de la voix' },
+      "3": { series: 1, repetitions: null, duree_secondes: 600, description: 'Lecture à voix haute et modulation 10 min', conseil: 'Exagérez intentionnellement le volume (méthode LSVT)' },
+    },
   },
   {
     id: 'pk_03',
@@ -455,6 +605,11 @@ export const EXERCICES_BASE: Exercice[] = [
     adaptations: { parkinson: 'Utiliser des repères visuels au sol (lignes adhésives) pour guider les pas.' },
     positionRequise: 'debout',
     niveauMobilite: 'modere',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 600,  description: 'Allure confortable avec repères visuels', conseil: 'Vous devez pouvoir parler sans essoufflement' },
+      "2": { series: 1, repetitions: null, duree_secondes: 1200, description: 'Allure modérée sans repères', conseil: 'Légère transpiration attendue' },
+      "3": { series: 1, repetitions: null, duree_secondes: 1800, description: 'Allure soutenue, variations de direction', conseil: 'Surveillez la FC si prescrite' },
+    },
   },
 
   // ── SCLÉROSE EN PLAQUES ──────────────────────────────────────────────────────
@@ -473,6 +628,11 @@ export const EXERCICES_BASE: Exercice[] = [
     adaptations: { sep: 'Éviter la chaleur (signe d\'Uhthoff). Préférer les heures fraîches. Pauses fréquentes.' },
     positionRequise: 'assis',
     niveauMobilite: 'minimal',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 180, description: 'Effort léger Borg 9-11', conseil: 'Conversation possible sans essoufflement' },
+      "2": { series: 1, repetitions: null, duree_secondes: 300, description: 'Effort modéré Borg 11-13, amplitude complète', conseil: 'Légère transpiration normale' },
+      "3": { series: 1, repetitions: null, duree_secondes: 480, description: 'Effort soutenu, variations de style', conseil: 'Surveillez votre fréquence cardiaque' },
+    },
   },
   {
     id: 'sep_02',
@@ -488,6 +648,11 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['sep', 'avc_hemiplegie'],
     positionRequise: 'couche',
     niveauMobilite: 'minimal',
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 15, description: 'Assis, inclinaison légère', conseil: 'Dos droit, penchez depuis les hanches' },
+      "2": { series: 3, repetitions: null, duree_secondes: 20, description: 'Amplitude complète au sol', conseil: 'Respirez profondément dans l\'étirement' },
+      "3": { series: 3, repetitions: null, duree_secondes: 30, description: 'Amplitude maximale + mobilisation active', conseil: 'Allez progressivement plus loin à chaque expiration' },
+    },
   },
 
   // ── TOUS PROFILS ─────────────────────────────────────────────────────────────
@@ -505,6 +670,11 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['tous'],
     positionRequise: 'tous',
     niveauMobilite: 'minimal',
+    niveau_config: {
+      "1": { series: 1, repetitions: 5,  duree_secondes: null, description: '5 respirations complètes, assis', conseil: 'Expirez lentement par la bouche' },
+      "2": { series: 1, repetitions: 10, duree_secondes: null, description: '10 respirations, ventre souple', conseil: 'Maintenez le ventre souple' },
+      "3": { series: 1, repetitions: 15, duree_secondes: null, description: '15 respirations, cohérence cardiaque', conseil: '5s inspire / 5s expire' },
+    },
   },
   {
     id: 'all_02',
@@ -524,6 +694,11 @@ export const EXERCICES_BASE: Exercice[] = [
     },
     positionRequise: 'assis',
     niveauMobilite: 'minimal',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 300, description: 'Marche lente + compter à voix haute', conseil: 'Ralentissez si vous perdez le fil' },
+      "2": { series: 1, repetitions: null, duree_secondes: 600, description: 'Marche modérée + nommer des objets', conseil: 'La qualité de marche prime sur la tâche cognitive' },
+      "3": { series: 1, repetitions: null, duree_secondes: 900, description: 'Marche rapide + calcul mental', conseil: 'Arrêtez-vous si déséquilibre' },
+    },
   },
   // ── FAUTEUIL ROULANT — ÉCHAUFFEMENT ─────────────────────────────────────────
   {
@@ -543,6 +718,11 @@ export const EXERCICES_BASE: Exercice[] = [
     positionRequise: 'fauteuil',
     niveauMobilite: 'minimal',
     reference: 'SCI-Action Canada — Guide entraînement paraplégie',
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Amplitude réduite, lent', conseil: 'Cercles doux sans forcer l\'amplitude' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Amplitude modérée, avant et arrière', conseil: 'Respirez régulièrement' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Amplitude maximale, pause 2s en haut', conseil: 'Alternez sens horaire et antihoraire' },
+    },
   },
   {
     id: 'fr_ech_02',
@@ -560,6 +740,11 @@ export const EXERCICES_BASE: Exercice[] = [
     positionRequise: 'fauteuil',
     niveauMobilite: 'minimal',
     reference: 'SCI-Action Canada — Prévention tendinites propulsion',
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Rotations lentes, amplitude réduite', conseil: 'Cercles doux sans forcer l\'amplitude' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Amplitude maximale', conseil: 'Respirez régulièrement' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Poignets groupés puis séparés', conseil: 'Alternez sens horaire et antihoraire' },
+    },
   },
   {
     id: 'fr_ech_03',
@@ -580,6 +765,11 @@ export const EXERCICES_BASE: Exercice[] = [
       avc_hemiplegie: 'Mobiliser en priorité le membre supérieur hémiplégique. Amplitude réduite si spasticité.',
     },
     reference: 'SCI-Action Canada',
+    niveau_config: {
+      "1": { series: 2, repetitions: 6,  duree_secondes: null, description: 'Cercles vers l\'avant seulement', conseil: 'Amplitude sans douleur uniquement' },
+      "2": { series: 3, repetitions: 8,  duree_secondes: null, description: 'Cercles dans les deux sens', conseil: 'Respirez régulièrement' },
+      "3": { series: 3, repetitions: 10, duree_secondes: null, description: 'Amplitude maximale, alternance avant/arrière', conseil: 'Alternez sens horaire et antihoraire' },
+    },
   },
 
   // ── FAUTEUIL ROULANT — FORCE ─────────────────────────────────────────────────
@@ -600,6 +790,11 @@ export const EXERCICES_BASE: Exercice[] = [
     positionRequise: 'fauteuil',
     niveauMobilite: 'minimal',
     reference: 'SCI-Action Canada — Entraînement en force à domicile',
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Élastique léger', conseil: 'Allez à votre rythme' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Élastique moyen', conseil: 'Maintenez une bonne posture' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Élastique fort, tempo contrôlé', conseil: 'Contrôlez chaque mouvement' },
+    },
   },
   {
     id: 'fr_force_03',
@@ -618,6 +813,11 @@ export const EXERCICES_BASE: Exercice[] = [
     positionRequise: 'fauteuil',
     niveauMobilite: 'minimal',
     reference: 'Sunrise Medical — exercices fauteuil roulant',
+    niveau_config: {
+      "1": { series: 2, repetitions: 6,  duree_secondes: null, description: 'Sans charge ou 0,5 kg', conseil: 'Amplitude sans douleur uniquement' },
+      "2": { series: 3, repetitions: 8,  duree_secondes: null, description: 'Haltères 1 kg', conseil: 'Expirez en montant' },
+      "3": { series: 3, repetitions: 10, duree_secondes: null, description: 'Haltères 1,5–2 kg, tempo contrôlé', conseil: 'Contrôlez la descente' },
+    },
   },
   {
     id: 'fr_force_04',
@@ -636,6 +836,11 @@ export const EXERCICES_BASE: Exercice[] = [
     positionRequise: 'fauteuil',
     niveauMobilite: 'minimal',
     reference: 'Harmonie Santé APA — Entraînement cardio paraplégie',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 600,  description: 'Effort léger Borg 9-11', conseil: 'Conversation possible sans essoufflement' },
+      "2": { series: 1, repetitions: null, duree_secondes: 1200, description: 'Effort modéré Borg 11-13', conseil: 'Légère transpiration normale' },
+      "3": { series: 1, repetitions: null, duree_secondes: 1800, description: 'Effort soutenu Borg 13-14, avec variations', conseil: 'Surveillez votre fréquence cardiaque' },
+    },
   },
   {
     id: 'fr_tronc_01',
@@ -653,6 +858,11 @@ export const EXERCICES_BASE: Exercice[] = [
     positionRequise: 'fauteuil',
     niveauMobilite: 'minimal',
     reference: 'SCI-Action Canada — Gainage tronc paraplégie',
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 20, description: 'Assis, dos droit, bords de chaise', conseil: 'Mains sur les genoux pour équilibre' },
+      "2": { series: 3, repetitions: null, duree_secondes: 30, description: 'Assis sans dossier', conseil: 'Abdominaux légèrement contractés' },
+      "3": { series: 3, repetitions: null, duree_secondes: 45, description: 'Assis, bras tendus + légère inclinaison', conseil: 'Regard droit devant, ne cambrez pas' },
+    },
   },
 
   // ── FAUTEUIL ROULANT — SOUPLESSE ─────────────────────────────────────────────
@@ -677,6 +887,11 @@ export const EXERCICES_BASE: Exercice[] = [
       avc_hemiplegie: 'Commencer par le membre non affecté. Aide si nécessaire côté hémiplégique.',
     },
     reference: 'Sunrise Medical — souplesse en fauteuil roulant',
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 15, description: 'Assis, inclinaison légère', conseil: 'Dos droit, penchez depuis les hanches' },
+      "2": { series: 3, repetitions: null, duree_secondes: 20, description: 'Inclinaison plus marquée', conseil: 'Respirez profondément dans l\'étirement' },
+      "3": { series: 3, repetitions: null, duree_secondes: 30, description: 'Amplitude maximale, maintien actif dos plat', conseil: 'Allez progressivement plus loin à chaque expiration' },
+    },
   },
 
   // ── PARKINSON — MARCHE ET COORDINATION ──────────────────────────────────────
@@ -700,6 +915,11 @@ export const EXERCICES_BASE: Exercice[] = [
       avc_hemiplegie: 'Insister sur le membre inférieur hémiplégique. Aide manuelle si nécessaire.',
     },
     reference: 'SFP-APA — Fiches neuro Parkinson, rythme et coordination',
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 20, description: 'Appui bilatéral, 70–80 bpm', conseil: 'Tenez-vous à une chaise stable des deux côtés' },
+      "2": { series: 3, repetitions: null, duree_secondes: 30, description: 'Appui unilatéral, 90 bpm', conseil: 'Une main sur la chaise suffit' },
+      "3": { series: 3, repetitions: null, duree_secondes: 45, description: 'Sans appui, 100 bpm + variations', conseil: 'Supervision directe recommandée' },
+    },
   },
   {
     id: 'pk_eq_01',
@@ -718,6 +938,11 @@ export const EXERCICES_BASE: Exercice[] = [
     positionRequise: 'debout',
     niveauMobilite: 'modere',
     reference: 'HAS — Prévention des chutes Parkinson',
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 15, description: 'Appui possible, lent', conseil: 'Gardez une main sur la chaise' },
+      "2": { series: 3, repetitions: null, duree_secondes: 25, description: 'Sans appui, pied levé 1s', conseil: 'Abdominaux légèrement contractés' },
+      "3": { series: 3, repetitions: null, duree_secondes: 40, description: 'Sans appui, yeux fermés, pied levé 2s', conseil: 'Concentrez-vous sur vos sensations plantaires' },
+    },
   },
   {
     id: 'pk_resp_01',
@@ -738,6 +963,11 @@ export const EXERCICES_BASE: Exercice[] = [
       parkinson: 'Méthode LSVT : effort vocal maximal intentionnel. Volume fort = bénéfique.',
     },
     reference: 'Méthode LSVT (Lee Silverman Voice Treatment) — validée maladie de Parkinson',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 300, description: 'Volume modéré, 3 rep × 5s/voyelle', conseil: 'Effort vocal maximal intentionnel' },
+      "2": { series: 1, repetitions: null, duree_secondes: 480, description: 'Volume fort, 5 rep × 5s/voyelle', conseil: 'Travaillez l\'amplitude de la voix' },
+      "3": { series: 1, repetitions: null, duree_secondes: 600, description: 'Volume maximal + lecture à voix haute', conseil: 'Exagérez intentionnellement (méthode LSVT)' },
+    },
   },
 
   // ── SCLÉROSE EN PLAQUES ──────────────────────────────────────────────────────
@@ -761,6 +991,11 @@ export const EXERCICES_BASE: Exercice[] = [
       sep: '⚠️ Environnement frais obligatoire. Préférer matin ou soirée. Pauses fréquentes. Stopper si symptômes neurologiques.',
     },
     reference: 'HAS — Recommandations APA SEP 2024',
+    niveau_config: {
+      "1": { series: 2, repetitions: 6,  duree_secondes: null, description: 'Descente à 30°, maintien 3s', conseil: 'Allez à votre rythme, environnement frais' },
+      "2": { series: 3, repetitions: 8,  duree_secondes: null, description: 'Descente à 45°, maintien 5s', conseil: 'Maintenez une bonne posture' },
+      "3": { series: 3, repetitions: 10, duree_secondes: null, description: 'Descente à 45°, maintien 8s', conseil: 'Contrôlez chaque mouvement, pauses fréquentes' },
+    },
   },
   {
     id: 'sep_ex_02',
@@ -782,6 +1017,11 @@ export const EXERCICES_BASE: Exercice[] = [
       sep: 'Fractionné OBLIGATOIRE (continu contre-indiqué SEP). Stopper si apparition de symptômes neurologiques.',
     },
     reference: 'HAS SEP 2024 — Entraînement fractionné recommandé versus continu pour SEP',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 600,  description: 'Effort léger Borg 9-11', conseil: 'Conversation possible sans essoufflement' },
+      "2": { series: 1, repetitions: null, duree_secondes: 1200, description: 'Effort modéré Borg 11-13', conseil: 'Légère transpiration normale' },
+      "3": { series: 1, repetitions: null, duree_secondes: 1800, description: 'Effort soutenu Borg 13-15', conseil: 'Surveillez votre fréquence cardiaque' },
+    },
   },
   {
     id: 'sep_fatigue_01',
@@ -803,6 +1043,11 @@ export const EXERCICES_BASE: Exercice[] = [
       sep: 'La fatigue est le symptôme le plus invalidant de la SEP. Objectif : maintien de l\'autonomie à long terme.',
     },
     reference: 'HAS SEP — Gestion de la fatigue et maintien de l\'autonomie',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 600,  description: 'Identifier 3 activités prioritaires', conseil: 'Planifiez-les en début de journée' },
+      "2": { series: 1, repetitions: null, duree_secondes: 1200, description: 'Alterner activités debout/assises', conseil: 'S\'asseoir dès les premiers signes de fatigue' },
+      "3": { series: 1, repetitions: null, duree_secondes: 1800, description: 'Planning hebdomadaire équilibré', conseil: 'Créneaux exercice et récupération alternés' },
+    },
   },
 
   // ── AVC / HÉMIPLÉGIE ─────────────────────────────────────────────────────────
@@ -827,6 +1072,11 @@ export const EXERCICES_BASE: Exercice[] = [
       parkinson: 'Utiliser les accoudoirs. Se lever d\'un élan si difficulté d\'initiation du mouvement.',
     },
     reference: 'HAS — Réadaptation post-AVC, exercices de transfert',
+    niveau_config: {
+      "1": { series: 2, repetitions: 5,  duree_secondes: null, description: 'Avec aide des accoudoirs, lent', conseil: 'Aidez-vous des accoudoirs pour démarrer' },
+      "2": { series: 3, repetitions: 6,  duree_secondes: null, description: 'Avec aide d\'un accoudoir', conseil: 'Gardez le dos droit, pieds à plat' },
+      "3": { series: 3, repetitions: 8,  duree_secondes: null, description: 'Sans accoudoir, descente contrôlée 3s', conseil: 'Contrôlez la descente lentement' },
+    },
   },
   {
     id: 'avc_ex_04',
@@ -847,6 +1097,11 @@ export const EXERCICES_BASE: Exercice[] = [
       avc_hemiplegie: 'Travailler les deux membres : commencer côté sain puis côté hémiplégique. Ne jamais forcer.',
     },
     reference: 'SFP-APA — Fiches neuro AVC, coordination et proprioception',
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Yeux ouverts, amplitude réduite', conseil: 'Commencez côté sain' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Yeux fermés, avec balle légère', conseil: 'Respirez régulièrement' },
+      "3": { series: 3, repetitions: 10, duree_secondes: null, description: 'Yeux fermés, vitesse progressive', conseil: 'Ne jamais forcer côté hémiplégique' },
+    },
   },
 
   // ── EXERCICES UNIVERSELS ──────────────────────────────────────────────────────
@@ -866,6 +1121,11 @@ export const EXERCICES_BASE: Exercice[] = [
     positionRequise: 'assis',
     niveauMobilite: 'minimal',
     reference: 'APA EHPAD / HAS — Exercice réalisable tous profils, y compris GIR 1',
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Amplitude réduite, lent', conseil: 'Cercles doux sans forcer l\'amplitude' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Amplitude modérée, rythme modéré', conseil: 'Respirez régulièrement' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Amplitude maximale + rotation', conseil: 'Alternez sens horaire et antihoraire' },
+    },
   },
   {
     id: 'univ_03',
@@ -883,6 +1143,11 @@ export const EXERCICES_BASE: Exercice[] = [
     positionRequise: 'assis',
     niveauMobilite: 'minimal',
     reference: 'APA EHPAD — Renforcement quadriceps fauteuil et GIR 1 (HAS)',
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Contractions légères 3s', conseil: 'Allez à votre rythme' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Contractions modérées 5s', conseil: 'Maintenez une bonne posture' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Pression maximale 8s', conseil: 'Contrôlez chaque contraction' },
+    },
   },
   {
     id: 'univ_05',
@@ -906,6 +1171,11 @@ export const EXERCICES_BASE: Exercice[] = [
       fauteuil_roulant: 'Idéal en fauteuil. Adapter la distance des cibles.',
     },
     reference: 'APA handisport et EHPAD — Outil spécifiquement recommandé en APA',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 300, description: 'Grande cible à 1 m, marche lente', conseil: 'Ralentissez si vous perdez le fil' },
+      "2": { series: 1, repetitions: null, duree_secondes: 600, description: 'Cible moyenne à 1,5 m', conseil: 'La précision prime sur la vitesse' },
+      "3": { series: 1, repetitions: null, duree_secondes: 900, description: 'Petite cible à 2 m avec chrono', conseil: 'Arrêtez-vous si déséquilibre' },
+    },
   },
 
   {
@@ -922,6 +1192,11 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['tous'],
     positionRequise: 'assis',
     niveauMobilite: 'minimal',
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 20, description: 'Assis, bord chaise, dos droit', conseil: 'Mains sur les genoux pour équilibre' },
+      "2": { series: 3, repetitions: null, duree_secondes: 30, description: 'Assis sans dossier', conseil: 'Abdominaux légèrement contractés' },
+      "3": { series: 3, repetitions: null, duree_secondes: 45, description: 'Assis bras tendus + inclinaison', conseil: 'Regard droit devant, ne cambrez pas' },
+    },
   },
 
   // ── OBÉSITÉ ──────────────────────────────────────────────────────────────────
@@ -940,6 +1215,11 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['obesite'],
     positionRequise: 'debout',
     niveauMobilite: 'modere',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 600,  description: 'Allure confortable Borg 9-11, FC < 120', conseil: 'Vous devez pouvoir parler sans essoufflement' },
+      "2": { series: 1, repetitions: null, duree_secondes: 1200, description: 'Allure modérée Borg 11-13, FC < 130', conseil: 'Légère transpiration attendue' },
+      "3": { series: 1, repetitions: null, duree_secondes: 1800, description: 'Allure soutenue Borg 13-15', conseil: 'Surveillez la FC si prescrite' },
+    },
   },
   {
     id: 'ob_renfo',
@@ -956,6 +1236,11 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['obesite'],
     positionRequise: 'assis',
     niveauMobilite: 'minimal',
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Débutant, sans résistance', conseil: 'Allez à votre rythme' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Avec résistance légère', conseil: 'Maintenez une bonne posture' },
+      "3": { series: 3, repetitions: 15, duree_secondes: null, description: 'Avec élastique ou lest cheville', conseil: 'Contrôlez chaque mouvement' },
+    },
   },
   {
     id: 'ob_aqua',
@@ -972,6 +1257,11 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['obesite'],
     positionRequise: 'debout',
     niveauMobilite: 'modere',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 1200, description: 'Effort léger Borg 9-11, marche aquatique', conseil: 'Conversation possible sans essoufflement' },
+      "2": { series: 1, repetitions: null, duree_secondes: 1800, description: 'Effort modéré Borg 11-13, résistance aquatique', conseil: 'Légère transpiration normale' },
+      "3": { series: 1, repetitions: null, duree_secondes: 2700, description: 'Effort soutenu, cardio + renforcement', conseil: 'Surveillez votre fréquence cardiaque' },
+    },
   },
 
   // ── DIABÈTE ──────────────────────────────────────────────────────────────────
@@ -990,6 +1280,11 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['diabete'],
     positionRequise: 'debout',
     niveauMobilite: 'modere',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 900,  description: 'Allure confortable Borg 9-11, FC < 110', conseil: 'Vous devez pouvoir parler sans essoufflement' },
+      "2": { series: 1, repetitions: null, duree_secondes: 1500, description: 'Allure soutenue Borg 11-13, FC < 130', conseil: 'Légère transpiration attendue' },
+      "3": { series: 1, repetitions: null, duree_secondes: 1800, description: 'Allure soutenue Borg 13-15, variations d\'intensité', conseil: 'Surveillez la FC si prescrite' },
+    },
   },
   {
     id: 'diab_renfo',
@@ -1006,6 +1301,11 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['diabete'],
     positionRequise: 'tous',
     niveauMobilite: 'modere',
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Résistance légère', conseil: 'Allez à votre rythme' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Résistance modérée', conseil: 'Maintenez une bonne posture' },
+      "3": { series: 3, repetitions: 15, duree_secondes: null, description: 'Résistance forte, circuit training', conseil: 'Contrôlez chaque mouvement' },
+    },
   },
   {
     id: 'diab_souplesse',
@@ -1022,6 +1322,11 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['diabete'],
     positionRequise: 'assis',
     niveauMobilite: 'minimal',
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 15, description: 'Débutant, mouvement lent', conseil: 'Arrêtez à la première sensation d\'étirement' },
+      "2": { series: 3, repetitions: null, duree_secondes: 25, description: 'Mobilisation complète', conseil: 'Respirez profondément dans l\'étirement' },
+      "3": { series: 3, repetitions: null, duree_secondes: 35, description: 'Proprioception + plateau d\'équilibre', conseil: 'Allez progressivement plus loin à chaque expiration' },
+    },
   },
 
   // ── PROTHÈSE (hanche / genou) ─────────────────────────────────────────────
@@ -1040,6 +1345,11 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['prothese_hanche', 'prothese_genou'],
     positionRequise: 'debout',
     niveauMobilite: 'modere',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 600,  description: 'Allure confortable Borg 9-11', conseil: 'Vous devez pouvoir parler sans essoufflement' },
+      "2": { series: 1, repetitions: null, duree_secondes: 1200, description: 'Allure modérée Borg 11-13', conseil: 'Légère transpiration attendue' },
+      "3": { series: 1, repetitions: null, duree_secondes: 1800, description: 'Allure soutenue Borg 13-15, légères pentes', conseil: 'Surveillez la FC si prescrite' },
+    },
   },
   {
     id: 'prot_renfo',
@@ -1056,6 +1366,11 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['prothese_hanche', 'prothese_genou'],
     positionRequise: 'tous',
     niveauMobilite: 'modere',
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Contractions isométriques', conseil: 'Allez à votre rythme' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Contractions isotoniques légères', conseil: 'Maintenez une bonne posture' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Exercices fonctionnels', conseil: 'Contrôlez chaque mouvement' },
+    },
   },
   {
     id: 'prot_eq',
@@ -1072,6 +1387,11 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['prothese_hanche', 'prothese_genou'],
     positionRequise: 'debout',
     niveauMobilite: 'modere',
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 10, description: 'Débutant avec appui', conseil: 'Gardez un appui à portée de main' },
+      "2": { series: 3, repetitions: null, duree_secondes: 20, description: 'Intermédiaire sans appui', conseil: 'Regard fixe sur un point immobile' },
+      "3": { series: 3, repetitions: null, duree_secondes: 35, description: 'Sur plateau d\'équilibre, yeux fermés', conseil: 'Supervision recommandée' },
+    },
   },
 ];
 

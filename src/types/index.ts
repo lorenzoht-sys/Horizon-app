@@ -166,6 +166,14 @@ export type CategorieExercice = 'equilibre' | 'force' | 'mobilite' | 'souplesse'
 export type NiveauExercice = 'debutant' | 'intermediaire' | 'avance';
 export type Ressenti = 'bien' | 'moyen' | 'difficile' | 'douleur';
 
+export interface NiveauConfig {
+  series: number;
+  repetitions: number | null;
+  duree_secondes: number | null;
+  description: string;
+  conseil: string;
+}
+
 export interface Exercice {
   id: string;
   nom: string;
@@ -187,6 +195,11 @@ export interface Exercice {
   positionRequise?: 'debout' | 'assis' | 'couche' | 'fauteuil' | 'tous';
   niveauMobilite?: 'minimal' | 'modere' | 'complet';
   reference?: string;
+  niveau_config?: {
+    "1": NiveauConfig;
+    "2": NiveauConfig;
+    "3": NiveauConfig;
+  };
 }
 
 export interface ExerciceProgramme {
