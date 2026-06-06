@@ -488,12 +488,11 @@ function ExerciceForm({ ex, onChange, onDelete, libExercice }: {
     }
   }
 
-  const niv = ex.niveau ?? '2';
-  const nivStyle = NIVEAU_STYLE[niv as '1' | '2' | '3'];
+  const niv = (ex.niveau ?? '2') as '1' | '2' | '3';
 
   return (
     <div style={{ background: '#F8FAFA', border: '1px solid #E0EEEE', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
-      <div style={{ display: 'flex', gap: 10, marginBottom: 8, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 10, marginBottom: ex.exerciceId ? 6 : 8, alignItems: 'center' }}>
         <input
           value={ex.nom}
           onChange={e => onChange({ nom: e.target.value })}
@@ -503,31 +502,41 @@ function ExerciceForm({ ex, onChange, onDelete, libExercice }: {
         <select value={ex.categorie} onChange={e => onChange({ categorie: e.target.value })} style={{ ...inputStyle, flex: 1 }}>
           {CEL.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        {libExercice?.niveau_config && (
-          <select
-            value={niv}
-            onChange={e => handleNiveauChange(e.target.value as '1' | '2' | '3')}
-            style={{
-              fontSize: 11, fontWeight: 700, padding: '5px 6px', borderRadius: 8,
-              border: 'none', cursor: 'pointer', flexShrink: 0,
-              background: nivStyle.bg, color: nivStyle.color,
-            }}
-            title="Niveau de difficulté"
-          >
-            <option value="1" style={{ background: '#E1F5EE', color: '#0F6E56' }}>🟢 Facile</option>
-            <option value="2" style={{ background: '#FAEEDA', color: '#BA7517' }}>🟡 Modéré</option>
-            <option value="3" style={{ background: '#FCEBEB', color: '#A32D2D' }}>🔴 Intense</option>
-          </select>
-        )}
         {onDelete && (
           <button onClick={onDelete} style={btnDeleteSmall} title="Supprimer">
             <Trash2 size={13} />
           </button>
         )}
       </div>
-      {flash && (
-        <div style={{ fontSize: 11, color: '#0F6E56', marginBottom: 6, fontWeight: 600 }}>
-          ✓ Valeurs mises à jour
+      {ex.exerciceId && (
+        <div style={{ display: 'flex', gap: 5, marginBottom: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 10, color: '#94A3B8', marginRight: 2 }}>Niveau :</span>
+          {(['1', '2', '3'] as const).map(n => {
+            const s = NIVEAU_STYLE[n];
+            const active = niv === n;
+            return (
+              <button
+                key={n}
+                type="button"
+                onClick={() => handleNiveauChange(n)}
+                style={{
+                  fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20,
+                  cursor: 'pointer',
+                  border: active ? `2px solid ${s.color}` : '2px solid transparent',
+                  background: active ? s.bg : '#EFEFEF',
+                  color: active ? s.color : '#999',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {s.emoji} {s.label}
+              </button>
+            );
+          })}
+          {flash && (
+            <span style={{ fontSize: 10, color: '#0F6E56', fontWeight: 600, marginLeft: 4 }}>
+              ✓ Valeurs mises à jour
+            </span>
+          )}
         </div>
       )}
       <input
