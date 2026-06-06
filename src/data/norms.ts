@@ -13,6 +13,7 @@ export const NORMES_SCORING: Record<string, NormeScoring> = {
   souplesse:         { note1: -15, note2: -5,  note3: 0,   note4: 10,  lowerIsBetter: false },
   tm6Distance:       { note1: 200, note2: 300, note3: 400, note4: 500, lowerIsBetter: false },
   memoire:           { note1: 3,   note2: 5,   note3: 7,   note4: 9,   lowerIsBetter: false },
+  apley:             { note1: 1.49, note2: 2.49, note3: 3.49, note4: 4.0, lowerIsBetter: false },
 };
 
 export function calculerNote(valeur: number, norme: NormeScoring): 1 | 2 | 3 | 4 | 5 {

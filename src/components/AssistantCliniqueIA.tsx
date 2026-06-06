@@ -68,6 +68,14 @@ function buildSystemContext(participant: Participant, bilanInitial: Bilan | null
     sep: 'Sclérose en plaques',
   };
 
+  const APLEY_H: Record<string, number> = { shoulder: 4, neck: 3, top: 2, below: 1 };
+  const APLEY_B: Record<string, number> = { scapula: 4, mid_back: 3, low_back: 2, buttocks: 1 };
+  const ap = lastBilan?.apley;
+  const apleyAsym = ap
+    ? ((ap.haut_d != null && ap.haut_g != null && Math.abs((APLEY_H[ap.haut_d] ?? 0) - (APLEY_H[ap.haut_g] ?? 0)) > 1)
+      || (ap.bas_d != null && ap.bas_g != null && Math.abs((APLEY_B[ap.bas_d] ?? 0) - (APLEY_B[ap.bas_g] ?? 0)) > 1))
+    : false;
+
   const lignesExtra = [
     profil?.douleursNiveau != null
       ? `- Douleur habituelle : ${profil.douleursNiveau}/10${profil.douleursLocalisation ? ` (${profil.douleursLocalisation})` : ''}`
@@ -86,6 +94,13 @@ function buildSystemContext(participant: Participant, bilanInitial: Bilan | null
       : null,
     participant.allergies
       ? `- Allergies : ${participant.allergies}`
+      : null,
+    ap?.score != null
+      ? `- Apley Scratch Test : ${ap.score}/4 — ${
+          ap.score >= 3.5 ? 'Amplitude normale' :
+          ap.score >= 2.5 ? 'Légèrement limité' :
+          ap.score >= 1.5 ? 'Modérément limité' : 'Très limité — à signaler au médecin'
+        }${apleyAsym ? ' — Asymétrie D/G à surveiller' : ''}${ap.notes ? ` (${ap.notes})` : ''}`
       : null,
   ].filter(Boolean).join('\n');
 

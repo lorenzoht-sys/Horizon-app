@@ -42,6 +42,7 @@ const TESTS_TABLEAU = [
   { label: 'TM6',         normeKey: 'tm6Distance',        unite: ' m',    lower: false, getVal: (b: Bilan) => b.tm6.distanceMetres },
   { label: 'Souplesse',   normeKey: 'souplesse',          unite: ' cm',   lower: false, getVal: (b: Bilan) => b.souplesse.valeur },
   { label: 'Mémoire',     normeKey: 'memoire',            unite: '/5',    lower: false, getVal: (b: Bilan) => b.memoire.scoreImmediat },
+  { label: 'Apley Scratch', normeKey: 'apley',           unite: '/4',    lower: false, getVal: (b: Bilan) => b.apley?.score ?? null },
 ];
 
 const METHODE_LABEL: Record<string, string> = {
@@ -56,6 +57,7 @@ const NORMES_LABEL: Record<string, string> = {
   souplesse:         '≥ 10 cm',
   tm6Distance:       '≥ 500 m',
   memoire:           '4-5/5',
+  apley:             '≥ 3.5/4',
 };
 
 const DOT_COLORS = {

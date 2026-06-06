@@ -43,5 +43,10 @@ export function useBilanDelta(current: Bilan, previous: Bilan | null) {
       p?.memoire.dubois?.scoreMIS ?? null,
       false,
     ),
+    apleyScore: calcDelta(
+      current.apley?.score ?? null,
+      p?.apley?.score ?? null,
+      false,
+    ),
   };
 }

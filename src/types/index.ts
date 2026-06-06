@@ -50,6 +50,14 @@ export interface Bilan {
     };
   };
 
+  apley?: {
+    haut_d: string | null;
+    haut_g: string | null;
+    bas_d: string | null;
+    bas_g: string | null;
+    score: number | null;
+    notes: string;
+  };
   notesProfessionnelles: string;
   objectifsSuivants: string;
   pointsVigilance: string;
@@ -97,7 +105,7 @@ export type TagPatient = 'senior' | 'post_op' | 'chronique' | 'adulte_blessure';
 export type ProfilHandicap = 'fauteuil_roulant' | 'avc_hemiplegie' | 'parkinson' | 'sep';
 export type ProfilPathologie = 'obesite' | 'diabete' | 'prothese_hanche' | 'prothese_genou';
 
-export type TestKey = 'equilibre' | 'chairStand' | 'handGrip' | 'tug' | 'souplesse' | 'tm6' | 'memoire';
+export type TestKey = 'equilibre' | 'chairStand' | 'handGrip' | 'tug' | 'souplesse' | 'tm6' | 'memoire' | 'apley';
 
 export type TypeQuestion = 'texte' | 'note' | 'oui_non';
 

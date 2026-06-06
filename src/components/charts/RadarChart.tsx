@@ -37,6 +37,8 @@ function bilanAxisValue(key: TestKey, bilan: Bilan, normalize: ReturnType<typeof
       const moy = ((bilan.memoire.scoreImmediat ?? 0) + (bilan.memoire.scoreDiffere ?? 0)) / 2;
       return normalize.memoire(moy);
     }
+    case 'apley':
+      return bilan.apley?.score != null ? Math.round((bilan.apley.score / 4) * 100) : 0;
   }
 }
 
