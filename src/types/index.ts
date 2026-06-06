@@ -473,6 +473,8 @@ export interface ProgrammeExerciceV2 {
   repetitions?: number;
   dureeSecondes?: number;
   ordre: number;
+  exerciceId?: string;
+  niveau?: '1' | '2' | '3';
 }
 
 export interface ProgrammeSeanceV2 {

@@ -75,6 +75,8 @@ function progV2ToWizard(prog: ProgrammeV2): WizardData {
           series: ex.series ?? 3,
           repetitions: ex.repetitions ?? 10,
           dureeSecondes: ex.dureeSecondes ?? 30,
+          exerciceId: ex.exerciceId,
+          niveau: ex.niveau,
         })),
     }));
 
@@ -501,7 +503,7 @@ function ExerciceForm({ ex, onChange, onDelete, libExercice }: {
         <select value={ex.categorie} onChange={e => onChange({ categorie: e.target.value })} style={{ ...inputStyle, flex: 1 }}>
           {CEL.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        {ex.exerciceId && (
+        {libExercice?.niveau_config && (
           <select
             value={niv}
             onChange={e => handleNiveauChange(e.target.value as '1' | '2' | '3')}
@@ -1033,6 +1035,8 @@ export default function ProgrammePage() {
             series: ex.mode !== 'total' ? ex.series : undefined,
             repetitions: ex.mode === 'reps' ? ex.repetitions : undefined,
             dureeSecondes: (ex.mode === 'duree' || ex.mode === 'total') ? ex.dureeSecondes : undefined,
+            exerciceId: ex.exerciceId || undefined,
+            niveau: ex.niveau || undefined,
           })),
         })),
         planning: wizardData.planning,
