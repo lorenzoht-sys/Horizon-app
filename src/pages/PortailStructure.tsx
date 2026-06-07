@@ -156,7 +156,7 @@ function VueProgressPatient({ p, seances }: { p: Participant; seances: Seance[] 
   );
 
   return (
-    <div style={{ padding: 16, maxWidth: 640, margin: '0 auto', fontFamily: "var(--font-sans)" }}>
+    <div style={{ fontFamily: "var(--font-sans)" }}>
 
       {/* Progression globale */}
       <div style={{ background: 'white', borderRadius: 16, border: `1px solid ${C.border}`, padding: 16, marginBottom: 14 }}>
@@ -338,18 +338,106 @@ export default function PortailStructure() {
   );
 
   // Vue progrès individuelle
-  if (selectedPatient) return (
-    <div style={{ maxWidth: 680, margin: '0 auto', background: C.bg, minHeight: '100vh', fontFamily: "var(--font-sans)" }}>
-      <div style={{ background: C.dark, padding: '14px 16px', position: 'sticky', top: 0, zIndex: 20 }}>
+  if (selectedPatient) {
+    const statutSel = statutPatient(selectedPatient, seances.filter(s => s.participantId === selectedPatient.id));
+    const programmeActifSel = selectedPatient.programmes?.filter(pr => pr.actif).sort((a, b) => b.dateCreation.localeCompare(a.dateCreation))[0] ?? null;
+    const documentsPatient = documents.filter((d: any) => d.participant_id === selectedPatient.id);
+
+    const patientHeader = (
+      <div style={{ background: C.dark, padding: isMobile ? '14px 16px' : '20px 24px', position: 'sticky', top: 0, zIndex: 20 }}>
         <button onClick={() => setSelectedPatient(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: 0, marginBottom: 10 }}>← Retour aux patients</button>
-        <div style={{ fontSize: 17, fontWeight: 800, color: 'white' }}>
+        <div style={{ fontSize: isMobile ? 17 : 19, fontWeight: 800, color: 'white' }}>
           {selectedPatient.prenom} {selectedPatient.nom}{selectedPatient.dateNaissance && ` · ${calcAge(selectedPatient.dateNaissance)} ans`}
         </div>
         {praticien && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Suivi par {praticien.prenom} {praticien.nom} · APA</div>}
       </div>
-      <VueProgressPatient p={selectedPatient} seances={seances} />
-    </div>
-  );
+    );
+
+    // Colonne gauche desktop : résumé patient
+    const patientSidebar = (
+      <aside style={{ width: 300, flexShrink: 0 }}>
+        <div style={{ background: 'white', borderRadius: 16, border: `1px solid ${C.border}`, padding: 16, marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: '50%', background: C.teal,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'white', fontWeight: 700, fontSize: 16, flexShrink: 0,
+            }}>
+              {selectedPatient.prenom[0]}{selectedPatient.nom[0]}
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>{selectedPatient.prenom} {selectedPatient.nom}</div>
+              {selectedPatient.dateNaissance && <div style={{ fontSize: 12, color: C.muted }}>{calcAge(selectedPatient.dateNaissance)} ans</div>}
+            </div>
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: statutSel.color }}>{statutSel.emoji} {statutSel.label}</div>
+        </div>
+
+        <div style={{ background: 'white', borderRadius: 16, border: `1px solid ${C.border}`, padding: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
+            Programme en cours
+          </div>
+          {programmeActifSel ? (
+            <>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.dark, marginBottom: 4 }}>🏋️ {programmeActifSel.titre}</div>
+              {programmeActifSel.objectif && <div style={{ fontSize: 13, color: C.dark }}>🎯 {programmeActifSel.objectif}</div>}
+            </>
+          ) : (
+            <div style={{ fontSize: 13, color: C.muted }}>Aucun programme en cours.</div>
+          )}
+        </div>
+      </aside>
+    );
+
+    // Documents partagés concernant ce patient
+    const documentsSection = (
+      <div style={{ background: 'white', borderRadius: 16, border: `1px solid ${C.border}`, padding: 16, marginTop: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+          Documents partagés
+        </div>
+        {documentsPatient.length === 0 ? (
+          <div style={{ fontSize: 13, color: C.muted }}>Aucun document partagé pour ce patient.</div>
+        ) : (
+          documentsPatient.map((d: any) => (
+            <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: `1px solid ${C.bg}`, gap: 10 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.dark }}>📄 {LABELS_DOCUMENTS[d.type_document] ?? 'Document'}</div>
+                <div style={{ fontSize: 12, color: C.muted }}>
+                  {d.date_document ? new Date(d.date_document + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}
+                </div>
+              </div>
+              <button
+                onClick={() => telechargerDocument(d, `${selectedPatient.prenom}-${selectedPatient.nom}`.replace(/ /g, '-'))}
+                style={{ fontSize: 12, fontWeight: 600, color: C.teal, background: 'none', border: `1px solid ${C.teal}30`, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', flexShrink: 0 }}
+              >
+                Télécharger →
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    );
+
+    return (
+      <div style={{ background: C.bg, minHeight: '100vh', fontFamily: "var(--font-sans)" }}>
+        {patientHeader}
+        {isMobile ? (
+          <div style={{ maxWidth: 600, margin: '0 auto', padding: 16 }}>
+            <VueProgressPatient p={selectedPatient} seances={seances} />
+            {documentsSection}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 24, maxWidth: 1200, margin: '0 auto', padding: 24, alignItems: 'flex-start' }}>
+            {patientSidebar}
+            <main style={{ flex: 1, minWidth: 0 }}>
+              <VueProgressPatient p={selectedPatient} seances={seances} />
+              {documentsSection}
+            </main>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // Données onglet séances
   const seancesFiltered = seances.filter(s => s.date.startsWith(moisFilter) && s.statut === 'realisee');
