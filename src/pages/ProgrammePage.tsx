@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { CSSProperties } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { ArrowLeft, Plus, Bot, Trash2, ChevronRight, ChevronLeft, X, Activity, Search } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
@@ -8,7 +8,7 @@ import { useProgramme } from '../hooks/useProgramme';
 import { useProgrammeV2 } from '../hooks/useProgrammeV2';
 import PageWrapper from '../components/layout/PageWrapper';
 import { toast } from 'sonner';
-import type { TypeProgramme, JourProgramme, ProgrammeV2, Participant } from '../types';
+import type { TypeProgramme, JourProgramme, ProgrammeV2, Participant, Bilan } from '../types';
 import { TYPE_PROGRAMME_LABELS as TPL, JOURS_PROGRAMME as JP, CATEGORIE_EXERCICE_LABELS as CEL } from '../types';
 import { loadExercices, saveCustomExercice } from '../data/exercices';
 import type { Exercice } from '../types';
@@ -182,6 +182,409 @@ const CAT_TO_DB: Record<string, string[]> = {
   'Souplesse':    ['souplesse', 'mobilite'],
   'Coordination': ['memoire'],
 };
+
+// ── Génération de programme par IA ───────────────────────────────────────────
+
+interface ConfigIA {
+  objectif: string;
+  objectifPersonnalise: string;
+  frequence: number;
+  duree: number;
+  niveau: 1 | 2 | 3;
+}
+
+const EMPTY_CONFIG_IA: ConfigIA = {
+  objectif: 'equilibre',
+  objectifPersonnalise: '',
+  frequence: 3,
+  duree: 45,
+  niveau: 2,
+};
+
+const OBJECTIFS_IA: { value: string; label: string }[] = [
+  { value: 'equilibre',    label: 'Équilibre et prévention des chutes' },
+  { value: 'force',        label: 'Renforcement musculaire' },
+  { value: 'endurance',    label: 'Endurance et cardio' },
+  { value: 'souplesse',    label: 'Souplesse et mobilité' },
+  { value: 'autonomie',    label: 'Autonomie quotidienne' },
+  { value: 'confiance',    label: "Confiance et reprise d'activité" },
+  { value: 'personnalise', label: 'Personnalisé' },
+];
+
+interface ExerciceIA {
+  nom: string;
+  categorie: string;
+  description: string;
+  conseil_securite?: string;
+  niveau: number;
+  series?: number | null;
+  repetitions?: number | null;
+  duree_secondes?: number | null;
+}
+
+interface SeanceIA {
+  nom: string;
+  description?: string;
+  exercices: ExerciceIA[];
+}
+
+interface ProgrammeIA {
+  nom: string;
+  description?: string;
+  objectif: string;
+  message_motivation: string;
+  niveau_global: number;
+  seances: SeanceIA[];
+  planning: Record<string, string>;
+  conseils_generaux?: string;
+}
+
+const JOURS_IA: JourProgramme[] = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+
+function calcAgeIA(dateNaissance: string): number {
+  if (!dateNaissance) return 0;
+  return Math.floor((Date.now() - new Date(dateNaissance).getTime()) / (365.25 * 24 * 3600 * 1000));
+}
+
+function construirePromptIA(participant: Participant, config: ConfigIA, dernierBilan: Bilan | null, programmesExistants: ProgrammeV2[]): string {
+  const age = calcAgeIA(participant.dateNaissance);
+  const traitements = (participant.traitements ?? []).map(t => t.nom).filter(Boolean).join(', ');
+  const antecedents = [participant.antecedentsMedicaux, participant.antecedentsChirurgicaux].filter(Boolean).join(' · ');
+
+  const contextePatient = `PATIENT : ${participant.prenom} ${participant.nom}, ${age} ans
+PATHOLOGIE : ${participant.pathologie || 'non renseignée'}
+ANTÉCÉDENTS : ${antecedents || 'non renseignés'}
+TRAITEMENTS : ${traitements || 'non renseignés'}
+ALLERGIES : ${participant.allergies || 'aucune connue'}
+PROFIL : ${participant.profilHandicap || 'aucun profil de handicap renseigné'}
+${dernierBilan ? `DERNIERS SCORES (bilan du ${dernierBilan.date}) :
+- TUG (Timed Up and Go) : ${dernierBilan.tug3m ?? 'NR'} s
+- Chair Stand 30s : ${dernierBilan.chairStand30 ?? 'NR'} répétitions
+- Force de préhension (HandGrip droite) : ${dernierBilan.handGrip?.droite ?? 'NR'} kg
+- Équilibre (appui droit) : ${dernierBilan.equilibre?.droite ?? 'NR'} s
+- Ressenti à l'effort (Borg) : ${dernierBilan.tm6?.borgRPE ?? 'NR'}/20` : "Aucun bilan disponible — adapter le programme au profil et à la pathologie déclarés."}
+PROGRAMMES EXISTANTS : ${programmesExistants.map(p => p.nom).join(', ') || 'aucun'}`;
+
+  const niveauLabel = config.niveau === 1 ? 'Facile (débutant, fragile)'
+    : config.niveau === 2 ? 'Modéré (actif, effort soutenu)'
+    : 'Intense (entraîné, bon niveau fonctionnel)';
+
+  const objectifLabel = config.objectif === 'personnalise'
+    ? (config.objectifPersonnalise || "objectif personnalisé du patient")
+    : OBJECTIFS_IA.find(o => o.value === config.objectif)?.label ?? config.objectif;
+
+  const nbExercices = config.frequence === 2 ? '1 à 2' : config.frequence <= 3 ? '2 à 3' : '3 à 4';
+
+  return `Tu es un expert en Activité Physique Adaptée (APA) certifié.
+Génère un programme d'exercices personnalisé pour ce patient.
+
+${contextePatient}
+
+CONFIGURATION DEMANDÉE :
+- Objectif : ${objectifLabel}
+- Fréquence : ${config.frequence} séances par semaine
+- Durée par séance : ${config.duree} minutes
+- Niveau : ${niveauLabel}
+
+RÈGLES ABSOLUES :
+1. Respecter toutes les contre-indications, pathologies et allergies signalées, sans exception
+2. En cas de traitement anticoagulant ou de risque de chute → éviter tout exercice à risque de choc ou de chute
+3. Adapter le niveau de difficulté aux scores fonctionnels du dernier bilan, s'ils sont disponibles
+4. Ne pas reproduire à l'identique les programmes existants listés ci-dessus
+
+Réponds UNIQUEMENT avec un JSON valide, sans texte avant ou après, sans balises markdown, sans commentaires.
+
+Format JSON exact attendu :
+{
+  "nom": "string (nom court et descriptif, ex: Programme Équilibre ${participant.prenom})",
+  "description": "string (1-2 phrases décrivant le programme)",
+  "objectif": "string (objectif principal en 1 phrase)",
+  "message_motivation": "string (message positif et encourageant pour le patient, 1 phrase)",
+  "niveau_global": ${config.niveau},
+  "seances": [
+    {
+      "nom": "string (ex: Séance A, Séance Équilibre)",
+      "description": "string (description courte de la séance)",
+      "exercices": [
+        {
+          "nom": "string (nom exact de l'exercice)",
+          "categorie": "string (Équilibre|Force|Endurance|Souplesse|Coordination|Mémoire)",
+          "description": "string (instruction simple et claire pour le patient)",
+          "conseil_securite": "string (conseil de sécurité spécifique)",
+          "niveau": ${config.niveau},
+          "series": nombre_ou_null,
+          "repetitions": nombre_ou_null,
+          "duree_secondes": nombre_ou_null
+        }
+      ]
+    }
+  ],
+  "planning": {
+    "lundi": "string (nom de séance exact ou repos)",
+    "mardi": "string",
+    "mercredi": "string",
+    "jeudi": "string",
+    "vendredi": "string",
+    "samedi": "string",
+    "dimanche": "string"
+  },
+  "conseils_generaux": "string (2-3 conseils généraux pour ce programme)"
+}
+
+Génère ${nbExercices} exercices par séance.
+La durée totale des exercices d'une séance doit correspondre à environ ${config.duree} minutes.
+Distribue les séances sur ${config.frequence} jours non consécutifs si possible, et indique "repos" pour les autres jours.`;
+}
+
+function ConfigIAModal({
+  participant, config, onChange, onGenerer, onClose, generating, error,
+}: {
+  participant: Participant;
+  config: ConfigIA;
+  onChange: (c: Partial<ConfigIA>) => void;
+  onGenerer: () => void;
+  onClose: () => void;
+  generating: boolean;
+  error: string | null;
+}) {
+  const age = calcAgeIA(participant.dateNaissance);
+
+  const chip = (active: boolean): CSSProperties => ({
+    flex: 1, padding: '9px 6px', fontSize: 13, fontWeight: 700, borderRadius: 10,
+    cursor: 'pointer', textAlign: 'center',
+    border: active ? '2px solid var(--color-teal)' : '1px solid #E0EEEE',
+    background: active ? '#F0F9F9' : 'white',
+    color: active ? 'var(--color-teal)' : '#6B7280',
+  });
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', zIndex: 1100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px 16px', overflowY: 'auto' }}>
+      <div style={{ background: 'white', borderRadius: 20, width: '100%', maxWidth: 520, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+        <div style={{ background: 'var(--color-ink)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'white' }}>🤖 Générer un programme avec l'IA</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
+              Pour {participant.prenom} {participant.nom} · {age} ans{participant.pathologie ? ` · ${participant.pathologie}` : ''}
+            </div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>L'IA s'adaptera automatiquement au profil du patient.</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8, padding: 8, cursor: 'pointer', color: 'white', flexShrink: 0 }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18, maxHeight: '64vh', overflowY: 'auto' }}>
+          {generating ? (
+            <div style={{ textAlign: 'center', padding: '32px 0' }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>🤖</div>
+              <p style={{ fontSize: 15, fontWeight: 600, color: '#0D2B2B' }}>L'IA génère le programme…</p>
+              <p style={{ fontSize: 13, color: '#94A3B8', marginTop: 6 }}>Analyse du profil de {participant.prenom} en cours (quelques secondes).</p>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label style={labelStyle}>Objectif principal *</label>
+                <select value={config.objectif} onChange={e => onChange({ objectif: e.target.value })} style={inputStyle}>
+                  {OBJECTIFS_IA.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                {config.objectif === 'personnalise' && (
+                  <input
+                    value={config.objectifPersonnalise}
+                    onChange={e => onChange({ objectifPersonnalise: e.target.value })}
+                    placeholder="Décrivez l'objectif souhaité…"
+                    style={{ ...inputStyle, marginTop: 8 }}
+                  />
+                )}
+              </div>
+
+              <div>
+                <label style={labelStyle}>Fréquence *</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {[2, 3, 4, 5].map(f => (
+                    <button key={f} type="button" onClick={() => onChange({ frequence: f })} style={chip(config.frequence === f)}>{f}x/sem</button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={labelStyle}>Durée par séance *</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {[30, 45, 60, 90].map(d => (
+                    <button key={d} type="button" onClick={() => onChange({ duree: d })} style={chip(config.duree === d)}>{d} min</button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={labelStyle}>Niveau de difficulté *</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {([1, 2, 3] as const).map(n => {
+                    const s = NIVEAU_STYLE[String(n) as '1' | '2' | '3'];
+                    return (
+                      <button key={n} type="button" onClick={() => onChange({ niveau: n })} style={chip(config.niveau === n)}>
+                        {s.emoji} {s.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid #E0EEEE', paddingTop: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
+                  Données transmises à l'IA
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, color: '#374151' }}>
+                  <div>✅ Pathologie et antécédents</div>
+                  <div>✅ Traitements et allergies déclarés</div>
+                  <div>✅ Derniers scores fonctionnels (si bilan disponible)</div>
+                  <div>✅ Programmes existants (pour éviter les doublons)</div>
+                </div>
+              </div>
+
+              {error && (
+                <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#991B1B' }}>
+                  {error}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {!generating && (
+          <div style={{ padding: '16px 24px', borderTop: '1px solid #E5E7EB', display: 'flex', gap: 10 }}>
+            <button onClick={onClose} style={{ ...btnSecondary, flex: 1, justifyContent: 'center' }}>Annuler</button>
+            <button onClick={onGenerer} style={{ ...btnPrimary, flex: 2, justifyContent: 'center' }}>
+              <Bot size={14} /> Générer le programme
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PreviewIAModal({
+  programme, onChange, onValider, onRegenerer, onModifierConfig, onClose, saving,
+}: {
+  programme: ProgrammeIA;
+  onChange: (p: ProgrammeIA) => void;
+  onValider: () => void;
+  onRegenerer: () => void;
+  onModifierConfig: () => void;
+  onClose: () => void;
+  saving: boolean;
+}) {
+  const nbSeancesSemaine = JOURS_IA.filter(j => programme.planning[j] && programme.planning[j] !== 'repos').length;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', zIndex: 1150, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px 16px', overflowY: 'auto' }}>
+      <div style={{ background: 'white', borderRadius: 20, width: '100%', maxWidth: 640, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+
+        <div style={{ padding: '20px 24px 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: '#0D2B2B' }}>🤖 Programme généré — à valider</div>
+              <div style={{ fontSize: 13, color: '#94A3B8', marginTop: 2 }}>Vérifiez et ajustez avant de créer le programme</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <button onClick={onRegenerer} style={btnSecondary} title="Regénérer avec la même configuration">
+                🔄 Regénérer
+              </button>
+              <button onClick={onClose} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, padding: 8, cursor: 'pointer' }}>
+                <X size={16} color="#94A3B8" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: '0 24px', maxHeight: '58vh', overflowY: 'auto' }}>
+          {/* Nom et message éditables */}
+          <div style={{ marginBottom: 16 }}>
+            <input
+              value={programme.nom}
+              onChange={e => onChange({ ...programme, nom: e.target.value })}
+              style={{ fontSize: 16, fontWeight: 700, border: 'none', borderBottom: '1.5px solid var(--color-teal)', width: '100%', padding: '4px 0', outline: 'none', color: '#0D2B2B', fontFamily: 'inherit', boxSizing: 'border-box' as const }}
+            />
+            <input
+              value={programme.message_motivation}
+              onChange={e => onChange({ ...programme, message_motivation: e.target.value })}
+              placeholder="Message de motivation pour le patient…"
+              style={{ fontSize: 13, color: '#6B7280', border: 'none', width: '100%', padding: '6px 0', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' as const }}
+            />
+          </div>
+
+          {/* Planning visuel */}
+          <div style={{ marginBottom: 16, padding: 12, background: '#F8FAFA', borderRadius: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Planning</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {JOURS_IA.map(jour => {
+                const actif = !!programme.planning[jour] && programme.planning[jour] !== 'repos';
+                return (
+                  <div key={jour} style={{
+                    textAlign: 'center', flex: 1, padding: '8px 4px', borderRadius: 8,
+                    background: actif ? 'var(--color-teal)' : 'transparent',
+                    border: actif ? 'none' : '1px solid #E0EEEE',
+                    color: actif ? 'white' : '#94A3B8', fontSize: 11,
+                  }}>
+                    <div style={{ fontWeight: 700 }}>{JOUR_COURT[jour]}</div>
+                    <div style={{ fontSize: 12, marginTop: 2 }}>{actif ? '●' : '○'}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 8, textAlign: 'center' }}>
+              {nbSeancesSemaine} séance{nbSeancesSemaine > 1 ? 's' : ''}/semaine
+            </div>
+          </div>
+
+          {/* Séances et exercices */}
+          {programme.seances.map((seance, si) => (
+            <div key={si} style={{ marginBottom: 14, border: '1px solid #E0EEEE', borderRadius: 12, padding: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#0D2B2B', marginBottom: 10 }}>{seance.nom}</div>
+              {seance.exercices.map((ex, ei) => {
+                const niv = (['1', '2', '3'].includes(String(ex.niveau)) ? String(ex.niveau) : '2') as '1' | '2' | '3';
+                const s = NIVEAU_STYLE[niv];
+                const qty = ex.series && ex.repetitions ? `${ex.series} × ${ex.repetitions} rép.`
+                  : ex.series && ex.duree_secondes ? `${ex.series} × ${ex.duree_secondes}s`
+                  : ex.duree_secondes ? `${Math.round(ex.duree_secondes / 60)} min` : '';
+                return (
+                  <div key={ei} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
+                    borderBottom: ei < seance.exercices.length - 1 ? '1px solid #F1F5F9' : 'none',
+                  }}>
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: s.bg, color: s.color, flexShrink: 0 }}>{s.emoji}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#0D2B2B' }}>{ex.nom}</span>
+                      {qty && <span style={{ fontSize: 12, color: '#94A3B8', marginLeft: 8 }}>{qty}</span>}
+                    </div>
+                    <span style={{ fontSize: 11, color: 'var(--color-teal)', flexShrink: 0 }}>{ex.categorie}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+
+          {/* Conseils généraux */}
+          {programme.conseils_generaux && (
+            <div style={{ padding: 12, background: '#E1F5EE', borderRadius: 10, marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#0F6E56', marginBottom: 4 }}>💡 Conseils généraux</div>
+              <div style={{ fontSize: 13, color: '#085041' }}>{programme.conseils_generaux}</div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '16px 24px', borderTop: '1px solid #E5E7EB', display: 'flex', gap: 10 }}>
+          <button onClick={onModifierConfig} style={btnSecondary}>
+            <ChevronLeft size={14} /> Modifier la config
+          </button>
+          <button onClick={onValider} disabled={saving} style={{ ...btnPrimary, flex: 1, justifyContent: 'center', opacity: saving ? 0.7 : 1 }}>
+            {saving ? '⏳ Création en cours…' : '✅ Valider et créer le programme'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Modale de sélection d'exercice ────────────────────────────────────────────
 
@@ -976,7 +1379,6 @@ const STEP_LABELS = ['Informations', 'Séances', 'Planning', 'Récapitulatif'];
 
 export default function ProgrammePage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const { participants } = useParticipants();
   const { programmes: progsV2, loading, createProgramme, updateProgramme, toggleActif, deleteProgrammeV2 } = useProgrammeV2(id!);
   const { programmes: progsV1, programmeActif: progV1Actif } = useProgramme(id!);
@@ -988,6 +1390,151 @@ export default function ProgrammePage() {
   const [wizardData, setWizardData] = useState<WizardData>(EMPTY_WIZARD);
   const [saving, setSaving] = useState(false);
   const [editingProgId, setEditingProgId] = useState<string | null>(null);
+
+  const [showConfigIA, setShowConfigIA] = useState(false);
+  const [configIA, setConfigIA] = useState<ConfigIA>(EMPTY_CONFIG_IA);
+  const [generatingIA, setGeneratingIA] = useState(false);
+  const [errorIA, setErrorIA] = useState<string | null>(null);
+  const [programmePreview, setProgrammePreview] = useState<ProgrammeIA | null>(null);
+  const [showPreviewIA, setShowPreviewIA] = useState(false);
+  const [savingIA, setSavingIA] = useState(false);
+
+  function updateConfigIA(patch: Partial<ConfigIA>) {
+    setConfigIA(prev => ({ ...prev, ...patch }));
+  }
+
+  function ouvrirConfigIA() {
+    setConfigIA(EMPTY_CONFIG_IA);
+    setErrorIA(null);
+    setShowConfigIA(true);
+  }
+
+  function fermerConfigIA() {
+    setShowConfigIA(false);
+    setErrorIA(null);
+  }
+
+  async function genererProgrammeIA() {
+    if (!participant) return;
+    if (configIA.objectif === 'personnalise' && !configIA.objectifPersonnalise.trim()) {
+      setErrorIA("Précisez l'objectif personnalisé.");
+      return;
+    }
+
+    setGeneratingIA(true);
+    setErrorIA(null);
+
+    try {
+      const bilans = (participant.bilans ?? []) as Bilan[];
+      const dernierBilan = bilans.length
+        ? [...bilans].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+        : null;
+
+      const prompt = construirePromptIA(participant, configIA, dernierBilan, progsV2);
+
+      const res = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || "Erreur lors de l'appel à l'IA");
+      }
+
+      const cleanText = String(data.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      let parsed: ProgrammeIA;
+      try {
+        parsed = JSON.parse(cleanText);
+      } catch {
+        throw new Error("L'IA a renvoyé une réponse invalide. Réessayez.");
+      }
+
+      if (!parsed || !Array.isArray(parsed.seances) || parsed.seances.length === 0) {
+        throw new Error("Le programme généré est incomplet. Réessayez.");
+      }
+
+      setProgrammePreview(parsed);
+      setShowConfigIA(false);
+      setShowPreviewIA(true);
+    } catch (err: any) {
+      setErrorIA(err?.message || "Une erreur est survenue lors de la génération.");
+    } finally {
+      setGeneratingIA(false);
+    }
+  }
+
+  function fermerPreviewIA() {
+    setShowPreviewIA(false);
+    setProgrammePreview(null);
+  }
+
+  function modifierConfigDepuisPreview() {
+    setShowPreviewIA(false);
+    setShowConfigIA(true);
+  }
+
+  async function regenererIA() {
+    setShowPreviewIA(false);
+    setProgrammePreview(null);
+    setShowConfigIA(true);
+    await genererProgrammeIA();
+  }
+
+  async function handleValiderEtCreerIA() {
+    if (!programmePreview) return;
+    setSavingIA(true);
+    try {
+      const seancesAvecId = programmePreview.seances.map(s => ({ ...s, tempId: uuidv4() }));
+
+      const planning: Partial<Record<JourProgramme, string | null>> = {};
+      for (const jour of JOURS_IA) {
+        const nomSeance = programmePreview.planning[jour];
+        if (!nomSeance || nomSeance.toLowerCase() === 'repos') {
+          planning[jour] = null;
+        } else {
+          const match = seancesAvecId.find(s => s.nom === nomSeance);
+          planning[jour] = match ? match.tempId : null;
+        }
+      }
+
+      const ok = await createProgramme({
+        nom: programmePreview.nom,
+        objectif: programmePreview.objectif,
+        messageMotivation: programmePreview.message_motivation,
+        type: 'domicile',
+        seances: seancesAvecId.map(s => ({
+          tempId: s.tempId,
+          nom: s.nom,
+          description: s.description,
+          exercices: s.exercices.map(ex => ({
+            nom: ex.nom,
+            categorie: ex.categorie,
+            description: ex.description,
+            conseilSecurite: ex.conseil_securite,
+            series: ex.series ?? undefined,
+            repetitions: ex.repetitions ?? undefined,
+            dureeSecondes: ex.duree_secondes ?? undefined,
+          })),
+        })),
+        planning,
+      });
+
+      if (ok) {
+        toast.success('Programme généré et créé avec succès 🎉');
+        setShowPreviewIA(false);
+        setProgrammePreview(null);
+        setShowConfigIA(false);
+        setConfigIA(EMPTY_CONFIG_IA);
+      } else {
+        toast.error('Erreur lors de la création du programme');
+      }
+    } catch {
+      toast.error('Erreur lors de la création du programme');
+    } finally {
+      setSavingIA(false);
+    }
+  }
 
   function updateWizard(patch: Partial<WizardData>) {
     setWizardData(prev => ({ ...prev, ...patch }));
@@ -1098,7 +1645,7 @@ export default function ProgrammePage() {
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button
-            onClick={() => navigate('/assistant', { state: { patientId: id } })}
+            onClick={ouvrirConfigIA}
             style={{ ...btnSecondary, gap: 6 }}
           >
             <Bot size={14} /> Générer avec l'IA
@@ -1252,6 +1799,30 @@ export default function ProgrammePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showConfigIA && participant && (
+        <ConfigIAModal
+          participant={participant}
+          config={configIA}
+          onChange={updateConfigIA}
+          onGenerer={genererProgrammeIA}
+          onClose={fermerConfigIA}
+          generating={generatingIA}
+          error={errorIA}
+        />
+      )}
+
+      {showPreviewIA && programmePreview && (
+        <PreviewIAModal
+          programme={programmePreview}
+          onChange={setProgrammePreview}
+          onValider={handleValiderEtCreerIA}
+          onRegenerer={regenererIA}
+          onModifierConfig={modifierConfigDepuisPreview}
+          onClose={fermerPreviewIA}
+          saving={savingIA}
+        />
       )}
     </PageWrapper>
   );
