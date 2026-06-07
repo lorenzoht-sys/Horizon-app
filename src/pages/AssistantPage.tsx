@@ -1102,6 +1102,23 @@ export default function AssistantPage() {
                         👁️ Partager avec le patient
                       </button>
                     )}
+                    {showPdfBar && selectedPatient?.structureId && (
+                      <button
+                        onClick={async () => {
+                          if (!supabase || !selectedPatient?.structureId) return;
+                          const { error } = await supabase.from('documents_partages').insert({
+                            participant_id: selectedPatient.id,
+                            structure_id: selectedPatient.structureId,
+                            type_document: actionType,
+                            contenu: msg.content,
+                          });
+                          if (!error) toast.success('Document partagé avec la structure ✅');
+                          else toast.error('Erreur lors du partage');
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: 'white', border: '0.5px solid #E5E7EB', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: 'var(--color-ink)' }}>
+                        🏢 Partager avec la structure
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
