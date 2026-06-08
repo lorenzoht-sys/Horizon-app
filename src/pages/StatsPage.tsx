@@ -471,6 +471,11 @@ function SectionAlertes({
   const dans30j = new Date(now); dans30j.setDate(now.getDate() + 30);
   const il90j = new Date(now);   il90j.setDate(now.getDate() - 90);
   const il14j = new Date(now);   il14j.setDate(now.getDate() - 14);
+  // Comparaisons en chaînes ISO (YYYY-MM-DD) plutôt qu'en objets Date :
+  // évite les décalages d'un jour selon le fuseau horaire de l'utilisateur.
+  const dans30jStr = dans30j.toISOString().slice(0, 10);
+  const il90jStr = il90j.toISOString().slice(0, 10);
+  const il14jStr = il14j.toISOString().slice(0, 10);
 
   const alertes: Alerte[] = [];
 
@@ -481,7 +486,7 @@ function SectionAlertes({
   const bilansEnRetard = participants.filter(p => {
     const last = p.bilans.at(-1);
     if (!last) return true; // aucun bilan
-    return new Date(last.date) < il90j;
+    return last.date < il90jStr;
   });
   if (bilansEnRetard.length > 0) {
     alertes.push({
@@ -497,7 +502,7 @@ function SectionAlertes({
   const contratsExpirants = contrats.filter(c => {
     if (c.statut !== 'actif' || c.dureeIndeterminee) return false;
     const fin = c.dateFin;
-    return fin >= today && fin <= dans30j.toISOString().slice(0, 10);
+    return fin >= today && fin <= dans30jStr;
   });
   if (contratsExpirants.length > 0) {
     alertes.push({
@@ -516,7 +521,7 @@ function SectionAlertes({
       .filter(s => s.participantId === p.id && s.statut === 'realisee')
       .sort((a: any, b: any) => b.date.localeCompare(a.date))[0];
     if (!derniereSeance) return true;
-    return new Date(derniereSeance.date) < il14j;
+    return derniereSeance.date < il14jStr;
   });
   if (patientsInactifs.length > 0) {
     alertes.push({
@@ -595,17 +600,22 @@ function SectionSantePortefeuille({
   const il90j = new Date(now);   il90j.setDate(now.getDate() - 90);
   const il14j = new Date(now);   il14j.setDate(now.getDate() - 14);
   const dans30j = new Date(now); dans30j.setDate(now.getDate() + 30);
+  // Comparaisons en chaînes ISO (YYYY-MM-DD) plutôt qu'en objets Date :
+  // évite les décalages d'un jour selon le fuseau horaire de l'utilisateur.
+  const il90jStr = il90j.toISOString().slice(0, 10);
+  const il14jStr = il14j.toISOString().slice(0, 10);
+  const dans30jStr = dans30j.toISOString().slice(0, 10);
 
   const bilansEnRetard = participants
     .map(p => {
       const last = [...p.bilans].sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
-      const enRetard = !last || new Date(last.date) < il90j;
+      const enRetard = !last || last.date < il90jStr;
       return enRetard ? { p, dernierBilan: last?.date ?? null } : null;
     })
     .filter(Boolean) as { p: Participant; dernierBilan: string | null }[];
 
   const contratsExpirants = contrats
-    .filter(c => c.statut === 'actif' && !c.dureeIndeterminee && c.dateFin >= today && c.dateFin <= dans30j.toISOString().slice(0, 10))
+    .filter(c => c.statut === 'actif' && !c.dureeIndeterminee && c.dateFin >= today && c.dateFin <= dans30jStr)
     .map(c => ({
       contrat: c,
       patient: participants.find(p => p.id === c.participantId),
@@ -618,7 +628,7 @@ function SectionSantePortefeuille({
       const derniere = seances
         .filter(s => s.participantId === p.id && s.statut === 'realisee')
         .sort((a: any, b: any) => b.date.localeCompare(a.date))[0] ?? null;
-      const inactif = !derniere || new Date(derniere.date) < il14j;
+      const inactif = !derniere || derniere.date < il14jStr;
       return inactif ? { p, derniereSeance: derniere?.date ?? null } : null;
     })
     .filter(Boolean) as { p: Participant; derniereSeance: string | null }[];

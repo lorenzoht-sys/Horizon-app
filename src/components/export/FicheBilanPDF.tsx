@@ -105,7 +105,7 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
     { label: 'Endurance', key: 'endurance' },
     { label: 'Force',     key: 'force'     },
   ];
-  const barres = BARRES.filter(b => notes[b.key] !== undefined);
+  const barres = BARRES.filter(b => typeof notes[b.key] === 'number' && Number.isFinite(notes[b.key]));
   const interp = bilan.interpretationIA?.textePro || bilan.notesProfessionnelles || '—';
 
   const bilanInitial = participant.bilans.find(b => b.type === 'initial');
@@ -162,7 +162,7 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
             <View style={S.barSection}>
               <Text style={[S.sectionLabel, { textAlign: 'center' }]}>GRAPHIQUES</Text>
               {barres.map(({ label, key }) => {
-                const note = notes[key] as number;
+                const note = notes[key]!;
                 return (
                   <View key={key} style={S.barRow}>
                     <Text style={S.barLabel}>{label}</Text>

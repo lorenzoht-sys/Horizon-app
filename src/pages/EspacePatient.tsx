@@ -688,6 +688,7 @@ function ModeSeance({
   const [showFin, setShowFin] = useState(false);
   const [commentaireGlobal, setCommentaireGlobal] = useState('');
   const [saving, setSaving] = useState(false);
+  const [erreurSauvegarde, setErreurSauvegarde] = useState(false);
   const [startTime] = useState(() => Date.now());
 
   const ex = exercices[idx];
@@ -713,6 +714,7 @@ function ModeSeance({
   async function sauvegarder() {
     if (!supabase) { onTermine(); return; }
     setSaving(true);
+    setErreurSauvegarde(false);
     try {
       const total = exercices.length;
       const statut = realises === total ? 'terminee' : 'partielle';
@@ -732,15 +734,16 @@ function ModeSeance({
         .select()
         .single();
 
-      if (spErr || !sp) { console.error('seance_patient insert:', spErr); setSaving(false); return; }
+      if (spErr || !sp) { console.error('seance_patient insert:', spErr); setErreurSauvegarde(true); setSaving(false); return; }
 
       for (const es of states) {
-        await supabase.from('exercices_realises').insert({
+        const { error: exErr } = await supabase.from('exercices_realises').insert({
           seance_patient_id: sp.id,
           exercice_id: es.id,
           realise: es.realise ?? false,
           commentaire: es.commentaire.trim() || null,
         });
+        if (exErr) { console.error('exercice_realise insert:', exErr); setErreurSauvegarde(true); setSaving(false); return; }
       }
       onTermine();
     } finally {
@@ -796,6 +799,12 @@ function ModeSeance({
             style={{ width: '100%', border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px', fontSize: 14, resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none', background: 'white' }}
           />
         </div>
+
+        {erreurSauvegarde && (
+          <div style={{ width: '100%', background: '#FFF5F5', border: '1px solid #FECACA', borderRadius: 12, padding: '12px 16px', fontSize: 13, color: '#B91C1C', marginBottom: 12, lineHeight: 1.5 }}>
+            😕 L'enregistrement a échoué (problème de connexion). Vos réponses n'ont pas été perdues : réessayez.
+          </div>
+        )}
 
         <button
           onClick={sauvegarder}

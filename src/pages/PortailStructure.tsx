@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabase, createStructurePortailClient } from '../lib/supabase';
 import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/mappers';
 import { useDevice } from '../hooks/useDevice';
 import type { Participant, Seance, Bilan } from '../types';
@@ -263,20 +263,26 @@ export default function PortailStructure() {
 
   useEffect(() => {
     if (!token || !supabase) { setLoading(false); setErreur(true); return; }
+    // Client dédié, qui transmet le token dans l'en-tête "x-structure-token" :
+    // c'est lui que les policies RLS vérifient pour n'exposer que LA structure
+    // correspondant à ce token (et aucune autre — cf. migration de sécurité
+    // 20260608_fix_structure_anon_rls.sql).
+    const portail = createStructurePortailClient(token);
+    if (!portail) { setLoading(false); setErreur(true); return; }
     async function charger() {
       try {
         // 1. Vérifier token
-        const { data: str, error: strErr } = await supabase!
+        const { data: str, error: strErr } = await portail!
           .from('structures').select('id, nom, actif, tarif_seance').eq('token_acces', token).single();
         if (strErr || !str || !str.actif) { setErreur(true); setLoading(false); return; }
         setStructure({ id: str.id, nom: str.nom, actif: str.actif, tarifSeance: Number(str.tarif_seance ?? 45) });
 
         // 1bis. Infos de contact du praticien (nom, titre, téléphone, email)
-        const { data: praData } = await supabase!.rpc('get_praticien_structure', { p_token: token });
+        const { data: praData } = await portail!.rpc('get_praticien_structure', { p_token: token });
         if (Array.isArray(praData) && praData.length > 0) setPraticien(praData[0]);
 
         // 2. Charger participants de cette structure
-        const { data: pData } = await supabase!
+        const { data: pData } = await portail!
           .from('participants').select('*, bilans(*), programmes(*)').eq('structure_id', str.id);
         const parts: Participant[] = (pData ?? []).map((row: any) => ({
           ...dbToParticipant(row),
@@ -288,15 +294,15 @@ export default function PortailStructure() {
         const ids = parts.map(p => p.id);
         if (ids.length > 0) {
           // 3. Séances
-          const { data: sData } = await supabase!.from('seances').select('*').in('participant_id', ids).order('date', { ascending: false });
+          const { data: sData } = await portail!.from('seances').select('*').in('participant_id', ids).order('date', { ascending: false });
           setSeances((sData ?? []).map(dbToSeance));
 
           // 4. Factures structure
-          const { data: fData } = await supabase!.from('factures_suivi').select('*').eq('structure_id', str.id).order('periode_annee', { ascending: false }).order('periode_mois', { ascending: false });
+          const { data: fData } = await portail!.from('factures_suivi').select('*').eq('structure_id', str.id).order('periode_annee', { ascending: false }).order('periode_mois', { ascending: false });
           setFactures(fData ?? []);
 
           // 5. Documents partagés avec la structure
-          const { data: dData } = await supabase!.from('documents_partages').select('*').eq('structure_id', str.id).order('partage_le', { ascending: false });
+          const { data: dData } = await portail!.from('documents_partages').select('*').eq('structure_id', str.id).order('partage_le', { ascending: false });
           setDocuments(dData ?? []);
         }
       } catch { setErreur(true); }

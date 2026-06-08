@@ -201,8 +201,9 @@ export default function LoginPage({ onLogin }: Props) {
     if (!email || !password) { setError('Veuillez remplir tous les champs'); return; }
     setLoading(true);
 
-    // Identifiants de secours — fonctionnent même sans Supabase configuré
-    if (email === 'pierre@mouvapa.com' && password === 'mouvapa2025') {
+    // Identifiants de secours — uniquement en local quand Supabase n'est pas configuré
+    // (sinon ce serait une porte dérobée permanente en production).
+    if (!supabase && email === 'pierre@mouvapa.com' && password === 'mouvapa2025') {
       localStorage.setItem('isLoggedIn', 'true');
       onLogin();
       navigate('/');

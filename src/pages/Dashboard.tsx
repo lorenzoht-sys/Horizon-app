@@ -266,7 +266,11 @@ export default function Dashboard() {
 
   const needsBilan = participants.filter(p => {
     const last = p.bilans.at(-1);
-    return !last || (Date.now() - new Date(last.date).getTime()) / 86400000 > 85;
+    if (!last) return true;
+    // Comparaison en chaînes ISO (YYYY-MM-DD) pour éviter les décalages
+    // d'un jour selon le fuseau horaire de l'utilisateur.
+    const il85j = new Date(); il85j.setDate(il85j.getDate() - 85);
+    return last.date < il85j.toISOString().slice(0, 10);
   }).length;
 
   const thisMonthBilans = participants.reduce((acc, p) => {

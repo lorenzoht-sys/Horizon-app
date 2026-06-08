@@ -428,3 +428,28 @@ CREATE POLICY "indispos_delete" ON indisponibilites FOR DELETE USING (praticien_
 CREATE TRIGGER indispos_set_praticien
   BEFORE INSERT ON indisponibilites
   FOR EACH ROW EXECUTE FUNCTION set_praticien_id_from_auth();
+
+-- ============================================================
+-- TABLE : assistant_logs  (historique des échanges avec l'assistant IA)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS assistant_logs (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id   UUID NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
+  praticien_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  question     TEXT NOT NULL,
+  reponse      TEXT NOT NULL,
+  action_type  TEXT,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE assistant_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "al_select" ON assistant_logs FOR SELECT USING (praticien_id = auth.uid());
+CREATE POLICY "al_insert" ON assistant_logs FOR INSERT WITH CHECK (praticien_id = auth.uid());
+CREATE POLICY "al_delete" ON assistant_logs FOR DELETE USING (praticien_id = auth.uid());
+
+CREATE INDEX idx_assistant_logs_patient ON assistant_logs(patient_id);
+CREATE INDEX idx_assistant_logs_praticien ON assistant_logs(praticien_id);
+
+CREATE TRIGGER assistant_logs_set_praticien
+  BEFORE INSERT ON assistant_logs
+  FOR EACH ROW EXECUTE FUNCTION set_praticien_id_from_auth();
