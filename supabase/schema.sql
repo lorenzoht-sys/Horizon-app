@@ -201,6 +201,14 @@ CREATE TABLE IF NOT EXISTS bilans (
   notes_bilan             JSONB,
   interpretation_ia       JSONB,
 
+  -- Scores sédentarité / fatigue (questionnaire bilan initial)
+  sedentarite_score       INTEGER,
+  sedentarite_profil      TEXT,
+  sedentarite_reponses    JSONB,
+  fatigue_score           INTEGER,
+  fatigue_profil          TEXT,
+  fatigue_reponses        JSONB,
+
   created_at              TIMESTAMPTZ DEFAULT NOW(),
   updated_at              TIMESTAMPTZ DEFAULT NOW()
 );

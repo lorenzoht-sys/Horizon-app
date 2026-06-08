@@ -2,7 +2,7 @@
   "name": "Mouv'APA Suivis",
   "short_name": "MouvAPA",
   "description": "Suivi patient APA — Pierre Clavier",
-  "start_url": "/",
+  "start_url": "/patient",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#032c28",

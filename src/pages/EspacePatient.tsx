@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/mappers';
 import { loadExercices } from '../data/exercices';
 import { exportProgrammePDF } from '../utils/exportPDF';
+import { getSessionPatient, sauvegarderSessionPatient } from '../hooks/useAccesPatients';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1463,7 +1464,11 @@ const TABS_CONFIG: { id: Tab; emoji: string; label: string }[] = [
 export default function EspacePatient() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
-  const code = searchParams.get('code');
+  const codeUrl = searchParams.get('code');
+  // PWA rouverte depuis l'écran d'accueil → pas de ?code= dans l'URL,
+  // on retombe sur la session sauvegardée en localStorage.
+  const session = getSessionPatient();
+  const code = codeUrl ?? (session && session.patientId === id ? session.code : null);
 
   const [loading, setLoading]           = useState(true);
   const [participant, setParticipant]   = useState<Participant | null>(null);
@@ -1605,6 +1610,14 @@ export default function EspacePatient() {
 
     void charger();
   }, [id]);
+
+  // Accès validé → on mémorise la session pour que la PWA reste connectée
+  // après "Ajouter à l'écran d'accueil" (l'URL ne conserve pas le ?code=).
+  useEffect(() => {
+    if (participant && id && code && calculerCode(participant.prenom) === code) {
+      sauvegarderSessionPatient({ patientId: id, code });
+    }
+  }, [participant, id, code]);
 
   if (!id) return <Navigate to="/patient" replace />;
 

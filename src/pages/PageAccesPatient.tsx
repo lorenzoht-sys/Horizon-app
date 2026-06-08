@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { getSessionPatient, sauvegarderSessionPatient } from '../hooks/useAccesPatients';
 
 function calculerCode(prenom: string): string {
   return prenom
@@ -16,6 +17,13 @@ export default function PageAccesPatient() {
   const [erreur, setErreur] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Session déjà connue (PWA rouverte depuis l'écran d'accueil, sans ?code=...)
+  // → on saute directement le formulaire de connexion.
+  useEffect(() => {
+    const session = getSessionPatient();
+    if (session) navigate(`/patient/${session.patientId}?code=${session.code}`, { replace: true });
+  }, [navigate]);
 
   async function verifierCode() {
     const codeEntre = code.trim().toLowerCase();
@@ -35,6 +43,7 @@ export default function PageAccesPatient() {
       );
 
       if (patient) {
+        sauvegarderSessionPatient({ patientId: patient.id, code: codeEntre });
         navigate(`/patient/${patient.id}?code=${codeEntre}`);
       } else {
         setErreur('Ce code ne correspond à aucun compte. Contactez votre enseignant APA.');

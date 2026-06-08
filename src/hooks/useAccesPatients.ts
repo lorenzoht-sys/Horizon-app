@@ -47,6 +47,26 @@ export function sauvegarderAccesPatient(acces: AccesPatient): void {
   save(list);
 }
 
+// ── Session patient (persistance pour PWA "ajouter à l'écran d'accueil") ──────
+// La PWA s'ouvre sans les paramètres d'URL (?code=...) : on garde la session
+// en localStorage pour rester connecté entre deux ouvertures de l'app.
+
+const SESSION_KEY = 'horizon_patient_session';
+
+export interface SessionPatient {
+  patientId: string;
+  code: string;
+}
+
+export function sauvegarderSessionPatient(session: SessionPatient): void {
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch {}
+}
+
+export function getSessionPatient(): SessionPatient | null {
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null'); }
+  catch { return null; }
+}
+
 export function mettreAJourDernierAcces(participantId: string): void {
   const list = load();
   const idx = list.findIndex(a => a.participantId === participantId);
