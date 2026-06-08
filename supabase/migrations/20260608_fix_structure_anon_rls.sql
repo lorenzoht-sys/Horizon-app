@@ -75,11 +75,17 @@ CREATE POLICY "structure_anon_read_factures" ON factures_suivi
     structure_id IS NOT NULL AND structure_token_valide(structure_id)
   );
 
--- Documents partagés avec la structure
-DROP POLICY IF EXISTS "structure_anon_read_documents_partages" ON documents_partages;
-CREATE POLICY "structure_anon_read_documents_partages" ON documents_partages
-  FOR SELECT USING (
-    structure_id IS NOT NULL AND structure_token_valide(structure_id)
-  );
+-- Documents partagés avec la structure (table optionnelle : créée seulement
+-- si la migration 20260607_documents_partages.sql a déjà été exécutée).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'documents_partages') THEN
+    EXECUTE 'DROP POLICY IF EXISTS "structure_anon_read_documents_partages" ON documents_partages';
+    EXECUTE 'CREATE POLICY "structure_anon_read_documents_partages" ON documents_partages
+      FOR SELECT USING (
+        structure_id IS NOT NULL AND structure_token_valide(structure_id)
+      )';
+  END IF;
+END $$;
 
 NOTIFY pgrst, 'reload schema';
