@@ -204,7 +204,8 @@ export function useParticipants() {
     if (!current) return;
     const merged = { ...current, ...data };
     if (supabase) {
-      await supabase.from('bilans').update(bilanToDb(participantId, merged)).eq('id', bilanId);
+      const { error } = await supabase.from('bilans').update(bilanToDb(participantId, merged)).eq('id', bilanId);
+      if (error) { console.error('Erreur mise à jour bilan:', error); return; }
     }
     setParticipants(prev => prev.map(p =>
       p.id === participantId
