@@ -6,6 +6,7 @@
 ALTER TABLE assistant_logs
 ADD COLUMN IF NOT EXISTS action_type TEXT;
 
+DROP TRIGGER IF EXISTS assistant_logs_set_praticien ON assistant_logs;
 CREATE TRIGGER assistant_logs_set_praticien
   BEFORE INSERT ON assistant_logs
   FOR EACH ROW EXECUTE FUNCTION set_praticien_id_from_auth();
