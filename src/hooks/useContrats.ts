@@ -53,7 +53,10 @@ export function useContrats() {
 
     if (supabase) {
       const { error } = await supabase.from('contrats').insert(contratToDb(contrat));
-      if (error) { console.error('Erreur création contrat:', error); }
+      if (error) {
+        console.error('Erreur création contrat:', error);
+        throw new Error(error.message);
+      }
     }
     setContrats(prev => [...prev, contrat]);
 

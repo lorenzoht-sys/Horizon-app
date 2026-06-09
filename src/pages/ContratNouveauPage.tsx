@@ -121,25 +121,30 @@ export default function ContratNouveauPage() {
       ? { lat: participant.coordonnees.lat, lng: participant.coordonnees.lng }
       : undefined;
 
-    const result = await creerContrat(
-      {
-        participantId: participant.id,
-        dateDebut,
-        dateFin: dateFinEffective,
-        joursFixe,
-        heureDebut,
-        dureeMinutes,
-        statut: 'actif',
-        notes: notes || undefined,
-        dureeIndeterminee: dureeIndeterminee || undefined,
-      },
-      adresse,
-      coordonnees
-    );
+    try {
+      const result = await creerContrat(
+        {
+          participantId: participant.id,
+          dateDebut,
+          dateFin: dateFinEffective,
+          joursFixe,
+          heureDebut,
+          dureeMinutes,
+          statut: 'actif',
+          notes: notes || undefined,
+          dureeIndeterminee: dureeIndeterminee || undefined,
+        },
+        adresse,
+        coordonnees
+      );
 
-    await bulkCreerSeances(result.seancesData);
-    toast.success(`Contrat créé — ${nbSeances} séances générées automatiquement`);
-    navigate(`/participant/${participant.id}`);
+      await bulkCreerSeances(result.seancesData);
+      toast.success(`Contrat créé — ${nbSeances} séances générées automatiquement`);
+      navigate(`/participant/${participant.id}`);
+    } catch (err) {
+      console.error('Erreur création contrat:', err);
+      toast.error('Erreur lors de la création du contrat. Vérifie la console pour le détail.');
+    }
   }
 
   if (!participant) {
