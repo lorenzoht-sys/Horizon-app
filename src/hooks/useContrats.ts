@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { differenceInDays } from 'date-fns';
+import { toast } from 'sonner';
 import type { Contrat, Seance, JourSemaine, StatutContrat } from '../types';
 import { calculerNombreSeances, genererDatesSeances, addMinutes } from '../utils/horaires';
 import { supabase } from '../lib/supabase';
@@ -79,12 +80,18 @@ export function useContrats() {
   }
 
   async function modifierStatut(id: string, statut: StatutContrat) {
-    if (supabase) await supabase.from('contrats').update({ statut }).eq('id', id);
+    if (supabase) {
+      const { error } = await supabase.from('contrats').update({ statut }).eq('id', id);
+      if (error) { console.error('Erreur modification statut contrat:', error); toast.error('Erreur : ' + error.message); return; }
+    }
     setContrats(prev => prev.map(c => c.id === id ? { ...c, statut } : c));
   }
 
   async function supprimerContrat(id: string) {
-    if (supabase) await supabase.from('contrats').delete().eq('id', id);
+    if (supabase) {
+      const { error } = await supabase.from('contrats').delete().eq('id', id);
+      if (error) { console.error('Erreur suppression contrat:', error); toast.error('Erreur : ' + error.message); return; }
+    }
     setContrats(prev => prev.filter(c => c.id !== id));
   }
 
@@ -93,7 +100,8 @@ export function useContrats() {
     if (!contrat) return;
     const newCount = Math.min(contrat.nombreSeancesRealisees + 1, contrat.nombreSeancesTotal);
     if (supabase) {
-      await supabase.from('contrats').update({ nombre_seances_realisees: newCount }).eq('id', contratId);
+      const { error } = await supabase.from('contrats').update({ nombre_seances_realisees: newCount }).eq('id', contratId);
+      if (error) { console.error('Erreur incrémentation séances:', error); toast.error('Erreur : ' + error.message); return; }
     }
     setContrats(prev => prev.map(c =>
       c.id === contratId ? { ...c, nombreSeancesRealisees: newCount } : c

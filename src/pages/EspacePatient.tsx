@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/mappers';
 import { loadExercices } from '../data/exercices';
 import { exportProgrammePDF } from '../utils/exportPDF';
+import { exportFicheCompletePDF } from '../utils/exportFicheCompletePDF';
 import { getSessionPatient, sauvegarderSessionPatient } from '../hooks/useAccesPatients';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1341,14 +1342,45 @@ function EcranProgramme({ participant, programmes, programmesV2, historiqueSeanc
 
 // ── ÉCRAN 4 — Documents ───────────────────────────────────────────────────────
 
-function EcranDocuments({ bilans, documentsPatient }: {
+function EcranDocuments({ bilans, participant, programmeActif, documentsPatient }: {
   bilans: Bilan[];
   participant: Participant;
+  programmeActif: Programme | null;
   documentsPatient: { id: string; titre: string; contenu: string; date_creation: string }[];
 }) {
+  const [genPDF, setGenPDF] = useState(false);
   const praticien = loadPraticien();
   const sortedBilans = [...bilans].sort((a, b) => b.date.localeCompare(a.date));
   const hasContent = documentsPatient.length > 0 || sortedBilans.length > 0;
+
+  async function handleFicheComplete() {
+    setGenPDF(true);
+    try {
+      let s: Record<string, string> = {};
+      try { s = JSON.parse(localStorage.getItem('settings_praticien') ?? '{}'); } catch {}
+      const settings = {
+        prenom: s.prenom ?? '',
+        nom: s.nom ?? '',
+        titre: s.titre ?? '',
+        email: s.email ?? '',
+        telephone: s.telephone ?? '',
+        societe: s.societe ?? '',
+      };
+      const date = new Date().toISOString().slice(0, 10);
+      await exportFicheCompletePDF(
+        {
+          participant,
+          bilans: [...bilans].sort((a, b) => a.date.localeCompare(b.date)),
+          contratActif: null,
+          programmeActif,
+          compteRendus: [],
+          seancesStats: [],
+          settings,
+        },
+        `Fiche-${participant.prenom}-${participant.nom}-${date}.pdf`
+      );
+    } finally { setGenPDF(false); }
+  }
 
   if (!hasContent) {
     return (
@@ -1366,6 +1398,35 @@ function EcranDocuments({ bilans, documentsPatient }: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+      {/* Fiche complète téléchargeable */}
+      <div style={{
+        background: 'white', border: '1.5px solid rgba(43,191,191,0.3)',
+        borderRadius: 18, padding: '16px',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.dark, marginBottom: 2 }}>
+              📄 Ma fiche santé complète
+            </div>
+            <div style={{ fontSize: 12, color: C.muted }}>
+              Identité · bilans · programme · recommandations
+            </div>
+          </div>
+          <button
+            onClick={handleFicheComplete}
+            disabled={genPDF}
+            style={{
+              background: 'var(--color-teal)', color: 'white',
+              border: 'none', borderRadius: 12, padding: '9px 16px',
+              fontSize: 13, fontWeight: 600, cursor: genPDF ? 'not-allowed' : 'pointer',
+              opacity: genPDF ? 0.6 : 1,
+            }}
+          >
+            {genPDF ? 'Génération…' : 'Télécharger PDF →'}
+          </button>
+        </div>
+      </div>
 
       {/* Documents partagés explicitement par Pierre */}
       {documentsPatient.length > 0 && (
@@ -1700,7 +1761,7 @@ export default function EspacePatient() {
           <EcranProgramme participant={participant} programmes={programmes} programmesV2={programmesV2} historiqueSeances={seancesPatient} />
         )}
         {tab === 'documents' && (
-          <EcranDocuments bilans={bilans} participant={participant} documentsPatient={documentsPatient} />
+          <EcranDocuments bilans={bilans} participant={participant} programmeActif={programmes.find(p => p.actif) ?? null} documentsPatient={documentsPatient} />
         )}
       </div>
 

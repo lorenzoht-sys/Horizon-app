@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { addDays, differenceInDays } from 'date-fns';
+import { toast } from 'sonner';
 import type { Seance, StatutSeance } from '../types';
 import { useParticipants } from './useParticipants';
 import { supabase } from '../lib/supabase';
@@ -39,7 +40,11 @@ export function useAgenda() {
     const nouvelle: Seance = { ...data, id: uuidv4() };
     if (supabase) {
       const { error } = await supabase.from('seances').insert(seanceToDb(nouvelle));
-      if (error) { console.error('Erreur création séance:', error); }
+      if (error) {
+        console.error('Erreur création séance:', error);
+        toast.error('Erreur : ' + error.message);
+        throw new Error(error.message);
+      }
     }
     setSeances(prev => [...prev, nouvelle]);
     return nouvelle;
@@ -49,7 +54,11 @@ export function useAgenda() {
     const nouvelles: Seance[] = data.map(d => ({ ...d, id: uuidv4() }));
     if (supabase) {
       const { error } = await supabase.from('seances').insert(nouvelles.map(s => seanceToDb(s)));
-      if (error) { console.error('Erreur bulk création séances:', error); }
+      if (error) {
+        console.error('Erreur bulk création séances:', error);
+        toast.error('Erreur : ' + error.message);
+        throw new Error(error.message);
+      }
     }
     setSeances(prev => [...prev, ...nouvelles]);
     return nouvelles;
@@ -60,13 +69,17 @@ export function useAgenda() {
     if (!current) return;
     const merged = { ...current, ...updates };
     if (supabase) {
-      await supabase.from('seances').update(seanceToDb(merged)).eq('id', id);
+      const { error } = await supabase.from('seances').update(seanceToDb(merged)).eq('id', id);
+      if (error) { console.error('Erreur modification séance:', error); toast.error('Erreur : ' + error.message); return; }
     }
     setSeances(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
   }
 
   async function supprimerSeance(id: string) {
-    if (supabase) await supabase.from('seances').delete().eq('id', id);
+    if (supabase) {
+      const { error } = await supabase.from('seances').delete().eq('id', id);
+      if (error) { console.error('Erreur suppression séance:', error); toast.error('Erreur : ' + error.message); return; }
+    }
     setSeances(prev => prev.filter(s => s.id !== id));
   }
 
