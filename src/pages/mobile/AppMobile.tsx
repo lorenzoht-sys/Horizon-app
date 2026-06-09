@@ -1524,28 +1524,116 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
           </div>
         )}
 
-        {onglet === 'sante' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {p.antecedentsMedicaux ? (
-              <InfoSection titre="Antécédents médicaux">
-                <div style={{ fontSize: 13, color: '#4A6080', lineHeight: 1.6 }}>{p.antecedentsMedicaux}</div>
-              </InfoSection>
-            ) : null}
-            {p.antecedentsChirurgicaux ? (
-              <InfoSection titre="Antécédents chirurgicaux">
-                <div style={{ fontSize: 13, color: '#4A6080', lineHeight: 1.6 }}>{p.antecedentsChirurgicaux}</div>
-              </InfoSection>
-            ) : null}
-            {p.allergies ? (
-              <InfoSection titre="Allergies">
-                <div style={{ fontSize: 13, color: '#4A6080' }}>{p.allergies}</div>
-              </InfoSection>
-            ) : null}
-            {!p.antecedentsMedicaux && !p.antecedentsChirurgicaux && !p.allergies && (
-              <div style={{ color: C.muted, textAlign: 'center', padding: 30 }}>Aucune information de santé renseignée</div>
-            )}
-          </div>
-        )}
+        {onglet === 'sante' && (() => {
+          const traitementsActifs = (p.traitements ?? []).filter(t => !t.date_fin);
+          const traitementsArretes = (p.traitements ?? []).filter(t => t.date_fin);
+          const antecedentsStructures = p.antecedentsMedicauxStructures ?? [];
+          const hasAnyData = !!(p.pathologie || p.antecedentsMedicaux || p.antecedentsChirurgicaux || p.allergies
+            || traitementsActifs.length || traitementsArretes.length || antecedentsStructures.length);
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+              {/* Pathologie / contexte */}
+              {(p.pathologie || p.antecedentsMedicaux) && (
+                <InfoSection titre="Pathologies & contexte médical">
+                  {p.pathologie && <div style={{ fontSize: 13, color: '#4A6080', lineHeight: 1.6, marginBottom: p.antecedentsMedicaux ? 6 : 0 }}>🏥 {p.pathologie}</div>}
+                  {p.antecedentsMedicaux && <div style={{ fontSize: 13, color: '#4A6080', lineHeight: 1.6 }}>📋 {p.antecedentsMedicaux}</div>}
+                </InfoSection>
+              )}
+
+              {/* Traitements structurés */}
+              {(traitementsActifs.length > 0 || traitementsArretes.length > 0) && (
+                <InfoSection titre="Traitements en cours">
+                  {traitementsActifs.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {traitementsActifs.map(t => (
+                        <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13 }}>
+                          <span>💊</span>
+                          <div style={{ flex: 1 }}>
+                            <span style={{ fontWeight: 600, color: '#032c28' }}>{t.nom}</span>
+                            {t.dose && <span style={{ color: '#4A6080' }}> · {t.dose}</span>}
+                            {t.effetSecondaire && <div style={{ fontSize: 12, color: '#8FA8A8' }}>{t.effetSecondaire}</div>}
+                          </div>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '2px 6px', borderRadius: 20, whiteSpace: 'nowrap' }}>En cours ✅</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 13, color: '#8FA8A8', fontStyle: 'italic' }}>Aucun traitement en cours</div>
+                  )}
+                  {traitementsArretes.length > 0 && (
+                    <details style={{ marginTop: 10 }}>
+                      <summary style={{ fontSize: 12, color: '#8FA8A8', fontWeight: 600, cursor: 'pointer', listStyle: 'none' }}>
+                        ▶ Traitements arrêtés ({traitementsArretes.length})
+                      </summary>
+                      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {traitementsArretes.map(t => (
+                          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#8FA8A8' }}>
+                            <span>💊</span>
+                            <span style={{ textDecoration: 'line-through' }}>{t.nom}</span>
+                            {t.dose && <span>· {t.dose}</span>}
+                            <span style={{ marginLeft: 'auto', fontSize: 10, background: '#f3f4f6', padding: '2px 6px', borderRadius: 20, whiteSpace: 'nowrap' }}>
+                              Arrêté le {new Date((t.date_fin ?? '') + 'T12:00').toLocaleDateString('fr-FR')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </InfoSection>
+              )}
+
+              {/* Antécédents structurés */}
+              {antecedentsStructures.length > 0 && (
+                <InfoSection titre="Antécédents médicaux">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {antecedentsStructures.map(a => (
+                      <div key={a.id}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                          <span>🩺</span>
+                          <span style={{ fontWeight: 600, color: '#032c28' }}>{a.type}</span>
+                          {a.date && <span style={{ fontSize: 12, color: '#8FA8A8' }}>· {a.date}</span>}
+                          {a.douleur === 'oui' && (
+                            <span style={{ fontSize: 10, color: '#c2410c', background: '#fff7ed', border: '1px solid #fed7aa', padding: '2px 6px', borderRadius: 20 }}>Douleur liée</span>
+                          )}
+                        </div>
+                        {a.notes_evolution && <div style={{ fontSize: 12, color: '#8FA8A8', fontStyle: 'italic', marginLeft: 24, marginTop: 2 }}>{a.notes_evolution}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </InfoSection>
+              )}
+
+              {/* Antécédents chirurgicaux texte (ancien format) */}
+              {p.antecedentsChirurgicaux && (
+                <InfoSection titre="Antécédents chirurgicaux">
+                  <div style={{ fontSize: 13, color: '#4A6080', lineHeight: 1.6 }}>✂️ {p.antecedentsChirurgicaux}</div>
+                </InfoSection>
+              )}
+
+              {/* Allergies */}
+              {p.allergies && (
+                <InfoSection titre="Allergies">
+                  <div style={{ fontSize: 13, color: '#4A6080' }}>⚠️ {p.allergies}</div>
+                </InfoSection>
+              )}
+
+              {/* Message vide */}
+              {!hasAnyData && (
+                <div style={{ color: C.muted, textAlign: 'center', padding: 30 }}>Aucune information de santé renseignée</div>
+              )}
+
+              {/* Bouton Modifier */}
+              <button
+                onClick={() => setShowEdit(true)}
+                style={{ background: 'white', border: `1.5px solid ${C.primary}`, color: C.primary, borderRadius: 12, padding: '12px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+              >
+                ✏️ Modifier les infos santé
+              </button>
+            </div>
+          );
+        })()}
 
         {onglet === 'bilans' && (
           <div>
