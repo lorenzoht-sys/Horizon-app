@@ -282,6 +282,21 @@ export default function ParticipantProfileMobile() {
         </MobileCard>
 
         {/* Contrat actif */}
+        {!contratActif && (
+          <MobileCard title="Suivi en cours">
+            <div className="flex flex-col items-center py-4 text-center gap-2">
+              <p className="text-[13px] text-gray-500">Aucun contrat actif</p>
+              <p className="text-[12px] text-gray-400">Créez un contrat pour définir les jours d'intervention</p>
+              <button
+                onClick={() => navigate(`/participant/${id}/contrat/nouveau`)}
+                className="mt-1 text-[13px] font-semibold px-4 py-2 rounded-lg border"
+                style={{ borderColor: 'var(--color-teal)', color: 'var(--color-teal)' }}
+              >
+                + Créer un contrat
+              </button>
+            </div>
+          </MobileCard>
+        )}
         {contratActif && (
           <MobileCard title="Suivi en cours">
             <div className="text-[13px] text-gray-600 space-y-1 pt-1">

@@ -16,37 +16,106 @@ function ListeTraitementsForm({
   value: TraitementPatient[];
   onChange: (v: TraitementPatient[]) => void;
 }) {
+  const [stoppingId, setStoppingId] = useState<string | null>(null);
+  const [stopDate, setStopDate] = useState('');
+  const [showArretes, setShowArretes] = useState(false);
+
   const items = value ?? [];
+  const actifs = items.filter(i => !i.date_fin);
+  const arretes = items.filter(i => i.date_fin);
+
   const add = () => onChange([...items, { id: genId(), nom: '' }]);
   const remove = (id: string) => onChange(items.filter(i => i.id !== id));
   const upd = (id: string, patch: Partial<TraitementPatient>) =>
     onChange(items.map(i => (i.id === id ? { ...i, ...patch } : i)));
 
+  const confirmerArret = (id: string) => {
+    const date = stopDate || new Date().toISOString().split('T')[0];
+    upd(id, { date_fin: date });
+    setStoppingId(null);
+    setStopDate('');
+  };
+
+  const reactiver = (id: string) => upd(id, { date_fin: undefined });
+
   return (
     <div>
-      {items.length > 0 && (
+      {/* Traitements en cours */}
+      {actifs.length > 0 && (
         <div className="mb-2">
-          <div className="grid grid-cols-3 gap-1.5 mb-1">
+          <div className="grid gap-1.5 mb-1" style={{ gridTemplateColumns: '1fr 1fr 1fr auto' }}>
             <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1">Médicament</span>
             <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1">Dose</span>
             <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1">Effet secondaire notable</span>
+            <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1">Statut</span>
           </div>
-          {items.map(item => (
-            <div key={item.id} className="grid grid-cols-3 gap-1.5 mb-1.5 items-center">
-              <input type="text" value={item.nom} onChange={e => upd(item.id, { nom: e.target.value })}
-                placeholder="Metformine" className={CLS_CELL} />
-              <input type="text" value={item.dose ?? ''} onChange={e => upd(item.id, { dose: e.target.value })}
-                placeholder="500mg × 2/j" className={CLS_CELL} />
-              <div className="flex gap-1">
-                <input type="text" value={item.effetSecondaire ?? ''} onChange={e => upd(item.id, { effetSecondaire: e.target.value })}
-                  placeholder="Troubles digestifs" className={`${CLS_CELL} flex-1`} />
-                <button type="button" onClick={() => remove(item.id)}
-                  className="text-red-400 hover:text-red-600 px-1 flex-shrink-0">✕</button>
-              </div>
+          {actifs.map(item => (
+            <div key={item.id} className="mb-2">
+              {stoppingId === item.id ? (
+                <div className="flex gap-2 items-center bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <span className="text-sm text-amber-700 font-medium flex-1">Date d'arrêt :</span>
+                  <input type="date" value={stopDate} onChange={e => setStopDate(e.target.value)}
+                    className="border border-amber-300 rounded px-2 py-1 text-sm" />
+                  <button type="button" onClick={() => confirmerArret(item.id)}
+                    className="text-white text-sm font-semibold px-3 py-1 rounded-lg"
+                    style={{ backgroundColor: '#E24B4A', border: 'none' }}>
+                    Confirmer
+                  </button>
+                  <button type="button" onClick={() => { setStoppingId(null); setStopDate(''); }}
+                    className="text-gray-500 hover:text-gray-700 text-sm px-2">Annuler</button>
+                </div>
+              ) : (
+                <div className="grid gap-1.5 items-center" style={{ gridTemplateColumns: '1fr 1fr 1fr auto' }}>
+                  <input type="text" value={item.nom} onChange={e => upd(item.id, { nom: e.target.value })}
+                    placeholder="Metformine" className={CLS_CELL} />
+                  <input type="text" value={item.dose ?? ''} onChange={e => upd(item.id, { dose: e.target.value })}
+                    placeholder="500mg × 2/j" className={CLS_CELL} />
+                  <input type="text" value={item.effetSecondaire ?? ''} onChange={e => upd(item.id, { effetSecondaire: e.target.value })}
+                    placeholder="Troubles digestifs" className={CLS_CELL} />
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] font-semibold text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">En cours ✅</span>
+                    <button type="button" onClick={() => setStoppingId(item.id)}
+                      title="Marquer comme arrêté"
+                      className="text-gray-400 hover:text-amber-500 px-1 text-sm flex-shrink-0">⏹</button>
+                    <button type="button" onClick={() => remove(item.id)}
+                      className="text-red-400 hover:text-red-600 px-1 flex-shrink-0">✕</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
+
+      {/* Traitements arrêtés */}
+      {arretes.length > 0 && (
+        <div className="mb-2">
+          <button type="button" onClick={() => setShowArretes(!showArretes)}
+            className="flex items-center gap-1.5 text-[12px] text-gray-400 hover:text-gray-600 font-medium mb-1.5">
+            {showArretes ? '▼' : '▶'} Traitements arrêtés ({arretes.length})
+          </button>
+          {showArretes && (
+            <div className="border border-gray-100 rounded-lg overflow-hidden">
+              {arretes.map(item => (
+                <div key={item.id} className="grid gap-1.5 items-center px-3 py-2 bg-gray-50 border-b border-gray-100 last:border-0" style={{ gridTemplateColumns: '1fr 1fr 1fr auto' }}>
+                  <span className="text-sm text-gray-400">{item.nom || '—'}</span>
+                  <span className="text-sm text-gray-400">{item.dose || '—'}</span>
+                  <span className="text-[10px] text-gray-400 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                    Arrêté le {new Date(item.date_fin + 'T12:00').toLocaleDateString('fr-FR')} ⬜
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button type="button" onClick={() => reactiver(item.id)}
+                      title="Réactiver" className="text-[11px] text-primary hover:underline px-1">↩ Réactiver</button>
+                    <button type="button" onClick={() => remove(item.id)}
+                      className="text-red-400 hover:text-red-600 px-1">✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <button type="button" onClick={add}
         className="w-full flex items-center justify-center gap-2 text-primary border border-dashed border-primary/40 hover:border-primary hover:bg-primary/5 px-4 py-2 rounded-xl text-sm font-medium transition-colors">
         + Ajouter un traitement
@@ -78,36 +147,45 @@ function ListeAntecedentsForm({
             <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1">Douleur liée</span>
           </div>
           {items.map(item => (
-            <div key={item.id} className="grid grid-cols-3 gap-1.5 mb-1.5 items-center">
-              <input type="text" value={item.type} onChange={e => upd(item.id, { type: e.target.value })}
-                placeholder="Op. jambe droite" className={CLS_CELL} />
-              <input type="text" value={item.date ?? ''} onChange={e => upd(item.id, { date: e.target.value })}
-                placeholder="2019" className={CLS_CELL} />
-              <div className="flex gap-1 items-center">
-                {(['oui', 'non'] as const).map(v => {
-                  const isActive = item.douleur === v;
-                  return (
-                  <button key={v} type="button" onClick={() => upd(item.id, { douleur: item.douleur === v ? undefined : v })}
-                    style={{
-                      flex: 1,
-                      padding: '8px 4px',
-                      borderRadius: '8px',
-                      border: '1.5px solid',
-                      borderColor: isActive ? '#2BBFBF' : '#D1D5DB',
-                      background: isActive ? '#2BBFBF' : '#FFFFFF',
-                      color: isActive ? '#FFFFFF' : '#374151',
-                      fontWeight: isActive ? '600' : '400',
-                      fontSize: '12px',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}>
-                    {v === 'oui' ? 'Oui' : 'Non'}
-                  </button>
-                  );
-                })}
-                <button type="button" onClick={() => remove(item.id)}
-                  className="text-red-400 hover:text-red-600 px-1 flex-shrink-0 ml-0.5">✕</button>
+            <div key={item.id} className="mb-3 border border-gray-100 rounded-lg p-2">
+              <div className="grid grid-cols-3 gap-1.5 mb-1.5 items-center">
+                <input type="text" value={item.type} onChange={e => upd(item.id, { type: e.target.value })}
+                  placeholder="Op. jambe droite" className={CLS_CELL} />
+                <input type="text" value={item.date ?? ''} onChange={e => upd(item.id, { date: e.target.value })}
+                  placeholder="2019" className={CLS_CELL} />
+                <div className="flex gap-1 items-center">
+                  {(['oui', 'non'] as const).map(v => {
+                    const isActive = item.douleur === v;
+                    return (
+                    <button key={v} type="button" onClick={() => upd(item.id, { douleur: item.douleur === v ? undefined : v })}
+                      style={{
+                        flex: 1,
+                        padding: '8px 4px',
+                        borderRadius: '8px',
+                        border: '1.5px solid',
+                        borderColor: isActive ? '#2BBFBF' : '#D1D5DB',
+                        background: isActive ? '#2BBFBF' : '#FFFFFF',
+                        color: isActive ? '#FFFFFF' : '#374151',
+                        fontWeight: isActive ? '600' : '400',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}>
+                      {v === 'oui' ? 'Oui' : 'Non'}
+                    </button>
+                    );
+                  })}
+                  <button type="button" onClick={() => remove(item.id)}
+                    className="text-red-400 hover:text-red-600 px-1 flex-shrink-0 ml-0.5">✕</button>
+                </div>
               </div>
+              <input
+                type="text"
+                value={item.notes_evolution ?? ''}
+                onChange={e => upd(item.id, { notes_evolution: e.target.value })}
+                placeholder="Notes d'évolution : ex. douleur réduite depuis kiné..."
+                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-[12px] text-gray-500 focus:outline-none focus:border-primary"
+              />
             </div>
           ))}
         </div>

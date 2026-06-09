@@ -428,6 +428,7 @@ export interface TraitementPatient {
   nom: string;
   dose?: string;
   effetSecondaire?: string;
+  date_fin?: string; // null/undefined = en cours, ISO date = arrêté
 }
 
 export interface AntecedentMedical {
@@ -435,6 +436,7 @@ export interface AntecedentMedical {
   type: string;
   date?: string;
   douleur?: 'oui' | 'non';
+  notes_evolution?: string;
 }
 
 // ── ESPACE PATIENT ────────────────────────────────────────────────────────────
