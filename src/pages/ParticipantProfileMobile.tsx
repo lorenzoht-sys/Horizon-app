@@ -825,7 +825,8 @@ export default function ParticipantProfileMobile() {
                   toast.success('Patient supprimé.');
                   navigate('/');
                 }}
-                className="flex-1 bg-red-500 text-white py-3 rounded-xl text-[13px] font-semibold">
+                style={{ backgroundColor: '#E24B4A', color: 'white', border: 'none' }}
+                className="flex-1 py-3 rounded-xl text-[13px] font-semibold hover:opacity-90 transition-opacity">
                 Supprimer
               </button>
             </div>

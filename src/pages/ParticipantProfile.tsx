@@ -1311,7 +1311,8 @@ export default function ParticipantProfile() {
                   toast.success(`${participant.prenom} ${participant.nom} supprimé(e).`);
                   navigate('/');
                 }}
-                className="flex-1 bg-red-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors">
+                style={{ backgroundColor: '#E24B4A', color: 'white', border: 'none' }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity">
                 Supprimer définitivement
               </button>
             </div>
