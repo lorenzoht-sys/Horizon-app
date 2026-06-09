@@ -288,6 +288,8 @@ Tu cites les recommandations HAS ou SFP-APA quand pertinent.`;
     ? (bilanInitial.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail ?? 'non précisées')
     : 'aucune contre-indication renseignée';
   const pathologies = [patient.pathologie, patient.antecedentsMedicaux].filter(Boolean).join(' / ') || 'non renseigné';
+  const traitementsActifsCtx = (patient.traitements ?? []).filter(t => !t.date_fin);
+  const traitementsArretesCtx = (patient.traitements ?? []).filter(t => t.date_fin);
   const imc = patient.taille && patient.poids
     ? (patient.poids / ((patient.taille / 100) ** 2)).toFixed(1) : 'NE';
 
@@ -308,6 +310,12 @@ Tu cites les recommandations HAS ou SFP-APA quand pertinent.`;
     profil?.anticoagulants ? '- Anticoagulants : ⚠️ Oui — risque de saignement/chute à signaler systématiquement' : null,
     patient.antecedentsChirurgicaux ? `- ATCD chirurgicaux : ${patient.antecedentsChirurgicaux}` : null,
     patient.allergies ? `- Allergies : ${patient.allergies}` : null,
+    traitementsActifsCtx.length > 0
+      ? `- Traitements en cours : ${traitementsActifsCtx.map(t => `${t.nom}${t.dose ? ` (${t.dose})` : ''}${t.effetSecondaire ? ` — ${t.effetSecondaire}` : ''}`).join(', ')}`
+      : null,
+    traitementsArretesCtx.length > 0
+      ? `- Traitements arrêtés : ${traitementsArretesCtx.map(t => `${t.nom}${t.dose ? ` (${t.dose})` : ''} (arrêté le ${new Date((t.date_fin ?? '') + 'T12:00').toLocaleDateString('fr-FR')})`).join(', ')}`
+      : null,
     profil?.objectifsPersonnels ? `- Objectifs personnels : ${profil.objectifsPersonnels}` : null,
     sedProfilLabel ? `- Niveau d'activité physique : ${sedProfilLabel} (score ${flatData?.sedentariteScore ?? '?'}/55 — Ricci & Gagnon)` : null,
     fssProfilLabel ? `- Fatigue perçue : ${fssProfilLabel} (FSS ${flatData?.fatigueScore ?? '?'}/63)` : null,

@@ -343,6 +343,10 @@ export default function ParticipantProfileMobile() {
       participant.allergies && { icon: '⚠️', label: 'Allergies', texte: participant.allergies },
     ].filter(Boolean) as { icon: string; label: string; texte: string }[];
 
+    const traitementsActifs = (participant.traitements ?? []).filter(t => !t.date_fin);
+    const traitementsArretes = (participant.traitements ?? []).filter(t => t.date_fin);
+    const antecedents = participant.antecedentsMedicauxStructures ?? [];
+
     const profil = bilanInitial?.profilEnrichi;
     const profilLignes = [
       profil?.douleursNiveau != null && { label: 'Douleur habituelle', texte: `${profil.douleursNiveau}/10` },
@@ -368,6 +372,68 @@ export default function ParticipantProfileMobile() {
             </div>
           ) : (
             <p className="text-[13px] text-gray-400 italic pt-1">Aucune pathologie renseignée</p>
+          )}
+
+          {/* Traitements structurés */}
+          {(traitementsActifs.length > 0 || traitementsArretes.length > 0) && (
+            <div className="mt-3 border-t border-gray-100 pt-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Traitements en cours</div>
+              {traitementsActifs.length > 0 ? (
+                <div className="space-y-2">
+                  {traitementsActifs.map(t => (
+                    <div key={t.id} className="flex items-start gap-2 text-[13px]">
+                      <span>💊</span>
+                      <div className="flex-1">
+                        <span className="font-medium text-gray-700">{t.nom}</span>
+                        {t.dose && <span className="text-gray-400"> · {t.dose}</span>}
+                        {t.effetSecondaire && <div className="text-[12px] text-gray-400">{t.effetSecondaire}</div>}
+                      </div>
+                      <span className="text-[10px] font-semibold text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">En cours ✅</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[13px] text-gray-400 italic">Aucun traitement en cours</p>
+              )}
+              {traitementsArretes.length > 0 && (
+                <details className="mt-2">
+                  <summary className="text-[12px] text-gray-400 font-medium cursor-pointer list-none flex items-center gap-1">
+                    ▶ Traitements arrêtés ({traitementsArretes.length})
+                  </summary>
+                  <div className="mt-1.5 space-y-1">
+                    {traitementsArretes.map(t => (
+                      <div key={t.id} className="flex items-center gap-2 text-[12px] text-gray-400">
+                        <span>💊</span>
+                        <span className="line-through">{t.nom}</span>
+                        <span className="ml-auto text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                          Arrêté le {new Date((t.date_fin ?? '') + 'T12:00').toLocaleDateString('fr-FR')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
+
+          {/* Antécédents structurés */}
+          {antecedents.length > 0 && (
+            <div className="mt-3 border-t border-gray-100 pt-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Antécédents</div>
+              <div className="space-y-2">
+                {antecedents.map(a => (
+                  <div key={a.id}>
+                    <div className="flex items-center gap-2 text-[13px]">
+                      <span>🩺</span>
+                      <span className="font-medium text-gray-700">{a.type}</span>
+                      {a.date && <span className="text-gray-400 text-[12px]">· {a.date}</span>}
+                      {a.douleur === 'oui' && <span className="text-[10px] text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full">Douleur liée</span>}
+                    </div>
+                    {a.notes_evolution && <p className="text-[12px] text-gray-400 ml-5 mt-0.5 italic">{a.notes_evolution}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </MobileCard>
 
