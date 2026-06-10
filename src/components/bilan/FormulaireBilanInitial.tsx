@@ -10,7 +10,7 @@ type QuestionType =
   | 'text' | 'date' | 'number' | 'tel' | 'email' | 'oui-non'
   | 'echelle-10' | 'echelle-5' | 'choix-unique' | 'choix-multiple'
   | 'textarea' | 'time'
-  | 'operations-list' | 'pathologies-list' | 'traitements-list'
+  | 'operations-list'
   | 'gir';
 
 interface Question {
@@ -51,19 +51,6 @@ export interface OperationMedicale {
   complicationDetail?: string;
 }
 
-export interface PathologieItem {
-  id: string;
-  nature: string;
-  stade?: string;
-  anciennete?: string;
-}
-
-export interface TraitementItem {
-  id: string;
-  nom: string;
-  dose?: string;
-}
-
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
@@ -94,32 +81,6 @@ const BLOCS: BlocConditionnel[] = [
   },
 
   // ─── CONDITIONNELS ───────────────────────────────────────────────────────
-
-  {
-    id: 'antecedents',
-    titre: '🏥 Antécédents médicaux',
-    questionCle: { label: 'A-t-il des antécédents médicaux ou chirurgicaux ?', field: 'aAntecedents' },
-    afficherSi: 'oui',
-    questions: [
-      {
-        id: 'pathologiesConnues',
-        label: 'Pathologies connues',
-        type: 'pathologies-list',
-      },
-      {
-        id: 'antecedentsChirurgicaux',
-        label: 'Antécédents chirurgicaux (hors opérations récentes)',
-        type: 'textarea',
-        placeholder: 'Hernie 2015, appendicite 2010...',
-      },
-      {
-        id: 'traitements',
-        label: 'Traitements médicamenteux',
-        type: 'traitements-list',
-      },
-      { id: 'allergies', label: 'Allergies', type: 'text', placeholder: 'Aspirine, latex...' },
-    ],
-  },
 
   {
     id: 'chutes',
@@ -533,132 +494,6 @@ function ListeOperations({
   );
 }
 
-function ListePathologies({
-  value,
-  onChange,
-}: {
-  value: PathologieItem[];
-  onChange: (v: PathologieItem[]) => void;
-}) {
-  const items = value ?? [];
-
-  const add = () => onChange([...items, { id: genId(), nature: '' }]);
-  const remove = (id: string) => onChange(items.filter(i => i.id !== id));
-  const upd = (id: string, patch: Partial<PathologieItem>) =>
-    onChange(items.map(i => (i.id === id ? { ...i, ...patch } : i)));
-
-  return (
-    <div>
-      <p className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-3">
-        💡 Si plusieurs pathologies, ajoutez-les toutes — le stade est important (ex : cancer stade 1 ≠ stade 4, Parkinson stade précoce ≠ avancé)
-      </p>
-      {items.map((item, i) => (
-        <div key={item.id} className="border border-gray-100 rounded-xl p-3.5 mb-2 bg-gray-50">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-gray-400">Pathologie {i + 1}</span>
-            <button
-              type="button"
-              onClick={() => remove(item.id)}
-              className="text-xs text-red-400 hover:text-red-600"
-            >
-              🗑️
-            </button>
-          </div>
-          <div className="flex flex-col gap-2">
-            <input
-              type="text"
-              value={item.nature}
-              onChange={e => upd(item.id, { nature: e.target.value })}
-              placeholder="Diabète T2, Cancer sein, Parkinson, BPCO..."
-              className={`w-full ${INPUT_CLS}`}
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="text"
-                value={item.stade ?? ''}
-                onChange={e => upd(item.id, { stade: e.target.value })}
-                placeholder="Stade / Grade (optionnel)"
-                className={INPUT_CLS}
-              />
-              <input
-                type="text"
-                value={item.anciennete ?? ''}
-                onChange={e => upd(item.id, { anciennete: e.target.value })}
-                placeholder="Depuis quand (optionnel)"
-                className={INPUT_CLS}
-              />
-            </div>
-          </div>
-        </div>
-      ))}
-      <button
-        type="button"
-        onClick={add}
-        className="w-full flex items-center justify-center gap-2 text-primary border border-dashed border-primary/40 hover:border-primary hover:bg-primary/5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
-      >
-        + Ajouter une pathologie
-      </button>
-    </div>
-  );
-}
-
-function ListeTraitements({
-  value,
-  onChange,
-}: {
-  value: TraitementItem[];
-  onChange: (v: TraitementItem[]) => void;
-}) {
-  const items = value ?? [];
-
-  const add = () => onChange([...items, { id: genId(), nom: '' }]);
-  const remove = (id: string) => onChange(items.filter(i => i.id !== id));
-  const upd = (id: string, patch: Partial<TraitementItem>) =>
-    onChange(items.map(i => (i.id === id ? { ...i, ...patch } : i)));
-
-  return (
-    <div>
-      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-3">
-        💊 La dose peut influencer la tolérance à l'effort (ex : bêtabloquants limitent l'accélération cardiaque)
-      </p>
-      {items.map(item => (
-        <div key={item.id} className="flex items-center gap-2 mb-2">
-          <div className="flex-1 grid grid-cols-2 gap-2">
-            <input
-              type="text"
-              value={item.nom}
-              onChange={e => upd(item.id, { nom: e.target.value })}
-              placeholder="Médicament (ex : Metformine)"
-              className={INPUT_CLS}
-            />
-            <input
-              type="text"
-              value={item.dose ?? ''}
-              onChange={e => upd(item.id, { dose: e.target.value })}
-              placeholder="Dose (ex : 500mg × 2/jour)"
-              className={INPUT_CLS}
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => remove(item.id)}
-            className="text-red-400 hover:text-red-600 flex-shrink-0 p-1"
-          >
-            🗑️
-          </button>
-        </div>
-      ))}
-      <button
-        type="button"
-        onClick={add}
-        className="w-full flex items-center justify-center gap-2 text-primary border border-dashed border-primary/40 hover:border-primary hover:bg-primary/5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors mt-1"
-      >
-        + Ajouter un traitement
-      </button>
-    </div>
-  );
-}
-
 // ─── Composants UI de base ────────────────────────────────────────────────────
 
 const SCALE5_COLORS = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#16A34A'];
@@ -992,28 +827,6 @@ function RenduInput({
         <div>
           {lbl}
           <ListeOperations
-            value={Array.isArray(value) ? value : []}
-            onChange={onChange}
-          />
-        </div>
-      );
-
-    case 'pathologies-list':
-      return (
-        <div>
-          {lbl}
-          <ListePathologies
-            value={Array.isArray(value) ? value : []}
-            onChange={onChange}
-          />
-        </div>
-      );
-
-    case 'traitements-list':
-      return (
-        <div>
-          {lbl}
-          <ListeTraitements
             value={Array.isArray(value) ? value : []}
             onChange={onChange}
           />
@@ -1442,7 +1255,6 @@ interface Props {
 }
 
 const CLÉS_INITIALES: Record<string, OuiNon | null> = {
-  aAntecedents:         null,
   aChutes:              null,
   aOperationRecente:    null,
   aBlessure:            null,

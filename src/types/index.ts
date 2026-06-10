@@ -431,12 +431,33 @@ export interface TraitementPatient {
   date_fin?: string; // null/undefined = en cours, ISO date = arrêté
 }
 
+export type TypeAntecedent =
+  | 'pathologie_chronique'
+  | 'chirurgie'
+  | 'fracture'
+  | 'prothese'
+  | 'hospitalisation'
+  | 'accident'
+  | 'autre';
+
+export const TYPES_ANTECEDENT_LABELS: Record<TypeAntecedent, string> = {
+  pathologie_chronique: '💊 Pathologie chronique',
+  chirurgie: '✂️ Chirurgie',
+  fracture: '🦴 Fracture',
+  prothese: '🦾 Prothèse',
+  hospitalisation: '🏥 Hospitalisation',
+  accident: '⚡ Accident',
+  autre: '📋 Autre',
+};
+
 export interface AntecedentMedical {
   id: string;
-  type: string;
+  type: TypeAntecedent;
   date?: string;
+  localisation?: string;
+  consequence?: string;
   douleur?: 'oui' | 'non';
-  notes_evolution?: string;
+  notes?: string;
 }
 
 // ── ESPACE PATIENT ────────────────────────────────────────────────────────────

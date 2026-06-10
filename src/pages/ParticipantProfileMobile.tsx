@@ -20,6 +20,7 @@ import { exportFichePatientPDF } from '../utils/exportFichePatientPDF';
 import { TAG_CONFIG } from '../data/profiles';
 import { toast } from 'sonner';
 import type { Bilan, Participant, RessentiSeance } from '../types';
+import { TYPES_ANTECEDENT_LABELS } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
 
 // ── Constants & helpers ───────────────────────────────────────────────────────
@@ -425,11 +426,11 @@ export default function ParticipantProfileMobile() {
                   <div key={a.id}>
                     <div className="flex items-center gap-2 text-[13px]">
                       <span>🩺</span>
-                      <span className="font-medium text-gray-700">{a.type}</span>
+                      <span className="font-medium text-gray-700">{TYPES_ANTECEDENT_LABELS[a.type] ?? a.type}</span>
                       {a.date && <span className="text-gray-400 text-[12px]">· {a.date}</span>}
                       {a.douleur === 'oui' && <span className="text-[10px] text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full">Douleur liée</span>}
                     </div>
-                    {a.notes_evolution && <p className="text-[12px] text-gray-400 ml-5 mt-0.5 italic">{a.notes_evolution}</p>}
+                    {a.notes && <p className="text-[12px] text-gray-400 ml-5 mt-0.5 italic">{a.notes}</p>}
                   </div>
                 ))}
               </div>

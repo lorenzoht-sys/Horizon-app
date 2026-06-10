@@ -8,6 +8,7 @@ import BilanStepper from '../../components/bilan/BilanStepper';
 import DicteePostSeance from '../../components/DicteePostSeance';
 import ModalEspacePatient from '../../components/participant/ModalEspacePatient';
 import type { Bilan } from '../../types';
+import { TYPES_ANTECEDENT_LABELS } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../../lib/supabase';
 
@@ -1592,13 +1593,13 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
                       <div key={a.id}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
                           <span>🩺</span>
-                          <span style={{ fontWeight: 600, color: '#032c28' }}>{a.type}</span>
+                          <span style={{ fontWeight: 600, color: '#032c28' }}>{TYPES_ANTECEDENT_LABELS[a.type] ?? a.type}</span>
                           {a.date && <span style={{ fontSize: 12, color: '#8FA8A8' }}>· {a.date}</span>}
                           {a.douleur === 'oui' && (
                             <span style={{ fontSize: 10, color: '#c2410c', background: '#fff7ed', border: '1px solid #fed7aa', padding: '2px 6px', borderRadius: 20 }}>Douleur liée</span>
                           )}
                         </div>
-                        {a.notes_evolution && <div style={{ fontSize: 12, color: '#8FA8A8', fontStyle: 'italic', marginLeft: 24, marginTop: 2 }}>{a.notes_evolution}</div>}
+                        {a.notes && <div style={{ fontSize: 12, color: '#8FA8A8', fontStyle: 'italic', marginLeft: 24, marginTop: 2 }}>{a.notes}</div>}
                       </div>
                     ))}
                   </div>
