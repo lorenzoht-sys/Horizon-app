@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical, TypeAntecedent, AnamneseData, ChutesData, PeriodeChutes, FourchetteChutes } from '../../types';
 import { TYPES_ANTECEDENT_LABELS, PERIODES_CHUTES_LABELS } from '../../types';
 import { useStructures } from '../../hooks/useStructures';
+import { getBrouillonParticipant, sauvegarderBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
 import { Save, X } from 'lucide-react';
 
 function genId() {
@@ -479,62 +480,113 @@ interface Props {
   onSubmit: (data: Omit<Participant, 'id' | 'token' | 'bilans'>) => void;
   onCancel: () => void;
   initial?: Partial<Participant>;
+  /** Étape affichée (1 à 5). Si non fourni, le formulaire complet est affiché (usage modale). */
+  step?: 1 | 2 | 3 | 4 | 5;
+  /** Clé de brouillon localStorage (ex : "nouveau" ou l'id du participant). */
+  draftKey?: string;
+  /** Appelé à chaque changement, avec le nombre de champs remplis / total. */
+  onCompletionChange?: (filled: number, total: number) => void;
+}
+
+export interface ParticipantFormHandle {
+  /** Tente la soumission. Retourne false si le prénom ou le nom est manquant. */
+  submit: () => boolean;
 }
 
 const CLS_INPUT = 'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10';
 const CLS_LABEL = 'block text-sm font-medium text-gray-700 mb-1.5';
 
-export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) {
+function computeCompletion(
+  form: Record<string, string>,
+  anamnese: AnamneseData,
+  traitements: TraitementPatient[],
+  antecedents: AntecedentMedical[],
+  rgpd: RgpdConsent,
+): { filled: number; total: number } {
+  const champsTexte = [
+    form.prenom, form.nom, form.dateNaissance, form.dateCreation,
+    form.email, form.telephone,
+    form.villeNaissance, form.codePostalNaissance,
+    form.adresseRue, form.adresseCodePostal, form.adresseVille,
+    form.taille, form.poids,
+    form.iban, form.bic, form.allergies,
+  ];
+  let filled = champsTexte.filter(v => v !== '' && v != null).length;
+  let total = champsTexte.length;
+
+  total += 6;
+  if (anamnese.douleurQuotidienne != null) filled++;
+  if (anamnese.fatigueQuotidienne != null) filled++;
+  if (anamnese.contreIndications != null) filled++;
+  if (anamnese.chutes?.aChutes != null) filled++;
+  if (traitements.length > 0) filled++;
+  if (antecedents.length > 0) filled++;
+
+  total += 1;
+  if (rgpd.consentementObtenu) filled++;
+
+  return { filled, total };
+}
+
+const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function ParticipantForm(
+  { onSubmit, onCancel, initial, step, draftKey, onCompletionChange }, ref
+) {
   const { structures } = useStructures();
 
+  // ── Brouillon localStorage (page Nouveau participant / Modifier) ─
+  const brouillon = draftKey ? getBrouillonParticipant(draftKey) : null;
+  const seed: Partial<Participant> = brouillon?.data ? { ...initial, ...brouillon.data } : (initial ?? {});
+
   // ── Rattachement structure ──────────────────────────────────────
-  const [structureId, setStructureId] = useState<string | undefined>(initial?.structureId);
+  const [structureId, setStructureId] = useState<string | undefined>(seed.structureId);
 
   // ── Traitements & antécédents structurés ───────────────────────
-  const [traitements, setTraitements] = useState<TraitementPatient[]>(initial?.traitements ?? []);
-  const [antecedents, setAntecedents] = useState<AntecedentMedical[]>(initial?.antecedentsMedicauxStructures ?? []);
+  const [traitements, setTraitements] = useState<TraitementPatient[]>(seed.traitements ?? []);
+  const [antecedents, setAntecedents] = useState<AntecedentMedical[]>(seed.antecedentsMedicauxStructures ?? []);
 
   // ── Anamnèse (état de santé général) ────────────────────────────
   const [anamnese, setAnamnese] = useState<AnamneseData>({
-    douleurQuotidienne: initial?.anamnese?.douleurQuotidienne ?? null,
-    fatigueQuotidienne: initial?.anamnese?.fatigueQuotidienne ?? null,
-    chutes: initial?.anamnese?.chutes ?? {},
+    douleurQuotidienne: seed.anamnese?.douleurQuotidienne ?? null,
+    fatigueQuotidienne: seed.anamnese?.fatigueQuotidienne ?? null,
+    chutes: seed.anamnese?.chutes ?? {},
+    contreIndications: seed.anamnese?.contreIndications ?? null,
+    contreIndicationsDetail: seed.anamnese?.contreIndicationsDetail ?? '',
   });
 
   // ── Tags / tests ────────────────────────────────────────────────
-  const [tags] = useState<TagPatient[]>(initial?.tags ?? []);
-  const [testsActifs] = useState<TestKey[]>(initial?.testsActifs ?? []);
+  const [tags] = useState<TagPatient[]>(seed.tags ?? []);
+  const [testsActifs] = useState<TestKey[]>(seed.testsActifs ?? []);
 
   // ── RGPD + droit à l'image ──────────────────────────────────────
   const [rgpd, setRgpd] = useState<RgpdConsent>({
-    consentementObtenu:  initial?.rgpd?.consentementObtenu  ?? false,
-    droitAcces:          initial?.rgpd?.droitAcces          ?? false,
-    droitRectification:  initial?.rgpd?.droitRectification  ?? false,
-    droitEffacement:     initial?.rgpd?.droitEffacement     ?? false,
-    methodeConsentement: initial?.rgpd?.methodeConsentement ?? 'oral_note',
-    consentementDate:    initial?.rgpd?.consentementDate    ?? new Date().toISOString().slice(0, 10),
+    consentementObtenu:  seed.rgpd?.consentementObtenu  ?? false,
+    droitAcces:          seed.rgpd?.droitAcces          ?? false,
+    droitRectification:  seed.rgpd?.droitRectification  ?? false,
+    droitEffacement:     seed.rgpd?.droitEffacement     ?? false,
+    methodeConsentement: seed.rgpd?.methodeConsentement ?? 'oral_note',
+    consentementDate:    seed.rgpd?.consentementDate    ?? new Date().toISOString().slice(0, 10),
   });
-  const [droitImage, setDroitImage] = useState<boolean>(initial?.droitImage ?? false);
+  const [droitImage, setDroitImage] = useState<boolean>(seed.droitImage ?? false);
 
   // ── Champs texte ────────────────────────────────────────────────
   const [form, setForm] = useState({
-    nom:               initial?.nom               ?? '',
-    prenom:            initial?.prenom            ?? '',
-    dateNaissance:     initial?.dateNaissance     ?? '',
-    dateCreation:      initial?.dateCreation      ?? new Date().toISOString().slice(0, 10),
-    email:             initial?.email             ?? '',
-    telephone:         initial?.telephone         ?? '',
-    contexteClinic:    initial?.contexteClinic    ?? '',
-    adresseRue:        initial?.adresseRue        ?? '',
-    adresseCodePostal: initial?.adresseCodePostal ?? '',
-    adresseVille:      initial?.adresseVille      ?? '',
-    taille:               initial?.taille?.toString() ?? '',
-    poids:                initial?.poids?.toString()  ?? '',
-    villeNaissance:       initial?.villeNaissance       ?? '',
-    codePostalNaissance:  initial?.codePostalNaissance  ?? '',
-    iban:                 initial?.iban              ?? '',
-    bic:                  initial?.bic               ?? '',
-    allergies:            initial?.allergies         ?? '',
+    nom:               seed.nom               ?? '',
+    prenom:            seed.prenom            ?? '',
+    dateNaissance:     seed.dateNaissance     ?? '',
+    dateCreation:      seed.dateCreation      ?? new Date().toISOString().slice(0, 10),
+    email:             seed.email             ?? '',
+    telephone:         seed.telephone         ?? '',
+    contexteClinic:    seed.contexteClinic    ?? '',
+    adresseRue:        seed.adresseRue        ?? '',
+    adresseCodePostal: seed.adresseCodePostal ?? '',
+    adresseVille:      seed.adresseVille      ?? '',
+    taille:               seed.taille?.toString() ?? '',
+    poids:                seed.poids?.toString()  ?? '',
+    villeNaissance:       seed.villeNaissance       ?? '',
+    codePostalNaissance:  seed.codePostalNaissance  ?? '',
+    iban:                 seed.iban              ?? '',
+    bic:                  seed.bic               ?? '',
+    allergies:            seed.allergies         ?? '',
   });
 
   // ── Handlers ────────────────────────────────────────────────────
@@ -543,9 +595,8 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
     setForm(f => ({ ...f, [e.target.name]: e.target.value }));
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    onSubmit({
+  function buildPayload(): Omit<Participant, 'id' | 'token' | 'bilans'> {
+    return {
       ...form,
       taille: form.taille ? Number(form.taille) : undefined,
       poids:  form.poids  ? Number(form.poids)  : undefined,
@@ -568,8 +619,43 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
       coordonnees:    initial?.coordonnees,
       geocodeFailed:  initial?.geocodeFailed,
       programmes:     initial?.programmes,
-    });
+    };
   }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    onSubmit(buildPayload());
+  }
+
+  useImperativeHandle(ref, () => ({
+    submit: () => {
+      if (!form.prenom.trim() || !form.nom.trim()) return false;
+      onSubmit(buildPayload());
+      return true;
+    },
+  }));
+
+  // ── Brouillon : sauvegarde auto (debounce 800ms) ─────────────────
+  useEffect(() => {
+    if (!draftKey) return;
+    const t = setTimeout(() => {
+      sauvegarderBrouillonParticipant(draftKey, step ?? 0, {
+        ...form,
+        taille: form.taille ? Number(form.taille) : undefined,
+        poids:  form.poids  ? Number(form.poids)  : undefined,
+        anamnese, traitements, antecedentsMedicauxStructures: antecedents,
+        rgpd, droitImage, structureId,
+      });
+    }, 800);
+    return () => clearTimeout(t);
+  }, [draftKey, step, form, anamnese, traitements, antecedents, rgpd, droitImage, structureId]);
+
+  // ── Indicateur de complétion ─────────────────────────────────────
+  useEffect(() => {
+    if (!onCompletionChange) return;
+    const { filled, total } = computeCompletion(form, anamnese, traitements, antecedents, rgpd);
+    onCompletionChange(filled, total);
+  }, [form, anamnese, traitements, antecedents, rgpd, onCompletionChange]);
 
   // ── Calcul IMC ──────────────────────────────────────────────────
   const t = Number(form.taille), p = Number(form.poids);
@@ -585,10 +671,15 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
     catch { return 'votre email professionnel'; }
   })();
 
+  const showAll = step === undefined;
+  const Wrapper = showAll ? 'form' : 'div';
+  const wrapperProps = showAll ? { onSubmit: handleSubmit } : {};
+
   // ──────────────────────────────────────────────────────────────────────────
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <Wrapper {...wrapperProps} className="space-y-6">
 
+      {(showAll || step === 1) && <>
       {/* ── IDENTITÉ ── */}
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -672,7 +763,9 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
             className="col-span-2 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary" />
         </div>
       </div>
+      </>}
 
+      {(showAll || step === 4) && <>
       {/* ── SAP — COORDONNÉES BANCAIRES ── */}
       <div className="border border-yellow-200 rounded-2xl overflow-hidden">
         <div className="bg-yellow-50 px-4 py-3 flex items-center gap-2.5">
@@ -757,6 +850,14 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
         </div>
       )}
 
+      {!showAll && (
+        <div className="border border-dashed border-gray-200 rounded-2xl p-4 text-sm text-gray-400">
+          🎯 Objectifs, activités souhaitées et disponibilités : ces champs seront ajoutés ici lors d'une prochaine mise à jour.
+        </div>
+      )}
+      </>}
+
+      {(showAll || step === 2) && <>
       {/* ── ÉTAT DE SANTÉ GÉNÉRAL ── */}
       <div className="border border-gray-100 rounded-2xl overflow-hidden">
         <div className="bg-gradient-to-r from-rose-50 to-orange-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
@@ -848,6 +949,49 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
           />
         </div>
       </div>
+      </>}
+
+      {!showAll && step === 3 && (
+        <div className="border border-dashed border-gray-200 rounded-2xl p-4 text-sm text-gray-400">
+          🏃 Autonomie, hygiène de vie et activité physique : ces champs seront ajoutés ici lors d'une prochaine mise à jour.
+        </div>
+      )}
+
+      {(showAll || step === 5) && <>
+      {!showAll && (
+        <div className="border border-gray-100 rounded-2xl overflow-hidden">
+          <div className="bg-gradient-to-r from-teal-50 to-cyan-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
+            <span className="text-lg">📋</span>
+            <div>
+              <div className="font-semibold text-dark text-sm">Récapitulatif</div>
+              <div className="text-xs text-gray-500">Vérifiez les informations avant de créer la fiche</div>
+            </div>
+          </div>
+          <div className="p-4 space-y-3 text-sm text-gray-600">
+            <p><span className="font-medium text-gray-700">Identité :</span> {form.prenom || '—'} {form.nom || '—'}{form.dateNaissance ? ` · né(e) le ${new Date(form.dateNaissance).toLocaleDateString('fr-FR')}` : ''}</p>
+            {(form.email || form.telephone) && (
+              <p><span className="font-medium text-gray-700">Contact :</span> {[form.email, form.telephone].filter(Boolean).join(' · ')}</p>
+            )}
+            {(form.adresseRue || form.adresseVille) && (
+              <p><span className="font-medium text-gray-700">Adresse :</span> {[form.adresseRue, form.adresseCodePostal, form.adresseVille].filter(Boolean).join(' ')}</p>
+            )}
+            {imc !== null && imcCat && (
+              <p><span className="font-medium text-gray-700">IMC :</span> {imc} — {imcCat.label}</p>
+            )}
+            <p><span className="font-medium text-gray-700">Traitements :</span> {traitements.length > 0 ? `${traitements.length} renseigné(s)` : 'aucun'}</p>
+            <p><span className="font-medium text-gray-700">Antécédents médicaux :</span> {antecedents.length > 0 ? `${antecedents.length} renseigné(s)` : 'aucun'}</p>
+            {anamnese.contreIndications === 'oui' && (
+              <p className="text-red-600"><span className="font-medium">⚠️ Contre-indications :</span> {anamnese.contreIndicationsDetail || 'oui (détail non précisé)'}</p>
+            )}
+            {anamnese.chutes?.aChutes === 'oui' && (
+              <p><span className="font-medium text-gray-700">Chutes :</span> oui — {anamnese.chutes.nombreChutes ?? '?'} chute(s)</p>
+            )}
+            {structureId && (
+              <p><span className="font-medium text-gray-700">Structure :</span> {structures.find(s => s.id === structureId)?.nom ?? '—'}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── RGPD + DROIT À L'IMAGE ── */}
       <div className="border border-blue-100 rounded-2xl overflow-hidden">
@@ -902,18 +1046,24 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
         </div>
       </div>
 
-      <div className="flex gap-3 pt-2">
-        <button type="submit"
-          className="flex-1 bg-primary text-white rounded-xl py-2.5 font-semibold flex items-center justify-center gap-2 hover:bg-dark transition-colors">
-          <Save size={16} />
-          Enregistrer
-        </button>
-        <button type="button" onClick={onCancel}
-          className="px-5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-2">
-          <X size={16} />
-          Annuler
-        </button>
-      </div>
-    </form>
+      </>}
+
+      {showAll && (
+        <div className="flex gap-3 pt-2">
+          <button type="submit"
+            className="flex-1 bg-primary text-white rounded-xl py-2.5 font-semibold flex items-center justify-center gap-2 hover:bg-dark transition-colors">
+            <Save size={16} />
+            Enregistrer
+          </button>
+          <button type="button" onClick={onCancel}
+            className="px-5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-2">
+            <X size={16} />
+            Annuler
+          </button>
+        </div>
+      )}
+    </Wrapper>
   );
-}
+});
+
+export default ParticipantForm;

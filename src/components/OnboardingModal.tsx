@@ -43,7 +43,7 @@ export default function OnboardingModal({ onClose }: Props) {
     localStorage.setItem('onboarding_complete', 'true');
     onClose();
     if (openAddParticipant) {
-      navigate('/', { state: { openNewParticipant: true } });
+      navigate('/participants/nouveau');
     }
   }
 

@@ -7,7 +7,6 @@ import { useStructures } from '../hooks/useStructures';
 import ParticipantCard from '../components/participant/ParticipantCard';
 import { FadeInCard } from '../components/ui/FadeInCard';
 import { motion } from 'framer-motion';
-import ParticipantForm from '../components/participant/ParticipantForm';
 import ImportExcelModal from '../components/import/ImportExcelModal';
 import PageWrapper from '../components/layout/PageWrapper';
 import { Plus, Search, Users, BarChart3, FileSpreadsheet, X, CalendarDays, MapPin, ChevronRight, NotebookPen, AlertCircle, Building2, Settings } from 'lucide-react';
@@ -194,7 +193,6 @@ export default function Dashboard() {
   const { structures, creerStructure } = useStructures();
   const { notes } = useJournalSeance();
   const [search, setSearch] = useState('');
-  const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showCreateStructure, setShowCreateStructure] = useState(false);
   const [activeTab, setActiveTab] = useState<DashTab>('independants');
@@ -248,13 +246,8 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (location.state?.openNewParticipant) {
-      setShowForm(true);
-    }
     if (location.state?.activeTab) {
       setActiveTab(location.state.activeTab as DashTab);
-    }
-    if (location.state?.openNewParticipant || location.state?.activeTab) {
       navigate('/', { replace: true, state: {} });
     }
   }, [location.state, navigate]);
@@ -503,7 +496,7 @@ export default function Dashboard() {
                 <span className="hidden sm:inline">Import Excel</span>
               </motion.button>
               <motion.button
-                onClick={() => setShowForm(true)}
+                onClick={() => navigate('/participants/nouveau')}
                 className="flex items-center gap-2 text-white text-sm font-semibold"
                 style={{ padding: '10px 20px', background: 'var(--color-teal)', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
                 whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.1 }}
@@ -759,34 +752,6 @@ export default function Dashboard() {
         )}
       </PageWrapper>
 
-      {/* Modal nouveau participant */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[1100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <h2 className="font-heading font-bold text-dark text-lg">Nouveau participant</h2>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-dark transition-colors">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-6">
-              <ParticipantForm
-                onSubmit={async (data) => {
-                  try {
-                    const p = await addParticipant(data);
-                    setShowForm(false);
-                    toast.success(`${data.prenom} ${data.nom} ajouté(e) !`);
-                    navigate(`/participant/${p.id}`);
-                  } catch (error: any) {
-                    toast.error(error?.message || 'Erreur lors de l\'ajout du patient');
-                  }
-                }}
-                onCancel={() => setShowForm(false)}
-              />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal import Excel */}
       {showImport && <ImportExcelModal onClose={() => setShowImport(false)} participants={participants} addParticipant={addParticipant} />}

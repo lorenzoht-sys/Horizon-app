@@ -36,6 +36,7 @@ const ContratNouveauPage = lazy(() => import('./pages/ContratNouveauPage'));
 const BilanDetail        = lazy(() => import('./pages/BilanDetail'));
 const NewBilan           = lazy(() => import('./pages/NewBilan'));
 const ProgrammePage      = lazy(() => import('./pages/ProgrammePage'));
+const ParticipantFormPage = lazy(() => import('./pages/ParticipantFormPage'));
 
 function DesktopContent({ onLogout }: { onLogout: () => void }) {
   const location = useLocation();
@@ -73,6 +74,8 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
             <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
+            <Route path="/participants/nouveau" element={<PageTransition><Suspense fallback={<MapFallback />}><ParticipantFormPage /></Suspense></PageTransition>} />
+            <Route path="/participants/:id/modifier" element={<PageTransition><Suspense fallback={<MapFallback />}><ParticipantFormPage /></Suspense></PageTransition>} />
             <Route path="/participant/:id" element={<PageTransition><ParticipantProfile /></PageTransition>} />
             <Route path="/participant/:id/bilan/new" element={<PageTransition><Suspense fallback={<MapFallback />}><NewBilan /></Suspense></PageTransition>} />
             <Route path="/participant/:id/bilan/:bilanId" element={<PageTransition><Suspense fallback={<MapFallback />}><BilanDetail /></Suspense></PageTransition>} />

@@ -5,7 +5,7 @@ import { differenceInDays } from 'date-fns';
 import {
   ArrowLeft, Pencil, FileText, TrendingUp, Share2,
   Download, Trash2, Dumbbell, NotebookPen, Calendar, MapPin,
-  RefreshCw, X, ClipboardList, Mic, ChevronDown, ChevronUp,
+  RefreshCw, ClipboardList, Mic, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
@@ -21,7 +21,6 @@ import BilanEvolutionCharts from '../components/charts/BilanEvolutionCharts';
 import BilanTimeline from '../components/bilan/BilanTimeline';
 import ContratsTab from '../components/participant/ContratsTab';
 import DicteePostSeance from '../components/DicteePostSeance';
-import ParticipantForm from '../components/participant/ParticipantForm';
 import ModalEspacePatient from '../components/participant/ModalEspacePatient';
 import { exportFichePatientPDF } from '../utils/exportFichePatientPDF';
 import { exportFicheCompletePDF } from '../utils/exportFicheCompletePDF';
@@ -631,7 +630,6 @@ export default function ParticipantProfile() {
   const settings = loadSettings();
 
   const [menuOuvert, setMenuOuvert]         = useState(false);
-  const [showEdit, setShowEdit]             = useState(false);
   const [confirmDelete, setConfirmDelete]   = useState(false);
   const [confirmDeleteProg, setConfirmDeleteProg] = useState(false);
   const [showDictee, setShowDictee]         = useState(false);
@@ -711,7 +709,7 @@ export default function ParticipantProfile() {
   function handleAction(action: string) {
     setMenuOuvert(false);
     switch (action) {
-      case 'modifier':        setShowEdit(true); break;
+      case 'modifier':        navigate(`/participants/${id}/modifier`); break;
       case 'evolution':       navigate(`/participant/${id}/comparaison`); break;
       case 'pdf_fiche':       handleExportFiche(); break;
       case 'lien':            copyClientLink(); break;
@@ -720,7 +718,7 @@ export default function ParticipantProfile() {
       case 'programme':       navigate(`/participant/${id}/programme`); break;
       case 'nouveau_bilan':   navigate(`/participant/${id}/bilan/new`); break;
       case 'nouveau_contrat': navigate(`/participant/${id}/contrat/nouveau`); break;
-      case 'rgpd':            setShowEdit(true); break;
+      case 'rgpd':            navigate(`/participants/${id}/modifier`); break;
     }
   }
 
@@ -774,12 +772,6 @@ export default function ParticipantProfile() {
     setGeocoding(true);
     geocodeParticipant(participant!.id);
     setTimeout(() => setGeocoding(false), 4000);
-  }
-
-  function handleEditSubmit(data: Omit<Participant, 'id' | 'token' | 'bilans'>) {
-    updateParticipant(participant!.id, data);
-    setShowEdit(false);
-    toast.success('Fiche mise à jour !');
   }
 
   const MENU_ACTIONS = [
@@ -1151,7 +1143,7 @@ export default function ParticipantProfile() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-4 mb-4">
         {/* Colonne gauche */}
         <div className="flex flex-col gap-3">
-          <CarteSante participant={participant} bilanInitial={bilanInitial} onModifier={() => setShowEdit(true)} />
+          <CarteSante participant={participant} bilanInitial={bilanInitial} onModifier={() => navigate(`/participants/${id}/modifier`)} />
           <CarteStats participant={participant} contratActif={contratActif} prochaineSeance={prochaineSeance} />
         </div>
         {/* Colonne droite */}
@@ -1383,24 +1375,6 @@ export default function ParticipantProfile() {
       </TabsSection>
 
       {/* ── MODALS ─────────────────────────────────────────────── */}
-      {showEdit && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[1100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
-              <div>
-                <h2 className="font-heading font-bold text-gray-900 text-lg">Modifier la fiche</h2>
-                <p className="text-sm text-gray-400 mt-0.5">{participant.prenom} {participant.nom}</p>
-              </div>
-              <button onClick={() => setShowEdit(false)} className="text-gray-400 hover:text-gray-700 p-1 transition-colors">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-6">
-              <ParticipantForm initial={participant} onSubmit={handleEditSubmit} onCancel={() => setShowEdit(false)} />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Confirmation suppression programme */}
       {confirmDeleteProg && programmeActif && (
