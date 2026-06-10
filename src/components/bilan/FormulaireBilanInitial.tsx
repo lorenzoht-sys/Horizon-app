@@ -106,37 +106,17 @@ const BLOCS: BlocConditionnel[] = [
     ],
   },
 
+  // ─── CONTRE-INDICATIONS (toujours affiché) ──────────────────────────────
+
   {
-    id: 'pathologieChronique',
-    titre: '💊 Pathologie chronique',
-    questionCle: { label: 'A-t-il une pathologie chronique (cardiaque, diabète, BPCO...) ?', field: 'aPathologieChronique' },
-    afficherSi: 'oui',
+    id: 'mesuresCliniques',
+    titre: '📊 Mesures cliniques',
     questions: [
-      {
-        id: 'naturePathologie',
-        label: 'Nature de la pathologie principale',
-        type: 'text',
-        placeholder: 'Insuffisance cardiaque, diabète T2, BPCO...',
-      },
       { id: 'fcMax',       label: 'FC max autorisée (si prescrite)', type: 'number', placeholder: '130' },
-      {
-        id: 'dyspneeEffort',
-        label: "Dyspnée à l'effort ?",
-        type: 'oui-non',
-        aide: "Si le patient ne sait pas, laissez vide — à observer lors des premières séances",
-      },
-      {
-        id: 'dyspneeRepos',
-        label: 'Dyspnée au repos ?',
-        type: 'oui-non',
-        aide: "Si le patient ne sait pas, laissez vide",
-      },
       { id: 'spo2Repos',         label: 'SpO₂ au repos (%)',        type: 'number' },
       { id: 'tensionArterielle', label: 'Tension artérielle connue', type: 'text', placeholder: '130/80' },
     ],
   },
-
-  // ─── CONTRE-INDICATIONS (toujours affiché) ──────────────────────────────
 
   {
     id: 'contreIndicationsEffort',
@@ -1213,7 +1193,6 @@ interface Props {
 const CLÉS_INITIALES: Record<string, OuiNon | null> = {
   aOperationRecente:    null,
   aBlessure:            null,
-  aPathologieChronique: null,
 };
 
 const TYPES_SIMPLES: QuestionType[] = [
