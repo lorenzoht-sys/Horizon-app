@@ -71,15 +71,6 @@ const BLOCS: BlocConditionnel[] = [
     ],
   },
 
-  {
-    id: 'douleurFatigue',
-    titre: '💊 Douleur & Fatigue',
-    questions: [
-      { id: 'douleur', label: 'Douleur quotidienne (0-10)', type: 'echelle-10' },
-      { id: 'fatigue', label: 'Fatigue quotidienne (0-10)', type: 'echelle-10' },
-    ],
-  },
-
   // ─── CONDITIONNELS ───────────────────────────────────────────────────────
 
   {

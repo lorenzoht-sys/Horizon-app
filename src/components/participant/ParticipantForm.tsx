@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical, TypeAntecedent } from '../../types';
+import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical, TypeAntecedent, AnamneseData } from '../../types';
 import { TYPES_ANTECEDENT_LABELS } from '../../types';
 import { useStructures } from '../../hooks/useStructures';
 import { Save, X } from 'lucide-react';
@@ -236,6 +236,57 @@ function ListeAntecedentsForm({
   );
 }
 
+// ─── ÉCHELLE 0-10 (douleur / fatigue) ──────────────────────────────────────────
+
+function Echelle10({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number | null | undefined;
+  onChange: (v: number) => void;
+}) {
+  const v = value ?? null;
+  const getColor = (n: number) =>
+    n === 0 ? '#3B6D11' : n <= 3 ? '#F59E0B' : n <= 6 ? '#EF8C00' : n <= 8 ? '#EF4444' : '#991B1B';
+  const getLibelle = (n: number) =>
+    n === 0 ? '😊 Aucune' : n <= 2 ? '🙂 Légère' : n <= 4 ? '😐 Modérée'
+    : n <= 6 ? '😟 Importante' : n <= 8 ? '😣 Sévère' : '😭 Insupportable';
+
+  return (
+    <div>
+      <label className={CLS_LABEL}>{label}</label>
+      <div className="flex gap-1">
+        {[0,1,2,3,4,5,6,7,8,9,10].map(n => {
+          const active = v === n;
+          const color = getColor(n);
+          return (
+            <button key={n} type="button"
+              onClick={() => onChange(n)}
+              style={{ borderColor: active ? color : undefined, background: active ? color : undefined }}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-bold border transition-all ${
+                active ? 'text-white shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+              }`}>
+              {n}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex justify-between text-xs text-gray-400 mt-1.5">
+        <span>0 — Aucune</span>
+        <span>5 — Modérée</span>
+        <span>10 — Insupportable</span>
+      </div>
+      {v !== null && (
+        <p className="text-xs font-semibold mt-1" style={{ color: getColor(v) }}>
+          {getLibelle(v)}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── IBAN ─────────────────────────────────────────────────────────────────────
 
 function validerIBAN(iban: string): boolean {
@@ -286,6 +337,12 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
   // ── Traitements & antécédents structurés ───────────────────────
   const [traitements, setTraitements] = useState<TraitementPatient[]>(initial?.traitements ?? []);
   const [antecedents, setAntecedents] = useState<AntecedentMedical[]>(initial?.antecedentsMedicauxStructures ?? []);
+
+  // ── Anamnèse (état de santé général) ────────────────────────────
+  const [anamnese, setAnamnese] = useState<AnamneseData>({
+    douleurQuotidienne: initial?.anamnese?.douleurQuotidienne ?? null,
+    fatigueQuotidienne: initial?.anamnese?.fatigueQuotidienne ?? null,
+  });
 
   // ── Tags / tests ────────────────────────────────────────────────
   const [tags] = useState<TagPatient[]>(initial?.tags ?? []);
@@ -348,6 +405,7 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
       tags, testsActifs, rgpd,
       traitements: traitements.length > 0 ? traitements : undefined,
       antecedentsMedicauxStructures: antecedents.length > 0 ? antecedents : undefined,
+      anamnese,
       structureId: structureId || undefined,
       profil:         initial?.profil,
       coordonnees:    initial?.coordonnees,
@@ -541,6 +599,29 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
           </div>
         </div>
       )}
+
+      {/* ── ÉTAT DE SANTÉ GÉNÉRAL ── */}
+      <div className="border border-gray-100 rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-rose-50 to-orange-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
+          <span className="text-lg">🩺</span>
+          <div>
+            <div className="font-semibold text-dark text-sm">État de santé général</div>
+            <div className="text-xs text-gray-500">Ressenti au quotidien du patient</div>
+          </div>
+        </div>
+        <div className="p-4 space-y-4">
+          <Echelle10
+            label="Douleur quotidienne (0-10)"
+            value={anamnese.douleurQuotidienne}
+            onChange={n => setAnamnese(a => ({ ...a, douleurQuotidienne: n }))}
+          />
+          <Echelle10
+            label="Fatigue quotidienne (0-10)"
+            value={anamnese.fatigueQuotidienne}
+            onChange={n => setAnamnese(a => ({ ...a, fatigueQuotidienne: n }))}
+          />
+        </div>
+      </div>
 
       {/* ── TRAITEMENTS ── */}
       <div className="border border-gray-100 rounded-2xl overflow-hidden">

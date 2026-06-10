@@ -391,6 +391,7 @@ export interface Participant {
   allergies?: string;
   traitements?: TraitementPatient[];
   antecedentsMedicauxStructures?: AntecedentMedical[];
+  anamnese?: AnamneseData;
   structureId?: string;
   activitesSouhaitees?: string[];
   objectifsPatient?: string | string[];
@@ -458,6 +459,13 @@ export interface AntecedentMedical {
   consequence?: string;
   douleur?: 'oui' | 'non';
   notes?: string;
+}
+
+// ── ANAMNÈSE (état général, hygiène de vie, etc.) ────────────────────────────
+
+export interface AnamneseData {
+  douleurQuotidienne?: number | null;
+  fatigueQuotidienne?: number | null;
 }
 
 // ── ESPACE PATIENT ────────────────────────────────────────────────────────────
