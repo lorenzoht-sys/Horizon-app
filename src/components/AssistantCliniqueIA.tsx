@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Participant, Bilan } from '../types';
 import { supabase } from '../lib/supabase';
-import { getContreIndications } from '../lib/anamnese';
+import { getContreIndications, getObjectifsActivites } from '../lib/anamnese';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { toast } from 'sonner';
 
@@ -50,10 +50,10 @@ function buildSystemContext(participant: Participant, bilanInitial: Bilan | null
   const lastBilan = sortedBilans[0];
   const borgRPE = lastBilan?.tm6?.borgRPE;
 
-  const rawObjectifs = participant.objectifsPatient;
-  const objectifs = Array.isArray(rawObjectifs)
-    ? rawObjectifs.join(', ')
-    : (rawObjectifs as string | undefined) ?? profil?.objectifsPersonnels ?? 'non renseignés';
+  const { objectifsPatient, activitesSouhaitees } = getObjectifsActivites(participant, bilanInitial);
+  const objectifs = objectifsPatient.length > 0
+    ? objectifsPatient.join(', ')
+    : profil?.objectifsPersonnels ?? 'non renseignés';
 
   const pathologies = [
     participant.pathologie,
@@ -116,6 +116,7 @@ PROFIL DU PATIENT :
 - Contre-indications à l'effort : ${contreIndications}
 - Dernier Borg RPE : ${borgRPE ?? 'non renseigné'}
 - Objectifs APA : ${objectifs}
+- Activités souhaitées : ${activitesSouhaitees.length > 0 ? activitesSouhaitees.join(', ') : 'non renseignées'}
 - Historique : ${participant.bilans.length} bilan(s)${lastBilan ? `, dernier le ${new Date(lastBilan.date).toLocaleDateString('fr-FR')}` : ''}
 ${lignesExtra}
 

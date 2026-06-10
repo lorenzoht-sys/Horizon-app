@@ -599,6 +599,48 @@ const OPTIONS_ACTIVITES = [
 
 const NUM_INPUT_CLS = 'w-36 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary';
 
+// ─── Mode de déplacement, objectifs, cognition, organisation des séances ──────
+
+const MODE_DEPLACEMENT_LABELS: Record<NonNullable<Participant['modeDeplacementHabituel']>, string> = {
+  voiture: '🚗 Voiture',
+  velo: '🚲 Vélo',
+  transports: '🚌 Transports',
+  marche: '🚶 Marche',
+  fauteuil: '♿ Fauteuil',
+  autre: '✏️ Autre',
+};
+const MODE_DEPLACEMENT_OPTIONS = Object.values(MODE_DEPLACEMENT_LABELS);
+function modeDeplacementFromLabel(label: string | null): Participant['modeDeplacementHabituel'] {
+  const entry = (Object.entries(MODE_DEPLACEMENT_LABELS) as [NonNullable<Participant['modeDeplacementHabituel']>, string][])
+    .find(([, l]) => l === label);
+  return entry?.[0];
+}
+
+const OPTIONS_OBJECTIFS_PATIENT = [
+  '💪 Renforcement musculaire',
+  '⚖️ Améliorer l\'équilibre',
+  '🦵 Améliorer la mobilité',
+  '🫀 Endurance à l\'effort',
+  '🛡️ Prévention des chutes',
+  '🏠 Maintien de l\'autonomie',
+  '😌 Réduire les douleurs',
+  '🎯 Améliorer la coordination',
+  '🧘 Travailler la souplesse',
+  '🔄 Reprendre une activité physique',
+  '💙 Regagner confiance en ses capacités',
+];
+
+const OPTIONS_ORIGINE_DEMARCHE = [
+  '💪 De sa propre initiative',
+  '👨‍⚕️ Recommandation médicale',
+  '👨‍👩‍👦 Poussé par un proche',
+  '✏️ Autre',
+];
+
+const OPTIONS_JOURS_DISPONIBLES = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+const OPTIONS_CRENEAU = ['🌅 Matin (8h-12h)', '☀️ Après-midi (13h30-18h)', '🔄 Flexible'];
+const OPTIONS_DUREE_SEANCE = ['30 min', '45 min', '60 min', '90 min'];
+
 // ─── IBAN ─────────────────────────────────────────────────────────────────────
 
 function validerIBAN(iban: string): boolean {
@@ -657,6 +699,7 @@ function computeCompletion(
   traitements: TraitementPatient[],
   antecedents: AntecedentMedical[],
   rgpd: RgpdConsent,
+  profilActivite: { modeDeplacementHabituel?: Participant['modeDeplacementHabituel']; objectifsPatient: string[]; activitesSouhaitees: string[] },
 ): { filled: number; total: number } {
   const champsTexte = [
     form.prenom, form.nom, form.dateNaissance, form.dateCreation,
@@ -698,6 +741,20 @@ function computeCompletion(
   if (anamnese.sedentariteScore != null) filled++;
   if (anamnese.fatigueScore != null) filled++;
 
+  total += 3;
+  if (profilActivite.modeDeplacementHabituel != null) filled++;
+  if (profilActivite.objectifsPatient.length > 0) filled++;
+  if (profilActivite.activitesSouhaitees.length > 0) filled++;
+
+  total += 3;
+  if (anamnese.cognition?.plaintesMemoire != null) filled++;
+  if (anamnese.cognition?.suiviPsy != null) filled++;
+  if (anamnese.cognition?.origineDemarche != null) filled++;
+
+  total += 2;
+  if ((anamnese.organisation?.joursDisponibles?.length ?? 0) > 0) filled++;
+  if (anamnese.organisation?.creneau != null) filled++;
+
   total += 1;
   if (rgpd.consentementObtenu) filled++;
 
@@ -736,6 +793,21 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
     fatigueReponses: seed.anamnese?.fatigueReponses ?? Array(9).fill(null),
     fatigueScore: seed.anamnese?.fatigueScore ?? null,
     fatigueProfil: seed.anamnese?.fatigueProfil ?? null,
+    cognition: seed.anamnese?.cognition ?? {},
+    organisation: seed.anamnese?.organisation ?? {},
+  });
+
+  // ── Mode de déplacement, objectifs & activités souhaitées ────────
+  const [profilActivite, setProfilActivite] = useState<{
+    modeDeplacementHabituel: Participant['modeDeplacementHabituel'];
+    modeDeplacementDetail: string;
+    objectifsPatient: string[];
+    activitesSouhaitees: string[];
+  }>({
+    modeDeplacementHabituel: seed.modeDeplacementHabituel,
+    modeDeplacementDetail:   seed.modeDeplacementDetail ?? '',
+    objectifsPatient:    Array.isArray(seed.objectifsPatient) ? seed.objectifsPatient : (seed.objectifsPatient ? [seed.objectifsPatient] : []),
+    activitesSouhaitees: seed.activitesSouhaitees ?? [],
   });
 
   // ── Tags / tests ────────────────────────────────────────────────
@@ -810,10 +882,10 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
       pathologie:              initial?.pathologie,
       antecedentsMedicaux:     initial?.antecedentsMedicaux,
       antecedentsChirurgicaux: initial?.antecedentsChirurgicaux,
-      modeDeplacementHabituel: initial?.modeDeplacementHabituel,
-      modeDeplacementDetail:   initial?.modeDeplacementDetail,
-      activitesSouhaitees:     initial?.activitesSouhaitees,
-      objectifsPatient:        initial?.objectifsPatient,
+      modeDeplacementHabituel: profilActivite.modeDeplacementHabituel,
+      modeDeplacementDetail:   profilActivite.modeDeplacementDetail || undefined,
+      activitesSouhaitees:     profilActivite.activitesSouhaitees.length > 0 ? profilActivite.activitesSouhaitees : undefined,
+      objectifsPatient:        profilActivite.objectifsPatient.length > 0 ? profilActivite.objectifsPatient : undefined,
       disponibilites:          initial?.disponibilites,
       droitImage,
       tags, testsActifs, rgpd,
@@ -851,17 +923,21 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
         poids:  form.poids  ? Number(form.poids)  : undefined,
         anamnese, traitements, antecedentsMedicauxStructures: antecedents,
         rgpd, droitImage, structureId,
+        modeDeplacementHabituel: profilActivite.modeDeplacementHabituel,
+        modeDeplacementDetail:   profilActivite.modeDeplacementDetail || undefined,
+        activitesSouhaitees:     profilActivite.activitesSouhaitees,
+        objectifsPatient:        profilActivite.objectifsPatient,
       });
     }, 800);
     return () => clearTimeout(t);
-  }, [draftKey, step, form, anamnese, traitements, antecedents, rgpd, droitImage, structureId]);
+  }, [draftKey, step, form, anamnese, traitements, antecedents, rgpd, droitImage, structureId, profilActivite]);
 
   // ── Indicateur de complétion ─────────────────────────────────────
   useEffect(() => {
     if (!onCompletionChange) return;
-    const { filled, total } = computeCompletion(form, anamnese, traitements, antecedents, rgpd);
+    const { filled, total } = computeCompletion(form, anamnese, traitements, antecedents, rgpd, profilActivite);
     onCompletionChange(filled, total);
-  }, [form, anamnese, traitements, antecedents, rgpd, onCompletionChange]);
+  }, [form, anamnese, traitements, antecedents, rgpd, profilActivite, onCompletionChange]);
 
   // ── Calcul IMC ──────────────────────────────────────────────────
   const t = Number(form.taille), p = Number(form.poids);
@@ -1056,11 +1132,82 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
         </div>
       )}
 
-      {!showAll && (
-        <div className="border border-dashed border-gray-200 rounded-2xl p-4 text-sm text-gray-400">
-          🎯 Objectifs, activités souhaitées et disponibilités : ces champs seront ajoutés ici lors d'une prochaine mise à jour.
+      {/* ── OBJECTIFS & ACTIVITÉS SOUHAITÉES ── */}
+      <div className="border border-gray-100 rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-teal-50 to-cyan-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
+          <span className="text-lg">🎯</span>
+          <div>
+            <div className="font-semibold text-dark text-sm">Objectifs & activités souhaitées</div>
+            <div className="text-xs text-gray-500">Ce que le patient souhaite atteindre et pratiquer</div>
+          </div>
         </div>
-      )}
+        <div className="p-4 space-y-4">
+          <ChoixMultiple
+            label="Objectifs du patient"
+            options={OPTIONS_OBJECTIFS_PATIENT}
+            value={profilActivite.objectifsPatient}
+            onChange={v => setProfilActivite(p => ({ ...p, objectifsPatient: v }))}
+            avecChampLibre
+          />
+          <ChoixMultiple
+            label="Activités que le patient aimerait pratiquer"
+            options={OPTIONS_ACTIVITES}
+            value={profilActivite.activitesSouhaitees}
+            onChange={v => setProfilActivite(p => ({ ...p, activitesSouhaitees: v }))}
+            avecChampLibre
+          />
+        </div>
+      </div>
+
+      {/* ── ORGANISATION DES SÉANCES ── */}
+      <div className="border border-gray-100 rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-fuchsia-50 to-pink-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
+          <span className="text-lg">📅</span>
+          <div>
+            <div className="font-semibold text-dark text-sm">Organisation des séances</div>
+            <div className="text-xs text-gray-500">Disponibilités et préférences pour planifier les séances</div>
+          </div>
+        </div>
+        <div className="p-4 space-y-4">
+          <ChoixMultiple
+            label="Jour(s) disponible(s)"
+            options={OPTIONS_JOURS_DISPONIBLES}
+            value={anamnese.organisation?.joursDisponibles ?? []}
+            onChange={v => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, joursDisponibles: v } }))}
+          />
+          <ChoixUnique
+            label="Créneau préféré"
+            options={OPTIONS_CRENEAU}
+            value={anamnese.organisation?.creneau}
+            onChange={v => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, creneau: v } }))}
+          />
+          <div>
+            <label className={CLS_LABEL}>Heure souhaitée</label>
+            <input
+              type="time"
+              value={anamnese.organisation?.heureSouhaitee ?? ''}
+              onChange={e => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, heureSouhaitee: e.target.value } }))}
+              className={NUM_INPUT_CLS}
+            />
+          </div>
+          <ChoixUnique
+            label="Durée habituelle"
+            options={OPTIONS_DUREE_SEANCE}
+            value={anamnese.organisation?.dureeSeance}
+            onChange={v => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, dureeSeance: v } }))}
+          />
+          <div>
+            <label className={CLS_LABEL}>Contraintes particulières</label>
+            <textarea
+              value={anamnese.organisation?.contraintes ?? ''}
+              onChange={e => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, contraintes: e.target.value } }))}
+              placeholder="Jamais avant 9h, accompagné le lundi..."
+              rows={2}
+              className={CLS_INPUT}
+            />
+          </div>
+        </div>
+      </div>
       </>}
 
       {(showAll || step === 2) && <>
@@ -1103,6 +1250,40 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
             )}
             <p className="text-xs text-gray-400 mt-1.5">Ces contre-indications seront affichées en alerte dans la fiche patient et tous les PDFs.</p>
           </div>
+        </div>
+      </div>
+
+      {/* ── COGNITION & HUMEUR ── */}
+      <div className="border border-gray-100 rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-violet-50 to-indigo-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
+          <span className="text-lg">🧠</span>
+          <div>
+            <div className="font-semibold text-dark text-sm">Cognition & humeur</div>
+            <div className="text-xs text-gray-500">Mémoire, suivi psychologique, motivation</div>
+          </div>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-gray-700">Plaintes mémoire ?</span>
+            <ToggleOuiNon
+              value={anamnese.cognition?.plaintesMemoire}
+              onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, plaintesMemoire: v } }))}
+            />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-gray-700">Suivi psychologique ?</span>
+            <ToggleOuiNon
+              value={anamnese.cognition?.suiviPsy}
+              onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsy: v } }))}
+            />
+          </div>
+          <ChoixUnique
+            label="Pourquoi le patient est-il là aujourd'hui ?"
+            options={OPTIONS_ORIGINE_DEMARCHE}
+            value={anamnese.cognition?.origineDemarche}
+            onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, origineDemarche: v } }))}
+          />
+          <p className="text-xs text-gray-400 -mt-2">La motivation intrinsèque influence l'implication dans le suivi</p>
         </div>
       </div>
 
@@ -1200,6 +1381,27 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
             value={anamnese.autonomie?.aideMarche}
             onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, aideMarche: v } }))}
           />
+          <div className="border-t border-gray-100 pt-3">
+            <ChoixUnique
+              label="Mode de déplacement habituel"
+              options={MODE_DEPLACEMENT_OPTIONS}
+              value={profilActivite.modeDeplacementHabituel ? MODE_DEPLACEMENT_LABELS[profilActivite.modeDeplacementHabituel] : null}
+              onChange={label => setProfilActivite(p => ({
+                ...p,
+                modeDeplacementHabituel: modeDeplacementFromLabel(label),
+                modeDeplacementDetail: label === MODE_DEPLACEMENT_LABELS.autre ? p.modeDeplacementDetail : '',
+              }))}
+            />
+            {profilActivite.modeDeplacementHabituel === 'autre' && (
+              <input
+                type="text"
+                value={profilActivite.modeDeplacementDetail}
+                onChange={e => setProfilActivite(p => ({ ...p, modeDeplacementDetail: e.target.value }))}
+                placeholder="Précisez le mode de déplacement..."
+                className={`mt-2 ${CLS_INPUT}`}
+              />
+            )}
+          </div>
           <div className="border-t border-gray-100 pt-3">
             <label className={CLS_LABEL}>Évaluation GIR (Grille AGGIR)</label>
             <GIRWidget

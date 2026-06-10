@@ -8,6 +8,7 @@ import { ArrowLeft, Check, Calendar, Hash } from 'lucide-react';
 import { toast } from 'sonner';
 import type { JourSemaine } from '../types';
 import { calculerNombreSeances, calculerDateFin, LABELS_JOURS_LONG } from '../utils/horaires';
+import { getOrganisation } from '../lib/anamnese';
 
 const JOURS: { value: JourSemaine; label: string }[] = [
   { value: 'lun', label: 'Lun' },
@@ -29,19 +30,19 @@ export default function ContratNouveauPage() {
 
   const participant = participants.find(p => p.id === id);
   const bilanInitial = participant?.bilans.find(b => b.type === 'initial');
-  const flatData = bilanInitial?.bilanInitialData?.formulaireFlat?.data;
 
-  // Lecture des disponibilités depuis le formulaire plat (bilan initial)
+  // Disponibilités : fiche patient (organisation des séances), avec repli sur l'ancien bilan initial
   const JOUR_MAP: Record<string, JourSemaine> = {
     'Lun': 'lun', 'Mar': 'mar', 'Mer': 'mer', 'Jeu': 'jeu', 'Ven': 'ven', 'Sam': 'sam',
   };
-  const orgFlat = flatData ? {
-    jours: (Array.isArray(flatData['joursDisponibles']) ? flatData['joursDisponibles'] as string[] : [])
+  const organisation = participant ? getOrganisation(participant, bilanInitial) : null;
+  const orgFlat = organisation ? {
+    jours: (organisation.joursDisponibles ?? [])
       .map(l => JOUR_MAP[l]).filter((j): j is JourSemaine => Boolean(j)),
-    heureSouhaitee: typeof flatData['heureSouhaitee'] === 'string' ? flatData['heureSouhaitee'] : undefined,
-    dureeMinutes: parseInt(String(flatData['dureeSeance'] ?? '')) || null,
-    creneau: typeof flatData['creneau'] === 'string' ? flatData['creneau'] : '',
-    contraintes: typeof flatData['contraintes'] === 'string' ? flatData['contraintes'] : undefined,
+    heureSouhaitee: organisation.heureSouhaitee || undefined,
+    dureeMinutes: parseInt(String(organisation.dureeSeance ?? '')) || null,
+    creneau: organisation.creneau ?? '',
+    contraintes: organisation.contraintes || undefined,
   } : null;
 
   const [mode, setMode] = useState<ModePeriode>('duree');
@@ -63,7 +64,7 @@ export default function ContratNouveauPage() {
     if (orgFlat.jours.length > 0) setJoursFixe(orgFlat.jours);
     if (orgFlat.heureSouhaitee) setHeureDebut(orgFlat.heureSouhaitee);
     if (orgFlat.dureeMinutes) setDureeMinutes(orgFlat.dureeMinutes);
-  }, [flatData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [organisation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleJour(jour: JourSemaine) {
     setJoursFixe(prev =>
@@ -175,7 +176,7 @@ export default function ContratNouveauPage() {
         {orgFlat && (orgFlat.jours.length > 0 || orgFlat.heureSouhaitee) && (
           <div className="bg-blue-50 border border-blue-200 rounded-2xl px-5 py-4 mb-6">
             <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">
-              Disponibilités du bilan initial
+              Disponibilités renseignées
             </div>
             <div className="text-sm text-blue-800">
               {orgFlat.jours.map((j: JourSemaine) => LABELS_JOURS_LONG[j]).join(', ')}

@@ -2,7 +2,7 @@ import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import type { Participant, Bilan, Contrat, Programme } from '../../types';
 import { PdfHeader, PdfFooter, type PdfPraticienSettings } from './PdfShared';
 import type { CompteRenduSeance } from '../../types/seance';
-import { getContreIndications } from '../../lib/anamnese';
+import { getContreIndications, getObjectifsActivites } from '../../lib/anamnese';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -163,9 +163,9 @@ function Page1({ participant, settings }: { participant: Participant; settings: 
   const bilanInitial = participant.bilans.find(b => b.type === 'initial');
   const contreIndic = getContreIndications(participant, bilanInitial).detail;
 
-  const objectifsStr = Array.isArray(participant.objectifsPatient)
-    ? participant.objectifsPatient.join(' · ')
-    : (participant.objectifsPatient ?? null);
+  const { objectifsPatient, activitesSouhaitees } = getObjectifsActivites(participant, bilanInitial);
+  const objectifsStr = objectifsPatient.length > 0 ? objectifsPatient.join(' · ') : null;
+  const activitesStr = activitesSouhaitees.length > 0 ? activitesSouhaitees.join(' · ') : null;
 
   const bioline = [
     `${calcAge(participant.dateNaissance)} ans`,
@@ -229,6 +229,13 @@ function Page1({ participant, settings }: { participant: Participant; settings: 
           <>
             <Section title="Objectifs du suivi APA" />
             <Text style={{ fontSize: 9, color: DARK, lineHeight: 1.6 }}>{objectifsStr}</Text>
+          </>
+        )}
+
+        {activitesStr && (
+          <>
+            <Section title="Activités souhaitées" />
+            <Text style={{ fontSize: 9, color: DARK, lineHeight: 1.6 }}>{activitesStr}</Text>
           </>
         )}
 

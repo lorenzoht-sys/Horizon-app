@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import type { Participant, Bilan, Contrat, NotesBilan } from '../../types';
 import { PdfHeader, PdfFooter, type PdfPraticienSettings } from './PdfShared';
+import { getModeDeplacement } from '../../lib/anamnese';
 
 export interface FichePatientPDFData {
   participant: Participant;
@@ -104,10 +105,11 @@ function MiniBar({ valeur, max, color }: { valeur: number; max: number; color: s
 
 // ─── Page 1 ───────────────────────────────────────────────────────────────────
 
-function Page1({ participant, settings }: { participant: Participant; settings: PdfPraticienSettings }) {
+function Page1({ participant, bilanInitial, settings }: { participant: Participant; bilanInitial: Bilan | null; settings: PdfPraticienSettings }) {
   const imc = participant.taille && participant.poids
     ? Math.round((participant.poids / ((participant.taille / 100) ** 2)) * 10) / 10
     : null;
+  const modeDeplacement = getModeDeplacement(participant, bilanInitial);
 
   const lieuNaissance = [participant.villeNaissance, participant.codePostalNaissance].filter(Boolean).join(' ');
   const infosLigne = [
@@ -136,14 +138,16 @@ function Page1({ participant, settings }: { participant: Participant; settings: 
           </>
         )}
 
-        {(participant.antecedentsMedicaux || participant.antecedentsChirurgicaux || participant.allergies || participant.modeDeplacementHabituel) && (
+        {(participant.antecedentsMedicaux || participant.antecedentsChirurgicaux || participant.allergies || modeDeplacement.value) && (
           <>
             <Section titre="Profil de santé" />
             {participant.antecedentsMedicaux && <Ligne label="Antécédents médicaux" valeur={participant.antecedentsMedicaux} />}
             {participant.antecedentsChirurgicaux && <Ligne label="Antécédents chirurgicaux" valeur={participant.antecedentsChirurgicaux} />}
             {participant.allergies && <Ligne label="Allergies" valeur={participant.allergies} />}
-            {participant.modeDeplacementHabituel && (
-              <Ligne label="Déplacement habituel" valeur={MODE_LABEL[participant.modeDeplacementHabituel] ?? participant.modeDeplacementHabituel} />
+            {modeDeplacement.value && (
+              <Ligne label="Déplacement habituel" valeur={
+                [MODE_LABEL[modeDeplacement.value] ?? modeDeplacement.value, modeDeplacement.detail].filter(Boolean).join(' — ')
+              } />
             )}
           </>
         )}
@@ -314,7 +318,7 @@ function Page2({ bilan, contrat, settings }: { bilan: Bilan; contrat: Contrat | 
 export default function FichePatientPDF({ participant, bilanInitial, contratActif, settings }: FichePatientPDFData) {
   return (
     <Document>
-      <Page1 participant={participant} settings={settings} />
+      <Page1 participant={participant} bilanInitial={bilanInitial} settings={settings} />
       {bilanInitial && <Page2 bilan={bilanInitial} contrat={contratActif} settings={settings} />}
     </Document>
   );

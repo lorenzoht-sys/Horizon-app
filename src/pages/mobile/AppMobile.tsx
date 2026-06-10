@@ -11,7 +11,7 @@ import type { Bilan } from '../../types';
 import { TYPES_ANTECEDENT_LABELS } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../../lib/supabase';
-import { getContreIndications } from '../../lib/anamnese';
+import { getContreIndications, getObjectifsActivites } from '../../lib/anamnese';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1506,20 +1506,24 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
               )}
             </InfoSection>
 
-            {(p.activitesSouhaitees?.length || p.objectifsPatient) && (
-              <InfoSection titre="Objectifs APA">
-                {p.objectifsPatient && (Array.isArray(p.objectifsPatient) ? p.objectifsPatient.length > 0 : true) && (
-                  <div style={{ marginBottom: 6 }}>
-                    {(Array.isArray(p.objectifsPatient) ? p.objectifsPatient : [p.objectifsPatient]).map((o, i) => (
-                      <span key={i} style={{ display: 'inline-block', background: '#E6F7F5', color: '#0F7265', borderRadius: 10, padding: '2px 8px', margin: '2px', fontSize: 12, fontWeight: 600 }}>{o}</span>
-                    ))}
-                  </div>
-                )}
-                {p.activitesSouhaitees?.length ? (
-                  <div style={{ fontSize: 13, color: '#4A6080' }}>🎯 {p.activitesSouhaitees.join(' · ')}</div>
-                ) : null}
-              </InfoSection>
-            )}
+            {(() => {
+              const { objectifsPatient, activitesSouhaitees } = getObjectifsActivites(p, bilanInitial);
+              if (objectifsPatient.length === 0 && activitesSouhaitees.length === 0) return null;
+              return (
+                <InfoSection titre="Objectifs APA">
+                  {objectifsPatient.length > 0 && (
+                    <div style={{ marginBottom: 6 }}>
+                      {objectifsPatient.map((o, i) => (
+                        <span key={i} style={{ display: 'inline-block', background: '#E6F7F5', color: '#0F7265', borderRadius: 10, padding: '2px 8px', margin: '2px', fontSize: 12, fontWeight: 600 }}>{o}</span>
+                      ))}
+                    </div>
+                  )}
+                  {activitesSouhaitees.length > 0 && (
+                    <div style={{ fontSize: 13, color: '#4A6080' }}>🎯 {activitesSouhaitees.join(' · ')}</div>
+                  )}
+                </InfoSection>
+              );
+            })()}
           </div>
         )}
 

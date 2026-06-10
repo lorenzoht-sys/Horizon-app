@@ -529,6 +529,24 @@ export interface ActivitePhysiqueData {
   derniereActivite?: string;
 }
 
+// ── COGNITION & HUMEUR ────────────────────────────────────────────────────────
+
+export interface CognitionData {
+  plaintesMemoire?: 'oui' | 'non' | null;
+  suiviPsy?: 'oui' | 'non' | null;
+  origineDemarche?: string | null;
+}
+
+// ── ORGANISATION DES SÉANCES ──────────────────────────────────────────────────
+
+export interface OrganisationData {
+  joursDisponibles?: string[];
+  creneau?: string | null;
+  heureSouhaitee?: string;
+  dureeSeance?: string | null;
+  contraintes?: string;
+}
+
 // ── TESTS RICCI & GAGNON (sédentarité) / FSS (fatigue) ───────────────────────
 
 export type SedentariteReponses = {
@@ -558,6 +576,8 @@ export interface AnamneseData {
   fatigueReponses?: (number | null)[];
   fatigueScore?: number | null;
   fatigueProfil?: 'pas_de_fatigue' | 'fatigue_probable' | null;
+  cognition?: CognitionData;
+  organisation?: OrganisationData;
 }
 
 // ── ESPACE PATIENT ────────────────────────────────────────────────────────────

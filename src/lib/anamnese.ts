@@ -1,4 +1,4 @@
-import type { Bilan, Participant, SedentariteReponses } from '../types';
+import type { Bilan, OrganisationData, Participant, SedentariteReponses } from '../types';
 
 // Contre-indications : nouvelle source = fiche patient (anamnese),
 // avec repli sur l'ancien emplacement (bilan initial) pour les bilans déjà remplis.
@@ -54,4 +54,70 @@ export function getTestsAutonomie(
       };
 
   return { sedentarite, fatigue };
+}
+
+// Mode de déplacement habituel : nouvelle source = fiche patient, avec repli
+// sur l'ancien bloc du bilan initial (bulle emoji) pour les bilans déjà remplis.
+const MODE_DEPLACEMENT_DEPUIS_BILAN: Record<string, NonNullable<Participant['modeDeplacementHabituel']>> = {
+  '🚗 Voiture': 'voiture',
+  '🚲 Vélo': 'velo',
+  '🚌 Transports': 'transports',
+  '🚶 Marche': 'marche',
+  '♿ Fauteuil': 'fauteuil',
+  '✏️ Autre': 'autre',
+};
+
+export function getModeDeplacement(
+  participant: Participant,
+  bilanInitial?: Bilan | null
+): { value: Participant['modeDeplacementHabituel']; detail: string | null } {
+  if (participant.modeDeplacementHabituel != null) {
+    return { value: participant.modeDeplacementHabituel, detail: participant.modeDeplacementDetail ?? null };
+  }
+  const bilan = bilanInitial !== undefined ? bilanInitial : (participant.bilans.find(b => b.type === 'initial') ?? null);
+  const data = bilan?.bilanInitialData?.formulaireFlat?.data;
+  const raw = data?.deplacement as string | undefined;
+  return { value: raw ? MODE_DEPLACEMENT_DEPUIS_BILAN[raw] : undefined, detail: null };
+}
+
+// Objectifs & activités souhaitées : nouvelle source = fiche patient, avec
+// repli sur l'ancien bloc du bilan initial pour les bilans déjà remplis.
+export function getObjectifsActivites(
+  participant: Participant,
+  bilanInitial?: Bilan | null
+): { objectifsPatient: string[]; activitesSouhaitees: string[] } {
+  const objectifsPatient = Array.isArray(participant.objectifsPatient)
+    ? participant.objectifsPatient
+    : (participant.objectifsPatient ? [participant.objectifsPatient] : []);
+  const activitesSouhaitees = participant.activitesSouhaitees ?? [];
+  if (objectifsPatient.length > 0 || activitesSouhaitees.length > 0) {
+    return { objectifsPatient, activitesSouhaitees };
+  }
+  const bilan = bilanInitial !== undefined ? bilanInitial : (participant.bilans.find(b => b.type === 'initial') ?? null);
+  const data = bilan?.bilanInitialData?.formulaireFlat?.data;
+  return {
+    objectifsPatient: (data?.objectifsPatient as string[] | undefined) ?? [],
+    activitesSouhaitees: (data?.activitesSouhaitees as string[] | undefined) ?? [],
+  };
+}
+
+// Organisation des séances : nouvelle source = fiche patient (anamnese), avec
+// repli sur l'ancien bloc du bilan initial pour les bilans déjà remplis.
+export function getOrganisation(
+  participant: Participant,
+  bilanInitial?: Bilan | null
+): OrganisationData {
+  const organisation = participant.anamnese?.organisation;
+  if (organisation && Object.keys(organisation).length > 0) {
+    return organisation;
+  }
+  const bilan = bilanInitial !== undefined ? bilanInitial : (participant.bilans.find(b => b.type === 'initial') ?? null);
+  const data = bilan?.bilanInitialData?.formulaireFlat?.data;
+  return {
+    joursDisponibles: (data?.joursDisponibles as string[] | undefined) ?? [],
+    creneau: (data?.creneau as string | null | undefined) ?? null,
+    heureSouhaitee: (data?.heureSouhaitee as string | undefined) ?? '',
+    dureeSeance: (data?.dureeSeance as string | null | undefined) ?? null,
+    contraintes: (data?.contraintes as string | undefined) ?? '',
+  };
 }

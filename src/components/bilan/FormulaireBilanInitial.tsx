@@ -56,19 +56,6 @@ function genId() {
 // ─── BLOCS ──────────────────────────────────────────────────────────────────
 
 const BLOCS: BlocConditionnel[] = [
-  {
-    id: 'modeDeplacement',
-    titre: '🚶 Mode de déplacement',
-    questions: [
-      {
-        id: 'deplacement',
-        label: 'Mode de déplacement habituel',
-        type: 'choix-unique',
-        options: ['🚗 Voiture', '🚲 Vélo', '🚌 Transports', '🚶 Marche', '♿ Fauteuil', '✏️ Autre'],
-      },
-    ],
-  },
-
   // ─── CONDITIONNELS ───────────────────────────────────────────────────────
 
   {
@@ -113,100 +100,6 @@ const BLOCS: BlocConditionnel[] = [
       { id: 'fcMax',       label: 'FC max autorisée (si prescrite)', type: 'number', placeholder: '130' },
       { id: 'spo2Repos',         label: 'SpO₂ au repos (%)',        type: 'number' },
       { id: 'tensionArterielle', label: 'Tension artérielle connue', type: 'text', placeholder: '130/80' },
-    ],
-  },
-
-  // ─── TOUJOURS AFFICHÉS ───────────────────────────────────────────────────
-
-  {
-    id: 'objectifs',
-    titre: '🎯 Objectifs & activités souhaitées',
-    questions: [
-      {
-        id: 'objectifsPatient',
-        label: 'Objectifs du patient',
-        type: 'choix-multiple',
-        options: [
-          '💪 Renforcement musculaire',
-          '⚖️ Améliorer l\'équilibre',
-          '🦵 Améliorer la mobilité',
-          '🫀 Endurance à l\'effort',
-          '🛡️ Prévention des chutes',
-          '🏠 Maintien de l\'autonomie',
-          '😌 Réduire les douleurs',
-          '🎯 Améliorer la coordination',
-          '🧘 Travailler la souplesse',
-          '🔄 Reprendre une activité physique',
-          '💙 Regagner confiance en ses capacités',
-        ],
-        avecChampLibre: true,
-      },
-      {
-        id: 'activitesSouhaitees',
-        label: 'Activités que le patient aimerait pratiquer',
-        type: 'choix-multiple',
-        options: [
-          '🚶 Marche / Randonnée',
-          '🚴 Cyclisme (vélo, vélo électrique)',
-          '🏊 Natation / Aquagym',
-          '🎾 Raquettes (tennis, badminton, ping-pong)',
-          '⚽ Jeux de ballon (basket, foot, volley)',
-          '🎯 Précision (pétanque, golf, sarbacane, tir à l\'arc, fléchettes)',
-          '🤸 Gym douce / Stretching / Yoga',
-          '💃 Danse / Activités rythmiques',
-          '🏋️ Renforcement musculaire',
-          '🧠 Activités cognitives (mémoire, jeux de société)',
-        ],
-        avecChampLibre: true,
-      },
-    ],
-  },
-
-  {
-    id: 'cognition',
-    titre: '🧠 Cognition & humeur',
-    questions: [
-      { id: 'plaintesMemoire', label: 'Plaintes mémoire ?',    type: 'oui-non' },
-      { id: 'suiviPsy',        label: 'Suivi psychologique ?', type: 'oui-non' },
-      {
-        id: 'origineDemarche',
-        label: "Pourquoi le patient est-il là aujourd'hui ?",
-        type: 'choix-unique',
-        options: [
-          '💪 De sa propre initiative',
-          '👨‍⚕️ Recommandation médicale',
-          '👨‍👩‍👦 Poussé par un proche',
-          '✏️ Autre',
-        ],
-        aide: "La motivation intrinsèque influence l'implication dans le suivi",
-      },
-    ],
-  },
-
-  {
-    id: 'organisation',
-    titre: '📅 Organisation des séances',
-    questions: [
-      {
-        id: 'joursDisponibles',
-        label: 'Jour(s) disponible(s)',
-        type: 'choix-multiple',
-        options: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'],
-      },
-      {
-        id: 'creneau',
-        label: 'Créneau préféré',
-        type: 'choix-unique',
-        options: ['🌅 Matin (8h-12h)', '☀️ Après-midi (13h30-18h)', '🔄 Flexible'],
-      },
-      { id: 'heureSouhaitee', label: 'Heure souhaitée',      type: 'time' },
-      {
-        id: 'dureeSeance',
-        label: 'Durée habituelle',
-        type: 'choix-unique',
-        options: ['30 min', '45 min', '60 min', '90 min'],
-      },
-      { id: 'contraintes', label: 'Contraintes particulières', type: 'textarea', placeholder: "Jamais avant 9h, accompagné le lundi..." },
     ],
   },
 ];
