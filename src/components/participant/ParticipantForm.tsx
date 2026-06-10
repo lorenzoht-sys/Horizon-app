@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical, TypeAntecedent, AnamneseData } from '../../types';
-import { TYPES_ANTECEDENT_LABELS } from '../../types';
+import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical, TypeAntecedent, AnamneseData, ChutesData, PeriodeChutes, FourchetteChutes } from '../../types';
+import { TYPES_ANTECEDENT_LABELS, PERIODES_CHUTES_LABELS } from '../../types';
 import { useStructures } from '../../hooks/useStructures';
 import { Save, X } from 'lucide-react';
 
@@ -287,6 +287,162 @@ function Echelle10({
   );
 }
 
+// ─── TOGGLE OUI/NON ─────────────────────────────────────────────────────────────
+
+function ToggleOuiNon({
+  value,
+  onChange,
+}: {
+  value: 'oui' | 'non' | null | undefined;
+  onChange: (v: 'oui' | 'non') => void;
+}) {
+  return (
+    <div style={{ display: 'flex', gap: '8px' }}>
+      {(['oui', 'non'] as const).map(v => {
+        const isActive = value === v;
+        return (
+          <button key={v} type="button" onClick={() => onChange(v)}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '8px',
+              border: '1.5px solid',
+              borderColor: isActive ? '#2BBFBF' : '#D1D5DB',
+              background: isActive ? '#2BBFBF' : '#FFFFFF',
+              color: isActive ? '#FFFFFF' : '#374151',
+              fontWeight: isActive ? '600' : '400',
+              fontSize: '12px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}>
+            {v === 'oui' ? 'Oui' : 'Non'}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── ÉCHELLE 1-5 ──────────────────────────────────────────────────────────────
+
+function Echelle5({
+  label,
+  aide,
+  value,
+  onChange,
+}: {
+  label: string;
+  aide?: string;
+  value: number | null | undefined;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div>
+      <label className={CLS_LABEL}>{label}</label>
+      <div className="flex gap-1.5">
+        {[1, 2, 3, 4, 5].map(n => {
+          const active = value === n;
+          return (
+            <button key={n} type="button" onClick={() => onChange(n)}
+              className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-colors ${
+                active ? 'bg-primary text-white border-primary' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+              }`}>
+              {n}
+            </button>
+          );
+        })}
+      </div>
+      {aide && <p className="text-xs text-gray-400 mt-1">{aide}</p>}
+    </div>
+  );
+}
+
+// ─── ANTÉCÉDENTS DE CHUTES (MOD3) ───────────────────────────────────────────────
+
+function ChutesForm({
+  value,
+  onChange,
+}: {
+  value: ChutesData;
+  onChange: (v: ChutesData) => void;
+}) {
+  const upd = (patch: Partial<ChutesData>) => onChange({ ...value, ...patch });
+  const FOURCHETTES: FourchetteChutes[] = ['1', '2', '3-5', '6+'];
+  const PERIODES: PeriodeChutes[] = ['<1mois', '1-3mois', '3-6mois', '6-12mois', '+12mois'];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm font-medium text-gray-700">A-t-il fait des chutes au cours des 12 derniers mois ?</span>
+        <ToggleOuiNon value={value.aChutes} onChange={v => upd({ aChutes: v })} />
+      </div>
+
+      {value.aChutes === 'oui' && (
+        <div className="space-y-3 border-t border-gray-100 pt-3">
+          <div>
+            <label className={CLS_LABEL}>Nombre de chutes</label>
+            <div className="flex gap-2">
+              {FOURCHETTES.map(f => (
+                <button key={f} type="button" onClick={() => upd({ nombreChutes: value.nombreChutes === f ? null : f })}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    value.nombreChutes === f ? 'bg-primary text-white border-primary' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}>
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className={CLS_LABEL}>Période de la dernière chute</label>
+            <div className="flex flex-wrap gap-2">
+              {PERIODES.map(p => (
+                <button key={p} type="button" onClick={() => upd({ periode: value.periode === p ? null : p })}
+                  className={`px-3 py-1.5 rounded-xl text-sm font-medium border transition-colors ${
+                    value.periode === p ? 'bg-primary text-white border-primary' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}>
+                  {PERIODES_CHUTES_LABELS[p]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className={CLS_LABEL}>Date de la dernière chute (optionnel)</label>
+            <input type="date" value={value.dateDerniereChute ?? ''} onChange={e => upd({ dateDerniereChute: e.target.value })} className={CLS_INPUT} />
+          </div>
+
+          <div>
+            <label className={CLS_LABEL}>Circonstances</label>
+            <textarea value={value.circonstances ?? ''} onChange={e => upd({ circonstances: e.target.value })}
+              placeholder="Bain, escaliers, sol glissant, vertige, nuit..." rows={2} className={CLS_INPUT} />
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-gray-700">Blessure occasionnée ?</span>
+            <ToggleOuiNon value={value.blessureOccasionnee} onChange={v => upd({ blessureOccasionnee: v })} />
+          </div>
+          {value.blessureOccasionnee === 'oui' && (
+            <input type="text" value={value.blessureDetail ?? ''} onChange={e => upd({ blessureDetail: e.target.value })}
+              placeholder="Fracture poignet, contusion, point de suture..." className={CLS_INPUT} />
+          )}
+
+          <Echelle5
+            label="Confiance lors des déplacements (1-5)"
+            aide="1 = Très peu confiant · 5 = Totalement confiant"
+            value={value.confianceDeplacements}
+            onChange={n => upd({ confianceDeplacements: n })}
+          />
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-gray-700">Aménagement du domicile réalisé ?</span>
+            <ToggleOuiNon value={value.amenagementDomicile} onChange={v => upd({ amenagementDomicile: v })} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── IBAN ─────────────────────────────────────────────────────────────────────
 
 function validerIBAN(iban: string): boolean {
@@ -342,6 +498,7 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
   const [anamnese, setAnamnese] = useState<AnamneseData>({
     douleurQuotidienne: initial?.anamnese?.douleurQuotidienne ?? null,
     fatigueQuotidienne: initial?.anamnese?.fatigueQuotidienne ?? null,
+    chutes: initial?.anamnese?.chutes ?? {},
   });
 
   // ── Tags / tests ────────────────────────────────────────────────
@@ -653,6 +810,23 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
               placeholder="Aspirine, latex..." className={CLS_INPUT} />
           </div>
           <ListeAntecedentsForm value={antecedents} onChange={setAntecedents} />
+        </div>
+      </div>
+
+      {/* ── ANTÉCÉDENTS DE CHUTES ── */}
+      <div className="border border-gray-100 rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-red-50 to-orange-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
+          <span className="text-lg">⚠️</span>
+          <div>
+            <div className="font-semibold text-dark text-sm">Antécédents de chutes</div>
+            <div className="text-xs text-gray-500">Nombre, période, circonstances...</div>
+          </div>
+        </div>
+        <div className="p-4">
+          <ChutesForm
+            value={anamnese.chutes ?? {}}
+            onChange={chutes => setAnamnese(a => ({ ...a, chutes }))}
+          />
         </div>
       </div>
 

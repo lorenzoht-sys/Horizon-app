@@ -463,9 +463,33 @@ export interface AntecedentMedical {
 
 // ── ANAMNÈSE (état général, hygiène de vie, etc.) ────────────────────────────
 
+export type FourchetteChutes = '1' | '2' | '3-5' | '6+';
+export type PeriodeChutes = '<1mois' | '1-3mois' | '3-6mois' | '6-12mois' | '+12mois';
+
+export const PERIODES_CHUTES_LABELS: Record<PeriodeChutes, string> = {
+  '<1mois':   'Moins d\'1 mois',
+  '1-3mois':  '1 à 3 mois',
+  '3-6mois':  '3 à 6 mois',
+  '6-12mois': '6 à 12 mois',
+  '+12mois':  'Plus de 12 mois',
+};
+
+export interface ChutesData {
+  aChutes?: 'oui' | 'non' | null;
+  nombreChutes?: FourchetteChutes | null;
+  periode?: PeriodeChutes | null;
+  dateDerniereChute?: string;
+  circonstances?: string;
+  blessureOccasionnee?: 'oui' | 'non' | null;
+  blessureDetail?: string;
+  confianceDeplacements?: number | null;
+  amenagementDomicile?: 'oui' | 'non' | null;
+}
+
 export interface AnamneseData {
   douleurQuotidienne?: number | null;
   fatigueQuotidienne?: number | null;
+  chutes?: ChutesData;
 }
 
 // ── ESPACE PATIENT ────────────────────────────────────────────────────────────

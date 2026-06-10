@@ -74,41 +74,6 @@ const BLOCS: BlocConditionnel[] = [
   // ─── CONDITIONNELS ───────────────────────────────────────────────────────
 
   {
-    id: 'chutes',
-    titre: '⚠️ Antécédents de chutes',
-    questionCle: { label: 'A-t-il fait des chutes dans les 12 derniers mois ?', field: 'aChutes' },
-    afficherSi: 'oui',
-    questions: [
-      { id: 'nombreChutes', label: 'Nombre de chutes', type: 'number' },
-      { id: 'circonstances', label: 'Circonstances', type: 'textarea', placeholder: 'Bain, escaliers, sol glissant, vertige, nuit...' },
-      {
-        id: 'derniereChute',
-        label: 'La dernière chute remonte à quand ?',
-        type: 'choix-unique',
-        options: [
-          "Il y a moins d'une semaine",
-          "Il y a moins d'un mois",
-          'Il y a 1 à 3 mois',
-          'Il y a 3 à 6 mois',
-          'Il y a 6 à 12 mois',
-        ],
-        aide: "Une chute récente est un signal d'alerte prioritaire",
-        alerteSi: ["Il y a moins d'une semaine", "Il y a moins d'un mois"],
-        alerteMessage: "Adapter les exercices d'équilibre en priorité. Travailler près d'un appui lors des premières séances.",
-      },
-      { id: 'blessureOccasionnee', label: 'Blessure occasionnée ?', type: 'oui-non' },
-      { id: 'blessureDetail', label: 'Laquelle ?', type: 'text', placeholder: 'Fracture poignet, contusion, point de suture...', conditionnelSi: 'blessureOccasionnee_oui' },
-      {
-        id: 'confianceDeplacements',
-        label: 'Confiance lors des déplacements (1-5)',
-        type: 'echelle-5',
-        aide: '1 = Très peu confiant · 5 = Totalement confiant',
-      },
-      { id: 'amenagementDomicile', label: 'Aménagement du domicile réalisé ?', type: 'oui-non' },
-    ],
-  },
-
-  {
     id: 'postOp',
     titre: '🏥 Opération(s) récente(s)',
     questionCle: { label: 'A-t-il été opéré récemment (< 12 mois) ?', field: 'aOperationRecente' },
@@ -1246,7 +1211,6 @@ interface Props {
 }
 
 const CLÉS_INITIALES: Record<string, OuiNon | null> = {
-  aChutes:              null,
   aOperationRecente:    null,
   aBlessure:            null,
   aPathologieChronique: null,
