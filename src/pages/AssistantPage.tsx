@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Bot, Send, Mic, MicOff, Copy, ArrowLeft, RefreshCw, Search } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
+import { getContreIndications } from '../lib/anamnese';
 import { supabase } from '../lib/supabase';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { toast } from 'sonner';
@@ -284,9 +285,8 @@ Tu cites les recommandations HAS ou SFP-APA quand pertinent.`;
   const age = calcAge(patient.dateNaissance);
   const bilanInitial = patient.bilans.find(b => b.type === 'initial') ?? null;
   const profil = bilanInitial?.profilEnrichi;
-  const ci = bilanInitial?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
-    ? (bilanInitial.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail ?? 'non précisées')
-    : 'aucune contre-indication renseignée';
+  const ciInfo = getContreIndications(patient, bilanInitial);
+  const ci = ciInfo.actif ? (ciInfo.detail ?? 'non précisées') : 'aucune contre-indication renseignée';
   const pathologies = [patient.pathologie, patient.antecedentsMedicaux].filter(Boolean).join(' / ') || 'non renseigné';
   const traitementsActifsCtx = (patient.traitements ?? []).filter(t => !t.date_fin);
   const traitementsArretesCtx = (patient.traitements ?? []).filter(t => t.date_fin);
@@ -503,14 +503,7 @@ function LeftColumn({
     ? participants.filter(p => `${p.prenom} ${p.nom}`.toLowerCase().includes(patientQ.toLowerCase())).slice(0, 8)
     : participants.slice(0, 8);
 
-  const ciTexte = selectedPatient
-    ? (() => {
-        const bi = selectedPatient.bilans.find(b => b.type === 'initial') ?? null;
-        return bi?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
-          ? bi.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail ?? null
-          : null;
-      })()
-    : null;
+  const ciTexte = selectedPatient ? getContreIndications(selectedPatient).detail : null;
 
   return (
     <div style={{ width: 280, flexShrink: 0, borderRight: '0.5px solid #E5E7EB', background: 'white', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>

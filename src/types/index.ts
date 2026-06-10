@@ -490,6 +490,8 @@ export interface AnamneseData {
   douleurQuotidienne?: number | null;
   fatigueQuotidienne?: number | null;
   chutes?: ChutesData;
+  contreIndications?: 'oui' | 'non' | null;
+  contreIndicationsDetail?: string;
 }
 
 // ── ESPACE PATIENT ────────────────────────────────────────────────────────────

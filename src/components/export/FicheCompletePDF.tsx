@@ -2,6 +2,7 @@ import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import type { Participant, Bilan, Contrat, Programme } from '../../types';
 import { PdfHeader, PdfFooter, type PdfPraticienSettings } from './PdfShared';
 import type { CompteRenduSeance } from '../../types/seance';
+import { getContreIndications } from '../../lib/anamnese';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -160,9 +161,7 @@ function Page1({ participant, settings }: { participant: Participant; settings: 
   const chirurgicauxStr = participant.antecedentsChirurgicaux ?? null;
 
   const bilanInitial = participant.bilans.find(b => b.type === 'initial');
-  const contreIndic = bilanInitial?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
-    ? (bilanInitial.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail as string | undefined) ?? null
-    : null;
+  const contreIndic = getContreIndications(participant, bilanInitial).detail;
 
   const objectifsStr = Array.isArray(participant.objectifsPatient)
     ? participant.objectifsPatient.join(' · ')
@@ -497,9 +496,7 @@ function Page4({ participant, bilans, programmeActif, settings }: {
   const dernierBilan = sorted[sorted.length - 1] ?? null;
 
   const bilanInitial = participant.bilans.find(b => b.type === 'initial');
-  const contreIndic = bilanInitial?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
-    ? (bilanInitial.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail as string | undefined) ?? null
-    : null;
+  const contreIndic = getContreIndications(participant, bilanInitial).detail;
 
   let prochainBilan: string | null = null;
   if (dernierBilan) {

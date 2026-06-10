@@ -11,6 +11,7 @@ import type { Bilan } from '../../types';
 import { TYPES_ANTECEDENT_LABELS } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../../lib/supabase';
+import { getContreIndications } from '../../lib/anamnese';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -339,9 +340,9 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
         {/* ── PROCHAINE SÉANCE ──────────────────────────────────── */}
         {prochaineSeance && (() => {
           const p = participants.find(x => x.id === prochaineSeance.participantId);
-          const contreIndDetail = p?.bilans.find(b => b.type === 'initial')
-            ?.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail as string | undefined;
-          const hasCI = p?.bilans.some(b => b.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui');
+          const ciInfo = p ? getContreIndications(p) : { actif: false, detail: null };
+          const contreIndDetail = ciInfo.detail ?? undefined;
+          const hasCI = ciInfo.actif;
           const adresse = [p?.adresseRue, p?.adresseVille].filter(Boolean).join(', ');
           return (
             <div style={{ background: '#E8F8F8', borderRadius: 16, padding: '16px', border: `1px solid ${C.primary}33` }}>
@@ -438,7 +439,7 @@ function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
   const il90jFmt = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10); })();
 
   function hasCI(p: import('../../types').Participant): boolean {
-    return p.bilans.some(b => b.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui');
+    return getContreIndications(p).actif;
   }
 
   const baseFiltered = participants.filter(p =>
@@ -1337,10 +1338,7 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
   );
 
   const bilanInitial = p.bilans.find(b => b.type === 'initial') ?? null;
-  const contreIndicationsTexte: string | null =
-    bilanInitial?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
-      ? ((bilanInitial.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail as string | undefined) ?? null)
-      : null;
+  const contreIndicationsTexte: string | null = getContreIndications(p, bilanInitial).detail;
 
   const sortedBilans = [...p.bilans].sort((a, b) => b.date.localeCompare(a.date));
   const contrat = contratActifDeParticipant(participantId);
@@ -1797,9 +1795,8 @@ Tu ne fais jamais de diagnostic médical.`;
     ? (() => {
         const age = calcAge(patient.dateNaissance);
         const bi = patient.bilans.find(b => b.type === 'initial') ?? null;
-        const ci = bi?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
-          ? (bi.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail ?? 'non précisées')
-          : 'aucune';
+        const ciInfoExport = getContreIndications(patient, bi);
+        const ci = ciInfoExport.actif ? (ciInfoExport.detail ?? 'non précisées') : 'aucune';
         const pathologies = [patient.pathologie, patient.antecedentsMedicaux].filter(Boolean).join(' / ') || 'non renseigné';
         return `\n\nPATIENT : ${patient.prenom} ${patient.nom}, ${age} ans. Pathologies : ${pathologies}. Contre-indications : ${ci}.`;
       })()
@@ -1876,14 +1873,7 @@ function EcranAssistant({
     ? participants.filter(p => `${p.prenom} ${p.nom}`.toLowerCase().includes(searchQ.toLowerCase())).slice(0, 8)
     : participants.slice(0, 10);
 
-  const ciTexte = selectedPatient
-    ? (() => {
-        const bi = selectedPatient.bilans.find(b => b.type === 'initial') ?? null;
-        return bi?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
-          ? bi.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail ?? null
-          : null;
-      })()
-    : null;
+  const ciTexte = selectedPatient ? getContreIndications(selectedPatient).detail : null;
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: C.bg }}>

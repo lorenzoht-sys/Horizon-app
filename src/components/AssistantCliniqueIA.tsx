@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Participant, Bilan } from '../types';
 import { supabase } from '../lib/supabase';
+import { getContreIndications } from '../lib/anamnese';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { toast } from 'sonner';
 
@@ -42,10 +43,8 @@ function buildSystemContext(participant: Participant, bilanInitial: Bilan | null
   const age = calcAge(participant.dateNaissance);
   const profil = bilanInitial?.profilEnrichi;
 
-  const contreIndications =
-    bilanInitial?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
-      ? (bilanInitial.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail ?? 'non précisées')
-      : 'aucune contre-indication renseignée';
+  const ciContext = getContreIndications(participant, bilanInitial);
+  const contreIndications = ciContext.actif ? (ciContext.detail ?? 'non précisées') : 'aucune contre-indication renseignée';
 
   const sortedBilans = [...participant.bilans].sort((a, b) => b.date.localeCompare(a.date));
   const lastBilan = sortedBilans[0];
@@ -293,10 +292,7 @@ export default function AssistantCliniqueIA({ participant, bilanInitial }: Props
     toast.success('Consultez le programme pour ajouter les exercices suggérés');
   }
 
-  const contreIndicationsTexte =
-    bilanInitial?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
-      ? (bilanInitial.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail ?? null)
-      : null;
+  const contreIndicationsTexte = getContreIndications(participant, bilanInitial).detail;
 
   const hasResponse = lastResponse || messages.some(m => m.role === 'assistant');
 

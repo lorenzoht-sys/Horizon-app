@@ -777,6 +777,25 @@ export default function ParticipantForm({ onSubmit, onCancel, initial }: Props) 
             value={anamnese.fatigueQuotidienne}
             onChange={n => setAnamnese(a => ({ ...a, fatigueQuotidienne: n }))}
           />
+          <div className="border-t border-gray-100 pt-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium text-gray-700">Contre-indications à l'effort physique ?</span>
+              <ToggleOuiNon
+                value={anamnese.contreIndications}
+                onChange={v => setAnamnese(a => ({ ...a, contreIndications: v }))}
+              />
+            </div>
+            {anamnese.contreIndications === 'oui' && (
+              <textarea
+                value={anamnese.contreIndicationsDetail ?? ''}
+                onChange={e => setAnamnese(a => ({ ...a, contreIndicationsDetail: e.target.value }))}
+                placeholder="FC max 130 bpm, éviter les impacts, pas de port de charges > 5 kg..."
+                rows={2}
+                className={`mt-2 ${CLS_INPUT}`}
+              />
+            )}
+            <p className="text-xs text-gray-400 mt-1.5">Ces contre-indications seront affichées en alerte dans la fiche patient et tous les PDFs.</p>
+          </div>
         </div>
       </div>
 

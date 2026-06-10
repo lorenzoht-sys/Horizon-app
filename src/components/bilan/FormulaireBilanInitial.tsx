@@ -118,26 +118,6 @@ const BLOCS: BlocConditionnel[] = [
     ],
   },
 
-  {
-    id: 'contreIndicationsEffort',
-    titre: "⚠️ Contre-indications à l'effort",
-    questions: [
-      {
-        id: 'contreIndications',
-        label: "Y a-t-il des contre-indications à l'effort physique ?",
-        type: 'oui-non',
-      },
-      {
-        id: 'contreIndicationsDetail',
-        label: 'Lesquelles ?',
-        type: 'textarea',
-        conditionnelSi: 'contreIndications_oui',
-        placeholder: 'FC max 130 bpm, éviter les impacts, pas de port de charges > 5 kg...',
-        aide: 'Ces contre-indications seront affichées en alerte dans la fiche patient et tous les PDFs.',
-      },
-    ],
-  },
-
   // ─── TOUJOURS AFFICHÉS ───────────────────────────────────────────────────
 
   {

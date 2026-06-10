@@ -2,6 +2,7 @@ import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import type { Bilan, Participant, NotesBilan } from '../../types';
 import { NORMES_SCORING, calculerNote } from '../../data/norms';
 import { PdfHeader, PdfFooter, type PdfPraticienSettings } from './PdfShared';
+import { getContreIndications } from '../../lib/anamnese';
 
 // ─── Calcul notes ─────────────────────────────────────────────────────────────
 
@@ -109,10 +110,7 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
   const interp = bilan.interpretationIA?.textePro || bilan.notesProfessionnelles || '—';
 
   const bilanInitial = participant.bilans.find(b => b.type === 'initial');
-  const contreIndic: string | null =
-    bilanInitial?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
-      ? (bilanInitial.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail ?? null)
-      : null;
+  const contreIndic: string | null = getContreIndications(participant, bilanInitial).detail;
 
   return (
     <Document>

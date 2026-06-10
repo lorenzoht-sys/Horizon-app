@@ -32,6 +32,7 @@ import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import type { Bilan, Participant, Contrat, Seance, ProfilHandicap } from '../types';
 import { TYPES_ANTECEDENT_LABELS } from '../types';
+import { getContreIndications } from '../lib/anamnese';
 import type { CompteRenduSeance } from '../types/seance';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -690,10 +691,7 @@ export default function ParticipantProfile() {
 
   const sortedBilans   = [...participant.bilans].sort((a, b) => a.date.localeCompare(b.date));
   const bilanInitial   = participant.bilans.find(b => b.type === 'initial') ?? null;
-  const contreIndicationsTexte: string | null =
-    bilanInitial?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
-      ? (bilanInitial.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail ?? null)
-      : null;
+  const contreIndicationsTexte: string | null = getContreIndications(participant, bilanInitial).detail;
   const latestBilan    = sortedBilans[sortedBilans.length - 1] ?? null;
   const contratActif   = contrats.find(c => c.participantId === participant.id && c.statut === 'actif') ?? null;
   const contratsCount  = contrats.filter(c => c.participantId === participant.id).length;

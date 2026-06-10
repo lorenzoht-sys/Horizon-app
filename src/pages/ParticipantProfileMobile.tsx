@@ -21,6 +21,7 @@ import { TAG_CONFIG } from '../data/profiles';
 import { toast } from 'sonner';
 import type { Bilan, Participant, RessentiSeance } from '../types';
 import { TYPES_ANTECEDENT_LABELS } from '../types';
+import { getContreIndications } from '../lib/anamnese';
 import type { CompteRenduSeance } from '../types/seance';
 
 // ── Constants & helpers ───────────────────────────────────────────────────────
@@ -146,10 +147,7 @@ export default function ParticipantProfileMobile() {
 
   const sortedBilans   = [...participant.bilans].sort((a, b) => a.date.localeCompare(b.date));
   const bilanInitial   = participant.bilans.find(b => b.type === 'initial') ?? null;
-  const contreIndicationsTexte: string | null =
-    bilanInitial?.bilanInitialData?.formulaireFlat?.data?.contreIndications === 'oui'
-      ? (bilanInitial.bilanInitialData?.formulaireFlat?.data?.contreIndicationsDetail ?? null)
-      : null;
+  const contreIndicationsTexte: string | null = getContreIndications(participant, bilanInitial).detail;
   const latestBilan    = sortedBilans[sortedBilans.length - 1] ?? null;
   const contratActif   = contrats.find(c => c.participantId === participant.id && c.statut === 'actif') ?? null;
   const notes          = notesParPatient(participant.id);
