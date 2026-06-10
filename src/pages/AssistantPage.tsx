@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Bot, Send, Mic, MicOff, Copy, ArrowLeft, RefreshCw, Search } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
-import { getContreIndications } from '../lib/anamnese';
+import { getContreIndications, getTestsAutonomie } from '../lib/anamnese';
 import { supabase } from '../lib/supabase';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { toast } from 'sonner';
@@ -297,12 +297,12 @@ Tu cites les recommandations HAS ou SFP-APA quand pertinent.`;
   const dernierBilan   = sortedBilans[0] ?? null;
   const bilanPrecedent = sortedBilans[1] ?? null;
 
-  const flatData = bilanInitial?.bilanInitialData?.formulaireFlat?.data;
-  const sedProfilLabel = flatData?.sedentariteProfil === 'inactif' ? 'Inactif'
-    : flatData?.sedentariteProfil === 'actif' ? 'Actif'
-    : flatData?.sedentariteProfil === 'tres_actif' ? 'Très actif' : null;
-  const fssProfilLabel = flatData?.fatigueProfil === 'pas_de_fatigue' ? 'Pas de fatigue significative'
-    : flatData?.fatigueProfil === 'fatigue_probable' ? 'Fatigue probable' : null;
+  const { sedentarite, fatigue } = getTestsAutonomie(patient, bilanInitial);
+  const sedProfilLabel = sedentarite.profil === 'inactif' ? 'Inactif'
+    : sedentarite.profil === 'actif' ? 'Actif'
+    : sedentarite.profil === 'tres_actif' ? 'Très actif' : null;
+  const fssProfilLabel = fatigue.profil === 'pas_de_fatigue' ? 'Pas de fatigue significative'
+    : fatigue.profil === 'fatigue_probable' ? 'Fatigue probable' : null;
 
   const extra = [
     profil?.douleursNiveau != null ? `- Douleur habituelle : ${profil.douleursNiveau}/10${profil.douleursLocalisation ? ` (${profil.douleursLocalisation})` : ''}` : null,
@@ -317,8 +317,8 @@ Tu cites les recommandations HAS ou SFP-APA quand pertinent.`;
       ? `- Traitements arrêtés : ${traitementsArretesCtx.map(t => `${t.nom}${t.dose ? ` (${t.dose})` : ''} (arrêté le ${new Date((t.date_fin ?? '') + 'T12:00').toLocaleDateString('fr-FR')})`).join(', ')}`
       : null,
     profil?.objectifsPersonnels ? `- Objectifs personnels : ${profil.objectifsPersonnels}` : null,
-    sedProfilLabel ? `- Niveau d'activité physique : ${sedProfilLabel} (score ${flatData?.sedentariteScore ?? '?'}/55 — Ricci & Gagnon)` : null,
-    fssProfilLabel ? `- Fatigue perçue : ${fssProfilLabel} (FSS ${flatData?.fatigueScore ?? '?'}/63)` : null,
+    sedProfilLabel ? `- Niveau d'activité physique : ${sedProfilLabel} (score ${sedentarite.score ?? '?'}/55 — Ricci & Gagnon)` : null,
+    fssProfilLabel ? `- Fatigue perçue : ${fssProfilLabel} (FSS ${fatigue.score ?? '?'}/63)` : null,
   ].filter(Boolean).join('\n');
 
   const crText = extras?.compteRendus.length

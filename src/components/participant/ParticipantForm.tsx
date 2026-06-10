@@ -1,9 +1,11 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
-import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical, TypeAntecedent, AnamneseData, ChutesData, PeriodeChutes, FourchetteChutes } from '../../types';
+import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical, TypeAntecedent, AnamneseData, ChutesData, PeriodeChutes, FourchetteChutes, SedentariteReponses } from '../../types';
 import { TYPES_ANTECEDENT_LABELS, PERIODES_CHUTES_LABELS } from '../../types';
 import { useStructures } from '../../hooks/useStructures';
 import { getBrouillonParticipant, sauvegarderBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
 import { Save, X } from 'lucide-react';
+import GIRWidget from '../bilan/GIRWidget';
+import { EMPTY_SED, computeSedScore, getSedProfil, getFSSProfil, SectionSedentarite, SectionFatigue } from '../bilan/TestsAutonomie';
 
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -444,6 +446,159 @@ function ChutesForm({
   );
 }
 
+// ─── CHOIX UNIQUE (sélection simple, re-cliquer pour désélectionner) ───────────
+
+function ChoixUnique({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: string[];
+  value: string | null | undefined;
+  onChange: (v: string | null) => void;
+}) {
+  return (
+    <div>
+      <label className={CLS_LABEL}>{label}</label>
+      <div className="flex flex-wrap gap-2">
+        {options.map(opt => (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => onChange(value === opt ? null : opt)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium border transition-colors ${
+              value === opt
+                ? 'bg-primary text-white border-primary'
+                : 'border-gray-200 text-gray-600 hover:border-primary/50 hover:bg-gray-50'
+            }`}
+          >
+            {opt}
+            {value === opt && <span className="text-white/80 text-xs leading-none">✕</span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── CHOIX MULTIPLE (bulles + champ libre) ─────────────────────────────────────
+
+function ChoixMultiple({
+  label,
+  options,
+  value,
+  onChange,
+  avecChampLibre,
+}: {
+  label: string;
+  options: string[];
+  value: string[];
+  onChange: (v: string[]) => void;
+  avecChampLibre?: boolean;
+}) {
+  const selected = value ?? [];
+  const predefined = selected.filter(s => options.includes(s));
+  const customs = selected.filter(s => !options.includes(s));
+
+  const toggle = (opt: string) =>
+    onChange(
+      predefined.includes(opt)
+        ? [...predefined.filter(s => s !== opt), ...customs]
+        : [...predefined, opt, ...customs]
+    );
+
+  const updateCustom = (idx: number, text: string) => {
+    const next = customs.map((c, i) => (i === idx ? text : c));
+    onChange([...predefined, ...next]);
+  };
+
+  const removeCustom = (idx: number) => {
+    onChange([...predefined, ...customs.filter((_, i) => i !== idx)]);
+  };
+
+  const addCustom = () => {
+    onChange([...predefined, ...customs, '']);
+  };
+
+  return (
+    <div>
+      <label className={CLS_LABEL}>{label}</label>
+      <div className="flex flex-wrap gap-2 mb-2">
+        {options.map(opt => (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => toggle(opt)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium border transition-colors ${
+              predefined.includes(opt)
+                ? 'bg-primary text-white border-primary'
+                : 'border-gray-200 text-gray-600 hover:border-primary/50 hover:bg-gray-50'
+            }`}
+          >
+            {opt}
+            {predefined.includes(opt) && <span className="text-white/80 text-xs leading-none">✕</span>}
+          </button>
+        ))}
+      </div>
+
+      {avecChampLibre && (
+        <div className="mt-1">
+          {customs.map((custom, idx) => (
+            <div key={idx} className="flex items-center gap-2 mb-2">
+              <input
+                type="text"
+                value={custom}
+                onChange={e => updateCustom(idx, e.target.value)}
+                placeholder="Activité personnalisée..."
+                className={`flex-1 ${CLS_INPUT}`}
+              />
+              <button
+                type="button"
+                onClick={() => removeCustom(idx)}
+                aria-label="Supprimer"
+                className="text-gray-400 hover:text-red-500 p-1 text-base leading-none flex-shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addCustom}
+            className="flex items-center gap-1.5 text-primary text-sm font-medium border border-dashed border-primary/40 hover:border-primary hover:bg-primary/5 px-3 py-1.5 rounded-xl transition-colors"
+          >
+            + Autre
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Options des champs autonomie / habitudes de vie / activité physique ──────
+
+const OPTIONS_SITUATION_VIE = ['Seul(e)', 'En famille', 'EHPAD / résidence', 'Autre'];
+const OPTIONS_AIDE_MARCHE = ['Aucune', 'Canne', 'Déambulateur', 'Autre'];
+const OPTIONS_REPAS = ['1', '2', '3', 'Plus de 3'];
+const OPTIONS_HYDRATATION = ['< 1L', '1 à 1,5L', '> 1,5L'];
+const OPTIONS_NIVEAU_ACTIVITE = ['Sédentaire', 'Légèrement actif', 'Modérément actif', 'Actif'];
+const OPTIONS_ACTIVITES = [
+  '🚶 Marche / Randonnée',
+  '🚴 Cyclisme (vélo, vélo électrique)',
+  '🏊 Natation / Aquagym',
+  '🎾 Raquettes (tennis, badminton, ping-pong)',
+  '⚽ Jeux de ballon (basket, foot, volley)',
+  '🎯 Précision (pétanque, golf, sarbacane, tir à l\'arc, fléchettes)',
+  '🤸 Gym douce / Stretching / Yoga',
+  '💃 Danse / Activités rythmiques',
+  '🏋️ Renforcement musculaire',
+  '🧠 Activités cognitives (mémoire, jeux de société)',
+];
+
+const NUM_INPUT_CLS = 'w-36 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary';
+
 // ─── IBAN ─────────────────────────────────────────────────────────────────────
 
 function validerIBAN(iban: string): boolean {
@@ -522,6 +677,27 @@ function computeCompletion(
   if (traitements.length > 0) filled++;
   if (antecedents.length > 0) filled++;
 
+  total += 19;
+  if (anamnese.autonomie?.situationVie != null) filled++;
+  if (anamnese.autonomie?.aideADomicile != null) filled++;
+  if (anamnese.autonomie?.aideMarche != null) filled++;
+  if (anamnese.autonomie?.gir?.niveau != null) filled++;
+  if (anamnese.habitudesVie?.nombreRepas != null) filled++;
+  if (anamnese.habitudesVie?.hydratation != null) filled++;
+  if (anamnese.habitudesVie?.qualiteSommeil != null) filled++;
+  if (anamnese.habitudesVie?.heuresSommeil != null) filled++;
+  if (anamnese.habitudesVie?.energieMatin != null) filled++;
+  if (anamnese.habitudesVie?.energieSoir != null) filled++;
+  if (anamnese.habitudesVie?.niveauAppetit != null) filled++;
+  if (anamnese.habitudesVie?.variationPoids != null) filled++;
+  if (anamnese.habitudesVie?.tabagisme != null) filled++;
+  if (anamnese.activitePhysique?.niveauActivite != null) filled++;
+  if ((anamnese.activitePhysique?.activitesActuelles?.length ?? 0) > 0) filled++;
+  if ((anamnese.activitePhysique?.activitesPrecedentes?.length ?? 0) > 0) filled++;
+  if (anamnese.activitePhysique?.derniereActivite) filled++;
+  if (anamnese.sedentariteScore != null) filled++;
+  if (anamnese.fatigueScore != null) filled++;
+
   total += 1;
   if (rgpd.consentementObtenu) filled++;
 
@@ -551,6 +727,15 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
     chutes: seed.anamnese?.chutes ?? {},
     contreIndications: seed.anamnese?.contreIndications ?? null,
     contreIndicationsDetail: seed.anamnese?.contreIndicationsDetail ?? '',
+    autonomie: seed.anamnese?.autonomie ?? {},
+    habitudesVie: seed.anamnese?.habitudesVie ?? {},
+    activitePhysique: seed.anamnese?.activitePhysique ?? {},
+    sedentariteReponses: seed.anamnese?.sedentariteReponses ?? EMPTY_SED,
+    sedentariteScore: seed.anamnese?.sedentariteScore ?? null,
+    sedentariteProfil: seed.anamnese?.sedentariteProfil ?? null,
+    fatigueReponses: seed.anamnese?.fatigueReponses ?? Array(9).fill(null),
+    fatigueScore: seed.anamnese?.fatigueScore ?? null,
+    fatigueProfil: seed.anamnese?.fatigueProfil ?? null,
   });
 
   // ── Tags / tests ────────────────────────────────────────────────
@@ -593,6 +778,27 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+  }
+
+  function setSedData(reponses: SedentariteReponses) {
+    const sc = computeSedScore(reponses);
+    setAnamnese(a => ({
+      ...a,
+      sedentariteReponses: reponses,
+      sedentariteScore: sc?.total ?? null,
+      sedentariteProfil: sc ? getSedProfil(sc.total).profil : null,
+    }));
+  }
+
+  function setFSSData(reponses: (number | null)[]) {
+    const answered = reponses.filter(v => v !== null);
+    const score = answered.length > 0 ? answered.reduce((sum, v) => sum + (v ?? 0), 0) : null;
+    setAnamnese(a => ({
+      ...a,
+      fatigueReponses: reponses,
+      fatigueScore: score,
+      fatigueProfil: score !== null ? getFSSProfil(score).profil : null,
+    }));
   }
 
   function buildPayload(): Omit<Participant, 'id' | 'token' | 'bilans'> {
@@ -951,11 +1157,197 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
       </div>
       </>}
 
-      {!showAll && step === 3 && (
-        <div className="border border-dashed border-gray-200 rounded-2xl p-4 text-sm text-gray-400">
-          🏃 Autonomie, hygiène de vie et activité physique : ces champs seront ajoutés ici lors d'une prochaine mise à jour.
+      {(showAll || step === 3) && <>
+      {/* ── AUTONOMIE & MODE DE VIE ── */}
+      <div className="border border-gray-100 rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
+          <span className="text-lg">🏠</span>
+          <div>
+            <div className="font-semibold text-dark text-sm">Autonomie & mode de vie</div>
+            <div className="text-xs text-gray-500">Situation, aides, évaluation GIR</div>
+          </div>
         </div>
-      )}
+        <div className="p-4 space-y-4">
+          <ChoixUnique
+            label="Situation de vie"
+            options={OPTIONS_SITUATION_VIE}
+            value={anamnese.autonomie?.situationVie}
+            onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, situationVie: v } }))}
+          />
+          <div className="border-t border-gray-100 pt-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium text-gray-700">Aide à domicile ?</span>
+              <ToggleOuiNon
+                value={anamnese.autonomie?.aideADomicile}
+                onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, aideADomicile: v } }))}
+              />
+            </div>
+            {anamnese.autonomie?.aideADomicile === 'oui' && (
+              <div className="mt-2">
+                <label className={CLS_LABEL}>Nombre d'heures / semaine</label>
+                <input
+                  type="number"
+                  value={anamnese.autonomie?.aideADomicileHeures ?? ''}
+                  onChange={e => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, aideADomicileHeures: e.target.value === '' ? null : Number(e.target.value) } }))}
+                  className={NUM_INPUT_CLS}
+                />
+              </div>
+            )}
+          </div>
+          <ChoixUnique
+            label="Aide à la marche"
+            options={OPTIONS_AIDE_MARCHE}
+            value={anamnese.autonomie?.aideMarche}
+            onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, aideMarche: v } }))}
+          />
+          <div className="border-t border-gray-100 pt-3">
+            <label className={CLS_LABEL}>Évaluation GIR (Grille AGGIR)</label>
+            <GIRWidget
+              value={anamnese.autonomie?.gir ?? null}
+              onChange={gir => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, gir } }))}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── HABITUDES DE VIE ── */}
+      <div className="border border-gray-100 rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-emerald-50 to-teal-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
+          <span className="text-lg">🍽️</span>
+          <div>
+            <div className="font-semibold text-dark text-sm">Habitudes de vie</div>
+            <div className="text-xs text-gray-500">Alimentation, sommeil, énergie</div>
+          </div>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <ChoixUnique
+              label="Nombre de repas par jour"
+              options={OPTIONS_REPAS}
+              value={anamnese.habitudesVie?.nombreRepas}
+              onChange={v => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, nombreRepas: v } }))}
+            />
+            <ChoixUnique
+              label="Hydratation estimée"
+              options={OPTIONS_HYDRATATION}
+              value={anamnese.habitudesVie?.hydratation}
+              onChange={v => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, hydratation: v } }))}
+            />
+          </div>
+          <Echelle5
+            label="Qualité du sommeil (1-5)"
+            value={anamnese.habitudesVie?.qualiteSommeil}
+            onChange={n => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, qualiteSommeil: n } }))}
+          />
+          <div>
+            <label className={CLS_LABEL}>Heures de sommeil / nuit</label>
+            <input
+              type="number"
+              value={anamnese.habitudesVie?.heuresSommeil ?? ''}
+              onChange={e => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, heuresSommeil: e.target.value === '' ? null : Number(e.target.value) } }))}
+              className={NUM_INPUT_CLS}
+            />
+          </div>
+          <Echelle5
+            label="Énergie le matin (1-5)"
+            value={anamnese.habitudesVie?.energieMatin}
+            onChange={n => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, energieMatin: n } }))}
+          />
+          <Echelle5
+            label="Énergie le soir (1-5)"
+            value={anamnese.habitudesVie?.energieSoir}
+            onChange={n => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, energieSoir: n } }))}
+          />
+          <Echelle5
+            label="Niveau d'appétit (1-5)"
+            value={anamnese.habitudesVie?.niveauAppetit}
+            onChange={n => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, niveauAppetit: n } }))}
+          />
+          <div className="border-t border-gray-100 pt-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium text-gray-700">Variation de poids involontaire ?</span>
+              <ToggleOuiNon
+                value={anamnese.habitudesVie?.variationPoids}
+                onChange={v => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, variationPoids: v } }))}
+              />
+            </div>
+            {anamnese.habitudesVie?.variationPoids === 'oui' && (
+              <div className="mt-2">
+                <label className={CLS_LABEL}>Combien de kg ?</label>
+                <input
+                  type="number"
+                  value={anamnese.habitudesVie?.variationPoidsKg ?? ''}
+                  onChange={e => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, variationPoidsKg: e.target.value === '' ? null : Number(e.target.value) } }))}
+                  className={NUM_INPUT_CLS}
+                />
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium text-gray-700">Tabagisme ?</span>
+              <ToggleOuiNon
+                value={anamnese.habitudesVie?.tabagisme}
+                onChange={v => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, tabagisme: v } }))}
+              />
+            </div>
+            <p className="text-xs text-gray-400 mt-1.5">Aide à comprendre l'essoufflement à l'effort</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── ACTIVITÉ PHYSIQUE ACTUELLE ── */}
+      <div className="border border-gray-100 rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-cyan-50 to-sky-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
+          <span className="text-lg">🏃</span>
+          <div>
+            <div className="font-semibold text-dark text-sm">Activité physique actuelle</div>
+            <div className="text-xs text-gray-500">Habitudes sportives passées et présentes</div>
+          </div>
+        </div>
+        <div className="p-4 space-y-4">
+          <ChoixUnique
+            label="Niveau d'activité actuel"
+            options={OPTIONS_NIVEAU_ACTIVITE}
+            value={anamnese.activitePhysique?.niveauActivite}
+            onChange={v => setAnamnese(a => ({ ...a, activitePhysique: { ...a.activitePhysique, niveauActivite: v } }))}
+          />
+          <ChoixMultiple
+            label="Activités pratiquées actuellement"
+            options={OPTIONS_ACTIVITES}
+            value={anamnese.activitePhysique?.activitesActuelles ?? []}
+            onChange={v => setAnamnese(a => ({ ...a, activitePhysique: { ...a.activitePhysique, activitesActuelles: v } }))}
+            avecChampLibre
+          />
+          <ChoixMultiple
+            label="Activités pratiquées avant"
+            options={OPTIONS_ACTIVITES}
+            value={anamnese.activitePhysique?.activitesPrecedentes ?? []}
+            onChange={v => setAnamnese(a => ({ ...a, activitePhysique: { ...a.activitePhysique, activitesPrecedentes: v } }))}
+            avecChampLibre
+          />
+          <div>
+            <label className={CLS_LABEL}>Dernière activité régulière</label>
+            <input
+              type="text"
+              value={anamnese.activitePhysique?.derniereActivite ?? ''}
+              onChange={e => setAnamnese(a => ({ ...a, activitePhysique: { ...a.activitePhysique, derniereActivite: e.target.value } }))}
+              placeholder="Il y a 2 ans / Jamais"
+              className={CLS_INPUT}
+            />
+          </div>
+        </div>
+      </div>
+
+      <SectionSedentarite
+        value={anamnese.sedentariteReponses ?? EMPTY_SED}
+        onChange={setSedData}
+      />
+      <SectionFatigue
+        value={anamnese.fatigueReponses ?? Array(9).fill(null)}
+        onChange={setFSSData}
+      />
+      </>}
 
       {(showAll || step === 5) && <>
       {!showAll && (

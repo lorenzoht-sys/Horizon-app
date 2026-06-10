@@ -8,6 +8,7 @@ import { loadExercices } from '../data/exercices';
 import { exportProgrammePDF } from '../utils/exportPDF';
 import { exportFicheCompletePDF } from '../utils/exportFicheCompletePDF';
 import { getSessionPatient, sauvegarderSessionPatient } from '../hooks/useAccesPatients';
+import { getTestsAutonomie } from '../lib/anamnese';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -442,13 +443,13 @@ function CarteProgression({ item }: { item: ProgItem }) {
   );
 }
 
-function EcranProgres({ bilans }: { bilans: Bilan[] }) {
+function EcranProgres({ participant, bilans }: { participant: Participant; bilans: Bilan[] }) {
   const sorted = [...bilans].sort((a, b) => a.date.localeCompare(b.date));
   const bilanInitial = sorted.find(b => b.type === 'initial') ?? sorted[0] ?? null;
   const dernierBilan = sorted[sorted.length - 1] ?? null;
-  const flatData = bilanInitial?.bilanInitialData?.formulaireFlat?.data;
-  const sedProfil = flatData?.sedentariteProfil as string | null ?? null;
-  const fssProfil = flatData?.fatigueProfil as string | null ?? null;
+  const { sedentarite, fatigue } = getTestsAutonomie(participant, bilanInitial);
+  const sedProfil = sedentarite.profil;
+  const fssProfil = fatigue.profil;
 
   const hasDeux = bilanInitial && dernierBilan && bilanInitial.id !== dernierBilan.id;
   const progressions = hasDeux ? calculerProgressions(bilanInitial!, dernierBilan!) : [];
@@ -1756,7 +1757,7 @@ export default function EspacePatient() {
             programmesV2={programmesV2}
           />
         )}
-        {tab === 'progres' && <EcranProgres bilans={bilans} />}
+        {tab === 'progres' && <EcranProgres participant={participant} bilans={bilans} />}
         {tab === 'programme' && (
           <EcranProgramme participant={participant} programmes={programmes} programmesV2={programmesV2} historiqueSeances={seancesPatient} />
         )}

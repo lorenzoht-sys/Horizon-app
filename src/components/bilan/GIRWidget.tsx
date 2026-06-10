@@ -1,11 +1,6 @@
 // Composant d'évaluation GIR (Grille AGGIR)
 
-export interface GIRData {
-  mode: 'direct' | 'calcule';
-  niveau: number | null;
-  methode: 'direct' | 'calcule';
-  variables: Record<string, 'A' | 'B' | 'C'>;
-}
+import type { GIRData } from '../../types';
 
 // ─── Variables AGGIR ──────────────────────────────────────────────────────────
 

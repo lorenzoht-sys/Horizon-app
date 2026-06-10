@@ -26,12 +26,12 @@ import { exportFichePatientPDF } from '../utils/exportFichePatientPDF';
 import { exportFicheCompletePDF } from '../utils/exportFicheCompletePDF';
 import { calculerNote, NORMES_SCORING } from '../data/norms';
 import { TAG_CONFIG } from '../data/profiles';
-import { getSedProfil, getFSSProfil } from '../components/bilan/FormulaireBilanInitial';
+import { getSedProfil, getFSSProfil } from '../components/bilan/TestsAutonomie';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import type { Bilan, Participant, Contrat, Seance, ProfilHandicap } from '../types';
 import { TYPES_ANTECEDENT_LABELS } from '../types';
-import { getContreIndications } from '../lib/anamnese';
+import { getContreIndications, getTestsAutonomie } from '../lib/anamnese';
 import type { CompteRenduSeance } from '../types/seance';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -335,7 +335,8 @@ function CarteSante({ participant, bilanInitial, onModifier }: {
 
 // ── CarteProfilFonctionnel ────────────────────────────────────────────────────
 
-function CarteProfilFonctionnel({ bilans }: {
+function CarteProfilFonctionnel({ participant, bilans }: {
+  participant: Participant;
   bilans: Bilan[];
 }) {
   const sorted = [...bilans].sort((a, b) => a.date.localeCompare(b.date));
@@ -343,12 +344,9 @@ function CarteProfilFonctionnel({ bilans }: {
   const current = sorted[sorted.length - 1] ?? null;
   if (!current) return null;
 
-  const flatData = initial?.bilanInitialData?.formulaireFlat?.data;
-  const sedScore = flatData?.sedentariteScore as number | null ?? null;
-  const fssScore = flatData?.fatigueScore as number | null ?? null;
-
-  const sedInfo = sedScore !== null ? getSedProfil(sedScore) : null;
-  const fssInfo = fssScore !== null ? getFSSProfil(fssScore) : null;
+  const { sedentarite, fatigue } = getTestsAutonomie(participant, initial);
+  const sedInfo = sedentarite.score !== null ? getSedProfil(sedentarite.score) : null;
+  const fssInfo = fatigue.score !== null ? getFSSProfil(fatigue.score) : null;
 
   const testsAvecValeur = TESTS_TABLEAU.map(test => {
     const val = test.getVal(current);
@@ -437,7 +435,7 @@ function CarteProfilFonctionnel({ bilans }: {
             <div className="flex items-center justify-between text-[12px]">
               <span className="text-gray-500">Activité physique</span>
               <span style={{ color: sedInfo.color, fontWeight: 600 }}>
-                {sedInfo.label}{sedScore !== null ? ` (${sedScore}/55)` : ''}
+                {sedInfo.label}{sedentarite.score !== null ? ` (${sedentarite.score}/55)` : ''}
               </span>
             </div>
           )}
@@ -445,7 +443,7 @@ function CarteProfilFonctionnel({ bilans }: {
             <div className="flex items-center justify-between text-[12px]">
               <span className="text-gray-500">Fatigue perçue</span>
               <span style={{ color: fssInfo.color, fontWeight: 600 }}>
-                {fssInfo.label}{fssScore !== null ? ` (FSS ${fssScore}/63)` : ''}
+                {fssInfo.label}{fatigue.score !== null ? ` (FSS ${fatigue.score}/63)` : ''}
               </span>
             </div>
           )}
@@ -1148,7 +1146,7 @@ export default function ParticipantProfile() {
         </div>
         {/* Colonne droite */}
         <div className="flex flex-col gap-3">
-          {latestBilan && <CarteProfilFonctionnel bilans={participant.bilans} />}
+          {latestBilan && <CarteProfilFonctionnel participant={participant} bilans={participant.bilans} />}
           <CarteJournalFusion
             compteRendus={compteRendus.slice(0, 5)}
             onDicter={() => setShowDictee(true)}

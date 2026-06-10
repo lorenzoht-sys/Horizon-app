@@ -486,12 +486,78 @@ export interface ChutesData {
   amenagementDomicile?: 'oui' | 'non' | null;
 }
 
+// ── ÉVALUATION GIR (Grille AGGIR) ────────────────────────────────────────────
+
+export interface GIRData {
+  mode: 'direct' | 'calcule';
+  niveau: number | null;
+  methode: 'direct' | 'calcule';
+  variables: Record<string, 'A' | 'B' | 'C'>;
+}
+
+// ── AUTONOMIE & MODE DE VIE ───────────────────────────────────────────────────
+
+export interface AutonomieData {
+  situationVie?: string | null;
+  aideADomicile?: 'oui' | 'non' | null;
+  aideADomicileHeures?: number | null;
+  aideMarche?: string | null;
+  gir?: GIRData | null;
+}
+
+// ── HABITUDES DE VIE ──────────────────────────────────────────────────────────
+
+export interface HabitudesVieData {
+  nombreRepas?: string | null;
+  hydratation?: string | null;
+  qualiteSommeil?: number | null;
+  heuresSommeil?: number | null;
+  energieMatin?: number | null;
+  energieSoir?: number | null;
+  niveauAppetit?: number | null;
+  variationPoids?: 'oui' | 'non' | null;
+  variationPoidsKg?: number | null;
+  tabagisme?: 'oui' | 'non' | null;
+}
+
+// ── ACTIVITÉ PHYSIQUE ─────────────────────────────────────────────────────────
+
+export interface ActivitePhysiqueData {
+  niveauActivite?: string | null;
+  activitesActuelles?: string[];
+  activitesPrecedentes?: string[];
+  derniereActivite?: string;
+}
+
+// ── TESTS RICCI & GAGNON (sédentarité) / FSS (fatigue) ───────────────────────
+
+export type SedentariteReponses = {
+  a_sedentarite: number | null;
+  b_pratique: 'oui' | 'non' | null;
+  b_freq: number | null;
+  b_duree: number | null;
+  b_effort: number | null;
+  c_intensite: number | null;
+  c_travaux: number | null;
+  c_marche: number | null;
+  c_etages: number | null;
+};
+
 export interface AnamneseData {
   douleurQuotidienne?: number | null;
   fatigueQuotidienne?: number | null;
   chutes?: ChutesData;
   contreIndications?: 'oui' | 'non' | null;
   contreIndicationsDetail?: string;
+  autonomie?: AutonomieData;
+  habitudesVie?: HabitudesVieData;
+  activitePhysique?: ActivitePhysiqueData;
+  sedentariteReponses?: SedentariteReponses;
+  sedentariteScore?: number | null;
+  sedentariteProfil?: 'inactif' | 'actif' | 'tres_actif' | null;
+  fatigueReponses?: (number | null)[];
+  fatigueScore?: number | null;
+  fatigueProfil?: 'pas_de_fatigue' | 'fatigue_probable' | null;
 }
 
 // ── ESPACE PATIENT ────────────────────────────────────────────────────────────
