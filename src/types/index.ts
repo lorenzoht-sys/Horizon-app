@@ -367,6 +367,7 @@ export interface Participant {
   // Informations complémentaires
   taille?: number;
   poids?: number;
+  nomNaissance?: string;
   villeNaissance?: string;
   codePostalNaissance?: string;
   medecinTraitant?: string;
@@ -510,6 +511,8 @@ export interface GIRData {
 export interface AutonomieData {
   situationVie?: string | null;
   aideADomicile?: 'oui' | 'non' | null;
+  aideADomicileTypes?: string[];
+  aideADomicileFrequence?: string | null;
   aideADomicileHeures?: number | null;
   aideMarche?: string | null;
   gir?: GIRData | null;

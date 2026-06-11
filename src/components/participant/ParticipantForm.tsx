@@ -588,12 +588,14 @@ function ChoixMultiple({
   value,
   onChange,
   avecChampLibre,
+  placeholderCustom,
 }: {
   label: string;
   options: string[];
   value: string[];
   onChange: (v: string[]) => void;
   avecChampLibre?: boolean;
+  placeholderCustom?: string;
 }) {
   const selected = value ?? [];
   const predefined = selected.filter(s => options.includes(s));
@@ -648,7 +650,7 @@ function ChoixMultiple({
                 type="text"
                 value={custom}
                 onChange={e => updateCustom(idx, e.target.value)}
-                placeholder="Activité personnalisée..."
+                placeholder={placeholderCustom ?? 'Activité personnalisée...'}
                 className={`flex-1 ${CLS_INPUT}`}
               />
               <button
@@ -846,10 +848,11 @@ function CreneauxParJourForm({
 // ─── Options des champs autonomie / habitudes de vie / activité physique ──────
 
 const OPTIONS_SITUATION_VIE = ['Seul(e)', 'En famille', 'EHPAD / résidence', 'Autre'];
+const OPTIONS_TYPE_AIDE_DOMICILE = ['Aide ménagère', 'Auxiliaire de vie', 'Infirmier(e)', 'Portage de repas', 'Aide-soignant(e)', 'Autre'];
+const OPTIONS_FREQUENCE_AIDE = ['Quotidienne', 'Plusieurs fois / semaine', 'Hebdomadaire', 'Ponctuelle'];
 const OPTIONS_AIDE_MARCHE = ['Aucune', 'Canne', 'Déambulateur', 'Autre'];
 const OPTIONS_REPAS = ['1', '2', '3', 'Plus de 3'];
 const OPTIONS_HYDRATATION = ['< 1L', '1 à 1,5L', '> 1,5L'];
-const OPTIONS_NIVEAU_ACTIVITE = ['Sédentaire', 'Légèrement actif', 'Modérément actif', 'Actif'];
 const OPTIONS_ACTIVITES = [
   '🚶 Marche / Randonnée',
   '🚴 Cyclisme (vélo, vélo électrique)',
@@ -973,7 +976,7 @@ function computeCompletion(
   const champsTexte = [
     form.prenom, form.nom, form.dateNaissance, form.dateCreation,
     form.email, form.telephone,
-    form.villeNaissance, form.codePostalNaissance,
+    form.nomNaissance, form.villeNaissance, form.codePostalNaissance,
     form.adresseRue, form.adresseCodePostal, form.adresseVille,
     form.taille, form.poids,
     form.iban, form.bic, form.allergies,
@@ -989,7 +992,7 @@ function computeCompletion(
   if (traitements.length > 0) filled++;
   if (antecedents.length > 0) filled++;
 
-  total += 16;
+  total += 15;
   if (anamnese.autonomie?.situationVie != null) filled++;
   if (anamnese.autonomie?.aideADomicile != null) filled++;
   if (anamnese.autonomie?.aideMarche != null) filled++;
@@ -1001,7 +1004,6 @@ function computeCompletion(
   if (anamnese.habitudesVie?.niveauAppetit != null) filled++;
   if (anamnese.habitudesVie?.variationPoids != null) filled++;
   if (anamnese.habitudesVie?.tabagisme != null) filled++;
-  if (anamnese.activitePhysique?.niveauActivite != null) filled++;
   if ((anamnese.activitePhysique?.activitesActuelles?.length ?? 0) > 0) filled++;
   if ((anamnese.activitePhysique?.activitesPrecedentes?.length ?? 0) > 0) filled++;
   if (anamnese.sedentariteScore != null) filled++;
@@ -1103,6 +1105,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
     adresseVille:      seed.adresseVille      ?? '',
     taille:               seed.taille?.toString() ?? '',
     poids:                seed.poids?.toString()  ?? '',
+    nomNaissance:         seed.nomNaissance         ?? '',
     villeNaissance:       seed.villeNaissance       ?? '',
     codePostalNaissance:  seed.codePostalNaissance  ?? '',
     iban:                 seed.iban              ?? '',
@@ -1236,6 +1239,11 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
           <label className={CLS_LABEL}>Nom *</label>
           <input name="nom" value={form.nom} onChange={handleChange} required placeholder="Dupont" className={CLS_INPUT} />
         </div>
+      </div>
+      <div>
+        <label className={CLS_LABEL}>Nom de naissance <span className="text-gray-400 font-normal">(jeune fille, optionnel)</span></label>
+        <input name="nomNaissance" value={form.nomNaissance} onChange={handleChange}
+          placeholder="Martin" className={CLS_INPUT} />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -1688,14 +1696,30 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
               />
             </div>
             {anamnese.autonomie?.aideADomicile === 'oui' && (
-              <div className="mt-2">
-                <label className={CLS_LABEL}>Nombre d'heures / semaine</label>
-                <input
-                  type="number"
-                  value={anamnese.autonomie?.aideADomicileHeures ?? ''}
-                  onChange={e => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, aideADomicileHeures: e.target.value === '' ? null : Number(e.target.value) } }))}
-                  className={NUM_INPUT_CLS}
+              <div className="mt-2 space-y-3">
+                <ChoixMultiple
+                  label="Type d'aide"
+                  options={OPTIONS_TYPE_AIDE_DOMICILE}
+                  value={anamnese.autonomie?.aideADomicileTypes ?? []}
+                  onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, aideADomicileTypes: v } }))}
+                  avecChampLibre
+                  placeholderCustom="Type d'aide personnalisé..."
                 />
+                <ChoixUnique
+                  label="Fréquence"
+                  options={OPTIONS_FREQUENCE_AIDE}
+                  value={anamnese.autonomie?.aideADomicileFrequence}
+                  onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, aideADomicileFrequence: v } }))}
+                />
+                <div>
+                  <label className={CLS_LABEL}>Nombre d'heures / semaine</label>
+                  <input
+                    type="number"
+                    value={anamnese.autonomie?.aideADomicileHeures ?? ''}
+                    onChange={e => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, aideADomicileHeures: e.target.value === '' ? null : Number(e.target.value) } }))}
+                    className={NUM_INPUT_CLS}
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -1801,12 +1825,6 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
           </div>
         </div>
         <div className="p-4 space-y-4">
-          <ChoixUnique
-            label="Niveau d'activité actuel"
-            options={OPTIONS_NIVEAU_ACTIVITE}
-            value={anamnese.activitePhysique?.niveauActivite}
-            onChange={v => setAnamnese(a => ({ ...a, activitePhysique: { ...a.activitePhysique, niveauActivite: v } }))}
-          />
           <ChoixMultiple
             label="Activités pratiquées actuellement"
             options={OPTIONS_ACTIVITES}

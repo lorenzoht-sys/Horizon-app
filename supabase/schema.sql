@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS participants (
   poids                    NUMERIC(5,1),
 
   -- Naissance (attestations SAP)
+  nom_naissance            TEXT,
   ville_naissance          TEXT,
   code_postal_naissance    TEXT,
   cp_naissance             TEXT,

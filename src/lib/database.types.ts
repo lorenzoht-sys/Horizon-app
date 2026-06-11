@@ -29,6 +29,7 @@ export interface Database {
           contexte_clinic: string | null;
           taille: number | null;
           poids: number | null;
+          nom_naissance: string | null;
           ville_naissance: string | null;
           code_postal_naissance: string | null;
           medecin_traitant: string | null;
