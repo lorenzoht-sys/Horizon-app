@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Check } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Participant } from '../../types';
@@ -46,6 +46,10 @@ export default function ParticipantFormStepper({ initial, draftKey, onSave, onCa
       setStep(0);
     }
   }
+
+  const handleCompletionChange = useCallback((filled: number, total: number) => {
+    setCompletion(prev => (prev.filled === filled && prev.total === total) ? prev : { filled, total });
+  }, []);
 
   function handleAnnuler() {
     // Évite qu'un brouillon abandonné réapparaisse lors d'une prochaine création
@@ -106,7 +110,7 @@ export default function ParticipantFormStepper({ initial, draftKey, onSave, onCa
           step={(step + 1) as 1 | 2 | 3 | 4 | 5}
           initial={initial}
           draftKey={draftKey}
-          onCompletionChange={(filled, total) => setCompletion({ filled, total })}
+          onCompletionChange={handleCompletionChange}
           onSubmit={handleSubmit}
           onCancel={onCancel}
         />
