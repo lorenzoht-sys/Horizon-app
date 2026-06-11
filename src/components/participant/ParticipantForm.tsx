@@ -1007,9 +1007,8 @@ function computeCompletion(
   if (anamnese.sedentariteScore != null) filled++;
   if (anamnese.fatigueScore != null) filled++;
 
-  total += 2;
+  total += 1;
   if (profilActivite.objectifsPatient.length > 0) filled++;
-  if (profilActivite.activitesSouhaitees.length > 0) filled++;
 
   total += 3;
   if (anamnese.cognition?.plaintesMemoire != null) filled++;
@@ -1397,13 +1396,13 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
         </div>
       )}
 
-      {/* ── OBJECTIFS & ACTIVITÉS SOUHAITÉES ── */}
+      {/* ── OBJECTIFS ── */}
       <div className="border border-gray-100 rounded-2xl overflow-hidden">
         <div className="bg-gradient-to-r from-teal-50 to-cyan-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
           <span className="text-lg">🎯</span>
           <div>
-            <div className="font-semibold text-dark text-sm">Objectifs & activités souhaitées</div>
-            <div className="text-xs text-gray-500">Ce que le patient souhaite atteindre et pratiquer</div>
+            <div className="font-semibold text-dark text-sm">Objectifs</div>
+            <div className="text-xs text-gray-500">Ce que le patient souhaite atteindre</div>
           </div>
         </div>
         <div className="p-4 space-y-4">
@@ -1412,13 +1411,6 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
             options={OPTIONS_OBJECTIFS_PATIENT}
             value={profilActivite.objectifsPatient}
             onChange={v => setProfilActivite(p => ({ ...p, objectifsPatient: v }))}
-            avecChampLibre
-          />
-          <ChoixMultiple
-            label="Activités que le patient aimerait pratiquer"
-            options={OPTIONS_ACTIVITES}
-            value={profilActivite.activitesSouhaitees}
-            onChange={v => setProfilActivite(p => ({ ...p, activitesSouhaitees: v }))}
             avecChampLibre
           />
         </div>
@@ -1446,15 +1438,6 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
               jours={anamnese.organisation?.joursDisponibles ?? []}
               value={anamnese.organisation?.creneauxParJour ?? {}}
               onChange={v => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, creneauxParJour: v } }))}
-            />
-          </div>
-          <div>
-            <label className={CLS_LABEL}>Heure souhaitée</label>
-            <input
-              type="time"
-              value={anamnese.organisation?.heureSouhaitee ?? ''}
-              onChange={e => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, heureSouhaitee: e.target.value } }))}
-              className={NUM_INPUT_CLS}
             />
           </div>
           <ChoixUnique
