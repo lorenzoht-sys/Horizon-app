@@ -622,6 +622,7 @@ export interface AccesPatient {
     rdv: boolean;
     programme: boolean;
     messagePierre: boolean;
+    carteSante: boolean;
   };
   messagePierreTexte?: string;
   dernierAcces?: string;

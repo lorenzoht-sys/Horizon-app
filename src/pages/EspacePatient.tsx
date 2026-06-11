@@ -7,7 +7,7 @@ import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/ma
 import { loadExercices } from '../data/exercices';
 import { exportProgrammePDF } from '../utils/exportPDF';
 import { exportCarteSantePatient } from '../utils/exportDossierPDF';
-import { getSessionPatient, sauvegarderSessionPatient } from '../hooks/useAccesPatients';
+import { getSessionPatient, sauvegarderSessionPatient, getAccesPatient } from '../hooks/useAccesPatients';
 import { getTestsAutonomie } from '../lib/anamnese';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1352,7 +1352,8 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
   const [genPDF, setGenPDF] = useState(false);
   const praticien = loadPraticien();
   const sortedBilans = [...bilans].sort((a, b) => b.date.localeCompare(a.date));
-  const hasContent = documentsPatient.length > 0 || sortedBilans.length > 0;
+  const carteSanteAutorisee = getAccesPatient(participant.id).visibilite.carteSante;
+  const hasContent = documentsPatient.length > 0 || sortedBilans.length > 0 || carteSanteAutorisee;
 
   async function handleExportCarteSante() {
     setGenPDF(true);
@@ -1386,33 +1387,35 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
       {/* Fiche complète téléchargeable */}
-      <div style={{
-        background: 'white', border: '1.5px solid rgba(43,191,191,0.3)',
-        borderRadius: 18, padding: '16px',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.dark, marginBottom: 2 }}>
-              📄 Ma carte de santé
+      {carteSanteAutorisee && (
+        <div style={{
+          background: 'white', border: '1.5px solid rgba(43,191,191,0.3)',
+          borderRadius: 18, padding: '16px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.dark, marginBottom: 2 }}>
+                📄 Ma carte de santé
+              </div>
+              <div style={{ fontSize: 12, color: C.muted }}>
+                Identité · bilans · profil de santé — à partager avec un médecin
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: C.muted }}>
-              Identité · bilans · profil de santé — à partager avec un médecin
-            </div>
+            <button
+              onClick={handleExportCarteSante}
+              disabled={genPDF}
+              style={{
+                background: 'var(--color-teal)', color: 'white',
+                border: 'none', borderRadius: 12, padding: '9px 16px',
+                fontSize: 13, fontWeight: 600, cursor: genPDF ? 'not-allowed' : 'pointer',
+                opacity: genPDF ? 0.6 : 1,
+              }}
+            >
+              {genPDF ? 'Génération…' : 'Télécharger PDF →'}
+            </button>
           </div>
-          <button
-            onClick={handleExportCarteSante}
-            disabled={genPDF}
-            style={{
-              background: 'var(--color-teal)', color: 'white',
-              border: 'none', borderRadius: 12, padding: '9px 16px',
-              fontSize: 13, fontWeight: 600, cursor: genPDF ? 'not-allowed' : 'pointer',
-              opacity: genPDF ? 0.6 : 1,
-            }}
-          >
-            {genPDF ? 'Génération…' : 'Télécharger PDF →'}
-          </button>
         </div>
-      </div>
+      )}
 
       {/* Documents partagés explicitement par Pierre */}
       {documentsPatient.length > 0 && (

@@ -3,7 +3,7 @@ import type { AccesPatient, Participant } from '../types';
 const STORAGE_KEY = 'horizon_acces_patients';
 
 const VISIBILITE_DEFAULT: AccesPatient['visibilite'] = {
-  progression: true, bilans: true, rdv: true, programme: true, messagePierre: true,
+  progression: true, bilans: true, rdv: true, programme: true, messagePierre: true, carteSante: true,
 };
 
 function load(): AccesPatient[] {
@@ -34,10 +34,9 @@ export function trouverParticipantParCode(code: string): Participant | null {
 }
 
 export function getAccesPatient(participantId: string): AccesPatient {
-  return load().find(a => a.participantId === participantId) ?? {
-    participantId,
-    visibilite: { ...VISIBILITE_DEFAULT },
-  };
+  const found = load().find(a => a.participantId === participantId);
+  if (!found) return { participantId, visibilite: { ...VISIBILITE_DEFAULT } };
+  return { ...found, visibilite: { ...VISIBILITE_DEFAULT, ...found.visibilite } };
 }
 
 export function sauvegarderAccesPatient(acces: AccesPatient): void {

@@ -12,6 +12,7 @@ const VISIBILITE_ITEMS = [
   { key: 'rdv'           as const, label: 'Prochains rendez-vous' },
   { key: 'programme'     as const, label: "Programme d'exercices" },
   { key: 'messagePierre' as const, label: 'Message de Pierre' },
+  { key: 'carteSante'    as const, label: 'Carte de santé téléchargeable' },
 ];
 
 interface Props {
