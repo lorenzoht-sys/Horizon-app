@@ -1382,20 +1382,6 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
     } finally { setGenPDF(false); }
   }
 
-  if (!hasContent) {
-    return (
-      <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: C.dark, marginBottom: 8 }}>
-          Pas encore de documents
-        </div>
-        <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>
-          Les documents que {praticien.nom.split(' ')[0]} partage avec vous<br />apparaîtront ici.
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
@@ -1513,6 +1499,18 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
             );
           })}
         </>
+      )}
+
+      {!hasContent && (
+        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.dark, marginBottom: 8 }}>
+            Pas encore de documents
+          </div>
+          <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>
+            Les documents que {praticien.nom.split(' ')[0]} partage avec vous<br />apparaîtront ici.
+          </div>
+        </div>
       )}
     </div>
   );
