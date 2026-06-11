@@ -8,10 +8,9 @@ import BilanStepper from '../../components/bilan/BilanStepper';
 import DicteePostSeance from '../../components/DicteePostSeance';
 import ModalEspacePatient from '../../components/participant/ModalEspacePatient';
 import type { Bilan } from '../../types';
-import { TYPES_ANTECEDENT_LABELS } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../../lib/supabase';
-import { getContreIndications, getObjectifsActivites } from '../../lib/anamnese';
+import { getContreIndications, getObjectifsActivites, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne } from '../../lib/anamnese';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1556,6 +1555,8 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
                           <div style={{ flex: 1 }}>
                             <span style={{ fontWeight: 600, color: '#032c28' }}>{t.nom}</span>
                             {t.dose && <span style={{ color: '#4A6080' }}> · {t.dose}</span>}
+                            {t.frequence && <span style={{ color: '#4A6080' }}> · {t.frequence}</span>}
+                            {(t.moments?.length ?? 0) > 0 && <span style={{ color: '#4A6080' }}> · {formatMomentsTraitement(t.moments)}</span>}
                             {t.effetSecondaire && <div style={{ fontSize: 12, color: '#8FA8A8' }}>{t.effetSecondaire}</div>}
                           </div>
                           <span style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '2px 6px', borderRadius: 20, whiteSpace: 'nowrap' }}>En cours ✅</span>
@@ -1594,13 +1595,13 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
                     {antecedentsStructures.map(a => (
                       <div key={a.id}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                          <span>🩺</span>
-                          <span style={{ fontWeight: 600, color: '#032c28' }}>{TYPES_ANTECEDENT_LABELS[a.type] ?? a.type}</span>
-                          {a.date && <span style={{ fontSize: 12, color: '#8FA8A8' }}>· {a.date}</span>}
+                          <span>{getAntecedentIcon(a)}</span>
+                          <span style={{ fontWeight: 600, color: '#032c28' }}>{getAntecedentTitre(a)}</span>
                           {a.douleur === 'oui' && (
                             <span style={{ fontSize: 10, color: '#c2410c', background: '#fff7ed', border: '1px solid #fed7aa', padding: '2px 6px', borderRadius: 20 }}>Douleur liée</span>
                           )}
                         </div>
+                        {getAntecedentSousLigne(a) && <div style={{ fontSize: 12, color: '#8FA8A8', marginLeft: 24, marginTop: 2 }}>{getAntecedentSousLigne(a)}</div>}
                         {a.notes && <div style={{ fontSize: 12, color: '#8FA8A8', fontStyle: 'italic', marginLeft: 24, marginTop: 2 }}>{a.notes}</div>}
                       </div>
                     ))}

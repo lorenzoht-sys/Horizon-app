@@ -1,4 +1,5 @@
-import type { Bilan, OrganisationData, Participant, SedentariteReponses } from '../types';
+import type { AntecedentMedical, Bilan, MomentPrise, OrganisationData, Participant, SedentariteReponses, TraitementPatient } from '../types';
+import { MOMENTS_PRISE_LABELS, TYPES_ANTECEDENT_LABELS } from '../types';
 
 // Contre-indications : nouvelle source = fiche patient (anamnese),
 // avec repli sur l'ancien emplacement (bilan initial) pour les bilans déjà remplis.
@@ -99,6 +100,38 @@ export function getObjectifsActivites(
     objectifsPatient: (data?.objectifsPatient as string[] | undefined) ?? [],
     activitesSouhaitees: (data?.activitesSouhaitees as string[] | undefined) ?? [],
   };
+}
+
+// Traitements : formatage des moments de prise et de la ligne complète,
+// utilisés dans la fiche patient, ses exports PDF et le contexte de l'assistant IA.
+export function formatMomentsTraitement(moments?: MomentPrise[] | null): string {
+  if (!moments || moments.length === 0) return '—';
+  return moments.map(m => MOMENTS_PRISE_LABELS[m] ?? m).join(' + ');
+}
+
+export function formatTraitementLigne(t: TraitementPatient): string {
+  const nomDose = [t.nom, t.dose].filter(Boolean).join(' ');
+  const frequence = t.frequence ? ` — ${t.frequence}` : '';
+  const moments = (t.moments?.length ?? 0) > 0
+    ? ` (${t.moments!.map(m => (MOMENTS_PRISE_LABELS[m] ?? m).toLowerCase()).join(' + ')})`
+    : '';
+  return `${nomDose}${frequence}${moments}`;
+}
+
+// Antécédents médicaux structurés : titre saisi par le praticien (avec repli
+// sur le libellé du type), icône associée au type, et sous-ligne date/conséquence.
+export function getAntecedentIcon(a: AntecedentMedical): string {
+  return (TYPES_ANTECEDENT_LABELS[a.type] ?? '📋').split(' ')[0];
+}
+
+export function getAntecedentTitre(a: AntecedentMedical): string {
+  if (a.titre) return a.titre;
+  const label = TYPES_ANTECEDENT_LABELS[a.type] ?? a.type;
+  return label.split(' ').slice(1).join(' ') || label;
+}
+
+export function getAntecedentSousLigne(a: AntecedentMedical): string {
+  return [a.date, a.consequence].filter(Boolean).join(' · ');
 }
 
 // Organisation des séances : nouvelle source = fiche patient (anamnese), avec

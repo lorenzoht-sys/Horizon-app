@@ -20,8 +20,7 @@ import { exportFichePatientPDF } from '../utils/exportFichePatientPDF';
 import { TAG_CONFIG } from '../data/profiles';
 import { toast } from 'sonner';
 import type { Bilan, Participant, RessentiSeance } from '../types';
-import { TYPES_ANTECEDENT_LABELS } from '../types';
-import { getContreIndications } from '../lib/anamnese';
+import { getContreIndications, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne } from '../lib/anamnese';
 import type { CompteRenduSeance } from '../types/seance';
 
 // ── Constants & helpers ───────────────────────────────────────────────────────
@@ -385,6 +384,8 @@ export default function ParticipantProfileMobile() {
                       <div className="flex-1">
                         <span className="font-medium text-gray-700">{t.nom}</span>
                         {t.dose && <span className="text-gray-400"> · {t.dose}</span>}
+                        {t.frequence && <span className="text-gray-400"> · {t.frequence}</span>}
+                        {(t.moments?.length ?? 0) > 0 && <span className="text-gray-400"> · {formatMomentsTraitement(t.moments)}</span>}
                         {t.effetSecondaire && <div className="text-[12px] text-gray-400">{t.effetSecondaire}</div>}
                       </div>
                       <span className="text-[10px] font-semibold text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">En cours ✅</span>
@@ -423,11 +424,11 @@ export default function ParticipantProfileMobile() {
                 {antecedents.map(a => (
                   <div key={a.id}>
                     <div className="flex items-center gap-2 text-[13px]">
-                      <span>🩺</span>
-                      <span className="font-medium text-gray-700">{TYPES_ANTECEDENT_LABELS[a.type] ?? a.type}</span>
-                      {a.date && <span className="text-gray-400 text-[12px]">· {a.date}</span>}
+                      <span>{getAntecedentIcon(a)}</span>
+                      <span className="font-medium text-gray-700">{getAntecedentTitre(a)}</span>
                       {a.douleur === 'oui' && <span className="text-[10px] text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full">Douleur liée</span>}
                     </div>
+                    {getAntecedentSousLigne(a) && <p className="text-[12px] text-gray-400 ml-5 mt-0.5">{getAntecedentSousLigne(a)}</p>}
                     {a.notes && <p className="text-[12px] text-gray-400 ml-5 mt-0.5 italic">{a.notes}</p>}
                   </div>
                 ))}

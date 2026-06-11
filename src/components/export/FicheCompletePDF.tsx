@@ -2,7 +2,7 @@ import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import type { Participant, Bilan, Contrat, Programme } from '../../types';
 import { PdfHeader, PdfFooter, type PdfPraticienSettings } from './PdfShared';
 import type { CompteRenduSeance } from '../../types/seance';
-import { getContreIndications, getObjectifsActivites } from '../../lib/anamnese';
+import { getContreIndications, getObjectifsActivites, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne } from '../../lib/anamnese';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -157,6 +157,7 @@ function Page1({ participant, settings }: { participant: Participant; settings: 
     .filter(Boolean).join(', ');
 
   const traitements = (participant.traitements ?? []).filter(t => !t.date_fin);
+  const antecedentsStructures = participant.antecedentsMedicauxStructures ?? [];
   const antecedentsStr = participant.antecedentsMedicaux ?? null;
   const chirurgicauxStr = participant.antecedentsChirurgicaux ?? null;
 
@@ -211,15 +212,38 @@ function Page1({ participant, settings }: { participant: Participant; settings: 
           <>
             <Section title="Traitements médicamenteux en cours" />
             <View style={S.thead}>
-              <Text style={[S.tc1, { fontFamily: 'Helvetica-Bold', fontSize: 8 }]}>Médicament</Text>
-              <Text style={[S.tc3, { fontFamily: 'Helvetica-Bold', fontSize: 8 }]}>Dose</Text>
-              <Text style={[S.tc5, { fontFamily: 'Helvetica-Bold', fontSize: 8 }]}>Effet secondaire</Text>
+              <Text style={[S.tc1, { flex: 2, fontFamily: 'Helvetica-Bold', fontSize: 8 }]}>Médicament</Text>
+              <Text style={[S.tc2, { flex: 1, fontFamily: 'Helvetica-Bold', fontSize: 8 }]}>Dose</Text>
+              <Text style={[S.tc2, { flex: 1, fontFamily: 'Helvetica-Bold', fontSize: 8 }]}>Fréquence</Text>
+              <Text style={[S.tc3, { flex: 1.5, fontFamily: 'Helvetica-Bold', fontSize: 8 }]}>Moment</Text>
+              <Text style={[S.tc5, { flex: 1.5, fontFamily: 'Helvetica-Bold', fontSize: 8 }]}>Effet secondaire</Text>
             </View>
             {traitements.map((t, i) => (
               <View key={i} style={S.trow}>
-                <Text style={S.tc1}>{t.nom}</Text>
-                <Text style={S.tc3}>{t.dose ?? '—'}</Text>
-                <Text style={S.tc5}>{t.effetSecondaire ?? '—'}</Text>
+                <Text style={[S.tc1, { flex: 2 }]}>{t.nom}</Text>
+                <Text style={[S.tc2, { flex: 1 }]}>{t.dose ?? '—'}</Text>
+                <Text style={[S.tc2, { flex: 1 }]}>{t.frequence ?? '—'}</Text>
+                <Text style={[S.tc3, { flex: 1.5 }]}>{formatMomentsTraitement(t.moments)}</Text>
+                <Text style={[S.tc5, { flex: 1.5 }]}>{t.effetSecondaire ?? '—'}</Text>
+              </View>
+            ))}
+          </>
+        )}
+
+        {antecedentsStructures.length > 0 && (
+          <>
+            <Section title="Antécédents médicaux" />
+            {antecedentsStructures.map((a, i) => (
+              <View key={i} style={{ marginBottom: 4 }}>
+                <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: DARK }}>
+                  {getAntecedentIcon(a)} {getAntecedentTitre(a)}{a.douleur === 'oui' ? '  —  Douleur liée' : ''}
+                </Text>
+                {getAntecedentSousLigne(a) && (
+                  <Text style={{ fontSize: 8.5, color: GRAY, marginLeft: 14, marginTop: 1 }}>{getAntecedentSousLigne(a)}</Text>
+                )}
+                {a.notes && (
+                  <Text style={{ fontSize: 8.5, color: GRAY, marginLeft: 14, marginTop: 1, fontStyle: 'italic' }}>{a.notes}</Text>
+                )}
               </View>
             ))}
           </>

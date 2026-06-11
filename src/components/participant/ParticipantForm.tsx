@@ -1,6 +1,6 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
-import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical, TypeAntecedent, AnamneseData, ChutesData, PeriodeChutes, FourchetteChutes, SedentariteReponses } from '../../types';
-import { TYPES_ANTECEDENT_LABELS, PERIODES_CHUTES_LABELS } from '../../types';
+import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical, TypeAntecedent, AnamneseData, ChutesData, PeriodeChutes, FourchetteChutes, SedentariteReponses, MomentPrise } from '../../types';
+import { TYPES_ANTECEDENT_LABELS, PERIODES_CHUTES_LABELS, MOMENTS_PRISE_LABELS } from '../../types';
 import { useStructures } from '../../hooks/useStructures';
 import { getBrouillonParticipant, sauvegarderBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
 import { Save, X } from 'lucide-react';
@@ -12,6 +12,9 @@ function genId() {
 }
 
 const CLS_CELL = 'border border-gray-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-primary w-full';
+
+const FREQUENCES_TRAITEMENT = ['1x/jour', '2x/jour', '3x/jour', 'À la demande', 'Autre'];
+const MOMENTS_PRISE: MomentPrise[] = ['matin', 'midi', 'soir', 'nuit', 'avant_repas', 'apres_repas'];
 
 function ListeTraitementsForm({
   value,
@@ -69,20 +72,43 @@ function ListeTraitementsForm({
                     className="text-gray-500 hover:text-gray-700 text-sm px-2">Annuler</button>
                 </div>
               ) : (
-                <div className="grid gap-1.5 items-center" style={{ gridTemplateColumns: '1fr 1fr 1fr auto' }}>
-                  <input type="text" value={item.nom} onChange={e => upd(item.id, { nom: e.target.value })}
-                    placeholder="Metformine" className={CLS_CELL} />
-                  <input type="text" value={item.dose ?? ''} onChange={e => upd(item.id, { dose: e.target.value })}
-                    placeholder="500mg × 2/j" className={CLS_CELL} />
-                  <input type="text" value={item.effetSecondaire ?? ''} onChange={e => upd(item.id, { effetSecondaire: e.target.value })}
-                    placeholder="Troubles digestifs" className={CLS_CELL} />
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] font-semibold text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">En cours ✅</span>
-                    <button type="button" onClick={() => setStoppingId(item.id)}
-                      title="Marquer comme arrêté"
-                      className="text-gray-400 hover:text-amber-500 px-1 text-sm flex-shrink-0">⏹</button>
-                    <button type="button" onClick={() => remove(item.id)}
-                      className="text-red-400 hover:text-red-600 px-1 flex-shrink-0">✕</button>
+                <div className="border border-gray-100 rounded-lg p-2 bg-white">
+                  <div className="grid gap-1.5 items-center" style={{ gridTemplateColumns: '1fr 1fr 1fr auto' }}>
+                    <input type="text" value={item.nom} onChange={e => upd(item.id, { nom: e.target.value })}
+                      placeholder="Metformine" className={CLS_CELL} />
+                    <input type="text" value={item.dose ?? ''} onChange={e => upd(item.id, { dose: e.target.value })}
+                      placeholder="500mg × 2/j" className={CLS_CELL} />
+                    <input type="text" value={item.effetSecondaire ?? ''} onChange={e => upd(item.id, { effetSecondaire: e.target.value })}
+                      placeholder="Troubles digestifs" className={CLS_CELL} />
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] font-semibold text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">En cours ✅</span>
+                      <button type="button" onClick={() => setStoppingId(item.id)}
+                        title="Marquer comme arrêté"
+                        className="text-gray-400 hover:text-amber-500 px-1 text-sm flex-shrink-0">⏹</button>
+                      <button type="button" onClick={() => remove(item.id)}
+                        className="text-red-400 hover:text-red-600 px-1 flex-shrink-0">✕</button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 mt-2 pt-2 border-t border-gray-100">
+                    <select value={item.frequence ?? ''} onChange={e => upd(item.id, { frequence: e.target.value || undefined })}
+                      className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-primary">
+                      <option value="">Fréquence...</option>
+                      {FREQUENCES_TRAITEMENT.map(f => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                      {MOMENTS_PRISE.map(m => {
+                        const checked = (item.moments ?? []).includes(m);
+                        return (
+                          <label key={m} className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer">
+                            <input type="checkbox" checked={checked} className="accent-primary" onChange={() => {
+                              const moments = item.moments ?? [];
+                              upd(item.id, { moments: checked ? moments.filter(x => x !== m) : [...moments, m] });
+                            }} />
+                            {MOMENTS_PRISE_LABELS[m]}
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
@@ -161,6 +187,12 @@ function ListeAntecedentsForm({
               <span className="text-xs font-bold text-gray-400">Antécédent {i + 1}</span>
               <button type="button" onClick={() => remove(item.id)}
                 className="text-xs text-red-400 hover:text-red-600">🗑️ Supprimer</button>
+            </div>
+
+            <div className="mb-2.5">
+              <label className="text-[11px] font-medium text-gray-500 mb-1 block">Titre de l'antécédent *</label>
+              <input type="text" value={item.titre ?? ''} onChange={e => upd(item.id, { titre: e.target.value })}
+                placeholder="Ex: Opération genou droit, Fracture col fémur, Prothèse hanche..." className={`w-full ${CLS_CELL}`} />
             </div>
 
             <div className="flex flex-wrap gap-1.5 mb-2.5">
@@ -483,6 +515,51 @@ function ChoixUnique({
   );
 }
 
+// ─── CHOIX UNIQUE OU TEXTE LIBRE (bulles de suggestion + champ texte) ──────────
+
+function ChoixOuTexte({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  options: string[];
+  value: string | null | undefined;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className={CLS_LABEL}>{label}</label>
+      <div className="flex flex-wrap gap-2 mb-2">
+        {options.map(opt => (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => onChange(value === opt ? '' : opt)}
+            className={`px-3 py-1.5 rounded-xl text-sm font-medium border transition-colors ${
+              value === opt
+                ? 'bg-primary text-white border-primary'
+                : 'border-gray-200 text-gray-600 hover:border-primary/50 hover:bg-gray-50'
+            }`}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+      <input
+        type="text"
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder ?? 'Ou précisez...'}
+        className={CLS_INPUT}
+      />
+    </div>
+  );
+}
+
 // ─── CHOIX MULTIPLE (bulles + champ libre) ─────────────────────────────────────
 
 function ChoixMultiple({
@@ -636,6 +713,13 @@ const OPTIONS_ORIGINE_DEMARCHE = [
   '👨‍👩‍👦 Poussé par un proche',
   '✏️ Autre',
 ];
+
+// ─── Cognition & humeur : plaintes mémoire / suivi psychologique ──────────────
+
+const OPTIONS_DEPUIS_QUAND = ['< 6 mois', '6-12 mois', '> 1 an'];
+const OPTIONS_SIGNALE_PAR = ['Le patient lui-même', "L'entourage", 'Les deux'];
+const OPTIONS_SUIVI_PSY_QUI = ['Psychologue', 'Psychiatre', 'Psychothérapeute', 'Autre'];
+const OPTIONS_SUIVI_PSY_FREQUENCE = ['Hebdomadaire', 'Mensuel', 'Occasionnel', 'En pause'];
 
 const OPTIONS_JOURS_DISPONIBLES = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 const OPTIONS_CRENEAU = ['🌅 Matin (8h-12h)', '☀️ Après-midi (13h30-18h)', '🔄 Flexible'];
@@ -1263,20 +1347,94 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
           </div>
         </div>
         <div className="p-4 space-y-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-gray-700">Plaintes mémoire ?</span>
-            <ToggleOuiNon
-              value={anamnese.cognition?.plaintesMemoire}
-              onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, plaintesMemoire: v } }))}
-            />
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium text-gray-700">Plaintes mémoire ?</span>
+              <ToggleOuiNon
+                value={anamnese.cognition?.plaintesMemoire}
+                onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, plaintesMemoire: v } }))}
+              />
+            </div>
+            {anamnese.cognition?.plaintesMemoire === 'oui' && (
+              <div className="mt-3 space-y-3 border-t border-gray-100 pt-3">
+                <ChoixOuTexte
+                  label="Depuis quand ?"
+                  options={OPTIONS_DEPUIS_QUAND}
+                  value={anamnese.cognition?.plaintesMemoireDepuisQuand}
+                  onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, plaintesMemoireDepuisQuand: v } }))}
+                />
+                <div>
+                  <label className={CLS_LABEL}>Dans quel contexte ?</label>
+                  <input
+                    type="text"
+                    value={anamnese.cognition?.plaintesMemoireContexte ?? ''}
+                    onChange={e => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, plaintesMemoireContexte: e.target.value } }))}
+                    placeholder="Stress, fatigue, post-opératoire..."
+                    className={CLS_INPUT}
+                  />
+                </div>
+                <ChoixUnique
+                  label="Plaintes signalées par"
+                  options={OPTIONS_SIGNALE_PAR}
+                  value={anamnese.cognition?.plaintesMemoireSignalePar}
+                  onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, plaintesMemoireSignalePar: v } }))}
+                />
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-gray-700">Suivi psychologique ?</span>
-            <ToggleOuiNon
-              value={anamnese.cognition?.suiviPsy}
-              onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsy: v } }))}
-            />
+
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium text-gray-700">Suivi psychologique ?</span>
+              <ToggleOuiNon
+                value={anamnese.cognition?.suiviPsy}
+                onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsy: v } }))}
+              />
+            </div>
+            {anamnese.cognition?.suiviPsy === 'oui' && (
+              <div className="mt-3 space-y-3 border-t border-gray-100 pt-3">
+                <ChoixUnique
+                  label="Par qui ?"
+                  options={OPTIONS_SUIVI_PSY_QUI}
+                  value={anamnese.cognition?.suiviPsyQui}
+                  onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsyQui: v } }))}
+                />
+                <div>
+                  <label className={CLS_LABEL}>Où ?</label>
+                  <input
+                    type="text"
+                    value={anamnese.cognition?.suiviPsyOu ?? ''}
+                    onChange={e => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsyOu: e.target.value } }))}
+                    placeholder="Cabinet, hôpital, téléconsultation..."
+                    className={CLS_INPUT}
+                  />
+                </div>
+                <div>
+                  <label className={CLS_LABEL}>Pourquoi ?</label>
+                  <input
+                    type="text"
+                    value={anamnese.cognition?.suiviPsyPourquoi ?? ''}
+                    onChange={e => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsyPourquoi: e.target.value } }))}
+                    placeholder="Anxiété, dépression, deuil, trauma, autre..."
+                    className={CLS_INPUT}
+                  />
+                </div>
+                <ChoixOuTexte
+                  label="Depuis quand ?"
+                  options={OPTIONS_DEPUIS_QUAND}
+                  value={anamnese.cognition?.suiviPsyDepuisQuand}
+                  onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsyDepuisQuand: v } }))}
+                />
+                <ChoixUnique
+                  label="Fréquence"
+                  options={OPTIONS_SUIVI_PSY_FREQUENCE}
+                  value={anamnese.cognition?.suiviPsyFrequence}
+                  onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsyFrequence: v } }))}
+                />
+              </div>
+            )}
           </div>
+
           <ChoixUnique
             label="Pourquoi le patient est-il là aujourd'hui ?"
             options={OPTIONS_ORIGINE_DEMARCHE}

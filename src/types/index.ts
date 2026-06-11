@@ -424,10 +424,23 @@ export interface Structure {
 
 // ── TRAITEMENTS & ANTÉCÉDENTS STRUCTURÉS ─────────────────────────────────────
 
+export type MomentPrise = 'matin' | 'midi' | 'soir' | 'nuit' | 'avant_repas' | 'apres_repas';
+
+export const MOMENTS_PRISE_LABELS: Record<MomentPrise, string> = {
+  matin: 'Matin',
+  midi: 'Midi',
+  soir: 'Soir',
+  nuit: 'Nuit',
+  avant_repas: 'Avant repas',
+  apres_repas: 'Après repas',
+};
+
 export interface TraitementPatient {
   id: string;
   nom: string;
   dose?: string;
+  frequence?: string; // '1x/jour' | '2x/jour' | '3x/jour' | 'À la demande' | 'Autre'
+  moments?: MomentPrise[];
   effetSecondaire?: string;
   date_fin?: string; // null/undefined = en cours, ISO date = arrêté
 }
@@ -453,6 +466,7 @@ export const TYPES_ANTECEDENT_LABELS: Record<TypeAntecedent, string> = {
 
 export interface AntecedentMedical {
   id: string;
+  titre?: string;
   type: TypeAntecedent;
   date?: string;
   localisation?: string;
@@ -533,7 +547,15 @@ export interface ActivitePhysiqueData {
 
 export interface CognitionData {
   plaintesMemoire?: 'oui' | 'non' | null;
+  plaintesMemoireDepuisQuand?: string;
+  plaintesMemoireContexte?: string;
+  plaintesMemoireSignalePar?: string | null;
   suiviPsy?: 'oui' | 'non' | null;
+  suiviPsyQui?: string | null;
+  suiviPsyOu?: string;
+  suiviPsyPourquoi?: string;
+  suiviPsyDepuisQuand?: string;
+  suiviPsyFrequence?: string | null;
   origineDemarche?: string | null;
 }
 

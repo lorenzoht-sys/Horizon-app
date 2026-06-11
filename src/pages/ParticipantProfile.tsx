@@ -30,8 +30,7 @@ import { getSedProfil, getFSSProfil } from '../components/bilan/TestsAutonomie';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import type { Bilan, Participant, Contrat, Seance, ProfilHandicap } from '../types';
-import { TYPES_ANTECEDENT_LABELS } from '../types';
-import { getContreIndications, getTestsAutonomie } from '../lib/anamnese';
+import { getContreIndications, getTestsAutonomie, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne } from '../lib/anamnese';
 import type { CompteRenduSeance } from '../types/seance';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -266,10 +265,12 @@ function CarteSante({ participant, bilanInitial, onModifier }: {
           {traitementsActifs.length > 0 ? (
             <div className="space-y-1.5 mb-2">
               {traitementsActifs.map(t => (
-                <div key={t.id} className="flex items-center gap-2 text-[13px]">
+                <div key={t.id} className="flex items-center gap-2 text-[13px] flex-wrap">
                   <span className="flex-shrink-0">💊</span>
                   <span className="font-medium text-gray-700">{t.nom || '—'}</span>
                   {t.dose && <span className="text-gray-400">· {t.dose}</span>}
+                  {t.frequence && <span className="text-gray-400">· {t.frequence}</span>}
+                  {(t.moments?.length ?? 0) > 0 && <span className="text-gray-400">· {formatMomentsTraitement(t.moments)}</span>}
                   {t.effetSecondaire && <span className="text-gray-400 text-[12px]">— {t.effetSecondaire}</span>}
                   <span className="ml-auto text-[10px] font-semibold text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">En cours ✅</span>
                 </div>
@@ -314,13 +315,15 @@ function CarteSante({ participant, bilanInitial, onModifier }: {
             {antecedents.map(a => (
               <div key={a.id}>
                 <div className="flex items-center gap-2 text-[13px]">
-                  <span className="flex-shrink-0">🩺</span>
-                  <span className="font-medium text-gray-700">{TYPES_ANTECEDENT_LABELS[a.type] ?? a.type}</span>
-                  {a.date && <span className="text-gray-400 text-[12px]">· {a.date}</span>}
+                  <span className="flex-shrink-0">{getAntecedentIcon(a)}</span>
+                  <span className="font-medium text-gray-700">{getAntecedentTitre(a)}</span>
                   {a.douleur === 'oui' && (
                     <span className="text-[10px] text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full">Douleur liée</span>
                   )}
                 </div>
+                {getAntecedentSousLigne(a) && (
+                  <p className="text-[12px] text-gray-400 ml-5 mt-0.5">{getAntecedentSousLigne(a)}</p>
+                )}
                 {a.notes && (
                   <p className="text-[12px] text-gray-400 ml-5 mt-0.5 italic">{a.notes}</p>
                 )}
