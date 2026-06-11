@@ -1,52 +1,10 @@
 import React from 'react';
 import { pdf } from '@react-pdf/renderer';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import type { Bilan, Participant, NotesBilan, Programme, Exercice } from '../types';
 import type { PdfPraticienSettings } from '../components/export/PdfShared';
 import FicheBilanPDF from '../components/export/FicheBilanPDF';
 import ProgrammePDF from '../components/export/ProgrammePDF';
 import QRCode from 'qrcode';
-
-// ─── Helper DOM→PDF (legacy — utilisé par ExportButton) ──────────────────────
-
-async function captureElement(id: string, delayMs = 150): Promise<HTMLCanvasElement> {
-  const el = document.getElementById(id);
-  if (!el) throw new Error(`Élément #${id} introuvable`);
-  el.style.display = 'block';
-  await new Promise<void>(r => setTimeout(r, delayMs));
-  const canvas = await html2canvas(el, {
-    scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false,
-  });
-  el.style.display = 'none';
-  return canvas;
-}
-
-function placeCanvas(pdf: jsPDF, canvas: HTMLCanvasElement) {
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
-  const imgH = (canvas.height * pageW) / canvas.width;
-  const img = canvas.toDataURL('image/png');
-  if (imgH <= pageH) {
-    pdf.addImage(img, 'PNG', 0, 0, pageW, imgH);
-  } else {
-    let y = 0;
-    while (y < imgH) {
-      if (y > 0) pdf.addPage();
-      pdf.addImage(img, 'PNG', 0, -y, pageW, imgH);
-      y += pageH;
-    }
-  }
-}
-
-// ─── Export rapport HTML (ExportButton) ───────────────────────────────────────
-
-export async function exportPDF(elementId: string, fileName: string): Promise<void> {
-  const doc = new jsPDF('p', 'mm', 'a4');
-  const canvas = await captureElement(elementId, 100);
-  placeCanvas(doc, canvas);
-  doc.save(fileName);
-}
 
 // ─── Export fiche bilan — @react-pdf/renderer ─────────────────────────────────
 

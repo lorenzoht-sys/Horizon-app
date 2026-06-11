@@ -22,8 +22,7 @@ import BilanTimeline from '../components/bilan/BilanTimeline';
 import ContratsTab from '../components/participant/ContratsTab';
 import DicteePostSeance from '../components/DicteePostSeance';
 import ModalEspacePatient from '../components/participant/ModalEspacePatient';
-import { exportFichePatientPDF } from '../utils/exportFichePatientPDF';
-import { exportFicheCompletePDF } from '../utils/exportFicheCompletePDF';
+import { exportDossierPraticien } from '../utils/exportDossierPDF';
 import { calculerNote, NORMES_SCORING } from '../data/norms';
 import { TAG_CONFIG } from '../data/profiles';
 import { getSedProfil, getFSSProfil } from '../components/bilan/TestsAutonomie';
@@ -635,9 +634,7 @@ export default function ParticipantProfile() {
   const [confirmDeleteProg, setConfirmDeleteProg] = useState(false);
   const [showDictee, setShowDictee]         = useState(false);
   const [geocoding, setGeocoding]           = useState(false);
-  const [exportingPDF, setExportingPDF]         = useState(false);
-  const [exportingComplete, setExportingComplete] = useState(false);
-  const [showPdfMenu, setShowPdfMenu]           = useState(false);
+  const [exportingDossier, setExportingDossier] = useState(false);
   const [showProfilPicker, setShowProfilPicker] = useState(false);
   const [showEspacePatient, setShowEspacePatient] = useState(false);
   const [activeTab, setActiveTab]           = useState<TabId>('bilans');
@@ -712,7 +709,6 @@ export default function ParticipantProfile() {
     switch (action) {
       case 'modifier':        navigate(`/participants/${id}/modifier`); break;
       case 'evolution':       navigate(`/participant/${id}/comparaison`); break;
-      case 'pdf_fiche':       handleExportFiche(); break;
       case 'lien':            copyClientLink(); break;
       case 'export':          handleExport(); break;
       case 'supprimer':       setConfirmDelete(true); break;
@@ -723,34 +719,21 @@ export default function ParticipantProfile() {
     }
   }
 
-  async function handleExportFiche() {
-    setExportingPDF(true);
+  async function handleExportDossier() {
+    setExportingDossier(true);
     try {
-      await exportFichePatientPDF(
-        { participant: participant!, bilanInitial, contratActif, settings },
-        `Fiche_${participant!.nom}_${participant!.prenom}_MouvAPA.pdf`
-      );
-    } finally { setExportingPDF(false); }
-  }
-
-  async function handleExportFicheComplete() {
-    setExportingComplete(true);
-    setShowPdfMenu(false);
-    try {
-      const sortedBilans = [...participant!.bilans].sort((a, b) => a.date.localeCompare(b.date));
-      await exportFicheCompletePDF(
+      await exportDossierPraticien(
         {
           participant: participant!,
           bilans: sortedBilans,
           contratActif,
           programmeActif,
           compteRendus,
-          seancesStats,
           settings,
         },
-        `Fiche-Complete-${participant!.nom}-${participant!.prenom}-${today}.pdf`
+        `Dossier_${participant!.nom}_${participant!.prenom}.pdf`
       );
-    } finally { setExportingComplete(false); }
+    } finally { setExportingDossier(false); }
   }
 
   function copyClientLink() {
@@ -777,7 +760,6 @@ export default function ParticipantProfile() {
 
   const MENU_ACTIONS = [
     { Icon: Pencil,     label: 'Modifier le patient',    action: 'modifier' },
-    { Icon: FileText,   label: 'Fiche patient PDF',      action: 'pdf_fiche' },
     { Icon: TrendingUp, label: "Rapport d'évolution",    action: 'evolution', disabled: participant.bilans.length < 2 },
     { Icon: Share2,     label: 'Lien client',             action: 'lien' },
     { Icon: Download,   label: 'Mes données (JSON)',      action: 'export' },
@@ -1075,45 +1057,14 @@ export default function ParticipantProfile() {
                 <TrendingUp size={13} /> Évolution
               </button>
             )}
-            {/* ── Dropdown Fiche PDF ── */}
-            <div className="relative">
-              <button
-                onClick={() => setShowPdfMenu(v => !v)}
-                disabled={exportingPDF || exportingComplete}
-                className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-              >
-                <FileText size={13} />
-                {exportingComplete ? 'PDF…' : exportingPDF ? 'PDF…' : 'Fiche PDF'}
-                <ChevronDown size={11} />
-              </button>
-              {showPdfMenu && (
-                <div
-                  className="absolute left-0 top-full mt-1 w-52 bg-white rounded-lg border border-gray-200 shadow-lg z-50 overflow-hidden"
-                  onMouseLeave={() => setShowPdfMenu(false)}
-                >
-                  <button
-                    onClick={handleExportFicheComplete}
-                    className="w-full text-left px-4 py-2.5 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-100 flex items-center gap-2"
-                  >
-                    <FileText size={12} style={{ color: 'var(--color-teal)' }} />
-                    <span>
-                      <span className="font-medium">Fiche complète</span>
-                      <span className="block text-[11px] text-gray-400">4 pages — médecin / dossier</span>
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => { setShowPdfMenu(false); handleExportFiche(); }}
-                    className="w-full text-left px-4 py-2.5 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
-                  >
-                    <FileText size={12} className="text-gray-400" />
-                    <span>
-                      <span className="font-medium">Fiche résumé</span>
-                      <span className="block text-[11px] text-gray-400">Identité + bilan initial</span>
-                    </span>
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              onClick={handleExportDossier}
+              disabled={exportingDossier}
+              className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <FileText size={13} />
+              {exportingDossier ? 'PDF…' : 'Dossier'}
+            </button>
             <button
               onClick={() => handleAction('programme')}
               className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors"

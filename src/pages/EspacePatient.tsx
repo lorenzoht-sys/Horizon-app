@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/mappers';
 import { loadExercices } from '../data/exercices';
 import { exportProgrammePDF } from '../utils/exportPDF';
-import { exportFicheCompletePDF } from '../utils/exportFicheCompletePDF';
+import { exportCarteSantePatient } from '../utils/exportDossierPDF';
 import { getSessionPatient, sauvegarderSessionPatient } from '../hooks/useAccesPatients';
 import { getTestsAutonomie } from '../lib/anamnese';
 
@@ -1354,7 +1354,7 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
   const sortedBilans = [...bilans].sort((a, b) => b.date.localeCompare(a.date));
   const hasContent = documentsPatient.length > 0 || sortedBilans.length > 0;
 
-  async function handleFicheComplete() {
+  async function handleExportCarteSante() {
     setGenPDF(true);
     try {
       let s: Record<string, string> = {};
@@ -1368,17 +1368,16 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
         societe: s.societe ?? '',
       };
       const date = new Date().toISOString().slice(0, 10);
-      await exportFicheCompletePDF(
+      await exportCarteSantePatient(
         {
           participant,
           bilans: [...bilans].sort((a, b) => a.date.localeCompare(b.date)),
           contratActif: null,
           programmeActif,
           compteRendus: [],
-          seancesStats: [],
           settings,
         },
-        `Fiche-${participant.prenom}-${participant.nom}-${date}.pdf`
+        `Carte-Sante-${participant.prenom}-${participant.nom}-${date}.pdf`
       );
     } finally { setGenPDF(false); }
   }
@@ -1408,14 +1407,14 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: C.dark, marginBottom: 2 }}>
-              📄 Ma fiche santé complète
+              📄 Ma carte de santé
             </div>
             <div style={{ fontSize: 12, color: C.muted }}>
-              Identité · bilans · programme · recommandations
+              Identité · bilans · profil de santé — à partager avec un médecin
             </div>
           </div>
           <button
-            onClick={handleFicheComplete}
+            onClick={handleExportCarteSante}
             disabled={genPDF}
             style={{
               background: 'var(--color-teal)', color: 'white',

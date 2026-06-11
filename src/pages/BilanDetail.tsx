@@ -6,8 +6,6 @@ import { useParticipants } from '../hooks/useParticipants';
 import PageWrapper from '../components/layout/PageWrapper';
 import RadarChart from '../components/charts/RadarChart';
 import ComparisonTable from '../components/charts/ComparisonTable';
-import PrintableReport from '../components/export/PrintableReport';
-import ExportButton from '../components/export/ExportButton';
 import { calculerNotesAuto } from '../components/export/FicheBilanPDF';
 import { exportFicheBilanPDF } from '../utils/exportPDF';
 import { ArrowLeft, Calendar, MessageSquare, StickyNote, Target, AlertTriangle, FileText, TrendingUp } from 'lucide-react';
@@ -39,8 +37,6 @@ export default function BilanDetail() {
 
   return (
     <PageWrapper>
-      <PrintableReport participant={participant} bilan={bilan} initial={initial !== bilan ? initial : null} />
-
       <Link to={`/participant/${id}`} className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-primary mb-6 transition-colors">
         <ArrowLeft size={15} />
         Retour au profil
@@ -84,7 +80,6 @@ export default function BilanDetail() {
             <FileText size={15} />
             {exporting ? 'Génération…' : 'Fiche bilan PDF'}
           </button>
-          <ExportButton participant={participant} bilan={bilan} />
         </div>
       </div>
 

@@ -6,6 +6,7 @@ import {
   TrendingUp, FileText, NotebookPen, ChevronDown, ChevronUp, X, Trash2,
 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
+import { useProgramme } from '../hooks/useProgramme';
 import { useContrats } from '../hooks/useContrats';
 import { useAgenda } from '../hooks/useAgenda';
 import { useJournalSeance } from '../hooks/useJournalSeance';
@@ -16,7 +17,7 @@ import ParticipantForm from '../components/participant/ParticipantForm';
 import ModalEspacePatient from '../components/participant/ModalEspacePatient';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
 import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
-import { exportFichePatientPDF } from '../utils/exportFichePatientPDF';
+import { exportDossierPraticien } from '../utils/exportDossierPDF';
 import { TAG_CONFIG } from '../data/profiles';
 import { toast } from 'sonner';
 import type { Bilan, Participant, RessentiSeance } from '../types';
@@ -120,6 +121,7 @@ function MobileCard({ title, children }: { title?: string; children: React.React
 export default function ParticipantProfileMobile() {
   const { id } = useParams<{ id: string }>();
   const { participants, updateParticipant, deleteParticipant } = useParticipants();
+  const { programmeActif } = useProgramme(id ?? '');
   const { contrats } = useContrats();
   const { seances } = useAgenda();
   const { notesParPatient } = useJournalSeance();
@@ -132,7 +134,7 @@ export default function ParticipantProfileMobile() {
   const [showNoteModal, setShowNoteModal]   = useState(false);
   const [showDictee, setShowDictee]         = useState(false);
   const [showEspacePatient, setShowEspacePatient] = useState(false);
-  const [exportingPDF, setExportingPDF]     = useState(false);
+  const [exportingDossier, setExportingDossier] = useState(false);
   const [expandedIds, setExpandedIds]       = useState<Set<string>>(new Set());
 
   const participant = participants.find(p => p.id === id);
@@ -173,14 +175,21 @@ export default function ParticipantProfileMobile() {
     });
   }
 
-  async function handleExportFiche() {
-    setExportingPDF(true);
+  async function handleExportDossier() {
+    setExportingDossier(true);
     try {
-      await exportFichePatientPDF(
-        { participant: participant!, bilanInitial, contratActif, settings },
-        `Fiche_${participant!.nom}_${participant!.prenom}_MouvAPA.pdf`
+      await exportDossierPraticien(
+        {
+          participant: participant!,
+          bilans: sortedBilans,
+          contratActif,
+          programmeActif,
+          compteRendus,
+          settings,
+        },
+        `Dossier_${participant!.nom}_${participant!.prenom}.pdf`
       );
-    } finally { setExportingPDF(false); }
+    } finally { setExportingDossier(false); }
   }
 
   function handleEditSubmit(data: Omit<Participant, 'id' | 'token' | 'bilans'>) {
@@ -823,14 +832,14 @@ export default function ParticipantProfileMobile() {
           {[
             { icon: <Mic size={13} style={{ color: 'var(--color-teal)' }} />,    label: 'Dicter',    action: () => setShowDictee(true) },
             { icon: <TrendingUp size={13} className="text-gray-500" />, label: 'Évolution', action: () => { if (participant.bilans.length >= 2) navigate(`/participant/${id}/comparaison`); else toast('Nécessite 2 bilans'); } },
-            { icon: <FileText size={13} className="text-gray-500" />,   label: exportingPDF ? 'PDF…' : 'PDF', action: handleExportFiche },
+            { icon: <FileText size={13} className="text-gray-500" />,   label: exportingDossier ? 'PDF…' : 'Dossier', action: handleExportDossier },
             { icon: <NotebookPen size={13} className="text-gray-500" />,label: 'Note',      action: () => setShowNoteModal(true) },
             { icon: <ClipboardList size={13} className="text-gray-500" />, label: 'Contrat', action: () => navigate(`/participant/${id}/contrat/nouveau`) },
           ].map(btn => (
             <button
               key={btn.label}
               onClick={btn.action}
-              disabled={exportingPDF && btn.label.startsWith('PDF')}
+              disabled={exportingDossier && btn.label.startsWith('PDF')}
               className="flex items-center gap-1 border border-gray-200 rounded-lg text-[12px] text-gray-600 flex-shrink-0 disabled:opacity-50"
               style={{ height: 34, padding: '0 12px' }}
             >
