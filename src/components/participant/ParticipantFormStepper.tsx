@@ -16,7 +16,7 @@ const STEPS = [
 interface Props {
   initial?: Partial<Participant>;
   draftKey: string;
-  onSave: (data: Omit<Participant, 'id' | 'token' | 'bilans'>) => void;
+  onSave: (data: Omit<Participant, 'id' | 'token' | 'bilans'>) => void | Promise<void>;
   onCancel: () => void;
   isEdition?: boolean;
 }
@@ -24,15 +24,22 @@ interface Props {
 export default function ParticipantFormStepper({ initial, draftKey, onSave, onCancel, isEdition }: Props) {
   const [step, setStep] = useState(0);
   const [completion, setCompletion] = useState({ filled: 0, total: 1 });
+  const [isSaving, setIsSaving] = useState(false);
   const formRef = useRef<ParticipantFormHandle>(null);
   const LAST = STEPS.length - 1;
 
-  function handleSubmit(data: Omit<Participant, 'id' | 'token' | 'bilans'>) {
+  async function handleSubmit(data: Omit<Participant, 'id' | 'token' | 'bilans'>) {
     supprimerBrouillonParticipant(draftKey);
-    onSave(data);
+    setIsSaving(true);
+    try {
+      await onSave(data);
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function handleCreer() {
+    if (isSaving) return;
     const ok = formRef.current?.submit();
     if (ok === false) {
       toast.error('Le prénom et le nom sont obligatoires.');
@@ -124,10 +131,11 @@ export default function ParticipantFormStepper({ initial, draftKey, onSave, onCa
         ) : (
           <button
             onClick={handleCreer}
-            className="px-6 py-2.5 bg-success text-white rounded-xl font-semibold hover:bg-green-600 transition-colors flex items-center gap-2"
+            disabled={isSaving}
+            className="px-6 py-2.5 bg-success text-white rounded-xl font-semibold hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Check size={16} />
-            {isEdition ? 'Enregistrer' : 'Créer la fiche'}
+            {isSaving ? 'Enregistrement...' : (isEdition ? 'Enregistrer' : 'Créer la fiche')}
           </button>
         )}
       </div>
