@@ -1,6 +1,6 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
-import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical, TypeAntecedent, AnamneseData, ChutesData, PeriodeChutes, FourchetteChutes, SedentariteReponses, MomentPrise } from '../../types';
-import { TYPES_ANTECEDENT_LABELS, PERIODES_CHUTES_LABELS, MOMENTS_PRISE_LABELS } from '../../types';
+import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical, TypeAntecedent, AnamneseData, ChutesData, ChuteDetail, ActivitePrecedente, NiveauActivite, CreneauHoraire, SedentariteReponses, MomentPrise } from '../../types';
+import { TYPES_ANTECEDENT_LABELS, TYPES_BLESSURE_CHUTE, MOMENTS_PRISE_LABELS } from '../../types';
 import { useStructures } from '../../hooks/useStructures';
 import { getBrouillonParticipant, sauvegarderBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
 import { Save, X } from 'lucide-react';
@@ -393,6 +393,70 @@ function Echelle5({
 
 // ─── ANTÉCÉDENTS DE CHUTES (MOD3) ───────────────────────────────────────────────
 
+function ChuteCard({
+  item,
+  index,
+  onChange,
+  onRemove,
+}: {
+  item: ChuteDetail;
+  index: number;
+  onChange: (patch: Partial<ChuteDetail>) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="border border-gray-100 rounded-xl p-3.5 mb-3 bg-gray-50">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-bold text-gray-400">Chute {index + 1}</span>
+        <button type="button" onClick={onRemove}
+          className="text-xs text-red-400 hover:text-red-600">🗑️ Supprimer</button>
+      </div>
+
+      <div className="mb-2.5">
+        <label className="text-[11px] font-medium text-gray-500 mb-1 block">Date approximative (MM/AAAA)</label>
+        <input type="text" value={item.dateApprox ?? ''} onChange={e => onChange({ dateApprox: e.target.value })}
+          placeholder="03/2025" className={`w-full ${CLS_CELL}`} />
+      </div>
+
+      <div className="mb-2.5">
+        <label className="text-[11px] font-medium text-gray-500 mb-1 block">Circonstances</label>
+        <input type="text" value={item.circonstances ?? ''} onChange={e => onChange({ circonstances: e.target.value })}
+          placeholder="Bain, escaliers, sol glissant, vertige, nuit..." className={`w-full ${CLS_CELL}`} />
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap mb-2.5">
+        <span className="text-[11px] font-medium text-gray-500">Blessure occasionnée ?</span>
+        <ToggleOuiNon value={item.blessure} onChange={v => onChange({ blessure: v })} />
+      </div>
+
+      {item.blessure === 'oui' && (
+        <div className="mb-2.5 space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            {TYPES_BLESSURE_CHUTE.map(t => (
+              <button key={t} type="button" onClick={() => onChange({ typeBlessure: item.typeBlessure === t ? null : t })}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  item.typeBlessure === t
+                    ? 'bg-primary text-white border-primary'
+                    : 'border-gray-200 text-gray-600 hover:border-primary/50 hover:bg-white'
+                }`}>
+                {t}
+              </button>
+            ))}
+          </div>
+          <input type="text" value={item.detailBlessure ?? ''} onChange={e => onChange({ detailBlessure: e.target.value })}
+            placeholder="Détails..." className={`w-full ${CLS_CELL}`} />
+        </div>
+      )}
+
+      <Echelle5
+        label="Confiance depuis cette chute (1-5)"
+        value={item.confiance}
+        onChange={n => onChange({ confiance: n })}
+      />
+    </div>
+  );
+}
+
 function ChutesForm({
   value,
   onChange,
@@ -400,78 +464,34 @@ function ChutesForm({
   value: ChutesData;
   onChange: (v: ChutesData) => void;
 }) {
-  const upd = (patch: Partial<ChutesData>) => onChange({ ...value, ...patch });
-  const FOURCHETTES: FourchetteChutes[] = ['1', '2', '3-5', '6+'];
-  const PERIODES: PeriodeChutes[] = ['<1mois', '1-3mois', '3-6mois', '6-12mois', '+12mois'];
+  const items = value.chutesDetail ?? [];
+  const add = () => onChange({ ...value, chutesDetail: [...items, { id: genId() }] });
+  const remove = (id: string) => onChange({ ...value, chutesDetail: items.filter(i => i.id !== id) });
+  const upd = (id: string, patch: Partial<ChuteDetail>) =>
+    onChange({ ...value, chutesDetail: items.map(i => (i.id === id ? { ...i, ...patch } : i)) });
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-sm font-medium text-gray-700">A-t-il fait des chutes au cours des 12 derniers mois ?</span>
-        <ToggleOuiNon value={value.aChutes} onChange={v => upd({ aChutes: v })} />
+        <span className="text-sm font-medium text-gray-700">A-t-il déjà fait des chutes ?</span>
+        <ToggleOuiNon value={value.aChutes} onChange={v => onChange({ ...value, aChutes: v })} />
       </div>
 
       {value.aChutes === 'oui' && (
-        <div className="space-y-3 border-t border-gray-100 pt-3">
-          <div>
-            <label className={CLS_LABEL}>Nombre de chutes</label>
-            <div className="flex gap-2">
-              {FOURCHETTES.map(f => (
-                <button key={f} type="button" onClick={() => upd({ nombreChutes: value.nombreChutes === f ? null : f })}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                    value.nombreChutes === f ? 'bg-primary text-white border-primary' : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                  }`}>
-                  {f}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className={CLS_LABEL}>Période de la dernière chute</label>
-            <div className="flex flex-wrap gap-2">
-              {PERIODES.map(p => (
-                <button key={p} type="button" onClick={() => upd({ periode: value.periode === p ? null : p })}
-                  className={`px-3 py-1.5 rounded-xl text-sm font-medium border transition-colors ${
-                    value.periode === p ? 'bg-primary text-white border-primary' : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                  }`}>
-                  {PERIODES_CHUTES_LABELS[p]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className={CLS_LABEL}>Date de la dernière chute (optionnel)</label>
-            <input type="date" value={value.dateDerniereChute ?? ''} onChange={e => upd({ dateDerniereChute: e.target.value })} className={CLS_INPUT} />
-          </div>
-
-          <div>
-            <label className={CLS_LABEL}>Circonstances</label>
-            <textarea value={value.circonstances ?? ''} onChange={e => upd({ circonstances: e.target.value })}
-              placeholder="Bain, escaliers, sol glissant, vertige, nuit..." rows={2} className={CLS_INPUT} />
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-gray-700">Blessure occasionnée ?</span>
-            <ToggleOuiNon value={value.blessureOccasionnee} onChange={v => upd({ blessureOccasionnee: v })} />
-          </div>
-          {value.blessureOccasionnee === 'oui' && (
-            <input type="text" value={value.blessureDetail ?? ''} onChange={e => upd({ blessureDetail: e.target.value })}
-              placeholder="Fracture poignet, contusion, point de suture..." className={CLS_INPUT} />
-          )}
-
-          <Echelle5
-            label="Confiance lors des déplacements (1-5)"
-            aide="1 = Très peu confiant · 5 = Totalement confiant"
-            value={value.confianceDeplacements}
-            onChange={n => upd({ confianceDeplacements: n })}
-          />
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-gray-700">Aménagement du domicile réalisé ?</span>
-            <ToggleOuiNon value={value.amenagementDomicile} onChange={v => upd({ amenagementDomicile: v })} />
-          </div>
+        <div className="border-t border-gray-100 pt-3">
+          {items.map((item, i) => (
+            <ChuteCard
+              key={item.id}
+              item={item}
+              index={i}
+              onChange={patch => upd(item.id, patch)}
+              onRemove={() => remove(item.id)}
+            />
+          ))}
+          <button type="button" onClick={add}
+            className="w-full flex items-center justify-center gap-2 text-primary border border-dashed border-primary/40 hover:border-primary hover:bg-primary/5 px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+            + Ajouter une chute
+          </button>
         </div>
       )}
     </div>
@@ -654,6 +674,175 @@ function ChoixMultiple({
   );
 }
 
+// ─── ACTIVITÉS PRÉCÉDENTES (bulles + détails par activité) ─────────────────────
+
+function ActivitesPrecedentesForm({
+  value,
+  onChange,
+}: {
+  value: ActivitePrecedente[];
+  onChange: (v: ActivitePrecedente[]) => void;
+}) {
+  const items = value ?? [];
+
+  const toggleOption = (opt: string) => {
+    const exists = items.some(i => i.nom === opt);
+    onChange(exists ? items.filter(i => i.nom !== opt) : [...items, { nom: opt }]);
+  };
+
+  const upd = (idx: number, patch: Partial<ActivitePrecedente>) =>
+    onChange(items.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+
+  const removeAt = (idx: number) => onChange(items.filter((_, i) => i !== idx));
+
+  const addCustom = () => onChange([...items, { nom: '' }]);
+
+  return (
+    <div>
+      <label className={CLS_LABEL}>Activités pratiquées avant</label>
+      <div className="flex flex-wrap gap-2 mb-2">
+        {OPTIONS_ACTIVITES.map(opt => {
+          const selected = items.some(i => i.nom === opt);
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => toggleOption(opt)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium border transition-colors ${
+                selected
+                  ? 'bg-primary text-white border-primary'
+                  : 'border-gray-200 text-gray-600 hover:border-primary/50 hover:bg-gray-50'
+              }`}
+            >
+              {opt}
+              {selected && <span className="text-white/80 text-xs leading-none">✕</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {items.map((item, idx) => {
+        const isPredefined = OPTIONS_ACTIVITES.includes(item.nom);
+        return (
+          <div key={idx} className="border border-gray-100 rounded-xl p-3.5 mb-2 bg-gray-50">
+            <div className="flex items-center justify-between gap-2 mb-2.5">
+              {isPredefined ? (
+                <span className="text-xs font-bold text-gray-500">{item.nom}</span>
+              ) : (
+                <input
+                  type="text"
+                  value={item.nom}
+                  onChange={e => upd(idx, { nom: e.target.value })}
+                  placeholder="Activité personnalisée..."
+                  className={`flex-1 ${CLS_CELL}`}
+                />
+              )}
+              <button type="button" onClick={() => removeAt(idx)} aria-label="Supprimer"
+                className="text-gray-400 hover:text-red-500 p-1 text-base leading-none flex-shrink-0">✕</button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                value={item.periode ?? ''}
+                onChange={e => upd(idx, { periode: e.target.value })}
+                placeholder="Période (ex : jusqu'à 45 ans)"
+                className={`w-full ${CLS_CELL}`}
+              />
+              <div className="flex gap-1.5">
+                {NIVEAUX_ACTIVITE.map(n => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => upd(idx, { niveau: item.niveau === n ? null : n })}
+                    className={`flex-1 px-2 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                      item.niveau === n ? 'bg-primary text-white border-primary' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      <button type="button" onClick={addCustom}
+        className="flex items-center gap-1.5 text-primary text-sm font-medium border border-dashed border-primary/40 hover:border-primary hover:bg-primary/5 px-3 py-1.5 rounded-xl transition-colors">
+        + Autre
+      </button>
+    </div>
+  );
+}
+
+// ─── ORGANISATION : CRÉNEAUX HORAIRES PAR JOUR ──────────────────────────────────
+
+function CreneauxParJourForm({
+  jours,
+  value,
+  onChange,
+}: {
+  jours: string[];
+  value: Record<string, CreneauHoraire[]>;
+  onChange: (v: Record<string, CreneauHoraire[]>) => void;
+}) {
+  const addCreneau = (jour: string) => {
+    const creneaux = value[jour] ?? [];
+    onChange({ ...value, [jour]: [...creneaux, { debut: '07:00', fin: '12:00' }] });
+  };
+  const updCreneau = (jour: string, idx: number, patch: Partial<CreneauHoraire>) => {
+    const creneaux = (value[jour] ?? []).map((c, i) => (i === idx ? { ...c, ...patch } : c));
+    onChange({ ...value, [jour]: creneaux });
+  };
+  const removeCreneau = (jour: string, idx: number) => {
+    const creneaux = (value[jour] ?? []).filter((_, i) => i !== idx);
+    onChange({ ...value, [jour]: creneaux });
+  };
+
+  if (jours.length === 0) {
+    return <p className="text-xs text-gray-400">Sélectionnez d'abord un ou plusieurs jours disponibles.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {jours.map(jour => {
+        const creneaux = value[jour] ?? [];
+        return (
+          <div key={jour}>
+            <label className={CLS_LABEL}>{JOURS_LABELS_COMPLET[jour] ?? jour}</label>
+            {creneaux.map((c, i) => (
+              <div key={i} className="flex items-center gap-2 mb-2">
+                <span className="text-sm text-gray-500">De</span>
+                <select
+                  value={c.debut}
+                  onChange={e => updCreneau(jour, i, { debut: e.target.value })}
+                  className="border border-gray-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-primary"
+                >
+                  {OPTIONS_HEURES.map(h => <option key={h} value={h}>{h}</option>)}
+                </select>
+                <span className="text-sm text-gray-500">à</span>
+                <select
+                  value={c.fin}
+                  onChange={e => updCreneau(jour, i, { fin: e.target.value })}
+                  className="border border-gray-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-primary"
+                >
+                  {OPTIONS_HEURES.map(h => <option key={h} value={h}>{h}</option>)}
+                </select>
+                <button type="button" onClick={() => removeCreneau(jour, i)} aria-label="Supprimer"
+                  className="text-gray-400 hover:text-red-500 p-1 text-base leading-none">✕</button>
+              </div>
+            ))}
+            <button type="button" onClick={() => addCreneau(jour)}
+              className="flex items-center gap-1.5 text-primary text-sm font-medium border border-dashed border-primary/40 hover:border-primary hover:bg-primary/5 px-3 py-1.5 rounded-xl transition-colors">
+              + Ajouter un créneau
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Options des champs autonomie / habitudes de vie / activité physique ──────
 
 const OPTIONS_SITUATION_VIE = ['Seul(e)', 'En famille', 'EHPAD / résidence', 'Autre'];
@@ -676,22 +865,9 @@ const OPTIONS_ACTIVITES = [
 
 const NUM_INPUT_CLS = 'w-36 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary';
 
-// ─── Mode de déplacement, objectifs, cognition, organisation des séances ──────
+const NIVEAUX_ACTIVITE: NiveauActivite[] = ['Loisir', 'Compétition', 'Professionnel'];
 
-const MODE_DEPLACEMENT_LABELS: Record<NonNullable<Participant['modeDeplacementHabituel']>, string> = {
-  voiture: '🚗 Voiture',
-  velo: '🚲 Vélo',
-  transports: '🚌 Transports',
-  marche: '🚶 Marche',
-  fauteuil: '♿ Fauteuil',
-  autre: '✏️ Autre',
-};
-const MODE_DEPLACEMENT_OPTIONS = Object.values(MODE_DEPLACEMENT_LABELS);
-function modeDeplacementFromLabel(label: string | null): Participant['modeDeplacementHabituel'] {
-  const entry = (Object.entries(MODE_DEPLACEMENT_LABELS) as [NonNullable<Participant['modeDeplacementHabituel']>, string][])
-    .find(([, l]) => l === label);
-  return entry?.[0];
-}
+// ─── Objectifs, cognition, organisation des séances ───────────────────────────
 
 const OPTIONS_OBJECTIFS_PATIENT = [
   '💪 Renforcement musculaire',
@@ -722,8 +898,17 @@ const OPTIONS_SUIVI_PSY_QUI = ['Psychologue', 'Psychiatre', 'Psychothérapeute',
 const OPTIONS_SUIVI_PSY_FREQUENCE = ['Hebdomadaire', 'Mensuel', 'Occasionnel', 'En pause'];
 
 const OPTIONS_JOURS_DISPONIBLES = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-const OPTIONS_CRENEAU = ['🌅 Matin (8h-12h)', '☀️ Après-midi (13h30-18h)', '🔄 Flexible'];
-const OPTIONS_DUREE_SEANCE = ['30 min', '45 min', '60 min', '90 min'];
+const JOURS_LABELS_COMPLET: Record<string, string> = {
+  Lun: 'Lundi', Mar: 'Mardi', Mer: 'Mercredi', Jeu: 'Jeudi', Ven: 'Vendredi', Sam: 'Samedi',
+};
+const OPTIONS_DUREE_SEANCE = ['30 min', '45 min', '60 min', '90 min', '120 min'];
+const OPTIONS_HEURES = (() => {
+  const heures: string[] = [];
+  for (let m = 7 * 60; m <= 20 * 60; m += 30) {
+    heures.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+  }
+  return heures;
+})();
 
 // ─── IBAN ─────────────────────────────────────────────────────────────────────
 
@@ -804,7 +989,7 @@ function computeCompletion(
   if (traitements.length > 0) filled++;
   if (antecedents.length > 0) filled++;
 
-  total += 19;
+  total += 16;
   if (anamnese.autonomie?.situationVie != null) filled++;
   if (anamnese.autonomie?.aideADomicile != null) filled++;
   if (anamnese.autonomie?.aideMarche != null) filled++;
@@ -813,20 +998,16 @@ function computeCompletion(
   if (anamnese.habitudesVie?.hydratation != null) filled++;
   if (anamnese.habitudesVie?.qualiteSommeil != null) filled++;
   if (anamnese.habitudesVie?.heuresSommeil != null) filled++;
-  if (anamnese.habitudesVie?.energieMatin != null) filled++;
-  if (anamnese.habitudesVie?.energieSoir != null) filled++;
   if (anamnese.habitudesVie?.niveauAppetit != null) filled++;
   if (anamnese.habitudesVie?.variationPoids != null) filled++;
   if (anamnese.habitudesVie?.tabagisme != null) filled++;
   if (anamnese.activitePhysique?.niveauActivite != null) filled++;
   if ((anamnese.activitePhysique?.activitesActuelles?.length ?? 0) > 0) filled++;
   if ((anamnese.activitePhysique?.activitesPrecedentes?.length ?? 0) > 0) filled++;
-  if (anamnese.activitePhysique?.derniereActivite) filled++;
   if (anamnese.sedentariteScore != null) filled++;
   if (anamnese.fatigueScore != null) filled++;
 
-  total += 3;
-  if (profilActivite.modeDeplacementHabituel != null) filled++;
+  total += 2;
   if (profilActivite.objectifsPatient.length > 0) filled++;
   if (profilActivite.activitesSouhaitees.length > 0) filled++;
 
@@ -837,7 +1018,7 @@ function computeCompletion(
 
   total += 2;
   if ((anamnese.organisation?.joursDisponibles?.length ?? 0) > 0) filled++;
-  if (anamnese.organisation?.creneau != null) filled++;
+  if (Object.keys(anamnese.organisation?.creneauxParJour ?? {}).length > 0) filled++;
 
   total += 1;
   if (rgpd.consentementObtenu) filled++;
@@ -1259,12 +1440,14 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
             value={anamnese.organisation?.joursDisponibles ?? []}
             onChange={v => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, joursDisponibles: v } }))}
           />
-          <ChoixUnique
-            label="Créneau préféré"
-            options={OPTIONS_CRENEAU}
-            value={anamnese.organisation?.creneau}
-            onChange={v => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, creneau: v } }))}
-          />
+          <div>
+            <label className={CLS_LABEL}>Créneaux horaires par jour</label>
+            <CreneauxParJourForm
+              jours={anamnese.organisation?.joursDisponibles ?? []}
+              value={anamnese.organisation?.creneauxParJour ?? {}}
+              onChange={v => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, creneauxParJour: v } }))}
+            />
+          </div>
           <div>
             <label className={CLS_LABEL}>Heure souhaitée</label>
             <input
@@ -1540,27 +1723,6 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
             onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, aideMarche: v } }))}
           />
           <div className="border-t border-gray-100 pt-3">
-            <ChoixUnique
-              label="Mode de déplacement habituel"
-              options={MODE_DEPLACEMENT_OPTIONS}
-              value={profilActivite.modeDeplacementHabituel ? MODE_DEPLACEMENT_LABELS[profilActivite.modeDeplacementHabituel] : null}
-              onChange={label => setProfilActivite(p => ({
-                ...p,
-                modeDeplacementHabituel: modeDeplacementFromLabel(label),
-                modeDeplacementDetail: label === MODE_DEPLACEMENT_LABELS.autre ? p.modeDeplacementDetail : '',
-              }))}
-            />
-            {profilActivite.modeDeplacementHabituel === 'autre' && (
-              <input
-                type="text"
-                value={profilActivite.modeDeplacementDetail}
-                onChange={e => setProfilActivite(p => ({ ...p, modeDeplacementDetail: e.target.value }))}
-                placeholder="Précisez le mode de déplacement..."
-                className={`mt-2 ${CLS_INPUT}`}
-              />
-            )}
-          </div>
-          <div className="border-t border-gray-100 pt-3">
             <label className={CLS_LABEL}>Évaluation GIR (Grille AGGIR)</label>
             <GIRWidget
               value={anamnese.autonomie?.gir ?? null}
@@ -1608,16 +1770,6 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
               className={NUM_INPUT_CLS}
             />
           </div>
-          <Echelle5
-            label="Énergie le matin (1-5)"
-            value={anamnese.habitudesVie?.energieMatin}
-            onChange={n => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, energieMatin: n } }))}
-          />
-          <Echelle5
-            label="Énergie le soir (1-5)"
-            value={anamnese.habitudesVie?.energieSoir}
-            onChange={n => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, energieSoir: n } }))}
-          />
           <Echelle5
             label="Niveau d'appétit (1-5)"
             value={anamnese.habitudesVie?.niveauAppetit}
@@ -1679,23 +1831,10 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
             onChange={v => setAnamnese(a => ({ ...a, activitePhysique: { ...a.activitePhysique, activitesActuelles: v } }))}
             avecChampLibre
           />
-          <ChoixMultiple
-            label="Activités pratiquées avant"
-            options={OPTIONS_ACTIVITES}
+          <ActivitesPrecedentesForm
             value={anamnese.activitePhysique?.activitesPrecedentes ?? []}
             onChange={v => setAnamnese(a => ({ ...a, activitePhysique: { ...a.activitePhysique, activitesPrecedentes: v } }))}
-            avecChampLibre
           />
-          <div>
-            <label className={CLS_LABEL}>Dernière activité régulière</label>
-            <input
-              type="text"
-              value={anamnese.activitePhysique?.derniereActivite ?? ''}
-              onChange={e => setAnamnese(a => ({ ...a, activitePhysique: { ...a.activitePhysique, derniereActivite: e.target.value } }))}
-              placeholder="Il y a 2 ans / Jamais"
-              className={CLS_INPUT}
-            />
-          </div>
         </div>
       </div>
 
@@ -1736,7 +1875,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
               <p className="text-red-600"><span className="font-medium">⚠️ Contre-indications :</span> {anamnese.contreIndicationsDetail || 'oui (détail non précisé)'}</p>
             )}
             {anamnese.chutes?.aChutes === 'oui' && (
-              <p><span className="font-medium text-gray-700">Chutes :</span> oui — {anamnese.chutes.nombreChutes ?? '?'} chute(s)</p>
+              <p><span className="font-medium text-gray-700">Chutes :</span> oui — {anamnese.chutes.chutesDetail?.length ?? 0} chute(s)</p>
             )}
             {structureId && (
               <p><span className="font-medium text-gray-700">Structure :</span> {structures.find(s => s.id === structureId)?.nom ?? '—'}</p>
