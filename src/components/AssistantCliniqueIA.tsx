@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Participant, Bilan } from '../types';
 import { supabase, getAuthHeader } from '../lib/supabase';
-import { getContreIndications, getObjectifsActivites, formatTraitementLigne } from '../lib/anamnese';
+import { getContreIndications, getObjectifsActivites, formatTraitementLigne, getTraitementsActifs } from '../lib/anamnese';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { toast } from 'sonner';
 
@@ -101,8 +101,7 @@ function buildSystemContext(participant: Participant, bilanInitial: Bilan | null
           ap.score >= 1.5 ? 'Modérément limité' : 'Très limité — à signaler au médecin'
         }${apleyAsym ? ' — Asymétrie D/G à surveiller' : ''}${ap.notes ? ` (${ap.notes})` : ''}`
       : null,
-    ...(participant.traitements ?? [])
-      .filter(t => !t.date_fin)
+    ...getTraitementsActifs(participant.traitements)
       .map(t => `- Traitement en cours : ${formatTraitementLigne(t)}`),
   ].filter(Boolean).join('\n');
 

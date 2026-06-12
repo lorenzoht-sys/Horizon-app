@@ -12,6 +12,7 @@ import ParticipantCard from '../components/participant/ParticipantCard';
 import { toast } from 'sonner';
 import type { Structure } from '../types';
 import jsPDF from 'jspdf';
+import { cleanTextPdf } from '../utils/pdfText';
 
 const URL_APP = 'horizon-app-dusky.vercel.app';
 const MOIS_LONGS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
@@ -100,8 +101,8 @@ export default function StructureDetail() {
     doc.text(`Émise le : ${new Date().toLocaleDateString('fr-FR')}`, 20, y); y += 16;
     doc.setFontSize(11); doc.setTextColor(13, 43, 43); doc.text('Structure facturée :', 20, y); y += 6;
     doc.setFontSize(10); doc.setTextColor(60, 60, 60);
-    doc.text(structure.nom, 20, y); y += 5;
-    if (structure.contactEmail) { doc.text(structure.contactEmail, 20, y); y += 5; }
+    doc.text(cleanTextPdf(structure.nom), 20, y); y += 5;
+    if (structure.contactEmail) { doc.text(cleanTextPdf(structure.contactEmail), 20, y); y += 5; }
     y += 12;
     doc.setFontSize(12); doc.setTextColor(13, 43, 43);
     doc.text(`Séances APA — ${nomMois(f.periodeMois, f.periodeAnnee)}`, 20, y); y += 10;

@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Bot, Send, Mic, MicOff, Copy, ArrowLeft, RefreshCw, Search } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
-import { getContreIndications, getTestsAutonomie } from '../lib/anamnese';
+import { getContreIndications, getTestsAutonomie, getTraitementsActifs, getTraitementsArretes } from '../lib/anamnese';
 import { supabase, getAuthHeader } from '../lib/supabase';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { toast } from 'sonner';
@@ -288,8 +288,8 @@ Tu cites les recommandations HAS ou SFP-APA quand pertinent.`;
   const ciInfo = getContreIndications(patient, bilanInitial);
   const ci = ciInfo.actif ? (ciInfo.detail ?? 'non précisées') : 'aucune contre-indication renseignée';
   const pathologies = [patient.pathologie, patient.antecedentsMedicaux].filter(Boolean).join(' / ') || 'non renseigné';
-  const traitementsActifsCtx = (patient.traitements ?? []).filter(t => !t.date_fin);
-  const traitementsArretesCtx = (patient.traitements ?? []).filter(t => t.date_fin);
+  const traitementsActifsCtx = getTraitementsActifs(patient.traitements);
+  const traitementsArretesCtx = getTraitementsArretes(patient.traitements);
   const imc = patient.taille && patient.poids
     ? (patient.poids / ((patient.taille / 100) ** 2)).toFixed(1) : 'NE';
 

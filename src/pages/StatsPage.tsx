@@ -18,6 +18,7 @@ import { useFactures } from '../hooks/useFactures';
 import type { Participant, Contrat } from '../types';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
+import { cleanTextPdf } from '../utils/pdfText';
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -160,9 +161,9 @@ function exportFacturePDF(data: {
   doc.setFontSize(10);
   doc.setTextColor(60, 60, 60);
   y += 6;
-  doc.text(data.praticien.nom || data.praticien.societe, 20, y);
-  if (data.praticien.email) { y += 5; doc.text(data.praticien.email, 20, y); }
-  if (data.praticien.telephone) { y += 5; doc.text(data.praticien.telephone, 20, y); }
+  doc.text(cleanTextPdf(data.praticien.nom || data.praticien.societe), 20, y);
+  if (data.praticien.email) { y += 5; doc.text(cleanTextPdf(data.praticien.email), 20, y); }
+  if (data.praticien.telephone) { y += 5; doc.text(cleanTextPdf(data.praticien.telephone), 20, y); }
 
   y += 16;
   doc.setFontSize(11);
@@ -171,7 +172,7 @@ function exportFacturePDF(data: {
   doc.setFontSize(10);
   doc.setTextColor(60, 60, 60);
   y += 6;
-  doc.text(data.nomPatient, 20, y);
+  doc.text(cleanTextPdf(data.nomPatient), 20, y);
 
   y += 16;
   doc.setDrawColor(200, 200, 200);

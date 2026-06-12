@@ -29,7 +29,7 @@ import { getSedProfil, getFSSProfil } from '../components/bilan/TestsAutonomie';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import type { Bilan, Participant, Contrat, Seance, ProfilHandicap } from '../types';
-import { getContreIndications, getTestsAutonomie, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne } from '../lib/anamnese';
+import { getContreIndications, getTestsAutonomie, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../lib/anamnese';
 import type { CompteRenduSeance } from '../types/seance';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -215,8 +215,8 @@ function CarteSante({ participant, bilanInitial, onModifier }: {
   const [showArretes, setShowArretes] = useState(false);
   const profil = bilanInitial?.profilEnrichi;
 
-  const traitementsActifs = (participant.traitements ?? []).filter(t => !t.date_fin);
-  const traitementsArretes = (participant.traitements ?? []).filter(t => t.date_fin);
+  const traitementsActifs = getTraitementsActifs(participant.traitements);
+  const traitementsArretes = getTraitementsArretes(participant.traitements);
   const antecedents = participant.antecedentsMedicauxStructures ?? [];
 
   const lignes = ([

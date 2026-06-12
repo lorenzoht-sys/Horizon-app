@@ -118,6 +118,18 @@ export function formatTraitementLigne(t: TraitementPatient): string {
   return `${nomDose}${frequence}${moments}`;
 }
 
+// Lignes actives / arrêtées, en ignorant celles ajoutées via "+ Ajouter" dans
+// la fiche patient mais jamais renseignées (nom vide) — sinon une section
+// "Traitements en cours" vide s'affiche dans la fiche, les exports PDF et le
+// contexte de l'assistant IA.
+export function getTraitementsActifs(traitements?: TraitementPatient[] | null): TraitementPatient[] {
+  return (traitements ?? []).filter(t => !t.date_fin && t.nom?.trim());
+}
+
+export function getTraitementsArretes(traitements?: TraitementPatient[] | null): TraitementPatient[] {
+  return (traitements ?? []).filter(t => t.date_fin && t.nom?.trim());
+}
+
 // Antécédents médicaux structurés : titre saisi par le praticien (avec repli
 // sur le libellé du type), icône associée au type, et sous-ligne date/conséquence.
 export function getAntecedentIcon(a: AntecedentMedical): string {

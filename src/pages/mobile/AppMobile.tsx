@@ -10,7 +10,7 @@ import ModalEspacePatient from '../../components/participant/ModalEspacePatient'
 import type { Bilan } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, getAuthHeader } from '../../lib/supabase';
-import { getContreIndications, getObjectifsActivites, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne } from '../../lib/anamnese';
+import { getContreIndications, getObjectifsActivites, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../../lib/anamnese';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1527,8 +1527,8 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
         )}
 
         {onglet === 'sante' && (() => {
-          const traitementsActifs = (p.traitements ?? []).filter(t => !t.date_fin);
-          const traitementsArretes = (p.traitements ?? []).filter(t => t.date_fin);
+          const traitementsActifs = getTraitementsActifs(p.traitements);
+          const traitementsArretes = getTraitementsArretes(p.traitements);
           const antecedentsStructures = p.antecedentsMedicauxStructures ?? [];
           const hasAnyData = !!(p.pathologie || p.antecedentsMedicaux || p.antecedentsChirurgicaux || p.allergies
             || traitementsActifs.length || traitementsArretes.length || antecedentsStructures.length);

@@ -21,7 +21,7 @@ import { exportDossierPraticien } from '../utils/exportDossierPDF';
 import { TAG_CONFIG } from '../data/profiles';
 import { toast } from 'sonner';
 import type { Bilan, Participant, RessentiSeance } from '../types';
-import { getContreIndications, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne } from '../lib/anamnese';
+import { getContreIndications, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../lib/anamnese';
 import type { CompteRenduSeance } from '../types/seance';
 
 // ── Constants & helpers ───────────────────────────────────────────────────────
@@ -350,8 +350,8 @@ export default function ParticipantProfileMobile() {
       participant.allergies && { icon: '⚠️', label: 'Allergies', texte: participant.allergies },
     ].filter(Boolean) as { icon: string; label: string; texte: string }[];
 
-    const traitementsActifs = (participant.traitements ?? []).filter(t => !t.date_fin);
-    const traitementsArretes = (participant.traitements ?? []).filter(t => t.date_fin);
+    const traitementsActifs = getTraitementsActifs(participant.traitements);
+    const traitementsArretes = getTraitementsArretes(participant.traitements);
     const antecedents = participant.antecedentsMedicauxStructures ?? [];
 
     const profil = bilanInitial?.profilEnrichi;

@@ -10,6 +10,7 @@ import {
   formatMomentsTraitement,
   getAntecedentTitre,
   getAntecedentSousLigne,
+  getTraitementsActifs,
 } from '../../lib/anamnese';
 import { TYPES_ANTECEDENT_LABELS } from '../../types';
 import { PdfFooter, LOGO_H } from './PdfShared';
@@ -306,7 +307,7 @@ export default function DossierPDF({
   const modeDeplacement = getModeDeplacement(participant, bilanInitial);
   const organisation = getOrganisation(participant, bilanInitial);
 
-  const traitementsActifs = (participant.traitements ?? []).filter(t => !t.date_fin);
+  const traitementsActifs = getTraitementsActifs(participant.traitements);
   const antecedentsStructures = participant.antecedentsMedicauxStructures ?? [];
   const autonomie = participant.anamnese?.autonomie;
 
