@@ -54,7 +54,7 @@ const SESSION_KEY = 'horizon_patient_session';
 
 export interface SessionPatient {
   patientId: string;
-  code: string;
+  token: string;
 }
 
 export function sauvegarderSessionPatient(session: SessionPatient): void {
@@ -64,6 +64,10 @@ export function sauvegarderSessionPatient(session: SessionPatient): void {
 export function getSessionPatient(): SessionPatient | null {
   try { return JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null'); }
   catch { return null; }
+}
+
+export function purgerSessionPatient(): void {
+  try { localStorage.removeItem(SESSION_KEY); } catch {}
 }
 
 export function mettreAJourDernierAcces(participantId: string): void {

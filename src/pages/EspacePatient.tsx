@@ -1,25 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useParams, useSearchParams, Navigate } from 'react-router-dom';
+import { useParams, Navigate } from 'react-router-dom';
 import type { Participant, Seance, Bilan, Programme, ProgrammeV2, ProgrammeSeanceV2, JourProgramme } from '../types';
 import { JOURS_PROGRAMME } from '../types';
-import { supabase } from '../lib/supabase';
 import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/mappers';
+import { patientFetchMe, patientSauvegarderSeance } from '../lib/patientApi';
 import { loadExercices } from '../data/exercices';
 import { exportProgrammePDF } from '../utils/exportPDF';
 import { exportCarteSantePatient } from '../utils/exportDossierPDF';
-import { getSessionPatient, sauvegarderSessionPatient, getAccesPatient } from '../hooks/useAccesPatients';
+import { getSessionPatient, purgerSessionPatient, getAccesPatient } from '../hooks/useAccesPatients';
 import { getTestsAutonomie } from '../lib/anamnese';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function calculerCode(prenom: string): string {
-  return prenom
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z]/g, '')
-    + '2026';
-}
 
 function fmt(iso: string, options?: Intl.DateTimeFormatOptions): string {
   return new Date(iso + 'T12:00').toLocaleDateString('fr-FR', options ?? {
@@ -672,11 +663,11 @@ interface ExState {
 
 function ModeSeance({
   seanceActive,
-  participantId,
+  token,
   onTermine,
 }: {
   seanceActive: SeanceActive;
-  participantId: string;
+  token: string;
   onTermine: () => void;
 }) {
   const { seance, progId } = seanceActive;
@@ -714,7 +705,6 @@ function ModeSeance({
   }
 
   async function sauvegarder() {
-    if (!supabase) { onTermine(); return; }
     setSaving(true);
     setErreurSauvegarde(false);
     try {
@@ -722,31 +712,21 @@ function ModeSeance({
       const statut = realises === total ? 'terminee' : 'partielle';
       const dureeMins = Math.max(1, Math.round((Date.now() - startTime) / 60000));
 
-      const { data: sp, error: spErr } = await supabase
-        .from('seances_patient')
-        .insert({
-          participant_id: participantId,
-          programme_id: progId,
-          seance_id: seance.id,
-          date_seance: new Date().toISOString().split('T')[0],
-          statut,
-          commentaire_patient: commentaireGlobal.trim() || null,
-          duree_minutes: dureeMins,
-        })
-        .select()
-        .single();
-
-      if (spErr || !sp) { console.error('seance_patient insert:', spErr); setErreurSauvegarde(true); setSaving(false); return; }
-
-      for (const es of states) {
-        const { error: exErr } = await supabase.from('exercices_realises').insert({
-          seance_patient_id: sp.id,
-          exercice_id: es.id,
+      const ok = await patientSauvegarderSeance(token, {
+        programmeId: progId,
+        seanceId: seance.id,
+        dateSeance: new Date().toISOString().split('T')[0],
+        statut,
+        commentairePatient: commentaireGlobal.trim() || null,
+        dureeMinutes: dureeMins,
+        exercices: states.map(es => ({
+          id: es.id,
           realise: es.realise ?? false,
-          commentaire: es.commentaire.trim() || null,
-        });
-        if (exErr) { console.error('exercice_realise insert:', exErr); setErreurSauvegarde(true); setSaving(false); return; }
-      }
+          commentaire: es.commentaire.trim() || undefined,
+        })),
+      });
+
+      if (!ok) { setErreurSauvegarde(true); setSaving(false); return; }
       onTermine();
     } finally {
       setSaving(false);
@@ -947,11 +927,12 @@ function ModeSeance({
 
 // ── ÉCRAN 3 — Programme ───────────────────────────────────────────────────────
 
-function EcranProgramme({ participant, programmes, programmesV2, historiqueSeances }: {
+function EcranProgramme({ participant, programmes, programmesV2, historiqueSeances, token }: {
   participant: Participant;
   programmes: Programme[];
   programmesV2: ProgrammeV2[];
   historiqueSeances: SeancePatientRecord[];
+  token: string;
 }) {
   const [selectedProgId, setSelectedProgId] = useState<string | null>(null);
   const [modeSeance, setModeSeance] = useState<SeanceActive | null>(null);
@@ -991,7 +972,7 @@ function EcranProgramme({ participant, programmes, programmesV2, historiqueSeanc
     return (
       <ModeSeance
         seanceActive={modeSeance}
-        participantId={participant.id}
+        token={token}
         onTermine={() => setModeSeance(null)}
       />
     );
@@ -1534,14 +1515,13 @@ const TABS_CONFIG: { id: Tab; emoji: string; label: string }[] = [
 
 export default function EspacePatient() {
   const { id } = useParams<{ id: string }>();
-  const [searchParams] = useSearchParams();
-  const codeUrl = searchParams.get('code');
-  // PWA rouverte depuis l'écran d'accueil → pas de ?code= dans l'URL,
-  // on retombe sur la session sauvegardée en localStorage.
+  // PWA rouverte depuis l'écran d'accueil → on retombe sur la session
+  // (token JWT) sauvegardée en localStorage lors de la connexion.
   const session = getSessionPatient();
-  const code = codeUrl ?? (session && session.patientId === id ? session.code : null);
+  const token = session?.token && session.patientId === id ? session.token : null;
 
   const [loading, setLoading]           = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [participant, setParticipant]   = useState<Participant | null>(null);
   const [seances, setSeances]           = useState<Seance[]>([]);
   const [bilans, setBilans]             = useState<Bilan[]>([]);
@@ -1552,145 +1532,110 @@ export default function EspacePatient() {
   const [tab, setTab]                   = useState<Tab>('accueil');
 
   useEffect(() => {
-    if (!id || !supabase) { setLoading(false); return; }
+    if (!id || !token) { setAccessDenied(true); setLoading(false); return; }
 
     async function charger() {
-      // allSettled : si une requête échoue, les autres continuent
-      const [pRes, bRes, sRes, prRes, docRes] = await Promise.allSettled([
-        supabase!.from('participants').select('*').eq('id', id).single(),
-        supabase!.from('bilans').select('*').eq('participant_id', id).order('date'),
-        supabase!.from('seances').select('*').eq('participant_id', id).order('date'),
-        supabase!.from('programmes').select('*').eq('participant_id', id),
-        // Documents explicitement partagés par Pierre
-        supabase!.from('documents_patient')
-          .select('id, titre, contenu, date_creation')
-          .eq('participant_id', id)
-          .order('date_creation', { ascending: false }),
-      ]);
-
-      if (pRes.status === 'fulfilled' && pRes.value.data)
-        setParticipant(dbToParticipant(pRes.value.data));
-      if (bRes.status === 'fulfilled' && bRes.value.data)
-        setBilans(bRes.value.data.map(dbToBilan));
-      if (sRes.status === 'fulfilled' && sRes.value.data)
-        setSeances(sRes.value.data.map(dbToSeance));
-      if (prRes.status === 'fulfilled' && prRes.value.data) {
-        const allProgs = prRes.value.data;
-        setProgrammes(allProgs.map(dbToProgramme));
-
-        // Charger les programmes V2 (avec type != null) + leurs séances/planning/exercices
-        const v2Rows = allProgs.filter((p: Record<string, unknown>) => p.type != null);
-        if (v2Rows.length > 0) {
-          const [seancesRes, planningRes] = await Promise.allSettled([
-            supabase!.from('programme_seances').select('*').in('programme_id', v2Rows.map((p: Record<string, unknown>) => p.id)).order('ordre'),
-            supabase!.from('programme_planning').select('*').in('programme_id', v2Rows.map((p: Record<string, unknown>) => p.id)),
-          ]);
-          const seanceRows = seancesRes.status === 'fulfilled' ? (seancesRes.value.data ?? []) : [];
-          const planningRows = planningRes.status === 'fulfilled' ? (planningRes.value.data ?? []) : [];
-
-          let exerciceRows: Record<string, unknown>[] = [];
-          if (seanceRows.length > 0) {
-            const exRes = await supabase!.from('programme_exercices').select('*')
-              .in('seance_id', seanceRows.map((s: Record<string, unknown>) => s.id)).order('ordre');
-            exerciceRows = exRes.data ?? [];
-          }
-
-          const v2Programmes: ProgrammeV2[] = v2Rows.map((progRow: Record<string, unknown>) => {
-            const progSeances = seanceRows
-              .filter((s: Record<string, unknown>) => s.programme_id === progRow.id)
-              .map((s: Record<string, unknown>) => ({
-                id: s.id as string,
-                programmeId: s.programme_id as string,
-                nom: (s.nom as string) ?? '',
-                description: (s.description as string | null) ?? undefined,
-                ordre: (s.ordre as number) ?? 0,
-                exercices: exerciceRows
-                  .filter((e: Record<string, unknown>) => e.seance_id === s.id)
-                  .map((e: Record<string, unknown>) => ({
-                    id: e.id as string,
-                    seanceId: e.seance_id as string,
-                    nom: (e.nom as string) ?? '',
-                    categorie: (e.categorie as string | null) ?? undefined,
-                    description: (e.description as string | null) ?? undefined,
-                    conseilSecurite: (e.conseil_securite as string | null) ?? undefined,
-                    series: (e.series as number | null) ?? undefined,
-                    repetitions: (e.repetitions as number | null) ?? undefined,
-                    dureeSecondes: (e.duree_secondes as number | null) ?? undefined,
-                    ordre: (e.ordre as number) ?? 0,
-                  })),
-              })) as ProgrammeSeanceV2[];
-
-            const progPlanning = planningRows
-              .filter((p: Record<string, unknown>) => p.programme_id === progRow.id)
-              .map((p: Record<string, unknown>) => ({
-                id: p.id as string,
-                programmeId: p.programme_id as string,
-                seanceId: p.seance_id as string,
-                jour: p.jour as JourProgramme,
-              }));
-
-            return {
-              id: progRow.id as string,
-              participantId: progRow.participant_id as string,
-              nom: (progRow.nom as string | null) ?? (progRow.titre as string | null) ?? '',
-              objectif: (progRow.objectif as string | null) ?? undefined,
-              messageMotivation: (progRow.message_motivation as string | null) ?? undefined,
-              type: ((progRow.type as string) ?? 'domicile') as ProgrammeV2['type'],
-              actif: (progRow.actif as boolean) ?? true,
-              createdAt: (progRow.created_at as string | null) ?? (progRow.date_creation as string | null) ?? '',
-              seances: progSeances,
-              planning: progPlanning,
-            } as ProgrammeV2;
-          });
-
-          setProgrammesV2(v2Programmes);
-        }
+      const result = await patientFetchMe(token!);
+      if (!result.ok) {
+        if (result.status === 401) purgerSessionPatient();
+        setAccessDenied(true);
+        setLoading(false);
+        return;
       }
-      if (docRes.status === 'fulfilled' && docRes.value.data)
-        setDocumentsPatient(docRes.value.data as { id: string; titre: string; contenu: string; date_creation: string }[]);
+      const data = result.data;
 
-      // Charger historique des séances patient (dernières 15)
-      const spRes = await supabase!.from('seances_patient')
-        .select('id, programme_id, seance_id, date_seance, statut, commentaire_patient, duree_minutes')
-        .eq('participant_id', id)
-        .order('date_seance', { ascending: false })
-        .limit(15);
-      if (spRes.data && spRes.data.length > 0) {
-        const erRes = await supabase!.from('exercices_realises')
-          .select('seance_patient_id, realise')
-          .in('seance_patient_id', spRes.data.map((s: Record<string, unknown>) => s.id));
-        const erRows = (erRes.data ?? []) as { seance_patient_id: string; realise: boolean }[];
-        setSeancesPatient(spRes.data.map((sp: Record<string, unknown>) => {
-          const items = erRows.filter(e => e.seance_patient_id === sp.id);
+      setParticipant(dbToParticipant(data.participant));
+      setBilans(data.bilans.map(dbToBilan));
+      setSeances(data.seances.map(dbToSeance));
+
+      const allProgs = data.programmes;
+      setProgrammes(allProgs.map(dbToProgramme));
+
+      // Programmes V2 (avec type != null) + leurs séances/planning/exercices
+      const v2Rows = allProgs.filter((p: Record<string, unknown>) => p.type != null);
+      if (v2Rows.length > 0) {
+        const seanceRows = data.programmeSeances;
+        const planningRows = data.programmePlanning;
+        const exerciceRows = data.programmeExercices;
+
+        const v2Programmes: ProgrammeV2[] = v2Rows.map((progRow: Record<string, unknown>) => {
+          const progSeances = seanceRows
+            .filter((s: Record<string, unknown>) => s.programme_id === progRow.id)
+            .map((s: Record<string, unknown>) => ({
+              id: s.id as string,
+              programmeId: s.programme_id as string,
+              nom: (s.nom as string) ?? '',
+              description: (s.description as string | null) ?? undefined,
+              ordre: (s.ordre as number) ?? 0,
+              exercices: exerciceRows
+                .filter((e: Record<string, unknown>) => e.seance_id === s.id)
+                .map((e: Record<string, unknown>) => ({
+                  id: e.id as string,
+                  seanceId: e.seance_id as string,
+                  nom: (e.nom as string) ?? '',
+                  categorie: (e.categorie as string | null) ?? undefined,
+                  description: (e.description as string | null) ?? undefined,
+                  conseilSecurite: (e.conseil_securite as string | null) ?? undefined,
+                  series: (e.series as number | null) ?? undefined,
+                  repetitions: (e.repetitions as number | null) ?? undefined,
+                  dureeSecondes: (e.duree_secondes as number | null) ?? undefined,
+                  ordre: (e.ordre as number) ?? 0,
+                })),
+            })) as ProgrammeSeanceV2[];
+
+          const progPlanning = planningRows
+            .filter((p: Record<string, unknown>) => p.programme_id === progRow.id)
+            .map((p: Record<string, unknown>) => ({
+              id: p.id as string,
+              programmeId: p.programme_id as string,
+              seanceId: p.seance_id as string,
+              jour: p.jour as JourProgramme,
+            }));
+
           return {
-            id: sp.id as string,
-            programmeId: sp.programme_id as string,
-            seanceId: sp.seance_id as string,
-            dateSeance: sp.date_seance as string,
-            statut: (sp.statut as SeancePatientRecord['statut']) ?? 'en_cours',
-            commentairePatient: (sp.commentaire_patient as string | null) ?? null,
-            dureeMinutes: (sp.duree_minutes as number | null) ?? null,
-            nbRealises: items.filter(e => e.realise).length,
-            nbTotal: items.length,
-          };
-        }));
+            id: progRow.id as string,
+            participantId: progRow.participant_id as string,
+            nom: (progRow.nom as string | null) ?? (progRow.titre as string | null) ?? '',
+            objectif: (progRow.objectif as string | null) ?? undefined,
+            messageMotivation: (progRow.message_motivation as string | null) ?? undefined,
+            type: ((progRow.type as string) ?? 'domicile') as ProgrammeV2['type'],
+            actif: (progRow.actif as boolean) ?? true,
+            createdAt: (progRow.created_at as string | null) ?? (progRow.date_creation as string | null) ?? '',
+            seances: progSeances,
+            planning: progPlanning,
+          } as ProgrammeV2;
+        });
+
+        setProgrammesV2(v2Programmes);
       }
+
+      setDocumentsPatient(data.documentsPatient);
+
+      // Historique des séances patient (dernières 15)
+      const spRows = data.seancesPatient;
+      const erRows = data.exercicesRealises;
+      setSeancesPatient(spRows.map((sp: Record<string, unknown>) => {
+        const items = erRows.filter(e => e.seance_patient_id === sp.id);
+        return {
+          id: sp.id as string,
+          programmeId: sp.programme_id as string,
+          seanceId: sp.seance_id as string,
+          dateSeance: sp.date_seance as string,
+          statut: (sp.statut as SeancePatientRecord['statut']) ?? 'en_cours',
+          commentairePatient: (sp.commentaire_patient as string | null) ?? null,
+          dureeMinutes: (sp.duree_minutes as number | null) ?? null,
+          nbRealises: items.filter(e => e.realise).length,
+          nbTotal: items.length,
+        };
+      }));
 
       setLoading(false);
     }
 
     void charger();
-  }, [id]);
+  }, [id, token]);
 
-  // Accès validé → on mémorise la session pour que la PWA reste connectée
-  // après "Ajouter à l'écran d'accueil" (l'URL ne conserve pas le ?code=).
-  useEffect(() => {
-    if (participant && id && code && calculerCode(participant.prenom) === code) {
-      sauvegarderSessionPatient({ patientId: id, code });
-    }
-  }, [participant, id, code]);
-
-  if (!id) return <Navigate to="/patient" replace />;
+  if (!id || accessDenied) return <Navigate to="/patient" replace />;
 
   if (loading) {
     return (
@@ -1708,8 +1653,7 @@ export default function EspacePatient() {
     );
   }
 
-  if (!participant) return <Navigate to="/patient" replace />;
-  if (!code || calculerCode(participant.prenom) !== code) return <Navigate to="/patient" replace />;
+  if (!participant || !token) return <Navigate to="/patient" replace />;
 
   return (
     <div style={{
@@ -1759,7 +1703,7 @@ export default function EspacePatient() {
         )}
         {tab === 'progres' && <EcranProgres participant={participant} bilans={bilans} />}
         {tab === 'programme' && (
-          <EcranProgramme participant={participant} programmes={programmes} programmesV2={programmesV2} historiqueSeances={seancesPatient} />
+          <EcranProgramme participant={participant} programmes={programmes} programmesV2={programmesV2} historiqueSeances={seancesPatient} token={token} />
         )}
         {tab === 'documents' && (
           <EcranDocuments bilans={bilans} participant={participant} programmeActif={programmes.find(p => p.actif) ?? null} documentsPatient={documentsPatient} />

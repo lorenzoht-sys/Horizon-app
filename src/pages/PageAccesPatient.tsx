@@ -1,16 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { patientLogin } from '../lib/patientApi';
 import { getSessionPatient, sauvegarderSessionPatient } from '../hooks/useAccesPatients';
-
-function calculerCode(prenom: string): string {
-  return prenom
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z]/g, '')
-    + '2026';
-}
 
 export default function PageAccesPatient() {
   const [code, setCode] = useState('');
@@ -22,7 +13,7 @@ export default function PageAccesPatient() {
   // → on saute directement le formulaire de connexion.
   useEffect(() => {
     const session = getSessionPatient();
-    if (session) navigate(`/patient/${session.patientId}?code=${session.code}`, { replace: true });
+    if (session?.token) navigate(`/patient/${session.patientId}`, { replace: true });
   }, [navigate]);
 
   async function verifierCode() {
@@ -31,29 +22,17 @@ export default function PageAccesPatient() {
     setLoading(true);
     setErreur('');
 
-    try {
-      if (!supabase) throw new Error('no-supabase');
+    const result = await patientLogin(codeEntre);
 
-      const { data: tousParticipants } = await supabase
-        .from('participants')
-        .select('id, prenom, nom');
-
-      const patient = tousParticipants?.find(p =>
-        calculerCode(p.prenom) === codeEntre
-      );
-
-      if (patient) {
-        sauvegarderSessionPatient({ patientId: patient.id, code: codeEntre });
-        navigate(`/patient/${patient.id}?code=${codeEntre}`);
-      } else {
-        setErreur('Ce code ne correspond à aucun compte. Contactez votre enseignant APA.');
-        setCode('');
-      }
-    } catch {
-      setErreur('Erreur de connexion. Vérifiez votre réseau et réessayez.');
-    } finally {
-      setLoading(false);
+    if ('error' in result) {
+      setErreur(result.error);
+      setCode('');
+    } else {
+      sauvegarderSessionPatient({ patientId: result.participantId, token: result.token });
+      navigate(`/patient/${result.participantId}`);
     }
+
+    setLoading(false);
   }
 
   return (

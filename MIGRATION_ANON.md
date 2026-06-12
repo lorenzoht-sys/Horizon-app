@@ -87,7 +87,7 @@ chaque requête PostgREST par `structure_token_valide()` (RLS).
 
 ## État de migration
 
-- [ ] 1.1 → `POST /api/patient/login`
-- [ ] 1.2–1.11 → `GET /api/patient/me`
-- [ ] 1.12–1.13 → `POST /api/patient/seance`
+- [x] 1.1 → `POST /api/patient/login`
+- [x] 1.2–1.11 → `GET /api/patient/me`
+- [x] 1.12–1.13 → `POST /api/patient/seance`
 - [ ] 2.1–2.6 → `GET /api/structure/data`
