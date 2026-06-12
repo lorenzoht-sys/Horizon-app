@@ -72,7 +72,7 @@ chaque requête PostgREST par `structure_token_valide()` (RLS).
 | Export | Usage actuel | Action |
 |--------|-------------|--------|
 | `supabase` (client anon) | Importé par `PageAccesPatient.tsx` et `EspacePatient.tsx` pour 1.1 à 1.13 | Remplacé par des appels `fetch('/api/patient/...')` avec JWT patient. Le client `supabase` anon reste utilisé ailleurs par le praticien authentifié (hors scope T3/T5). |
-| `createStructurePortailClient(token)` | Importé par `PortailStructure.tsx` pour 2.1 à 2.6 | Remplacé par `fetch('/api/structure/data', { headers: { 'x-structure-token': token } })`. Fonction retirable une fois 2.1-2.6 migrées (vérifier qu'aucun autre fichier ne l'importe). |
+| `createStructurePortailClient(token)` | ~~Importé par `PortailStructure.tsx` pour 2.1 à 2.6~~ | ✅ Retiré : remplacé par `fetch('/api/structure/data', { headers: { 'x-structure-token': token } })` (`src/lib/structureApi.ts`). Aucun autre fichier ne l'importait. |
 
 ---
 
@@ -90,4 +90,4 @@ chaque requête PostgREST par `structure_token_valide()` (RLS).
 - [x] 1.1 → `POST /api/patient/login`
 - [x] 1.2–1.11 → `GET /api/patient/me`
 - [x] 1.12–1.13 → `POST /api/patient/seance`
-- [ ] 2.1–2.6 → `GET /api/structure/data`
+- [x] 2.1–2.6 → `GET /api/structure/data`
