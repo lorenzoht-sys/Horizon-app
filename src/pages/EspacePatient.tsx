@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useParams, Navigate } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 import type { Participant, Seance, Bilan, Programme, ProgrammeV2, ProgrammeSeanceV2, JourProgramme } from '../types';
 import { JOURS_PROGRAMME } from '../types';
 import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/mappers';
-import { patientFetchMe, patientSauvegarderSeance } from '../lib/patientApi';
+import { patientFetchMe, patientSauvegarderSeance, patientLogin } from '../lib/patientApi';
 import { loadExercices } from '../data/exercices';
 import { exportProgrammePDF } from '../utils/exportPDF';
 import { exportCarteSantePatient } from '../utils/exportDossierPDF';
-import { getSessionPatient, purgerSessionPatient, getAccesPatient } from '../hooks/useAccesPatients';
+import { getSessionPatient, sauvegarderSessionPatient, purgerSessionPatient, getAccesPatient } from '../hooks/useAccesPatients';
 import { getTestsAutonomie } from '../lib/anamnese';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1330,6 +1330,7 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
   programmeActif: Programme | null;
   documentsPatient: { id: string; titre: string; contenu: string; date_creation: string }[];
 }) {
+  const navigate = useNavigate();
   const [genPDF, setGenPDF] = useState(false);
   const praticien = loadPraticien();
   const sortedBilans = [...bilans].sort((a, b) => b.date.localeCompare(a.date));
@@ -1496,6 +1497,20 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
           </div>
         </div>
       )}
+
+      {/* Changer de patient — utile sur un appareil partagé entre plusieurs
+          personnes (la session reste sinon mémorisée sur cet appareil). */}
+      <button
+        onClick={() => { purgerSessionPatient(); navigate('/patient', { replace: true }); }}
+        style={{
+          width: '100%', padding: '14px 16px', marginTop: 4,
+          background: 'none', border: `1px solid ${C.border}`,
+          borderRadius: 12, cursor: 'pointer',
+          fontSize: 13, fontWeight: 600, color: C.muted,
+        }}
+      >
+        🔄 Changer de patient
+      </button>
     </div>
   );
 }
@@ -1515,13 +1530,15 @@ const TABS_CONFIG: { id: Tab; emoji: string; label: string }[] = [
 
 export default function EspacePatient() {
   const { id } = useParams<{ id: string }>();
-  // PWA rouverte depuis l'écran d'accueil → on retombe sur la session
-  // (token JWT) sauvegardée en localStorage lors de la connexion.
-  const session = getSessionPatient();
-  const token = session?.token && session.patientId === id ? session.token : null;
+  const [searchParams] = useSearchParams();
+  // QR code praticien → lien direct /patient/:id?code=xxxx (re-login serveur,
+  // écrase une session existante : gère le cas "appareil partagé" quand un
+  // autre patient scanne son propre QR code sur le même appareil).
+  const codeUrl = searchParams.get('code');
 
   const [loading, setLoading]           = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
+  const [token, setToken]               = useState<string | null>(null);
   const [participant, setParticipant]   = useState<Participant | null>(null);
   const [seances, setSeances]           = useState<Seance[]>([]);
   const [bilans, setBilans]             = useState<Bilan[]>([]);
@@ -1532,16 +1549,32 @@ export default function EspacePatient() {
   const [tab, setTab]                   = useState<Tab>('accueil');
 
   useEffect(() => {
-    if (!id || !token) { setAccessDenied(true); setLoading(false); return; }
+    if (!id) { setAccessDenied(true); setLoading(false); return; }
+
+    async function resoudreToken(): Promise<string | null> {
+      if (codeUrl) {
+        const result = await patientLogin(codeUrl);
+        if ('error' in result || result.participantId !== id) return null;
+        sauvegarderSessionPatient({ patientId: result.participantId, token: result.token });
+        return result.token;
+      }
+      const session = getSessionPatient();
+      if (session?.token && session.patientId === id) return session.token;
+      return null;
+    }
 
     async function charger() {
-      const result = await patientFetchMe(token!);
+      const tok = await resoudreToken();
+      if (!tok) { setAccessDenied(true); setLoading(false); return; }
+
+      const result = await patientFetchMe(tok);
       if (!result.ok) {
         if (result.status === 401) purgerSessionPatient();
         setAccessDenied(true);
         setLoading(false);
         return;
       }
+      setToken(tok);
       const data = result.data;
 
       setParticipant(dbToParticipant(data.participant));
@@ -1633,7 +1666,7 @@ export default function EspacePatient() {
     }
 
     void charger();
-  }, [id, token]);
+  }, [id, codeUrl]);
 
   if (!id || accessDenied) return <Navigate to="/patient" replace />;
 
