@@ -6,8 +6,8 @@
 // (clé service_role) et chaque accès est journalisé
 // (sql/t5_structure_access.sql).
 
-import { getServiceClient, getClientIp } from '../_lib/patientAuth';
-import { validateStructureToken, logStructureAccess, getStructureToken } from '../_lib/structureAuth';
+import { getServiceClient, getClientIp } from '../_lib/patientAuth.js';
+import { validateStructureToken, logStructureAccess, getStructureToken } from '../_lib/structureAuth.js';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {

@@ -10,7 +10,7 @@ import {
   getClientIp,
   checkRateLimit,
   recordLoginAttempt,
-} from '../_lib/patientAuth';
+} from '../_lib/patientAuth.js';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

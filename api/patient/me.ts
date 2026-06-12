@@ -4,7 +4,7 @@
 // filtrées par le participant_id du JWT — jamais par un id fourni par le
 // client.
 
-import { getServiceClient, verifyPatientToken, extractBearerToken } from '../_lib/patientAuth';
+import { getServiceClient, verifyPatientToken, extractBearerToken } from '../_lib/patientAuth.js';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {

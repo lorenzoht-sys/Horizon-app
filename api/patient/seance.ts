@@ -3,7 +3,7 @@
 // exercices_realises). Le participant_id provient exclusivement du JWT,
 // jamais du corps de la requête.
 
-import { getServiceClient, verifyPatientToken, extractBearerToken } from '../_lib/patientAuth';
+import { getServiceClient, verifyPatientToken, extractBearerToken } from '../_lib/patientAuth.js';
 
 const STATUTS_VALIDES = ['terminee', 'partielle', 'en_cours'];
 

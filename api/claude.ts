@@ -3,7 +3,7 @@
 // (Authorization: Bearer <access_token>), pour éviter qu'un tiers
 // n'utilise la clé ANTHROPIC_API_KEY (configurée dans Vercel) à nos frais.
 
-import { getServiceClient, extractBearerToken } from './_lib/patientAuth';
+import { getServiceClient, extractBearerToken } from './_lib/patientAuth.js';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
