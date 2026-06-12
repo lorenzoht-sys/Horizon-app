@@ -1,4 +1,5 @@
 import type { InterpretationIA, NotesBilan } from '../types';
+import { getAuthHeader } from '../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ export async function genererInterpretation(
 
   const response = await fetch('/api/claude', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
     body: JSON.stringify({ prompt }),
   });
 

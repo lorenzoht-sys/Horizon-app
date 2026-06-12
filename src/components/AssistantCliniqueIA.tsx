@@ -4,7 +4,7 @@ import { Bot, Send, Copy, Plus, ChevronDown, Mic, MicOff, RefreshCw, AlertCircle
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Participant, Bilan } from '../types';
-import { supabase } from '../lib/supabase';
+import { supabase, getAuthHeader } from '../lib/supabase';
 import { getContreIndications, getObjectifsActivites, formatTraitementLigne } from '../lib/anamnese';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { toast } from 'sonner';
@@ -234,7 +234,7 @@ export default function AssistantCliniqueIA({ participant, bilanInitial }: Props
     try {
       const response = await fetch('/api/claude', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
         body: JSON.stringify({ prompt }),
       });
 

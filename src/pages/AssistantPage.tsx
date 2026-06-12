@@ -4,7 +4,7 @@ import { Bot, Send, Mic, MicOff, Copy, ArrowLeft, RefreshCw, Search } from 'luci
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
 import { getContreIndications, getTestsAutonomie } from '../lib/anamnese';
-import { supabase } from '../lib/supabase';
+import { supabase, getAuthHeader } from '../lib/supabase';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -811,7 +811,7 @@ export default function AssistantPage() {
     const prompt = buildActionPrompt(action, patient, extras, getContratInfo(patient));
     // console.log('[AssistantPage] prompt:', prompt); // Décommenter pour débugger
     try {
-      const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+      const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) }, body: JSON.stringify({ prompt }) });
       if (!res.ok) throw new Error(`Erreur ${res.status}`);
       const data = await res.json();
       const text: string = data.text ?? '';
@@ -840,7 +840,7 @@ export default function AssistantPage() {
       const sys = buildSystemPrompt(selectedPatient, extras, getContratInfo(selectedPatient));
       const prompt = `${sys}\n\n---\nQUESTION:\nGénère un programme d'exercices APA pour l'objectif suivant : "${trimmed}"\n\n## Objectif\n### Exercices recommandés\n- **Nom** — durée/répétitions\n  Précautions : ...\n### Points de vigilance\n### À éviter absolument`;
       try {
-        const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+        const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) }, body: JSON.stringify({ prompt }) });
         const data = await res.json();
         const responseText: string = data.text ?? '';
         setMessages(prev => [...prev, { id: newId(), role: 'assistant', content: responseText }]);
@@ -858,7 +858,7 @@ export default function AssistantPage() {
       ? `${sys}\n\n---\nÉCHANGES PRÉCÉDENTS:\n${history}\n\n---\nQUESTION:\n${trimmed}`
       : `${sys}\n\n---\nQUESTION:\n${trimmed}`;
     try {
-      const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: fullPrompt }) });
+      const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) }, body: JSON.stringify({ prompt: fullPrompt }) });
       if (!res.ok) throw new Error(`Erreur ${res.status}`);
       const data = await res.json();
       const responseText: string = data.text ?? '';

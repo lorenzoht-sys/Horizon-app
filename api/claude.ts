@@ -1,16 +1,28 @@
 // Vercel Serverless Function — proxy Claude API
-// Ajouter ANTHROPIC_API_KEY dans les variables d'environnement Vercel
+// Sécurisé (T6) : nécessite une session praticien Supabase valide
+// (Authorization: Bearer <access_token>), pour éviter qu'un tiers
+// n'utilise la clé ANTHROPIC_API_KEY (configurée dans Vercel) à nos frais.
+
+import { getServiceClient, extractBearerToken } from './_lib/patientAuth';
 
 export default async function handler(req: any, res: any) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const token = extractBearerToken(req);
+  if (!token) return res.status(401).json({ error: 'Authentification requise' });
+
+  let supabase;
+  try {
+    supabase = getServiceClient();
+  } catch (err) {
+    return res.status(500).json({ error: String(err) });
+  }
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+  if (userErr || !userData?.user) {
+    return res.status(401).json({ error: 'Session invalide ou expirée' });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -19,7 +31,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const { prompt } = req.body ?? {};
-  if (!prompt) {
+  if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'prompt requis' });
   }
 

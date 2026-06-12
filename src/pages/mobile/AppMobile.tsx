@@ -9,7 +9,7 @@ import DicteePostSeance from '../../components/DicteePostSeance';
 import ModalEspacePatient from '../../components/participant/ModalEspacePatient';
 import type { Bilan } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
-import { supabase } from '../../lib/supabase';
+import { supabase, getAuthHeader } from '../../lib/supabase';
 import { getContreIndications, getObjectifsActivites, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne } from '../../lib/anamnese';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1852,7 +1852,7 @@ function EcranAssistant({
       const prompt = buildAssistantPrompt(selectedPatient, messages, trimmed);
       const res = await fetch('/api/claude', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
         body: JSON.stringify({ prompt }),
       });
       const data = await res.json();

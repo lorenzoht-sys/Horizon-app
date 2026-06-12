@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import type { TypeProgramme, JourProgramme, ProgrammeV2, Participant, Bilan } from '../types';
 import { TYPE_PROGRAMME_LABELS as TPL, JOURS_PROGRAMME as JP, CATEGORIE_EXERCICE_LABELS as CEL } from '../types';
 import { loadExercices, saveCustomExercice } from '../data/exercices';
+import { getAuthHeader } from '../lib/supabase';
 import type { Exercice } from '../types';
 
 // ── Types wizard ─────────────────────────────────────────────────────────────
@@ -1434,7 +1435,7 @@ export default function ProgrammePage() {
 
       const res = await fetch('/api/claude', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
         body: JSON.stringify({ prompt }),
       });
       const data = await res.json();

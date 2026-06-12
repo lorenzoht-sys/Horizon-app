@@ -9,6 +9,7 @@ import { useParticipants } from '../hooks/useParticipants';
 import PageWrapper from '../components/layout/PageWrapper';
 import { NORMS } from '../data/norms';
 import { exportRapportEvolutionPDF } from '../utils/exportRapportEvolutionPDF';
+import { getAuthHeader } from '../lib/supabase';
 import type { Bilan, Participant } from '../types';
 import { toast } from 'sonner';
 
@@ -251,7 +252,7 @@ Réponds UNIQUEMENT en JSON valide :
 
       const res = await fetch('/api/claude', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
         body: JSON.stringify({ prompt }),
       });
 
