@@ -4,8 +4,9 @@
 // n'utilise la clé ANTHROPIC_API_KEY (configurée dans Vercel) à nos frais.
 
 import { getServiceClient, extractBearerToken } from './_lib/patientAuth.js';
+import { withSentry } from './_lib/sentry.js';
 
-export default async function handler(req: any, res: any) {
+export default withSentry(async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -63,4 +64,4 @@ export default async function handler(req: any, res: any) {
   } catch (err) {
     return res.status(500).json({ error: String(err) });
   }
-}
+});

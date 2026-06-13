@@ -6,6 +6,9 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import 'leaflet/dist/leaflet.css'
 import App from './App.tsx'
+import { initSentry } from './lib/sentry'
+
+initSentry();
 
 // Fix Leaflet default marker icons with Vite (bug connu)
 import L from 'leaflet';

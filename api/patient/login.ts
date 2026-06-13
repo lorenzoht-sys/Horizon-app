@@ -12,8 +12,9 @@ import {
   checkRateLimit,
   recordLoginAttempt,
 } from '../_lib/patientAuth.js';
+import { withSentry } from '../_lib/sentry.js';
 
-export default async function handler(req: any, res: any) {
+export default withSentry(async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -55,4 +56,4 @@ export default async function handler(req: any, res: any) {
 
   const token = await signPatientToken(patient.id);
   return res.status(200).json({ token, participantId: patient.id });
-}
+});
