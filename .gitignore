@@ -18,6 +18,10 @@ dist-ssr
 .env.*
 !.env.example
 
+# Dump de schéma temporaire (mise en place de l'environnement de staging —
+# voir supabase/migrations/SETUP_STAGING.md), ne doit jamais être commité.
+supabase/_staging_schema_dump.sql
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

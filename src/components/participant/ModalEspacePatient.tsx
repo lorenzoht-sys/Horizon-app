@@ -3,8 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import type { AccesPatient, Participant } from '../../types';
 import { calculerCode, getAccesPatient, sauvegarderAccesPatient } from '../../hooks/useAccesPatients';
-
-const URL_APP = 'horizon-app-dusky.vercel.app/patient';
+import { getAppHost } from '../../lib/config';
 
 const VISIBILITE_ITEMS = [
   { key: 'progression'   as const, label: 'Graphiques de progression' },
@@ -64,7 +63,7 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
 
   function envoyerSMS() {
     const msg = encodeURIComponent(
-      `Bonjour ${participant.prenom}, votre code d'accès Horizon est : ${code}\nConnectez-vous sur : https://${URL_APP}`
+      `Bonjour ${participant.prenom}, votre code d'accès Horizon est : ${code}\nConnectez-vous sur : https://${getAppHost()}/patient`
     );
     window.open(`sms:${participant.telephone}?body=${msg}`);
   }
@@ -111,7 +110,7 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
             {code}
           </div>
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 8 }}>
-            {URL_APP}
+            {getAppHost()}/patient
           </div>
         </div>
 

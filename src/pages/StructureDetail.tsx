@@ -6,6 +6,7 @@ import { useParticipants } from '../hooks/useParticipants';
 import { useAgenda } from '../hooks/useAgenda';
 import { useFactures } from '../hooks/useFactures';
 import { supabase } from '../lib/supabase';
+import { getAppHost } from '../lib/config';
 import { dbToStructure } from '../lib/mappers';
 import PageWrapper from '../components/layout/PageWrapper';
 import ParticipantCard from '../components/participant/ParticipantCard';
@@ -14,7 +15,6 @@ import type { Structure } from '../types';
 import jsPDF from 'jspdf';
 import { cleanTextPdf } from '../utils/pdfText';
 
-const URL_APP = 'horizon-app-dusky.vercel.app';
 const MOIS_LONGS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 
 function nomMois(m: number, y: number) { return `${MOIS_LONGS[m - 1]} ${y}`; }
@@ -131,7 +131,7 @@ export default function StructureDetail() {
     </PageWrapper>
   );
 
-  const portalUrl = `https://${URL_APP}/structure/${structure.tokenAcces}`;
+  const portalUrl = `https://${getAppHost()}/structure/${structure.tokenAcces}`;
 
   return (
     <PageWrapper>
