@@ -1,66 +1,122 @@
-# Mouv'APA - Suivis
+# Horizon (Mouv'APA) — suivi des participants
 
-Application web de suivi des bilans fonctionnels pour Pierre Clavier, enseignant en Activité Physique Adaptée.
+Application web pour un enseignant en Activité Physique Adaptée (APA) :
+suivi des bilans fonctionnels, programmes d'exercices, agenda/tournée,
+espace patient (PWA) et portail de suivi pour les structures partenaires.
+
+## Stack technique
+
+- **Front** : React 19 + Vite + TypeScript + Tailwind CSS
+- **Données** : Supabase (Postgres + Auth + Row Level Security)
+- **Backend** : fonctions serverless Vercel (`api/*`) — proxy sécurisé vers
+  Supabase (clé `service_role`) et vers l'API Claude (assistant IA)
+- **Hébergement** : Vercel (déploiement automatique sur `main`)
+- **Tests** : Playwright (E2E) + GitHub Actions (CI)
+- **Supervision** : Sentry (optionnel, prod uniquement — voir `docs/SENTRY.md`)
 
 ## Démarrage rapide
 
 ```bash
 npm install
+cp .env.example .env.local   # puis renseigner les variables Supabase (voir ci-dessous)
 npm run dev
 ```
 
-Ouvre ensuite [http://localhost:5173](http://localhost:5173) dans ton navigateur.
+Ouvre ensuite [http://localhost:5173](http://localhost:5173).
 
-## Fonctionnalités
+### Variables d'environnement
 
-### Bilans fonctionnels
-- **Tableau de bord** : liste de tous les participants avec indicateurs "bilan à faire"
-- **Profil participant** : historique des bilans, radar, courbes de progression
-- **Saisie de bilan** : formulaire en 4 étapes avec comparaison temps réel vs bilan précédent
-- **Graphiques** : radar (profil fonctionnel) + courbes d'évolution
-- **Export PDF** : fiche de suivi complète avec tableau comparatif et message client
-- **Espace client** : lien partageable en lecture seule (onglets Progrès + Programme)
+Voir `.env.example` pour la liste complète et les commentaires. En résumé :
 
-### Module Programme d'exercices
-- **Bibliothèque** (`/exercices`) : 22 exercices APA couvrant 6 catégories (équilibre, force, mobilité, souplesse, endurance, mémoire) + ajout d'exercices personnalisés
-- **Constructeur de programme** (`/participant/:id/programme`) : interface deux colonnes, configuration niveau/séries/jours pour chaque exercice
-- **Suivi adhérence** : graphique par semaine + calendrier coloré des 28 derniers jours
-- **Vue patient** : programme du jour avec boutons "J'ai fait", ressenti, envoi bilan (accessible via lien client)
+- `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` : projet Supabase (front et
+  fonctions `api/*`).
+- `SUPABASE_SERVICE_ROLE_KEY`, `PATIENT_SESSION_SECRET`, `ANTHROPIC_API_KEY` :
+  **variables serveur uniquement** (jamais préfixées par `VITE_`), utilisées
+  par `api/*` et configurées dans Vercel.
+- `VITE_SENTRY_DSN` / `SENTRY_DSN` : optionnel, supervision des erreurs en
+  production (voir `docs/SENTRY.md`).
 
-## Données de démo
+En local, sans ces variables serveur, les routes `/api/*` ne fonctionnent
+pas (mais l'app praticien fonctionne via le client Supabase `anon`).
 
-L'application démarre avec 2 participants de démo :
-- **Gérard Martin** — 3 bilans (initial + T1 + T2) + 1 programme actif
-- **Monique Dubois** — 2 bilans (initial + T1) + 1 programme actif
+## Les trois espaces de l'application
 
-Pour tester la vue client Gérard : `http://localhost:5173/client/demo-token-gerard-martin`
-Pour tester la vue client Monique : `http://localhost:5173/client/demo-token-monique-dubois`
+| Espace | Accès | Description |
+|---|---|---|
+| **Praticien** (`/`, `/participants/...`, `/agenda`, `/tournee`, `/exercices`, `/stats`, ...) | Compte Supabase Auth (email/mot de passe) | Tableau de bord, bilans fonctionnels, programmes d'exercices, agenda/tournée, statistiques, assistant IA. |
+| **Patient** (`/patient`) | Code d'accès personnel (prénom + année) | PWA mobile : programme du jour, séances réalisées, historique — données servies par `/api/patient/*`. |
+| **Structure** (`/structure/:token`) | Lien à token, sans compte | Portail de suivi en lecture pour une structure partenaire (participants, séances, factures, documents) — données servies par `/api/structure/data`. |
 
-## Sauvegarde des données
+## Structure du dépôt
 
-Toutes les données sont stockées en **localStorage** (aucun serveur requis).
-
-- **Exporter** : bouton téléchargement ↓ sur le tableau de bord → fichier `.json`
-- **Importer** : bouton ↑ sur le tableau de bord → sélectionner un fichier `.json`
-
-## Partage de l'espace client
-
-Sur le profil d'un participant → "Lien client" → copie l'URL unique à envoyer au patient.
-L'URL ressemble à : `http://localhost:5173/client/[token-unique]`
-
-## Build de production
-
-```bash
-npm run build
+```
+src/            Application praticien (React) — pages, composants, hooks Supabase
+api/            Fonctions serverless Vercel ("1 fichier = 1 route")
+  _lib/         Helpers partagés (auth patient/structure, Sentry)
+  patient/      Routes de l'espace patient (login, me, seance)
+  structure/    Route du portail structure (data)
+  claude.ts     Proxy sécurisé vers l'API Claude (assistant IA)
+supabase/
+  migrations/   Historique versionné du schéma (règle d'or : voir migrations/README.md)
+  functions/    Edge Functions Supabase (analyser-seance, interpreter-bilan)
+e2e/            Tests Playwright (parcours praticien, patient, structure)
+docs/           Procédures de configuration manuelle (Sentry, branch protection, PITR...)
+scripts/        Scripts ponctuels (ex. seed de l'environnement de staging)
 ```
 
-Les fichiers sont générés dans le dossier `dist/`.
+## Scripts npm
 
-## Stack technique
+```bash
+npm run dev            # serveur de développement
+npm run build           # build de production (tsc -b + vite build) → dist/
+npm run preview         # prévisualiser le build
+npm run lint             # ESLint
+npm run typecheck:api    # tsc sur api/ (config dédiée NodeNext)
+npm run typecheck:e2e    # tsc sur e2e/
+npm run test:e2e         # suite Playwright (voir e2e/README.md)
+```
 
-- React 19 + Vite + TypeScript
-- Tailwind CSS 3 (thème Mouv'APA)
-- Recharts (courbes + radar)
-- jsPDF + html2canvas (export PDF)
-- React Router v6
-- Lucide React (icônes)
+## Tests et CI
+
+Une suite de tests Playwright (`e2e/`) couvre les parcours principaux des
+trois espaces (praticien, patient, structure). La CI GitHub Actions
+(`.github/workflows/ci.yml`) exécute à chaque push/PR :
+
+- build + `typecheck:api` + `typecheck:e2e` (job `build`, toujours actif) ;
+- la suite E2E complète (job `e2e`), si un environnement de Preview/staging
+  est configuré (variables de dépôt `E2E_*`, voir `e2e/README.md` et
+  `supabase/migrations/SETUP_STAGING.md`).
+
+## Déploiement
+
+Le projet Vercel **horizon-app** déploie automatiquement :
+
+- **Production** : tout push sur `main` → vraie base de données Supabase
+  (projet `rjgzeuywwknubpwigozq`).
+- **Preview** : toute autre branche / pull request → projet Supabase de
+  staging avec des données fictives (voir
+  `supabase/migrations/SETUP_STAGING.md`).
+
+Avant de merger sur `main`, voir **`CHECKLIST_RELEASE.md`**.
+
+## Sécurité, conformité et supervision
+
+Cette application traite des données de santé. Plusieurs documents
+encadrent ça :
+
+- **`RAPPORT_SECURISATION.md`** — sécurisation des accès (auth serveur pour
+  l'espace patient et le portail structure, RLS, rate limiting).
+- **`AUDIT.md`** — état des lieux détaillé du code (Tâche 1, consolidation).
+- **`supabase/migrations/`** — historique versionné du schéma (règle d'or :
+  toute évolution passe par un fichier de migration, jamais une modification
+  directe dans Supabase Studio).
+- **Journal d'audit patient** (`audit_logs`, voir
+  `supabase/migrations/20260613_audit_logs.sql`) — trace les connexions et
+  accès aux données de santé de l'espace patient (sans jamais stocker les
+  données elles-mêmes).
+- **`docs/SENTRY.md`** — supervision des erreurs en production, configurée
+  pour ne jamais transmettre de données de santé.
+- **`docs/PITR.md`** — sauvegarde/restauration ponctuelle (Point-in-Time
+  Recovery) de la base Supabase de production.
+- **`docs/BRANCH_PROTECTION.md`** — protection de la branche `main` sur
+  GitHub.
