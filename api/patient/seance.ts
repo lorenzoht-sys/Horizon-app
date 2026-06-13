@@ -3,7 +3,7 @@
 // exercices_realises). Le participant_id provient exclusivement du JWT,
 // jamais du corps de la requête.
 
-import { getServiceClient, verifyPatientToken, extractBearerToken } from '../_lib/patientAuth.js';
+import { getServiceClient, verifyPatientToken, extractBearerToken, getClientIp, logAuditEvent } from '../_lib/patientAuth.js';
 import { withSentry } from '../_lib/sentry.js';
 
 const STATUTS_VALIDES = ['terminee', 'partielle', 'en_cours'];
@@ -58,6 +58,7 @@ export default withSentry(async function handler(req: any, res: any) {
     .single();
 
   if (spErr || !sp) {
+    await logAuditEvent(supabase, 'patient_seance_submit', participantId, getClientIp(req), false);
     return res.status(500).json({ error: 'Erreur enregistrement séance' });
   }
 
@@ -70,9 +71,11 @@ export default withSentry(async function handler(req: any, res: any) {
       commentaire: typeof ex.commentaire === 'string' && ex.commentaire.trim() ? ex.commentaire.trim() : null,
     });
     if (exErr) {
+      await logAuditEvent(supabase, 'patient_seance_submit', participantId, getClientIp(req), false);
       return res.status(500).json({ error: 'Erreur enregistrement exercice' });
     }
   }
 
+  await logAuditEvent(supabase, 'patient_seance_submit', participantId, getClientIp(req), true);
   return res.status(200).json({ ok: true, seancePatientId: sp.id });
 });

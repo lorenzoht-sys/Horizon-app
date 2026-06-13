@@ -4,7 +4,7 @@
 // filtrées par le participant_id du JWT — jamais par un id fourni par le
 // client.
 
-import { getServiceClient, verifyPatientToken, extractBearerToken } from '../_lib/patientAuth.js';
+import { getServiceClient, verifyPatientToken, extractBearerToken, getClientIp, logAuditEvent } from '../_lib/patientAuth.js';
 import { withSentry } from '../_lib/sentry.js';
 
 export default withSentry(async function handler(req: any, res: any) {
@@ -41,8 +41,11 @@ export default withSentry(async function handler(req: any, res: any) {
   ]);
 
   if (participantRes.error || !participantRes.data) {
+    await logAuditEvent(supabase, 'patient_data_access', participantId, getClientIp(req), false);
     return res.status(404).json({ error: 'Patient introuvable' });
   }
+
+  await logAuditEvent(supabase, 'patient_data_access', participantId, getClientIp(req), true);
 
   const programmes = programmesRes.data ?? [];
   const v2ProgrammeIds = programmes.filter((p: any) => p.type != null).map((p: any) => p.id);

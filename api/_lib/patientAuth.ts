@@ -81,3 +81,18 @@ export async function checkRateLimit(supabase: SupabaseClient, ip: string): Prom
 export async function recordLoginAttempt(supabase: SupabaseClient, ip: string): Promise<void> {
   await supabase.from('patient_login_attempts').insert({ ip });
 }
+
+export type AuditEventType = 'patient_login' | 'patient_data_access' | 'patient_seance_submit';
+
+// Journal d'audit des accès à l'espace patient (connexions et accès aux
+// données de santé), à des fins de conformité
+// (table supabase/migrations/20260613_audit_logs.sql).
+export async function logAuditEvent(
+  supabase: SupabaseClient,
+  eventType: AuditEventType,
+  participantId: string | null,
+  ip: string,
+  success: boolean,
+): Promise<void> {
+  await supabase.from('audit_logs').insert({ event_type: eventType, participant_id: participantId, ip, success });
+}

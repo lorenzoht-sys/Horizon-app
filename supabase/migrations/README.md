@@ -57,6 +57,13 @@ automatiquement par Claude sur la base de production**. Les migrations sont
   `supabase db push`, ils seront marqués comme tels et ne seront plus
   rejoués.
 
+## Nouvelle table (Tâche 7 — consolidation)
+
+- `20260613_audit_logs.sql` — crée la table `audit_logs` (journal d'audit des
+  connexions et accès à l'espace patient, voir `api/_lib/patientAuth.ts`).
+  Pas encore appliquée en production : à exécuter via `supabase db push` en
+  même temps que les fichiers ci-dessus.
+
 ## ⚠️ Limite connue : ce dossier ne suffit PAS à recréer la base depuis zéro
 
 Les tables "de base" du projet (`participants`, `praticiens`, `bilans`,

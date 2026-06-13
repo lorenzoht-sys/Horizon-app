@@ -11,6 +11,7 @@ import {
   getClientIp,
   checkRateLimit,
   recordLoginAttempt,
+  logAuditEvent,
 } from '../_lib/patientAuth.js';
 import { withSentry } from '../_lib/sentry.js';
 
@@ -35,6 +36,7 @@ export default withSentry(async function handler(req: any, res: any) {
 
   const allowed = await checkRateLimit(supabase, ip);
   if (!allowed) {
+    await logAuditEvent(supabase, 'patient_login', null, ip, false);
     return res.status(429).json({ error: 'Trop de tentatives. Réessayez dans 15 minutes.' });
   }
   await recordLoginAttempt(supabase, ip);
@@ -51,8 +53,11 @@ export default withSentry(async function handler(req: any, res: any) {
   const patient = (participants ?? []).find(p => calculerCode(p.prenom) === codeEntre);
 
   if (!patient) {
+    await logAuditEvent(supabase, 'patient_login', null, ip, false);
     return res.status(401).json({ error: 'Ce code ne correspond à aucun compte. Contactez votre enseignant APA.' });
   }
+
+  await logAuditEvent(supabase, 'patient_login', patient.id, ip, true);
 
   const token = await signPatientToken(patient.id);
   return res.status(200).json({ token, participantId: patient.id });
