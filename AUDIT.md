@@ -195,13 +195,15 @@ consolidation (pas de suppression, pas de complétion proposées ici).
 
 ## 4. `console.log`, `TODO`/`FIXME`, blocs commentés
 
-- **`console.log`** : 13 fichiers dans `src/` (0 dans `api/`) :
-  `src/pages/mobile/AppMobile.tsx`, `src/components/participant/ParticipantForm.tsx`,
-  `src/pages/SettingsPage.tsx`, `src/data/demo.ts` (fichier mort, voir §3), et 9 autres trouvés
-  dans le périmètre `handicap` ci-dessus + d'autres pages. → à retirer en T2 (garder tous les
-  `console.error`).
-- **`TODO`/`FIXME`/`XXX`** : un seul, dans `src/pages/AssistantPage.tsx` (1 occurrence). À
-  examiner au moment du nettoyage.
+- **`console.log`** : ⚠️ correction par rapport à une première estimation erronée (confusion avec
+  une autre recherche) — il n'y a en réalité **qu'une seule occurrence** dans tout `src/`
+  (0 dans `api/`), et elle est déjà **en commentaire** :
+  `src/pages/AssistantPage.tsx:812` (`// console.log('[AssistantPage] prompt:', prompt); // Décommenter pour débugger`).
+  Aucun `console.log` actif à retirer en T2. Tous les `console.error` sont conservés.
+- **`TODO`/`FIXME`/`XXX`** : aucun vrai marqueur de TODO. La recherche `TODO|FIXME|XXX` ne
+  remonte que des **faux positifs** : des textes de placeholder dans des champs de formulaire
+  (`"XXX XXX XXX XXXXX"` pour le SIRET, `"BNPAFRPPXXX"` pour le BIC, `"SAP XXXXXXXXX"`, etc.)
+  dans `AppMobile.tsx`, `ParticipantForm.tsx` et `SettingsPage.tsx`. Rien à nettoyer.
 - **Blocs commentés volumineux** : un seul bloc notable, `src/hooks/useBrouillonBilan.ts`
   lignes 5-20 — c'est du **SQL d'installation en commentaire** (`CREATE TABLE bilans_brouillons...`),
   intentionnel et toujours pertinent (voir §6). **Pas du code mort, ne pas supprimer** — sera
@@ -246,6 +248,31 @@ d'écran de sessions de design/debug passées, scripts ad-hoc) :
 **Proposition : laissés en place pour l'instant**, seront remplacés par la vraie suite
 Playwright de la Tâche 5 (qui les rendra redondants — suppression à ce moment-là plutôt que
 maintenant, pour ne pas perdre de référence avant d'avoir écrit les nouveaux tests).
+
+---
+
+## 5bis. Tables Supabase potentiellement inutilisées
+
+⚠️ **Liste uniquement — aucune suppression de table n'est faite par cette consolidation.**
+La suppression éventuelle se fera manuellement, plus tard, après backup.
+
+En comparant les tables référencées par le code actuel (`.from('...')` dans `src/`, `api/`,
+`supabase/functions/`) avec celles définies dans l'ancien fichier de types manuels
+`src/lib/database.types.ts` (fichier mort, voir §3, mais qui reflète un schéma DB antérieur),
+deux tables ressortent comme probablement obsolètes :
+
+| Table | Pourquoi elle semble obsolète |
+|---|---|
+| `acces_patients` | Apparaît dans `database.types.ts` mais n'est ni dans `schema.sql`/migrations, ni interrogée via `.from()`. Le suivi des accès patients se fait aujourd'hui via `localStorage` (`horizon_acces_patients`, dans `useAccesPatients.ts`) et les nouvelles routes `/api/patient/*`. |
+| `settings_praticien` | Idem : présente dans `database.types.ts` mais absente du schéma actuel. Les réglages praticien sont aujourd'hui des colonnes de la table `praticiens` (`tarif_horaire`, `couleur_theme`, etc.) + un cache `localStorage` (clé `settings_praticien`, voir `SettingsPage.tsx`). |
+
+Toutes les autres tables (17 définies dans schema.sql/migrations + les 5 tables hors-migration
+du §6 + `bilans_brouillons` du §7) sont bien référencées par le code actuel.
+
+**Action recommandée (manuelle, hors périmètre de cette consolidation)** : vérifier dans
+Supabase Studio si `acces_patients` et `settings_praticien` existent encore et contiennent des
+données ; si oui, faire un export/backup, puis les supprimer une fois confirmé qu'elles ne sont
+plus utiles.
 
 ---
 
