@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main, consolidation]
+  pull_request:
+
+jobs:
+  # Vérifications statiques : toujours exécutées, ne dépendent d'aucun
+  # environnement de staging. Volontairement SANS `npm run lint` (erreurs
+  # de lint pré-existantes, hors périmètre de la consolidation — voir
+  # AUDIT.md).
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm run typecheck:api
+      - run: npm run typecheck:e2e
+
+  # Suite E2E Playwright : nécessite un déploiement de Preview Vercel branché
+  # sur le projet Supabase de staging (voir supabase/migrations/SETUP_STAGING.md
+  # et e2e/README.md). Ignorée si la variable de dépôt E2E_BASE_URL n'est pas
+  # configurée, pour que la CI reste verte avant la mise en place du staging.
+  e2e:
+    needs: build
+    runs-on: ubuntu-latest
+    if: vars.E2E_BASE_URL != ''
+    env:
+      E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+      E2E_PRATICIEN_EMAIL: ${{ vars.E2E_PRATICIEN_EMAIL }}
+      E2E_PRATICIEN_PASSWORD: ${{ secrets.E2E_PRATICIEN_PASSWORD }}
+      E2E_PATIENT_CODE: ${{ vars.E2E_PATIENT_CODE }}
+      E2E_PATIENT_PRENOM: ${{ vars.E2E_PATIENT_PRENOM }}
+      E2E_PATIENT_NOM: ${{ vars.E2E_PATIENT_NOM }}
+      E2E_PATIENT_CODE_2: ${{ vars.E2E_PATIENT_CODE_2 }}
+      E2E_PATIENT_PRENOM_2: ${{ vars.E2E_PATIENT_PRENOM_2 }}
+      E2E_PATIENT_NOM_2: ${{ vars.E2E_PATIENT_NOM_2 }}
+      E2E_STRUCTURE_TOKEN: ${{ vars.E2E_STRUCTURE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

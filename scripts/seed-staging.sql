@@ -173,8 +173,17 @@ BEGIN
     (v_seance1_id, v_programme_id, 'Séance 1 — Équilibre', 'Travail de l''équilibre et renforcement léger', 1),
     (v_seance2_id, v_programme_id, 'Séance 2 — Renforcement', 'Renforcement musculaire global', 2);
 
+  -- Séance 1 planifiée tous les jours : le test Playwright "séance du jour"
+  -- (Tâche 5) doit pouvoir cocher un exercice quel que soit le jour
+  -- d'exécution de la suite. La séance 2 reste sur le jeudi uniquement.
   INSERT INTO programme_planning (programme_id, seance_id, jour) VALUES
+    (v_programme_id, v_seance1_id, 'dimanche'),
     (v_programme_id, v_seance1_id, 'lundi'),
+    (v_programme_id, v_seance1_id, 'mardi'),
+    (v_programme_id, v_seance1_id, 'mercredi'),
+    (v_programme_id, v_seance1_id, 'jeudi'),
+    (v_programme_id, v_seance1_id, 'vendredi'),
+    (v_programme_id, v_seance1_id, 'samedi'),
     (v_programme_id, v_seance2_id, 'jeudi');
 
   INSERT INTO programme_exercices (seance_id, nom, categorie, description, conseil_securite, series, repetitions, duree_secondes, ordre) VALUES
