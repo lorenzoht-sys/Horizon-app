@@ -66,7 +66,8 @@ export function getClientIp(req: { headers: Record<string, string | string[] | u
   return req.socket?.remoteAddress ?? 'unknown';
 }
 
-// Rate limiting : 5 tentatives / 15 min / IP (table sql/t3_patient_rate_limit.sql).
+// Rate limiting : 5 tentatives / 15 min / IP
+// (table supabase/migrations/20260613_patient_login_rate_limit.sql).
 export async function checkRateLimit(supabase: SupabaseClient, ip: string): Promise<boolean> {
   const since = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60_000).toISOString();
   const { count } = await supabase

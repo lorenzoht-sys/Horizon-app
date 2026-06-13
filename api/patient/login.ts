@@ -1,7 +1,8 @@
 // POST /api/patient/login
 // Valide le code patient (prénom normalisé + "2026") côté serveur via
 // service_role, et renvoie un JWT signé (PATIENT_SESSION_SECRET, 30 jours).
-// Rate limiting : 5 tentatives / 15 min / IP (sql/t3_patient_rate_limit.sql).
+// Rate limiting : 5 tentatives / 15 min / IP
+// (supabase/migrations/20260613_patient_login_rate_limit.sql).
 
 import {
   getServiceClient,

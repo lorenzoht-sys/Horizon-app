@@ -266,7 +266,8 @@ export default function PortailStructure() {
     async function charger() {
       try {
         // Le token est validé côté serveur (clé service_role) et l'accès est
-        // journalisé — cf. api/structure/data.ts et sql/t5_structure_access.sql.
+        // journalisé — cf. api/structure/data.ts et
+        // supabase/migrations/20260613_structure_access_logs.sql.
         const result = await fetchStructureData(token!);
         if (!result.ok) { setErreur(true); setLoading(false); return; }
         const { structure: str, praticien: pra, participants: pData, seances: sData, factures: fData, documents: dData } = result.data;

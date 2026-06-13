@@ -4,7 +4,7 @@
 // contact du praticien) pour la structure correspondant au token transmis
 // dans l'en-tête "x-structure-token". Le token est validé côté serveur
 // (clé service_role) et chaque accès est journalisé
-// (sql/t5_structure_access.sql).
+// (supabase/migrations/20260613_structure_access_logs.sql).
 
 import { getServiceClient, getClientIp } from '../_lib/patientAuth.js';
 import { validateStructureToken, logStructureAccess, getStructureToken } from '../_lib/structureAuth.js';

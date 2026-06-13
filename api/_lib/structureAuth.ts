@@ -39,7 +39,8 @@ export async function validateStructureToken(supabase: SupabaseClient, token: st
   };
 }
 
-// Journalisation des accès (table sql/t5_structure_access.sql).
+// Journalisation des accès
+// (table supabase/migrations/20260613_structure_access_logs.sql).
 export async function logStructureAccess(supabase: SupabaseClient, structureId: string, ip: string): Promise<void> {
   await supabase.from('structure_access_logs').insert({ structure_id: structureId, ip });
 }

@@ -1,7 +1,21 @@
 -- ============================================================
--- SCHÉMA COMPLET MOUV'APA
--- Généré depuis les interfaces TypeScript du projet
--- À exécuter dans Supabase SQL Editor (tout d'un coup)
+-- ⚠️ FICHIER OBSOLÈTE — CONSERVÉ POUR RÉFÉRENCE HISTORIQUE UNIQUEMENT
+-- ============================================================
+-- Ce fichier était une reconstitution MANUELLE du schéma (générée depuis les
+-- interfaces TypeScript), pas un vrai export de la base. Il ne reflète donc
+-- pas forcément l'état réel de la production (notamment les 5 tables
+-- "programme V2" créées via Supabase Studio, voir AUDIT.md §6, et la table
+-- bilans_brouillons qui n'existe pas encore — voir AUDIT.md §7).
+--
+-- À partir de la Tâche 3 (consolidation), la SOURCE DE VÉRITÉ du schéma est
+-- supabase/migrations/ (voir supabase/migrations/README.md pour la
+-- procédure de référence : `supabase db dump`). Ne plus modifier ce fichier
+-- à la main ; toute évolution de schéma doit passer par une nouvelle
+-- migration versionnée.
+-- ============================================================
+--
+-- SCHÉMA COMPLET MOUV'APA (ancienne version, généré depuis les interfaces
+-- TypeScript du projet — À NE PLUS EXÉCUTER)
 -- ============================================================
 
 -- ── Fonctions utilitaires ──────────────────────────────────────────────────────

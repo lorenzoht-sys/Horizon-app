@@ -290,8 +290,11 @@ via Supabase Studio) :
 | `programme_planning` | `useProgrammeV2.ts` |
 | `programme_exercices` | `useProgrammeV2.ts` |
 
-→ Traité en **Tâche 3** : migration dédiée pour ces 5 tables, afin que le schéma soit enfin
-complet et versionné.
+→ **Traité en Tâche 3** : `supabase/migrations/20260613_programme_v2_rls.sql` active RLS et
+ajoute des policies praticien-only sur ces 5 tables (elles n'avaient jusqu'ici aucune policy
+dédiée). Les `CREATE TABLE` eux-mêmes restent absents des migrations (impossible à écrire sans
+accès direct au schéma de production) — voir `supabase/migrations/README.md` pour la procédure
+`supabase db dump` qui capturera leur structure réelle dans un instantané de référence.
 
 ---
 
@@ -314,9 +317,11 @@ complet et versionné.
 
 **Conclusion** : ce n'est **pas une route morte ni du code à supprimer**. C'est une
 fonctionnalité réelle et déjà câblée ("sync cloud des brouillons de bilan entre appareils"),
-dont la migration de la table n'a jamais été créée. → **Traité en Tâche 3** : la création de
-cette table sera ajoutée aux migrations versionnées (avec son RLS, déjà écrit en commentaire
-dans le code).
+dont la migration de la table n'a jamais été créée. → **Traité en Tâche 3** :
+`supabase/migrations/20260613_create_bilans_brouillons.sql` crée la table (avec son RLS, repris
+du commentaire dans `useBrouillonBilan.ts`). Une fois cette migration appliquée en production
+(`supabase db push`, voir `supabase/migrations/README.md`), le 404 disparaîtra et la
+synchronisation cloud des brouillons deviendra active.
 
 ---
 
