@@ -149,7 +149,7 @@ async function traiterRelancesExercices(supabase: SupabaseClient): Promise<{ exa
 
   const { data: participants } = await supabase
     .from('participants')
-    .select('id, praticien_id, date_creation, created_at')
+    .select('id, praticien_id, date_creation')
     .in('id', participantIds);
   if (!participants || participants.length === 0) return { examines: 0, envoyes: 0 };
 
@@ -195,7 +195,6 @@ async function traiterRelancesExercices(supabase: SupabaseClient): Promise<{ exa
 
     const derniereActiviteISO: string | null = derniereActiviteParPatient.get(participant.id)
       ?? participant.date_creation
-      ?? participant.created_at
       ?? null;
     if (!derniereActiviteISO) continue;
 
