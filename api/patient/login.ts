@@ -1,13 +1,13 @@
 // POST /api/patient/login
-// Valide le code patient (prénom normalisé + "2026") côté serveur via
-// service_role, et renvoie un JWT signé (PATIENT_SESSION_SECRET, 30 jours).
+// Valide le code d'accès patient (code_acces, unique, fix-code-acces) côté
+// serveur via service_role, et renvoie un JWT signé (PATIENT_SESSION_SECRET,
+// 30 jours).
 // Rate limiting : 5 tentatives / 15 min / IP
 // (supabase/migrations/20260613_patient_login_rate_limit.sql).
 
 import {
   getServiceClient,
   signPatientToken,
-  calculerCode,
   getClientIp,
   checkRateLimit,
   recordLoginAttempt,
@@ -22,6 +22,14 @@ export default withSentry(async function handler(req: any, res: any) {
 
   const { code } = req.body ?? {};
   if (!code || typeof code !== 'string') {
+    return res.status(400).json({ error: 'Code requis' });
+  }
+
+  // Normalisation : les codes sont générés en majuscules (src/utils/codeAcces.ts).
+  // Un code vide après trim ne peut jamais correspondre à un code_acces (qui
+  // fait toujours 8 caractères) : on rejette tout de suite.
+  const codeEntre = code.trim().toUpperCase();
+  if (!codeEntre) {
     return res.status(400).json({ error: 'Code requis' });
   }
 
@@ -41,16 +49,17 @@ export default withSentry(async function handler(req: any, res: any) {
   }
   await recordLoginAttempt(supabase, ip);
 
-  const { data: participants, error } = await supabase
+  // NULL = '<code>' est toujours faux en SQL : un participant sans
+  // code_acces (pas encore backfillé) ne peut jamais matcher.
+  const { data: patient, error } = await supabase
     .from('participants')
-    .select('id, prenom');
+    .select('id')
+    .eq('code_acces', codeEntre)
+    .maybeSingle();
 
   if (error) {
     return res.status(500).json({ error: 'Erreur serveur' });
   }
-
-  const codeEntre = code.trim().toLowerCase();
-  const patient = (participants ?? []).find(p => calculerCode(p.prenom) === codeEntre);
 
   if (!patient) {
     await logAuditEvent(supabase, 'patient_login', null, ip, false);

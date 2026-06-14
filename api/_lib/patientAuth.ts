@@ -49,16 +49,6 @@ export function extractBearerToken(req: { headers: Record<string, string | strin
   return match ? match[1] : null;
 }
 
-// Identique à src/hooks/useAccesPatients.ts : code patient = prénom normalisé + "2026".
-export function calculerCode(prenom: string): string {
-  return prenom
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z]/g, '')
-    + '2026';
-}
-
 export function getClientIp(req: { headers: Record<string, string | string[] | undefined>; socket?: { remoteAddress?: string } }): string {
   const fwd = req.headers['x-forwarded-for'];
   if (typeof fwd === 'string' && fwd.length > 0) return fwd.split(',')[0].trim();
