@@ -66,3 +66,31 @@ export async function patientSauvegarderSeance(token: string, payload: SeanceAEn
     return false;
   }
 }
+
+// Enregistre un abonnement push (rappels-patients, T2).
+export async function patientActiverRappels(token: string, subscription: PushSubscriptionJSON): Promise<boolean> {
+  try {
+    const res = await fetch('/api/patient/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ subscription }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Supprime un abonnement push (désactive les rappels sur cet appareil).
+export async function patientDesactiverRappels(token: string, endpoint: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/patient/push-subscribe', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ endpoint }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

@@ -33,6 +33,10 @@ export default defineConfig({
       workbox: {
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Ajoute la gestion des notifications push (rappels-patients) au
+        // service worker généré, sans toucher à la stratégie de cache
+        // existante — voir public/push-sw.js.
+        importScripts: ['push-sw.js'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
