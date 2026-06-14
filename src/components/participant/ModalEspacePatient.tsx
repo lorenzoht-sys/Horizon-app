@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import type { AccesPatient, Participant } from '../../types';
-import { calculerCode, getAccesPatient, sauvegarderAccesPatient } from '../../hooks/useAccesPatients';
+import { getAccesPatient, sauvegarderAccesPatient } from '../../hooks/useAccesPatients';
 import { getAppHost } from '../../lib/config';
 
 const VISIBILITE_ITEMS = [
@@ -20,7 +20,8 @@ interface Props {
 }
 
 export default function ModalEspacePatient({ participant, onClose }: Props) {
-  const code = calculerCode(participant.prenom);
+  const code = participant.codeAcces ?? '';
+  const hasCode = code.length > 0;
   const patientUrl = `${window.location.origin}/patient/${participant.id}?code=${code}`;
   const [local, setLocal] = useState<AccesPatient>(() => getAccesPatient(participant.id));
   const [copiedLink, setCopiedLink] = useState(false);
@@ -96,50 +97,68 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
 
         {/* Code affiché */}
         <div style={{
-          background: C.dark, borderRadius: '12px 12px 0 0',
+          background: C.dark, borderRadius: hasCode ? '12px 12px 0 0' : 12,
           padding: '20px', textAlign: 'center',
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          borderBottom: hasCode ? '1px solid rgba(255,255,255,0.07)' : 'none',
+          marginBottom: hasCode ? 0 : 12,
         }}>
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 8, letterSpacing: '0.1em' }}>
             CODE D'ACCÈS DE {participant.prenom.toUpperCase()}
           </div>
-          <div style={{
-            fontSize: 28, fontWeight: 700, color: C.teal,
-            letterSpacing: '0.05em', fontFamily: 'monospace',
-          }}>
-            {code}
-          </div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 8 }}>
-            {getAppHost()}/patient
-          </div>
+          {hasCode ? (
+            <>
+              <div style={{
+                fontSize: 28, fontWeight: 700, color: C.teal,
+                letterSpacing: '0.05em', fontFamily: 'monospace',
+              }}>
+                {code}
+              </div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 8 }}>
+                {getAppHost()}/patient
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#FCA5A5' }}>
+                Code non généré
+              </div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 8, lineHeight: 1.5 }}>
+                Ce patient n'a pas encore de code d'accès. Demandez à votre
+                administrateur d'exécuter le script de génération des codes.
+              </div>
+            </>
+          )}
         </div>
 
         {/* ── QR Code ─────────────────────────────────────────── */}
-        <div style={{
-          background: C.dark,
-          borderRadius: '0 0 12px 12px',
-          padding: '20px 16px',
-          textAlign: 'center',
-          marginBottom: 12,
-        }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 12 }}>
-            QR Code — scan = accès direct
+        {hasCode && (
+          <div style={{
+            background: C.dark,
+            borderRadius: '0 0 12px 12px',
+            padding: '20px 16px',
+            textAlign: 'center',
+            marginBottom: 12,
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 12 }}>
+              QR Code — scan = accès direct
+            </div>
+            <div style={{ background: '#fff', borderRadius: 10, padding: 10, display: 'inline-block', boxShadow: '0 0 0 1px rgba(43,184,154,0.2)' }}>
+              <QRCodeSVG
+                value={patientUrl}
+                size={160}
+                bgColor="#ffffff"
+                fgColor="#1C2B24"
+                level="M"
+              />
+            </div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 10, lineHeight: 1.4 }}>
+              Le patient scanne → ouvre son suivi<br/>sans saisir le code ✓
+            </div>
           </div>
-          <div style={{ background: '#fff', borderRadius: 10, padding: 10, display: 'inline-block', boxShadow: '0 0 0 1px rgba(43,184,154,0.2)' }}>
-            <QRCodeSVG
-              value={patientUrl}
-              size={160}
-              bgColor="#ffffff"
-              fgColor="#1C2B24"
-              level="M"
-            />
-          </div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 10, lineHeight: 1.4 }}>
-            Le patient scanne → ouvre son suivi<br/>sans saisir le code ✓
-          </div>
-        </div>
+        )}
 
         {/* Boutons lien */}
+        {hasCode && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <button onClick={partager} style={{
             flex: 1, padding: '10px', background: '#2BB89A', color: 'white',
@@ -159,8 +178,10 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
             {copiedLink ? '✓ Copié' : 'Copier le lien'}
           </button>
         </div>
+        )}
 
         {/* Boutons code */}
+        {hasCode && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button onClick={copier} style={{
             flex: 1, padding: '10px', background: C.teal, color: 'white',
@@ -182,6 +203,7 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
             </button>
           )}
         </div>
+        )}
 
         {/* Visibilité */}
         <div style={{ marginBottom: 14 }}>

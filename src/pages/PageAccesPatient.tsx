@@ -17,7 +17,7 @@ export default function PageAccesPatient() {
   }, [navigate]);
 
   async function verifierCode() {
-    const codeEntre = code.trim().toLowerCase();
+    const codeEntre = code.trim();
     if (!codeEntre) return;
     setLoading(true);
     setErreur('');

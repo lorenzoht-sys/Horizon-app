@@ -1,4 +1,4 @@
-import type { AccesPatient, Participant } from '../types';
+import type { AccesPatient } from '../types';
 
 const STORAGE_KEY = 'horizon_acces_patients';
 
@@ -13,24 +13,6 @@ function load(): AccesPatient[] {
 
 function save(list: AccesPatient[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-}
-
-export function calculerCode(prenom: string): string {
-  return prenom
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z]/g, '')
-    + '2026';
-}
-
-function loadParticipants(): Participant[] {
-  try { return JSON.parse(localStorage.getItem('mouvtrack_participants') ?? '[]'); }
-  catch { return []; }
-}
-
-export function trouverParticipantParCode(code: string): Participant | null {
-  return loadParticipants().find(p => calculerCode(p.prenom) === code) ?? null;
 }
 
 export function getAccesPatient(participantId: string): AccesPatient {
