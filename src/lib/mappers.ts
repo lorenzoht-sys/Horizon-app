@@ -33,6 +33,7 @@ export function dbToParticipant(row: any): Participant {
     geocodeFailed: false,
     disponibilites: undefined,
     token: row.token ?? '',
+    codeAcces: row.code_acces ?? undefined,
     profilHandicap: row.profil_handicap ?? undefined,
     modeDeplacementHabituel: row.mode_deplacement ?? undefined,
     modeDeplacementDetail: row.mode_deplacement_detail ?? undefined,
@@ -98,6 +99,7 @@ export function participantToDb(p: Omit<Participant, 'bilans' | 'programmes'>): 
     bic: p.bic ?? null,
     droit_image: p.droitImage ?? null,
     rgpd: p.rgpd ?? null,
+    code_acces: p.codeAcces ?? null,
   };
 }
 

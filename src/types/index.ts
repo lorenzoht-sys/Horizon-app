@@ -380,6 +380,7 @@ export interface Participant {
   geocodeFailed?: boolean;       // true si le dernier géocodage a échoué
   disponibilites?: DisponibilitesPatient;
   token: string;
+  codeAcces?: string;            // code d'accès unique pour /patient (fix-code-acces)
   bilans: Bilan[];
   programmes?: Programme[];
   rgpd?: RgpdConsent;

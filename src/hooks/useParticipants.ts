@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Participant, Bilan } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { generateToken } from '../utils/generateToken';
+import { genererCodeAcces } from '../utils/codeAcces';
 import { geocodeAdresse } from '../utils/geocodeAdresse';
 import { supabase } from '../lib/supabase';
 import { dbToParticipant, participantToDb, bilanToDb } from '../lib/mappers';
@@ -80,6 +81,10 @@ function hasAddress(p: Pick<Participant, 'adresseRue' | 'adresseVille'>): boolea
   return Boolean(p.adresseRue?.trim() && p.adresseVille?.trim());
 }
 
+// Nombre d'essais en cas de collision improbable sur code_acces (espace de
+// 31^8 codes possibles — voir src/utils/codeAcces.ts).
+const MAX_TENTATIVES_CODE_ACCES = 5;
+
 export function useParticipants() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,12 +147,19 @@ export function useParticipants() {
   }
 
   const addParticipant = useCallback(async (data: Omit<Participant, 'id' | 'token' | 'bilans'>) => {
-    const newP: Participant = { tags: [], ...data, id: uuidv4(), token: generateToken(), bilans: [] };
+    const newP: Participant = { tags: [], ...data, id: uuidv4(), token: generateToken(), codeAcces: genererCodeAcces(), bilans: [] };
     if (supabase) {
       const { data: { user } } = await supabase.auth.getUser();
-      const dbRow = { ...participantToDb(newP), praticien_id: user?.id ?? null };
-      const { error } = await supabase.from('participants').insert(dbRow);
-      if (error) { console.error('Erreur ajout participant:', error); throw error; }
+      for (let tentative = 0; tentative < MAX_TENTATIVES_CODE_ACCES; tentative++) {
+        const dbRow = { ...participantToDb(newP), praticien_id: user?.id ?? null };
+        const { error } = await supabase.from('participants').insert(dbRow);
+        if (!error) break;
+        const collisionCodeAcces = error.code === '23505' && error.message.includes('code_acces');
+        if (!collisionCodeAcces || tentative === MAX_TENTATIVES_CODE_ACCES - 1) {
+          console.error('Erreur ajout participant:', error); throw error;
+        }
+        newP.codeAcces = genererCodeAcces();
+      }
       if (hasAddress(newP)) runGeocode(newP.id, newP.adresseRue!, newP.adresseCodePostal ?? '', newP.adresseVille!);
     }
     setParticipants(prev => {
