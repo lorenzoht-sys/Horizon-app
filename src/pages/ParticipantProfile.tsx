@@ -5,7 +5,7 @@ import { differenceInDays } from 'date-fns';
 import {
   ArrowLeft, Pencil, FileText, TrendingUp, Share2,
   Download, Trash2, Dumbbell, NotebookPen, Calendar, MapPin,
-  RefreshCw, ClipboardList, Mic, ChevronDown, ChevronUp,
+  RefreshCw, ClipboardList, Mic, ChevronDown, ChevronUp, Save,
 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
@@ -26,6 +26,7 @@ import { exportDossierPraticien } from '../utils/exportDossierPDF';
 import { calculerNote, NORMES_SCORING } from '../data/norms';
 import { TAG_CONFIG } from '../data/profiles';
 import { getSedProfil, getFSSProfil } from '../components/bilan/TestsAutonomie';
+import { useRappelPreferences, type RappelPreferences } from '../hooks/useRappelPreferences';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import type { Bilan, Participant, Contrat, Seance, ProfilHandicap } from '../types';
@@ -559,7 +560,7 @@ function CarteJournalFusion({ compteRendus, onDicter }: {
 
 // ── TabsSection ───────────────────────────────────────────────────────────────
 
-type TabId = 'bilans' | 'contrats' | 'assiduite';
+type TabId = 'bilans' | 'contrats' | 'assiduite' | 'rappels';
 
 // ── Types assiduité ───────────────────────────────────────────────────────────
 
@@ -611,6 +612,140 @@ function TabsSection({ activeTab, setActiveTab, tabs, children }: {
       {/* Tab content */}
       <div className="p-5">
         {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Rappels (par patient) ───────────────────────────────────────────────────────
+
+function SectionRappelsPatient({ participantId }: { participantId: string }) {
+  const { prefs, herite, loading, enregistrer, reinitialiser } = useRappelPreferences(participantId);
+  const [local, setLocal] = useState<RappelPreferences>(prefs);
+  const [saving, setSaving] = useState(false);
+  const [nbAppareils, setNbAppareils] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!loading) setLocal(prefs);
+  }, [loading, prefs]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    let annule = false;
+    async function charger() {
+      const { count } = await supabase!
+        .from('push_subscriptions')
+        .select('id', { count: 'exact', head: true })
+        .eq('participant_id', participantId);
+      if (!annule) setNbAppareils(count ?? 0);
+    }
+    void charger();
+    return () => { annule = true; };
+  }, [participantId]);
+
+  async function handleSave() {
+    setSaving(true);
+    const ok = await enregistrer(local);
+    setSaving(false);
+    toast[ok ? 'success' : 'error'](ok ? 'Préférences de rappels enregistrées' : "Erreur lors de l'enregistrement");
+  }
+
+  async function handleReset() {
+    setSaving(true);
+    const ok = await reinitialiser();
+    setSaving(false);
+    toast[ok ? 'success' : 'error'](ok ? 'Réglages globaux rétablis pour ce patient' : 'Erreur');
+  }
+
+  if (loading) return <div className="text-sm text-gray-400">Chargement…</div>;
+
+  return (
+    <div className="space-y-5">
+      {/* Abonnement push */}
+      <div>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-3">Notifications push</div>
+        <div className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium"
+          style={nbAppareils !== null && nbAppareils > 0
+            ? { background: '#DCFCE7', color: '#16A34A' }
+            : { background: '#F3F4F6', color: '#6B7280' }}>
+          {nbAppareils === null
+            ? 'Chargement…'
+            : nbAppareils > 0
+              ? `🔔 ${nbAppareils} appareil${nbAppareils > 1 ? 's' : ''} abonné${nbAppareils > 1 ? 's' : ''} aux rappels`
+              : '🔕 Aucun appareil abonné aux rappels'}
+        </div>
+        {nbAppareils === 0 && (
+          <p className="text-[12px] text-gray-400 mt-1.5">
+            Le patient peut les activer depuis son espace patient (bouton « Activer les rappels »).
+          </p>
+        )}
+      </div>
+
+      {/* Réglages */}
+      <div>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-3">Réglages</div>
+        {herite && (
+          <div className="rounded-lg px-3 py-2.5 text-[12px] mb-3" style={{ background: '#F3F4F6', color: '#6B7280' }}>
+            Ce patient suit les réglages globaux (Paramètres → Rappels automatiques). Modifiez-les ci-dessous pour les personnaliser uniquement pour lui.
+          </div>
+        )}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200/70 p-3">
+            <div>
+              <div className="text-sm font-medium text-gray-800">Rappel avant la séance</div>
+              <p className="text-[12px] text-gray-400 mt-0.5">Notification envoyée avant le rendez-vous.</p>
+            </div>
+            <input type="checkbox" checked={local.rappelSeanceActif}
+              onChange={e => setLocal(l => ({ ...l, rappelSeanceActif: e.target.checked }))}
+              className="w-4 h-4 accent-primary flex-shrink-0" />
+          </div>
+          {local.rappelSeanceActif && (
+            <label className="block">
+              <span className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Délai avant la séance (heures)</span>
+              <input type="number" min={1} max={48} value={local.rappelSeanceDelaiHeures}
+                onChange={e => setLocal(l => ({ ...l, rappelSeanceDelaiHeures: Number(e.target.value) }))}
+                className="w-full max-w-[120px] px-4 py-2.5 border border-gray-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-primary focus:ring-primary/10 transition-colors font-sans" />
+            </label>
+          )}
+
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200/70 p-3">
+            <div>
+              <div className="text-sm font-medium text-gray-800">Relance si inactif</div>
+              <p className="text-[12px] text-gray-400 mt-0.5">Notification envoyée si le patient n'a pas fait ses exercices depuis un moment.</p>
+            </div>
+            <input type="checkbox" checked={local.relanceExercicesActif}
+              onChange={e => setLocal(l => ({ ...l, relanceExercicesActif: e.target.checked }))}
+              className="w-4 h-4 accent-primary flex-shrink-0" />
+          </div>
+          {local.relanceExercicesActif && (
+            <label className="block">
+              <span className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Seuil d'inactivité (jours)</span>
+              <input type="number" min={1} max={30} value={local.relanceExercicesSeuilJours}
+                onChange={e => setLocal(l => ({ ...l, relanceExercicesSeuilJours: Number(e.target.value) }))}
+                className="w-full max-w-[120px] px-4 py-2.5 border border-gray-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-primary focus:ring-primary/10 transition-colors font-sans" />
+            </label>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+        >
+          <Save size={13} />
+          {saving ? 'Enregistrement…' : herite ? 'Personnaliser pour ce patient' : 'Enregistrer'}
+        </button>
+        {!herite && (
+          <button
+            onClick={handleReset}
+            disabled={saving}
+            className="flex items-center gap-1.5 text-gray-400 text-[13px] font-medium px-3 py-[7px] rounded-lg hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50"
+          >
+            Revenir aux réglages globaux
+          </button>
+        )}
       </div>
     </div>
   );
@@ -770,6 +905,7 @@ export default function ParticipantProfile() {
     { id: 'bilans',    label: 'Historique bilans',   count: participant.bilans.length },
     { id: 'contrats',  label: 'Contrats de suivi',   count: contratsCount },
     { id: 'assiduite', label: '📊 Assiduité',        count: seancesStats.length > 0 ? seancesStats.length : undefined },
+    { id: 'rappels',   label: '🔔 Rappels' },
   ];
 
   return (
@@ -1324,6 +1460,9 @@ export default function ParticipantProfile() {
             </div>
           );
         })()}
+        {activeTab === 'rappels' && (
+          <SectionRappelsPatient participantId={participant.id} />
+        )}
       </TabsSection>
 
       {/* ── MODALS ─────────────────────────────────────────────── */}
