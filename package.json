@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck:api": "tsc -p api/tsconfig.json --noEmit",
     "typecheck:e2e": "tsc -p e2e/tsconfig.json --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
@@ -47,6 +48,7 @@
     "sonner": "^2.0.7",
     "tailwindcss": "^3.4.19",
     "uuid": "^14.0.0",
+    "web-push": "^3.6.7",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -57,6 +59,7 @@
     "@types/react": "^19.2.14",
     "@types/react-big-calendar": "^1.16.3",
     "@types/react-dom": "^19.2.3",
+    "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -65,7 +68,8 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12",
-    "vite-plugin-pwa": "^1.3.0"
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^4.1.8"
   },
   "description": "Application web de suivi des bilans fonctionnels pour Pierre Clavier, enseignant en Activité Physique Adaptée.",
   "main": "eslint.config.js",
