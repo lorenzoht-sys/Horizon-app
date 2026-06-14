@@ -25,13 +25,22 @@
 --    > Run).
 --
 -- ----------------------------------------------------------------------------
--- CODES D'ACCÈS PATIENT GÉNÉRÉS (pour les tests Playwright — T5) :
+-- CODES D'ACCÈS PATIENT (fix-code-acces — pour les tests Playwright — T5/T6) :
 -- ----------------------------------------------------------------------------
---   Camille Martin   → code patient : camille2026
+--   Camille Martin   → code d'accès : CAME2E26
 --                       (bilans + programme déjà remplis — sert au test
 --                       "connexion patient affiche programme + bilans")
---   Julien Bernard   → code patient : julien2026
+--   Julien Bernard   → code d'accès : JUNE2E27
 --                       (rattaché à la structure de test ci-dessous)
+--
+-- ⚠️ Nécessite que la migration
+-- supabase/migrations/20260614_add_code_acces_participants.sql ait été
+-- appliquée sur le projet de staging (colonne participants.code_acces).
+--
+-- Ce script est idempotent (il s'arrête si Camille Martin existe déjà) :
+-- si tu dois ajouter `code_acces` à un jeu de données de staging déjà
+-- présent, lance plutôt scripts/backfill-code-acces.ts (ou recrée le
+-- staging et relance ce script).
 --
 -- Portail structure de test :
 --   URL : /structure/staging-token-demo-0001
@@ -74,25 +83,25 @@ BEGIN
     id, praticien_id, nom, prenom, date_naissance, email, telephone,
     pathologie, profil, tags, tests_actifs,
     adresse_rue, adresse_code_postal, adresse_ville,
-    taille, poids, droit_image
+    taille, poids, droit_image, code_acces
   ) VALUES (
     v_camille_id, v_praticien_id, 'Martin', 'Camille', '1950-03-12',
     'camille.martin.staging@example.com', '0601020304',
     'Arthrose du genou', 'Autonome', ARRAY['staging','demo'],
     ARRAY['equilibre','chair_stand_30','hand_grip','tug_3m','souplesse','tm6','memoire'],
     '1 rue de la Démo', '69001', 'Lyon',
-    165, 68, false
+    165, 68, false, 'CAME2E26'
   );
 
   INSERT INTO participants (
     id, praticien_id, nom, prenom, date_naissance, email, telephone,
     pathologie, profil, tags, structure_id,
-    adresse_rue, adresse_code_postal, adresse_ville
+    adresse_rue, adresse_code_postal, adresse_ville, code_acces
   ) VALUES (
     v_julien_id, v_praticien_id, 'Bernard', 'Julien', '1945-07-22',
     'julien.bernard.staging@example.com', '0605060708',
     'Suites d''AVC', 'Aide partielle', ARRAY['staging','demo'], v_structure_id,
-    '2 avenue de la Démo', '69002', 'Lyon'
+    '2 avenue de la Démo', '69002', 'Lyon', 'JUNE2E27'
   );
   -- v_structure_id n'existe pas encore à ce stade (FK différée non utilisée) :
   -- la structure est créée juste après, donc on met à jour le rattachement ensuite.

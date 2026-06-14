@@ -11,10 +11,10 @@ export const E2E_ENABLED = Boolean(E2E_BASE_URL);
 export const env = {
   praticienEmail: process.env.E2E_PRATICIEN_EMAIL ?? '',
   praticienPassword: process.env.E2E_PRATICIEN_PASSWORD ?? '',
-  patientCode: process.env.E2E_PATIENT_CODE ?? 'camille2026',
+  patientCode: process.env.E2E_PATIENT_CODE ?? 'CAME2E26',
   patientPrenom: process.env.E2E_PATIENT_PRENOM ?? 'Camille',
   patientNom: process.env.E2E_PATIENT_NOM ?? 'Martin',
-  patientCode2: process.env.E2E_PATIENT_CODE_2 ?? 'julien2026',
+  patientCode2: process.env.E2E_PATIENT_CODE_2 ?? 'JUNE2E27',
   patientPrenom2: process.env.E2E_PATIENT_PRENOM_2 ?? 'Julien',
   patientNom2: process.env.E2E_PATIENT_NOM_2 ?? 'Bernard',
   structureToken: process.env.E2E_STRUCTURE_TOKEN ?? 'staging-token-demo-0001',

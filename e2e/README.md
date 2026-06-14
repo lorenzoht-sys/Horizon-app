@@ -20,10 +20,10 @@ la mise en place du staging.
 | `E2E_BASE_URL` | oui (sinon tout est skip) | — | URL du déploiement à tester (ex : URL d'un Preview Vercel) |
 | `E2E_PRATICIEN_EMAIL` | pour les tests praticien (1, 2, 3, 4, 5, 10) | — | Email du compte praticien de staging (`staging.praticien@example.com`) |
 | `E2E_PRATICIEN_PASSWORD` | pour les tests praticien | — | Mot de passe de ce compte |
-| `E2E_PATIENT_CODE` | non | `camille2026` | Code d'accès du patient de démo "Camille" (a des bilans + programme) |
+| `E2E_PATIENT_CODE` | non | `CAME2E26` | Code d'accès (code_acces) du patient de démo "Camille" (a des bilans + programme) |
 | `E2E_PATIENT_PRENOM` | non | `Camille` | Prénom correspondant |
 | `E2E_PATIENT_NOM` | non | `Martin` | Nom correspondant |
-| `E2E_PATIENT_CODE_2` | non | `julien2026` | Code d'accès du patient de démo "Julien" (rattaché à une structure, sans bilan/programme) |
+| `E2E_PATIENT_CODE_2` | non | `JUNE2E27` | Code d'accès (code_acces) du patient de démo "Julien" (rattaché à une structure, sans bilan/programme) |
 | `E2E_PATIENT_PRENOM_2` | non | `Julien` | Prénom correspondant |
 | `E2E_PATIENT_NOM_2` | non | `Bernard` | Nom correspondant |
 | `E2E_STRUCTURE_TOKEN` | non | `staging-token-demo-0001` | Token du portail structure de démo |
