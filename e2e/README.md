@@ -58,6 +58,8 @@ npm run test:e2e
 8. `08-portail-structure` — portail structure avec token valide et invalide.
 9. `09-rate-limit-connexion-patient` — limitation (429) après plusieurs codes invalides sur `/api/patient/login`.
 10. `10-creation-contrat` — création d'un contrat de suivi pour Julien.
+11. `11-rappels-patient` — la section "Rappels" (notifications push) est visible dans l'espace patient de Camille.
+12. `12-rappels-praticien` — réglages globaux de rappels (Paramètres) et personnalisation par patient (fiche de Camille, onglet "Rappels").
 
 ## ⚠️ Les tests créent des données dans le projet de staging
 
