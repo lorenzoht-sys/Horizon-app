@@ -26,8 +26,8 @@ jobs:
       - run: npm run typecheck:e2e
 
   # Suite E2E Playwright : nécessite un déploiement de Preview Vercel branché
-  # sur le projet Supabase de staging (voir supabase/migrations/SETUP_STAGING.md
-  # et e2e/README.md). Ignorée si la variable de dépôt E2E_BASE_URL n'est pas
+  # sur le projet Supabase de staging (voir GUIDE_STAGING.md et
+  # e2e/README.md). Ignorée si la variable de dépôt E2E_BASE_URL n'est pas
   # configurée, pour que la CI reste verte avant la mise en place du staging.
   e2e:
     needs: build
