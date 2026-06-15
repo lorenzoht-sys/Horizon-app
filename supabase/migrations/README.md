@@ -64,6 +64,34 @@ automatiquement par Claude sur la base de production**. Les migrations sont
   Pas encore appliquée en production : à exécuter via `supabase db push` en
   même temps que les fichiers ci-dessus.
 
+## Migrations ajoutées depuis la consolidation
+
+- `20260614_add_code_acces_participants.sql` — code d'accès patient unique
+  (`participants.code_acces`), voir `RAPPORT_CODE_ACCES.md`.
+- `20260615_rappels_patients.sql` — tables des rappels automatiques patients
+  (`push_subscriptions`, `rappel_preferences`, `rappels_envoyes`), voir
+  `RAPPORT_RAPPELS.md`.
+- `20260616_cron_rappels_patients.sql` — job pg_cron de rappels pour la
+  **production** (placeholders `<VOTRE_URL_VERCEL>` / `<VOTRE_CRON_SECRET>`).
+  `20260616_cron_rappels_patients_staging.sql` est la variante pour
+  l'environnement de staging (job renommé `rappels-patients-horaire-staging`).
+
+Comme les fichiers `20260613_*`, ces 3 fichiers sont idempotents et leur
+statut "appliqué en prod ou non" doit être vérifié avant de les rejouer
+ailleurs. Pour l'environnement de **staging**, la liste à jour et l'ordre
+d'application sont dans `GUIDE_STAGING.md` (Étape 2.2).
+
+## Correctif — `20260613_rls_anon_lockdown.sql`
+
+Ce fichier référençait `documents_patient`, `documents_partages` et la
+fonction `get_praticien_structure()` : ces objets ont des migrations dans ce
+dossier (`20260603_documents_patient.sql`, `20260607_documents_partages.sql`,
+`20260607_praticien_portail_structure.sql`) mais **n'existent pas réellement
+en production** (jamais appliquées). Le fichier a été corrigé pour retirer
+ces références (sections renumérotées 1 à 4) afin de pouvoir être rejoué
+proprement sur staging et sur toute future réinstallation, sans adaptation
+manuelle.
+
 ## ⚠️ Limite connue : ce dossier ne suffit PAS à recréer la base depuis zéro
 
 Les tables "de base" du projet (`participants`, `praticiens`, `bilans`,
@@ -73,11 +101,11 @@ en place de ce dossier de migrations (avant le 29/05/2026) — il n'existe
 fichiers de ce dossier sur une base vide échouera donc (`ALTER TABLE` sur
 des tables qui n'existent pas).
 
-C'est pour ça que la Tâche 4 (environnement de staging) ne se base pas sur
-"rejouer toutes les migrations depuis zéro", mais sur une **copie complète du
-schéma de production** (`supabase db dump`), suivie de l'application des 5
-migrations `20260613_*` (les seules pas encore en prod). La procédure
-détaillée est dans `supabase/migrations/SETUP_STAGING.md` (Tâche 4).
+C'est pour ça que l'environnement de staging ne se base pas sur "rejouer
+toutes les migrations depuis zéro", mais sur une **copie complète du schéma
+de production** (`supabase db dump`), suivie de l'application des migrations
+listées dans `GUIDE_STAGING.md` (Étape 2.2). La procédure détaillée est dans
+`GUIDE_STAGING.md` (à la racine du dépôt).
 
 ## Générer un instantané de référence du schéma actuel (optionnel)
 
