@@ -116,6 +116,26 @@ describe('envoyerRappel', () => {
     expect(deleted).toEqual(['abo-1']);
   });
 
+  it('ne plante pas si les clés VAPID sont invalides (setVapidDetails lève une exception)', async () => {
+    Object.assign(process.env, ENV_VAPID);
+
+    const setVapidDetails = vi.fn(() => {
+      throw new Error('Vapid public key should be 65 bytes long when decoded.');
+    });
+    const sendNotification = vi.fn();
+    vi.doMock('web-push', () => ({ default: { setVapidDetails, sendNotification } }));
+
+    const { envoyerRappel } = await import('./notifications.js');
+    const { client } = creerSupabaseFake([
+      { id: 'abo-1', endpoint: 'https://push.example/1', p256dh: 'p1', auth_key: 'a1' },
+    ]);
+
+    const resultat = await envoyerRappel(client, 'participant-1', MESSAGE);
+
+    expect(resultat).toEqual({ nbEnvoyes: 0, nbEchecs: 0 });
+    expect(sendNotification).not.toHaveBeenCalled();
+  });
+
   it('conserve l\'abonnement en cas d\'erreur temporaire (ex: 500)', async () => {
     Object.assign(process.env, ENV_VAPID);
 

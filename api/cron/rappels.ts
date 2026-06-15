@@ -56,12 +56,21 @@ export default withSentry(async function handler(req: any, res: any) {
     return res.status(500).json({ error: String(err) });
   }
 
-  const [rappelsSeance, relances] = await Promise.all([
-    traiterRappelsSeance(supabase),
-    traiterRelancesExercices(supabase),
-  ]);
+  try {
+    const [rappelsSeance, relances] = await Promise.all([
+      traiterRappelsSeance(supabase),
+      traiterRelancesExercices(supabase),
+    ]);
 
-  return res.status(200).json({ rappelsSeance, relances });
+    return res.status(200).json({ rappelsSeance, relances });
+  } catch (err) {
+    // En cas d'échec, on renvoie le détail de l'exception (au moins le
+    // message) plutôt qu'un "Erreur serveur" générique : utile pour
+    // diagnostiquer un futur problème depuis les logs Vercel sans avoir à
+    // deviner.
+    const detail = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: 'Erreur serveur', detail: detail.slice(0, 500) });
+  }
 });
 
 async function chargerPrefsGlobales(supabase: SupabaseClient, praticienIds: string[]): Promise<Map<string, RowPrefs>> {

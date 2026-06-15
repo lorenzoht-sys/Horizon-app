@@ -29,7 +29,16 @@ function configurerVapid(): boolean {
   const privateKey = process.env.VAPID_PRIVATE_KEY;
   if (!publicKey || !privateKey) return false;
   const contact = process.env.VAPID_CONTACT_EMAIL || 'mailto:contact@example.com';
-  webpush.setVapidDetails(contact, publicKey, privateKey);
+  // setVapidDetails valide la forme des clés et lève une exception
+  // synchrone si elles sont invalides (mauvaise longueur, caractères non
+  // base64url...). On ne doit pas laisser planter tout le cron pour autant :
+  // on désactive juste le push, comme si VAPID n'était pas configuré.
+  try {
+    webpush.setVapidDetails(contact, publicKey, privateKey);
+  } catch (err) {
+    console.error('[rappels] Configuration VAPID invalide, notifications push désactivées :', err);
+    return false;
+  }
   vapidConfigure = true;
   return true;
 }
