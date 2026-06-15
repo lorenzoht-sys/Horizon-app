@@ -95,16 +95,16 @@ BEGIN
 
   INSERT INTO participants (
     id, praticien_id, nom, prenom, date_naissance, email, telephone,
-    pathologie, profil, tags, structure_id,
+    pathologie, profil, tags,
     adresse_rue, adresse_code_postal, adresse_ville, code_acces
   ) VALUES (
     v_julien_id, v_praticien_id, 'Bernard', 'Julien', '1945-07-22',
     'julien.bernard.staging@example.com', '0605060708',
-    'Suites d''AVC', 'Aide partielle', ARRAY['staging','demo'], v_structure_id,
+    'Suites d''AVC', 'Aide partielle', ARRAY['staging','demo'],
     '2 avenue de la Démo', '69002', 'Lyon', 'JUNE2E27'
   );
-  -- v_structure_id n'existe pas encore à ce stade (FK différée non utilisée) :
-  -- la structure est créée juste après, donc on met à jour le rattachement ensuite.
+  -- v_structure_id n'existe pas encore à ce stade : la structure est créée
+  -- juste après, donc le rattachement de Julien se fait via l'UPDATE ci-dessous.
 
   -- ── 3. Structure de test + rattachement de Julien ────────────────────────
   INSERT INTO structures (
