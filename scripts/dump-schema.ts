@@ -178,26 +178,41 @@ async function dumpTables(client: Client): Promise<{ sql: string[]; tables: stri
   return { sql: out, tables };
 }
 
-async function dumpConstraints(client: Client): Promise<string[]> {
-  const { rows } = await client.query<{ relname: string; conname: string; def: string }>(`
-    SELECT rel.relname, con.conname, pg_get_constraintdef(con.oid) AS def
+interface ConstraintSections {
+  nonFk: string[];
+  fk: string[];
+}
+
+// Sépare les contraintes en deux passes (ordre standard pg_dump) : PK/UNIQUE/
+// CHECK d'abord (pour toutes les tables), puis FOREIGN KEY ensuite (pour
+// toutes les tables). Sans cette séparation, une FK vers une table dont la PK
+// n'a pas encore été ajoutée (table située après dans l'ordre alphabétique)
+// échoue avec "there is no unique constraint matching given keys" (42830).
+async function dumpConstraints(client: Client): Promise<ConstraintSections> {
+  const { rows } = await client.query<{ relname: string; conname: string; contype: string; def: string }>(`
+    SELECT rel.relname, con.conname, con.contype, pg_get_constraintdef(con.oid) AS def
     FROM pg_constraint con
     JOIN pg_class rel ON rel.oid = con.conrelid
     JOIN pg_namespace n ON n.oid = rel.relnamespace
     WHERE n.nspname = 'public' AND rel.relkind = 'r'
     ORDER BY rel.relname, con.contype DESC, con.conname
   `);
-  if (rows.length === 0) return [];
-  const out = ['-- ── Contraintes (PK, FK, UNIQUE, CHECK) ─────────────────────────'];
+
+  const nonFk: string[] = [];
+  const fk: string[] = [];
   for (const r of rows) {
-    out.push(
+    const stmt =
       `DO $$ BEGIN\n` +
       `  ALTER TABLE public.${q(r.relname)} ADD CONSTRAINT ${q(r.conname)} ${r.def};\n` +
       `EXCEPTION WHEN duplicate_object THEN NULL;\n` +
-      `END $$;`
-    );
+      `END $$;`;
+    (r.contype === 'f' ? fk : nonFk).push(stmt);
   }
-  return out;
+
+  return {
+    nonFk: nonFk.length ? ['-- ── Contraintes (PK, UNIQUE, CHECK) ─────────────────────────────', ...nonFk] : [],
+    fk: fk.length ? ['-- ── Contraintes (FOREIGN KEY) ───────────────────────────────────', ...fk] : [],
+  };
 }
 
 async function dumpIndexes(client: Client): Promise<string[]> {
@@ -352,7 +367,9 @@ async function main() {
     const { sql: tableSql, tables } = await dumpTables(client);
     sections.push(tableSql);
     sections.push(await dumpFunctions(client));
-    sections.push(await dumpConstraints(client));
+    const constraints = await dumpConstraints(client);
+    sections.push(constraints.nonFk);
+    sections.push(constraints.fk);
     sections.push(await dumpIndexes(client));
     sections.push(await dumpTriggers(client));
     sections.push(await dumpRlsAndPolicies(client, tables));
