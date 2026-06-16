@@ -124,19 +124,21 @@ export default function ParticipantCard({ participant, structureNom }: Props) {
         style={{ borderTop: '1px solid #E2EEEE', fontSize: 12, color: 'var(--color-ink-3)' }}
       >
         <span
-          className="rounded-full"
+          className="rounded-full flex-shrink-0"
           style={{ background: 'var(--color-teal-light)', color: 'var(--color-teal)', padding: '2px 8px', fontSize: 12 }}
         >
           {participant.bilans.length} bilan{participant.bilans.length !== 1 ? 's' : ''}
         </span>
         {(participant.structureId || structureNom) && (
-          <span className="flex items-center gap-1 rounded-full" style={{ background: '#EEF2FF', color: '#4F46E5', padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>
-            <Building2 size={10} />
-            {structureNom ?? 'Structure'}
+          <span className="flex items-center gap-1 rounded-full min-w-0" style={{ background: '#EEF2FF', color: '#4F46E5', padding: '2px 8px', fontSize: 11, fontWeight: 600, maxWidth: '45%', overflow: 'hidden' }}>
+            <Building2 size={10} className="flex-shrink-0" />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {structureNom ?? 'Structure'}
+            </span>
           </span>
         )}
         {participant.telephone && (
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1 flex-shrink-0">
             <Phone size={10} />
             {participant.telephone}
           </span>
