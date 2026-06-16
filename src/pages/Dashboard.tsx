@@ -184,7 +184,7 @@ function CarteStructure({ structure, nbPatients, derniereSeance }: {
 
 const MiniMap = lazy(() => import('../components/map/MiniMap'));
 
-type DashTab = 'independants' | 'structures';
+type DashTab = 'tous' | 'independants' | 'structures';
 
 export default function Dashboard() {
   const { participants, loading: participantsLoading, addParticipant } = useParticipants();
@@ -195,7 +195,7 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
   const [showImport, setShowImport] = useState(false);
   const [showCreateStructure, setShowCreateStructure] = useState(false);
-  const [activeTab, setActiveTab] = useState<DashTab>('independants');
+  const [activeTab, setActiveTab] = useState<DashTab>('tous');
   const [minLoadDone, setMinLoadDone] = useState(false);
   const [assiduite, setAssiduite] = useState<Record<string, { nb: number; taux: number | null; derniere: string | null }>>({});
   const assiduiteLoaded = useRef(false);
@@ -257,6 +257,11 @@ export default function Dashboard() {
   const filtered = independants
     .filter(p => `${p.prenom} ${p.nom}`.toLowerCase().includes(search.toLowerCase()));
 
+  const filteredTous = participants
+    .filter(p => `${p.prenom} ${p.nom}`.toLowerCase().includes(search.toLowerCase()));
+
+  const listeFiltered = activeTab === 'tous' ? filteredTous : filtered;
+
   const needsBilan = participants.filter(p => {
     const last = p.bilans.at(-1);
     if (!last) return true;
@@ -300,6 +305,7 @@ export default function Dashboard() {
         {/* Onglets */}
         <div className="flex gap-1 mb-6 bg-gray-100 rounded-xl p-1 w-fit">
           {([
+            ['tous', `👥 Tous (${participants.length})`],
             ['independants', `🏠 Indépendants (${independants.length})`],
             ['structures', `🏢 Structures (${structures.length})`],
           ] as [DashTab, string][]).map(([tab, label]) => (
@@ -506,7 +512,7 @@ export default function Dashboard() {
             </div>
 
             {/* Grid participants */}
-            {filtered.length === 0 ? (
+            {listeFiltered.length === 0 ? (
               <div className="text-center py-20 text-gray-400">
                 <Users size={56} className="mx-auto mb-4 opacity-20" />
                 <p className="font-medium text-lg">Aucun participant trouvé</p>
@@ -514,7 +520,7 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filtered.map((p, i) => (
+                {listeFiltered.map((p, i) => (
                   <FadeInCard key={p.id} delay={0.15 + i * 0.05}>
                     <ParticipantCard
                       participant={p}
