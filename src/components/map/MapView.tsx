@@ -27,7 +27,8 @@ function buildSegments(colors: string[]): string {
 
 function createMarkerIcon(participant: Participant): L.DivIcon {
   const tags: TagPatient[] = participant.tags ?? [];
-  const colors = tags.length > 0 ? tags.map(t => TAG_CONFIG[t].color) : ['#6B7280'];
+  const knownTags = tags.filter(t => t in TAG_CONFIG);
+  const colors = knownTags.length > 0 ? knownTags.map(t => TAG_CONFIG[t].color) : ['#6B7280'];
   const initials = `${(participant.prenom[0] ?? '').toUpperCase()}${(participant.nom[0] ?? '').toUpperCase()}`;
 
   const html = `
@@ -77,7 +78,7 @@ function PatientPopup({ p }: { p: Participant }) {
 
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
-          {tags.map(tag => (
+          {tags.filter(tag => tag in TAG_CONFIG).map(tag => (
             <span key={tag}
               className="inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded-full text-white"
               style={{ backgroundColor: TAG_CONFIG[tag].color }}>

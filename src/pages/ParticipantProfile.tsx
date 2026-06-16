@@ -949,7 +949,7 @@ export default function ParticipantProfile() {
                   </span>
                 )}
                 {/* Autres tags */}
-                {participant.tags?.filter(t => t !== 'senior' && t !== 'chronique').map(tag => (
+                {participant.tags?.filter(t => t in TAG_CONFIG && t !== 'senior' && t !== 'chronique').map(tag => (
                   <span key={tag}
                     className="text-[12px] font-medium px-2.5 py-0.5 rounded-full text-white"
                     style={{ background: TAG_CONFIG[tag].color }}

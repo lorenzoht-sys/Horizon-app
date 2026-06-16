@@ -121,7 +121,7 @@ export const TAG_ORDER: TagPatient[] = ['senior', 'post_op', 'chronique', 'adult
 
 // Union des tests selon les tags cochés
 export function buildTestsActifs(tags: TagPatient[]): TestKey[] {
-  return [...new Set(tags.flatMap(tag => TAG_CONFIG[tag].tests))];
+  return [...new Set(tags.filter(tag => tag in TAG_CONFIG).flatMap(tag => TAG_CONFIG[tag].tests))];
 }
 
 // Tag le plus "médical" pour le message client (priorité)
@@ -130,7 +130,7 @@ export function getPriorityTag(tags: TagPatient[]): TagPatient | undefined {
   for (const t of TAG_PRIORITY) {
     if (tags.includes(t)) return t;
   }
-  return tags[0];
+  return tags.find(t => t in TAG_CONFIG);
 }
 
 // Mapping TestKey → axe radar

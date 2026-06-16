@@ -87,7 +87,7 @@ BEGIN
   ) VALUES (
     v_camille_id, v_praticien_id, 'Martin', 'Camille', '1950-03-12',
     'camille.martin.staging@example.com', '0601020304',
-    'Arthrose du genou', 'Autonome', ARRAY['staging','demo'],
+    'Arthrose du genou', 'Autonome', ARRAY['senior'],
     ARRAY['equilibre','chair_stand_30','hand_grip','tug_3m','souplesse','tm6','memoire'],
     '1 rue de la Démo', '69001', 'Lyon',
     165, 68, false, 'CAME2E26'
@@ -100,7 +100,7 @@ BEGIN
   ) VALUES (
     v_julien_id, v_praticien_id, 'Bernard', 'Julien', '1945-07-22',
     'julien.bernard.staging@example.com', '0605060708',
-    'Suites d''AVC', 'Aide partielle', ARRAY['staging','demo'],
+    'Suites d''AVC', 'Aide partielle', ARRAY['chronique'],
     '2 avenue de la Démo', '69002', 'Lyon', 'JUNE2E27'
   );
   -- v_structure_id n'existe pas encore à ce stade : la structure est créée

@@ -775,7 +775,7 @@ export default function ParticipantProfileMobile() {
               📋 Bilan {brouillon.completionPct}%
             </span>
           )}
-          {participant.tags?.filter(t => t !== 'chronique').map(tag => (
+          {participant.tags?.filter(t => t in TAG_CONFIG && t !== 'chronique').map(tag => (
             <span key={tag} className="text-[11px] font-medium px-2 py-0.5 rounded-full text-white"
               style={{ background: TAG_CONFIG[tag].color }}>
               {TAG_CONFIG[tag].emoji} {TAG_CONFIG[tag].label}
