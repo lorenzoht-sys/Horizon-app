@@ -13,6 +13,7 @@ import type { Participant, Seance, IndisponibilitePierre, JourSemaine, CreneauPr
 import { geocodeAdresse } from '../utils/geocodeAdresse';
 import { Link, useNavigate } from 'react-router-dom';
 import { useIndispos } from '../hooks/useIndispos';
+import { useZones } from '../hooks/useZones';
 
 // ── Fix icônes Leaflet ─────────────────────────────────────────────────────────
 
@@ -317,6 +318,7 @@ export default function TourneePage() {
   const { seances, seancesDuJour, changerStatut, creerSeance } = useAgenda();
   const { contrats } = useContrats();
   const { indisposDuJour } = useIndispos();
+  const { zones } = useZones();
   const navigate = useNavigate();
 
   const avecCoords = useMemo(
@@ -400,6 +402,22 @@ export default function TourneePage() {
     () => disponibles.filter(p => !participantIdsAujourdhui.has(p.id)),
     [disponibles, participantIdsAujourdhui]
   );
+
+  // IDs des patients dont la zone couvre le jour sélectionné
+  const patientsZoneDuJourIds = useMemo(() => {
+    if (jourChoisi === 'dim') return new Set<string>();
+    const ids = new Set<string>();
+    zones
+      .filter(z => z.joursAssignes.includes(jourChoisi as JourSemaine))
+      .forEach(z => z.participantIds.forEach(id => ids.add(id)));
+    return ids;
+  }, [zones, jourChoisi]);
+
+  // Patients zone du jour en tête, puis les autres
+  const disponiblesHorsJourTries = useMemo(() => [
+    ...disponiblesHorsJour.filter(p => patientsZoneDuJourIds.has(p.id)),
+    ...disponiblesHorsJour.filter(p => !patientsZoneDuJourIds.has(p.id)),
+  ], [disponiblesHorsJour, patientsZoneDuJourIds]);
 
   // Carte : contrats (par défaut) OU résultats de l'optimiseur
   const mapPatients = useMemo(() =>
@@ -699,12 +717,40 @@ export default function TourneePage() {
                 )}
 
                 <div className="space-y-1 max-h-60 overflow-y-auto">
-                  {disponiblesHorsJour.length > 0 && (
+                  {disponiblesHorsJourTries.length > 0 && (
                     <div className="text-xs font-semibold text-green-700 flex items-center gap-1 mb-1.5">
-                      <CheckCircle size={11} />Disponibles ({disponiblesHorsJour.length})
+                      <CheckCircle size={11} />Disponibles ({disponiblesHorsJourTries.length})
                     </div>
                   )}
-                  {disponiblesHorsJour.map(p => (
+
+                  {/* ── Patients de la zone du jour (en tête) ── */}
+                  {patientsZoneDuJourIds.size > 0 && disponiblesHorsJourTries.some(p => patientsZoneDuJourIds.has(p.id)) && (
+                    <div className="text-xs text-primary/70 font-medium flex items-center gap-1 mb-1">
+                      <MapPin size={10} />Zone du jour
+                    </div>
+                  )}
+                  {disponiblesHorsJourTries.filter(p => patientsZoneDuJourIds.has(p.id)).map(p => (
+                    <label key={p.id} className="flex items-start gap-2.5 cursor-pointer p-2 rounded-xl hover:bg-gray-50 transition-colors">
+                      <input type="checkbox" checked={selectionIds.has(p.id)} onChange={() => toggleSelection(p.id)}
+                        className="w-4 h-4 accent-primary mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-dark truncate">{p.prenom} {p.nom}</div>
+                        {p.disponibilites && (
+                          <div className="text-xs text-green-700">
+                            {p.disponibilites.creneauxPreference.map(c =>
+                              c === 'matin' ? '☀️ Matin' : c === 'apres-midi' ? '🌤 Après-midi' : '🌙 Soirée'
+                            ).join(' · ')} · {p.disponibilites.dureeSeanceMinutes} min
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+
+                  {/* ── Autres patients disponibles ── */}
+                  {patientsZoneDuJourIds.size > 0 && disponiblesHorsJourTries.some(p => !patientsZoneDuJourIds.has(p.id)) && (
+                    <div className="text-xs text-gray-400 border-t border-gray-100 pt-1.5 mt-1.5 mb-1">Autres</div>
+                  )}
+                  {disponiblesHorsJourTries.filter(p => !patientsZoneDuJourIds.has(p.id)).map(p => (
                     <label key={p.id} className="flex items-start gap-2.5 cursor-pointer p-2 rounded-xl hover:bg-gray-50 transition-colors">
                       <input type="checkbox" checked={selectionIds.has(p.id)} onChange={() => toggleSelection(p.id)}
                         className="w-4 h-4 accent-primary mt-0.5 flex-shrink-0" />
@@ -736,9 +782,9 @@ export default function TourneePage() {
                   )}
                 </div>
 
-                {disponiblesHorsJour.length > 0 && (
+                {disponiblesHorsJourTries.length > 0 && (
                   <div className="flex gap-2">
-                    <button onClick={() => setSelectionIds(new Set(disponiblesHorsJour.map(p => p.id)))}
+                    <button onClick={() => setSelectionIds(new Set(disponiblesHorsJourTries.map(p => p.id)))}
                       className="flex-1 text-xs py-1.5 border border-green-200 text-green-700 rounded-lg hover:bg-green-50 font-medium">
                       Tous les disponibles
                     </button>
