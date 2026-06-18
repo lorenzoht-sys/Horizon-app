@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import type { Participant, Seance, Bilan, Programme, ProgrammeV2, ProgrammeSeanceV2, JourProgramme } from '../types';
 import { JOURS_PROGRAMME } from '../types';
 import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/mappers';
-import { patientFetchMe, patientSauvegarderSeance, patientLogin, patientActiverRappels, patientDesactiverRappels } from '../lib/patientApi';
+import { patientFetchMe, patientSauvegarderSeance, patientEnvoyerRetour, patientLogin, patientActiverRappels, patientDesactiverRappels } from '../lib/patientApi';
 import { activerRappelsPush, desactiverRappelsPush, etatAbonnementPush, estIOS, estInstalleeSurEcranAccueil, pushSupporte } from '../lib/push';
 import { loadExercices } from '../data/exercices';
 import { exportProgrammePDF } from '../utils/exportPDF';
@@ -853,6 +853,11 @@ function ModeSeance({
   const [saving, setSaving] = useState(false);
   const [erreurSauvegarde, setErreurSauvegarde] = useState(false);
   const [startTime] = useState(() => Date.now());
+  const [showRetour, setShowRetour] = useState(false);
+  const [savedSeanceId, setSavedSeanceId] = useState<string | null>(null);
+  const [borgRpe, setBorgRpe] = useState<number | null>(null);
+  const [bienEtre, setBienEtre] = useState<number | null>(null);
+  const [sendingRetour, setSendingRetour] = useState(false);
 
   const ex = exercices[idx];
   const exState = states[idx];
@@ -882,7 +887,7 @@ function ModeSeance({
       const statut = realises === total ? 'terminee' : 'partielle';
       const dureeMins = Math.max(1, Math.round((Date.now() - startTime) / 60000));
 
-      const ok = await patientSauvegarderSeance(token, {
+      const result = await patientSauvegarderSeance(token, {
         programmeId: progId,
         seanceId: seance.id,
         dateSeance: new Date().toISOString().split('T')[0],
@@ -896,11 +901,123 @@ function ModeSeance({
         })),
       });
 
-      if (!ok) { setErreurSauvegarde(true); setSaving(false); return; }
-      onTermine();
+      if (!result.ok) { setErreurSauvegarde(true); setSaving(false); return; }
+      setSavedSeanceId(result.seancePatientId ?? null);
+      setShowRetour(true); // Proposer le formulaire de ressenti — séance déjà enregistrée
     } finally {
       setSaving(false);
     }
+  }
+
+  // ── Formulaire retour post-séance (Borg RPE + bien-être) ────────────────────
+  // Apparaît après la sauvegarde réussie. Optionnel : "Passer" ferme sans enregistrer.
+
+  const NIVEAUX_EFFORT = [
+    { label: 'Très facile', borg: 2,  couleur: '#16A34A' },
+    { label: 'Facile',      borg: 4,  couleur: '#65A84E' },
+    { label: 'Modéré',      borg: 6,  couleur: '#CA8A04' },
+    { label: 'Difficile',   borg: 8,  couleur: '#EA580C' },
+    { label: 'Très difficile', borg: 10, couleur: '#DC2626' },
+  ] as const;
+
+  const NIVEAUX_BIEN_ETRE = [
+    { label: 'Très bien',  val: 1, couleur: '#16A34A' },
+    { label: 'Bien',       val: 2, couleur: '#65A84E' },
+    { label: 'Correct',    val: 3, couleur: '#CA8A04' },
+    { label: 'Fatigué',    val: 4, couleur: '#EA580C' },
+    { label: 'Épuisé',     val: 5, couleur: '#DC2626' },
+  ] as const;
+
+  async function soumettreRetour() {
+    if (borgRpe === null || bienEtre === null) return;
+    setSendingRetour(true);
+    await patientEnvoyerRetour(token, { seanceId: savedSeanceId, borgRpe, bienEtre });
+    setSendingRetour(false);
+    onTermine();
+  }
+
+  if (showRetour) {
+    const btnStyle = (couleur: string, selected: boolean): React.CSSProperties => ({
+      flex: '1 1 0',
+      minWidth: 58,
+      padding: '14px 6px',
+      border: `2.5px solid ${selected ? couleur : '#E0EEEE'}`,
+      borderRadius: 14,
+      background: selected ? couleur + '18' : 'white',
+      color: selected ? couleur : C.text,
+      fontWeight: selected ? 700 : 500,
+      fontSize: 12,
+      lineHeight: 1.3,
+      cursor: 'pointer',
+      textAlign: 'center',
+      transition: 'all 0.15s ease',
+    });
+
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, background: C.bg, zIndex: 200,
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'center', padding: '32px 20px',
+        maxWidth: 600, margin: '0 auto', fontFamily: 'var(--font-sans)',
+      }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: C.dark, marginBottom: 4, textAlign: 'center' }}>
+          Votre ressenti après la séance
+        </div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 32, textAlign: 'center' }}>
+          Deux questions, environ 10 secondes.
+        </div>
+
+        {/* Question 1 — Effort */}
+        <div style={{ width: '100%', marginBottom: 28 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.dark, marginBottom: 12 }}>
+            Comment était l'effort ?
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {NIVEAUX_EFFORT.map(n => (
+              <button key={n.borg} onClick={() => setBorgRpe(n.borg)} style={btnStyle(n.couleur, borgRpe === n.borg)}>
+                {n.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Question 2 — Bien-être */}
+        <div style={{ width: '100%', marginBottom: 36 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.dark, marginBottom: 12 }}>
+            Comment vous sentez-vous ?
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {NIVEAUX_BIEN_ETRE.map(n => (
+              <button key={n.val} onClick={() => setBienEtre(n.val)} style={btnStyle(n.couleur, bienEtre === n.val)}>
+                {n.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button
+          onClick={soumettreRetour}
+          disabled={borgRpe === null || bienEtre === null || sendingRetour}
+          style={{
+            width: '100%', padding: '18px',
+            background: (borgRpe !== null && bienEtre !== null && !sendingRetour) ? C.teal : C.gray,
+            color: 'white', border: 'none', borderRadius: 16,
+            fontSize: 16, fontWeight: 800,
+            cursor: (borgRpe !== null && bienEtre !== null) ? 'pointer' : 'not-allowed',
+            marginBottom: 12, transition: 'background 0.2s',
+          }}
+        >
+          {sendingRetour ? 'Enregistrement…' : 'Valider'}
+        </button>
+
+        <button
+          onClick={onTermine}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: C.muted, padding: 8 }}
+        >
+          Passer
+        </button>
+      </div>
+    );
   }
 
   // ── Écran de fin ────────────────────────────────────────────────────────────

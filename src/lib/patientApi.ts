@@ -54,9 +54,30 @@ export async function patientFetchMe(token: string): Promise<{ ok: true; data: P
   }
 }
 
-export async function patientSauvegarderSeance(token: string, payload: SeanceAEnregistrer): Promise<boolean> {
+export async function patientSauvegarderSeance(
+  token: string,
+  payload: SeanceAEnregistrer,
+): Promise<{ ok: boolean; seancePatientId?: string }> {
   try {
     const res = await fetch('/api/patient/seance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return { ok: false };
+    const data = await res.json();
+    return { ok: true, seancePatientId: data.seancePatientId };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export async function patientEnvoyerRetour(
+  token: string,
+  payload: { seanceId?: string | null; borgRpe: number; bienEtre: number },
+): Promise<boolean> {
+  try {
+    const res = await fetch('/api/patient/retour-seance', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(payload),
