@@ -541,14 +541,19 @@ export default function TourneePage() {
 
   function handleOuvrirGoogleMaps() {
     if (etapes.length === 0) return;
+    // Adresse textuelle en priorité, coordonnées GPS en fallback
+    const resolveAddr = (patient: Participant) => {
+      const txt = [patient.adresseRue, patient.adresseVille].filter(Boolean).join(', ');
+      return txt || (patient.coordonnees ? `${patient.coordonnees.lat},${patient.coordonnees.lng}` : '');
+    };
     const origin = encodeURIComponent(departAdresse || 'Mon domicile');
     const waypoints = etapes.slice(0, -1)
-      .map(e => encodeURIComponent([e.patient.adresseRue, e.patient.adresseVille].filter(Boolean).join(', ')))
+      .map(e => resolveAddr(e.patient)).filter(Boolean)
+      .map(a => encodeURIComponent(a))
       .join('|');
-    const destination = encodeURIComponent(
-      [etapes.at(-1)!.patient.adresseRue, etapes.at(-1)!.patient.adresseVille].filter(Boolean).join(', ')
-    );
-    const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypoints ? `&waypoints=${waypoints}` : ''}&travelmode=driving`;
+    const destination = resolveAddr(etapes.at(-1)!.patient);
+    if (!destination) return;
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${encodeURIComponent(destination)}${waypoints ? `&waypoints=${waypoints}` : ''}&travelmode=driving`;
     window.open(url, '_blank');
   }
 
@@ -573,11 +578,17 @@ export default function TourneePage() {
     : totalTrajetEstime;
 
   function ouvrirMapsContrats() {
-    const avecAdresse = seancesEnrichies.filter(s => s.adresse);
-    if (!avecAdresse.length) return;
+    // s.adresse est '' quand la séance a été créée sans adresse stockée → fallback patient
+    const resolved = seancesEnrichies.map(s => {
+      const adresse = s.adresse
+        || [s.patient?.adresseRue, s.patient?.adresseVille].filter(Boolean).join(', ')
+        || (s.patient?.coordonnees ? `${s.patient.coordonnees.lat},${s.patient.coordonnees.lng}` : '');
+      return { ...s, adresse };
+    }).filter(s => s.adresse);
+    if (!resolved.length) return;
     const origin = encodeURIComponent(departAdresse || 'Mon domicile');
-    const dest = encodeURIComponent(avecAdresse.at(-1)!.adresse);
-    const wps = avecAdresse.slice(0, -1).map(s => encodeURIComponent(s.adresse)).join('|');
+    const dest = encodeURIComponent(resolved.at(-1)!.adresse);
+    const wps = resolved.slice(0, -1).map(s => encodeURIComponent(s.adresse)).join('|');
     window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}${wps ? `&waypoints=${wps}` : ''}&travelmode=driving`, '_blank');
   }
 
