@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { X, Loader, AlertCircle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Participant, Contrat, Seance, IndisponibilitePierre } from '../../types';
+import type { Participant, Contrat, Seance, IndisponibilitePierre, ZoneGeographique } from '../../types';
 import { getAuthHeader } from '../../lib/supabase';
 import {
   planifierSemaine,
@@ -19,6 +19,7 @@ interface Props {
   contrats: Contrat[];
   seances: Seance[];
   indispos: IndisponibilitePierre[];
+  zones?: ZoneGeographique[];
   depart: { lat: number; lng: number };
   departAdresse: string;
   heureDebutJournee: string;
@@ -39,8 +40,20 @@ function lundiDe(dateStr: string): string {
   return d.toISOString().split('T')[0];
 }
 
+// Zone représentant le plus d'étapes dans un jour donné
+function zoneDominanteJour(etapes: EtapePlanifiee[], zones: ZoneGeographique[]): ZoneGeographique | undefined {
+  const counts = new Map<string, number>();
+  for (const e of etapes) {
+    const z = zones.find(z => z.participantIds.includes(e.patient.id));
+    if (z) counts.set(z.id, (counts.get(z.id) ?? 0) + 1);
+  }
+  if (counts.size === 0) return undefined;
+  const [topId] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  return zones.find(z => z.id === topId);
+}
+
 export default function ModalPlanificateur({
-  onClose, participants, contrats, seances, indispos,
+  onClose, participants, contrats, seances, indispos, zones = [],
   depart, departAdresse, heureDebutJournee,
   bulkCreerSeances, modifierSeance,
 }: Props) {
@@ -269,20 +282,32 @@ export default function ModalPlanificateur({
           )}
 
           {/* Jours planifiés */}
-          {localJours.map((jour, ji) => (
+          {localJours.map((jour, ji) => {
+            const zDom = zones.length > 0 ? zoneDominanteJour(jour.etapes, zones) : undefined;
+            return (
             <div key={jour.date}>
-              <div className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">
-                {jour.label}
+              <div className="flex items-baseline justify-between mb-2">
+                <div className="text-xs font-bold uppercase tracking-widest text-gray-400">
+                  {jour.label}
+                </div>
+                {zDom && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: zDom.couleur }} />
+                    <span className="text-[11px] text-gray-400">{zDom.nom}</span>
+                  </div>
+                )}
               </div>
               {jour.etapes.length === 0 ? (
                 <p className="text-xs text-gray-400 italic pl-2">Toutes les suggestions ont été retirées.</p>
               ) : (
                 <div className="space-y-1">
-                  {jour.etapes.map((etape, ei) => (
+                  {jour.etapes.map((etape, ei) => {
+                    const horsZone = zDom && !zDom.participantIds.includes(etape.patient.id);
+                    return (
                     <div key={`${etape.patient.id}-${ei}`}
                       className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2.5">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline gap-2">
+                        <div className="flex items-baseline gap-2 flex-wrap">
                           <span className="text-xs font-mono text-primary font-semibold">
                             {formatHeure(etape.heureDebut)}
                           </span>
@@ -295,6 +320,11 @@ export default function ModalPlanificateur({
                           {etape.alreadyPlanned && (
                             <span className="text-[10px] font-medium text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded flex-shrink-0">
                               horaire ajusté
+                            </span>
+                          )}
+                          {horsZone && (
+                            <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded flex-shrink-0">
+                              hors zone
                             </span>
                           )}
                         </div>
@@ -318,11 +348,13 @@ export default function ModalPlanificateur({
                         <Trash2 size={13} />
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
 
           {/* Non planifiables */}
           {resultat && resultat.impossibles.length > 0 && (

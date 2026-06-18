@@ -1041,6 +1041,7 @@ export default function TourneePage() {
             contrats={contrats}
             seances={seances}
             indispos={indispos}
+            zones={zones}
             depart={depart}
             departAdresse={departAdresse}
             heureDebutJournee={heureDepart}
