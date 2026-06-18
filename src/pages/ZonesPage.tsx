@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import { useState, useMemo, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useZones } from '../hooks/useZones';
@@ -9,6 +9,13 @@ import { MapPin, Save, RefreshCw, Pencil, Check, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import type { JourSemaine, ZoneGeographique } from '../types';
 import { Link } from 'react-router-dom';
+
+// Fix carte blanche sur chunk lazy (ZonesPage est lazy-loadé dans App.tsx)
+function MapResizer() {
+  const map = useMap();
+  useEffect(() => { map.invalidateSize(); }, [map]);
+  return null;
+}
 
 // Fix Leaflet icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -38,6 +45,34 @@ function makeCentroideIcon(couleur: string) {
     html: `<div style="background:${couleur};opacity:0.6;border-radius:50%;width:16px;height:16px;border:3px solid ${couleur};box-shadow:0 0 0 2px white"></div>`,
     iconSize: [16, 16], iconAnchor: [8, 8],
   });
+}
+
+// ── Trajet estimé (haversine nearest-neighbor, 40 km/h) ───────────────────────
+
+function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLon = (b.lng - a.lng) * Math.PI / 180;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+function trajetEstimeMin(patients: { coordonnees?: { lat: number; lng: number } }[], centroide: { lat: number; lng: number }): number {
+  const coords = patients.map(p => p.coordonnees).filter((c): c is { lat: number; lng: number } => !!c);
+  if (coords.length <= 1) return 0;
+  const restants = [...coords];
+  let pos = centroide;
+  let totalKm = 0;
+  while (restants.length > 0) {
+    let minDist = Infinity, bestIdx = 0;
+    for (let i = 0; i < restants.length; i++) {
+      const d = haversineKm(pos, restants[i]);
+      if (d < minDist) { minDist = d; bestIdx = i; }
+    }
+    totalKm += minDist;
+    pos = restants.splice(bestIdx, 1)[0];
+  }
+  return Math.round(totalKm * 1.5); // 40 km/h
 }
 
 // ── Composant édition nom zone ─────────────────────────────────────────────────
@@ -139,7 +174,7 @@ export default function ZonesPage() {
             className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-dark transition-colors disabled:opacity-60"
           >
             <RefreshCw size={15} className={calcul ? 'animate-spin' : ''} />
-            Recalculer
+            {zones.length === 0 ? 'Suggérer des zones' : 'Recalculer'}
           </button>
         </div>
       </div>
@@ -157,10 +192,45 @@ export default function ZonesPage() {
         {/* ── Carte ── */}
         <div className="lg:col-span-3 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" style={{ height: 520 }}>
           <MapContainer center={mapCenter} zoom={10} style={{ width: '100%', height: '100%' }}>
+            <MapResizer />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
+
+            {/* Cercles de zone avec popup de survol */}
+            {zones.map(zone => {
+              const patientsZone = avecCoords.filter(p => zone.participantIds.includes(p.id));
+              const trajet = trajetEstimeMin(patientsZone, zone.centroide);
+              return (
+                <Circle
+                  key={`circle-${zone.id}`}
+                  center={[zone.centroide.lat, zone.centroide.lng]}
+                  radius={8000}
+                  pathOptions={{ color: zone.couleur, fillColor: zone.couleur, fillOpacity: 0.06, weight: 1.5, dashArray: '4 4' }}
+                  eventHandlers={{
+                    mouseover: (e) => e.target.openPopup(),
+                    mouseout:  (e) => e.target.closePopup(),
+                  }}
+                >
+                  <Popup closeButton={false} autoPan={false}>
+                    <div style={{ minWidth: 170 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4, color: zone.couleur }}>{zone.nom}</div>
+                      <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 6 }}>
+                        {patientsZone.length} patient{patientsZone.length > 1 ? 's' : ''}
+                        {zone.joursAssignes.length > 0 && <> · {zone.joursAssignes.join(', ')}</>}
+                        {trajet > 0 && <> · ~{trajet} min</>}
+                      </div>
+                      {patientsZone.map(p => (
+                        <div key={p.id} style={{ fontSize: 11, color: '#374151', marginBottom: 2 }}>
+                          {p.prenom} {p.nom}{p.adresseVille ? ` · ${p.adresseVille}` : ''}
+                        </div>
+                      ))}
+                    </div>
+                  </Popup>
+                </Circle>
+              );
+            })}
 
             {/* Centroïdes zones */}
             {zones.map(zone => (
@@ -182,22 +252,12 @@ export default function ZonesPage() {
                 >
                   <Popup>
                     <strong>{p.prenom} {p.nom}</strong><br />
-                    {zone ? <span style={{ color: zone.couleur }}>● {zone.nom}</span> : '⚪ Non assigné'}<br />
+                    {zone ? <span style={{ color: zone.couleur }}>● {zone.nom}</span> : <span style={{ color: '#9CA3AF' }}>Non assigné</span>}<br />
                     {p.adresseVille}
                   </Popup>
                 </Marker>
               );
             })}
-
-            {/* Cercle de zone autour du centroïde */}
-            {zones.map(zone => (
-              <Circle
-                key={`circle-${zone.id}`}
-                center={[zone.centroide.lat, zone.centroide.lng]}
-                radius={8000}
-                pathOptions={{ color: zone.couleur, fillColor: zone.couleur, fillOpacity: 0.06, weight: 1.5, dashArray: '4 4' }}
-              />
-            ))}
           </MapContainer>
         </div>
 
@@ -205,9 +265,13 @@ export default function ZonesPage() {
         <div className="lg:col-span-2 space-y-3 overflow-y-auto" style={{ maxHeight: 520 }}>
           {zones.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
-              <div className="text-4xl mb-3">🗺️</div>
-              <p className="text-sm text-gray-500">
-                Cliquez sur <strong>Recalculer</strong> pour grouper vos patients par zone géographique.
+              <MapPin size={32} className="text-gray-300 mx-auto mb-3" />
+              <p className="text-sm text-gray-600 font-medium mb-1">
+                Aucune zone définie
+              </p>
+              <p className="text-xs text-gray-400">
+                Cliquez sur <strong>Suggérer des zones</strong> pour regrouper automatiquement
+                vos patients. Vous pourrez ensuite renommer et ajuster chaque zone.
               </p>
             </div>
           ) : zones.map(zone => {
