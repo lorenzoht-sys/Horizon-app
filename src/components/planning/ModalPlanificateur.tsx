@@ -60,6 +60,7 @@ export default function ModalPlanificateur({
   const today = new Date().toISOString().split('T')[0];
   const [mode, setMode]         = useState<Mode>('A');
   const [lundiDate, setLundiDate] = useState<string>(prochainLundi(today));
+  const [nbSemaines, setNbSemaines] = useState(8);
   const [loading, setLoading]   = useState(false);
   const [orsWarn, setOrsWarn]   = useState(false);
   const [resultat, setResultat] = useState<ResultatPlanification | null>(null);
@@ -108,7 +109,7 @@ export default function ModalPlanificateur({
 
       const r = mode === 'A'
         ? planifierSemaine(params, lundiDate)
-        : planifierRecurrent(params, today);
+        : planifierRecurrent(params, today, nbSemaines);
 
       setResultat(r);
       setLocalJours(r.jours.map(j => ({ ...j, etapes: j.etapes.map(e => ({ ...e })) })));
@@ -251,9 +252,18 @@ export default function ModalPlanificateur({
           )}
 
           {mode === 'B' && (
-            <p className="text-xs text-gray-500">
-              Optimise les horaires des séances planifiées sur les 4 prochaines semaines en fonction des temps de trajet réels.
-            </p>
+            <div className="flex items-center gap-3">
+              <label className="text-xs font-medium text-gray-600">Optimiser les prochaines</label>
+              <select
+                value={nbSemaines}
+                onChange={e => { setNbSemaines(Number(e.target.value)); setResultat(null); setLocalJours([]); }}
+                className="border border-gray-200 rounded-lg px-2.5 py-1 text-sm focus:outline-none focus:border-primary"
+              >
+                {[4, 8, 12].map(n => (
+                  <option key={n} value={n}>{n} semaines</option>
+                ))}
+              </select>
+            </div>
           )}
 
           <button

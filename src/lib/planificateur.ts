@@ -307,6 +307,7 @@ export function planifierSemaine(
 export function planifierRecurrent(
   params: PlanificateurParams,
   dateRef: string,
+  nbSemaines = 8,
 ): ResultatPlanification {
   const { participants, contrats, seances, indispos, depart, matrix, indexMap, heureDebutJournee } = params;
   const departIdx = indexMap.get(coordKey(depart)) ?? 0;
@@ -322,7 +323,7 @@ export function planifierRecurrent(
 
   const vusImpossible = new Set<string>();
 
-  for (let i = 0; i < 28; i++) {
+  for (let i = 0; i < nbSemaines * 7; i++) {
     const date = new Date(startDate);
     date.setDate(startDate.getDate() + i);
     const dateStr = date.toISOString().split('T')[0];
