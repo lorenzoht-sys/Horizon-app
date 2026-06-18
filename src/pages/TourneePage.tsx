@@ -15,6 +15,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useIndispos } from '../hooks/useIndispos';
 import { useZones } from '../hooks/useZones';
 import { getAuthHeader } from '../lib/supabase';
+import ModalPlanificateur from '../components/planning/ModalPlanificateur';
 
 // ── Fix icônes Leaflet ─────────────────────────────────────────────────────────
 
@@ -321,9 +322,9 @@ const DEPART_FALLBACK = { lat: 47.2184, lng: -1.5536 };
 
 export default function TourneePage() {
   const { participants } = useParticipants();
-  const { seances, seancesDuJour, changerStatut, creerSeance } = useAgenda();
+  const { seances, seancesDuJour, changerStatut, creerSeance, bulkCreerSeances, modifierSeance } = useAgenda();
   const { contrats } = useContrats();
-  const { indisposDuJour } = useIndispos();
+  const { indispos, indisposDuJour } = useIndispos();
   const { zones } = useZones();
   const navigate = useNavigate();
 
@@ -347,6 +348,7 @@ export default function TourneePage() {
   const [impossibles, setImpossibles] = useState<{ patient: Participant; raison: string }[]>([]);
   const [orsLoading, setOrsLoading] = useState(false);
   const [orsFallback, setOrsFallback] = useState(false);
+  const [showPlanificateur, setShowPlanificateur] = useState(false);
 
   // Séances du jour depuis les contrats
   const seancesDuJourData = useMemo(() => seancesDuJour(date), [seances, date]);
@@ -723,6 +725,15 @@ export default function TourneePage() {
 
           {/* ── Patients hors contrat (ad hoc) ─────────────────── */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            {/* Planificateur de semaine */}
+            <button
+              onClick={() => setShowPlanificateur(true)}
+              className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors border-b border-gray-100"
+            >
+              <CalendarPlus size={15} className="text-primary" />
+              Planifier la semaine
+            </button>
+
             <button
               onClick={() => setShowAdHoc(v => !v)}
               className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
@@ -1002,6 +1013,21 @@ export default function TourneePage() {
           />
         );
       })()}
+
+      {showPlanificateur && (
+        <ModalPlanificateur
+          onClose={() => setShowPlanificateur(false)}
+          participants={participants}
+          contrats={contrats}
+          seances={seances}
+          indispos={indispos}
+          depart={depart}
+          departAdresse={departAdresse}
+          heureDebutJournee={heureDepart}
+          bulkCreerSeances={async (data) => { await bulkCreerSeances(data); }}
+          modifierSeance={async (id, updates) => { await modifierSeance(id, updates); }}
+        />
+      )}
     </PageWrapper>
   );
 }

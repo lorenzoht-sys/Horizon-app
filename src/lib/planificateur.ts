@@ -176,7 +176,7 @@ function ordonner(departIdx: number, candidates: Candidat[], matrix: MatriceORS)
 // Cœur de l'algorithme : ordonne et chronomètre une journée
 function planifierJour(
   date: string,
-  jourKey: JourSemaine,
+  _jourKey: JourSemaine,
   candidates: Candidat[],
   departIdx: number,
   indisposJour: IndisponibilitePierre[],

@@ -30,12 +30,6 @@ type Mode = 'A' | 'B';
 
 function formatHeure(h: string): string { return h.slice(0, 5); }
 
-function formatDate(s: string): string {
-  return new Date(s + 'T12:00').toLocaleDateString('fr-FR', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  });
-}
-
 function lundiDe(dateStr: string): string {
   // Lundi de la semaine contenant dateStr
   const d = new Date(dateStr + 'T12:00');
