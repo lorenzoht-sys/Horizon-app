@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useParticipants } from '../hooks/useParticipants';
@@ -41,6 +41,13 @@ function makeDepartIcon() {
     html: `<div style="background:#0D2B4B;color:white;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:16px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4)">🏠</div>`,
     iconSize: [32, 32], iconAnchor: [16, 16],
   });
+}
+
+// Force Leaflet à recalculer les dimensions (fix carte blanche après montage)
+function MapResizer() {
+  const map = useMap();
+  useEffect(() => { map.invalidateSize(); }, [map]);
+  return null;
 }
 
 // ── Créneaux horaires ──────────────────────────────────────────────────────────
@@ -904,8 +911,8 @@ export default function TourneePage() {
 
           {/* Carte */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" style={{ height: 420 }}>
-            <MapContainer center={mapCenter} zoom={11} style={{ width: '100%', height: '100%' }}
-              key={`${mapCenter[0].toFixed(3)}-${mapCenter[1].toFixed(3)}-${mapPatients.length}`}>
+            <MapContainer center={mapCenter} zoom={11} style={{ width: '100%', height: '100%' }}>
+              <MapResizer />
               <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
               {!departErreur && (
