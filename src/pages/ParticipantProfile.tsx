@@ -3,6 +3,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from 'recharts';
+import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ParticipantProfileMobile from './ParticipantProfileMobile';
 import { differenceInDays } from 'date-fns';
@@ -1760,9 +1761,11 @@ export default function ParticipantProfile() {
                       />
                       <Tooltip
                         contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
-                        formatter={(value: number, name: string) => {
-                          if (name === 'Effort') return [`${value} — ${labelBorg(value)}`, 'Effort'];
-                          return [`${value} — ${labelBienEtre(value)}`, 'Bien-être'];
+                        formatter={(value: ValueType | undefined, name: NameType) => {
+                          if (value === undefined) return ['', ''];
+                          const v = Number(value);
+                          if (name === 'Effort') return [`${v} — ${labelBorg(v)}`, 'Effort'];
+                          return [`${v} — ${labelBienEtre(v)}`, 'Bien-être'];
                         }}
                       />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
