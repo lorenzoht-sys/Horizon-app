@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { useParticipants } from '../hooks/useParticipants';
 import { useAgenda, addMinutes } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
