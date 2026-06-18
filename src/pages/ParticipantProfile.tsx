@@ -1,4 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend,
+} from 'recharts';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ParticipantProfileMobile from './ParticipantProfileMobile';
 import { differenceInDays } from 'date-fns';
@@ -718,9 +722,29 @@ function CarteDisponibilites({
   );
 }
 
+// ── Types ressentis ───────────────────────────────────────────────────────────
+
+interface RetourSeance {
+  id: string;
+  date: string;
+  borgRpe: number;
+  bienEtre: number;
+}
+
+// Libellés Borg RPE simplifié (valeurs utilisées : 2/4/6/8/10)
+const BORG_LABEL: Record<number, string> = {
+  2: 'Très facile', 4: 'Facile', 6: 'Modéré', 8: 'Difficile', 10: 'Très difficile',
+};
+const BIEN_ETRE_LABEL: Record<number, string> = {
+  1: 'Très bien', 2: 'Bien', 3: 'Correct', 4: 'Fatigué', 5: 'Épuisé',
+};
+
+function labelBorg(v: number): string { return BORG_LABEL[v] ?? `${v}`; }
+function labelBienEtre(v: number): string { return BIEN_ETRE_LABEL[v] ?? `${v}`; }
+
 // ── TabsSection ───────────────────────────────────────────────────────────────
 
-type TabId = 'bilans' | 'contrats' | 'assiduite' | 'rappels';
+type TabId = 'bilans' | 'contrats' | 'assiduite' | 'ressentis' | 'rappels';
 
 // ── Types assiduité ───────────────────────────────────────────────────────────
 
@@ -934,6 +958,28 @@ export default function ParticipantProfile() {
   const [showEspacePatient, setShowEspacePatient] = useState(false);
   const [activeTab, setActiveTab]           = useState<TabId>('bilans');
   const [seancesStats, setSeancesStats]     = useState<SeancePatientStat[]>([]);
+  const [retours, setRetours]               = useState<RetourSeance[]>([]);
+
+  useEffect(() => {
+    if (!id || !supabase) return;
+    async function loadRetours() {
+      const { data } = await supabase!
+        .from('retours_seance')
+        .select('id, date, borg_rpe, bien_etre')
+        .eq('participant_id', id)
+        .order('date', { ascending: false })
+        .limit(30);
+      if (data) {
+        setRetours(data.map((r: Record<string, unknown>) => ({
+          id: r.id as string,
+          date: r.date as string,
+          borgRpe: r.borg_rpe as number,
+          bienEtre: r.bien_etre as number,
+        })));
+      }
+    }
+    void loadRetours();
+  }, [id]);
 
   useEffect(() => {
     if (!id || !supabase) return;
@@ -1061,10 +1107,17 @@ export default function ParticipantProfile() {
     { Icon: Trash2,     label: 'Supprimer',               action: 'supprimer', danger: true },
   ];
 
+  const alerteRessentis = useMemo(() => {
+    if (retours.length < 3) return false;
+    const last3 = retours.slice(0, 3);
+    return last3.every(r => r.borgRpe >= 8) || last3.every(r => r.bienEtre >= 4);
+  }, [retours]);
+
   const TABS: { id: TabId; label: string; count?: number }[] = [
     { id: 'bilans',    label: 'Historique bilans',   count: participant.bilans.length },
     { id: 'contrats',  label: 'Contrats de suivi',   count: contratsCount },
     { id: 'assiduite', label: '📊 Assiduité',        count: seancesStats.length > 0 ? seancesStats.length : undefined },
+    { id: 'ressentis', label: alerteRessentis ? 'Ressentis ⚠' : 'Ressentis', count: retours.length > 0 ? retours.length : undefined },
     { id: 'rappels',   label: '🔔 Rappels' },
   ];
 
@@ -1619,6 +1672,152 @@ export default function ParticipantProfile() {
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+        {activeTab === 'ressentis' && (() => {
+          if (retours.length === 0) return (
+            <div className="text-center py-12 text-gray-400">
+              <div className="text-3xl mb-3">—</div>
+              <p className="font-medium text-gray-500">Aucun retour enregistré</p>
+              <p className="text-sm mt-1">
+                Les ressentis post-séance apparaîtront ici après que le patient
+                ait utilisé l'espace patient.
+              </p>
+            </div>
+          );
+
+          // Alerte : 3 séances consécutives avec effort ≥ 8 ou bien-être ≥ 4 (Fatigué/Épuisé)
+          const last3 = retours.slice(0, 3);
+          const alerteEffort = retours.length >= 3 && last3.every(r => r.borgRpe >= 8);
+          const alerteBienEtre = retours.length >= 3 && last3.every(r => r.bienEtre >= 4);
+
+          // Données graphique (chronologique, anciens→récents)
+          const chartData = [...retours].reverse().slice(-20).map(r => ({
+            date: new Date(r.date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+            Effort: r.borgRpe,
+            'Bien-être': r.bienEtre,
+          }));
+
+          return (
+            <div className="space-y-5">
+
+              {/* Alertes */}
+              {(alerteEffort || alerteBienEtre) && (
+                <div className="space-y-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+                    À surveiller
+                  </div>
+                  {alerteEffort && (
+                    <div className="rounded-lg px-3 py-2.5 text-sm" style={{ background: '#FEF3C7', color: '#92400E' }}>
+                      <span className="font-semibold">Effort élevé répété</span>
+                      {' '}— Borg ≥ 8 sur les 3 dernières séances.
+                      Envisager d'adapter la charge lors de la prochaine séance.
+                    </div>
+                  )}
+                  {alerteBienEtre && (
+                    <div className="rounded-lg px-3 py-2.5 text-sm" style={{ background: '#FEE2E2', color: '#991B1B' }}>
+                      <span className="font-semibold">Bien-être dégradé répété</span>
+                      {' '}— Fatigué ou épuisé sur les 3 dernières séances.
+                      Vérifier la récupération et la charge globale.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Courbe d'évolution — double axe Y */}
+              {chartData.length >= 2 && (
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-3">
+                    Évolution ({chartData.length} retours)
+                  </div>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={chartData} margin={{ top: 4, right: 20, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9CA3AF' }} tickLine={false} />
+                      {/* Axe gauche : Effort (Borg 1-10) */}
+                      <YAxis
+                        yAxisId="left"
+                        domain={[0, 10]}
+                        ticks={[2, 4, 6, 8, 10]}
+                        tick={{ fontSize: 11, fill: '#1A5F9E' }}
+                        tickLine={false}
+                        axisLine={false}
+                        label={{ value: 'Effort', angle: -90, position: 'insideLeft', offset: 10, fontSize: 11, fill: '#1A5F9E' }}
+                      />
+                      {/* Axe droit : Bien-être (1-5, 1=Très bien 5=Épuisé) */}
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        domain={[0, 5]}
+                        ticks={[1, 2, 3, 4, 5]}
+                        tick={{ fontSize: 11, fill: '#EA580C' }}
+                        tickLine={false}
+                        axisLine={false}
+                        label={{ value: 'Bien-être', angle: 90, position: 'insideRight', offset: 10, fontSize: 11, fill: '#EA580C' }}
+                      />
+                      <Tooltip
+                        contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }}
+                        formatter={(value: number, name: string) => {
+                          if (name === 'Effort') return [`${value} — ${labelBorg(value)}`, 'Effort'];
+                          return [`${value} — ${labelBienEtre(value)}`, 'Bien-être'];
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Line
+                        yAxisId="left"
+                        type="monotone"
+                        dataKey="Effort"
+                        stroke="#1A5F9E"
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: '#1A5F9E' }}
+                        activeDot={{ r: 5 }}
+                      />
+                      <Line
+                        yAxisId="right"
+                        type="monotone"
+                        dataKey="Bien-être"
+                        stroke="#EA580C"
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: '#EA580C' }}
+                        activeDot={{ r: 5 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <div className="text-[10px] text-gray-400 mt-1 text-right">
+                    Effort (axe gauche, 2=très facile 10=très difficile) ·
+                    Bien-être (axe droit, 1=très bien 5=épuisé)
+                  </div>
+                </div>
+              )}
+
+              {/* Table des derniers retours */}
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-2">
+                  Derniers retours
+                </div>
+                <div className="space-y-1">
+                  {retours.slice(0, 15).map(r => (
+                    <div key={r.id} className="flex items-center gap-3 rounded-lg px-3 py-2 bg-gray-50 text-sm">
+                      <span className="text-gray-400 text-xs w-16 flex-shrink-0">
+                        {new Date(r.date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                      </span>
+                      <span
+                        className="flex-1 font-medium"
+                        style={{ color: r.borgRpe >= 8 ? '#EA580C' : r.borgRpe >= 6 ? '#CA8A04' : '#16A34A' }}
+                      >
+                        Effort {r.borgRpe} — {labelBorg(r.borgRpe)}
+                      </span>
+                      <span
+                        className="flex-1 text-right"
+                        style={{ color: r.bienEtre >= 4 ? '#DC2626' : r.bienEtre === 3 ? '#CA8A04' : '#16A34A' }}
+                      >
+                        {labelBienEtre(r.bienEtre)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
