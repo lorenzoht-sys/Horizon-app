@@ -1,5 +1,45 @@
-import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure } from '../types';
+import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, DisponibilitesPatient, JourSemaine, CreneauPreference } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
+
+// ── Conversion anamnese.organisation → DisponibilitesPatient ──────────────────
+// Retourne undefined si les données sont absentes ou incomplètes (patient sans
+// jours saisis → traité comme "toujours disponible" par TourneePage).
+const JOUR_FORM_TO_DB: Record<string, JourSemaine> = {
+  Lun: 'lun', Mar: 'mar', Mer: 'mer', Jeu: 'jeu', Ven: 'ven', Sam: 'sam',
+  lun: 'lun', mar: 'mar', mer: 'mer', jeu: 'jeu', ven: 'ven', sam: 'sam',
+};
+
+function orgToDisponibilites(org: any): DisponibilitesPatient | undefined {
+  if (!org || typeof org !== 'object') return undefined;
+
+  // Jours disponibles — au moins un requis, sinon undefined
+  const rawJours = Array.isArray(org.joursDisponibles) ? org.joursDisponibles : [];
+  const joursDisponibles: JourSemaine[] = rawJours
+    .map((j: string) => JOUR_FORM_TO_DB[j])
+    .filter(Boolean) as JourSemaine[];
+  if (joursDisponibles.length === 0) return undefined;
+
+  // Créneaux préférence dérivés des plages horaires saisies par jour
+  const creneauxParJour: Record<string, { debut: string; fin: string }[]> =
+    org.creneauxParJour && typeof org.creneauxParJour === 'object' ? org.creneauxParJour : {};
+  const plages = new Set<CreneauPreference>();
+  for (const slots of Object.values(creneauxParJour)) {
+    if (!Array.isArray(slots)) continue;
+    for (const slot of slots) {
+      if (!slot?.debut || typeof slot.debut !== 'string') continue;
+      const d = slot.debut;
+      if (d < '12:00') plages.add('matin');
+      else if (d >= '13:30' && d < '18:00') plages.add('apres-midi');
+      else if (d >= '18:00') plages.add('soiree');
+    }
+  }
+
+  // Durée : "45 min" → 45, défaut 45
+  const parsedDuree = parseInt(org.dureeSeance ?? '', 10);
+  const dureeSeanceMinutes = Number.isFinite(parsedDuree) && parsedDuree > 0 ? parsedDuree : 45;
+
+  return { joursDisponibles, creneauxPreference: Array.from(plages), dureeSeanceMinutes };
+}
 
 // Participant: Supabase row → TypeScript type
 export function dbToParticipant(row: any): Participant {
@@ -31,7 +71,7 @@ export function dbToParticipant(row: any): Participant {
       geocodeeAt: '',
     } : undefined,
     geocodeFailed: false,
-    disponibilites: undefined,
+    disponibilites: orgToDisponibilites(row.anamnese?.organisation),
     token: row.token ?? '',
     codeAcces: row.code_acces ?? undefined,
     profilHandicap: row.profil_handicap ?? undefined,
