@@ -199,6 +199,8 @@ export default function Dashboard() {
   const [minLoadDone, setMinLoadDone] = useState(false);
   const [assiduite, setAssiduite] = useState<Record<string, { nb: number; taux: number | null; derniere: string | null }>>({});
   const assiduiteLoaded = useRef(false);
+  const [patientsASurveiller, setPatientsASurveiller] = useState<{ id: string; prenom: string; nom: string }[]>([]);
+  const retoursSurvLoaded = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -244,6 +246,36 @@ export default function Dashboard() {
     }
     void loadAssiduite();
   }, []);
+
+  useEffect(() => {
+    if (participantsLoading || participants.length === 0 || retoursSurvLoaded.current) return;
+    retoursSurvLoaded.current = true;
+    async function loadRetoursSurveillance() {
+      const ids = participants.map(p => p.id);
+      const { data } = await supabase!
+        .from('retours_seance')
+        .select('participant_id, borg_rpe, bien_etre')
+        .in('participant_id', ids)
+        .order('date', { ascending: false });
+      if (!data || data.length === 0) return;
+      const byParticipant: Record<string, { borgRpe: number; bienEtre: number }[]> = {};
+      for (const r of data as { participant_id: string; borg_rpe: number; bien_etre: number }[]) {
+        if (!byParticipant[r.participant_id]) byParticipant[r.participant_id] = [];
+        byParticipant[r.participant_id].push({ borgRpe: r.borg_rpe, bienEtre: r.bien_etre });
+      }
+      const alertes: { id: string; prenom: string; nom: string }[] = [];
+      for (const [pid, retours] of Object.entries(byParticipant)) {
+        if (retours.length < 3) continue;
+        const last3 = retours.slice(0, 3);
+        if (last3.every(r => r.borgRpe >= 8) || last3.every(r => r.bienEtre >= 4)) {
+          const p = participants.find(x => x.id === pid);
+          if (p) alertes.push({ id: p.id, prenom: p.prenom, nom: p.nom });
+        }
+      }
+      setPatientsASurveiller(alertes);
+    }
+    void loadRetoursSurveillance();
+  }, [participants, participantsLoading]);
 
   useEffect(() => {
     if (location.state?.activeTab) {
@@ -434,6 +466,31 @@ export default function Dashboard() {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* Alertes ressentis — À surveiller */}
+        {patientsASurveiller.length > 0 && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-2xl px-5 py-4">
+            <div className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-2">
+              ⚠️ {patientsASurveiller.length} patient{patientsASurveiller.length > 1 ? 's' : ''} à surveiller — ressentis dégradés
+            </div>
+            <div className="space-y-1">
+              {patientsASurveiller.map(p => (
+                <div key={p.id} className="flex items-center justify-between text-sm">
+                  <span className="text-red-800 font-medium">{p.prenom} {p.nom}</span>
+                  <Link
+                    to={`/participant/${p.id}`}
+                    className="text-xs text-red-700 underline hover:text-red-900 font-medium"
+                  >
+                    Voir les Ressentis →
+                  </Link>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-red-600 mt-2">
+              3 séances consécutives avec effort ≥ 8/10 ou bien-être ≥ 4/5 (Fatigué / Épuisé)
+            </p>
           </div>
         )}
 
