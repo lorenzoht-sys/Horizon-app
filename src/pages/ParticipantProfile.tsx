@@ -1012,6 +1012,12 @@ export default function ParticipantProfile() {
     void loadAssiduite();
   }, [id]);
 
+  const alerteRessentis = useMemo(() => {
+    if (retours.length < 3) return false;
+    const last3 = retours.slice(0, 3);
+    return last3.every(r => r.borgRpe >= 8) || last3.every(r => r.bienEtre >= 4);
+  }, [retours]);
+
   const participant = participants.find(p => p.id === id);
   const { compteRendus, ajouterCompteRendu } = useCompteRenduSeance(participant?.id ?? '');
 
@@ -1106,12 +1112,6 @@ export default function ParticipantProfile() {
     { Icon: Download,   label: 'Mes données (JSON)',      action: 'export' },
     { Icon: Trash2,     label: 'Supprimer',               action: 'supprimer', danger: true },
   ];
-
-  const alerteRessentis = useMemo(() => {
-    if (retours.length < 3) return false;
-    const last3 = retours.slice(0, 3);
-    return last3.every(r => r.borgRpe >= 8) || last3.every(r => r.bienEtre >= 4);
-  }, [retours]);
 
   const TABS: { id: TabId; label: string; count?: number }[] = [
     { id: 'bilans',    label: 'Historique bilans',   count: participant.bilans.length },
