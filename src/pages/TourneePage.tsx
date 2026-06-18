@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import type { Participant, Seance, IndisponibilitePierre, JourSemaine, CreneauPreference } from '../types';
 import { geocodeAdresse } from '../utils/geocodeAdresse';
 import { Link, useNavigate } from 'react-router-dom';
-import { DEMO_INDISPOS_PIERRE } from '../data/demoIndispos';
+import { useIndispos } from '../hooks/useIndispos';
 
 // ── Fix icônes Leaflet ─────────────────────────────────────────────────────────
 
@@ -301,30 +301,6 @@ function estDisponible(p: Participant, jour: JourSemaine | 'dim'): boolean {
   return p.disponibilites.joursDisponibles.includes(jour as JourSemaine);
 }
 
-function loadIndisposPierre(): IndisponibilitePierre[] {
-  try {
-    const raw = localStorage.getItem('mouvtrack_indispos_pierre');
-    if (!raw) {
-      localStorage.setItem('mouvtrack_indispos_pierre', JSON.stringify(DEMO_INDISPOS_PIERRE));
-      return DEMO_INDISPOS_PIERRE;
-    }
-    const stored: IndisponibilitePierre[] = JSON.parse(raw);
-    const ids = new Set(stored.map(i => i.id));
-    const missing = DEMO_INDISPOS_PIERRE.filter(i => !ids.has(i.id));
-    if (missing.length) {
-      const merged = [...missing, ...stored];
-      localStorage.setItem('mouvtrack_indispos_pierre', JSON.stringify(merged));
-      return merged;
-    }
-    return stored;
-  } catch { return DEMO_INDISPOS_PIERRE; }
-}
-
-function indisposDuJour(jour: JourSemaine | 'dim'): IndisponibilitePierre[] {
-  return loadIndisposPierre()
-    .filter(i => i.jour === jour)
-    .sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
-}
 
 function minutesAttente(de: string, a: string): number {
   const [h1, m1] = de.split(':').map(Number);
@@ -340,6 +316,7 @@ export default function TourneePage() {
   const { participants } = useParticipants();
   const { seances, seancesDuJour, changerStatut, creerSeance } = useAgenda();
   const { contrats } = useContrats();
+  const { indisposDuJour } = useIndispos();
   const navigate = useNavigate();
 
   const avecCoords = useMemo(
@@ -406,7 +383,7 @@ export default function TourneePage() {
   }, [praticienSettings.adresseRue, praticienSettings.adresseVille]);
 
   const jourChoisi = useMemo(() => jourDeLaDate(date), [date]);
-  const indisposJour = useMemo(() => indisposDuJour(jourChoisi), [jourChoisi]);
+  const indisposJour = useMemo(() => indisposDuJour(jourChoisi), [indisposDuJour, jourChoisi]);
 
   const { disponibles, nonDisponibles } = useMemo(() => {
     const d: Participant[] = [], nd: Participant[] = [];
