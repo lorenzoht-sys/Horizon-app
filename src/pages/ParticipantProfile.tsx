@@ -569,8 +569,6 @@ const HEURES_DISPO = (() => {
   return h;
 })();
 
-const DUREES_DISPO = ['30 min', '45 min', '60 min', '90 min', '120 min'];
-
 function CarteDisponibilites({
   participant,
   onSave,
@@ -581,17 +579,14 @@ function CarteDisponibilites({
   const org = participant.anamnese?.organisation ?? {};
   const jours: string[] = org.joursDisponibles ?? [];
   const creneauxParJour: Record<string, { debut: string; fin: string }[]> = org.creneauxParJour ?? {};
-  const duree: string = org.dureeSeance ?? '';
 
   const [editing, setEditing] = useState(false);
   const [editJours, setEditJours] = useState<string[]>([]);
   const [editCreneaux, setEditCreneaux] = useState<Record<string, { debut: string; fin: string }[]>>({});
-  const [editDuree, setEditDuree] = useState('45 min');
 
   function handleStartEdit() {
     setEditJours([...jours]);
     setEditCreneaux(JSON.parse(JSON.stringify(creneauxParJour)));
-    setEditDuree(duree || '45 min');
     setEditing(true);
   }
 
@@ -607,7 +602,7 @@ function CarteDisponibilites({
   }
 
   function handleSave() {
-    const newOrg = { ...org, joursDisponibles: editJours, creneauxParJour: editCreneaux, dureeSeance: editDuree };
+    const newOrg = { ...org, joursDisponibles: editJours, creneauxParJour: editCreneaux };
     onSave({ anamnese: { ...participant.anamnese, organisation: newOrg } });
     setEditing(false);
   }
@@ -630,7 +625,6 @@ function CarteDisponibilites({
                 <span key={j} className="text-[11px] font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-md">{j}</span>
               ))}
             </div>
-            {duree && <div className="text-[12px] text-gray-500">⏱ {duree}</div>}
             {jours.some(j => (creneauxParJour[j]?.length ?? 0) > 0) && (
               <div className="text-[12px] text-gray-400 leading-relaxed">
                 {jours.filter(j => (creneauxParJour[j]?.length ?? 0) > 0).map(j =>
@@ -708,15 +702,6 @@ function CarteDisponibilites({
           })}
         </div>
       )}
-
-      {/* Durée */}
-      <div className="mb-4">
-        <div className="text-[12px] font-medium text-gray-600 mb-1.5">Durée des séances</div>
-        <select value={editDuree} onChange={e => setEditDuree(e.target.value)}
-          className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-[12px] focus:outline-none focus:border-primary">
-          {DUREES_DISPO.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
-      </div>
 
       {/* Actions */}
       <div className="flex gap-2">

@@ -191,7 +191,8 @@ function calculerItineraire(
   depart: { lat: number; lng: number },
   tournee: Participant[],
   heureDepart: string,
-  indispos: IndisponibilitePierre[]
+  indispos: IndisponibilitePierre[],
+  getPatientDuree: (patientId: string) => number,
 ): ResultatItineraire {
   const etapes: EtapePatient[] = [];
   const impossibles: { patient: Participant; raison: string }[] = [];
@@ -262,7 +263,7 @@ function calculerItineraire(
       continue;
     }
 
-    const duree = patient.disponibilites?.dureeSeanceMinutes ?? 45;
+    const duree = getPatientDuree(patient.id);
     const heureFin = addMinutes(heureDebut, duree);
 
     etapes.push({
@@ -451,7 +452,9 @@ export default function TourneePage() {
     }
 
     const optimise = optimiserTournee(depart, selectionnes);
-    const { etapes: it, impossibles: imp } = calculerItineraire(depart, optimise, heureDepart, indisposJour);
+    const getPatientDuree = (id: string) =>
+      contrats.find(c => c.participantId === id && c.statut === 'actif')?.dureeMinutes ?? 45;
+    const { etapes: it, impossibles: imp } = calculerItineraire(depart, optimise, heureDepart, indisposJour, getPatientDuree);
     setTournee(optimise);
     setEtapes(it);
     setImpossibles(imp);
@@ -487,7 +490,7 @@ export default function TourneePage() {
       const s: Omit<Seance, 'id'> = {
         participantId: et.patient.id, date,
         heureDebut: et.heureArrivee, heureFin: et.heureDepart,
-        dureeMinutes: et.patient.disponibilites?.dureeSeanceMinutes ?? 45,
+        dureeMinutes: contrats.find(c => c.participantId === et.patient.id && c.statut === 'actif')?.dureeMinutes ?? 45,
         type: 'seance', statut: 'planifiee',
         adresse: [et.patient.adresseRue, et.patient.adresseCodePostal, et.patient.adresseVille].filter(Boolean).join(', '),
         coordonnees: et.patient.coordonnees ? { lat: et.patient.coordonnees.lat, lng: et.patient.coordonnees.lng } : undefined,

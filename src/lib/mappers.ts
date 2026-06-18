@@ -34,11 +34,7 @@ function orgToDisponibilites(org: any): DisponibilitesPatient | undefined {
     }
   }
 
-  // Durée : "45 min" → 45, défaut 45
-  const parsedDuree = parseInt(org.dureeSeance ?? '', 10);
-  const dureeSeanceMinutes = Number.isFinite(parsedDuree) && parsedDuree > 0 ? parsedDuree : 45;
-
-  return { joursDisponibles, creneauxPreference: Array.from(plages), dureeSeanceMinutes };
+  return { joursDisponibles, creneauxPreference: Array.from(plages), dureeSeanceMinutes: 45 };
 }
 
 // Participant: Supabase row → TypeScript type
