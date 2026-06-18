@@ -582,7 +582,6 @@ export default function SettingsPage() {
     const required: (keyof SettingsPraticien)[] = [
       'prenom', 'nom', 'titre', 'email',
       'adresseRue', 'adresseCodePostal', 'adresseVille',
-      'siret', 'numeroSAP', 'villeSignature',
     ];
     const next: Partial<Record<keyof SettingsPraticien, string>> = {};
 
