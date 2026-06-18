@@ -162,7 +162,7 @@ export default function ModalPlanificateur({
   const totalEtapes = localJours.reduce((acc, j) => acc + j.etapes.length, 0);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1001 }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
 
         {/* Header */}
