@@ -1,7 +1,6 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import { useParticipants } from '../hooks/useParticipants';
 import { useAgenda, addMinutes } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
@@ -15,7 +14,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useIndispos } from '../hooks/useIndispos';
 import { useZones } from '../hooks/useZones';
 import { getAuthHeader } from '../lib/supabase';
-import ModalPlanificateur from '../components/planning/ModalPlanificateur';
+
+const ModalPlanificateur = lazy(() => import('../components/planning/ModalPlanificateur'));
 
 // ── Fix icônes Leaflet ─────────────────────────────────────────────────────────
 
@@ -1015,18 +1015,20 @@ export default function TourneePage() {
       })()}
 
       {showPlanificateur && (
-        <ModalPlanificateur
-          onClose={() => setShowPlanificateur(false)}
-          participants={participants}
-          contrats={contrats}
-          seances={seances}
-          indispos={indispos}
-          depart={depart}
-          departAdresse={departAdresse}
-          heureDebutJournee={heureDepart}
-          bulkCreerSeances={async (data) => { await bulkCreerSeances(data); }}
-          modifierSeance={async (id, updates) => { await modifierSeance(id, updates); }}
-        />
+        <Suspense fallback={null}>
+          <ModalPlanificateur
+            onClose={() => setShowPlanificateur(false)}
+            participants={participants}
+            contrats={contrats}
+            seances={seances}
+            indispos={indispos}
+            depart={depart}
+            departAdresse={departAdresse}
+            heureDebutJournee={heureDepart}
+            bulkCreerSeances={async (data) => { await bulkCreerSeances(data); }}
+            modifierSeance={async (id, updates) => { await modifierSeance(id, updates); }}
+          />
+        </Suspense>
       )}
     </PageWrapper>
   );
