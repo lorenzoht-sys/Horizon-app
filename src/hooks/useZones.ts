@@ -30,16 +30,61 @@ export function useZones() {
 
     const clusters = kMeans(points, k);
 
-    const nouvelles: ZoneGeographique[] = clusters
+    const participantById = new Map(participants.map(p => [p.id, p]));
+
+    // Ville dominante de chaque cluster (la plus fréquente parmi les adresseVille)
+    const clusterData = clusters
       .filter(cl => cl.points.length > 0)
-      .map((cl, i) => ({
+      .map((cl, i) => {
+        const villes = cl.points
+          .map(pt => participantById.get(pt.id)?.adresseVille?.trim())
+          .filter((v): v is string => !!v);
+        const freq = new Map<string, number>();
+        for (const v of villes) freq.set(v, (freq.get(v) ?? 0) + 1);
+        const villeDominante = [...freq.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+        return { cl, i, villeDominante, centroide: cl.centroide };
+      });
+
+    // Grouper par ville pour détecter les homonymes → point cardinal
+    const byVille = new Map<string, typeof clusterData>();
+    for (const d of clusterData) {
+      const key = d.villeDominante ?? '';
+      const g = byVille.get(key) ?? [];
+      g.push(d);
+      byVille.set(key, g);
+    }
+
+    // Angle depuis le nord (0°=N, 90°=E) → direction en français
+    function cardinal(dlat: number, dlng: number): string {
+      const angle = Math.atan2(dlng, dlat) * 180 / Math.PI;
+      const dirs = ['Nord', 'Nord-Est', 'Est', 'Sud-Est', 'Sud', 'Sud-Ouest', 'Ouest', 'Nord-Ouest'];
+      return dirs[Math.round(((angle % 360) + 360) % 360 / 45) % 8];
+    }
+
+    const nouvelles: ZoneGeographique[] = clusterData.map((d, i) => {
+      let nom: string;
+      if (!d.villeDominante) {
+        nom = `Zone ${i + 1}`;
+      } else {
+        const groupe = byVille.get(d.villeDominante)!;
+        if (groupe.length === 1) {
+          nom = `Zone ${d.villeDominante}`;
+        } else {
+          // Centroïde du groupe (moyenne des centroïdes de la même ville)
+          const gcLat = groupe.reduce((s, g) => s + g.centroide.lat, 0) / groupe.length;
+          const gcLng = groupe.reduce((s, g) => s + g.centroide.lng, 0) / groupe.length;
+          nom = `Zone ${d.villeDominante} ${cardinal(d.centroide.lat - gcLat, d.centroide.lng - gcLng)}`;
+        }
+      }
+      return {
         id: uuidv4(),
-        nom: `Zone ${i + 1}`,
+        nom,
         couleur: COULEURS_ZONES[i % COULEURS_ZONES.length],
-        participantIds: cl.points.map(p => p.id),
-        centroide: cl.centroide,
+        participantIds: d.cl.points.map(p => p.id),
+        centroide: d.cl.centroide,
         joursAssignes: [],
-      }));
+      };
+    });
 
     if (supabase) {
       await supabase.from('zones_geographiques').delete().neq('id', '00000000-0000-0000-0000-000000000000');
