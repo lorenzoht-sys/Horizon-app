@@ -126,8 +126,16 @@ export default function ModalPlanificateur({
     try {
       if (!resultat?.modeB) {
         // Mode A : créer les nouvelles séances, mettre à jour celles qui existent déjà
-        const toCreate = etapesAcceptees.filter(e => !e.alreadyPlanned);
-        const toUpdate = etapesAcceptees.filter(e => e.alreadyPlanned && e.seanceExistanteId);
+        // Garde-fou unicité (participant_id, date) — évite les doublons si seances est désynchronisé
+        const existeDeja = (participantId: string, date: string) =>
+          seances.some(s => s.participantId === participantId && s.date === date && s.statut !== 'annulee');
+
+        const toCreate = etapesAcceptees.filter(e =>
+          !e.alreadyPlanned && !existeDeja(e.patient.id, e.date)
+        );
+        const toUpdate = etapesAcceptees.filter(e =>
+          e.alreadyPlanned && !!e.seanceExistanteId
+        );
         if (toCreate.length > 0) {
           const data: Omit<Seance, 'id'>[] = toCreate.map(e => ({
             participantId: e.patient.id,
