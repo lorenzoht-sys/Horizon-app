@@ -122,23 +122,37 @@ export default function ModalPlanificateur({
     setApplying(true);
     try {
       if (!resultat?.modeB) {
-        // Mode A : créer des séances
-        const data: Omit<Seance, 'id'>[] = etapesAcceptees.map(e => ({
-          participantId: e.patient.id,
-          contratId: e.contrat.id,
-          date: e.date,
-          heureDebut: e.heureDebut,
-          heureFin: e.heureFin,
-          dureeMinutes: e.contrat.dureeMinutes,
-          type: 'seance' as const,
-          statut: 'planifiee' as const,
-          adresse: [e.patient.adresseRue, e.patient.adresseCodePostal, e.patient.adresseVille]
-            .filter(Boolean).join(', '),
-          coordonnees: e.patient.coordonnees
-            ? { lat: e.patient.coordonnees.lat, lng: e.patient.coordonnees.lng }
-            : undefined,
-        }));
-        await bulkCreerSeances(data);
+        // Mode A : créer les nouvelles séances, mettre à jour celles qui existent déjà
+        const toCreate = etapesAcceptees.filter(e => !e.alreadyPlanned);
+        const toUpdate = etapesAcceptees.filter(e => e.alreadyPlanned && e.seanceExistanteId);
+        if (toCreate.length > 0) {
+          const data: Omit<Seance, 'id'>[] = toCreate.map(e => ({
+            participantId: e.patient.id,
+            contratId: e.contrat.id,
+            date: e.date,
+            heureDebut: e.heureDebut,
+            heureFin: e.heureFin,
+            dureeMinutes: e.contrat.dureeMinutes,
+            type: 'seance' as const,
+            statut: 'planifiee' as const,
+            adresse: [e.patient.adresseRue, e.patient.adresseCodePostal, e.patient.adresseVille]
+              .filter(Boolean).join(', '),
+            coordonnees: e.patient.coordonnees
+              ? { lat: e.patient.coordonnees.lat, lng: e.patient.coordonnees.lng }
+              : undefined,
+          }));
+          await bulkCreerSeances(data);
+        }
+        for (const e of toUpdate) {
+          await modifierSeance(e.seanceExistanteId!, { heureDebut: e.heureDebut, heureFin: e.heureFin });
+        }
+        const msg = [
+          toCreate.length > 0 ? `${toCreate.length} créée${toCreate.length > 1 ? 's' : ''}` : '',
+          toUpdate.length > 0 ? `${toUpdate.length} mise${toUpdate.length > 1 ? 's' : ''} à jour` : '',
+        ].filter(Boolean).join(', ');
+        toast.success(`Séances appliquées : ${msg}`);
+        onClose();
+        return;
       } else {
         // Mode B : mettre à jour les heures des séances existantes
         for (const e of etapesAcceptees) {
@@ -267,6 +281,11 @@ export default function ModalPlanificateur({
                           <span className="text-xs text-gray-400 flex-shrink-0">
                             {etape.contrat.dureeMinutes} min
                           </span>
+                          {etape.alreadyPlanned && (
+                            <span className="text-[10px] font-medium text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded flex-shrink-0">
+                              horaire ajusté
+                            </span>
+                          )}
                         </div>
                         {ei > 0 && etape.dureeTrajetMinutes > 0 && (
                           <div className="text-[11px] text-gray-400 mt-0.5">
@@ -274,10 +293,9 @@ export default function ModalPlanificateur({
                             {etape.distanceKm > 0 && ` · ${etape.distanceKm.toFixed(1)} km`}
                           </div>
                         )}
-                        {resultat?.modeB && (
+                        {(resultat?.modeB || etape.alreadyPlanned) && (
                           <div className="text-[11px] text-blue-500 mt-0.5">
-                            Heure actuelle : {/* we don't have the original time here; just show it's an update */}
-                            mise à jour proposée
+                            mise à jour d'horaire proposée
                           </div>
                         )}
                       </div>
@@ -318,7 +336,7 @@ export default function ModalPlanificateur({
             <p className="text-sm text-gray-500 text-center py-4">
               {resultat.modeB
                 ? 'Aucune séance planifiée trouvée sur les 4 prochaines semaines.'
-                : 'Tous les patients sont déjà planifiés pour cette semaine.'}
+                : 'Aucun patient avec un contrat actif trouvé pour cette semaine.'}
             </p>
           )}
         </div>

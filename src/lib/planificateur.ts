@@ -15,7 +15,8 @@ export interface MatriceORS {
 export interface EtapePlanifiee {
   patient: Participant;
   contrat: Contrat;
-  seanceExistanteId?: string; // Mode B : id de la séance à mettre à jour
+  seanceExistanteId?: string; // séance existante à mettre à jour (Mode B, ou Mode A si déjà planifiée)
+  alreadyPlanned?: boolean;   // Mode A : le patient a déjà une séance ce jour — on propose une mise à jour d'horaire
   date: string;
   heureDebut: string;
   heureFin: string;
@@ -148,6 +149,7 @@ type Candidat = {
   patient: Participant;
   contrat: Contrat;
   seanceExistanteId?: string;
+  alreadyPlanned?: boolean;
   idx: number;
 };
 
@@ -190,7 +192,7 @@ function planifierJour(
   let heure = heureDebutJournee;
   let posIdx = departIdx;
 
-  for (const { patient, contrat, seanceExistanteId, idx } of ordered) {
+  for (const { patient, contrat, seanceExistanteId, alreadyPlanned, idx } of ordered) {
     const trajet = travelMin(matrix, posIdx, idx);
     const dist   = distKm(matrix, posIdx, idx);
 
@@ -213,6 +215,7 @@ function planifierJour(
       patient,
       contrat,
       seanceExistanteId,
+      alreadyPlanned,
       date,
       heureDebut: heureArrivee,
       heureFin,
@@ -229,7 +232,9 @@ function planifierJour(
 }
 
 // ── MODE A : semaine ponctuelle ───────────────────────────────────────────────
-// Crée des séances pour les patients sans séance cette semaine-là.
+// Propose un planning optimal pour la semaine choisie.
+// Si un patient a déjà une séance ce jour, on propose une mise à jour d'horaire (alreadyPlanned).
+// Sinon, on propose la création d'une nouvelle séance.
 
 export function planifierSemaine(
   params: PlanificateurParams,
@@ -249,20 +254,20 @@ export function planifierSemaine(
 
     const indisposJour = indispos.filter(ind => ind.jour === jourKey && ind.recurrente);
 
-    // Participants déjà planifiés ce jour
-    const deja = new Set(
+    // Séances existantes ce jour (hors annulées) — pour détecter les patients déjà planifiés
+    const dejaMap = new Map(
       seances
         .filter(s => s.date === dateStr && s.statut !== 'annulee')
-        .map(s => s.participantId)
+        .map(s => [s.participantId, s.id])
     );
 
     const candidates: Candidat[] = [];
 
     for (const contrat of contrats) {
       if (contrat.statut !== 'actif') continue;
-      if (!contrat.joursFixe.includes(jourKey as JourSemaine)) continue;
+      const joursFixe = Array.isArray(contrat.joursFixe) ? contrat.joursFixe : [];
+      if (!joursFixe.includes(jourKey as JourSemaine)) continue;
       if (contrat.dateDebut > dateStr || contrat.dateFin < dateStr) continue;
-      if (deja.has(contrat.participantId)) continue;
 
       const patient = participants.find(p => p.id === contrat.participantId);
       if (!patient) continue;
@@ -275,7 +280,9 @@ export function planifierSemaine(
         allImpossibles.push({ patient, raison: 'Patient absent de la matrice de trajets' });
         continue;
       }
-      candidates.push({ patient, contrat, idx });
+      const alreadyPlanned = dejaMap.has(contrat.participantId);
+      const seanceExistanteId = dejaMap.get(contrat.participantId);
+      candidates.push({ patient, contrat, idx, alreadyPlanned, seanceExistanteId });
     }
 
     if (candidates.length === 0) continue;
