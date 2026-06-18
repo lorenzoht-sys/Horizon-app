@@ -85,6 +85,9 @@ export default function ModalPlanificateur({
 
       const indexMap = new Map(points.map((p, i) => [coordKey(p), i]));
 
+      console.log('[Planificateur] contrats actifs:', contrats.filter(c => c.statut === 'actif').map(c => ({ id: c.id.slice(0,8), statut: c.statut, joursFixe: c.joursFixe, dateDebut: c.dateDebut, dateFin: c.dateFin })));
+      console.log('[Planificateur] patientsActifs:', patientsActifs.length, 'lundiDate:', lundiDate);
+
       const params = {
         participants, contrats, seances, indispos,
         depart, matrix, indexMap, heureDebutJournee,

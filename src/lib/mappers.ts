@@ -251,13 +251,26 @@ export function programmeToDb(p: Programme): Record<string, unknown> {
   };
 }
 
+const JOUR_LONG_TO_SHORT: Record<string, JourSemaine> = {
+  lundi: 'lun', mardi: 'mar', mercredi: 'mer',
+  jeudi: 'jeu', vendredi: 'ven', samedi: 'sam',
+};
+
+function normaliserJoursFixe(raw: string[] | null | undefined): JourSemaine[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(j => {
+    const lower = (j ?? '').toLowerCase().trim();
+    return (JOUR_LONG_TO_SHORT[lower] ?? lower) as JourSemaine;
+  }).filter(j => ['lun','mar','mer','jeu','ven','sam'].includes(j));
+}
+
 export function dbToContrat(row: any): Contrat {
   return {
     id: row.id,
     participantId: row.participant_id,
     dateDebut: row.date_debut,
     dateFin: row.date_fin,
-    joursFixe: row.jours_fixe ?? [],
+    joursFixe: normaliserJoursFixe(row.jours_fixe),
     heureDebut: row.heure_debut,
     dureeMinutes: row.duree_minutes,
     statut: row.statut,

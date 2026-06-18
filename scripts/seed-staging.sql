@@ -163,7 +163,7 @@ BEGIN
   ) VALUES (
     v_contrat_id, v_camille_id, v_praticien_id,
     CURRENT_DATE - INTERVAL '3 months', CURRENT_DATE + INTERVAL '9 months',
-    ARRAY['lundi','jeudi'], '10:00', 45, 'actif',
+    ARRAY['lun','jeu'], '10:00', 45, 'actif',
     24, 6, 45
   );
 
