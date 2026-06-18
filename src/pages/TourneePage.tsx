@@ -126,17 +126,20 @@ function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: numb
 
 // ── Nearest neighbor dans un groupe ───────────────────────────────────────────
 
-function nearestNeighbor(start: { lat: number; lng: number }, patients: Participant[]): Participant[] {
+type LatLng = { lat: number; lng: number };
+type TravelFn = (from: LatLng, to: LatLng) => number;
+
+function nearestNeighbor(start: LatLng, patients: Participant[], getTravelSec: TravelFn): Participant[] {
   const restants = [...patients];
   const visite: Participant[] = [];
   let pos = start;
   while (restants.length > 0) {
-    let idx = 0, minDist = Infinity;
+    let idx = 0, minSec = Infinity;
     for (let i = 0; i < restants.length; i++) {
       const c = restants[i].coordonnees;
       if (!c) continue;
-      const d = distanceKm(pos, c);
-      if (d < minDist) { minDist = d; idx = i; }
+      const s = getTravelSec(pos, c);
+      if (s < minSec) { minSec = s; idx = i; }
     }
     const [next] = restants.splice(idx, 1);
     visite.push(next);
@@ -147,13 +150,13 @@ function nearestNeighbor(start: { lat: number; lng: number }, patients: Particip
 
 // Optimisation : grouper par créneau (matin → après-midi → soirée),
 // puis nearest-neighbor dans chaque groupe
-function optimiserTournee(depart: { lat: number; lng: number }, patients: Participant[]): Participant[] {
+function optimiserTournee(depart: LatLng, patients: Participant[], getTravelSec: TravelFn): Participant[] {
   const groupes = [0, 1, 2].map(prio => patients.filter(p => prioriteCreneau(p) === prio));
   const result: Participant[] = [];
   let pos = depart;
   for (const groupe of groupes) {
     if (!groupe.length) continue;
-    const optimise = nearestNeighbor(pos, groupe);
+    const optimise = nearestNeighbor(pos, groupe, getTravelSec);
     result.push(...optimise);
     const dernier = optimise[optimise.length - 1];
     if (dernier?.coordonnees) pos = dernier.coordonnees;
@@ -188,11 +191,13 @@ interface ResultatItineraire {
 }
 
 function calculerItineraire(
-  depart: { lat: number; lng: number },
+  depart: LatLng,
   tournee: Participant[],
   heureDepart: string,
   indispos: IndisponibilitePierre[],
   getPatientDuree: (patientId: string) => number,
+  getTravelMin: TravelFn,
+  getDistKm: TravelFn,
 ): ResultatItineraire {
   const etapes: EtapePatient[] = [];
   const impossibles: { patient: Participant; raison: string }[] = [];
@@ -201,8 +206,7 @@ function calculerItineraire(
 
   for (const patient of tournee) {
     const c = patient.coordonnees!;
-    const dist = distanceKm(pos, c);
-    const trajet = Math.max(2, Math.round(dist * 2));
+    const trajet = Math.max(1, Math.round(getTravelMin(pos, c)));
 
     let heureDebut = addMinutes(heure, trajet);
     const interruptions: Interruption[] = [];
@@ -271,7 +275,7 @@ function calculerItineraire(
       heureArrivee: heureDebut,
       heureDepart: heureFin,
       dureeTrajetMinutes: trajet,
-      distanceKm: Math.round(dist * 10) / 10,
+      distanceKm: Math.round(getDistKm(pos, c) * 10) / 10,
       interruptions,
     });
 
