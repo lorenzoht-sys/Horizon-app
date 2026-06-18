@@ -14,6 +14,7 @@ import { geocodeAdresse } from '../utils/geocodeAdresse';
 import { Link, useNavigate } from 'react-router-dom';
 import { useIndispos } from '../hooks/useIndispos';
 import { useZones } from '../hooks/useZones';
+import { getAuthHeader } from '../lib/supabase';
 
 // ── Fix icônes Leaflet ─────────────────────────────────────────────────────────
 
@@ -344,6 +345,8 @@ export default function TourneePage() {
   const [, setTournee] = useState<Participant[]>([]);
   const [etapes, setEtapes] = useState<EtapePatient[]>([]);
   const [impossibles, setImpossibles] = useState<{ patient: Participant; raison: string }[]>([]);
+  const [orsLoading, setOrsLoading] = useState(false);
+  const [orsFallback, setOrsFallback] = useState(false);
 
   // Séances du jour depuis les contrats
   const seancesDuJourData = useMemo(() => seancesDuJour(date), [seances, date]);
@@ -445,7 +448,7 @@ export default function TourneePage() {
     setSelectionIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   }
 
-  function handleOptimiser() {
+  async function handleOptimiser() {
     const selectionnes = avecCoords.filter(p => selectionIds.has(p.id));
     if (!selectionnes.length) { toast.error('Sélectionnez au moins un patient'); return; }
     if (departErreur) { toast.error('Renseignez votre adresse dans les Paramètres'); return; }
@@ -455,14 +458,65 @@ export default function TourneePage() {
       toast(`⚠️ ${horsDispos.map(p => p.prenom).join(', ')} : non disponible${horsDispos.length > 1 ? 's' : ''} ce jour`, { duration: 4000 });
     }
 
-    const optimise = optimiserTournee(depart, selectionnes);
+    // ── Matrice de trajets réels (ORS) ────────────────────────────────────────
+    const coordKey = (p: LatLng) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;
+    const points: LatLng[] = [depart, ...selectionnes.map(p => p.coordonnees!)];
+
+    let getTravelSec: TravelFn = (a, b) => distanceKm(a, b) * 126; // Haversine fallback (≈ km × 2 min)
+    let getTravelMin: TravelFn = (a, b) => Math.max(1, distanceKm(a, b) * 2.1);
+    let getDistKm: TravelFn    = (a, b) => distanceKm(a, b);
+    let usedFallback = false;
+
+    setOrsLoading(true);
+    try {
+      const authHeader = await getAuthHeader();
+      const res = await fetch('/api/tournee/matrice-trajets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({ coordonnees: points }),
+      });
+
+      if (res.ok) {
+        const matrix: { durees: number[][]; distances: number[][]; fallback: boolean } = await res.json();
+        usedFallback = matrix.fallback;
+
+        const indexMap = new Map(points.map((p, i) => [coordKey(p), i]));
+        const lookup = (mat: number[][], a: LatLng, b: LatLng): number => {
+          const ia = indexMap.get(coordKey(a));
+          const ib = indexMap.get(coordKey(b));
+          return (ia !== undefined && ib !== undefined) ? mat[ia][ib] : 0;
+        };
+
+        if (!matrix.fallback) {
+          getTravelSec = (a, b) => lookup(matrix.durees, a, b);
+          getTravelMin = (a, b) => Math.max(1, Math.round(lookup(matrix.durees, a, b) / 60));
+          getDistKm    = (a, b) => Math.round(lookup(matrix.distances, a, b)) / 1000;
+        }
+      } else {
+        usedFallback = true;
+      }
+    } catch {
+      usedFallback = true;
+    } finally {
+      setOrsLoading(false);
+    }
+
+    setOrsFallback(usedFallback);
+
+    // ── Optimisation ──────────────────────────────────────────────────────────
+    const optimise = optimiserTournee(depart, selectionnes, getTravelSec);
     const getPatientDuree = (id: string) =>
       contrats.find(c => c.participantId === id && c.statut === 'actif')?.dureeMinutes ?? 45;
-    const { etapes: it, impossibles: imp } = calculerItineraire(depart, optimise, heureDepart, indisposJour, getPatientDuree);
+    const { etapes: it, impossibles: imp } = calculerItineraire(
+      depart, optimise, heureDepart, indisposJour, getPatientDuree, getTravelMin, getDistKm,
+    );
     setTournee(optimise);
     setEtapes(it);
     setImpossibles(imp);
 
+    if (usedFallback) {
+      toast(`⚠️ Temps de trajet estimés · Vérifiez votre connexion ou configurez ORS_API_KEY`, { duration: 6000 });
+    }
     if (imp.length > 0) {
       toast.error(
         `${imp.map(i => i.patient.prenom).join(', ')} : créneau dépassé — retirés de la tournée`,
@@ -802,10 +856,19 @@ export default function TourneePage() {
                   </div>
                 )}
 
-                <button onClick={handleOptimiser} disabled={selectionIds.size === 0}
+                <button onClick={handleOptimiser} disabled={selectionIds.size === 0 || orsLoading}
                   className="w-full flex items-center justify-center gap-2 bg-primary text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                  <Route size={15} />Optimiser la tournée
+                  {orsLoading
+                    ? <><Loader size={15} className="animate-spin" />Calcul des trajets…</>
+                    : <><Route size={15} />Optimiser la tournée</>}
                 </button>
+
+                {orsFallback && etapes.length > 0 && (
+                  <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-xs text-amber-700">
+                    <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
+                    <span>Temps de trajet estimés (vol d'oiseau) — ORS indisponible</span>
+                  </div>
+                )}
 
                 {impossibles.length > 0 && (
                   <div className="bg-red-50 border border-red-200 rounded-xl p-3">
