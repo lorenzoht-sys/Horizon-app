@@ -5,6 +5,7 @@ import { useBilanDelta } from '../../../hooks/useBilanDelta';
 import { TEST_LABELS } from '../../../data/profiles';
 import { Plus } from 'lucide-react';
 import ChronoWidget from '../ChronoWidget';
+import TinettiTest from '../TinettiTest';
 
 
 // ─── Souplesse +/- ──────────────────────────────────────────────
@@ -106,7 +107,7 @@ function Num({ label, value, onChange, unit, min, max, step = 0.1 }: {
   );
 }
 
-const PHYSICAL_TESTS: TestKey[] = ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse', 'apley'];
+const PHYSICAL_TESTS: TestKey[] = ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse', 'apley', 'tinetti'];
 
 // ─── Apley's Scratch Test ───────────────────────────────────────────
 
@@ -386,6 +387,16 @@ export default function Step2_Physical({ form, update, previous, testsActifs }: 
           <ApleyTest
             value={form.apley}
             onChange={v => update({ apley: v })}
+          />
+        </section>
+      )}
+
+      {/* Test de Tinetti (POMA) */}
+      {active.includes('tinetti') && (
+        <section>
+          <TinettiTest
+            value={form.tinetti}
+            onChange={v => update({ tinetti: v })}
           />
         </section>
       )}

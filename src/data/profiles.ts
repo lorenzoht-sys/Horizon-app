@@ -10,7 +10,7 @@ export interface ProfileConfig {
   introMessage: string;
 }
 
-export const ALL_TESTS: TestKey[] = ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse', 'tm6', 'memoire', 'apley'];
+export const ALL_TESTS: TestKey[] = ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse', 'tm6', 'memoire', 'apley', 'tinetti'];
 
 export const PROFILES: Record<ProfilPatient, ProfileConfig> = {
   senior_chutes: {
@@ -69,6 +69,7 @@ export const TEST_LABELS: Record<TestKey, string> = {
   tm6:        'TM6 — Marche 6 min',
   memoire:    'Mémoire (Dubois)',
   apley:      'Apley Scratch Test',
+  tinetti:    'Tinetti (POMA) — Équilibre & Marche',
 };
 
 // ── Système de tags multiples ──────────────────────────────────
