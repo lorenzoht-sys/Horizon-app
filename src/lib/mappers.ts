@@ -1,4 +1,4 @@
-import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, DisponibilitesPatient, JourSemaine, CreneauPreference } from '../types';
+import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, TemplateStructure, DisponibilitesPatient, JourSemaine, CreneauPreference } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
 
 // ── Conversion anamnese.organisation → DisponibilitesPatient ──────────────────
@@ -472,5 +472,17 @@ export function structureToDb(s: Partial<Structure> & { nom: string; contactEmai
     tarif_seance: s.tarifSeance ?? 45,
     frequence_facturation: s.frequenceFacturation ?? 'mensuelle',
     actif: s.actif ?? true,
+  };
+}
+
+export function dbToTemplateStructure(row: any): TemplateStructure {
+  return {
+    id: row.id,
+    praticienId: row.praticien_id,
+    structureId: row.structure_id,
+    nom: row.nom,
+    contenuTexte: row.contenu_texte,
+    formatOrigine: row.format_origine ?? null,
+    createdAt: row.created_at ?? '',
   };
 }

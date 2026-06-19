@@ -466,6 +466,18 @@ export interface Structure {
   createdAt: string;
 }
 
+// Template de compte rendu réutilisable, sauvegardé pour une structure
+// (texte déjà extrait du PDF/Word d'origine — pas de fichier binaire conservé)
+export interface TemplateStructure {
+  id: string;
+  praticienId: string;
+  structureId: string;
+  nom: string;
+  contenuTexte: string;
+  formatOrigine: 'pdf' | 'docx' | null;
+  createdAt: string;
+}
+
 // ── TRAITEMENTS & ANTÉCÉDENTS STRUCTURÉS ─────────────────────────────────────
 
 export type MomentPrise = 'matin' | 'midi' | 'soir' | 'nuit' | 'avant_repas' | 'apres_repas';
