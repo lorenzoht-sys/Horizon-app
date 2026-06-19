@@ -3,7 +3,6 @@
 // il reste en mémoire le temps de l'extraction puis n'est plus référencé.
 
 import * as pdfjsLib from 'pdfjs-dist';
-// @ts-expect-error — pas de types pour cet import d'URL spécifique à Vite
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
