@@ -4,9 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 // Composant séparé de ChronoWidget.tsx (partagé avec équilibre/TUG) pour ne pas
 // risquer de casser ces autres tests.
 
-export const DUREES_FIXES = [120, 240, 360, 480, 600, 720] as const;
-
-export interface Tm6ChronoResult {
+interface Tm6ChronoResult {
   dureeReelleSecondes: number;
   nbPauses: number;
   dureePausesSecondes: number;
@@ -46,7 +44,9 @@ function playBeep() {
       osc.start(ctx.currentTime + d);
       osc.stop(ctx.currentTime + d + 0.25);
     });
-  } catch (_) {}
+  } catch {
+    // audio non disponible (navigateur sans Web Audio API) — pas de blocage
+  }
 }
 
 export default function Tm6ChronoWidget({ dureeMode, dureeCibleSecondes, onTerminer }: Props) {

@@ -23,7 +23,8 @@ import { useBilanDelta } from '../../../hooks/useBilanDelta';
 import { TEST_LABELS } from '../../../data/profiles';
 import { Plus } from 'lucide-react';
 import DuboisMISWidget from '../DuboisMISWidget';
-import Tm6ChronoWidget, { DUREES_FIXES } from '../Tm6ChronoWidget';
+import Tm6ChronoWidget from '../Tm6ChronoWidget';
+import { TM6_DUREES_FIXES } from '../../../data/norms';
 
 type BilanForm = Omit<Bilan, 'id'>;
 
@@ -136,7 +137,7 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
               <select value={tm6.dureeCibleSecondes ?? 360}
                 onChange={e => setTm6({ dureeCibleSecondes: Number(e.target.value) })}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10">
-                {DUREES_FIXES.map(s => (
+                {TM6_DUREES_FIXES.map(s => (
                   <option key={s} value={s}>{s / 60} min{s === 360 ? ' (standard)' : ''}</option>
                 ))}
               </select>

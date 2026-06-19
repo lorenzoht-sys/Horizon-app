@@ -16,6 +16,9 @@ export const NORMES_SCORING: Record<string, NormeScoring> = {
   apley:             { note1: 1.49, note2: 2.49, note3: 3.49, note4: 4.0, lowerIsBetter: false },
 };
 
+// ── Durées disponibles pour le TM6 en mode "durée fixe" (secondes) ───────
+export const TM6_DUREES_FIXES = [120, 240, 360, 480, 600, 720] as const;
+
 export function calculerNote(valeur: number, norme: NormeScoring): 1 | 2 | 3 | 4 | 5 {
   const { note1, note2, note3, note4, lowerIsBetter } = norme;
   if (!lowerIsBetter) {
