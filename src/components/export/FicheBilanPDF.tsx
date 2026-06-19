@@ -3,6 +3,7 @@ import type { Bilan, Participant, NotesBilan } from '../../types';
 import { NORMES_SCORING, calculerNote } from '../../data/norms';
 import { PdfHeader, PdfFooter, type PdfPraticienSettings } from './PdfShared';
 import { getContreIndications } from '../../lib/anamnese';
+import { computeTinettiScores, tinettiRisque } from '../../data/tinetti';
 
 // ─── Calcul notes ─────────────────────────────────────────────────────────────
 
@@ -109,6 +110,7 @@ interface Props {
 export default function FicheBilanPDF({ bilan, participant, notes, settings }: Props) {
   const { equilibre: eq, chairStand30: cs, handGrip: hg, tug3m, souplesse, tm6, memoire } = bilan;
   const sVal = souplesse.valeur !== null ? (souplesse.valeur >= 0 ? '+' : '') + souplesse.valeur : '—';
+  const tinettiScores = computeTinettiScores(bilan.tinetti);
 
   const BARRES: { label: string; key: keyof NotesBilan }[] = [
     { label: 'Souplesse', key: 'souplesse' },
@@ -166,6 +168,18 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
                 : `Immédiat : ${memoire.scoreImmediat ?? '—'}/5  ·  Différé : ${memoire.scoreDiffere ?? '—'}/5`
             } />
           </View>
+
+          {tinettiScores && (
+            <View style={S.cellRow}>
+              <Cellule
+                titre="Tinetti (POMA)"
+                unite={tinettiScores.complet ? `${tinettiScores.scoreTotal}/28` : `${tinettiScores.itemsRenseignes} items`}
+                body={tinettiScores.complet
+                  ? `Équilibre : ${tinettiScores.scoreEquilibre}/16  ·  Marche : ${tinettiScores.scoreMarche}/12\n${tinettiRisque(tinettiScores.scoreTotal).label}`
+                  : 'Test incomplet'}
+              />
+            </View>
+          )}
 
           {/* Graphiques */}
           {barres.length > 0 && (

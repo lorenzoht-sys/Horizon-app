@@ -14,6 +14,7 @@ import {
 } from '../../lib/anamnese';
 import { TYPES_ANTECEDENT_LABELS } from '../../types';
 import { PdfFooter, LOGO_H } from './PdfShared';
+import { computeTinettiScores } from '../../data/tinetti';
 
 // ── Palette « Horizon » ────────────────────────────────────────────────────────
 
@@ -106,6 +107,7 @@ function getStatutTest(key: string, val: number): Statut {
     equilibre:  v => v >= 40 ? 'ok' : v >= 10 ? 'attention' : 'travail',
     souplesse:  v => v >= 10 ? 'ok' : v >= 0  ? 'attention' : 'travail',
     tm6:        v => v >= 500 ? 'ok' : v >= 350 ? 'attention' : 'travail',
+    tinetti:    v => v >= 24  ? 'ok' : v >= 19  ? 'attention' : 'travail',
   };
   return normes[key]?.(val) ?? 'attention';
 }
@@ -347,6 +349,13 @@ export default function DossierPDF({
         ? `Test marche ${Math.round(dernierBilan.tm6.dureeReelleSecondes / 6) / 10} min, non standard (m)`
         : 'Test 6 minutes (m)',
       '>= 400 m', 'tm6', dernierBilan.tm6.distanceMetres, bilanInitial?.tm6.distanceMetres ?? null, false),
+    (() => {
+      const tDernier = computeTinettiScores(dernierBilan.tinetti);
+      const tInitial = computeTinettiScores(bilanInitial?.tinetti);
+      return tDernier?.complet
+        ? mkRow('Tinetti POMA (/28)', '>= 24/28', 'tinetti', tDernier.scoreTotal, tInitial?.complet ? tInitial.scoreTotal : null, false)
+        : null;
+    })(),
   ].filter((r): r is TestRow => r !== null) : [];
 
   const interpTextRaw = dernierBilan?.interpretationIA?.textePro

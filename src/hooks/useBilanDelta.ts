@@ -1,4 +1,5 @@
 import type { Bilan, DeltaResult, Direction } from '../types';
+import { computeTinettiScores } from '../data/tinetti';
 
 function calcDelta(current: number | null, previous: number | null, lowerIsBetter: boolean): DeltaResult {
   if (current === null) {
@@ -26,6 +27,8 @@ function calcDelta(current: number | null, previous: number | null, lowerIsBette
 
 export function useBilanDelta(current: Bilan, previous: Bilan | null) {
   const p = previous;
+  const tinettiCur = computeTinettiScores(current.tinetti);
+  const tinettiPrev = computeTinettiScores(p?.tinetti);
 
   return {
     equilibreDroite: calcDelta(current.equilibre.droite, p?.equilibre.droite ?? null, false),
@@ -47,6 +50,11 @@ export function useBilanDelta(current: Bilan, previous: Bilan | null) {
     apleyScore: calcDelta(
       current.apley?.score ?? null,
       p?.apley?.score ?? null,
+      false,
+    ),
+    tinettiScore: calcDelta(
+      tinettiCur?.complet ? tinettiCur.scoreTotal : null,
+      tinettiPrev?.complet ? tinettiPrev.scoreTotal : null,
       false,
     ),
   };

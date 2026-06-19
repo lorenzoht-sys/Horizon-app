@@ -39,6 +39,9 @@ function bilanAxisValue(key: TestKey, bilan: Bilan, normalize: ReturnType<typeof
     }
     case 'apley':
       return bilan.apley?.score != null ? Math.round((bilan.apley.score / 4) * 100) : 0;
+    case 'tinetti':
+      // pas d'axe radar pour Tinetti (absent de TEST_RADAR_LABELS) — filtré avant d'arriver ici
+      return 0;
   }
 }
 

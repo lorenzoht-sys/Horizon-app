@@ -28,6 +28,7 @@ import DicteePostSeance from '../components/DicteePostSeance';
 import ModalEspacePatient from '../components/participant/ModalEspacePatient';
 import { exportDossierPraticien } from '../utils/exportDossierPDF';
 import { calculerNote, NORMES_SCORING } from '../data/norms';
+import { computeTinettiScores, tinettiRisque } from '../data/tinetti';
 import { TAG_CONFIG } from '../data/profiles';
 import { getSedProfil, getFSSProfil } from '../components/bilan/TestsAutonomie';
 import { useRappelPreferences, type RappelPreferences } from '../hooks/useRappelPreferences';
@@ -47,6 +48,16 @@ function tm6Extra(b: Bilan): string | null {
   return parts.length ? parts.join(' · ') : null;
 }
 
+function tinettiVal(b: Bilan): number | null {
+  const s = computeTinettiScores(b.tinetti);
+  return s?.complet ? s.scoreTotal : null;
+}
+
+function tinettiExtra(b: Bilan): string | null {
+  const val = tinettiVal(b);
+  return val !== null ? tinettiRisque(val).label : null;
+}
+
 const TESTS_TABLEAU: {
   label: string; normeKey: string; unite: string; lower: boolean;
   getVal: (b: Bilan) => number | null; getExtra?: (b: Bilan) => string | null;
@@ -59,6 +70,7 @@ const TESTS_TABLEAU: {
   { label: 'Souplesse',   normeKey: 'souplesse',          unite: ' cm',   lower: false, getVal: (b: Bilan) => b.souplesse.valeur },
   { label: 'Mémoire',     normeKey: 'memoire',            unite: '/5',    lower: false, getVal: (b: Bilan) => b.memoire.scoreImmediat },
   { label: 'Apley Scratch', normeKey: 'apley',           unite: '/4',    lower: false, getVal: (b: Bilan) => b.apley?.score ?? null },
+  { label: 'Tinetti POMA', normeKey: 'tinetti',          unite: '/28',   lower: false, getVal: tinettiVal, getExtra: tinettiExtra },
 ];
 
 const METHODE_LABEL: Record<string, string> = {
@@ -74,6 +86,7 @@ const NORMES_LABEL: Record<string, string> = {
   tm6Distance:       '≥ 500 m',
   memoire:           '4-5/5',
   apley:             '≥ 3.5/4',
+  tinetti:           '≥ 24/28',
 };
 
 const DOT_COLORS = {
