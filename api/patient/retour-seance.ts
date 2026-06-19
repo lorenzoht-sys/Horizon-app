@@ -51,8 +51,15 @@ export default withSentry(async function handler(req: any, res: any) {
     .single();
 
   if (pErr || !participant) {
+    console.error('[retour-seance] participant introuvable:', participantId, pErr);
     await logAuditEvent(supabase, 'patient_retour_submit', participantId, getClientIp(req), false);
     return res.status(404).json({ error: 'Participant introuvable' });
+  }
+
+  if (!participant.praticien_id) {
+    console.error('[retour-seance] participant sans praticien_id:', participantId);
+    await logAuditEvent(supabase, 'patient_retour_submit', participantId, getClientIp(req), false);
+    return res.status(500).json({ error: 'Praticien introuvable pour ce participant' });
   }
 
   const { error: insErr } = await supabase.from('retours_seance').insert({
@@ -65,8 +72,10 @@ export default withSentry(async function handler(req: any, res: any) {
   });
 
   if (insErr) {
+    console.error('[retour-seance] échec insertion retours_seance:', insErr.code, insErr.message, insErr.details, insErr.hint);
     await logAuditEvent(supabase, 'patient_retour_submit', participantId, getClientIp(req), false);
-    return res.status(500).json({ error: 'Erreur enregistrement retour' });
+    const detail = process.env.VERCEL_ENV !== 'production' ? ` (${insErr.code}: ${insErr.message})` : '';
+    return res.status(500).json({ error: `Erreur enregistrement retour${detail}` });
   }
 
   await logAuditEvent(supabase, 'patient_retour_submit', participantId, getClientIp(req), true);
