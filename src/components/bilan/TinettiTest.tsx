@@ -54,27 +54,11 @@ export default function TinettiTest({ value, onChange }: Props) {
     <div>
       <div className="flex items-center justify-between mb-1">
         <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Test de Tinetti (POMA)</h3>
-      </div>
-      <p className="text-xs text-gray-400 mb-4">Équilibre & marche — risque de chute</p>
-
-      {/* Scores en temps réel */}
-      <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 mb-4">
-        <div className="flex items-center gap-4 text-sm font-semibold text-gray-700">
-          <span>Équilibre : {scores?.scoreEquilibre ?? 0}/{TINETTI_EQUILIBRE_MAX}</span>
-          <span>Marche : {scores?.scoreMarche ?? 0}/{TINETTI_MARCHE_MAX}</span>
-          <span>Total : {scores?.scoreTotal ?? 0}/{TINETTI_TOTAL_MAX}</span>
-        </div>
-        {scores?.complet && risque ? (
-          <div className="mt-2 rounded-lg px-3 py-2 inline-flex items-center text-sm font-semibold"
-            style={{ background: risque.bg, color: risque.color }}>
-            {risque.label}
-          </div>
-        ) : (
-          <p className="text-xs text-gray-400 mt-2">
-            {scores?.itemsRenseignes ?? 0}/{TINETTI_ITEMS_COUNT} items renseignés — interprétation affichée une fois le test complet
-          </p>
+        {!scores?.complet && (
+          <span className="text-xs text-gray-400">{scores?.itemsRenseignes ?? 0}/{TINETTI_ITEMS_COUNT} items renseignés</span>
         )}
       </div>
+      <p className="text-xs text-gray-400 mb-4">Équilibre & marche — risque de chute</p>
 
       {/* Équilibre */}
       <div className="mb-5">
@@ -90,6 +74,25 @@ export default function TinettiTest({ value, onChange }: Props) {
         {MARCHE_ITEMS.map(item => (
           <ItemRow key={item.key} item={item} value={t.marche[item.key]} onSelect={v => setMarche(item.key, v)} />
         ))}
+      </div>
+
+      {/* Conclusion — scores et interprétation */}
+      <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 mb-5">
+        <div className="flex items-center gap-4 text-sm font-semibold text-gray-700">
+          <span>Équilibre : {scores?.scoreEquilibre ?? 0}/{TINETTI_EQUILIBRE_MAX}</span>
+          <span>Marche : {scores?.scoreMarche ?? 0}/{TINETTI_MARCHE_MAX}</span>
+          <span>Total : {scores?.scoreTotal ?? 0}/{TINETTI_TOTAL_MAX}</span>
+        </div>
+        {scores?.complet && risque ? (
+          <div className="mt-2 rounded-lg px-3 py-2 inline-flex items-center text-sm font-semibold"
+            style={{ background: risque.bg, color: risque.color }}>
+            {risque.label}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400 mt-2">
+            {scores?.itemsRenseignes ?? 0}/{TINETTI_ITEMS_COUNT} items renseignés — interprétation affichée une fois le test complet
+          </p>
+        )}
       </div>
 
       <div>
