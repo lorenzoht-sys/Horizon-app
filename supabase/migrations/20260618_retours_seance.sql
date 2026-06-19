@@ -49,3 +49,19 @@ END $$;
 
 -- Aucune policy INSERT/UPDATE/DELETE pour les rôles anon ou authenticated :
 -- l'écriture passe exclusivement par /api/patient/retour-seance (service_role).
+
+-- ── Privilèges GRANT (couche distincte de RLS) ─────────────────────────────
+-- RLS ne filtre que les LIGNES ; sans un GRANT de base sur la table, toute
+-- requête échoue avec "permission denied for table" (42501) AVANT même que
+-- les policies RLS ne soient évaluées — y compris pour service_role, qui ne
+-- fait que contourner les policies, pas l'absence de GRANT.
+-- Les tables historiques (créées avant l'audit sécurité) ont hérité ce GRANT
+-- implicitement des privilèges par défaut du projet ; cette table, créée via
+-- une migration manuelle (Étape 2.2 du GUIDE_STAGING), doit le déclarer
+-- explicitement pour ne pas dépendre d'un réglage de projet potentiellement
+-- absent sur un environnement donné (constaté en pratique sur staging).
+GRANT SELECT, INSERT ON retours_seance TO service_role;
+GRANT SELECT ON retours_seance TO authenticated;
+-- anon : aucun privilège (cohérent avec le REVOKE global, voir
+-- 20260613_rls_anon_lockdown.sql) — l'espace patient passe exclusivement par
+-- /api/patient/* (service_role), jamais par un accès direct anon.
