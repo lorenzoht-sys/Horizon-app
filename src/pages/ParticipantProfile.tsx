@@ -772,7 +772,7 @@ function labelBienEtre(v: number): string { return BIEN_ETRE_LABEL[v] ?? `${v}`;
 
 // ── TabsSection ───────────────────────────────────────────────────────────────
 
-type TabId = 'bilans' | 'contrats' | 'assiduite' | 'ressentis' | 'rappels';
+type TabId = 'bilans' | 'contrats' | 'assiduite' | 'rappels';
 
 // ── Types assiduité ───────────────────────────────────────────────────────────
 
@@ -1144,8 +1144,7 @@ export default function ParticipantProfile() {
   const TABS: { id: TabId; label: string; count?: number }[] = [
     { id: 'bilans',    label: 'Historique bilans',   count: participant.bilans.length },
     { id: 'contrats',  label: 'Contrats de suivi',   count: contratsCount },
-    { id: 'assiduite', label: '📊 Assiduité',        count: seancesStats.length > 0 ? seancesStats.length : undefined },
-    { id: 'ressentis', label: alerteRessentis ? 'Ressentis ⚠' : 'Ressentis', count: retours.length > 0 ? retours.length : undefined },
+    { id: 'assiduite', label: alerteRessentis ? '📊 Assiduité ⚠' : '📊 Assiduité', count: seancesStats.length > 0 ? seancesStats.length : undefined },
     { id: 'rappels',   label: '🔔 Rappels' },
   ];
 
@@ -1600,12 +1599,24 @@ export default function ParticipantProfile() {
             s.commentairePatient?.toLowerCase().match(/douleur|mal|fait mal|douloureux/)
           );
 
+          // Ressentis post-séance (Borg RPE + bien-être) : alerte si 3 dernières séances dégradées
+          const last3 = retours.slice(0, 3);
+          const alerteEffort = retours.length >= 3 && last3.every(r => r.borgRpe >= 8);
+          const alerteBienEtre = retours.length >= 3 && last3.every(r => r.bienEtre >= 4);
+
+          // Données graphique (chronologique, anciens→récents)
+          const chartData = [...retours].reverse().slice(-20).map(r => ({
+            date: new Date(r.date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+            Effort: r.borgRpe,
+            'Bien-être': r.bienEtre,
+          }));
+
           return (
             <div className="space-y-5">
               {/* Alertes */}
-              {(joursInactivite !== null && joursInactivite >= 5 || alerteDouleur || (taux14 !== null && taux14 < 50)) && (
+              {(joursInactivite !== null && joursInactivite >= 5 || alerteDouleur || (taux14 !== null && taux14 < 50) || alerteEffort || alerteBienEtre) && (
                 <div className="space-y-2">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">Alertes</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">À surveiller</div>
                   {joursInactivite !== null && joursInactivite >= 5 && (
                     <div className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium" style={{ background: '#FFF7E6', color: '#B45309' }}>
                       ⏰ Inactivité : {joursInactivite} jours sans séance
@@ -1625,6 +1636,20 @@ export default function ParticipantProfile() {
                   {taux14 !== null && taux14 < 50 && (
                     <div className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium" style={{ background: '#FCEBEB', color: '#A32D2D' }}>
                       📉 Taux de réalisation faible sur 14 jours : {taux14}%
+                    </div>
+                  )}
+                  {alerteEffort && (
+                    <div className="rounded-lg px-3 py-2.5 text-sm" style={{ background: '#FEF3C7', color: '#92400E' }}>
+                      <span className="font-semibold">Effort élevé répété</span>
+                      {' '}— Borg ≥ 8 sur les 3 dernières séances.
+                      Envisager d'adapter la charge lors de la prochaine séance.
+                    </div>
+                  )}
+                  {alerteBienEtre && (
+                    <div className="rounded-lg px-3 py-2.5 text-sm" style={{ background: '#FEE2E2', color: '#991B1B' }}>
+                      <span className="font-semibold">Bien-être dégradé répété</span>
+                      {' '}— Fatigué ou épuisé sur les 3 dernières séances.
+                      Vérifier la récupération et la charge globale.
                     </div>
                   )}
                 </div>
@@ -1665,101 +1690,11 @@ export default function ParticipantProfile() {
                 )}
               </div>
 
-              {/* Historique */}
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-3">Détail des séances</div>
-                <div className="space-y-2">
-                  {seancesStats.slice(0, 15).map(sp => {
-                    const emoji = sp.statut === 'terminee' ? '✅' : sp.statut === 'partielle' ? '⚠️' : '🔄';
-                    const dateLabel = new Date(sp.dateSeance + 'T12:00').toLocaleDateString('fr-FR', {
-                      weekday: 'short', day: 'numeric', month: 'short',
-                    });
-                    return (
-                      <div key={sp.id} className="flex items-start gap-2.5 rounded-lg border border-gray-100 px-3 py-2.5">
-                        <span className="text-sm flex-shrink-0 mt-0.5">{emoji}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[13px] font-semibold text-gray-800">{dateLabel}</span>
-                            {sp.nbTotal > 0 && (
-                              <span className="text-[12px] font-medium px-1.5 py-0.5 rounded-full"
-                                style={{
-                                  background: sp.nbRealises === sp.nbTotal ? '#DCFCE7' : '#FEF3C7',
-                                  color: sp.nbRealises === sp.nbTotal ? '#16A34A' : '#B45309',
-                                }}>
-                                {sp.nbRealises}/{sp.nbTotal} ex.
-                              </span>
-                            )}
-                            {sp.dureeMinutes && (
-                              <span className="text-[11px] text-gray-400">{sp.dureeMinutes} min</span>
-                            )}
-                          </div>
-                          {sp.commentairePatient && (
-                            <div className="text-[12px] text-gray-400 italic mt-0.5 truncate">"{sp.commentairePatient}"</div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-        {activeTab === 'ressentis' && (() => {
-          if (retours.length === 0) return (
-            <div className="text-center py-12 text-gray-400">
-              <div className="text-3xl mb-3">—</div>
-              <p className="font-medium text-gray-500">Aucun retour enregistré</p>
-              <p className="text-sm mt-1">
-                Les ressentis post-séance apparaîtront ici après que le patient
-                ait utilisé l'espace patient.
-              </p>
-            </div>
-          );
-
-          // Alerte : 3 séances consécutives avec effort ≥ 8 ou bien-être ≥ 4 (Fatigué/Épuisé)
-          const last3 = retours.slice(0, 3);
-          const alerteEffort = retours.length >= 3 && last3.every(r => r.borgRpe >= 8);
-          const alerteBienEtre = retours.length >= 3 && last3.every(r => r.bienEtre >= 4);
-
-          // Données graphique (chronologique, anciens→récents)
-          const chartData = [...retours].reverse().slice(-20).map(r => ({
-            date: new Date(r.date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
-            Effort: r.borgRpe,
-            'Bien-être': r.bienEtre,
-          }));
-
-          return (
-            <div className="space-y-5">
-
-              {/* Alertes */}
-              {(alerteEffort || alerteBienEtre) && (
-                <div className="space-y-2">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
-                    À surveiller
-                  </div>
-                  {alerteEffort && (
-                    <div className="rounded-lg px-3 py-2.5 text-sm" style={{ background: '#FEF3C7', color: '#92400E' }}>
-                      <span className="font-semibold">Effort élevé répété</span>
-                      {' '}— Borg ≥ 8 sur les 3 dernières séances.
-                      Envisager d'adapter la charge lors de la prochaine séance.
-                    </div>
-                  )}
-                  {alerteBienEtre && (
-                    <div className="rounded-lg px-3 py-2.5 text-sm" style={{ background: '#FEE2E2', color: '#991B1B' }}>
-                      <span className="font-semibold">Bien-être dégradé répété</span>
-                      {' '}— Fatigué ou épuisé sur les 3 dernières séances.
-                      Vérifier la récupération et la charge globale.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Courbe d'évolution — double axe Y */}
+              {/* Courbe d'évolution des ressentis — double axe Y */}
               {chartData.length >= 2 && (
                 <div>
                   <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-3">
-                    Évolution ({chartData.length} retours)
+                    Évolution ressentis ({chartData.length} retours)
                   </div>
                   <ResponsiveContainer width="100%" height={200}>
                     <LineChart data={chartData} margin={{ top: 4, right: 20, left: 0, bottom: 0 }}>
@@ -1822,31 +1757,47 @@ export default function ParticipantProfile() {
                 </div>
               )}
 
-              {/* Table des derniers retours */}
+              {/* Historique */}
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-2">
-                  Derniers retours
-                </div>
-                <div className="space-y-1">
-                  {retours.slice(0, 15).map(r => (
-                    <div key={r.id} className="flex items-center gap-3 rounded-lg px-3 py-2 bg-gray-50 text-sm">
-                      <span className="text-gray-400 text-xs w-16 flex-shrink-0">
-                        {new Date(r.date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                      </span>
-                      <span
-                        className="flex-1 font-medium"
-                        style={{ color: r.borgRpe >= 8 ? '#EA580C' : r.borgRpe >= 6 ? '#CA8A04' : '#16A34A' }}
-                      >
-                        Effort {r.borgRpe} — {labelBorg(r.borgRpe)}
-                      </span>
-                      <span
-                        className="flex-1 text-right"
-                        style={{ color: r.bienEtre >= 4 ? '#DC2626' : r.bienEtre === 3 ? '#CA8A04' : '#16A34A' }}
-                      >
-                        {labelBienEtre(r.bienEtre)}
-                      </span>
-                    </div>
-                  ))}
+                <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-3">Détail des séances</div>
+                <div className="space-y-2">
+                  {seancesStats.slice(0, 15).map(sp => {
+                    const emoji = sp.statut === 'terminee' ? '✅' : sp.statut === 'partielle' ? '⚠️' : '🔄';
+                    const dateLabel = new Date(sp.dateSeance + 'T12:00').toLocaleDateString('fr-FR', {
+                      weekday: 'short', day: 'numeric', month: 'short',
+                    });
+                    const retour = retours.find(r => r.date === sp.dateSeance);
+                    return (
+                      <div key={sp.id} className="flex items-start gap-2.5 rounded-lg border border-gray-100 px-3 py-2.5">
+                        <span className="text-sm flex-shrink-0 mt-0.5">{emoji}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[13px] font-semibold text-gray-800">{dateLabel}</span>
+                            {sp.nbTotal > 0 && (
+                              <span className="text-[12px] font-medium px-1.5 py-0.5 rounded-full"
+                                style={{
+                                  background: sp.nbRealises === sp.nbTotal ? '#DCFCE7' : '#FEF3C7',
+                                  color: sp.nbRealises === sp.nbTotal ? '#16A34A' : '#B45309',
+                                }}>
+                                {sp.nbRealises}/{sp.nbTotal} ex.
+                              </span>
+                            )}
+                            {sp.dureeMinutes && (
+                              <span className="text-[11px] text-gray-400">{sp.dureeMinutes} min</span>
+                            )}
+                          </div>
+                          {sp.commentairePatient && (
+                            <div className="text-[12px] text-gray-400 italic mt-0.5 truncate">"{sp.commentairePatient}"</div>
+                          )}
+                          {retour && (
+                            <div className="text-[12px] mt-0.5" style={{ color: retour.borgRpe >= 8 || retour.bienEtre >= 4 ? '#B45309' : '#6B7280' }}>
+                              Effort : {labelBorg(retour.borgRpe)} · Ressenti : {labelBienEtre(retour.bienEtre)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
