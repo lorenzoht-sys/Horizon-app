@@ -7,7 +7,12 @@
 --   • borg_rpe    : effort perçu (Borg RPE simplifié, 5 niveaux : 2/4/6/8/10)
 --   • bien_etre   : ressenti après séance (1=Très bien … 5=Épuisé)
 --
--- PRÉREQUIS : tables participants, praticiens, seances_patient.
+-- PRÉREQUIS : tables participants, seances_patient.
+-- praticien_id référence directement auth.users(id), comme partout ailleurs
+-- dans le schéma (participants.praticien_id, bilans.praticien_id, etc.) —
+-- PAS la table praticiens (profil optionnel, créé seulement quand le
+-- praticien enregistre ses paramètres : une FK vers praticiens(id) ferait
+-- échouer l'insertion pour tout praticien n'ayant jamais ouvert Réglages).
 -- IDEMPOTENTE : IF NOT EXISTS / DO $$ sur tous les objets.
 -- NE PAS EXÉCUTER SUR PROD sans validation préalable.
 -- Écriture réservée à service_role via /api/patient/retour-seance.
@@ -18,7 +23,7 @@ CREATE TABLE IF NOT EXISTS retours_seance (
   participant_id UUID        NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
   -- seance_id nullable : peut ne pas être lié à une seances_patient spécifique
   seance_id      UUID        REFERENCES seances_patient(id) ON DELETE SET NULL,
-  praticien_id   UUID        NOT NULL REFERENCES praticiens(id) ON DELETE CASCADE,
+  praticien_id   UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   date           DATE        NOT NULL,
   borg_rpe       SMALLINT    NOT NULL CHECK (borg_rpe BETWEEN 1 AND 10),
   bien_etre      SMALLINT    NOT NULL CHECK (bien_etre BETWEEN 1 AND 5),
