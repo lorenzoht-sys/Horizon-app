@@ -56,6 +56,18 @@ const S = StyleSheet.create({
   interpretBox: { borderWidth: 1, borderColor: '#D0D8E8', padding: 9, fontSize: 10, color: '#333333', lineHeight: 1.65, textAlign: 'justify', backgroundColor: 'white' },
 });
 
+function tm6DureePausesTexte(tm6: Bilan['tm6']): string {
+  const lignes: string[] = [];
+  const duree = tm6.dureeReelleSecondes;
+  if (duree != null && duree !== 360) {
+    lignes.push(`Test non standard (${Math.round(duree / 6) / 10} min) — comparaison aux normes indicative`);
+  }
+  if (tm6.nbPauses) {
+    lignes.push(`${tm6.nbPauses} pause(s), ${tm6.dureePausesSecondes ?? 0}s d'arrêt`);
+  }
+  return lignes.length ? '\n' + lignes.join(' · ') : '';
+}
+
 function borgRPEInterp(v: number): string {
   if (v <= 11) return 'Effort faible';
   if (v <= 14) return 'Effort modéré — zone cible APA';
@@ -138,7 +150,7 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
           <View style={S.cellRow}>
             <Cellule titre="Force" unite={`${cs ?? '—'} Reps`} body={`Main D : ${hg.droite ?? '—'} Kg  ·  Main G : ${hg.gauche ?? '—'} Kg`} />
             <View style={S.cellSpacer} />
-            <Cellule titre="Endurance" unite={`${tm6.distanceMetres ?? '—'} M`} body={`O2 : ${tm6.spo2Avant ?? '—'} / ${tm6.spo2Apres ?? '—'} / ${tm6.spo22min ?? '—'}  ·  FC : ${tm6.fcAvant ?? '—'} / ${tm6.fcApres ?? '—'} Bpm${tm6.borgRPE != null ? `\nRessenti effort (Borg) : ${tm6.borgRPE}/20 — ${borgRPEInterp(tm6.borgRPE)}` : ''}`} />
+            <Cellule titre="Endurance" unite={`${tm6.distanceMetres ?? '—'} M`} body={`O2 : ${tm6.spo2Avant ?? '—'} / ${tm6.spo2Apres ?? '—'} / ${tm6.spo22min ?? '—'}  ·  FC : ${tm6.fcAvant ?? '—'} / ${tm6.fcApres ?? '—'} Bpm${tm6.borgRPE != null ? `\nRessenti effort (Borg) : ${tm6.borgRPE}/20 — ${borgRPEInterp(tm6.borgRPE)}` : ''}${tm6DureePausesTexte(tm6)}`} />
           </View>
           <View style={S.cellRow}>
             <Cellule titre="Souplesse" unite={`${sVal} Cm`} />

@@ -36,6 +36,7 @@ export function useBilanDelta(current: Bilan, previous: Bilan | null) {
     tug3m: calcDelta(current.tug3m, p?.tug3m ?? null, true),
     souplesse: calcDelta(current.souplesse.valeur, p?.souplesse.valeur ?? null, false),
     tm6Distance: calcDelta(current.tm6.distanceMetres, p?.tm6.distanceMetres ?? null, false),
+    tm6DureeMismatch: !!p && (current.tm6.dureeReelleSecondes ?? 360) !== (p.tm6.dureeReelleSecondes ?? 360),
     memoireImmediat: calcDelta(current.memoire.scoreImmediat, p?.memoire.scoreImmediat ?? null, false),
     memoireDiffere: calcDelta(current.memoire.scoreDiffere, p?.memoire.scoreDiffere ?? null, false),
     memoireMIS: calcDelta(

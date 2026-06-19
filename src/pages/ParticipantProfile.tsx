@@ -39,12 +39,23 @@ import type { CompteRenduSeance } from '../types/seance';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TESTS_TABLEAU = [
+function tm6Extra(b: Bilan): string | null {
+  const parts: string[] = [];
+  if (b.tm6.nbPauses) parts.push(`${b.tm6.nbPauses} pause(s), ${b.tm6.dureePausesSecondes ?? 0}s d'arrêt`);
+  const duree = b.tm6.dureeReelleSecondes;
+  if (duree != null && duree !== 360) parts.push(`test ${Math.round(duree / 6) / 10} min`);
+  return parts.length ? parts.join(' · ') : null;
+}
+
+const TESTS_TABLEAU: {
+  label: string; normeKey: string; unite: string; lower: boolean;
+  getVal: (b: Bilan) => number | null; getExtra?: (b: Bilan) => string | null;
+}[] = [
   { label: 'Équilibre D', normeKey: 'equilibreUnipodal', unite: 's',     lower: false, getVal: (b: Bilan) => b.equilibre.droite },
   { label: 'Chair Stand', normeKey: 'chairStand30',      unite: ' rép.', lower: false, getVal: (b: Bilan) => b.chairStand30 },
   { label: 'HandGrip D',  normeKey: 'handGrip',          unite: ' kg',   lower: false, getVal: (b: Bilan) => b.handGrip.droite },
   { label: 'TUG 3m',      normeKey: 'tug3m',             unite: 's',     lower: true,  getVal: (b: Bilan) => b.tug3m },
-  { label: 'TM6',         normeKey: 'tm6Distance',        unite: ' m',    lower: false, getVal: (b: Bilan) => b.tm6.distanceMetres },
+  { label: 'TM6',         normeKey: 'tm6Distance',        unite: ' m',    lower: false, getVal: (b: Bilan) => b.tm6.distanceMetres, getExtra: tm6Extra },
   { label: 'Souplesse',   normeKey: 'souplesse',          unite: ' cm',   lower: false, getVal: (b: Bilan) => b.souplesse.valeur },
   { label: 'Mémoire',     normeKey: 'memoire',            unite: '/5',    lower: false, getVal: (b: Bilan) => b.memoire.scoreImmediat },
   { label: 'Apley Scratch', normeKey: 'apley',           unite: '/4',    lower: false, getVal: (b: Bilan) => b.apley?.score ?? null },
@@ -363,14 +374,15 @@ function CarteProfilFonctionnel({ participant, bilans }: {
     const note = norme ? calculerNote(val, norme) : null;
     const delta = valInit !== null && valInit !== undefined ? val - valInit : null;
     const progression = delta !== null ? (test.lower ? -delta : delta) : null;
-    return { test, val, note, progression };
+    const extra = test.getExtra?.(current) ?? null;
+    return { test, val, note, progression, extra };
   }).filter((x): x is NonNullable<typeof x> => x !== null);
 
   // Pair tests into 2 columns
   const leftTests = testsAvecValeur.filter((_, i) => i % 2 === 0);
   const rightTests = testsAvecValeur.filter((_, i) => i % 2 === 1);
 
-  function TestRow({ test, val, note, progression }: typeof testsAvecValeur[0]) {
+  function TestRow({ test, val, note, progression, extra }: typeof testsAvecValeur[0]) {
     const dotColor = note !== null ? noteToDot(note) : null;
     const dotLabel = note !== null ? noteToLabel(note) : '';
     const normeText = NORMES_LABEL[test.normeKey];
@@ -380,6 +392,9 @@ function CarteProfilFonctionnel({ participant, bilans }: {
         <span className="text-[12px] text-gray-400 w-[82px] flex-shrink-0 truncate">{test.label}</span>
         <div className="flex-1 min-w-0">
           <span className="text-[13px] font-semibold text-gray-800">{valDisplay}</span>
+          {extra && (
+            <div className="text-[10px] text-orange-600 leading-none mt-0.5 truncate" title={extra}>{extra}</div>
+          )}
           {normeText && (
             <div className="text-[10px] text-gray-400 leading-none mt-0.5">{normeText}</div>
           )}

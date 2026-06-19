@@ -342,7 +342,11 @@ export default function DossierPDF({
     mkRow('Équilibre unipodal D (s)', '>= 40 s',  'equilibre',  dernierBilan.equilibre.droite,       bilanInitial?.equilibre.droite ?? null,       false),
     mkRow('Équilibre unipodal G (s)', '>= 40 s',  'equilibre',  dernierBilan.equilibre.gauche,       bilanInitial?.equilibre.gauche ?? null,       false),
     mkRow('Souplesse (cm)',       '>= 10 cm',   'souplesse',  dernierBilan.souplesse.valeur,       bilanInitial?.souplesse.valeur ?? null,       false),
-    mkRow('Test 6 minutes (m)',   '>= 400 m',   'tm6',        dernierBilan.tm6.distanceMetres,     bilanInitial?.tm6.distanceMetres ?? null,     false),
+    mkRow(
+      dernierBilan.tm6.dureeReelleSecondes != null && dernierBilan.tm6.dureeReelleSecondes !== 360
+        ? `Test marche ${Math.round(dernierBilan.tm6.dureeReelleSecondes / 6) / 10} min, non standard (m)`
+        : 'Test 6 minutes (m)',
+      '>= 400 m', 'tm6', dernierBilan.tm6.distanceMetres, bilanInitial?.tm6.distanceMetres ?? null, false),
   ].filter((r): r is TestRow => r !== null) : [];
 
   const interpTextRaw = dernierBilan?.interpretationIA?.textePro
@@ -477,6 +481,10 @@ export default function DossierPDF({
                     : [r.label, r.valD, r.norme, statut];
                 })}
               />
+            )}
+
+            {!!dernierBilan.tm6.nbPauses && (
+              <Row label="Pauses pendant le TM6" value={`${dernierBilan.tm6.nbPauses} pause(s), ${dernierBilan.tm6.dureePausesSecondes ?? 0}s d'arrêt${dernierBilan.tm6.notesPauses ? ` — ${dernierBilan.tm6.notesPauses}` : ''}`} />
             )}
 
             {interpText && (

@@ -1,6 +1,6 @@
 import type { Bilan } from '../../types';
 import { useBilanDelta } from '../../hooks/useBilanDelta';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react';
 
 interface Props {
   current: Bilan;
@@ -18,7 +18,7 @@ function DeltaBadge({ isPositive, direction }: { isPositive: boolean; direction:
 export default function ComparisonTable({ current, previous }: Props) {
   const d = useBilanDelta(current, previous);
 
-  const rows = [
+  const rows: { label: string; unit: string; current: number | null; delta: typeof d.tm6Distance; warning?: string | null }[] = [
     { label: 'Équilibre D', unit: 's', current: current.equilibre.droite, delta: d.equilibreDroite },
     { label: 'Équilibre G', unit: 's', current: current.equilibre.gauche, delta: d.equilibreGauche },
     { label: 'Chair Stand 30s', unit: 'rép.', current: current.chairStand30, delta: d.chairStand30 },
@@ -26,7 +26,7 @@ export default function ComparisonTable({ current, previous }: Props) {
     { label: 'HandGrip G', unit: 'kg', current: current.handGrip.gauche, delta: d.handGripGauche },
     { label: 'TUG 3m', unit: 's', current: current.tug3m, delta: d.tug3m },
     { label: 'Souplesse', unit: 'cm', current: current.souplesse.valeur, delta: d.souplesse },
-    { label: 'TM6 Distance', unit: 'm', current: current.tm6.distanceMetres, delta: d.tm6Distance },
+    { label: 'TM6 Distance', unit: 'm', current: current.tm6.distanceMetres, delta: d.tm6Distance, warning: d.tm6DureeMismatch ? 'Durées de test différentes — comparaison indicative' : null },
     { label: 'Mémoire immédiate', unit: '/5', current: current.memoire.scoreImmediat, delta: d.memoireImmediat },
     { label: 'Mémoire différée', unit: '/5', current: current.memoire.scoreDiffere, delta: d.memoireDiffere },
   ];
@@ -45,7 +45,16 @@ export default function ComparisonTable({ current, previous }: Props) {
         <tbody>
           {rows.map((row, i) => (
             <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50">
-              <td className="py-2 px-3 font-medium text-dark">{row.label}</td>
+              <td className="py-2 px-3 font-medium text-dark">
+                <span className="flex items-center gap-1.5">
+                  {row.label}
+                  {row.warning && (
+                    <span title={row.warning}>
+                      <AlertTriangle size={13} className="text-orange-500" />
+                    </span>
+                  )}
+                </span>
+              </td>
               <td className="py-2 px-3 text-center text-gray-500">
                 {row.delta.previous !== null ? `${row.delta.previous} ${row.unit}` : '—'}
               </td>
