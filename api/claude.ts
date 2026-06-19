@@ -31,10 +31,18 @@ export default withSentry(async function handler(req: any, res: any) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY non configuré dans Vercel' });
   }
 
-  const { prompt } = req.body ?? {};
+  const { prompt, model } = req.body ?? {};
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'prompt requis' });
   }
+
+  // Modèle par défaut inchangé pour tous les appelants existants. Un appelant
+  // peut explicitement demander Sonnet pour les usages nécessitant plus de
+  // fiabilité (ex : remplissage de documents sans inventer de données).
+  const ALLOWED_MODELS = ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6'];
+  const resolvedModel = typeof model === 'string' && ALLOWED_MODELS.includes(model)
+    ? model
+    : 'claude-haiku-4-5-20251001';
 
   try {
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -45,8 +53,8 @@ export default withSentry(async function handler(req: any, res: any) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4096,
+        model: resolvedModel,
+        max_tokens: 8192,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
