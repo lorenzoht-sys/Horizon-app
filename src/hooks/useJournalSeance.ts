@@ -26,7 +26,10 @@ export function useJournalSeance() {
     const nouvelle: NoteSeance = { ...note, id: uuidv4() };
     if (supabase) {
       const { error } = await supabase.from('notes_seances').insert(noteSeanceToDb(nouvelle));
-      if (error) { console.error('Erreur ajout note séance:', error); }
+      if (error) {
+        console.error('Erreur ajout note séance:', error);
+        throw new Error(error.message);
+      }
     }
     setNotes(prev => [nouvelle, ...prev]);
     return nouvelle;

@@ -74,7 +74,7 @@ export default function NoteSeanceModal({ participantId, participantNom, seance,
     recognition.start();
   }
 
-  function handleSave() {
+  async function handleSave() {
     const data: Omit<NoteSeance, 'id'> = {
       seanceId:    seance?.id ?? '',
       participantId,
@@ -84,11 +84,16 @@ export default function NoteSeanceModal({ participantId, participantNom, seance,
       note,
       alertes,
     };
-    ajouterNote(data);
-    if (seance?.id) onMarquerRealisee?.();
-    toast.success('Note enregistrée ✅');
-    onSaved?.();
-    onClose();
+    try {
+      await ajouterNote(data);
+      if (seance?.id) onMarquerRealisee?.();
+      toast.success('Note enregistrée ✅');
+      onSaved?.();
+      onClose();
+    } catch (err) {
+      console.error('Erreur enregistrement note:', err);
+      toast.error('Erreur lors de l\'enregistrement, réessayez');
+    }
   }
 
   return (

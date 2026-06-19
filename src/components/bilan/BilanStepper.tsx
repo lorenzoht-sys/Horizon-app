@@ -59,7 +59,7 @@ const STEPS_TRIMESTRIEL  = ['Identification', 'Tests physiques', 'Endurance & M�
 
 interface Props {
   participant: Participant;
-  onSave: (bilan: BilanForm) => void;
+  onSave: (bilan: BilanForm) => Promise<void>;
   onCancel: () => void;
   brouillon?: BrouillonBilan | null;
 }
@@ -84,6 +84,8 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(
     brouillon ? new Date(brouillon.dateDerniereModif) : null
   );
+  const [finalSaveError, setFinalSaveError] = useState<string | null>(null);
+  const [isFinalSaving, setIsFinalSaving] = useState(false);
   const [praticienId, setPraticienId] = useState<string | null>(null);
 
   // Récupérer l'ID du praticien une seule fois
@@ -149,14 +151,24 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
     update({ messageClient: generateClientMessage(participant.prenom, form as Bilan, previous, []) });
   }
 
-  function handleSave() {
+  async function handleSave() {
     clearTimeout(debounceRef.current);
-    supprimerBrouillon(participant.id);
-    // Nettoyage cloud (non bloquant)
-    if (praticienId) {
-      void deleteBrouillonFromSupabase(participant.id, praticienId);
+    setIsFinalSaving(true);
+    setFinalSaveError(null);
+    try {
+      await onSave(form);
+      // Le brouillon n'est nettoyé qu'APRÈS confirmation que la sauvegarde a réussi —
+      // sinon une erreur d'enregistrement entraînerait aussi la perte du brouillon.
+      supprimerBrouillon(participant.id);
+      if (praticienId) {
+        void deleteBrouillonFromSupabase(participant.id, praticienId);
+      }
+    } catch (err) {
+      console.error('Erreur enregistrement bilan:', err);
+      setFinalSaveError('Erreur lors de l\'enregistrement, réessayez — vos données sont conservées en brouillon.');
+    } finally {
+      setIsFinalSaving(false);
     }
-    onSave(form);
   }
 
   // Sync immédiate à chaque changement d'étape
@@ -314,13 +326,18 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
         ) : (
           <button
             onClick={handleSave}
-            className="px-6 py-2.5 bg-success text-white rounded-xl font-semibold hover:bg-green-600 transition-colors flex items-center gap-2"
+            disabled={isFinalSaving}
+            className="px-6 py-2.5 bg-success text-white rounded-xl font-semibold hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Check size={16} />
-            Enregistrer le bilan
+            {isFinalSaving ? 'Enregistrement...' : 'Enregistrer le bilan'}
           </button>
         )}
       </div>
+
+      {finalSaveError && (
+        <p className="mt-3 text-sm text-red-600 text-right">{finalSaveError}</p>
+      )}
     </div>
   );
 }

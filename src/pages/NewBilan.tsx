@@ -65,7 +65,6 @@ export default function NewBilan() {
 
   async function handleSave(bilan: Omit<Bilan, 'id'>) {
     const saved = await addBilan(participant!.id, bilan);
-    supprimerBrouillon(participant!.id);
     toast.success('Bilan enregistré !');
     navigate(`/participant/${participant!.id}/bilan/${saved.id}`);
   }

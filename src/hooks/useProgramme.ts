@@ -36,14 +36,20 @@ export function useProgramme(participantId: string) {
   async function upsertProgramme(prog: Programme) {
     if (supabase) {
       const { error } = await supabase.from('programmes').upsert(programmeToDb(prog));
-      if (error) console.error('Erreur sauvegarde programme:', error);
+      if (error) {
+        console.error('Erreur sauvegarde programme:', error);
+        throw new Error(error.message);
+      }
     }
   }
 
   async function deleteProgrammeDb(id: string) {
     if (supabase) {
       const { error } = await supabase.from('programmes').delete().eq('id', id);
-      if (error) console.error('Erreur suppression programme:', error);
+      if (error) {
+        console.error('Erreur suppression programme:', error);
+        throw new Error(error.message);
+      }
     }
   }
 
@@ -59,7 +65,10 @@ export function useProgramme(participantId: string) {
     if (supabase) {
       await supabase.from('programmes').update({ actif: false }).eq('participant_id', participantId);
       const { error } = await supabase.from('programmes').upsert(programmeToDb(newProg));
-      if (error) console.error('Erreur création programme:', error);
+      if (error) {
+        console.error('Erreur création programme:', error);
+        throw new Error(error.message);
+      }
     }
     setProgrammes(prev => [...prev.map(p => ({ ...p, actif: false })), newProg]);
     return newProg;

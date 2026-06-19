@@ -230,9 +230,13 @@ export default function ClientDashboard({ participant }: Props) {
   const [tab, setTab] = useState<'progres' | 'programme' | 'historique'>('progres');
   const { programmeActif, toggleSuivi } = useProgramme(participant.id);
 
-  function handleToggleSuivi(dateISO: string, exerciceId: string, fait: boolean, ressenti?: Ressenti) {
+  async function handleToggleSuivi(dateISO: string, exerciceId: string, fait: boolean, ressenti?: Ressenti) {
     if (!programmeActif) return;
-    toggleSuivi(programmeActif.id, dateISO, { exerciceId, fait, ressenti });
+    try {
+      await toggleSuivi(programmeActif.id, dateISO, { exerciceId, fait, ressenti });
+    } catch (err) {
+      console.error('Erreur mise à jour suivi exercice:', err);
+    }
   }
 
   if (!latest) return (

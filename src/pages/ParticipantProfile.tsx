@@ -606,7 +606,7 @@ function CarteDisponibilites({
   onSave,
 }: {
   participant: Participant;
-  onSave: (data: Partial<Participant>) => void;
+  onSave: (data: Partial<Participant>) => Promise<void>;
 }) {
   const org = participant.anamnese?.organisation ?? {};
   const jours: string[] = org.joursDisponibles ?? [];
@@ -633,10 +633,15 @@ function CarteDisponibilites({
     });
   }
 
-  function handleSave() {
+  async function handleSave() {
     const newOrg = { ...org, joursDisponibles: editJours, creneauxParJour: editCreneaux };
-    onSave({ anamnese: { ...participant.anamnese, organisation: newOrg } });
-    setEditing(false);
+    try {
+      await onSave({ anamnese: { ...participant.anamnese, organisation: newOrg } });
+      setEditing(false);
+    } catch (err) {
+      console.error('Erreur sauvegarde disponibilités:', err);
+      toast.error('Erreur lors de la sauvegarde, réessayez');
+    }
   }
 
   if (!editing) {
@@ -1355,7 +1360,7 @@ export default function ParticipantProfile() {
                       <div className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-xl z-50 py-1 min-w-[210px] border border-gray-100">
                         {participant.profilHandicap && (
                           <button
-                            onClick={() => { updateParticipant(id!, { profilHandicap: undefined }); setShowProfilPicker(false); }}
+                            onClick={() => { updateParticipant(id!, { profilHandicap: undefined }).catch(err => { console.error('Erreur retrait profil:', err); toast.error('Erreur lors de la sauvegarde, réessayez'); }); setShowProfilPicker(false); }}
                             className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2"
                           >
                             ✕ Retirer le profil
@@ -1364,7 +1369,7 @@ export default function ParticipantProfile() {
                         {PROFILS_HANDICAP.map(p => (
                           <button
                             key={p.id}
-                            onClick={() => { updateParticipant(id!, { profilHandicap: p.id }); setShowProfilPicker(false); }}
+                            onClick={() => { updateParticipant(id!, { profilHandicap: p.id }).catch(err => { console.error('Erreur changement profil:', err); toast.error('Erreur lors de la sauvegarde, réessayez'); }); setShowProfilPicker(false); }}
                             className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 transition-colors ${participant.profilHandicap === p.id ? 'bg-teal-50 text-teal-800 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
                           >
                             {p.emoji} {p.label}
@@ -1874,7 +1879,16 @@ export default function ParticipantProfile() {
             </p>
             <div className="flex gap-3">
               <button
-                onClick={async () => { await deleteProgramme(programmeActif.id); setConfirmDeleteProg(false); toast.success('Programme supprimé'); }}
+                onClick={async () => {
+                  try {
+                    await deleteProgramme(programmeActif.id);
+                    setConfirmDeleteProg(false);
+                    toast.success('Programme supprimé');
+                  } catch (err) {
+                    console.error('Erreur suppression programme:', err);
+                    toast.error('Erreur lors de la suppression, réessayez');
+                  }
+                }}
                 className="flex-1 bg-red-500 text-white rounded-xl py-2.5 font-semibold text-sm hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
               >
                 <Trash2 size={14} /> Supprimer

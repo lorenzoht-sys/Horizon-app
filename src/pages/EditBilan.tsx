@@ -1,6 +1,6 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useParticipants } from '../hooks/useParticipants';
-import { supprimerBrouillon, type BrouillonBilan } from '../hooks/useBrouillonBilan';
+import type { BrouillonBilan } from '../hooks/useBrouillonBilan';
 import BilanStepper from '../components/bilan/BilanStepper';
 import PageWrapper from '../components/layout/PageWrapper';
 import { ArrowLeft, AlertTriangle } from 'lucide-react';
@@ -44,7 +44,6 @@ export default function EditBilan() {
 
   async function handleSave(updatedData: BilanForm) {
     await updateBilan(participant!.id, bilanId!, updatedData);
-    supprimerBrouillon(participant!.id); // nettoie tout brouillon auto-sauvegardé
     toast.success('Bilan mis à jour ✅');
     navigate(`/participant/${participant!.id}`);
   }

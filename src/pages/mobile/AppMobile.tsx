@@ -626,8 +626,8 @@ function NouveauBilanMobile({ onBack, onVoirFiche }: { onBack: () => void; onVoi
         </div>
         <BilanStepper
           participant={participant}
-          onSave={(bilan: Omit<Bilan, 'id'>) => {
-            addBilan(participant.id, bilan);
+          onSave={async (bilan: Omit<Bilan, 'id'>) => {
+            await addBilan(participant.id, bilan);
             toast.success('Bilan enregistré ✅');
             if (onVoirFiche) {
               onVoirFiche(participant.id);
@@ -1162,25 +1162,31 @@ function EditPatientMobile({ participant, onBack }: { participant: import('../..
   async function sauvegarder() {
     if (!form.prenom.trim() || !form.nom.trim()) { toast.error('Prénom et nom requis'); return; }
     setLoading(true);
-    await updateParticipant(participant.id, {
-      prenom: form.prenom.trim(),
-      nom: form.nom.trim(),
-      dateNaissance: form.dateNaissance || participant.dateNaissance,
-      taille: form.taille ? Number(form.taille) : undefined,
-      poids: form.poids ? Number(form.poids) : undefined,
-      telephone: form.telephone || undefined,
-      email: form.email || undefined,
-      adresseRue: form.adresseRue || undefined,
-      adresseCodePostal: form.adresseCodePostal || undefined,
-      adresseVille: form.adresseVille || undefined,
-      contexteClinic: form.contexteClinic || undefined,
-      antecedentsMedicaux: form.antecedentsMedicaux || undefined,
-      antecedentsChirurgicaux: form.antecedentsChirurgicaux || undefined,
-      allergies: form.allergies || undefined,
-    });
-    setLoading(false);
-    toast.success('Fiche mise à jour ✅');
-    onBack();
+    try {
+      await updateParticipant(participant.id, {
+        prenom: form.prenom.trim(),
+        nom: form.nom.trim(),
+        dateNaissance: form.dateNaissance || participant.dateNaissance,
+        taille: form.taille ? Number(form.taille) : undefined,
+        poids: form.poids ? Number(form.poids) : undefined,
+        telephone: form.telephone || undefined,
+        email: form.email || undefined,
+        adresseRue: form.adresseRue || undefined,
+        adresseCodePostal: form.adresseCodePostal || undefined,
+        adresseVille: form.adresseVille || undefined,
+        contexteClinic: form.contexteClinic || undefined,
+        antecedentsMedicaux: form.antecedentsMedicaux || undefined,
+        antecedentsChirurgicaux: form.antecedentsChirurgicaux || undefined,
+        allergies: form.allergies || undefined,
+      });
+      toast.success('Fiche mise à jour ✅');
+      onBack();
+    } catch (err) {
+      console.error('Erreur mise à jour fiche:', err);
+      toast.error('Erreur lors de la sauvegarde, réessayez');
+    } finally {
+      setLoading(false);
+    }
   }
 
   const inp: React.CSSProperties = {
@@ -1326,8 +1332,8 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
       </div>
       <BilanStepper
         participant={p}
-        onSave={(bilan: Omit<Bilan, 'id'>) => {
-          addBilan(p.id, bilan);
+        onSave={async (bilan: Omit<Bilan, 'id'>) => {
+          await addBilan(p.id, bilan);
           toast.success('Bilan enregistré ✅');
           setShowNewBilan(false);
         }}

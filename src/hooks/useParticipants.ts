@@ -176,7 +176,10 @@ export function useParticipants() {
     const merged = { ...current, ...data };
     if (supabase) {
       const { error } = await supabase.from('participants').update(participantToDb(merged)).eq('id', id);
-      if (error) { console.error('Erreur mise à jour participant:', error); return; }
+      if (error) {
+        console.error('Erreur mise à jour participant:', error);
+        throw new Error(error.message);
+      }
       const addressChanged = 'adresseRue' in data || 'adresseVille' in data || 'adresseCodePostal' in data;
       if (addressChanged) {
         const rue = data.adresseRue ?? current.adresseRue ?? '';
@@ -203,7 +206,10 @@ export function useParticipants() {
     const newBilan: Bilan = { ...bilan, id: uuidv4() };
     if (supabase) {
       const { error } = await supabase.from('bilans').insert(bilanToDb(participantId, newBilan));
-      if (error) { console.error('Erreur ajout bilan:', error); return newBilan; }
+      if (error) {
+        console.error('Erreur ajout bilan:', error);
+        throw new Error(error.message);
+      }
     }
     setParticipants(prev => prev.map(p =>
       p.id === participantId ? { ...p, bilans: [...p.bilans, newBilan] } : p
@@ -217,7 +223,10 @@ export function useParticipants() {
     const merged = { ...current, ...data };
     if (supabase) {
       const { error } = await supabase.from('bilans').update(bilanToDb(participantId, merged)).eq('id', bilanId);
-      if (error) { console.error('Erreur mise à jour bilan:', error); return; }
+      if (error) {
+        console.error('Erreur mise à jour bilan:', error);
+        throw new Error(error.message);
+      }
     }
     setParticipants(prev => prev.map(p =>
       p.id === participantId

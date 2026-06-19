@@ -55,7 +55,10 @@ export function useCompteRenduSeance(participantId: string) {
       const { error } = await supabase
         .from('comptes_rendus_seances')
         .insert(compteRenduToDb(nouveau));
-      if (error) console.error('Erreur sauvegarde compte rendu:', error);
+      if (error) {
+        console.error('Erreur sauvegarde compte rendu:', error);
+        throw new Error(error.message);
+      }
     }
 
     setCompteRendus(prev => {

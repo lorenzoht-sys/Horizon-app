@@ -192,10 +192,15 @@ export default function ParticipantProfileMobile() {
     } finally { setExportingDossier(false); }
   }
 
-  function handleEditSubmit(data: Omit<Participant, 'id' | 'token' | 'bilans'>) {
-    updateParticipant(participant!.id, data);
-    setShowEdit(false);
-    toast.success('Fiche mise à jour !');
+  async function handleEditSubmit(data: Omit<Participant, 'id' | 'token' | 'bilans'>) {
+    try {
+      await updateParticipant(participant!.id, data);
+      setShowEdit(false);
+      toast.success('Fiche mise à jour !');
+    } catch (err) {
+      console.error('Erreur mise à jour fiche:', err);
+      toast.error('Erreur lors de la sauvegarde, réessayez');
+    }
   }
 
   // Fused journal entries sorted by date desc
