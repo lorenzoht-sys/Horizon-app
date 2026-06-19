@@ -34,6 +34,13 @@ export interface Bilan {
     spo2Apres: number | null;
     spo22min: number | null;
     borgRPE: number | null;
+    dureeMode: 'fixe' | 'libre' | null;
+    dureeCibleSecondes: number | null;
+    dureeReelleSecondes: number | null;
+    nbPauses: number | null;
+    dureePausesSecondes: number | null;
+    notesPauses: string;
+    pausesDetail?: { debutSecondes: number; dureeSecondes: number }[];
   };
 
   memoire: {
