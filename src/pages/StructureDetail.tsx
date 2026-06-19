@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, useLocation, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Copy, Mail, RefreshCw, Check, Trash2 } from 'lucide-react';
+import { ArrowLeft, Copy, Mail, RefreshCw, Check, Trash2, FileText } from 'lucide-react';
 import { useStructures } from '../hooks/useStructures';
 import { useParticipants } from '../hooks/useParticipants';
 import { useAgenda } from '../hooks/useAgenda';
@@ -11,7 +11,7 @@ import { dbToStructure } from '../lib/mappers';
 import PageWrapper from '../components/layout/PageWrapper';
 import ParticipantCard from '../components/participant/ParticipantCard';
 import { toast } from 'sonner';
-import type { Structure } from '../types';
+import type { Participant, Structure } from '../types';
 import jsPDF from 'jspdf';
 import { cleanTextPdf } from '../utils/pdfText';
 
@@ -22,6 +22,10 @@ function nomMois(m: number, y: number) { return `${MOIS_LONGS[m - 1]} ${y}`; }
 function premierJour(y: number, m: number) { return `${y}-${String(m).padStart(2, '0')}-01`; }
 function dernierJour(y: number, m: number) { const d = new Date(y, m, 0); return d.toISOString().slice(0, 10); }
 function moisPrec(y: number, m: number) { return m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 }; }
+
+// Chargement différé : pdfjs-dist/mammoth/docx sont lourds, à ne charger
+// que si Pierre clique réellement sur "Générer un compte rendu".
+const GenererCompteRenduModal = lazy(() => import('../components/structures/GenererCompteRenduModal'));
 
 export default function StructureDetail() {
   const { id } = useParams<{ id: string }>();
@@ -55,6 +59,7 @@ export default function StructureDetail() {
   const [genLoading, setGenLoading] = useState(false);
   const [modalEnvoi, setModalEnvoi] = useState<string | null>(null);
   const [dateEnvoi, setDateEnvoi] = useState(new Date().toISOString().slice(0, 10));
+  const [crPatient, setCrPatient] = useState<Participant | null>(null);
 
   const patientsStr = participants.filter(p => p.structureId === id);
 
@@ -162,7 +167,15 @@ export default function StructureDetail() {
               <p className="text-sm text-gray-400">Aucun patient rattaché à cette structure.</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {patientsStr.map(p => <ParticipantCard key={p.id} participant={p} />)}
+                {patientsStr.map(p => (
+                  <div key={p.id} className="flex flex-col gap-2">
+                    <ParticipantCard participant={p} />
+                    <button type="button" onClick={() => setCrPatient(p)}
+                      className="flex items-center justify-center gap-1.5 text-xs font-semibold text-primary border border-primary/30 hover:bg-primary/5 rounded-lg py-1.5 transition-colors">
+                      <FileText size={12} /> Générer un compte rendu
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -423,6 +436,12 @@ export default function StructureDetail() {
             </div>
           </div>
         </div>
+      )}
+
+      {crPatient && structure && (
+        <Suspense fallback={null}>
+          <GenererCompteRenduModal patient={crPatient} structure={structure} onClose={() => setCrPatient(null)} />
+        </Suspense>
       )}
     </PageWrapper>
   );
