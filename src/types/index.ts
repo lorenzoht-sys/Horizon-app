@@ -65,6 +65,7 @@ export interface Bilan {
     score: number | null;
     notes: string;
   };
+  tinetti?: TinettiData;
   notesProfessionnelles: string;
   objectifsSuivants: string;
   pointsVigilance: string;
@@ -112,7 +113,41 @@ export type TagPatient = 'senior' | 'post_op' | 'chronique' | 'adulte_blessure';
 export type ProfilHandicap = 'fauteuil_roulant' | 'avc_hemiplegie' | 'parkinson' | 'sep';
 export type ProfilPathologie = 'obesite' | 'diabete' | 'prothese_hanche' | 'prothese_genou';
 
-export type TestKey = 'equilibre' | 'chairStand' | 'handGrip' | 'tug' | 'souplesse' | 'tm6' | 'memoire' | 'apley';
+export type TestKey = 'equilibre' | 'chairStand' | 'handGrip' | 'tug' | 'souplesse' | 'tm6' | 'memoire' | 'apley' | 'tinetti';
+
+// ============================================================
+// TEST DE TINETTI (POMA) — équilibre & marche
+// ============================================================
+
+export interface TinettiEquilibre {
+  assis: 0 | 1 | null;
+  leverChaise: 0 | 1 | 2 | null;
+  tentativesLever: 0 | 1 | 2 | null;
+  deboutImmediat: 0 | 1 | 2 | null;
+  deboutStable: 0 | 1 | 2 | null;
+  pousseeSternale: 0 | 1 | 2 | null;
+  yeuxFermes: 0 | 1 | null;
+  pivotContinuite: 0 | 1 | null;
+  pivotStabilite: 0 | 1 | null;
+  sasseoir: 0 | 1 | 2 | null;
+}
+
+export interface TinettiMarche {
+  initiation: 0 | 1 | null;
+  pasDroit: 0 | 1 | 2 | null;
+  pasGauche: 0 | 1 | 2 | null;
+  symetrie: 0 | 1 | null;
+  continuite: 0 | 1 | null;
+  trajectoire: 0 | 1 | 2 | null;
+  tronc: 0 | 1 | 2 | null;
+  baseMarche: 0 | 1 | null;
+}
+
+export interface TinettiData {
+  equilibre: TinettiEquilibre;
+  marche: TinettiMarche;
+  notes: string;
+}
 
 export type TypeQuestion = 'texte' | 'note' | 'oui_non';
 

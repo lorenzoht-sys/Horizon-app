@@ -14,6 +14,7 @@ export const NORMES_SCORING: Record<string, NormeScoring> = {
   tm6Distance:       { note1: 200, note2: 300, note3: 400, note4: 500, lowerIsBetter: false },
   memoire:           { note1: 3,   note2: 5,   note3: 7,   note4: 9,   lowerIsBetter: false },
   apley:             { note1: 1.49, note2: 2.49, note3: 3.49, note4: 4.0, lowerIsBetter: false },
+  tinetti:           { note1: 18,   note2: 18,   note3: 23,   note4: 23,  lowerIsBetter: false },
 };
 
 // ── Durées disponibles pour le TM6 en mode "durée fixe" (secondes) ───────
