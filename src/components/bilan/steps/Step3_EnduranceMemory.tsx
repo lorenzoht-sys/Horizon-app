@@ -23,7 +23,7 @@ import { useBilanDelta } from '../../../hooks/useBilanDelta';
 import { TEST_LABELS } from '../../../data/profiles';
 import { Plus } from 'lucide-react';
 import DuboisMISWidget from '../DuboisMISWidget';
-import ChronoWidget from '../ChronoWidget';
+import Tm6ChronoWidget, { DUREES_FIXES } from '../Tm6ChronoWidget';
 
 type BilanForm = Omit<Bilan, 'id'>;
 
@@ -60,6 +60,8 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
   const [extras, setExtras] = useState<TestKey[]>([]);
   const tm6 = form.tm6;
   const setTm6 = (patch: Partial<typeof tm6>) => update({ tm6: { ...tm6, ...patch } });
+  const dureeModeEff: 'fixe' | 'libre' = tm6.dureeMode ?? 'fixe';
+  const dureeEffectiveSecondes = tm6.dureeReelleSecondes ?? (dureeModeEff === 'fixe' ? (tm6.dureeCibleSecondes ?? 360) : null);
   const mem = form.memoire;
   const setMem = (patch: Partial<typeof mem>) => update({ memoire: { ...mem, ...patch } });
 
@@ -111,21 +113,87 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
             </div>
           </div>
 
+          {/* Durée du test */}
+          <div className="mb-4">
+            <p className="text-xs font-medium text-gray-600 mb-2">Durée du test</p>
+            <div className="flex gap-2 mb-2">
+              {([
+                ['fixe', 'Durée fixe'],
+                ['libre', 'Durée libre'],
+              ] as const).map(([val, label]) => (
+                <button key={val} type="button"
+                  onClick={() => setTm6({ dureeMode: val, dureeCibleSecondes: val === 'fixe' ? (tm6.dureeCibleSecondes ?? 360) : tm6.dureeCibleSecondes })}
+                  className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-medium border transition-colors ${
+                    dureeModeEff === val
+                      ? 'bg-primary text-white border-primary'
+                      : 'border-gray-200 text-gray-600 hover:border-primary/50 hover:bg-gray-50'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {dureeModeEff === 'fixe' && (
+              <select value={tm6.dureeCibleSecondes ?? 360}
+                onChange={e => setTm6({ dureeCibleSecondes: Number(e.target.value) })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10">
+                {DUREES_FIXES.map(s => (
+                  <option key={s} value={s}>{s / 60} min{s === 360 ? ' (standard)' : ''}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Mention test non standard */}
+          {dureeEffectiveSecondes != null && dureeEffectiveSecondes !== 360 && (
+            <p className="text-xs text-orange-700 bg-orange-50 border border-orange-100 rounded-lg px-3 py-2 mb-4">
+              Test non standard ({Math.round(dureeEffectiveSecondes / 6) / 10} min) — comparaison aux normes indicative uniquement.
+            </p>
+          )}
+
           {/* Chrono */}
           <div className="mb-4">
-            <p className="text-xs font-medium text-gray-600 mb-2">Chronomètre 6 minutes</p>
-            <ChronoWidget mode="down-6min" />
+            <p className="text-xs font-medium text-gray-600 mb-2">Chronomètre</p>
+            <Tm6ChronoWidget
+              dureeMode={dureeModeEff}
+              dureeCibleSecondes={tm6.dureeCibleSecondes ?? 360}
+              onTerminer={result => setTm6({
+                dureeReelleSecondes: result.dureeReelleSecondes,
+                nbPauses: result.nbPauses,
+                dureePausesSecondes: result.dureePausesSecondes,
+                pausesDetail: result.pausesDetail,
+              })}
+            />
           </div>
 
           {/* Distance ou Pas */}
           <div className="mb-4">
             {(tm6.mode ?? 'standard') === 'marche_sur_place' ? (
-              <Num label="Nombre de pas (en 6 min)" value={tm6.repetitions ?? null} unit="pas" min={0} max={2000}
+              <Num label="Nombre de pas" value={tm6.repetitions ?? null} unit="pas" min={0} max={2000}
                 onChange={v => setTm6({ repetitions: v })} />
             ) : (
               <Num label="Distance parcourue" value={tm6.distanceMetres} unit="m" min={0} max={1000}
                 onChange={v => setTm6({ distanceMetres: v })} />
             )}
+          </div>
+
+          {/* Pauses pendant le test */}
+          <div className="mb-4">
+            <p className="text-xs font-medium text-gray-600 mb-2">
+              Pauses pendant le test {tm6.pausesDetail && tm6.pausesDetail.length > 0 && (
+                <span className="text-gray-400">(saisi automatiquement par le chrono, modifiable)</span>
+              )}
+            </p>
+            <div className="grid grid-cols-2 gap-3 mb-2">
+              <Num label="Nombre de pauses" value={tm6.nbPauses} min={0} max={20}
+                onChange={v => setTm6({ nbPauses: v })} />
+              <Num label="Durée totale des pauses" value={tm6.dureePausesSecondes} unit="s" min={0} max={3600}
+                onChange={v => setTm6({ dureePausesSecondes: v })} />
+            </div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Notes pauses</label>
+            <input type="text" value={tm6.notesPauses ?? ''}
+              onChange={e => setTm6({ notesPauses: e.target.value })}
+              placeholder="ex : arrêt à 3min30 pour dyspnée"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10" />
           </div>
 
           {/* Grille 3 colonnes AVANT / JUSTE APRÈS / 2 MIN APRÈS */}
