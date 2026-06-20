@@ -776,6 +776,12 @@ const BIEN_ETRE_LABEL: Record<number, string> = {
 function labelBorg(v: number): string { return BORG_LABEL[v] ?? `${v}`; }
 function labelBienEtre(v: number): string { return BIEN_ETRE_LABEL[v] ?? `${v}`; }
 
+// Normalise une date Supabase ("YYYY-MM-DD" pour une colonne DATE, mais
+// potentiellement "YYYY-MM-DDTHH:mm:ss+00:00" pour une colonne TIMESTAMP) en
+// "YYYY-MM-DD" — seances_patient ayant été créée hors migration (Studio), son
+// type de colonne réel n'est pas garanti identique à celui de retours_seance.
+function dateOnly(s: string): string { return s.slice(0, 10); }
+
 // ── TabsSection ───────────────────────────────────────────────────────────────
 
 type TabId = 'bilans' | 'contrats' | 'assiduite' | 'rappels';
@@ -1788,7 +1794,7 @@ export default function ParticipantProfile() {
                     const dateLabel = new Date(sp.dateSeance + 'T12:00').toLocaleDateString('fr-FR', {
                       weekday: 'short', day: 'numeric', month: 'short',
                     });
-                    const retour = retours.find(r => r.date === sp.dateSeance);
+                    const retour = retours.find(r => dateOnly(r.date) === dateOnly(sp.dateSeance));
                     return (
                       <div key={sp.id} className="flex items-start gap-2.5 rounded-lg border border-gray-100 px-3 py-2.5">
                         <span className="text-sm flex-shrink-0 mt-0.5">{emoji}</span>
