@@ -103,6 +103,15 @@ clique **Run** :
 11. `supabase/migrations/20260619_tm6_pauses_duree.sql`
 12. `supabase/migrations/20260619_tinetti_bilans.sql`
 13. `supabase/migrations/20260619_templates_structure.sql`
+14. `supabase/migrations/20260620_consolidation_seances_patient.sql` — documente
+    enfin (CREATE TABLE) les 5 tables "programme V2" jamais versionnées
+    (`seances_patient`, `exercices_realises`, `programme_seances`,
+    `programme_planning`, `programme_exercices`) ; à appliquer même si ces
+    tables existent déjà (no-op garanti par `IF NOT EXISTS`), idéalement
+    avant le fichier 2 (`20260613_programme_v2_rls.sql`) sur une
+    réinstallation qui ne repartirait pas du dump de l'étape 2.1.
+15. `supabase/migrations/20260620_seances_autonomes.sql`
+16. `supabase/migrations/20260620_tests_etalons_exercices_libres.sql`
 
 Tous ces fichiers sont **idempotents** (`CREATE TABLE IF NOT EXISTS`,
 `DROP POLICY IF EXISTS` puis `CREATE POLICY`, `ADD COLUMN IF NOT EXISTS`,
@@ -158,6 +167,9 @@ appliquer manuellement.
 20260619_tm6_pauses_duree.sql                    ← Étape 2.2 (11)
 20260619_tinetti_bilans.sql                      ← Étape 2.2 (12)
 20260619_templates_structure.sql                 ← Étape 2.2 (13)
+20260620_consolidation_seances_patient.sql       ← Étape 2.2 (14)
+20260620_seances_autonomes.sql                   ← Étape 2.2 (15)
+20260620_tests_etalons_exercices_libres.sql      ← Étape 2.2 (16)
 ```
 \* `20260613_audit_logs.sql` et `20260613_create_bilans_brouillons.sql`
 n'ont pas de dépendance d'ordre entre eux ni avec les autres `20260613_*` —
