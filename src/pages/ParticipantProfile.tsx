@@ -9,11 +9,14 @@ import { differenceInDays } from 'date-fns';
 import {
   ArrowLeft, Pencil, FileText, TrendingUp, Share2,
   Download, Trash2, Dumbbell, NotebookPen, Calendar, MapPin,
-  RefreshCw, ClipboardList, Mic, ChevronDown, ChevronUp, Save,
+  RefreshCw, ClipboardList, Mic, ChevronDown, ChevronUp, Save, X,
 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
 import { useProgrammeV2 } from '../hooks/useProgrammeV2';
+import { useActivitesHorsProgramme } from '../hooks/useActivitesHorsProgramme';
+import { TESTS_ETALONS } from '../data/testsEtalons';
+import { loadExercices } from '../data/exercices';
 import { useContrats } from '../hooks/useContrats';
 import { useStructures } from '../hooks/useStructures';
 import { useAgenda } from '../hooks/useAgenda';
@@ -35,7 +38,7 @@ import { getSedProfil, getFSSProfil } from '../components/bilan/TestsAutonomie';
 import { useRappelPreferences, type RappelPreferences } from '../hooks/useRappelPreferences';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
-import type { Bilan, Participant, Contrat, Seance, ProfilHandicap } from '../types';
+import type { Bilan, Participant, Contrat, Seance, ProfilHandicap, Exercice } from '../types';
 import { getContreIndications, getTestsAutonomie, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../lib/anamnese';
 import type { CompteRenduSeance } from '../types/seance';
 
@@ -784,7 +787,7 @@ function dateOnly(s: string): string { return s.slice(0, 10); }
 
 // ── TabsSection ───────────────────────────────────────────────────────────────
 
-type TabId = 'bilans' | 'contrats' | 'assiduite' | 'rappels';
+type TabId = 'bilans' | 'contrats' | 'assiduite' | 'activites' | 'rappels';
 
 // ── Types assiduité ───────────────────────────────────────────────────────────
 
@@ -836,6 +839,202 @@ function TabsSection({ activeTab, setActiveTab, tabs, children }: {
       {/* Tab content */}
       <div className="p-5">
         {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Activités hors programme (tests étalons & exercices libres) ───────────────
+// Complément ponctuel au programme structuré existant. Rien n'est visible
+// côté patient sans activation explicite ici, pour CE patient précisément.
+
+function SectionActivitesHorsProgramme({ participant, hook }: {
+  participant: Participant;
+  hook: ReturnType<typeof useActivitesHorsProgramme>;
+}) {
+  const {
+    loading, testsActivations, testsResultats,
+    exercicesActivations, exercicesValidations,
+    toggleTestEtalon, assignerExerciceLibre, toggleExerciceLibre,
+  } = hook;
+  const [confirmActivation, setConfirmActivation] = useState<string | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
+
+  if (loading) return <div className="text-center py-12 text-gray-400">Chargement…</div>;
+
+  return (
+    <div className="space-y-6">
+      {/* Tests étalons chronométrés */}
+      <div>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-3">
+          Tests étalons chronométrés
+        </div>
+        <div className="space-y-2">
+          {TESTS_ETALONS.map(test => {
+            const actif = testsActivations[test.id] ?? false;
+            const resultats = testsResultats.filter(r => r.testId === test.id).sort((a, b) => a.dateTest.localeCompare(b.dateTest));
+            const chartData = resultats.map(r => ({
+              date: new Date(r.dateTest + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+              valeur: r.valeur,
+            }));
+            const pendingConfirm = confirmActivation === test.id;
+            return (
+              <div key={test.id} className="rounded-xl border border-gray-200/70 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-[14px] text-gray-800">{test.nom}</div>
+                    <div className="text-[12px] text-gray-400">{test.dureeSecondes}s · {test.unite}</div>
+                  </div>
+                  {!pendingConfirm && (
+                    <button
+                      onClick={() => actif ? toggleTestEtalon(test.id, false) : setConfirmActivation(test.id)}
+                      className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border ${actif ? 'bg-[#DCFCE7] text-[#166534] border-[#BBF7D0]' : 'bg-gray-100 text-gray-600 border-gray-200'}`}
+                    >
+                      {actif ? 'Activé' : 'Désactivé'}
+                    </button>
+                  )}
+                </div>
+                {pendingConfirm && (
+                  <div className="mt-3 rounded-lg bg-[#FFF7E6] border border-[#FDE68A] p-3 text-[12px] text-[#92400E]">
+                    ⚠️ Vérifiez l'absence de contre-indication chez {participant.prenom} avant d'activer ce test physique.
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => { void toggleTestEtalon(test.id, true); setConfirmActivation(null); }}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white"
+                        style={{ background: 'var(--color-teal)' }}
+                      >
+                        Activer
+                      </button>
+                      <button onClick={() => setConfirmActivation(null)} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200">
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {chartData.length >= 2 ? (
+                  <div className="mt-3">
+                    <ResponsiveContainer width="100%" height={120}>
+                      <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9CA3AF' }} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} tickLine={false} axisLine={false} />
+                        <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }} />
+                        <Line type="monotone" dataKey="valeur" stroke="var(--color-teal)" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : resultats.length > 0 && (
+                  <div className="mt-2 text-[12px] text-gray-500">
+                    Dernier résultat : {resultats[resultats.length - 1].valeur} {test.unite}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Exercices libres hors programme */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+            Exercices libres hors programme
+          </div>
+          <button
+            onClick={() => setShowPicker(true)}
+            className="text-xs font-medium text-primary border border-primary/30 hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            + Assigner un exercice
+          </button>
+        </div>
+        {exercicesActivations.length === 0 ? (
+          <div className="text-[13px] text-gray-400">Aucun exercice libre assigné pour le moment.</div>
+        ) : (
+          <div className="space-y-2">
+            {exercicesActivations.map(ex => {
+              const dernier = exercicesValidations
+                .filter(v => v.exerciceId === ex.exerciceId && v.fait)
+                .sort((a, b) => b.date.localeCompare(a.date))[0];
+              return (
+                <div key={ex.id} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200/70 p-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-[14px] text-gray-800">{ex.nom}</div>
+                    <div className="text-[12px] text-gray-400">
+                      {dernier
+                        ? `Dernière fois fait : ${new Date(dernier.date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`
+                        : 'Jamais marqué fait'}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => toggleExerciceLibre(ex.exerciceId, !ex.actif)}
+                    className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border ${ex.actif ? 'bg-[#DCFCE7] text-[#166534] border-[#BBF7D0]' : 'bg-gray-100 text-gray-600 border-gray-200'}`}
+                  >
+                    {ex.actif ? 'Activé' : 'Désactivé'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {showPicker && (
+        <PickerExerciceLibreModal
+          onClose={() => setShowPicker(false)}
+          onPick={async ex => { await assignerExerciceLibre(ex); setShowPicker(false); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function PickerExerciceLibreModal({ onClose, onPick }: {
+  onClose: () => void;
+  onPick: (ex: Exercice) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const allExercices = useMemo(() => loadExercices(), []);
+  const filtered = useMemo(() => allExercices.filter(ex => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return ex.nom.toLowerCase().includes(q) || (ex.description ?? '').toLowerCase().includes(q);
+  }), [allExercices, search]);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[1200] flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-[480px] max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+          <div className="font-semibold text-[15px] text-[#0D2B2B]">Assigner un exercice libre</div>
+          <button onClick={onClose} className="text-gray-400"><X size={18} /></button>
+        </div>
+        <div className="p-4 border-b border-gray-100 flex-shrink-0">
+          <input
+            autoFocus
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher un exercice…"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none"
+          />
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {filtered.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-sm">Aucun exercice correspondant</div>
+          ) : filtered.map(ex => (
+            <div key={ex.id} className="flex items-center justify-between gap-3 border border-gray-100 rounded-lg p-2.5">
+              <div className="min-w-0">
+                <div className="text-[13px] font-medium text-gray-800">{ex.nom}</div>
+                <div className="text-[11px] text-gray-400 truncate">{ex.description}</div>
+              </div>
+              <button
+                onClick={() => onPick(ex)}
+                className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg text-white"
+                style={{ background: 'var(--color-teal)' }}
+              >
+                Assigner
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -982,6 +1181,7 @@ export default function ParticipantProfile() {
   const { participants, updateParticipant, deleteParticipant, deleteBilan, geocodeParticipant } = useParticipants();
   const { programmeActif, deleteProgramme } = useProgramme(id ?? '');
   const { programmes: programmesV2, seancesAutonomesStats } = useProgrammeV2(id ?? '');
+  const activitesHorsProgramme = useActivitesHorsProgramme(id ?? '');
   const { contrats } = useContrats();
   const { structures } = useStructures();
   const { seances } = useAgenda();
@@ -1158,6 +1358,7 @@ export default function ParticipantProfile() {
     { id: 'bilans',    label: 'Historique bilans',   count: participant.bilans.length },
     { id: 'contrats',  label: 'Contrats de suivi',   count: contratsCount },
     { id: 'assiduite', label: alerteRessentis ? '📊 Assiduité ⚠' : '📊 Assiduité', count: seancesStats.length > 0 ? seancesStats.length : undefined },
+    { id: 'activites', label: '🎯 Activités' },
     { id: 'rappels',   label: '🔔 Rappels' },
   ];
 
@@ -1831,6 +2032,9 @@ export default function ParticipantProfile() {
             </div>
           );
         })()}
+        {activeTab === 'activites' && (
+          <SectionActivitesHorsProgramme participant={participant} hook={activitesHorsProgramme} />
+        )}
         {activeTab === 'rappels' && (
           <SectionRappelsPatient participantId={participant.id} />
         )}
