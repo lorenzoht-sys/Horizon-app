@@ -834,10 +834,14 @@ interface ExState {
 function ModeSeance({
   seanceActive,
   token,
+  objectifSeancesAutonomes,
+  seancesAutonomesRealisees,
   onTermine,
 }: {
   seanceActive: SeanceActive;
   token: string;
+  objectifSeancesAutonomes?: number;
+  seancesAutonomesRealisees: number;
   onTermine: () => void;
 }) {
   const { seance, progId } = seanceActive;
@@ -851,7 +855,7 @@ function ModeSeance({
   const [showFin, setShowFin] = useState(false);
   const [commentaireGlobal, setCommentaireGlobal] = useState('');
   const [saving, setSaving] = useState(false);
-  const [erreurSauvegarde, setErreurSauvegarde] = useState(false);
+  const [erreurSauvegarde, setErreurSauvegarde] = useState<string | null>(null);
   const [startTime] = useState(() => Date.now());
   const [showRetour, setShowRetour] = useState(false);
   const [savedSeanceId, setSavedSeanceId] = useState<string | null>(null);
@@ -881,7 +885,7 @@ function ModeSeance({
 
   async function sauvegarder() {
     setSaving(true);
-    setErreurSauvegarde(false);
+    setErreurSauvegarde(null);
     try {
       const total = exercices.length;
       const statut = realises === total ? 'terminee' : 'partielle';
@@ -901,7 +905,15 @@ function ModeSeance({
         })),
       });
 
-      if (!result.ok) { setErreurSauvegarde(true); setSaving(false); return; }
+      if (!result.ok) {
+        setErreurSauvegarde(result.error ?? "L'enregistrement a échoué (problème de connexion). Vos réponses n'ont pas été perdues : réessayez.");
+        setSaving(false);
+        return;
+      }
+      if (objectifSeancesAutonomes) {
+        const nb = Math.min(seancesAutonomesRealisees + 1, objectifSeancesAutonomes);
+        toast.success(`Séance autonome enregistrée : ${nb}/${objectifSeancesAutonomes}, continuez !`);
+      }
       setSavedSeanceId(result.seancePatientId ?? null);
       setShowRetour(true); // Proposer le formulaire de ressenti — séance déjà enregistrée
     } finally {
@@ -1055,6 +1067,15 @@ function ModeSeance({
           </div>
         )}
 
+        {objectifSeancesAutonomes && (
+          <div style={{ width: '100%', marginBottom: 20, background: '#F0FBFB', border: '1px solid rgba(43,191,191,0.25)', borderRadius: 12, padding: '12px 14px' }}>
+            <div style={{ fontSize: 13, color: C.dark }}>
+              🏃 En validant, cette séance comptera dans votre progression autonome :{' '}
+              <strong>{Math.min(seancesAutonomesRealisees + 1, objectifSeancesAutonomes)}/{objectifSeancesAutonomes}</strong>
+            </div>
+          </div>
+        )}
+
         {/* Commentaire global */}
         <div style={{ width: '100%', marginBottom: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: C.dark, marginBottom: 8 }}>
@@ -1071,7 +1092,7 @@ function ModeSeance({
 
         {erreurSauvegarde && (
           <div style={{ width: '100%', background: '#FFF5F5', border: '1px solid #FECACA', borderRadius: 12, padding: '12px 16px', fontSize: 13, color: '#B91C1C', marginBottom: 12, lineHeight: 1.5 }}>
-            😕 L'enregistrement a échoué (problème de connexion). Vos réponses n'ont pas été perdues : réessayez.
+            😕 {erreurSauvegarde}
           </div>
         )}
 
@@ -1214,11 +1235,12 @@ function ModeSeance({
 
 // ── ÉCRAN 3 — Programme ───────────────────────────────────────────────────────
 
-function EcranProgramme({ participant, programmes, programmesV2, historiqueSeances, token }: {
+function EcranProgramme({ participant, programmes, programmesV2, historiqueSeances, seancesAutonomesCount, token }: {
   participant: Participant;
   programmes: Programme[];
   programmesV2: ProgrammeV2[];
   historiqueSeances: SeancePatientRecord[];
+  seancesAutonomesCount: Record<string, number>;
   token: string;
 }) {
   const [selectedProgId, setSelectedProgId] = useState<string | null>(null);
@@ -1256,10 +1278,13 @@ function EcranProgramme({ participant, programmes, programmesV2, historiqueSeanc
 
   // Mode séance plein écran
   if (modeSeance) {
+    const progActif = programmesV2.find(p => p.id === modeSeance.progId);
     return (
       <ModeSeance
         seanceActive={modeSeance}
         token={token}
+        objectifSeancesAutonomes={progActif?.objectifSeancesAutonomes}
+        seancesAutonomesRealisees={seancesAutonomesCount[modeSeance.progId] ?? 0}
         onTermine={() => setModeSeance(null)}
       />
     );
@@ -1310,6 +1335,21 @@ function EcranProgramme({ participant, programmes, programmesV2, historiqueSeanc
               💬 "{selectedProg.messageMotivation}"
             </div>
           )}
+          {selectedProg.objectifSeancesAutonomes && (() => {
+            const nb = seancesAutonomesCount[selectedProg.id] ?? 0;
+            const pct = Math.min(100, Math.round((nb / selectedProg.objectifSeancesAutonomes) * 100));
+            return (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 6 }}>
+                  <span>🏃 Séances autonomes</span>
+                  <span style={{ fontWeight: 700, color: C.teal }}>{nb} / {selectedProg.objectifSeancesAutonomes}</span>
+                </div>
+                <div style={{ height: 6, background: 'rgba(255,255,255,0.15)', borderRadius: 6, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${pct}%`, background: C.teal, borderRadius: 6, transition: 'width 0.5s ease' }} />
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Planning semaine */}
@@ -1833,6 +1873,7 @@ export default function EspacePatient() {
   const [programmesV2, setProgrammesV2] = useState<ProgrammeV2[]>([]);
   const [documentsPatient, setDocumentsPatient] = useState<{ id: string; titre: string; contenu: string; date_creation: string }[]>([]);
   const [seancesPatient, setSeancesPatient]     = useState<SeancePatientRecord[]>([]);
+  const [seancesAutonomesCount, setSeancesAutonomesCount] = useState<Record<string, number>>({});
   const [tab, setTab]                   = useState<Tab>('accueil');
 
   useEffect(() => {
@@ -1923,11 +1964,14 @@ export default function EspacePatient() {
             createdAt: (progRow.created_at as string | null) ?? (progRow.date_creation as string | null) ?? '',
             seances: progSeances,
             planning: progPlanning,
+            objectifSeancesAutonomes: (progRow.objectif_seances_autonomes as number | null) ?? undefined,
           } as ProgrammeV2;
         });
 
         setProgrammesV2(v2Programmes);
       }
+
+      setSeancesAutonomesCount(data.seancesAutonomesCount ?? {});
 
       setDocumentsPatient(data.documentsPatient);
 
@@ -2024,7 +2068,7 @@ export default function EspacePatient() {
         )}
         {tab === 'progres' && <EcranProgres participant={participant} bilans={bilans} />}
         {tab === 'programme' && (
-          <EcranProgramme participant={participant} programmes={programmes} programmesV2={programmesV2} historiqueSeances={seancesPatient} token={token} />
+          <EcranProgramme participant={participant} programmes={programmes} programmesV2={programmesV2} historiqueSeances={seancesPatient} seancesAutonomesCount={seancesAutonomesCount} token={token} />
         )}
         {tab === 'documents' && (
           <EcranDocuments bilans={bilans} participant={participant} programmeActif={programmes.find(p => p.actif) ?? null} documentsPatient={documentsPatient} />
