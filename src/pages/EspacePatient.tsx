@@ -248,7 +248,7 @@ function SectionRappels({ token }: { token: string }) {
           🔔 Activer les rappels
         </div>
         <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, marginBottom: 10 }}>
-          Recevez une notification avant vos séances et pour ne pas oublier vos exercices.
+          Recevez une notification avant vos séances et le matin des jours où vous en avez une.
         </div>
         <button onClick={activer} disabled={enCours} style={{
           width: '100%', padding: '11px', background: C.teal, color: 'white',

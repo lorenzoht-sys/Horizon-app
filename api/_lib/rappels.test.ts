@@ -4,7 +4,8 @@ import {
   resoudrePrefs,
   dateHeureParisVersUTC,
   seanceDansLaFenetreDeRappel,
-  doitRelancerExercices,
+  heureParisCivile,
+  doitEnvoyerRappelJourSeance,
 } from './rappels.js';
 
 describe('resoudrePrefs', () => {
@@ -13,23 +14,23 @@ describe('resoudrePrefs', () => {
   });
 
   it('utilise les réglages globaux du praticien si pas de surcharge patient', () => {
-    const global = { rappel_seance_actif: false, rappel_seance_delai_heures: 4, relance_exercices_actif: true, relance_exercices_seuil_jours: 5 };
+    const global = { rappel_seance_actif: false, rappel_seance_delai_heures: 4, rappel_jour_seance_actif: true, rappel_jour_seance_heure: '09:00:00' };
     expect(resoudrePrefs(undefined, global)).toEqual({
       rappelSeanceActif: false,
       rappelSeanceDelaiHeures: 4,
-      relanceExercicesActif: true,
-      relanceExercicesSeuilJours: 5,
+      rappelJourSeanceActif: true,
+      rappelJourSeanceHeure: '09:00:00',
     });
   });
 
   it('la surcharge patient prend le dessus sur le global', () => {
-    const global = { rappel_seance_actif: true, rappel_seance_delai_heures: 2, relance_exercices_actif: true, relance_exercices_seuil_jours: 3 };
+    const global = { rappel_seance_actif: true, rappel_seance_delai_heures: 2, rappel_jour_seance_actif: true, rappel_jour_seance_heure: '08:00:00' };
     const parPatient = { rappel_seance_delai_heures: 12 };
     expect(resoudrePrefs(parPatient, global)).toEqual({
       rappelSeanceActif: true,
       rappelSeanceDelaiHeures: 12,
-      relanceExercicesActif: true,
-      relanceExercicesSeuilJours: 3,
+      rappelJourSeanceActif: true,
+      rappelJourSeanceHeure: '08:00:00',
     });
   });
 });
@@ -78,34 +79,40 @@ describe('seanceDansLaFenetreDeRappel', () => {
   });
 });
 
-describe('doitRelancerExercices', () => {
-  const maintenant = new Date('2026-07-15T08:00:00.000Z');
-
-  it('relance si inactif depuis plus que le seuil et jamais relancé', () => {
-    const derniereActivite = new Date('2026-07-10T08:00:00.000Z'); // 5 jours, seuil 3j
-    expect(doitRelancerExercices(maintenant, derniereActivite, null, PREFS_PAR_DEFAUT)).toBe(true);
+describe('heureParisCivile', () => {
+  it('calcule l\'heure civile en hiver (CET, UTC+1)', () => {
+    expect(heureParisCivile(new Date('2026-01-15T07:30:00.000Z'))).toBe('08:30');
   });
 
-  it('ne relance pas si inactif depuis moins que le seuil', () => {
-    const derniereActivite = new Date('2026-07-14T08:00:00.000Z'); // 1 jour, seuil 3j
-    expect(doitRelancerExercices(maintenant, derniereActivite, null, PREFS_PAR_DEFAUT)).toBe(false);
+  it('calcule l\'heure civile en été (CEST, UTC+2)', () => {
+    expect(heureParisCivile(new Date('2026-07-15T06:00:00.000Z'))).toBe('08:00');
+  });
+});
+
+describe('doitEnvoyerRappelJourSeance', () => {
+  // 2026-07-15T06:00:00Z == 08:00 Europe/Paris (CEST)
+  const huitHeuresParis = new Date('2026-07-15T06:00:00.000Z');
+  const septHeuresParis = new Date('2026-07-15T05:00:00.000Z');
+
+  it('envoie si l\'heure cible (08:00) est atteinte et pas déjà envoyé aujourd\'hui', () => {
+    expect(doitEnvoyerRappelJourSeance(huitHeuresParis, PREFS_PAR_DEFAUT, false)).toBe(true);
   });
 
-  it('ne relance pas deux fois dans la même fenêtre (anti-harcèlement)', () => {
-    const derniereActivite = new Date('2026-07-01T08:00:00.000Z'); // largement inactif
-    const derniereRelance = new Date('2026-07-14T08:00:00.000Z'); // relancé il y a 1 jour, seuil 3j
-    expect(doitRelancerExercices(maintenant, derniereActivite, derniereRelance, PREFS_PAR_DEFAUT)).toBe(false);
+  it('n\'envoie pas avant l\'heure cible', () => {
+    expect(doitEnvoyerRappelJourSeance(septHeuresParis, PREFS_PAR_DEFAUT, false)).toBe(false);
   });
 
-  it('relance à nouveau si la dernière relance date de plus que le seuil', () => {
-    const derniereActivite = new Date('2026-07-01T08:00:00.000Z');
-    const derniereRelance = new Date('2026-07-10T08:00:00.000Z'); // relancé il y a 5 jours, seuil 3j
-    expect(doitRelancerExercices(maintenant, derniereActivite, derniereRelance, PREFS_PAR_DEFAUT)).toBe(true);
+  it('n\'envoie pas si déjà envoyé aujourd\'hui', () => {
+    expect(doitEnvoyerRappelJourSeance(huitHeuresParis, PREFS_PAR_DEFAUT, true)).toBe(false);
   });
 
-  it('ne relance pas si la relance exercices est désactivée', () => {
-    const derniereActivite = new Date('2026-07-01T08:00:00.000Z');
-    const prefs = { ...PREFS_PAR_DEFAUT, relanceExercicesActif: false };
-    expect(doitRelancerExercices(maintenant, derniereActivite, null, prefs)).toBe(false);
+  it('n\'envoie pas si le rappel jour de séance est désactivé', () => {
+    const prefs = { ...PREFS_PAR_DEFAUT, rappelJourSeanceActif: false };
+    expect(doitEnvoyerRappelJourSeance(huitHeuresParis, prefs, false)).toBe(false);
+  });
+
+  it('respecte une heure cible personnalisée', () => {
+    const prefs = { ...PREFS_PAR_DEFAUT, rappelJourSeanceHeure: '09:00:00' };
+    expect(doitEnvoyerRappelJourSeance(huitHeuresParis, prefs, false)).toBe(false);
   });
 });

@@ -934,18 +934,18 @@ function SectionRappelsPatient({ participantId }: { participantId: string }) {
 
           <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200/70 p-3">
             <div>
-              <div className="text-sm font-medium text-gray-800">Relance si inactif</div>
-              <p className="text-[12px] text-gray-400 mt-0.5">Notification envoyée si le patient n'a pas fait ses exercices depuis un moment.</p>
+              <div className="text-sm font-medium text-gray-800">Rappel jour de séance</div>
+              <p className="text-[12px] text-gray-400 mt-0.5">Le matin, si le patient a une séance prévue ce jour-là.</p>
             </div>
-            <input type="checkbox" checked={local.relanceExercicesActif}
-              onChange={e => setLocal(l => ({ ...l, relanceExercicesActif: e.target.checked }))}
+            <input type="checkbox" checked={local.rappelJourSeanceActif}
+              onChange={e => setLocal(l => ({ ...l, rappelJourSeanceActif: e.target.checked }))}
               className="w-4 h-4 accent-primary flex-shrink-0" />
           </div>
-          {local.relanceExercicesActif && (
+          {local.rappelJourSeanceActif && (
             <label className="block">
-              <span className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Seuil d'inactivité (jours)</span>
-              <input type="number" min={1} max={30} value={local.relanceExercicesSeuilJours}
-                onChange={e => setLocal(l => ({ ...l, relanceExercicesSeuilJours: Number(e.target.value) }))}
+              <span className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Heure d'envoi</span>
+              <input type="time" value={local.rappelJourSeanceHeure}
+                onChange={e => setLocal(l => ({ ...l, rappelJourSeanceHeure: e.target.value }))}
                 className="w-full max-w-[120px] px-4 py-2.5 border border-gray-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:border-primary focus:ring-primary/10 transition-colors font-sans" />
             </label>
           )}

@@ -512,17 +512,17 @@ function SectionRappelsGlobal() {
 
         <div className="flex items-center justify-between gap-4 pt-4 border-t border-gray-100">
           <div>
-            <div className="text-sm font-medium text-dark">Relance si inactif</div>
-            <p className="text-xs text-gray-400 mt-0.5">Le patient reçoit une notification s'il n'a pas fait ses exercices depuis un moment.</p>
+            <div className="text-sm font-medium text-dark">Rappel jour de séance</div>
+            <p className="text-xs text-gray-400 mt-0.5">Le matin, si le patient a une séance prévue ce jour-là.</p>
           </div>
-          <input type="checkbox" checked={local.relanceExercicesActif}
-            onChange={e => setLocal(l => ({ ...l, relanceExercicesActif: e.target.checked }))}
+          <input type="checkbox" checked={local.rappelJourSeanceActif}
+            onChange={e => setLocal(l => ({ ...l, rappelJourSeanceActif: e.target.checked }))}
             className="w-4 h-4 accent-primary flex-shrink-0" />
         </div>
-        {local.relanceExercicesActif && (
-          <Field label="Seuil d'inactivité (jours)">
-            <input type="number" min={1} max={30} value={local.relanceExercicesSeuilJours}
-              onChange={e => setLocal(l => ({ ...l, relanceExercicesSeuilJours: Number(e.target.value) }))}
+        {local.rappelJourSeanceActif && (
+          <Field label="Heure d'envoi">
+            <input type="time" value={local.rappelJourSeanceHeure}
+              onChange={e => setLocal(l => ({ ...l, rappelJourSeanceHeure: e.target.value }))}
               className={`${inputClass()} max-w-[120px]`} />
           </Field>
         )}

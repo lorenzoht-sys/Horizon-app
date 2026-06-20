@@ -8,13 +8,15 @@
 // valeur de la variable d'environnement CRON_SECRET (jamais exposée au
 // client, configurée uniquement sur Vercel).
 //
-// À chaque exécution, deux traitements indépendants :
-//   - rappel de séance : séances "planifiee" dont l'heure de début tombe
-//     dans la fenêtre configurée (rappel_seance_delai_heures) → push +
-//     entrée dans rappels_envoyes.
-//   - relance exercices : patients avec un programme actif, inactifs depuis
-//     au moins relance_exercices_seuil_jours, et n'ayant pas déjà reçu de
-//     relance dans cette fenêtre → push + entrée dans rappels_envoyes.
+// À chaque exécution, deux traitements indépendants, tous deux basés sur les
+// séances ENCADRÉES (table seances, statut 'planifiee') :
+//   - rappel de séance : l'heure de début tombe dans la fenêtre configurée
+//     (rappel_seance_delai_heures) → push + entrée dans rappels_envoyes.
+//   - rappel jour de séance : une séance existe aujourd'hui pour ce patient
+//     et l'heure civile Paris a atteint l'heure configurée
+//     (rappel_jour_seance_heure) → push + entrée dans rappels_envoyes (au
+//     plus un par jour, quel que soit le nombre de séances ce jour-là).
+//     Remplace l'ancienne relance d'inactivité (basée sur seances_patient).
 //
 // Le journal rappels_envoyes garantit qu'un même rappel n'est jamais envoyé
 // deux fois, même si le cron tourne plusieurs fois dans la fenêtre.
@@ -27,9 +29,9 @@ import {
   resoudrePrefs,
   dateHeureParisVersUTC,
   seanceDansLaFenetreDeRappel,
-  doitRelancerExercices,
+  doitEnvoyerRappelJourSeance,
   MESSAGE_RAPPEL_SEANCE,
-  MESSAGE_RELANCE_EXERCICES,
+  MESSAGE_RAPPEL_JOUR_SEANCE,
   type RowPrefs,
 } from '../_lib/rappels.js';
 
@@ -57,12 +59,12 @@ export default withSentry(async function handler(req: any, res: any) {
   }
 
   try {
-    const [rappelsSeance, relances] = await Promise.all([
+    const [rappelsSeance, rappelsJourSeance] = await Promise.all([
       traiterRappelsSeance(supabase),
-      traiterRelancesExercices(supabase),
+      traiterRappelsJourSeance(supabase),
     ]);
 
-    return res.status(200).json({ rappelsSeance, relances });
+    return res.status(200).json({ rappelsSeance, rappelsJourSeance });
   } catch (err) {
     // En cas d'échec, on renvoie le détail de l'exception (au moins le
     // message) plutôt qu'un "Erreur serveur" générique : utile pour
@@ -144,80 +146,65 @@ async function traiterRappelsSeance(supabase: SupabaseClient): Promise<{ examine
   return { examinees: seances.length, envoyes };
 }
 
-async function traiterRelancesExercices(supabase: SupabaseClient): Promise<{ examines: number; envoyes: number }> {
+async function traiterRappelsJourSeance(supabase: SupabaseClient): Promise<{ examines: number; envoyes: number }> {
   const maintenant = new Date();
+  const aujourdhui = maintenant.toISOString().slice(0, 10);
 
-  // Seuls les patients avec un programme actif sont éligibles à la relance.
-  const { data: programmesActifs } = await supabase
-    .from('programmes')
-    .select('participant_id')
-    .eq('actif', true);
+  // Même table/filtre que traiterRappelsSeance (séances encadrées
+  // "planifiee"), restreint à aujourd'hui : un seul rappel par jour, quel
+  // que soit le nombre de séances ce jour-là — pas de fenêtre horaire à
+  // calculer par séance ici, contrairement à rappel_seance.
+  const { data: seances, error } = await supabase
+    .from('seances')
+    .select('participant_id, praticien_id')
+    .eq('statut', 'planifiee')
+    .eq('date', aujourdhui);
 
-  const participantIds = [...new Set((programmesActifs ?? []).map((p: any) => p.participant_id as string))];
-  if (participantIds.length === 0) return { examines: 0, envoyes: 0 };
+  if (error || !seances || seances.length === 0) return { examines: 0, envoyes: 0 };
 
-  const { data: participants } = await supabase
-    .from('participants')
-    .select('id, praticien_id, date_creation')
-    .in('id', participantIds);
-  if (!participants || participants.length === 0) return { examines: 0, envoyes: 0 };
+  const praticienIdParParticipant = new Map<string, string | null>();
+  for (const s of seances as any[]) {
+    if (!praticienIdParParticipant.has(s.participant_id)) {
+      praticienIdParParticipant.set(s.participant_id, s.praticien_id ?? null);
+    }
+  }
+  const participantIds = [...praticienIdParParticipant.keys()];
+  const praticienIds = [...new Set([...praticienIdParParticipant.values()].filter((id): id is string => !!id))];
 
-  const praticienIds = [...new Set(participants.map((p: any) => p.praticien_id as string | null).filter((id): id is string => !!id))];
   const [prefsGlobales, prefsParticipants] = await Promise.all([
     chargerPrefsGlobales(supabase, praticienIds),
     chargerPrefsParticipants(supabase, participantIds),
   ]);
 
-  // Dernière activité = dernière séance enregistrée par le patient (même
-  // métrique que l'onglet "Assiduité" de la fiche patient).
-  const { data: dernieresSeances } = await supabase
-    .from('seances_patient')
-    .select('participant_id, date_seance')
-    .in('participant_id', participantIds)
-    .order('date_seance', { ascending: false });
-
-  const derniereActiviteParPatient = new Map<string, string>();
-  for (const sp of (dernieresSeances ?? []) as any[]) {
-    if (!derniereActiviteParPatient.has(sp.participant_id)) {
-      derniereActiviteParPatient.set(sp.participant_id, sp.date_seance);
-    }
-  }
-
-  // Dernière relance déjà envoyée par patient (anti-harcèlement).
-  const { data: dernieresRelances } = await supabase
+  // Dernier rappel "jour de séance" déjà envoyé par patient (au plus un par jour).
+  const { data: derniersRappels } = await supabase
     .from('rappels_envoyes')
     .select('participant_id, envoye_le')
-    .eq('type', 'relance_exercices')
+    .eq('type', 'rappel_jour_seance')
     .in('participant_id', participantIds)
     .order('envoye_le', { ascending: false });
 
-  const derniereRelanceParPatient = new Map<string, string>();
-  for (const r of (dernieresRelances ?? []) as any[]) {
-    if (!derniereRelanceParPatient.has(r.participant_id)) {
-      derniereRelanceParPatient.set(r.participant_id, r.envoye_le);
+  const dernierEnvoiParPatient = new Map<string, string>();
+  for (const r of (derniersRappels ?? []) as any[]) {
+    if (!dernierEnvoiParPatient.has(r.participant_id)) {
+      dernierEnvoiParPatient.set(r.participant_id, r.envoye_le);
     }
   }
 
   let envoyes = 0;
-  for (const participant of participants as any[]) {
-    const prefs = resoudrePrefs(prefsParticipants.get(participant.id), prefsGlobales.get(participant.praticien_id));
+  for (const participantId of participantIds) {
+    const praticienId = praticienIdParParticipant.get(participantId) ?? null;
+    const prefs = resoudrePrefs(prefsParticipants.get(participantId), praticienId ? prefsGlobales.get(praticienId) : undefined);
 
-    const derniereActiviteISO: string | null = derniereActiviteParPatient.get(participant.id)
-      ?? participant.date_creation
-      ?? null;
-    if (!derniereActiviteISO) continue;
+    const dernierEnvoiISO = dernierEnvoiParPatient.get(participantId) ?? null;
+    const dejaEnvoyeAujourdhui = dernierEnvoiISO ? dernierEnvoiISO.slice(0, 10) === aujourdhui : false;
 
-    const derniereActivite = new Date(derniereActiviteISO.length === 10 ? `${derniereActiviteISO}T12:00:00Z` : derniereActiviteISO);
+    if (!doitEnvoyerRappelJourSeance(maintenant, prefs, dejaEnvoyeAujourdhui)) continue;
 
-    const derniereRelanceISO = derniereRelanceParPatient.get(participant.id) ?? null;
-    const derniereRelance = derniereRelanceISO ? new Date(derniereRelanceISO) : null;
-
-    if (!doitRelancerExercices(maintenant, derniereActivite, derniereRelance, prefs)) continue;
-
-    await envoyerRappel(supabase, participant.id, MESSAGE_RELANCE_EXERCICES);
-    await supabase.from('rappels_envoyes').insert({ participant_id: participant.id, type: 'relance_exercices' });
+    await envoyerRappel(supabase, participantId, MESSAGE_RAPPEL_JOUR_SEANCE);
+    await supabase.from('rappels_envoyes').insert({ participant_id: participantId, type: 'rappel_jour_seance' });
     envoyes++;
   }
 
-  return { examines: participants.length, envoyes };
+  return { examines: participantIds.length, envoyes };
 }

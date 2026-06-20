@@ -10,22 +10,22 @@
 export interface PrefsRappel {
   rappelSeanceActif: boolean;
   rappelSeanceDelaiHeures: number;
-  relanceExercicesActif: boolean;
-  relanceExercicesSeuilJours: number;
+  rappelJourSeanceActif: boolean;
+  rappelJourSeanceHeure: string; // "HH:MM:SS" (colonne TIME)
 }
 
 export const PREFS_PAR_DEFAUT: PrefsRappel = {
   rappelSeanceActif: true,
   rappelSeanceDelaiHeures: 2,
-  relanceExercicesActif: true,
-  relanceExercicesSeuilJours: 3,
+  rappelJourSeanceActif: true,
+  rappelJourSeanceHeure: '08:00:00',
 };
 
 export interface RowPrefs {
   rappel_seance_actif?: boolean | null;
   rappel_seance_delai_heures?: number | null;
-  relance_exercices_actif?: boolean | null;
-  relance_exercices_seuil_jours?: number | null;
+  rappel_jour_seance_actif?: boolean | null;
+  rappel_jour_seance_heure?: string | null;
 }
 
 /**
@@ -36,8 +36,8 @@ export function resoudrePrefs(parPatient: RowPrefs | null | undefined, global: R
   return {
     rappelSeanceActif: parPatient?.rappel_seance_actif ?? global?.rappel_seance_actif ?? PREFS_PAR_DEFAUT.rappelSeanceActif,
     rappelSeanceDelaiHeures: parPatient?.rappel_seance_delai_heures ?? global?.rappel_seance_delai_heures ?? PREFS_PAR_DEFAUT.rappelSeanceDelaiHeures,
-    relanceExercicesActif: parPatient?.relance_exercices_actif ?? global?.relance_exercices_actif ?? PREFS_PAR_DEFAUT.relanceExercicesActif,
-    relanceExercicesSeuilJours: parPatient?.relance_exercices_seuil_jours ?? global?.relance_exercices_seuil_jours ?? PREFS_PAR_DEFAUT.relanceExercicesSeuilJours,
+    rappelJourSeanceActif: parPatient?.rappel_jour_seance_actif ?? global?.rappel_jour_seance_actif ?? PREFS_PAR_DEFAUT.rappelJourSeanceActif,
+    rappelJourSeanceHeure: parPatient?.rappel_jour_seance_heure ?? global?.rappel_jour_seance_heure ?? PREFS_PAR_DEFAUT.rappelJourSeanceHeure,
   };
 }
 
@@ -86,24 +86,39 @@ export function seanceDansLaFenetreDeRappel(maintenant: Date, dateHeureSeance: D
 }
 
 /**
- * Un patient doit recevoir une relance "exercices" si la relance est
- * activée, que sa dernière activité date d'au moins le seuil configuré, et
- * qu'aucune relance n'a déjà été envoyée dans cette même fenêtre (anti-
- * harcèlement : au plus une relance par fenêtre).
+ * Heure civile Europe/Paris (HH:MM) de l'instant donné — gère
+ * automatiquement CET/CEST.
  */
-export function doitRelancerExercices(
+export function heureParisCivile(date: Date): string {
+  const dtf = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    hour12: false,
+    hour: '2-digit', minute: '2-digit',
+  });
+  const parts: Record<string, string> = {};
+  for (const p of dtf.formatToParts(date)) {
+    if (p.type !== 'literal') parts[p.type] = p.value;
+  }
+  const heure = parts.hour === '24' ? '00' : parts.hour;
+  return `${heure}:${parts.minute}`;
+}
+
+/**
+ * Un patient doit recevoir le rappel "jour de séance" si le rappel est
+ * activé, que l'heure civile Paris actuelle a atteint l'heure configurée, et
+ * qu'aucun rappel "jour de séance" n'a déjà été envoyé aujourd'hui (au plus
+ * un par jour, quel que soit le nombre de séances ce jour-là).
+ */
+export function doitEnvoyerRappelJourSeance(
   maintenant: Date,
-  derniereActivite: Date,
-  derniereRelance: Date | null,
   prefs: PrefsRappel,
+  dejaEnvoyeAujourdhui: boolean,
 ): boolean {
-  if (!prefs.relanceExercicesActif) return false;
-  const seuilMs = prefs.relanceExercicesSeuilJours * 86_400_000;
-  if (maintenant.getTime() - derniereActivite.getTime() < seuilMs) return false;
-  if (derniereRelance && maintenant.getTime() - derniereRelance.getTime() < seuilMs) return false;
-  return true;
+  if (!prefs.rappelJourSeanceActif) return false;
+  if (dejaEnvoyeAujourdhui) return false;
+  return heureParisCivile(maintenant) >= prefs.rappelJourSeanceHeure.slice(0, 5);
 }
 
 // Messages neutres (RGPD/confidentialité santé) — voir RAPPORT_RAPPELS.md.
 export const MESSAGE_RAPPEL_SEANCE = { titre: 'Horizon', corps: 'Vous avez une séance aujourd’hui.' };
-export const MESSAGE_RELANCE_EXERCICES = { titre: 'Horizon', corps: 'Pensez à vos exercices !' };
+export const MESSAGE_RAPPEL_JOUR_SEANCE = { titre: 'Horizon', corps: 'Vous avez une séance d’exercices aujourd’hui.' };
