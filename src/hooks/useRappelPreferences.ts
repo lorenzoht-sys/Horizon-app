@@ -19,7 +19,7 @@ export const RAPPEL_PREFS_DEFAUT: RappelPreferences = {
   rappelSeanceActif: true,
   rappelSeanceDelaiHeures: 2,
   rappelJourSeanceActif: true,
-  rappelJourSeanceHeure: '08:00',
+  rappelJourSeanceHeure: '19:00',
 };
 
 function rowToPrefs(row: Record<string, unknown>): RappelPreferences {
@@ -27,7 +27,7 @@ function rowToPrefs(row: Record<string, unknown>): RappelPreferences {
     rappelSeanceActif: Boolean(row.rappel_seance_actif),
     rappelSeanceDelaiHeures: Number(row.rappel_seance_delai_heures),
     rappelJourSeanceActif: Boolean(row.rappel_jour_seance_actif),
-    rappelJourSeanceHeure: String(row.rappel_jour_seance_heure ?? '08:00:00').slice(0, 5),
+    rappelJourSeanceHeure: String(row.rappel_jour_seance_heure ?? '19:00:00').slice(0, 5),
   };
 }
 

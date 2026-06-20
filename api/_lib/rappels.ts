@@ -18,7 +18,7 @@ export const PREFS_PAR_DEFAUT: PrefsRappel = {
   rappelSeanceActif: true,
   rappelSeanceDelaiHeures: 2,
   rappelJourSeanceActif: true,
-  rappelJourSeanceHeure: '08:00:00',
+  rappelJourSeanceHeure: '19:00:00',
 };
 
 export interface RowPrefs {
@@ -104,12 +104,13 @@ export function heureParisCivile(date: Date): string {
 }
 
 /**
- * Un patient doit recevoir le rappel "jour de séance" si le rappel est
- * activé, que l'heure civile Paris actuelle a atteint l'heure configurée, et
- * qu'aucun rappel "jour de séance" n'a déjà été envoyé aujourd'hui (au plus
- * un par jour, quel que soit le nombre de séances ce jour-là).
+ * Un patient doit recevoir le rappel "veille de séance" si le rappel est
+ * activé, que l'heure civile Paris actuelle a atteint l'heure configurée
+ * (défaut 19h, la veille au soir d'une séance prévue demain), et qu'aucun
+ * rappel n'a déjà été envoyé aujourd'hui (au plus un par jour, quel que soit
+ * le nombre de séances le lendemain).
  */
-export function doitEnvoyerRappelJourSeance(
+export function doitEnvoyerRappelVeilleSeance(
   maintenant: Date,
   prefs: PrefsRappel,
   dejaEnvoyeAujourdhui: boolean,
@@ -121,4 +122,4 @@ export function doitEnvoyerRappelJourSeance(
 
 // Messages neutres (RGPD/confidentialité santé) — voir RAPPORT_RAPPELS.md.
 export const MESSAGE_RAPPEL_SEANCE = { titre: 'Horizon', corps: 'Vous avez une séance aujourd’hui.' };
-export const MESSAGE_RAPPEL_JOUR_SEANCE = { titre: 'Horizon', corps: 'Vous avez une séance d’exercices aujourd’hui.' };
+export const MESSAGE_RAPPEL_VEILLE_SEANCE = { titre: 'Horizon', corps: 'Vous avez une séance d’exercices demain.' };

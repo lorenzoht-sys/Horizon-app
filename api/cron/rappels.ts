@@ -12,11 +12,12 @@
 // séances ENCADRÉES (table seances, statut 'planifiee') :
 //   - rappel de séance : l'heure de début tombe dans la fenêtre configurée
 //     (rappel_seance_delai_heures) → push + entrée dans rappels_envoyes.
-//   - rappel jour de séance : une séance existe aujourd'hui pour ce patient
-//     et l'heure civile Paris a atteint l'heure configurée
-//     (rappel_jour_seance_heure) → push + entrée dans rappels_envoyes (au
-//     plus un par jour, quel que soit le nombre de séances ce jour-là).
-//     Remplace l'ancienne relance d'inactivité (basée sur seances_patient).
+//   - rappel veille de séance : une séance existe DEMAIN pour ce patient et
+//     l'heure civile Paris a atteint l'heure configurée
+//     (rappel_jour_seance_heure, défaut 19h) → push la veille au soir +
+//     entrée dans rappels_envoyes (au plus un par jour, quel que soit le
+//     nombre de séances le lendemain). Remplace l'ancienne relance
+//     d'inactivité (basée sur seances_patient).
 //
 // Le journal rappels_envoyes garantit qu'un même rappel n'est jamais envoyé
 // deux fois, même si le cron tourne plusieurs fois dans la fenêtre.
@@ -29,9 +30,9 @@ import {
   resoudrePrefs,
   dateHeureParisVersUTC,
   seanceDansLaFenetreDeRappel,
-  doitEnvoyerRappelJourSeance,
+  doitEnvoyerRappelVeilleSeance,
   MESSAGE_RAPPEL_SEANCE,
-  MESSAGE_RAPPEL_JOUR_SEANCE,
+  MESSAGE_RAPPEL_VEILLE_SEANCE,
   type RowPrefs,
 } from '../_lib/rappels.js';
 
@@ -59,12 +60,12 @@ export default withSentry(async function handler(req: any, res: any) {
   }
 
   try {
-    const [rappelsSeance, rappelsJourSeance] = await Promise.all([
+    const [rappelsSeance, rappelsVeilleSeance] = await Promise.all([
       traiterRappelsSeance(supabase),
-      traiterRappelsJourSeance(supabase),
+      traiterRappelsVeilleSeance(supabase),
     ]);
 
-    return res.status(200).json({ rappelsSeance, rappelsJourSeance });
+    return res.status(200).json({ rappelsSeance, rappelsVeilleSeance });
   } catch (err) {
     // En cas d'échec, on renvoie le détail de l'exception (au moins le
     // message) plutôt qu'un "Erreur serveur" générique : utile pour
@@ -146,19 +147,21 @@ async function traiterRappelsSeance(supabase: SupabaseClient): Promise<{ examine
   return { examinees: seances.length, envoyes };
 }
 
-async function traiterRappelsJourSeance(supabase: SupabaseClient): Promise<{ examines: number; envoyes: number }> {
+async function traiterRappelsVeilleSeance(supabase: SupabaseClient): Promise<{ examines: number; envoyes: number }> {
   const maintenant = new Date();
   const aujourdhui = maintenant.toISOString().slice(0, 10);
+  const demain = new Date(maintenant.getTime() + 86_400_000).toISOString().slice(0, 10);
 
   // Même table/filtre que traiterRappelsSeance (séances encadrées
-  // "planifiee"), restreint à aujourd'hui : un seul rappel par jour, quel
-  // que soit le nombre de séances ce jour-là — pas de fenêtre horaire à
-  // calculer par séance ici, contrairement à rappel_seance.
+  // "planifiee"), restreint à DEMAIN (le rappel part la veille au soir) : un
+  // seul rappel par jour, quel que soit le nombre de séances le lendemain —
+  // pas de fenêtre horaire à calculer par séance ici, contrairement à
+  // rappel_seance.
   const { data: seances, error } = await supabase
     .from('seances')
     .select('participant_id, praticien_id')
     .eq('statut', 'planifiee')
-    .eq('date', aujourdhui);
+    .eq('date', demain);
 
   if (error || !seances || seances.length === 0) return { examines: 0, envoyes: 0 };
 
@@ -176,7 +179,9 @@ async function traiterRappelsJourSeance(supabase: SupabaseClient): Promise<{ exa
     chargerPrefsParticipants(supabase, participantIds),
   ]);
 
-  // Dernier rappel "jour de séance" déjà envoyé par patient (au plus un par jour).
+  // Dernier rappel "veille de séance" déjà envoyé par patient (au plus un
+  // par jour). Le type en base reste 'rappel_jour_seance' (journal
+  // rappels_envoyes inchangé) — seule la logique de déclenchement change.
   const { data: derniersRappels } = await supabase
     .from('rappels_envoyes')
     .select('participant_id, envoye_le')
@@ -199,9 +204,9 @@ async function traiterRappelsJourSeance(supabase: SupabaseClient): Promise<{ exa
     const dernierEnvoiISO = dernierEnvoiParPatient.get(participantId) ?? null;
     const dejaEnvoyeAujourdhui = dernierEnvoiISO ? dernierEnvoiISO.slice(0, 10) === aujourdhui : false;
 
-    if (!doitEnvoyerRappelJourSeance(maintenant, prefs, dejaEnvoyeAujourdhui)) continue;
+    if (!doitEnvoyerRappelVeilleSeance(maintenant, prefs, dejaEnvoyeAujourdhui)) continue;
 
-    await envoyerRappel(supabase, participantId, MESSAGE_RAPPEL_JOUR_SEANCE);
+    await envoyerRappel(supabase, participantId, MESSAGE_RAPPEL_VEILLE_SEANCE);
     await supabase.from('rappels_envoyes').insert({ participant_id: participantId, type: 'rappel_jour_seance' });
     envoyes++;
   }

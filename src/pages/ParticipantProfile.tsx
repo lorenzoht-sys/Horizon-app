@@ -935,7 +935,7 @@ function SectionRappelsPatient({ participantId }: { participantId: string }) {
           <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200/70 p-3">
             <div>
               <div className="text-sm font-medium text-gray-800">Rappel jour de séance</div>
-              <p className="text-[12px] text-gray-400 mt-0.5">Le matin, si le patient a une séance prévue ce jour-là.</p>
+              <p className="text-[12px] text-gray-400 mt-0.5">La veille au soir, si le patient a une séance prévue le lendemain.</p>
             </div>
             <input type="checkbox" checked={local.rappelJourSeanceActif}
               onChange={e => setLocal(l => ({ ...l, rappelJourSeanceActif: e.target.checked }))}

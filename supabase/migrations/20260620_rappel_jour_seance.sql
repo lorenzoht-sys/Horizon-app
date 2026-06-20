@@ -4,10 +4,10 @@
 --
 -- Remplace la relance d'inactivité ("Pensez à vos exercices !", envoyée si
 -- le patient n'a pas validé de séance autonome depuis X jours) par un rappel
--- "jour de séance" : chaque matin (heure réglable, défaut 08:00
--- Europe/Paris), si le patient a une séance ENCADRÉE prévue aujourd'hui
+-- "veille de séance" : chaque soir (heure réglable, défaut 19:00
+-- Europe/Paris), si le patient a une séance ENCADRÉE prévue le LENDEMAIN
 -- (table seances, statut 'planifiee'), il reçoit "Vous avez une séance
--- d'exercices aujourd'hui." Remplacement net (pas de cohabitation des deux
+-- d'exercices demain." Remplacement net (pas de cohabitation des deux
 -- types) pour garder l'UI de réglages simple côté praticien — voir
 -- api/_lib/rappels.ts et api/cron/rappels.ts pour la logique.
 --
@@ -18,7 +18,7 @@
 
 ALTER TABLE public.rappel_preferences
   ADD COLUMN IF NOT EXISTS rappel_jour_seance_actif BOOLEAN NOT NULL DEFAULT TRUE,
-  ADD COLUMN IF NOT EXISTS rappel_jour_seance_heure TIME NOT NULL DEFAULT '08:00:00';
+  ADD COLUMN IF NOT EXISTS rappel_jour_seance_heure TIME NOT NULL DEFAULT '19:00:00';
 
 ALTER TABLE public.rappel_preferences
   DROP COLUMN IF EXISTS relance_exercices_actif,

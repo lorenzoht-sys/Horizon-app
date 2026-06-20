@@ -5,7 +5,7 @@ import {
   dateHeureParisVersUTC,
   seanceDansLaFenetreDeRappel,
   heureParisCivile,
-  doitEnvoyerRappelJourSeance,
+  doitEnvoyerRappelVeilleSeance,
 } from './rappels.js';
 
 describe('resoudrePrefs', () => {
@@ -89,30 +89,30 @@ describe('heureParisCivile', () => {
   });
 });
 
-describe('doitEnvoyerRappelJourSeance', () => {
-  // 2026-07-15T06:00:00Z == 08:00 Europe/Paris (CEST)
-  const huitHeuresParis = new Date('2026-07-15T06:00:00.000Z');
-  const septHeuresParis = new Date('2026-07-15T05:00:00.000Z');
+describe('doitEnvoyerRappelVeilleSeance', () => {
+  // 2026-07-15T17:00:00Z == 19:00 Europe/Paris (CEST) — heure par défaut
+  const dixNeufHeuresParis = new Date('2026-07-15T17:00:00.000Z');
+  const dixHuitHeuresParis = new Date('2026-07-15T16:00:00.000Z');
 
-  it('envoie si l\'heure cible (08:00) est atteinte et pas déjà envoyé aujourd\'hui', () => {
-    expect(doitEnvoyerRappelJourSeance(huitHeuresParis, PREFS_PAR_DEFAUT, false)).toBe(true);
+  it('envoie si l\'heure cible (19:00, défaut) est atteinte et pas déjà envoyé aujourd\'hui', () => {
+    expect(doitEnvoyerRappelVeilleSeance(dixNeufHeuresParis, PREFS_PAR_DEFAUT, false)).toBe(true);
   });
 
   it('n\'envoie pas avant l\'heure cible', () => {
-    expect(doitEnvoyerRappelJourSeance(septHeuresParis, PREFS_PAR_DEFAUT, false)).toBe(false);
+    expect(doitEnvoyerRappelVeilleSeance(dixHuitHeuresParis, PREFS_PAR_DEFAUT, false)).toBe(false);
   });
 
   it('n\'envoie pas si déjà envoyé aujourd\'hui', () => {
-    expect(doitEnvoyerRappelJourSeance(huitHeuresParis, PREFS_PAR_DEFAUT, true)).toBe(false);
+    expect(doitEnvoyerRappelVeilleSeance(dixNeufHeuresParis, PREFS_PAR_DEFAUT, true)).toBe(false);
   });
 
-  it('n\'envoie pas si le rappel jour de séance est désactivé', () => {
+  it('n\'envoie pas si le rappel veille de séance est désactivé', () => {
     const prefs = { ...PREFS_PAR_DEFAUT, rappelJourSeanceActif: false };
-    expect(doitEnvoyerRappelJourSeance(huitHeuresParis, prefs, false)).toBe(false);
+    expect(doitEnvoyerRappelVeilleSeance(dixNeufHeuresParis, prefs, false)).toBe(false);
   });
 
   it('respecte une heure cible personnalisée', () => {
-    const prefs = { ...PREFS_PAR_DEFAUT, rappelJourSeanceHeure: '09:00:00' };
-    expect(doitEnvoyerRappelJourSeance(huitHeuresParis, prefs, false)).toBe(false);
+    const prefs = { ...PREFS_PAR_DEFAUT, rappelJourSeanceHeure: '20:00:00' };
+    expect(doitEnvoyerRappelVeilleSeance(dixNeufHeuresParis, prefs, false)).toBe(false);
   });
 });
