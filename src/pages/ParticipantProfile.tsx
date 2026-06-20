@@ -787,7 +787,7 @@ function dateOnly(s: string): string { return s.slice(0, 10); }
 
 // ── TabsSection ───────────────────────────────────────────────────────────────
 
-type TabId = 'bilans' | 'contrats' | 'assiduite' | 'activites' | 'rappels';
+type TabId = 'bilans' | 'contrats' | 'assiduite' | 'rappels';
 
 // ── Types assiduité ───────────────────────────────────────────────────────────
 
@@ -1358,7 +1358,6 @@ export default function ParticipantProfile() {
     { id: 'bilans',    label: 'Historique bilans',   count: participant.bilans.length },
     { id: 'contrats',  label: 'Contrats de suivi',   count: contratsCount },
     { id: 'assiduite', label: alerteRessentis ? '📊 Assiduité ⚠' : '📊 Assiduité', count: seancesStats.length > 0 ? seancesStats.length : undefined },
-    { id: 'activites', label: '🎯 Activités' },
     { id: 'rappels',   label: '🔔 Rappels' },
   ];
 
@@ -1763,6 +1762,12 @@ export default function ParticipantProfile() {
         </div>
       )}
 
+      {/* ── ACTIVITÉS COMPLÉMENTAIRES (regroupées visuellement avec le programme, données distinctes) ── */}
+      <div className="bg-white rounded-xl border border-gray-200/50 shadow-sm mb-4 p-5">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-3">Activités complémentaires</div>
+        <SectionActivitesHorsProgramme participant={participant} hook={activitesHorsProgramme} />
+      </div>
+
       {/* ── TABS ───────────────────────────────────────────────── */}
       <TabsSection activeTab={activeTab} setActiveTab={setActiveTab} tabs={TABS}>
         {activeTab === 'bilans' && (
@@ -2032,9 +2037,6 @@ export default function ParticipantProfile() {
             </div>
           );
         })()}
-        {activeTab === 'activites' && (
-          <SectionActivitesHorsProgramme participant={participant} hook={activitesHorsProgramme} />
-        )}
         {activeTab === 'rappels' && (
           <SectionRappelsPatient participantId={participant.id} />
         )}

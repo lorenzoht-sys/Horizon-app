@@ -2129,13 +2129,12 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
 
 // ── Navigation bas de page ────────────────────────────────────────────────────
 
-type Tab = 'accueil' | 'progres' | 'programme' | 'activites' | 'documents';
+type Tab = 'accueil' | 'progres' | 'programme' | 'documents';
 
 const TABS_CONFIG: { id: Tab; emoji: string; label: string }[] = [
   { id: 'accueil',    emoji: '🏠', label: 'Accueil' },
   { id: 'progres',   emoji: '📊', label: 'Progrès' },
-  { id: 'programme', emoji: '🏋️', label: 'Programme' },
-  { id: 'activites', emoji: '🎯', label: 'Activités' },
+  { id: 'programme', emoji: '🏋️', label: 'Programme & Activités' },
   { id: 'documents', emoji: '📋', label: 'Documents' },
 ];
 
@@ -2369,20 +2368,25 @@ export default function EspacePatient() {
         )}
         {tab === 'progres' && <EcranProgres participant={participant} bilans={bilans} />}
         {tab === 'programme' && (
-          <EcranProgramme participant={participant} programmes={programmes} programmesV2={programmesV2} historiqueSeances={seancesPatient} seancesAutonomesCount={seancesAutonomesCount} token={token} />
-        )}
-        {tab === 'activites' && (
-          <EcranActivites
-            token={token}
-            testsActifs={testsEtalonsActifs}
-            resultats={testsEtalonsResultats}
-            onNouveauResultat={r => setTestsEtalonsResultats(prev => [r, ...prev])}
-            exercicesActifs={exercicesLibresActifs}
-            validations={exercicesLibresValidations}
-            onValidation={v => setExercicesLibresValidations(prev => [
-              v, ...prev.filter(p => !(p.exerciceId === v.exerciceId && p.date === v.date)),
-            ])}
-          />
+          <>
+            <EcranProgramme participant={participant} programmes={programmes} programmesV2={programmesV2} historiqueSeances={seancesPatient} seancesAutonomesCount={seancesAutonomesCount} token={token} />
+            <div style={{ marginTop: 28 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+                Activités complémentaires
+              </div>
+              <EcranActivites
+                token={token}
+                testsActifs={testsEtalonsActifs}
+                resultats={testsEtalonsResultats}
+                onNouveauResultat={r => setTestsEtalonsResultats(prev => [r, ...prev])}
+                exercicesActifs={exercicesLibresActifs}
+                validations={exercicesLibresValidations}
+                onValidation={v => setExercicesLibresValidations(prev => [
+                  v, ...prev.filter(p => !(p.exerciceId === v.exerciceId && p.date === v.date)),
+                ])}
+              />
+            </div>
+          </>
         )}
         {tab === 'documents' && (
           <EcranDocuments bilans={bilans} participant={participant} programmeActif={programmes.find(p => p.actif) ?? null} documentsPatient={documentsPatient} />
