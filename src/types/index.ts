@@ -743,5 +743,7 @@ export interface ProgrammeV2 {
   createdAt: string;
   seances: ProgrammeSeanceV2[];
   planning: ProgrammePlanningV2[];
+  /** Objectif de séances AUTONOMES (réalisées par le patient seul) fixé par le praticien. Distinct du champ texte `objectif` et des séances ENCADRÉES (contrats). */
+  objectifSeancesAutonomes?: number;
 }
 

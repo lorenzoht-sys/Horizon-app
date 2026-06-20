@@ -59,14 +59,21 @@ function rowToProgrammeV2(
     createdAt: (row.created_at as string | null) ?? (row.date_creation as string | null) ?? '',
     seances,
     planning,
+    objectifSeancesAutonomes: (row.objectif_seances_autonomes as number | null) ?? undefined,
   };
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
+export interface SeancesAutonomesStats {
+  count: number;
+  dates: string[];
+}
+
 export function useProgrammeV2(participantId: string) {
   const [programmes, setProgrammes] = useState<ProgrammeV2[]>([]);
   const [loading, setLoading] = useState(true);
+  const [seancesAutonomesStats, setSeancesAutonomesStats] = useState<Record<string, SeancesAutonomesStats>>({});
 
   const load = useCallback(async () => {
     if (!participantId || !supabase) { setLoading(false); return; }
@@ -80,7 +87,7 @@ export function useProgrammeV2(participantId: string) {
       .not('type', 'is', null)
       .order('created_at', { ascending: false });
 
-    if (!progRows || progRows.length === 0) { setProgrammes([]); setLoading(false); return; }
+    if (!progRows || progRows.length === 0) { setProgrammes([]); setSeancesAutonomesStats({}); setLoading(false); return; }
 
     // Load seances + planning for all programmes in parallel
     const [seancesRes, planningRes] = await Promise.all([
@@ -119,6 +126,24 @@ export function useProgrammeV2(participantId: string) {
     });
 
     setProgrammes(fullProgs);
+
+    // Assiduité autonome : décompte + dates de validation par programme,
+    // pour la progression "X / objectif" côté praticien.
+    const { data: spRows } = await supabase
+      .from('seances_patient')
+      .select('programme_id, date_seance')
+      .in('programme_id', progRows.map(p => p.id))
+      .order('date_seance', { ascending: false });
+
+    const stats: Record<string, SeancesAutonomesStats> = {};
+    for (const row of (spRows ?? []) as { programme_id: string; date_seance: string }[]) {
+      const entry = stats[row.programme_id] ?? { count: 0, dates: [] };
+      entry.count += 1;
+      if (entry.dates.length < 8) entry.dates.push(row.date_seance);
+      stats[row.programme_id] = entry;
+    }
+    setSeancesAutonomesStats(stats);
+
     setLoading(false);
   }, [participantId]);
 
@@ -129,6 +154,7 @@ export function useProgrammeV2(participantId: string) {
   const createProgramme = useCallback(async (data: {
     nom: string;
     objectif?: string;
+    objectifSeancesAutonomes?: number;
     messageMotivation?: string;
     type: TypeProgramme;
     seances: Array<{
@@ -158,6 +184,7 @@ export function useProgrammeV2(participantId: string) {
       nom: data.nom,
       titre: data.nom, // backward compat with old hook
       objectif: data.objectif ?? null,
+      objectif_seances_autonomes: data.objectifSeancesAutonomes ?? null,
       message_motivation: data.messageMotivation ?? null,
       type: data.type,
       actif: true,
@@ -229,6 +256,7 @@ export function useProgrammeV2(participantId: string) {
     data: {
       nom: string;
       objectif?: string;
+      objectifSeancesAutonomes?: number;
       messageMotivation?: string;
       type: TypeProgramme;
       seances: Array<{
@@ -255,6 +283,7 @@ export function useProgrammeV2(participantId: string) {
       nom: data.nom,
       titre: data.nom,
       objectif: data.objectif ?? null,
+      objectif_seances_autonomes: data.objectifSeancesAutonomes ?? null,
       message_motivation: data.messageMotivation ?? null,
       type: data.type,
     }).eq('id', id);
@@ -352,6 +381,7 @@ export function useProgrammeV2(participantId: string) {
   return {
     programmes,
     loading,
+    seancesAutonomesStats,
     createProgramme,
     updateProgramme,
     toggleActif,
