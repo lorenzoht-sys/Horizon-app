@@ -99,6 +99,10 @@ clique **Run** :
 7. `supabase/migrations/20260614_add_code_acces_participants.sql`
 8. `supabase/migrations/20260615_rappels_patients.sql`
 9. *(optionnel, voir Étape 8)* `supabase/migrations/20260616_cron_rappels_patients_staging.sql`
+10. `supabase/migrations/20260618_retours_seance.sql`
+11. `supabase/migrations/20260619_tm6_pauses_duree.sql`
+12. `supabase/migrations/20260619_tinetti_bilans.sql`
+13. `supabase/migrations/20260619_templates_structure.sql`
 
 Tous ces fichiers sont **idempotents** (`CREATE TABLE IF NOT EXISTS`,
 `DROP POLICY IF EXISTS` puis `CREATE POLICY`, `ADD COLUMN IF NOT EXISTS`,
@@ -150,6 +154,10 @@ appliquer manuellement.
 20260615_rappels_patients.sql                    ← Étape 2.2 (8)
 20260616_cron_rappels_patients.sql               (variante PROD, pas pour staging)
 20260616_cron_rappels_patients_staging.sql       ← Étape 2.2 (9, optionnel)
+20260618_retours_seance.sql                      ← Étape 2.2 (10)
+20260619_tm6_pauses_duree.sql                    ← Étape 2.2 (11)
+20260619_tinetti_bilans.sql                      ← Étape 2.2 (12)
+20260619_templates_structure.sql                 ← Étape 2.2 (13)
 ```
 \* `20260613_audit_logs.sql` et `20260613_create_bilans_brouillons.sql`
 n'ont pas de dépendance d'ordre entre eux ni avec les autres `20260613_*` —

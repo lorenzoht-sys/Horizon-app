@@ -862,6 +862,7 @@ function ModeSeance({
   const [borgRpe, setBorgRpe] = useState<number | null>(null);
   const [bienEtre, setBienEtre] = useState<number | null>(null);
   const [sendingRetour, setSendingRetour] = useState(false);
+  const [erreurRetour, setErreurRetour] = useState(false);
 
   const ex = exercices[idx];
   const exState = states[idx];
@@ -943,8 +944,10 @@ function ModeSeance({
   async function soumettreRetour() {
     if (borgRpe === null || bienEtre === null) return;
     setSendingRetour(true);
-    await patientEnvoyerRetour(token, { seanceId: savedSeanceId, borgRpe, bienEtre });
+    setErreurRetour(false);
+    const ok = await patientEnvoyerRetour(token, { seanceId: savedSeanceId, borgRpe, bienEtre });
     setSendingRetour(false);
+    if (!ok) { setErreurRetour(true); return; }
     onTermine();
   }
 
@@ -1006,6 +1009,12 @@ function ModeSeance({
             ))}
           </div>
         </div>
+
+        {erreurRetour && (
+          <div style={{ width: '100%', background: '#FFF5F5', border: '1px solid #FECACA', borderRadius: 12, padding: '12px 16px', fontSize: 13, color: '#B91C1C', marginBottom: 16, lineHeight: 1.5, textAlign: 'center' }}>
+            😕 L'enregistrement a échoué (problème de connexion). Réessayez.
+          </div>
+        )}
 
         <button
           onClick={soumettreRetour}
