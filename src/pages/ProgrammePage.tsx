@@ -40,6 +40,7 @@ interface WizardData {
   nom: string;
   type: TypeProgramme;
   objectif: string;
+  objectifSeancesAutonomes: string;
   messageMotivation: string;
   seances: FormSeance[];
   planning: Partial<Record<JourProgramme, string | null>>;
@@ -49,6 +50,7 @@ const EMPTY_WIZARD: WizardData = {
   nom: '',
   type: 'domicile',
   objectif: '',
+  objectifSeancesAutonomes: '',
   messageMotivation: '',
   seances: [],
   planning: {},
@@ -90,6 +92,7 @@ function progV2ToWizard(prog: ProgrammeV2): WizardData {
     nom: prog.nom,
     type: prog.type,
     objectif: prog.objectif ?? '',
+    objectifSeancesAutonomes: prog.objectifSeancesAutonomes != null ? String(prog.objectifSeancesAutonomes) : '',
     messageMotivation: prog.messageMotivation ?? '',
     seances,
     planning,
@@ -843,6 +846,20 @@ function Step1({ data, onChange }: {
         />
       </div>
       <div>
+        <label style={labelStyle}>Objectif de séances autonomes <span style={{ color: '#94A3B8', fontWeight: 400 }}>(optionnel)</span></label>
+        <input
+          type="number"
+          min={1}
+          value={data.objectifSeancesAutonomes}
+          onChange={e => onChange({ objectifSeancesAutonomes: e.target.value })}
+          placeholder="ex: 20"
+          style={inputStyle}
+        />
+        <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
+          Nombre de séances que le patient doit réaliser seul. Affiché comme progression dans son espace patient.
+        </div>
+      </div>
+      <div>
         <label style={labelStyle}>Message de motivation <span style={{ color: '#94A3B8', fontWeight: 400 }}>(visible par le patient)</span></label>
         <textarea
           value={data.messageMotivation}
@@ -1205,8 +1222,9 @@ function Step4({ data }: { data: WizardData }) {
 
 // ── Carte programme V2 ───────────────────────────────────────────────────────
 
-function ProgrammeCard({ prog, onToggle, onDelete, onEdit }: {
+function ProgrammeCard({ prog, seancesAutonomes, onToggle, onDelete, onEdit }: {
   prog: ProgrammeV2;
+  seancesAutonomes: { count: number; dates: string[] } | null;
   onToggle: () => void;
   onDelete: () => void;
   onEdit: () => void;
@@ -1215,6 +1233,9 @@ function ProgrammeCard({ prog, onToggle, onDelete, onEdit }: {
   const jourActifs = JP.filter(j => prog.planning.some(p => p.jour === j));
   const totalEx = prog.seances.reduce((sum, s) => sum + s.exercices.length, 0);
   const date = new Date(prog.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  const objectifAutonome = prog.objectifSeancesAutonomes;
+  const nbAutonomes = seancesAutonomes?.count ?? 0;
+  const pctAutonome = objectifAutonome ? Math.min(100, Math.round((nbAutonomes / objectifAutonome) * 100)) : 0;
 
   return (
     <div style={{
@@ -1247,6 +1268,28 @@ function ProgrammeCard({ prog, onToggle, onDelete, onEdit }: {
           <div style={{ fontSize: 11, color: '#CBD5E1' }}>Mis à jour le {date}</div>
         </div>
       </div>
+
+      {objectifAutonome && (
+        <div style={{ background: '#F8FBFB', border: '1px solid #E0EEEE', borderRadius: 12, padding: '10px 12px', marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, marginBottom: 6 }}>
+            <span style={{ fontWeight: 700, color: '#0D2B2B' }}>🏃 Séances autonomes</span>
+            <span style={{ fontWeight: 700, color: 'var(--color-teal)' }}>{nbAutonomes} / {objectifAutonome}</span>
+          </div>
+          <div style={{ height: 6, background: '#E0EEEE', borderRadius: 6, overflow: 'hidden', marginBottom: seancesAutonomes?.dates.length ? 8 : 0 }}>
+            <div style={{ height: '100%', width: `${pctAutonome}%`, background: 'var(--color-teal)', borderRadius: 6, transition: 'width 0.4s ease' }} />
+          </div>
+          {seancesAutonomes && seancesAutonomes.dates.length > 0 && (
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
+              {seancesAutonomes.dates.map(d => (
+                <span key={d} style={{ fontSize: 10, color: '#64748B', background: 'white', border: '1px solid #E0EEEE', borderRadius: 6, padding: '2px 6px' }}>
+                  {new Date(d + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
         <button onClick={onEdit} style={{ ...btnSmall, background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
           ✏️ Modifier
@@ -1381,7 +1424,7 @@ const STEP_LABELS = ['Informations', 'Séances', 'Planning', 'Récapitulatif'];
 export default function ProgrammePage() {
   const { id } = useParams<{ id: string }>();
   const { participants } = useParticipants();
-  const { programmes: progsV2, loading, createProgramme, updateProgramme, toggleActif, deleteProgrammeV2 } = useProgrammeV2(id!);
+  const { programmes: progsV2, loading, seancesAutonomesStats, createProgramme, updateProgramme, toggleActif, deleteProgrammeV2 } = useProgrammeV2(id!);
   const { programmes: progsV1, programmeActif: progV1Actif } = useProgramme(id!);
 
   const participant = participants.find(p => p.id === id);
@@ -1576,9 +1619,13 @@ export default function ProgrammePage() {
   async function handleSave() {
     setSaving(true);
     try {
+      const objectifSeancesAutonomes = wizardData.objectifSeancesAutonomes.trim()
+        ? Number(wizardData.objectifSeancesAutonomes)
+        : undefined;
       const payload = {
         nom: wizardData.nom,
         objectif: wizardData.objectif || undefined,
+        objectifSeancesAutonomes: objectifSeancesAutonomes != null && objectifSeancesAutonomes > 0 ? objectifSeancesAutonomes : undefined,
         messageMotivation: wizardData.messageMotivation || undefined,
         type: wizardData.type,
         seances: wizardData.seances.map(s => ({
@@ -1680,6 +1727,7 @@ export default function ProgrammePage() {
                 <ProgrammeCard
                   key={prog.id}
                   prog={prog}
+                  seancesAutonomes={seancesAutonomesStats[prog.id] ?? null}
                   onToggle={() => toggleActif(prog.id, false)}
                   onDelete={() => deleteProgrammeV2(prog.id).then(() => toast.success('Programme supprimé'))}
                   onEdit={() => openEditWizard(prog)}
@@ -1697,6 +1745,7 @@ export default function ProgrammePage() {
                 <ProgrammeCard
                   key={prog.id}
                   prog={prog}
+                  seancesAutonomes={seancesAutonomesStats[prog.id] ?? null}
                   onToggle={() => toggleActif(prog.id, true)}
                   onDelete={() => deleteProgrammeV2(prog.id).then(() => toast.success('Programme supprimé'))}
                   onEdit={() => openEditWizard(prog)}
