@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
+import { useProgrammeV2 } from '../hooks/useProgrammeV2';
 import { useContrats } from '../hooks/useContrats';
 import { useStructures } from '../hooks/useStructures';
 import { useAgenda } from '../hooks/useAgenda';
@@ -974,6 +975,7 @@ export default function ParticipantProfile() {
   const { id } = useParams<{ id: string }>();
   const { participants, updateParticipant, deleteParticipant, deleteBilan, geocodeParticipant } = useParticipants();
   const { programmeActif, deleteProgramme } = useProgramme(id ?? '');
+  const { programmes: programmesV2, seancesAutonomesStats } = useProgrammeV2(id ?? '');
   const { contrats } = useContrats();
   const { structures } = useStructures();
   const { seances } = useAgenda();
@@ -1504,6 +1506,21 @@ export default function ParticipantProfile() {
                 Généré le {new Date(programmeActif.dateCreation).toLocaleDateString('fr-FR')}
                 {programmeActif.exercices.length > 0 && ` · ${programmeActif.exercices.length} exercice${programmeActif.exercices.length > 1 ? 's' : ''}`}
               </div>
+              {(() => {
+                const progV2Actif = programmesV2.find(p => p.id === programmeActif.id);
+                const objectif = progV2Actif?.objectifSeancesAutonomes;
+                if (!objectif) return null;
+                const nb = seancesAutonomesStats[progV2Actif!.id]?.count ?? 0;
+                const pct = Math.min(100, Math.round((nb / objectif) * 100));
+                return (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-[11px] font-medium text-gray-500 whitespace-nowrap">🏃 Séances autonomes : {nb}/{objectif}</span>
+                    <div className="h-1.5 w-20 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
             <div className="flex items-center gap-2">
               <button
