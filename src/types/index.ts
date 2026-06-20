@@ -264,6 +264,59 @@ export interface ExerciceProgramme {
   ordre: number;
 }
 
+// ============================================================
+// ACTIVITÉS HORS PROGRAMME — tests étalons & exercices libres
+// ============================================================
+
+/** Catalogue figé en code (src/data/testsEtalons.ts) — pas de création libre par le praticien en V1. */
+export interface TestEtalon {
+  id: string;
+  nom: string;
+  dureeSecondes: number;
+  unite: string; // ex: 'répétitions', 'pas'
+  consigne: string;
+  consigneSecurite: string;
+}
+
+export interface TestEtalonActivation {
+  id: string;
+  participantId: string;
+  testId: string;
+  praticienId: string;
+  actif: boolean;
+  createdAt: string;
+}
+
+export interface TestEtalonResultat {
+  id: string;
+  participantId: string;
+  testId: string;
+  valeur: number;
+  dateTest: string;
+}
+
+export interface ExerciceLibreActivation {
+  id: string;
+  participantId: string;
+  praticienId: string;
+  exerciceId: string;
+  nom: string;
+  description?: string;
+  consigneSecurite?: string;
+  categorie?: string;
+  actif: boolean;
+  createdAt: string;
+}
+
+export interface ExerciceLibreValidation {
+  id: string;
+  participantId: string;
+  exerciceId: string;
+  date: string;
+  fait: boolean;
+  note?: string;
+}
+
 export interface SuiviJour {
   exerciceId: string;
   fait: boolean;

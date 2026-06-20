@@ -29,7 +29,7 @@ export default withSentry(async function handler(req: any, res: any) {
     return res.status(500).json({ error: String(err) });
   }
 
-  const [participantRes, bilansRes, seancesRes, programmesRes, docsRes] = await Promise.all([
+  const [participantRes, bilansRes, seancesRes, programmesRes, docsRes, testsActifsRes, testsResultatsRes, exLibresActifsRes, exLibresValidationsRes] = await Promise.all([
     supabase.from('participants').select('*').eq('id', participantId).single(),
     supabase.from('bilans').select('*').eq('participant_id', participantId).order('date'),
     supabase.from('seances').select('*').eq('participant_id', participantId).order('date'),
@@ -38,6 +38,20 @@ export default withSentry(async function handler(req: any, res: any) {
       .select('id, titre, contenu, date_creation')
       .eq('participant_id', participantId)
       .order('date_creation', { ascending: false }),
+    // Activités hors programme (tests étalons + exercices libres) : ne
+    // jamais exposer un test/exercice non explicitement activé pour ce
+    // participant (sécurité non négociable).
+    supabase.from('tests_etalons_activations')
+      .select('test_id').eq('participant_id', participantId).eq('actif', true),
+    supabase.from('tests_etalons_resultats')
+      .select('id, test_id, valeur, date_test').eq('participant_id', participantId)
+      .order('date_test', { ascending: false }).limit(200),
+    supabase.from('exercices_libres_activations')
+      .select('id, exercice_id, nom, description, consigne_securite, categorie')
+      .eq('participant_id', participantId).eq('actif', true),
+    supabase.from('exercices_libres_validations')
+      .select('exercice_id, date, fait, note').eq('participant_id', participantId)
+      .order('date', { ascending: false }).limit(200),
   ]);
 
   if (participantRes.error || !participantRes.data) {
@@ -118,5 +132,9 @@ export default withSentry(async function handler(req: any, res: any) {
     seancesPatient,
     exercicesRealises,
     seancesAutonomesCount,
+    testsEtalonsActifs: (testsActifsRes.data ?? []).map((r: any) => r.test_id as string),
+    testsEtalonsResultats: testsResultatsRes.data ?? [],
+    exercicesLibresActifs: exLibresActifsRes.data ?? [],
+    exercicesLibresValidations: exLibresValidationsRes.data ?? [],
   });
 });

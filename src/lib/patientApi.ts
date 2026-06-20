@@ -17,6 +17,11 @@ export interface PatientMeResponse {
   exercicesRealises: { seance_patient_id: string; realise: boolean }[];
   /** Décompte total des séances autonomes validées, par programme_id — non limité aux 15 dernières (cf. seancesPatient). */
   seancesAutonomesCount: Record<string, number>;
+  /** Ids des tests étalons activés par le praticien pour ce patient — un test absent de cette liste n'existe pas pour le patient. */
+  testsEtalonsActifs: string[];
+  testsEtalonsResultats: { id: string; test_id: string; valeur: number; date_test: string }[];
+  exercicesLibresActifs: { id: string; exercice_id: string; nom: string; description: string | null; consigne_securite: string | null; categorie: string | null }[];
+  exercicesLibresValidations: { exercice_id: string; date: string; fait: boolean; note: string | null }[];
 }
 
 export interface SeanceAEnregistrer {
@@ -92,6 +97,42 @@ export async function patientEnvoyerRetour(
   } catch (err) {
     console.error('[patientEnvoyerRetour] erreur réseau', err);
     return false;
+  }
+}
+
+export async function patientEnregistrerTestEtalon(
+  token: string,
+  payload: { testId: string; valeur: number },
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch('/api/patient/test-etalon', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data?.error };
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export async function patientMarquerExerciceLibre(
+  token: string,
+  payload: { exerciceId: string; fait: boolean; note?: string },
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch('/api/patient/exercice-libre', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data?.error };
+    return { ok: true };
+  } catch {
+    return { ok: false };
   }
 }
 
