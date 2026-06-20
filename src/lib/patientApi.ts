@@ -82,8 +82,13 @@ export async function patientEnvoyerRetour(
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(payload),
     });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      console.error('[patientEnvoyerRetour] échec', res.status, body?.error);
+    }
     return res.ok;
-  } catch {
+  } catch (err) {
+    console.error('[patientEnvoyerRetour] erreur réseau', err);
     return false;
   }
 }
