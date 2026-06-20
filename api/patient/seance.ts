@@ -59,6 +59,9 @@ export default withSentry(async function handler(req: any, res: any) {
 
   if (spErr || !sp) {
     await logAuditEvent(supabase, 'patient_seance_submit', participantId, getClientIp(req), false);
+    if (spErr?.code === '23505') {
+      return res.status(409).json({ error: 'Vous avez déjà validé cette séance aujourd\'hui.' });
+    }
     return res.status(500).json({ error: 'Erreur enregistrement séance' });
   }
 

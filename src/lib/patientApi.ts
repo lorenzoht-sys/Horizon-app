@@ -15,6 +15,8 @@ export interface PatientMeResponse {
   documentsPatient: { id: string; titre: string; contenu: string; date_creation: string }[];
   seancesPatient: Record<string, unknown>[];
   exercicesRealises: { seance_patient_id: string; realise: boolean }[];
+  /** Décompte total des séances autonomes validées, par programme_id — non limité aux 15 dernières (cf. seancesPatient). */
+  seancesAutonomesCount: Record<string, number>;
 }
 
 export interface SeanceAEnregistrer {
@@ -57,15 +59,15 @@ export async function patientFetchMe(token: string): Promise<{ ok: true; data: P
 export async function patientSauvegarderSeance(
   token: string,
   payload: SeanceAEnregistrer,
-): Promise<{ ok: boolean; seancePatientId?: string }> {
+): Promise<{ ok: boolean; seancePatientId?: string; error?: string }> {
   try {
     const res = await fetch('/api/patient/seance', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) return { ok: false };
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data?.error };
     return { ok: true, seancePatientId: data.seancePatientId };
   } catch {
     return { ok: false };

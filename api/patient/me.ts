@@ -91,6 +91,20 @@ export default withSentry(async function handler(req: any, res: any) {
     exercicesRealises = erRes.data ?? [];
   }
 
+  // Décompte total des séances autonomes validées par programme (non limité
+  // à 15, contrairement à l'historique ci-dessus) — alimente la progression
+  // "X / objectif" affichée au patient, distincte des séances ENCADRÉES.
+  const allSpRes = await supabase
+    .from('seances_patient')
+    .select('programme_id')
+    .eq('participant_id', participantId);
+
+  const seancesAutonomesCount: Record<string, number> = {};
+  for (const row of allSpRes.data ?? []) {
+    const progId = (row as any).programme_id as string;
+    seancesAutonomesCount[progId] = (seancesAutonomesCount[progId] ?? 0) + 1;
+  }
+
   return res.status(200).json({
     participantId,
     participant: participantRes.data,
@@ -103,5 +117,6 @@ export default withSentry(async function handler(req: any, res: any) {
     documentsPatient: docsRes.data ?? [],
     seancesPatient,
     exercicesRealises,
+    seancesAutonomesCount,
   });
 });
