@@ -49,6 +49,27 @@ export async function patientLogin(code: string): Promise<{ token: string; parti
   }
 }
 
+// Accès praticien à l'espace patient sans saisie du code_acces : authHeader
+// doit contenir le JWT Supabase du praticien (cf. getAuthHeader, lib/supabase.ts).
+// Le serveur vérifie que le patient lui appartient avant de renvoyer un token.
+export async function patientAccesPraticien(
+  authHeader: Record<string, string>,
+  participantId: string,
+): Promise<{ token: string; participantId: string } | { error: string }> {
+  try {
+    const res = await fetch('/api/patient/praticien-acces', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader },
+      body: JSON.stringify({ participantId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data?.error ?? 'Erreur de connexion.' };
+    return data;
+  } catch {
+    return { error: 'Erreur de connexion. Vérifiez votre réseau et réessayez.' };
+  }
+}
+
 export async function patientFetchMe(token: string): Promise<{ ok: true; data: PatientMeResponse } | { ok: false; status: number }> {
   try {
     const res = await fetch('/api/patient/me', {

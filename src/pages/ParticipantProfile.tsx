@@ -9,7 +9,7 @@ import { differenceInDays } from 'date-fns';
 import {
   ArrowLeft, Pencil, FileText, TrendingUp, Share2,
   Download, Trash2, Dumbbell, NotebookPen, Calendar, MapPin,
-  RefreshCw, ClipboardList, Mic, ChevronDown, ChevronUp, Save,
+  RefreshCw, ClipboardList, Mic, ChevronDown, ChevronUp, Save, ExternalLink,
 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
@@ -34,7 +34,8 @@ import { TAG_CONFIG } from '../data/profiles';
 import { getSedProfil, getFSSProfil } from '../components/bilan/TestsAutonomie';
 import { useRappelPreferences, type RappelPreferences } from '../hooks/useRappelPreferences';
 import { toast } from 'sonner';
-import { supabase } from '../lib/supabase';
+import { supabase, getAuthHeader } from '../lib/supabase';
+import { patientAccesPraticien } from '../lib/patientApi';
 import type { Bilan, Participant, Contrat, Seance, ProfilHandicap } from '../types';
 import { getContreIndications, getTestsAutonomie, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../lib/anamnese';
 import type { CompteRenduSeance } from '../types/seance';
@@ -1004,6 +1005,7 @@ export default function ParticipantProfile() {
   const [exportingDossier, setExportingDossier] = useState(false);
   const [showProfilPicker, setShowProfilPicker] = useState(false);
   const [showEspacePatient, setShowEspacePatient] = useState(false);
+  const [ouvertureEspacePatient, setOuvertureEspacePatient] = useState(false);
   const [activeTab, setActiveTab]           = useState<TabId>('bilans');
   const [seancesStats, setSeancesStats]     = useState<SeancePatientStat[]>([]);
   const [retours, setRetours]               = useState<RetourSeance[]>([]);
@@ -1129,6 +1131,21 @@ export default function ParticipantProfile() {
         `Dossier_${participant!.nom}_${participant!.prenom}.pdf`
       );
     } finally { setExportingDossier(false); }
+  }
+
+  async function handleVoirEspacePatient() {
+    setOuvertureEspacePatient(true);
+    try {
+      const authHeader = await getAuthHeader();
+      const result = await patientAccesPraticien(authHeader, participant!.id);
+      if ('error' in result) {
+        toast.error(result.error);
+        return;
+      }
+      window.open(`/patient/${result.participantId}?ptoken=${encodeURIComponent(result.token)}`, '_blank');
+    } finally {
+      setOuvertureEspacePatient(false);
+    }
   }
 
   function copyClientLink() {
@@ -1481,6 +1498,14 @@ export default function ParticipantProfile() {
                 className="flex items-center gap-1.5 text-gray-400 text-[13px] font-medium px-3 py-[7px] rounded-lg hover:bg-gray-100 hover:text-gray-600 transition-colors"
               >
                 Espace patient
+              </button>
+              <button
+                onClick={handleVoirEspacePatient}
+                disabled={ouvertureEspacePatient}
+                title="Ouvrir l'espace patient de ce participant dans un nouvel onglet"
+                className="flex items-center gap-1.5 text-gray-400 text-[13px] font-medium px-3 py-[7px] rounded-lg hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50"
+              >
+                <ExternalLink size={13} /> {ouvertureEspacePatient ? 'Ouverture…' : "Voir l'espace patient"}
               </button>
             </div>
           </div>

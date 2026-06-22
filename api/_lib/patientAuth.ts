@@ -74,7 +74,7 @@ export async function recordLoginAttempt(supabase: SupabaseClient, ip: string): 
 
 export type AuditEventType =
   | 'patient_login' | 'patient_data_access' | 'patient_seance_submit' | 'patient_retour_submit'
-  | 'patient_test_etalon_submit' | 'patient_exercice_libre_submit';
+  | 'patient_test_etalon_submit' | 'patient_exercice_libre_submit' | 'patient_access_via_praticien';
 
 // Journal d'audit des accès à l'espace patient (connexions et accès aux
 // données de santé), à des fins de conformité

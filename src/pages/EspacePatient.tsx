@@ -2147,6 +2147,15 @@ export default function EspacePatient() {
   // écrase une session existante : gère le cas "appareil partagé" quand un
   // autre patient scanne son propre QR code sur le même appareil).
   const codeUrl = searchParams.get('code');
+  // Accès direct depuis la fiche patient côté praticien (bouton "Voir l'espace
+  // patient") : token déjà signé par /api/patient/praticien-acces, pas de
+  // code à saisir. sessionStorage (et non localStorage) garde la trace de
+  // cette origine pour le bandeau "Vous consultez l'espace de ..." même après
+  // un rechargement de l'onglet, sans la faire fuiter vers d'autres appareils.
+  const ptokenUrl = searchParams.get('ptoken');
+  const [viaPraticien] = useState(() =>
+    Boolean(ptokenUrl) || (id ? sessionStorage.getItem(`horizon_patient_via_praticien_${id}`) === '1' : false)
+  );
 
   const [loading, setLoading]           = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
@@ -2169,6 +2178,11 @@ export default function EspacePatient() {
     if (!id) { setAccessDenied(true); setLoading(false); return; }
 
     async function resoudreToken(): Promise<string | null> {
+      if (ptokenUrl && id) {
+        sessionStorage.setItem(`horizon_patient_via_praticien_${id}`, '1');
+        sauvegarderSessionPatient({ patientId: id, token: ptokenUrl });
+        return ptokenUrl;
+      }
       if (codeUrl) {
         const result = await patientLogin(codeUrl);
         if ('error' in result || result.participantId !== id) return null;
@@ -2297,7 +2311,7 @@ export default function EspacePatient() {
     }
 
     void charger();
-  }, [id, codeUrl]);
+  }, [id, codeUrl, ptokenUrl]);
 
   if (!id || accessDenied) return <Navigate to="/patient" replace />;
 
@@ -2353,6 +2367,19 @@ export default function EspacePatient() {
           </div>
         </div>
       </div>
+
+      {/* Bandeau "vue praticien" — évite toute confusion quand c'est Pierre qui consulte */}
+      {viaPraticien && (
+        <div style={{
+          background: 'rgba(43,184,154,0.1)',
+          borderBottom: '1px solid rgba(43,184,154,0.2)',
+          padding: '8px 16px',
+          textAlign: 'center',
+          fontSize: 12, fontWeight: 600, color: 'var(--color-teal)',
+        }}>
+          👁 Vous consultez l'espace de {participant.prenom}
+        </div>
+      )}
 
       {/* CONTENU */}
       <div style={{ padding: '16px' }}>
