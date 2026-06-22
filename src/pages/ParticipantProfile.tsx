@@ -776,6 +776,13 @@ const BIEN_ETRE_LABEL: Record<number, string> = {
 function labelBorg(v: number): string { return BORG_LABEL[v] ?? `${v}`; }
 function labelBienEtre(v: number): string { return BIEN_ETRE_LABEL[v] ?? `${v}`; }
 
+// Libellé Borg côté praticien (carte de séance, onglet Assiduité) — distinct du
+// libellé simplifié utilisé pour le graphique ci-dessus.
+const BORG_LABEL_PRATICIEN: Record<number, string> = {
+  2: 'Borg 2 — Très léger', 4: 'Borg 4 — Léger', 6: 'Borg 6 — Modéré', 8: 'Borg 8 — Intense', 10: 'Borg 10 — Très intense',
+};
+function labelBorgPraticien(v: number): string { return BORG_LABEL_PRATICIEN[v] ?? `Borg ${v}`; }
+
 // Normalise une date Supabase ("YYYY-MM-DD" pour une colonne DATE, mais
 // potentiellement "YYYY-MM-DDTHH:mm:ss+00:00" pour une colonne TIMESTAMP) en
 // "YYYY-MM-DD" — seances_patient ayant été créée hors migration (Studio), son
@@ -1819,7 +1826,7 @@ export default function ParticipantProfile() {
                           )}
                           {retour && (
                             <div className="text-[12px] mt-0.5" style={{ color: retour.borgRpe >= 8 || retour.bienEtre >= 4 ? '#B45309' : '#6B7280' }}>
-                              Effort : {labelBorg(retour.borgRpe)} · Ressenti : {labelBienEtre(retour.bienEtre)}
+                              Effort : {labelBorgPraticien(retour.borgRpe)} · Ressenti : {labelBienEtre(retour.bienEtre)}
                             </div>
                           )}
                         </div>
