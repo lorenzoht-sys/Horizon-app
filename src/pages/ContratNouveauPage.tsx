@@ -4,20 +4,13 @@ import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
 import { useAgenda } from '../hooks/useAgenda';
 import PageWrapper from '../components/layout/PageWrapper';
-import { ArrowLeft, Check, Calendar, Hash } from 'lucide-react';
+import { ArrowLeft, Check, Calendar, Hash, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import type { JourSemaine } from '../types';
-import { calculerNombreSeances, calculerDateFin, LABELS_JOURS_LONG } from '../utils/horaires';
-import { getOrganisation } from '../lib/anamnese';
+import { calculerNbSeancesEstime, calculerDateFinParFrequence } from '../utils/horaires';
+import { getOrganisation, getJoursDisponiblesCourts } from '../lib/anamnese';
 
-const JOURS: { value: JourSemaine; label: string }[] = [
-  { value: 'lun', label: 'Lun' },
-  { value: 'mar', label: 'Mar' },
-  { value: 'mer', label: 'Mer' },
-  { value: 'jeu', label: 'Jeu' },
-  { value: 'ven', label: 'Ven' },
-  { value: 'sam', label: 'Sam' },
-];
+const JOURS_DISPO_LIST = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'] as const;
+const FREQUENCES = [1, 2, 3, 4] as const;
 
 type ModePeriode = 'duree' | 'seances';
 
@@ -31,22 +24,14 @@ export default function ContratNouveauPage() {
   const participant = participants.find(p => p.id === id);
   const bilanInitial = participant?.bilans.find(b => b.type === 'initial');
 
-  // Disponibilités : fiche patient (organisation des séances), avec repli sur l'ancien bilan initial
-  const JOUR_MAP: Record<string, JourSemaine> = {
-    'Lun': 'lun', 'Mar': 'mar', 'Mer': 'mer', 'Jeu': 'jeu', 'Ven': 'ven', 'Sam': 'sam',
-  };
+  // Disponibilités : fiche patient (organisation des séances), avec repli sur l'ancien bilan initial.
   const organisation = participant ? getOrganisation(participant, bilanInitial) : null;
-  const orgFlat = organisation ? {
-    jours: (organisation.joursDisponibles ?? [])
-      .map(l => JOUR_MAP[l]).filter((j): j is JourSemaine => Boolean(j)),
-    heureSouhaitee: organisation.heureSouhaitee || undefined,
-    dureeMinutes: parseInt(String(organisation.dureeSeance ?? '')) || null,
-    creneau: organisation.creneau ?? '',
-    contraintes: organisation.contraintes || undefined,
-  } : null;
+  const joursDisponibles = participant ? getJoursDisponiblesCourts(participant, bilanInitial) : [];
+  const creneauxParJour: Record<string, { debut: string; fin: string }[]> = organisation?.creneauxParJour ?? {};
+  const joursDispoLabels = JOURS_DISPO_LIST.filter(j => (organisation?.joursDisponibles ?? []).includes(j));
 
   const [mode, setMode] = useState<ModePeriode>('duree');
-  const [joursFixe, setJoursFixe] = useState<JourSemaine[]>(['lun']);
+  const [nbSeancesSemaine, setNbSeancesSemaine] = useState(2);
   const [heureDebut, setHeureDebut] = useState('09:00');
   const [dureeMinutes, setDureeMinutes] = useState(45);
   const [dateDebut, setDateDebut] = useState(new Date().toISOString().split('T')[0]);
@@ -60,23 +45,11 @@ export default function ContratNouveauPage() {
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
-    if (!orgFlat) return;
-    if (orgFlat.jours.length > 0) setJoursFixe(orgFlat.jours);
-    if (orgFlat.heureSouhaitee) setHeureDebut(orgFlat.heureSouhaitee);
-    if (orgFlat.dureeMinutes) setDureeMinutes(orgFlat.dureeMinutes);
+    if (!organisation) return;
+    if (organisation.heureSouhaitee) setHeureDebut(organisation.heureSouhaitee);
+    const duree = parseInt(String(organisation.dureeSeance ?? '')) || null;
+    if (duree) setDureeMinutes(duree);
   }, [organisation]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function toggleJour(jour: JourSemaine) {
-    setJoursFixe(prev =>
-      prev.includes(jour)
-        ? prev.length > 1 ? prev.filter(j => j !== jour) : prev  // garder au moins 1 jour
-        : [...prev, jour].sort((a, b) =>
-            ['lun','mar','mer','jeu','ven','sam'].indexOf(a) - ['lun','mar','mer','jeu','ven','sam'].indexOf(b)
-          )
-    );
-  }
-
-  const seancesParSemaine = joursFixe.length;
 
   // Pour "durée indéterminée", générer 6 mois de séances par défaut
   const dateFinPourGeneration = (() => {
@@ -87,11 +60,11 @@ export default function ContratNouveauPage() {
   })();
 
   const nbSeances = mode === 'duree'
-    ? (dateDebut && dateFinPourGeneration ? calculerNombreSeances(dateDebut, dateFinPourGeneration, joursFixe) : 0)
+    ? (dateDebut && dateFinPourGeneration ? calculerNbSeancesEstime(dateDebut, dateFinPourGeneration, nbSeancesSemaine) : 0)
     : nbSeancesPrescrites;
 
   const dateFinEffective = mode === 'seances'
-    ? calculerDateFin(dateDebut, joursFixe, nbSeancesPrescrites)
+    ? calculerDateFinParFrequence(dateDebut, nbSeancesSemaine, nbSeancesPrescrites)
     : dateFinPourGeneration;
 
   function heureFinCalc(): string {
@@ -100,19 +73,11 @@ export default function ContratNouveauPage() {
     return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
   }
 
-  function labelJours(): string {
-    return joursFixe.map(j => LABELS_JOURS_LONG[j]).join(' + ');
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!participant) return;
-    if (!dateDebut || joursFixe.length === 0) {
+    if (!dateDebut) {
       toast.error('Remplissez tous les champs obligatoires');
-      return;
-    }
-    if (nbSeances === 0) {
-      toast.error('Nombre de séances invalide');
       return;
     }
 
@@ -122,13 +87,18 @@ export default function ContratNouveauPage() {
       ? { lat: participant.coordonnees.lat, lng: participant.coordonnees.lng }
       : undefined;
 
+    // Placement initial simple (premiers jours disponibles) — affiné ensuite
+    // par le planificateur de tournée, qui optimise les trajets.
+    const joursPourGeneration = joursDisponibles.slice(0, nbSeancesSemaine);
+
     try {
       const result = await creerContrat(
         {
           participantId: participant.id,
           dateDebut,
           dateFin: dateFinEffective,
-          joursFixe,
+          nbSeancesSemaine,
+          joursPourGeneration,
           heureDebut,
           dureeMinutes,
           statut: 'actif',
@@ -140,7 +110,11 @@ export default function ContratNouveauPage() {
       );
 
       await bulkCreerSeances(result.seancesData);
-      toast.success(`Contrat créé — ${nbSeances} séances générées automatiquement`);
+      toast.success(
+        result.seancesData.length > 0
+          ? `Contrat créé — ${result.seancesData.length} séances générées automatiquement`
+          : 'Contrat créé — renseignez les disponibilités du patient pour générer les séances'
+      );
       navigate(`/participant/${participant.id}`);
     } catch (err) {
       console.error('Erreur création contrat:', err);
@@ -172,21 +146,36 @@ export default function ContratNouveauPage() {
       </div>
 
       <div className="max-w-xl">
-        {/* Rappel disponibilités bilan initial */}
-        {orgFlat && (orgFlat.jours.length > 0 || orgFlat.heureSouhaitee) && (
+        {/* Disponibilités du patient — lecture seule, les jours réels de passage
+            sont décidés par le planificateur de tournée. */}
+        {joursDispoLabels.length > 0 ? (
           <div className="bg-blue-50 border border-blue-200 rounded-2xl px-5 py-4 mb-6">
             <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">
-              Disponibilités renseignées
+              Disponibilités du patient
             </div>
             <div className="text-sm text-blue-800">
-              {orgFlat.jours.map((j: JourSemaine) => LABELS_JOURS_LONG[j]).join(', ')}
-              {orgFlat.creneau && ` · ${orgFlat.creneau}`}
-              {orgFlat.heureSouhaitee && ` · ${orgFlat.heureSouhaitee}`}
-              {orgFlat.dureeMinutes && ` · ${orgFlat.dureeMinutes} min`}
+              Ce patient est disponible :{' '}
+              {joursDispoLabels.map(j =>
+                (creneauxParJour[j]?.length ?? 0) > 0
+                  ? `${j.toLowerCase()} ${creneauxParJour[j].map(c => `${c.debut}-${c.fin}`).join(', ')}`
+                  : j.toLowerCase()
+              ).join(', ')}
             </div>
-            {orgFlat.contraintes && (
-              <div className="text-xs text-blue-600 mt-1 italic">"{orgFlat.contraintes}"</div>
+            {organisation?.contraintes && (
+              <div className="text-xs text-blue-600 mt-1 italic">"{organisation.contraintes}"</div>
             )}
+          </div>
+        ) : (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-2.5">
+            <AlertTriangle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-amber-800">
+              Renseignez d'abord les disponibilités de ce patient pour que le planificateur
+              puisse générer les séances. Le contrat peut être créé sans, mais aucune séance
+              ne sera placée automatiquement.{' '}
+              <Link to={`/participants/${id}/modifier`} className="font-semibold underline">
+                Aller à la fiche patient
+              </Link>
+            </div>
           </div>
         )}
 
@@ -301,26 +290,19 @@ export default function ContratNouveauPage() {
             )}
           </div>
 
-          {/* Jours fixes — sélection multiple */}
+          {/* Fréquence */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Jour(s) fixe(s) *
-              </div>
-              {seancesParSemaine > 1 && (
-                <span className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-1 rounded-full">
-                  {seancesParSemaine}× par semaine
-                </span>
-              )}
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              Séances par semaine *
             </div>
             <div className="flex gap-2 flex-wrap">
-              {JOURS.map(j => {
-                const selected = joursFixe.includes(j.value);
+              {FREQUENCES.map(n => {
+                const selected = nbSeancesSemaine === n;
                 return (
                   <button
-                    key={j.value}
+                    key={n}
                     type="button"
-                    onClick={() => toggleJour(j.value)}
+                    onClick={() => setNbSeancesSemaine(n)}
                     className="px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-colors"
                     style={{
                       borderColor: selected ? '#1A5F9E' : '#E2EEF9',
@@ -328,16 +310,15 @@ export default function ContratNouveauPage() {
                       color: selected ? 'white' : '#4A6080',
                     }}
                   >
-                    {j.label}
+                    {n}×
                   </button>
                 );
               })}
             </div>
-            {seancesParSemaine > 1 && (
-              <p className="text-xs text-gray-400 mt-2">
-                Les séances seront générées le {labelJours()} chaque semaine à la même heure.
-              </p>
-            )}
+            <p className="text-xs text-gray-400 mt-2">
+              Les jours réels de passage sont décidés par le planificateur de tournée,
+              selon les disponibilités du patient et l'optimisation des trajets.
+            </p>
           </div>
 
           {/* Heure et durée séance */}
@@ -381,28 +362,23 @@ export default function ContratNouveauPage() {
           </div>
 
           {/* Récapitulatif */}
-          {nbSeances > 0 && (
-            <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 space-y-1 text-sm">
-              <div className="font-semibold text-dark mb-2">Récapitulatif</div>
-              <div className="text-gray-700">
-                📅 <strong>{nbSeances} séances</strong>
-                {seancesParSemaine > 1
-                  ? ` — ${seancesParSemaine}× par semaine (${labelJours()})`
-                  : ` × ${labelJours()}`}
-                {' à '}{heureDebut}
-              </div>
-              <div className="text-gray-600">
-                📆 Du {new Date(dateDebut + 'T12:00').toLocaleDateString('fr-FR')} au{' '}
-                {new Date(dateFinEffective + 'T12:00').toLocaleDateString('fr-FR')}
-              </div>
-              <div className="text-gray-600">⏱ {dureeMinutes} min par séance</div>
+          <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 space-y-1 text-sm">
+            <div className="font-semibold text-dark mb-2">Récapitulatif</div>
+            <div className="text-gray-700">
+              📅 <strong>{nbSeancesSemaine} séance{nbSeancesSemaine > 1 ? 's' : ''}/semaine</strong>
+              {' à '}{heureDebut}
+              {nbSeances > 0 && ` — ~${nbSeances} séances sur la période`}
             </div>
-          )}
+            <div className="text-gray-600">
+              📆 Du {new Date(dateDebut + 'T12:00').toLocaleDateString('fr-FR')} au{' '}
+              {new Date(dateFinEffective + 'T12:00').toLocaleDateString('fr-FR')}
+            </div>
+            <div className="text-gray-600">⏱ {dureeMinutes} min par séance</div>
+          </div>
 
           <div className="flex gap-3 pt-2">
             <button
               type="submit"
-              disabled={nbSeances === 0}
               className="flex-1 flex items-center justify-center gap-2 bg-primary text-white rounded-xl py-3 font-semibold text-sm hover:bg-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Check size={16} />

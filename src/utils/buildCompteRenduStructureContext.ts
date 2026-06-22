@@ -158,7 +158,7 @@ SÉANCES
 ${contratActif
   ? `Séances réalisées : ${contratActif.nombreSeancesRealisees} / ${contratActif.dureeIndeterminee ? 'durée indéterminée' : contratActif.nombreSeancesTotal}
 Période : du ${fmtDate(contratActif.dateDebut)}${contratActif.dureeIndeterminee ? '' : ` au ${fmtDate(contratActif.dateFin)}`}
-Fréquence : ${contratActif.joursFixe.join(', ') || 'non fixée'} · ${contratActif.dureeMinutes} minutes par séance`
+Fréquence : ${contratActif.nbSeancesSemaine} séance${contratActif.nbSeancesSemaine > 1 ? 's' : ''}/semaine · ${contratActif.dureeMinutes} minutes par séance`
   : 'Non renseigné — aucun contrat de suivi actif.'}
 
 OBJECTIFS

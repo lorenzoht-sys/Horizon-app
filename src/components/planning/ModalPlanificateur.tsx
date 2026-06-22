@@ -99,8 +99,6 @@ export default function ModalPlanificateur({
 
       const indexMap = new Map(points.map((p, i) => [coordKey(p), i]));
 
-      console.log('[Planificateur] contrats actifs:', contrats.filter(c => c.statut === 'actif').map(c => ({ id: c.id.slice(0,8), statut: c.statut, joursFixe: c.joursFixe, dateDebut: c.dateDebut, dateFin: c.dateFin })));
-      console.log('[Planificateur] patientsActifs:', patientsActifs.length, 'lundiDate:', lundiDate);
 
       const params = {
         participants, contrats, seances, indispos,
@@ -138,58 +136,46 @@ export default function ModalPlanificateur({
     if (etapesAcceptees.length === 0) { toast('Aucune séance acceptée.'); return; }
     setApplying(true);
     try {
-      if (!resultat?.modeB) {
-        // Mode A : créer les nouvelles séances, mettre à jour celles qui existent déjà
-        // Garde-fou unicité (participant_id, date) — évite les doublons si seances est désynchronisé
-        const existeDeja = (participantId: string, date: string) =>
-          seances.some(s => s.participantId === participantId && s.date === date && s.statut !== 'annulee');
+      // Les deux modes peuvent désormais créer de nouvelles séances et déplacer
+      // (jour + horaire) celles déjà planifiées cette semaine-là — les jours ne
+      // sont plus figés sur contrat.joursFixe, ils sont ré-optimisés à chaque
+      // exécution du planificateur (src/lib/planificateur.ts).
+      // Garde-fou unicité (participant_id, date) — évite les doublons si seances est désynchronisé
+      const existeDeja = (participantId: string, date: string) =>
+        seances.some(s => s.participantId === participantId && s.date === date && s.statut !== 'annulee');
 
-        const toCreate = etapesAcceptees.filter(e =>
-          !e.alreadyPlanned && !existeDeja(e.patient.id, e.date)
-        );
-        const toUpdate = etapesAcceptees.filter(e =>
-          e.alreadyPlanned && !!e.seanceExistanteId
-        );
-        if (toCreate.length > 0) {
-          const data: Omit<Seance, 'id'>[] = toCreate.map(e => ({
-            participantId: e.patient.id,
-            contratId: e.contrat.id,
-            date: e.date,
-            heureDebut: e.heureDebut,
-            heureFin: e.heureFin,
-            dureeMinutes: e.contrat.dureeMinutes,
-            type: 'seance' as const,
-            statut: 'planifiee' as const,
-            adresse: [e.patient.adresseRue, e.patient.adresseCodePostal, e.patient.adresseVille]
-              .filter(Boolean).join(', '),
-            coordonnees: e.patient.coordonnees
-              ? { lat: e.patient.coordonnees.lat, lng: e.patient.coordonnees.lng }
-              : undefined,
-          }));
-          await bulkCreerSeances(data);
-        }
-        for (const e of toUpdate) {
-          await modifierSeance(e.seanceExistanteId!, { heureDebut: e.heureDebut, heureFin: e.heureFin });
-        }
-        const msg = [
-          toCreate.length > 0 ? `${toCreate.length} créée${toCreate.length > 1 ? 's' : ''}` : '',
-          toUpdate.length > 0 ? `${toUpdate.length} mise${toUpdate.length > 1 ? 's' : ''} à jour` : '',
-        ].filter(Boolean).join(', ');
-        toast.success(`Séances appliquées : ${msg}`);
-        onClose();
-        return;
-      } else {
-        // Mode B : mettre à jour les heures des séances existantes
-        for (const e of etapesAcceptees) {
-          if (e.seanceExistanteId) {
-            await modifierSeance(e.seanceExistanteId, {
-              heureDebut: e.heureDebut,
-              heureFin: e.heureFin,
-            });
-          }
-        }
+      const toCreate = etapesAcceptees.filter(e =>
+        !e.alreadyPlanned && !existeDeja(e.patient.id, e.date)
+      );
+      const toUpdate = etapesAcceptees.filter(e =>
+        e.alreadyPlanned && !!e.seanceExistanteId
+      );
+      if (toCreate.length > 0) {
+        const data: Omit<Seance, 'id'>[] = toCreate.map(e => ({
+          participantId: e.patient.id,
+          contratId: e.contrat.id,
+          date: e.date,
+          heureDebut: e.heureDebut,
+          heureFin: e.heureFin,
+          dureeMinutes: e.contrat.dureeMinutes,
+          type: 'seance' as const,
+          statut: 'planifiee' as const,
+          adresse: [e.patient.adresseRue, e.patient.adresseCodePostal, e.patient.adresseVille]
+            .filter(Boolean).join(', '),
+          coordonnees: e.patient.coordonnees
+            ? { lat: e.patient.coordonnees.lat, lng: e.patient.coordonnees.lng }
+            : undefined,
+        }));
+        await bulkCreerSeances(data);
       }
-      toast.success(`${etapesAcceptees.length} séance${etapesAcceptees.length > 1 ? 's' : ''} ${resultat?.modeB ? 'mise(s) à jour' : 'créée(s)'}`);
+      for (const e of toUpdate) {
+        await modifierSeance(e.seanceExistanteId!, { date: e.date, heureDebut: e.heureDebut, heureFin: e.heureFin });
+      }
+      const msg = [
+        toCreate.length > 0 ? `${toCreate.length} créée${toCreate.length > 1 ? 's' : ''}` : '',
+        toUpdate.length > 0 ? `${toUpdate.length} déplacée${toUpdate.length > 1 ? 's' : ''}/mise${toUpdate.length > 1 ? 's' : ''} à jour` : '',
+      ].filter(Boolean).join(', ');
+      toast.success(`Séances appliquées : ${msg}`);
       onClose();
     } catch {
       toast.error('Erreur lors de l\'application du planning');
@@ -329,7 +315,7 @@ export default function ModalPlanificateur({
                           </span>
                           {etape.alreadyPlanned && (
                             <span className="text-[10px] font-medium text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded flex-shrink-0">
-                              horaire ajusté
+                              déjà planifiée
                             </span>
                           )}
                           {horsZone && (
@@ -346,7 +332,7 @@ export default function ModalPlanificateur({
                         )}
                         {(resultat?.modeB || etape.alreadyPlanned) && (
                           <div className="text-[11px] text-blue-500 mt-0.5">
-                            mise à jour d'horaire proposée
+                            jour/horaire ajustés
                           </div>
                         )}
                       </div>

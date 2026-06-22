@@ -515,7 +515,7 @@ export default function DossierPDF({
             {contratActif && (
               <>
                 <Row label="Début du suivi" value={fmtDate(contratActif.dateDebut)} />
-                <Row label="Fréquence" value={`${contratActif.joursFixe.map(j => JOURS_FR[j] ?? j).join(' + ')} · ${contratActif.dureeMinutes} min`} />
+                <Row label="Fréquence" value={`${contratActif.nbSeancesSemaine} séance${contratActif.nbSeancesSemaine > 1 ? 's' : ''}/semaine · ${contratActif.dureeMinutes} min`} />
                 <Row label="Progression" value={`${contratActif.nombreSeancesRealisees} / ${contratActif.nombreSeancesTotal} séances réalisées`} />
               </>
             )}

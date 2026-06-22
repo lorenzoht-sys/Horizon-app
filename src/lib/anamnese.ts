@@ -1,5 +1,10 @@
-import type { AntecedentMedical, Bilan, MomentPrise, OrganisationData, Participant, SedentariteReponses, TraitementPatient } from '../types';
+import type { AntecedentMedical, Bilan, JourSemaine, MomentPrise, OrganisationData, Participant, SedentariteReponses, TraitementPatient } from '../types';
 import { MOMENTS_PRISE_LABELS, TYPES_ANTECEDENT_LABELS } from '../types';
+
+// Disponibilités : 'Lun'/'Mar'/... (OPTIONS_JOURS_DISPONIBLES, ParticipantForm.tsx) → JourSemaine.
+const JOUR_DISPO_TO_JOUR_SEMAINE: Record<string, JourSemaine> = {
+  Lun: 'lun', Mar: 'mar', Mer: 'mer', Jeu: 'jeu', Ven: 'ven', Sam: 'sam',
+};
 
 // Contre-indications : nouvelle source = fiche patient (anamnese),
 // avec repli sur l'ancien emplacement (bilan initial) pour les bilans déjà remplis.
@@ -165,4 +170,18 @@ export function getOrganisation(
     dureeSeance: (data?.dureeSeance as string | null | undefined) ?? null,
     contraintes: (data?.contraintes as string | undefined) ?? '',
   };
+}
+
+// Jours disponibles du patient, normalisés en JourSemaine ('lun'..'sam') —
+// utilisé par le formulaire de contrat (placement initial) et le planificateur
+// de tournée (src/lib/planificateur.ts), pour choisir les jours réels de
+// passage à partir de la fréquence du contrat (nbSeancesSemaine).
+export function getJoursDisponiblesCourts(
+  participant: Participant,
+  bilanInitial?: Bilan | null
+): JourSemaine[] {
+  const jours = getOrganisation(participant, bilanInitial).joursDisponibles ?? [];
+  return jours
+    .map(j => JOUR_DISPO_TO_JOUR_SEMAINE[j])
+    .filter((j): j is JourSemaine => Boolean(j));
 }

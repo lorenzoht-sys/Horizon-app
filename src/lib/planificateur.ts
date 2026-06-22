@@ -3,6 +3,7 @@
 
 import type { Participant, Contrat, Seance, JourSemaine, IndisponibilitePierre } from '../types';
 import { addMinutes } from '../utils/horaires';
+import { getJoursDisponiblesCourts } from './anamnese';
 
 // ── Types publics ─────────────────────────────────────────────────────────────
 
@@ -175,6 +176,118 @@ function ordonner(departIdx: number, candidates: Candidat[], matrix: MatriceORS)
   return result;
 }
 
+// ── Assignation des jours de la semaine ────────────────────────────────────────
+// Remplace l'ancienne lecture de contrat.joursFixe : pour chaque contrat actif,
+// choisit nbSeancesSemaine jours parmi les disponibilités du patient
+// (anamnese.organisation), en optimisant les trajets (heuristique "most
+// constrained first" + coût = trajet vers le patient déjà placé le plus
+// proche ce jour-là, ou le départ si le jour est encore vide). Réutilise une
+// séance déjà planifiée cette semaine pour ce contrat (la "déplace" vers le
+// jour choisi) plutôt que d'en créer une en double.
+function assignerJoursSemaine(
+  joursDeLaSemaine: { date: string; jourKey: JourSemaine }[],
+  contrats: Contrat[],
+  participants: Participant[],
+  seancesExistantes: Seance[],
+  matrix: MatriceORS,
+  indexMap: Map<string, number>,
+  departIdx: number,
+): {
+  assignations: Map<string, { date: string; jourKey: JourSemaine; seanceExistanteId?: string }[]>;
+  impossibles: { patient: Participant; raison: string }[];
+} {
+  const impossibles: { patient: Participant; raison: string }[] = [];
+  const assignations = new Map<string, { date: string; jourKey: JourSemaine; seanceExistanteId?: string }[]>();
+
+  type CandidatJour = {
+    contrat: Contrat;
+    patient: Participant;
+    idx: number;
+    joursDispo: { date: string; jourKey: JourSemaine }[];
+  };
+  const candidats: CandidatJour[] = [];
+
+  for (const contrat of contrats) {
+    if (contrat.statut !== 'actif') continue;
+    const patient = participants.find(p => p.id === contrat.participantId);
+    if (!patient) continue;
+    if (!patient.coordonnees) {
+      impossibles.push({ patient, raison: 'Adresse non géocodée' });
+      continue;
+    }
+    const idx = indexMap.get(coordKey(patient.coordonnees));
+    if (idx === undefined) {
+      impossibles.push({ patient, raison: 'Patient absent de la matrice de trajets' });
+      continue;
+    }
+    const joursPatient = getJoursDisponiblesCourts(patient);
+    const joursDispo = joursDeLaSemaine.filter(({ date, jourKey }) =>
+      joursPatient.includes(jourKey) && contrat.dateDebut <= date && contrat.dateFin >= date
+    );
+    if (joursDispo.length === 0) {
+      impossibles.push({ patient, raison: 'Disponibilités du patient non renseignées (ou incompatibles cette semaine)' });
+      continue;
+    }
+    candidats.push({ contrat, patient, idx, joursDispo });
+  }
+
+  // Most constrained first : les patients avec le moins de jours disponibles
+  // sont placés en premier, pour ne pas leur laisser que des jours saturés.
+  candidats.sort((a, b) => a.joursDispo.length - b.joursDispo.length);
+
+  // Séances déjà planifiées cette semaine, par contrat — réutilisées (déplacées
+  // vers le nouveau jour choisi) plutôt que dupliquées.
+  const datesSemaine = new Set(joursDeLaSemaine.map(j => j.date));
+  const seancesParContrat = new Map<string, string[]>();
+  for (const s of seancesExistantes) {
+    if (s.statut !== 'planifiee' || !s.contratId || !datesSemaine.has(s.date)) continue;
+    const arr = seancesParContrat.get(s.contratId) ?? [];
+    arr.push(s.id);
+    seancesParContrat.set(s.contratId, arr);
+  }
+
+  const occupeParJour = new Map<JourSemaine, number[]>();
+
+  for (const { contrat, patient, idx, joursDispo } of candidats) {
+    const n = contrat.nbSeancesSemaine;
+    let choisis: { date: string; jourKey: JourSemaine }[];
+
+    if (joursDispo.length <= n) {
+      choisis = joursDispo;
+      if (joursDispo.length < n) {
+        impossibles.push({
+          patient,
+          raison: `${joursDispo.length}/${n} séance(s) possible(s) cette semaine (disponibilités insuffisantes)`,
+        });
+      }
+    } else {
+      const scored = joursDispo.map(jour => {
+        const occupants = occupeParJour.get(jour.jourKey) ?? [];
+        const cibles = occupants.length > 0 ? occupants : [departIdx];
+        const cout = Math.min(...cibles.map(o => matrix.durees[idx]?.[o] ?? Infinity));
+        return { jour, cout };
+      });
+      scored.sort((a, b) => a.cout - b.cout);
+      choisis = scored.slice(0, n).map(s => s.jour);
+    }
+
+    for (const jour of choisis) {
+      const occupants = occupeParJour.get(jour.jourKey) ?? [];
+      occupants.push(idx);
+      occupeParJour.set(jour.jourKey, occupants);
+    }
+
+    const existantes = [...(seancesParContrat.get(contrat.id) ?? [])];
+    assignations.set(contrat.id, choisis.map(jour => ({
+      date: jour.date,
+      jourKey: jour.jourKey,
+      seanceExistanteId: existantes.shift(),
+    })));
+  }
+
+  return { assignations, impossibles };
+}
+
 // Cœur de l'algorithme : ordonne et chronomètre une journée
 function planifierJour(
   date: string,
@@ -231,10 +344,39 @@ function planifierJour(
   return { etapes, impossibles };
 }
 
+// Construit, pour un jour donné, les candidats à partir de l'assignation de
+// la semaine (jourKey → contrats placés ce jour-là).
+function candidatsDuJour(
+  jourKey: JourSemaine,
+  assignations: Map<string, { date: string; jourKey: JourSemaine; seanceExistanteId?: string }[]>,
+  contrats: Contrat[],
+  participants: Participant[],
+): Candidat[] {
+  const candidates: Candidat[] = [];
+  for (const [contratId, joursAssignes] of assignations) {
+    const assign = joursAssignes.find(j => j.jourKey === jourKey);
+    if (!assign) continue;
+    const contrat = contrats.find(c => c.id === contratId);
+    if (!contrat) continue;
+    const patient = participants.find(p => p.id === contrat.participantId);
+    if (!patient?.coordonnees) continue;
+    candidates.push({
+      patient,
+      contrat,
+      idx: -1, // recalculé via indexMap par l'appelant si besoin — non utilisé ici
+      seanceExistanteId: assign.seanceExistanteId,
+      alreadyPlanned: Boolean(assign.seanceExistanteId),
+    });
+  }
+  return candidates;
+}
+
 // ── MODE A : semaine ponctuelle ───────────────────────────────────────────────
-// Propose un planning optimal pour la semaine choisie.
-// Si un patient a déjà une séance ce jour, on propose une mise à jour d'horaire (alreadyPlanned).
-// Sinon, on propose la création d'une nouvelle séance.
+// Propose un planning optimal pour la semaine choisie. Les jours de passage
+// sont choisis dynamiquement (assignerJoursSemaine) à partir des disponibilités
+// patient et de la fréquence du contrat (nbSeancesSemaine). Si une séance
+// existe déjà cette semaine pour un contrat, elle est déplacée vers le jour
+// choisi (alreadyPlanned) plutôt que dupliquée.
 
 export function planifierSemaine(
   params: PlanificateurParams,
@@ -245,64 +387,48 @@ export function planifierSemaine(
   const allImpossibles: { patient: Participant; raison: string }[] = [];
   const jours: JourPlanifie[] = [];
 
+  const joursDeLaSemaine: { date: string; jourKey: JourSemaine }[] = [];
   for (let i = 0; i < 6; i++) {
     const base = new Date(lundiDate + 'T12:00');
     base.setDate(base.getDate() + i);
     const dateStr = base.toISOString().split('T')[0];
     const jourKey = jourDeLaDate(dateStr);
     if (jourKey === 'dim') continue;
+    joursDeLaSemaine.push({ date: dateStr, jourKey: jourKey as JourSemaine });
+  }
 
+  const { assignations, impossibles } = assignerJoursSemaine(
+    joursDeLaSemaine, contrats, participants, seances, matrix, indexMap, departIdx,
+  );
+  allImpossibles.push(...impossibles);
+
+  for (const { date: dateStr, jourKey } of joursDeLaSemaine) {
     const indisposJour = indispos.filter(ind => ind.jour === jourKey && ind.recurrente);
 
-    // Séances existantes ce jour (hors annulées) — pour détecter les patients déjà planifiés
-    const dejaMap = new Map(
-      seances
-        .filter(s => s.date === dateStr && s.statut !== 'annulee')
-        .map(s => [s.participantId, s.id])
-    );
-
-    const candidates: Candidat[] = [];
-
-    for (const contrat of contrats) {
-      if (contrat.statut !== 'actif') continue;
-      const joursFixe = Array.isArray(contrat.joursFixe) ? contrat.joursFixe : [];
-      if (!joursFixe.includes(jourKey as JourSemaine)) continue;
-      if (contrat.dateDebut > dateStr || contrat.dateFin < dateStr) continue;
-
-      const patient = participants.find(p => p.id === contrat.participantId);
-      if (!patient) continue;
-      if (!patient.coordonnees) {
-        allImpossibles.push({ patient, raison: 'Adresse non géocodée' });
-        continue;
-      }
-      const idx = indexMap.get(coordKey(patient.coordonnees));
-      if (idx === undefined) {
-        allImpossibles.push({ patient, raison: 'Patient absent de la matrice de trajets' });
-        continue;
-      }
-      const alreadyPlanned = dejaMap.has(contrat.participantId);
-      const seanceExistanteId = dejaMap.get(contrat.participantId);
-      candidates.push({ patient, contrat, idx, alreadyPlanned, seanceExistanteId });
-    }
+    const candidates = candidatsDuJour(jourKey, assignations, contrats, participants)
+      .map(c => ({ ...c, idx: indexMap.get(coordKey(c.patient.coordonnees!))! }));
 
     if (candidates.length === 0) continue;
 
-    const { etapes, impossibles } = planifierJour(
-      dateStr, jourKey as JourSemaine, candidates,
+    const { etapes, impossibles: impJour } = planifierJour(
+      dateStr, jourKey, candidates,
       departIdx, indisposJour, matrix, heureDebutJournee,
     );
 
-    allImpossibles.push(...impossibles);
+    allImpossibles.push(...impJour);
     if (etapes.length > 0) {
-      jours.push({ jourKey: jourKey as JourSemaine, date: dateStr, label: labelDate(dateStr), etapes });
+      jours.push({ jourKey, date: dateStr, label: labelDate(dateStr), etapes });
     }
   }
 
   return { jours, impossibles: allImpossibles, fallbackORS: matrix.fallback, modeB: false };
 }
 
-// ── MODE B : planning récurrent — 4 semaines ─────────────────────────────────
-// Met à jour les heureDebut/heureFin des séances existantes (planifiee).
+// ── MODE B : planning récurrent — N semaines ─────────────────────────────────
+// Comme le Mode A, mais répété sur plusieurs semaines : à chaque semaine, les
+// jours sont ré-optimisés indépendamment (pas de jours figés d'une semaine à
+// l'autre). Une séance déjà planifiée cette semaine-là est déplacée vers le
+// nouveau jour choisi plutôt que dupliquée.
 
 export function planifierRecurrent(
   params: PlanificateurParams,
@@ -323,61 +449,52 @@ export function planifierRecurrent(
 
   const vusImpossible = new Set<string>();
 
-  for (let i = 0; i < nbSemaines * 7; i++) {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + i);
-    const dateStr = date.toISOString().split('T')[0];
-    const jourKey = jourDeLaDate(dateStr);
-    if (jourKey === 'dim') continue;
+  for (let semaine = 0; semaine < nbSemaines; semaine++) {
+    const lundi = new Date(startDate);
+    lundi.setDate(startDate.getDate() + semaine * 7);
 
-    const indisposJour = indispos.filter(ind => ind.jour === jourKey && ind.recurrente);
-
-    // Séances planifiées ce jour
-    const seancesDuJour = seances.filter(s => s.date === dateStr && s.statut === 'planifiee');
-    if (seancesDuJour.length === 0) continue;
-
-    const candidates: Candidat[] = [];
-
-    for (const seance of seancesDuJour) {
-      const contrat = contrats.find(c => c.id === seance.contratId && c.statut === 'actif');
-      if (!contrat) continue;
-
-      const patient = participants.find(p => p.id === seance.participantId);
-      if (!patient) continue;
-
-      if (!patient.coordonnees) {
-        if (!vusImpossible.has(patient.id)) {
-          allImpossibles.push({ patient, raison: 'Adresse non géocodée' });
-          vusImpossible.add(patient.id);
-        }
-        continue;
-      }
-      const idx = indexMap.get(coordKey(patient.coordonnees));
-      if (idx === undefined) {
-        if (!vusImpossible.has(patient.id)) {
-          allImpossibles.push({ patient, raison: 'Patient absent de la matrice de trajets' });
-          vusImpossible.add(patient.id);
-        }
-        continue;
-      }
-      candidates.push({ patient, contrat, seanceExistanteId: seance.id, idx });
+    const joursDeLaSemaine: { date: string; jourKey: JourSemaine }[] = [];
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(lundi);
+      d.setDate(lundi.getDate() + i);
+      const dateStr = d.toISOString().split('T')[0];
+      const jourKey = jourDeLaDate(dateStr);
+      if (jourKey === 'dim') continue;
+      joursDeLaSemaine.push({ date: dateStr, jourKey: jourKey as JourSemaine });
     }
 
-    if (candidates.length === 0) continue;
-
-    const { etapes, impossibles } = planifierJour(
-      dateStr, jourKey as JourSemaine, candidates,
-      departIdx, indisposJour, matrix, heureDebutJournee,
+    const { assignations, impossibles } = assignerJoursSemaine(
+      joursDeLaSemaine, contrats, participants, seances, matrix, indexMap, departIdx,
     );
-
     for (const imp of impossibles) {
       if (!vusImpossible.has(imp.patient.id)) {
         allImpossibles.push(imp);
         vusImpossible.add(imp.patient.id);
       }
     }
-    if (etapes.length > 0) {
-      jours.push({ jourKey: jourKey as JourSemaine, date: dateStr, label: labelDate(dateStr), etapes });
+
+    for (const { date: dateStr, jourKey } of joursDeLaSemaine) {
+      const indisposJour = indispos.filter(ind => ind.jour === jourKey && ind.recurrente);
+
+      const candidates = candidatsDuJour(jourKey, assignations, contrats, participants)
+        .map(c => ({ ...c, idx: indexMap.get(coordKey(c.patient.coordonnees!))! }));
+
+      if (candidates.length === 0) continue;
+
+      const { etapes, impossibles: impJour } = planifierJour(
+        dateStr, jourKey, candidates,
+        departIdx, indisposJour, matrix, heureDebutJournee,
+      );
+
+      for (const imp of impJour) {
+        if (!vusImpossible.has(imp.patient.id)) {
+          allImpossibles.push(imp);
+          vusImpossible.add(imp.patient.id);
+        }
+      }
+      if (etapes.length > 0) {
+        jours.push({ jourKey, date: dateStr, label: labelDate(dateStr), etapes });
+      }
     }
   }
 

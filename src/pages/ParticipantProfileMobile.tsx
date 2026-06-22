@@ -312,7 +312,7 @@ export default function ParticipantProfileMobile() {
         {contratActif && (
           <MobileCard title="Suivi en cours">
             <div className="text-[13px] text-gray-600 space-y-1 pt-1">
-              <div>📅 {contratActif.joursFixe.join(' + ')} · {contratActif.heureDebut} · {contratActif.dureeMinutes} min</div>
+              <div>📅 {contratActif.nbSeancesSemaine} séance{contratActif.nbSeancesSemaine > 1 ? 's' : ''}/semaine · {contratActif.heureDebut} · {contratActif.dureeMinutes} min</div>
               <div>
                 Séances : <strong className="text-gray-800">{contratActif.nombreSeancesRealisees}/{contratActif.nombreSeancesTotal}</strong>
               </div>

@@ -79,6 +79,32 @@ export function calculerDateFin(
   return current.toISOString().split('T')[0];
 }
 
+// Estimation du nombre de séances sur une période, à partir d'une fréquence
+// hebdomadaire (et non plus de jours fixes) — utilisée pour nombreSeancesTotal
+// et le récapitulatif du formulaire de contrat.
+export function calculerNbSeancesEstime(
+  dateDebut: string,
+  dateFin: string,
+  nbSeancesSemaine: number
+): number {
+  const jours = Math.max(0, (new Date(dateFin).getTime() - new Date(dateDebut).getTime()) / 86_400_000) + 1;
+  return Math.max(0, Math.round((jours / 7) * nbSeancesSemaine));
+}
+
+// Date de fin approximative pour atteindre nbSeances séances à une fréquence
+// donnée (mode "nombre de séances prescrites" du formulaire de contrat).
+export function calculerDateFinParFrequence(
+  dateDebut: string,
+  nbSeancesSemaine: number,
+  nbSeances: number
+): string {
+  if (nbSeances <= 0 || nbSeancesSemaine <= 0) return dateDebut;
+  const nbSemaines = Math.ceil(nbSeances / nbSeancesSemaine);
+  const d = new Date(dateDebut);
+  d.setDate(d.getDate() + nbSemaines * 7 - 1);
+  return d.toISOString().split('T')[0];
+}
+
 export function genererDatesSeances(
   dateDebut: string,
   dateFin: string,

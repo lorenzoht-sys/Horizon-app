@@ -740,7 +740,7 @@ export default function AssistantPage() {
   function getContratInfo(patient: Participant) {
     const c = contratActifDeParticipant(patient.id);
     if (!c) return null;
-    return { dureeMinutes: c.dureeMinutes, seancesParSemaine: c.joursFixe.length };
+    return { dureeMinutes: c.dureeMinutes, seancesParSemaine: c.nbSeancesSemaine };
   }
 
   async function runAction(action: ActionType, patient: Participant, extras: PatientExtras) {

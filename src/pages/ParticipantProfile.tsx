@@ -199,7 +199,7 @@ function CarteStats({ participant, contratActif, prochaineSeance }: {
             />
           </div>
           <div className="space-y-1 text-[13px] text-gray-500">
-            <div>📅 {contratActif.joursFixe.join(' + ')} · {contratActif.heureDebut} · {contratActif.dureeMinutes} min</div>
+            <div>📅 {contratActif.nbSeancesSemaine} séance{contratActif.nbSeancesSemaine > 1 ? 's' : ''}/semaine · {contratActif.heureDebut} · {contratActif.dureeMinutes} min</div>
             <div>📆 {new Date(contratActif.dateDebut + 'T12:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })} → {new Date(contratActif.dateFin + 'T12:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</div>
           </div>
 

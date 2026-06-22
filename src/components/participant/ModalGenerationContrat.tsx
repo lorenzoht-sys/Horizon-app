@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 import type { Contrat, Participant } from '../../types';
 import type { ContratPDFData } from '../export/ContratPDF';
 import { exportContratPDF } from '../../utils/exportContratPDF';
-import { LABELS_JOURS_LONG } from '../../utils/horaires';
 
 function formatDateFR(iso: string): string {
   const [y, m, d] = iso.split('-');
@@ -17,11 +16,9 @@ function formatDuree(minutes: number): string {
   return `${minutes} minutes`;
 }
 
-function formatFrequence(joursFixe: string[], heureDebut: string): string {
-  const n = joursFixe.length;
-  const freq = n === 1 ? '1 fois par semaine' : `${n} fois par semaine`;
-  const jours = joursFixe.map(j => LABELS_JOURS_LONG[j] ?? j).join(' + ');
-  return `${freq} — ${jours} à ${heureDebut.replace(':', 'h')}`;
+function formatFrequence(nbSeancesSemaine: number, heureDebut: string): string {
+  const freq = nbSeancesSemaine === 1 ? '1 fois par semaine' : `${nbSeancesSemaine} fois par semaine`;
+  return `${freq} à ${heureDebut.replace(':', 'h')}`;
 }
 
 function loadSettings() {
@@ -73,7 +70,7 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
     contrat: {
       dateDebut: formatDateFR(contrat.dateDebut),
       duree: formatDuree(contrat.dureeMinutes),
-      frequence: formatFrequence(contrat.joursFixe, contrat.heureDebut),
+      frequence: formatFrequence(contrat.nbSeancesSemaine, contrat.heureDebut),
       lieu: form.lieu,
     },
     tarif: form.tarif,
@@ -127,7 +124,7 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
               <div className="text-xs text-blue-800 leading-relaxed space-y-1">
                 <div>📋 Début du contrat : <strong>{formatDateFR(contrat.dateDebut)}</strong></div>
                 <div>⏱ Durée séance : <strong>{formatDuree(contrat.dureeMinutes)}</strong></div>
-                <div>📅 Fréquence : <strong>{formatFrequence(contrat.joursFixe, contrat.heureDebut)}</strong></div>
+                <div>📅 Fréquence : <strong>{formatFrequence(contrat.nbSeancesSemaine, contrat.heureDebut)}</strong></div>
                 <div>👤 Prestataire : <strong>{settings.prenom} {settings.nom}</strong> — SIRET {settings.siret || 'non renseigné'}</div>
               </div>
             </div>

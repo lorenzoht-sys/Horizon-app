@@ -6,13 +6,7 @@ import { useParticipants } from '../../hooks/useParticipants';
 import { Plus, PauseCircle, XCircle, RefreshCw, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Contrat } from '../../types';
-import { LABELS_JOURS_LONG } from '../../utils/horaires';
 import ModalGenerationContrat from './ModalGenerationContrat';
-
-function labelJours(contrat: Contrat): string {
-  const jours = contrat.joursFixe ?? [];
-  return jours.map(j => LABELS_JOURS_LONG[j]).join(' + ');
-}
 
 const STATUT_BADGE: Record<string, { label: string; class: string }> = {
   actif:    { label: 'Actif',    class: 'bg-green-100 text-green-700' },
@@ -126,10 +120,7 @@ export default function ContratsTab({ participantId }: Props) {
                   {new Date(contrat.dateFin + 'T12:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
-                  {labelJours(contrat)}
-                  {contrat.joursFixe?.length > 1 && (
-                    <span className="ml-1.5 text-primary font-semibold">{contrat.joursFixe.length}×/sem</span>
-                  )}
+                  {contrat.nbSeancesSemaine} séance{contrat.nbSeancesSemaine > 1 ? 's' : ''}/semaine
                   {' · '}{contrat.heureDebut} · {contrat.dureeMinutes} min
                 </div>
               </div>

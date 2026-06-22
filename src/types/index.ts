@@ -388,7 +388,9 @@ export interface Contrat {
   participantId: string;
   dateDebut: string;
   dateFin: string;
-  joursFixe: JourSemaine[];
+  /** @deprecated remplacé par nbSeancesSemaine — les jours réels sont décidés par le planificateur (src/lib/planificateur.ts) selon les disponibilités patient. Conservé pour les anciens contrats. */
+  joursFixe?: JourSemaine[];
+  nbSeancesSemaine: number;
   heureDebut: string;
   dureeMinutes: number;
   statut: StatutContrat;

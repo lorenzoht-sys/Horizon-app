@@ -281,12 +281,16 @@ function normaliserJoursFixe(raw: string[] | null | undefined): JourSemaine[] {
 }
 
 export function dbToContrat(row: any): Contrat {
+  const joursFixe = normaliserJoursFixe(row.jours_fixe);
   return {
     id: row.id,
     participantId: row.participant_id,
     dateDebut: row.date_debut,
     dateFin: row.date_fin,
-    joursFixe: normaliserJoursFixe(row.jours_fixe),
+    joursFixe,
+    // Fallback défensif : si une ligne échappe à la migration (nb_seances_semaine
+    // non backfillé), déduit la fréquence des anciens jours fixes.
+    nbSeancesSemaine: row.nb_seances_semaine ?? (joursFixe.length > 0 ? joursFixe.length : 2),
     heureDebut: row.heure_debut,
     dureeMinutes: row.duree_minutes,
     statut: row.statut,
@@ -305,7 +309,7 @@ export function contratToDb(c: Contrat): Record<string, unknown> {
     participant_id: c.participantId,
     date_debut: c.dateDebut,
     date_fin: c.dateFin,
-    jours_fixe: c.joursFixe,
+    nb_seances_semaine: c.nbSeancesSemaine,
     heure_debut: c.heureDebut,
     duree_minutes: c.dureeMinutes,
     statut: c.statut,

@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { differenceInDays } from 'date-fns';
 import { toast } from 'sonner';
 import type { Contrat, Seance, JourSemaine, StatutContrat } from '../types';
-import { calculerNombreSeances, genererDatesSeances, addMinutes } from '../utils/horaires';
+import { calculerNbSeancesEstime, genererDatesSeances, addMinutes } from '../utils/horaires';
 import { supabase } from '../lib/supabase';
 import { dbToContrat, contratToDb } from '../lib/mappers';
 
@@ -11,7 +11,9 @@ interface CreerContratData {
   participantId: string;
   dateDebut: string;
   dateFin: string;
-  joursFixe: JourSemaine[];
+  nbSeancesSemaine: number;
+  /** Jours dérivés des disponibilités patient, pour la génération initiale des séances (placement simple, affiné ensuite par le planificateur). Vide si aucune disponibilité connue. */
+  joursPourGeneration: JourSemaine[];
   heureDebut: string;
   dureeMinutes: number;
   statut?: StatutContrat;
@@ -42,11 +44,18 @@ export function useContrats() {
     adresse: string,
     coordonnees?: { lat: number; lng: number }
   ): Promise<{ contrat: Contrat; seancesData: Omit<Seance, 'id'>[] }> {
-    const nbSeances = calculerNombreSeances(data.dateDebut, data.dateFin, data.joursFixe);
+    const nbSeances = calculerNbSeancesEstime(data.dateDebut, data.dateFin, data.nbSeancesSemaine);
     const contrat: Contrat = {
-      ...data,
       id: uuidv4(),
+      participantId: data.participantId,
+      dateDebut: data.dateDebut,
+      dateFin: data.dateFin,
+      nbSeancesSemaine: data.nbSeancesSemaine,
+      heureDebut: data.heureDebut,
+      dureeMinutes: data.dureeMinutes,
       statut: data.statut ?? 'actif',
+      notes: data.notes,
+      dureeIndeterminee: data.dureeIndeterminee,
       dateCreation: new Date().toISOString().split('T')[0],
       nombreSeancesTotal: nbSeances,
       nombreSeancesRealisees: 0,
@@ -61,7 +70,10 @@ export function useContrats() {
     }
     setContrats(prev => [...prev, contrat]);
 
-    const dates = genererDatesSeances(data.dateDebut, data.dateFin, data.joursFixe);
+    // Placement initial simple (premiers jours disponibles) — affiné ensuite
+    // par le planificateur de tournée, qui optimise les trajets. Vide si le
+    // patient n'a aucune disponibilité connue : le contrat existe sans séance.
+    const dates = genererDatesSeances(data.dateDebut, data.dateFin, data.joursPourGeneration);
     const heureFin = addMinutes(data.heureDebut, data.dureeMinutes);
     const seancesData: Omit<Seance, 'id'>[] = dates.map(date => ({
       participantId: data.participantId,

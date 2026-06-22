@@ -1687,7 +1687,7 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
             {contrat ? (
               <div>
                 <InfoSection titre="Contrat actif">
-                  <InfoLigne icon="ti-calendar" texte={`${contrat.joursFixe.join(', ')} à ${contrat.heureDebut} · ${contrat.dureeMinutes} min`} />
+                  <InfoLigne icon="ti-calendar" texte={`${contrat.nbSeancesSemaine} séance${contrat.nbSeancesSemaine > 1 ? 's' : ''}/semaine à ${contrat.heureDebut} · ${contrat.dureeMinutes} min`} />
                   <InfoLigne icon="ti-clock" texte={`${new Date(contrat.dateDebut + 'T12:00').toLocaleDateString('fr-FR')} → ${new Date(contrat.dateFin + 'T12:00').toLocaleDateString('fr-FR')}`} />
                   <div style={{ marginTop: 10 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
