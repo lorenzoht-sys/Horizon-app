@@ -11,6 +11,9 @@ import { getOrganisation, getJoursDisponiblesCourts } from '../lib/anamnese';
 
 const JOURS_DISPO_LIST = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'] as const;
 const FREQUENCES = [1, 2, 3, 4] as const;
+// Heure de départ utilisée pour générer les séances initiales — sans incidence
+// réelle, le planificateur de tournée détermine les heures réelles de passage.
+const HEURE_DEBUT_DEFAUT = '08:00';
 
 type ModePeriode = 'duree' | 'seances';
 
@@ -32,7 +35,6 @@ export default function ContratNouveauPage() {
 
   const [mode, setMode] = useState<ModePeriode>('duree');
   const [nbSeancesSemaine, setNbSeancesSemaine] = useState(2);
-  const [heureDebut, setHeureDebut] = useState('09:00');
   // Durée de chaque séance de la semaine, dans l'ordre chronologique (séance 1, séance 2...).
   const [dureesSeances, setDureesSeances] = useState<number[]>([45, 45]);
   const [dateDebut, setDateDebut] = useState(new Date().toISOString().split('T')[0]);
@@ -47,7 +49,6 @@ export default function ContratNouveauPage() {
 
   useEffect(() => {
     if (!organisation) return;
-    if (organisation.heureSouhaitee) setHeureDebut(organisation.heureSouhaitee);
     const duree = parseInt(String(organisation.dureeSeance ?? '')) || null;
     if (duree) setDureesSeances(prev => prev.map(() => duree));
   }, [organisation]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -75,7 +76,7 @@ export default function ContratNouveauPage() {
     : dateFinPourGeneration;
 
   function heureFinCalc(dureeMinutes: number): string {
-    const [h, m] = heureDebut.split(':').map(Number);
+    const [h, m] = HEURE_DEBUT_DEFAUT.split(':').map(Number);
     const total = h * 60 + m + dureeMinutes;
     return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
   }
@@ -110,7 +111,7 @@ export default function ContratNouveauPage() {
           dateFin: dateFinEffective,
           nbSeancesSemaine,
           joursPourGeneration,
-          heureDebut,
+          heureDebut: HEURE_DEBUT_DEFAUT,
           dureesSeances,
           statut: 'actif',
           notes: notes || undefined,
@@ -332,19 +333,6 @@ export default function ContratNouveauPage() {
             </p>
           </div>
 
-          {/* Heure de début */}
-          <div>
-            <label className="block text-xs text-gray-500 mb-1.5">Heure de début *</label>
-            <input
-              type="time"
-              value={heureDebut}
-              onChange={e => setHeureDebut(e.target.value)}
-              min="07:00" max="20:00"
-              required
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
-            />
-          </div>
-
           {/* Durée par séance — une séance peut durer plus ou moins longtemps qu'une autre */}
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
@@ -386,7 +374,6 @@ export default function ContratNouveauPage() {
             <div className="font-semibold text-dark mb-2">Récapitulatif</div>
             <div className="text-gray-700">
               📅 <strong>{nbSeancesSemaine} séance{nbSeancesSemaine > 1 ? 's' : ''}/semaine</strong>
-              {' à '}{heureDebut}
               {nbSeances > 0 && ` — ~${nbSeances} séances sur la période`}
             </div>
             <div className="text-gray-600">
