@@ -392,7 +392,10 @@ export interface Contrat {
   joursFixe?: JourSemaine[];
   nbSeancesSemaine: number;
   heureDebut: string;
+  /** Représentatif = dureesSeances[0] — conservé pour les affichages à valeur unique. */
   dureeMinutes: number;
+  /** Durée de chaque séance de la semaine, dans l'ordre chronologique (séance 1, séance 2...). */
+  dureesSeances: number[];
   statut: StatutContrat;
   notes?: string;
   dateCreation: string;

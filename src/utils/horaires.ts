@@ -122,3 +122,25 @@ export function genererDatesSeances(
   }
   return dates;
 }
+
+function lundiDeLaSemaine(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00');
+  const dow = d.getDay();
+  const back = dow === 0 ? 6 : dow - 1;
+  d.setDate(d.getDate() - back);
+  return d.toISOString().split('T')[0];
+}
+
+// Pour des dates déjà triées chronologiquement (ex : genererDatesSeances),
+// renvoie le rang 0-based de chaque date au sein de sa semaine (lundi-dimanche)
+// — utilisé pour appliquer une durée individuelle par séance de la semaine
+// (Contrat.dureesSeances : séance 1, séance 2...).
+export function indexerParSemaine(dates: string[]): number[] {
+  const compteurParSemaine = new Map<string, number>();
+  return dates.map(date => {
+    const semaine = lundiDeLaSemaine(date);
+    const i = compteurParSemaine.get(semaine) ?? 0;
+    compteurParSemaine.set(semaine, i + 1);
+    return i;
+  });
+}

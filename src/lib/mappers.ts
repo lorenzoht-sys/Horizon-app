@@ -293,6 +293,11 @@ export function dbToContrat(row: any): Contrat {
     nbSeancesSemaine: row.nb_seances_semaine ?? (joursFixe.length > 0 ? joursFixe.length : 2),
     heureDebut: row.heure_debut,
     dureeMinutes: row.duree_minutes,
+    // Fallback défensif : si une ligne échappe à la migration (durees_seances
+    // non backfillé), retombe sur l'ancienne durée unique.
+    dureesSeances: Array.isArray(row.durees_seances) && row.durees_seances.length > 0
+      ? row.durees_seances
+      : [row.duree_minutes ?? 45],
     statut: row.statut,
     notes: row.notes ?? undefined,
     dateCreation: row.date_creation,
@@ -311,7 +316,8 @@ export function contratToDb(c: Contrat): Record<string, unknown> {
     date_fin: c.dateFin,
     nb_seances_semaine: c.nbSeancesSemaine,
     heure_debut: c.heureDebut,
-    duree_minutes: c.dureeMinutes,
+    duree_minutes: c.dureesSeances[0] ?? c.dureeMinutes,
+    durees_seances: c.dureesSeances,
     statut: c.statut,
     notes: c.notes ?? null,
     date_creation: c.dateCreation || null,

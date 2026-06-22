@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { differenceInDays } from 'date-fns';
 import { toast } from 'sonner';
 import type { Contrat, Seance, JourSemaine, StatutContrat } from '../types';
-import { calculerNbSeancesEstime, genererDatesSeances, addMinutes } from '../utils/horaires';
+import { calculerNbSeancesEstime, genererDatesSeances, indexerParSemaine, addMinutes } from '../utils/horaires';
 import { supabase } from '../lib/supabase';
 import { dbToContrat, contratToDb } from '../lib/mappers';
 
@@ -15,7 +15,8 @@ interface CreerContratData {
   /** Jours dérivés des disponibilités patient, pour la génération initiale des séances (placement simple, affiné ensuite par le planificateur). Vide si aucune disponibilité connue. */
   joursPourGeneration: JourSemaine[];
   heureDebut: string;
-  dureeMinutes: number;
+  /** Durée de chaque séance de la semaine, dans l'ordre chronologique (séance 1, séance 2...). */
+  dureesSeances: number[];
   statut?: StatutContrat;
   notes?: string;
   dureeIndeterminee?: boolean;
@@ -52,7 +53,8 @@ export function useContrats() {
       dateFin: data.dateFin,
       nbSeancesSemaine: data.nbSeancesSemaine,
       heureDebut: data.heureDebut,
-      dureeMinutes: data.dureeMinutes,
+      dureeMinutes: data.dureesSeances[0] ?? 45,
+      dureesSeances: data.dureesSeances,
       statut: data.statut ?? 'actif',
       notes: data.notes,
       dureeIndeterminee: data.dureeIndeterminee,
@@ -73,20 +75,25 @@ export function useContrats() {
     // Placement initial simple (premiers jours disponibles) — affiné ensuite
     // par le planificateur de tournée, qui optimise les trajets. Vide si le
     // patient n'a aucune disponibilité connue : le contrat existe sans séance.
+    // Chaque séance reçoit la durée individuelle de son rang dans la semaine
+    // (séance 1, séance 2...) — voir Contrat.dureesSeances.
     const dates = genererDatesSeances(data.dateDebut, data.dateFin, data.joursPourGeneration);
-    const heureFin = addMinutes(data.heureDebut, data.dureeMinutes);
-    const seancesData: Omit<Seance, 'id'>[] = dates.map(date => ({
-      participantId: data.participantId,
-      contratId: contrat.id,
-      date,
-      heureDebut: data.heureDebut,
-      heureFin,
-      dureeMinutes: data.dureeMinutes,
-      type: 'seance' as const,
-      statut: 'planifiee' as const,
-      adresse,
-      coordonnees,
-    }));
+    const indices = indexerParSemaine(dates);
+    const seancesData: Omit<Seance, 'id'>[] = dates.map((date, i) => {
+      const duree = data.dureesSeances[indices[i]] ?? data.dureesSeances.at(-1) ?? 45;
+      return {
+        participantId: data.participantId,
+        contratId: contrat.id,
+        date,
+        heureDebut: data.heureDebut,
+        heureFin: addMinutes(data.heureDebut, duree),
+        dureeMinutes: duree,
+        type: 'seance' as const,
+        statut: 'planifiee' as const,
+        adresse,
+        coordonnees,
+      };
+    });
 
     return { contrat, seancesData };
   }

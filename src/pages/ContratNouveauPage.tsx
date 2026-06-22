@@ -33,7 +33,8 @@ export default function ContratNouveauPage() {
   const [mode, setMode] = useState<ModePeriode>('duree');
   const [nbSeancesSemaine, setNbSeancesSemaine] = useState(2);
   const [heureDebut, setHeureDebut] = useState('09:00');
-  const [dureeMinutes, setDureeMinutes] = useState(45);
+  // Durée de chaque séance de la semaine, dans l'ordre chronologique (séance 1, séance 2...).
+  const [dureesSeances, setDureesSeances] = useState<number[]>([45, 45]);
   const [dateDebut, setDateDebut] = useState(new Date().toISOString().split('T')[0]);
   const [dateFin, setDateFin] = useState(() => {
     const d = new Date();
@@ -48,8 +49,14 @@ export default function ContratNouveauPage() {
     if (!organisation) return;
     if (organisation.heureSouhaitee) setHeureDebut(organisation.heureSouhaitee);
     const duree = parseInt(String(organisation.dureeSeance ?? '')) || null;
-    if (duree) setDureeMinutes(duree);
+    if (duree) setDureesSeances(prev => prev.map(() => duree));
   }, [organisation]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Redimensionne le tableau de durées quand la fréquence change — conserve
+  // les valeurs déjà saisies, complète à 45 min pour les nouvelles séances.
+  useEffect(() => {
+    setDureesSeances(prev => Array.from({ length: nbSeancesSemaine }, (_, i) => prev[i] ?? 45));
+  }, [nbSeancesSemaine]);
 
   // Pour "durée indéterminée", générer 6 mois de séances par défaut
   const dateFinPourGeneration = (() => {
@@ -67,10 +74,14 @@ export default function ContratNouveauPage() {
     ? calculerDateFinParFrequence(dateDebut, nbSeancesSemaine, nbSeancesPrescrites)
     : dateFinPourGeneration;
 
-  function heureFinCalc(): string {
+  function heureFinCalc(dureeMinutes: number): string {
     const [h, m] = heureDebut.split(':').map(Number);
     const total = h * 60 + m + dureeMinutes;
     return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  }
+
+  function setDureeSeance(i: number, valeur: number) {
+    setDureesSeances(prev => prev.map((d, j) => j === i ? valeur : d));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -100,7 +111,7 @@ export default function ContratNouveauPage() {
           nbSeancesSemaine,
           joursPourGeneration,
           heureDebut,
-          dureeMinutes,
+          dureesSeances,
           statut: 'actif',
           notes: notes || undefined,
           dureeIndeterminee: dureeIndeterminee || undefined,
@@ -321,31 +332,40 @@ export default function ContratNouveauPage() {
             </p>
           </div>
 
-          {/* Heure et durée séance */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1.5">Heure de début *</label>
-              <input
-                type="time"
-                value={heureDebut}
-                onChange={e => setHeureDebut(e.target.value)}
-                min="07:00" max="20:00"
-                required
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
-              />
-              <div className="text-xs text-gray-400 mt-1">Fin à {heureFinCalc()}</div>
+          {/* Heure de début */}
+          <div>
+            <label className="block text-xs text-gray-500 mb-1.5">Heure de début *</label>
+            <input
+              type="time"
+              value={heureDebut}
+              onChange={e => setHeureDebut(e.target.value)}
+              min="07:00" max="20:00"
+              required
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
+            />
+          </div>
+
+          {/* Durée par séance — une séance peut durer plus ou moins longtemps qu'une autre */}
+          <div>
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              Durée de chaque séance
             </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1.5">Durée par séance</label>
-              <select
-                value={dureeMinutes}
-                onChange={e => setDureeMinutes(Number(e.target.value))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
-              >
-                {[30, 45, 60, 90, 120].map(d => (
-                  <option key={d} value={d}>{d} min</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-4">
+              {dureesSeances.map((duree, i) => (
+                <div key={i}>
+                  <label className="block text-xs text-gray-500 mb-1.5">Séance {i + 1}</label>
+                  <select
+                    value={duree}
+                    onChange={e => setDureeSeance(i, Number(e.target.value))}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
+                  >
+                    {[30, 45, 60, 90, 120].map(d => (
+                      <option key={d} value={d}>{d} min</option>
+                    ))}
+                  </select>
+                  <div className="text-xs text-gray-400 mt-1">Fin à {heureFinCalc(duree)}</div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -373,7 +393,7 @@ export default function ContratNouveauPage() {
               📆 Du {new Date(dateDebut + 'T12:00').toLocaleDateString('fr-FR')} au{' '}
               {new Date(dateFinEffective + 'T12:00').toLocaleDateString('fr-FR')}
             </div>
-            <div className="text-gray-600">⏱ {dureeMinutes} min par séance</div>
+            <div className="text-gray-600">⏱ {dureesSeances.map(d => `${d} min`).join(', ')}</div>
           </div>
 
           <div className="flex gap-3 pt-2">
