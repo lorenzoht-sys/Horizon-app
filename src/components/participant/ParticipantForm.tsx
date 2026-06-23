@@ -905,6 +905,8 @@ const JOURS_LABELS_COMPLET: Record<string, string> = {
   Lun: 'Lundi', Mar: 'Mardi', Mer: 'Mercredi', Jeu: 'Jeudi', Ven: 'Vendredi', Sam: 'Samedi',
 };
 const OPTIONS_DUREE_SEANCE = ['30 min', '45 min', '60 min', '90 min', '120 min'];
+const FREQUENCES_SEANCES = [1, 2, 3, 4] as const;
+const OPTIONS_DUREE_SEANCE_MIN = [30, 45, 60, 90, 120];
 const OPTIONS_HEURES = (() => {
   const heures: string[] = [];
   for (let m = 7 * 60; m <= 20 * 60; m += 30) {
@@ -1464,6 +1466,60 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
               className={CLS_INPUT}
             />
           </div>
+          <div>
+            <label className={CLS_LABEL}>Nombre de séances souhaité par semaine (optionnel)</label>
+            <div className="flex gap-2 flex-wrap">
+              {FREQUENCES_SEANCES.map(n => {
+                const selected = anamnese.organisation?.nbSeancesSemaine === n;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setAnamnese(a => {
+                      const prevDurees = a.organisation?.dureesSeances ?? [];
+                      const dureesSeances = Array.from({ length: n }, (_, i) => prevDurees[i] ?? 45);
+                      return { ...a, organisation: { ...a.organisation, nbSeancesSemaine: n, dureesSeances } };
+                    })}
+                    className="px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-colors"
+                    style={{
+                      borderColor: selected ? '#1A5F9E' : '#E2EEF9',
+                      background: selected ? '#1A5F9E' : 'white',
+                      color: selected ? 'white' : '#4A6080',
+                    }}
+                  >
+                    {n}×
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {!!anamnese.organisation?.nbSeancesSemaine && (
+            <div>
+              <label className={CLS_LABEL}>Durée souhaitée par séance</label>
+              <div className="grid grid-cols-2 gap-4">
+                {(anamnese.organisation?.dureesSeances ?? []).map((duree, i) => (
+                  <div key={i}>
+                    <label className="block text-xs text-gray-500 mb-1.5">Séance {i + 1}</label>
+                    <select
+                      value={duree}
+                      onChange={e => setAnamnese(a => ({
+                        ...a,
+                        organisation: {
+                          ...a.organisation,
+                          dureesSeances: (a.organisation?.dureesSeances ?? []).map((d, j) => j === i ? Number(e.target.value) : d),
+                        },
+                      }))}
+                      className={CLS_INPUT}
+                    >
+                      {OPTIONS_DUREE_SEANCE_MIN.map(d => (
+                        <option key={d} value={d}>{d} min</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       </>}

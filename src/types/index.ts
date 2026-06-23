@@ -690,6 +690,8 @@ export interface OrganisationData {
   heureSouhaitee?: string;
   dureeSeance?: string | null;
   contraintes?: string;
+  nbSeancesSemaine?: number | null;
+  dureesSeances?: number[];
 }
 
 // ── TESTS RICCI & GAGNON (sédentarité) / FSS (fatigue) ───────────────────────

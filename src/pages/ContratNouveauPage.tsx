@@ -47,10 +47,18 @@ export default function ContratNouveauPage() {
   const [nbSeancesPrescrites, setNbSeancesPrescrites] = useState(12);
   const [notes, setNotes] = useState('');
 
+  // Préremplit la fréquence et les durées depuis les préférences saisies sur la fiche patient.
   useEffect(() => {
     if (!organisation) return;
-    const duree = parseInt(String(organisation.dureeSeance ?? '')) || null;
-    if (duree) setDureesSeances(prev => prev.map(() => duree));
+    const n = organisation.nbSeancesSemaine ?? nbSeancesSemaine;
+    if (organisation.nbSeancesSemaine) setNbSeancesSemaine(organisation.nbSeancesSemaine);
+
+    if (organisation.dureesSeances && organisation.dureesSeances.length > 0) {
+      setDureesSeances(Array.from({ length: n }, (_, i) => organisation.dureesSeances![i] ?? 45));
+    } else {
+      const duree = parseInt(String(organisation.dureeSeance ?? '')) || null;
+      if (duree) setDureesSeances(Array.from({ length: n }, () => duree));
+    }
   }, [organisation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Redimensionne le tableau de durées quand la fréquence change — conserve
