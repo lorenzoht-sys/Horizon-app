@@ -433,7 +433,11 @@ export function planifierSemaine(
   allImpossibles.push(...impossibles);
 
   for (const { date: dateStr, jourKey } of joursDeLaSemaine) {
-    const indisposJour = indispos.filter(ind => ind.jour === jourKey && ind.recurrente);
+    // IndisponibilitePierre n'a pas de date propre (seulement un jour de
+    // semaine) : qu'elle soit marquée "récurrente" ou non, elle s'applique à
+    // toute occurrence de ce jour — cohérent avec indisposDuJour (TourneePage),
+    // qui ne filtre pas non plus sur ce champ.
+    const indisposJour = indispos.filter(ind => ind.jour === jourKey);
 
     const candidates = candidatsDuJour(jourKey, assignations, contrats, participants)
       .map(c => ({ ...c, idx: indexMap.get(coordKey(c.patient.coordonnees!))! }));
@@ -504,7 +508,11 @@ export function planifierRecurrent(
     }
 
     for (const { date: dateStr, jourKey } of joursDeLaSemaine) {
-      const indisposJour = indispos.filter(ind => ind.jour === jourKey && ind.recurrente);
+      // IndisponibilitePierre n'a pas de date propre (seulement un jour de
+    // semaine) : qu'elle soit marquée "récurrente" ou non, elle s'applique à
+    // toute occurrence de ce jour — cohérent avec indisposDuJour (TourneePage),
+    // qui ne filtre pas non plus sur ce champ.
+    const indisposJour = indispos.filter(ind => ind.jour === jourKey);
 
       const candidates = candidatsDuJour(jourKey, assignations, contrats, participants)
         .map(c => ({ ...c, idx: indexMap.get(coordKey(c.patient.coordonnees!))! }));
