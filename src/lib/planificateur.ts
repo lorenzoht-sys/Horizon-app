@@ -57,6 +57,17 @@ export function coordKey(p: { lat: number; lng: number }): string {
   return `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;
 }
 
+// Garde-fou explicite : sans un vrai point de départ, toute la tournée
+// calculée serait fausse sans que personne ne le sache (cf. audit §3 — point
+// de départ non configuré). L'UI (TourneePage/ModalPlanificateur) bloque déjà
+// l'appel en amont ; cette validation est un filet de sécurité supplémentaire
+// directement dans l'algorithme.
+function validerDepart(depart: { lat: number; lng: number } | null | undefined): void {
+  if (!depart || !Number.isFinite(depart.lat) || !Number.isFinite(depart.lng)) {
+    throw new Error('Point de départ invalide ou non configuré — configurez votre adresse dans Paramètres.');
+  }
+}
+
 const JOURS_ORDRE: JourSemaine[] = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam'];
 
 const LABELS_JOURS: Record<JourSemaine, string> = {
@@ -413,6 +424,7 @@ export function planifierSemaine(
   lundiDate: string,
 ): ResultatPlanification {
   const { participants, contrats, seances, indispos, depart, matrix, indexMap, heureDebutJournee } = params;
+  validerDepart(depart);
   const departIdx = indexMap.get(coordKey(depart)) ?? 0;
   const allImpossibles: { patient: Participant; raison: string }[] = [];
   const jours: JourPlanifie[] = [];
@@ -470,6 +482,7 @@ export function planifierRecurrent(
   nbSemaines = 8,
 ): ResultatPlanification {
   const { participants, contrats, seances, indispos, depart, matrix, indexMap, heureDebutJournee } = params;
+  validerDepart(depart);
   const departIdx = indexMap.get(coordKey(depart)) ?? 0;
   const allImpossibles: { patient: Participant; raison: string }[] = [];
   const jours: JourPlanifie[] = [];
