@@ -243,3 +243,20 @@ describe('planifierSemaine — contrat non actif ignoré', () => {
     expect(r.impossibles).toHaveLength(0); // ignoré, pas signalé comme un cas à traiter
   });
 });
+
+describe('planifierSemaine — heures arrondies au quart d\'heure supérieur', () => {
+  it('un trajet menant à une heure non ronde est arrondi au quart d\'heure supérieur, jamais inférieur', () => {
+    // depart -> patient = 600 sec = 10 min de trajet (buildMatrix). Départ
+    // 08:00 (déjà rond) + 10 min = 08:10, jamais rond -> doit devenir 08:15.
+    const patient = makePatient({ id: 'p1' });
+    const contrat = makeContrat({ id: 'c1', participantId: 'p1' });
+
+    const r = planifierSemaine(makeParams({ participants: [patient], contrats: [contrat] }), LUNDI);
+
+    const etapes = toutesLesEtapes(r.jours);
+    expect(etapes).toHaveLength(1);
+    expect(etapes[0].heureDebut).toBe('08:15');
+    expect(etapes[0].heureDebut.endsWith(':00') || etapes[0].heureDebut.endsWith(':15')
+      || etapes[0].heureDebut.endsWith(':30') || etapes[0].heureDebut.endsWith(':45')).toBe(true);
+  });
+});

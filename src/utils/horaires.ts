@@ -13,6 +13,13 @@ export function addMinutes(heure: string, minutes: number): string {
   return minutesEnHeure(heureEnMinutes(heure) + minutes);
 }
 
+// Arrondit au quart d'heure SUPÉRIEUR (jamais inférieur) — un horaire déjà
+// rond (ex: 10h00) reste inchangé. Utilisé par le planificateur pour ne
+// jamais faire arriver Pierre avant l'heure réellement calculée.
+export function arrondirAuQuartHeureSup(minutes: number): number {
+  return Math.ceil(minutes / 15) * 15;
+}
+
 export function diffMinutes(debut: string, fin: string): number {
   return Math.max(0, heureEnMinutes(fin) - heureEnMinutes(debut));
 }

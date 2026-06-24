@@ -2,7 +2,7 @@
 // Utilisé par ModalPlanificateur pour les deux modes (ponctuel et récurrent).
 
 import type { Participant, Contrat, Seance, JourSemaine, IndisponibilitePierre } from '../types';
-import { addMinutes } from '../utils/horaires';
+import { addMinutes, heureEnMinutes, minutesEnHeure, arrondirAuQuartHeureSup } from '../utils/horaires';
 import { getJoursDisponiblesCourts } from './anamnese';
 
 // ── Types publics ─────────────────────────────────────────────────────────────
@@ -136,6 +136,12 @@ function appliquerIndispos(heure: string, indisposJour: IndisponibilitePierre[])
     }
   }
   return h;
+}
+
+// Arrondit une heure "HH:MM" au quart d'heure supérieur — jamais inférieur,
+// pour ne jamais faire arriver Pierre avant l'heure réellement calculée.
+function arrondirHeure(heure: string): string {
+  return minutesEnHeure(arrondirAuQuartHeureSup(heureEnMinutes(heure)));
 }
 
 function travelMin(matrix: MatriceORS, fromIdx: number, toIdx: number): number {
@@ -343,15 +349,15 @@ function planifierJour(
   const etapes: EtapePlanifiee[] = [];
   const impossibles: { patient: Participant; raison: string }[] = [];
 
-  let heure = heureDebutJournee;
+  let heure = arrondirHeure(heureDebutJournee); // heure de départ initiale
   let posIdx = departIdx;
 
   for (const { patient, contrat, seanceExistanteId, alreadyPlanned, idx } of ordered) {
     const trajet = travelMin(matrix, posIdx, idx);
     const dist   = distKm(matrix, posIdx, idx);
 
-    let heureArrivee = addMinutes(heure, trajet);
-    heureArrivee = appliquerIndispos(heureArrivee, indisposJour);
+    let heureArrivee = arrondirHeure(addMinutes(heure, trajet)); // après trajet
+    heureArrivee = arrondirHeure(appliquerIndispos(heureArrivee, indisposJour)); // après pause
 
     const slot = ajusterAuCreneauPatient(heureArrivee, patient);
     if (slot.impossible) {
