@@ -336,9 +336,9 @@ export default function ContratNouveauPage() {
                     onClick={() => setFrequence(opt)}
                     className="px-4 py-2.5 rounded-xl text-sm font-semibold border-2 transition-colors text-left"
                     style={{
-                      borderColor: selected ? '#1A5F9E' : '#E2EEF9',
-                      background: selected ? '#1A5F9E' : 'white',
-                      color: selected ? 'white' : '#4A6080',
+                      borderColor: selected ? '#2BBFBF' : '#D1D5DB',
+                      background: selected ? '#2BBFBF' : 'white',
+                      color: selected ? 'white' : '#374151',
                     }}
                   >
                     {opt.label}
