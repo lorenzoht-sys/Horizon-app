@@ -40,10 +40,10 @@ export default function ParticipantFormStepper({ initial, draftKey, onSave, onCa
 
   function handleCreer() {
     if (isSaving) return;
-    const ok = formRef.current?.submit();
-    if (ok === false) {
-      toast.error('Le prénom et le nom sont obligatoires.');
-      setStep(0);
+    const resultat = formRef.current?.submit();
+    if (resultat && resultat !== true) {
+      toast.error(resultat.message);
+      setStep(resultat.step - 1);
     }
   }
 

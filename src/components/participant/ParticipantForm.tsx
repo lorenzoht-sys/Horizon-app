@@ -1,4 +1,5 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { toast } from 'sonner';
 import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical, TypeAntecedent, AnamneseData, ChutesData, ChuteDetail, ActivitePrecedente, NiveauActivite, CreneauHoraire, SedentariteReponses, MomentPrise } from '../../types';
 import { TYPES_ANTECEDENT_LABELS, TYPES_BLESSURE_CHUTE, MOMENTS_PRISE_LABELS } from '../../types';
 import { useStructures } from '../../hooks/useStructures';
@@ -960,8 +961,13 @@ interface Props {
 }
 
 export interface ParticipantFormHandle {
-  /** Tente la soumission. Retourne false si le prénom ou le nom est manquant. */
-  submit: () => boolean;
+  /**
+   * Tente la soumission. Retourne true si réussie, ou { step, message } si une
+   * validation a échoué (prénom/nom manquant → étape 1, organisation des
+   * séances incomplète → étape 4) — à l'appelant de naviguer vers cette étape
+   * et d'afficher le message.
+   */
+  submit: () => true | { step: 1 | 2 | 3 | 4 | 5; message: string };
 }
 
 const CLS_INPUT = 'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10';
@@ -1115,6 +1121,19 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
     allergies:            seed.allergies         ?? '',
   });
 
+  // ── Organisation des séances : nb séances/semaine + durées obligatoires ──
+  const [erreurOrganisation, setErreurOrganisation] = useState<string | null>(null);
+
+  function validerOrganisation(): string | null {
+    const n = anamnese.organisation?.nbSeancesSemaine;
+    if (!n || n <= 0) return 'Veuillez indiquer le nombre de séances par semaine.';
+    const durees = anamnese.organisation?.dureesSeances ?? [];
+    if (durees.length !== n || durees.some(d => !d || d <= 0)) {
+      return 'Veuillez indiquer la durée de chaque séance.';
+    }
+    return null;
+  }
+
   // ── Handlers ────────────────────────────────────────────────────
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
@@ -1171,12 +1190,27 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const erreur = validerOrganisation();
+    if (erreur) {
+      setErreurOrganisation(erreur);
+      toast.error(erreur);
+      return;
+    }
+    setErreurOrganisation(null);
     onSubmit(buildPayload());
   }
 
   useImperativeHandle(ref, () => ({
     submit: () => {
-      if (!form.prenom.trim() || !form.nom.trim()) return false;
+      if (!form.prenom.trim() || !form.nom.trim()) {
+        return { step: 1, message: 'Le prénom et le nom sont obligatoires.' };
+      }
+      const erreur = validerOrganisation();
+      if (erreur) {
+        setErreurOrganisation(erreur);
+        return { step: 4, message: erreur };
+      }
+      setErreurOrganisation(null);
       onSubmit(buildPayload());
       return true;
     },
@@ -1467,7 +1501,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
             />
           </div>
           <div>
-            <label className={CLS_LABEL}>Nombre de séances souhaité par semaine (optionnel)</label>
+            <label className={CLS_LABEL}>Nombre de séances par semaine *</label>
             <div className="flex gap-2 flex-wrap">
               {FREQUENCES_SEANCES.map(n => {
                 const selected = anamnese.organisation?.nbSeancesSemaine === n;
@@ -1475,11 +1509,14 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
                   <button
                     key={n}
                     type="button"
-                    onClick={() => setAnamnese(a => {
-                      const prevDurees = a.organisation?.dureesSeances ?? [];
-                      const dureesSeances = Array.from({ length: n }, (_, i) => prevDurees[i] ?? 45);
-                      return { ...a, organisation: { ...a.organisation, nbSeancesSemaine: n, dureesSeances } };
-                    })}
+                    onClick={() => {
+                      setErreurOrganisation(null);
+                      setAnamnese(a => {
+                        const prevDurees = a.organisation?.dureesSeances ?? [];
+                        const dureesSeances = Array.from({ length: n }, (_, i) => prevDurees[i] ?? 45);
+                        return { ...a, organisation: { ...a.organisation, nbSeancesSemaine: n, dureesSeances } };
+                      });
+                    }}
                     className="px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-colors"
                     style={{
                       borderColor: selected ? '#1A5F9E' : '#E2EEF9',
@@ -1492,6 +1529,9 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
                 );
               })}
             </div>
+            {erreurOrganisation && (
+              <p className="text-xs text-red-500 mt-1.5">{erreurOrganisation}</p>
+            )}
           </div>
           {!!anamnese.organisation?.nbSeancesSemaine && (
             <div>
