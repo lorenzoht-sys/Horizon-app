@@ -255,6 +255,17 @@ function assignerJoursSemaine(
 
   for (const { contrat, patient, idx, joursDispo: joursDispoContrat } of candidats) {
     const n = contrat.nbSeancesSemaine;
+
+    // Fréquence invalide (donnée corrompue) — jamais ignorée silencieusement :
+    // signalée explicitement plutôt que de faire disparaître le patient du
+    // planning (et plutôt que de heurter la sémantique de slice(0, n) avec un
+    // n négatif, qui retournerait "tout sauf le dernier élément").
+    if (n <= 0) {
+      impossibles.push({ patient, raison: `Fréquence invalide (${n} séance(s)/semaine) — contrat à corriger` });
+      assignations.set(contrat.id, []);
+      continue;
+    }
+
     const joursDejaPris = joursPrisParPatient.get(patient.id) ?? new Set<JourSemaine>();
     const joursDispo = joursDispoContrat.filter(j => !joursDejaPris.has(j.jourKey));
 
