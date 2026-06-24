@@ -383,6 +383,13 @@ export interface IndisponibilitePierre {
 
 export type StatutContrat = 'actif' | 'termine' | 'suspendu' | 'a_venir';
 
+// Espacement du cycle de séances : 'semaine' = nbSeancesSemaine séances chaque
+// semaine (comportement historique) ; 'deux_semaines'/'trois_semaines' = une
+// seule séance (nbSeancesSemaine vaut alors toujours 1), répétée une semaine
+// sur deux / sur trois. Le cycle est ancré sur la semaine de dateDebut du
+// contrat (cadence fixe — voir estSemaineDue() dans planificateur.ts).
+export type PeriodiciteContrat = 'semaine' | 'deux_semaines' | 'trois_semaines';
+
 export interface Contrat {
   id: string;
   participantId: string;
@@ -391,6 +398,8 @@ export interface Contrat {
   /** @deprecated remplacé par nbSeancesSemaine — les jours réels sont décidés par le planificateur (src/lib/planificateur.ts) selon les disponibilités patient. Conservé pour les anciens contrats. */
   joursFixe?: JourSemaine[];
   nbSeancesSemaine: number;
+  /** Défaut 'semaine' si absent (contrats créés avant cette fonctionnalité). */
+  periodicite?: PeriodiciteContrat;
   heureDebut: string;
   /** Représentatif = dureesSeances[0] — conservé pour les affichages à valeur unique. */
   dureeMinutes: number;
@@ -696,6 +705,8 @@ export interface OrganisationData {
   contraintes?: string;
   nbSeancesSemaine?: number | null;
   dureesSeances?: number[];
+  /** Préférence saisie sur la fiche patient — préremplit periodicite au moment de créer un contrat. */
+  periodicite?: PeriodiciteContrat;
 }
 
 // ── TESTS RICCI & GAGNON (sédentarité) / FSS (fatigue) ───────────────────────

@@ -6,11 +6,12 @@ import { useAgenda } from '../hooks/useAgenda';
 import PageWrapper from '../components/layout/PageWrapper';
 import { ArrowLeft, Check, Calendar, Hash, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import { calculerNbSeancesEstime, calculerDateFinParFrequence } from '../utils/horaires';
-import { getOrganisation, getJoursDisponiblesCourts } from '../lib/anamnese';
+import { calculerNbSeancesEstime, calculerDateFinParFrequence, CYCLE_SEMAINES } from '../utils/horaires';
+import { getOrganisation, getJoursDisponiblesCourts, OPTIONS_FREQUENCE, trouverOptionFrequence, type OptionFrequence } from '../lib/anamnese';
 
 const JOURS_DISPO_LIST = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'] as const;
-const FREQUENCES = [1, 2, 3, 4] as const;
+const FREQUENCE_DEFAUT = OPTIONS_FREQUENCE[1]; // 2 séances/semaine
+
 // Heure de départ utilisée pour générer les séances initiales — sans incidence
 // réelle, le planificateur de tournée détermine les heures réelles de passage.
 const HEURE_DEBUT_DEFAUT = '08:00';
@@ -34,7 +35,13 @@ export default function ContratNouveauPage() {
   const joursDispoLabels = JOURS_DISPO_LIST.filter(j => (organisation?.joursDisponibles ?? []).includes(j));
 
   const [mode, setMode] = useState<ModePeriode>('duree');
-  const [nbSeancesSemaine, setNbSeancesSemaine] = useState(2);
+  const [frequence, setFrequence] = useState<OptionFrequence>(FREQUENCE_DEFAUT);
+  const nbSeancesSemaine = frequence.nbSeancesSemaine;
+  const periodicite = frequence.periodicite;
+  // Taux hebdomadaire effectif — dilué pour un cycle de 2/3 semaines (1 séance
+  // toutes les 2 semaines = 0.5/semaine) ; utilisé pour les estimations de
+  // durée/nombre de séances, qui raisonnent en taux par semaine.
+  const tauxHebdo = nbSeancesSemaine / CYCLE_SEMAINES[periodicite];
   // Durée de chaque séance de la semaine, dans l'ordre chronologique (séance 1, séance 2...).
   const [dureesSeances, setDureesSeances] = useState<number[]>([45, 45]);
   const [dateDebut, setDateDebut] = useState(new Date().toISOString().split('T')[0]);
@@ -52,7 +59,8 @@ export default function ContratNouveauPage() {
   useEffect(() => {
     if (!organisation) return;
     const n = organisation.nbSeancesSemaine ?? nbSeancesSemaine;
-    if (organisation.nbSeancesSemaine) setNbSeancesSemaine(organisation.nbSeancesSemaine);
+    const match = trouverOptionFrequence(organisation.nbSeancesSemaine, organisation.periodicite);
+    if (match) setFrequence(match);
 
     if (organisation.dureesSeances && organisation.dureesSeances.length > 0) {
       setDureesSeances(Array.from({ length: n }, (_, i) => organisation.dureesSeances![i] ?? 45));
@@ -77,11 +85,11 @@ export default function ContratNouveauPage() {
   })();
 
   const nbSeances = mode === 'duree'
-    ? (dateDebut && dateFinPourGeneration ? calculerNbSeancesEstime(dateDebut, dateFinPourGeneration, nbSeancesSemaine) : 0)
+    ? (dateDebut && dateFinPourGeneration ? calculerNbSeancesEstime(dateDebut, dateFinPourGeneration, tauxHebdo) : 0)
     : nbSeancesPrescrites;
 
   const dateFinEffective = mode === 'seances'
-    ? calculerDateFinParFrequence(dateDebut, nbSeancesSemaine, nbSeancesPrescrites)
+    ? calculerDateFinParFrequence(dateDebut, tauxHebdo, nbSeancesPrescrites)
     : dateFinPourGeneration;
 
   function heureFinCalc(dureeMinutes: number): string {
@@ -119,6 +127,7 @@ export default function ContratNouveauPage() {
           dateDebut,
           dateFin: dateFinEffective,
           nbSeancesSemaine,
+          periodicite,
           joursPourGeneration,
           heureDebut: HEURE_DEBUT_DEFAUT,
           dureesSeances,
@@ -315,24 +324,24 @@ export default function ContratNouveauPage() {
           {/* Fréquence */}
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-              Séances par semaine *
+              Fréquence *
             </div>
-            <div className="flex gap-2 flex-wrap">
-              {FREQUENCES.map(n => {
-                const selected = nbSeancesSemaine === n;
+            <div className="grid grid-cols-2 gap-2">
+              {OPTIONS_FREQUENCE.map(opt => {
+                const selected = frequence.key === opt.key;
                 return (
                   <button
-                    key={n}
+                    key={opt.key}
                     type="button"
-                    onClick={() => setNbSeancesSemaine(n)}
-                    className="px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-colors"
+                    onClick={() => setFrequence(opt)}
+                    className="px-4 py-2.5 rounded-xl text-sm font-semibold border-2 transition-colors text-left"
                     style={{
                       borderColor: selected ? '#1A5F9E' : '#E2EEF9',
                       background: selected ? '#1A5F9E' : 'white',
                       color: selected ? 'white' : '#4A6080',
                     }}
                   >
-                    {n}×
+                    {opt.label}
                   </button>
                 );
               })}
@@ -400,7 +409,7 @@ export default function ContratNouveauPage() {
           <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 space-y-1 text-sm">
             <div className="font-semibold text-dark mb-2">Récapitulatif</div>
             <div className="text-gray-700">
-              📅 <strong>{nbSeancesSemaine} séance{nbSeancesSemaine > 1 ? 's' : ''}/semaine</strong>
+              📅 <strong>{frequence.label}</strong>
               {nbSeances > 0 && ` — ~${nbSeances} séances sur la période`}
             </div>
             <div className="text-gray-600">

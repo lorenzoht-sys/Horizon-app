@@ -291,6 +291,7 @@ export function dbToContrat(row: any): Contrat {
     // Fallback défensif : si une ligne échappe à la migration (nb_seances_semaine
     // non backfillé), déduit la fréquence des anciens jours fixes.
     nbSeancesSemaine: row.nb_seances_semaine ?? (joursFixe.length > 0 ? joursFixe.length : 2),
+    periodicite: row.periodicite ?? 'semaine',
     heureDebut: row.heure_debut,
     dureeMinutes: row.duree_minutes,
     // Fallback défensif : si une ligne échappe à la migration (durees_seances
@@ -316,6 +317,7 @@ export function contratToDb(c: Contrat): Record<string, unknown> {
     date_debut: c.dateDebut,
     date_fin: c.dateFin,
     nb_seances_semaine: c.nbSeancesSemaine,
+    periodicite: c.periodicite ?? 'semaine',
     heure_debut: c.heureDebut,
     duree_minutes: c.dureesSeances[0] ?? c.dureeMinutes,
     durees_seances: c.dureesSeances,

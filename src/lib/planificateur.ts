@@ -2,7 +2,7 @@
 // Utilisé par ModalPlanificateur pour les deux modes (ponctuel et récurrent).
 
 import type { Participant, Contrat, Seance, JourSemaine, IndisponibilitePierre } from '../types';
-import { addMinutes, heureEnMinutes, minutesEnHeure, arrondirAuQuartHeureSup } from '../utils/horaires';
+import { addMinutes, heureEnMinutes, minutesEnHeure, arrondirAuQuartHeureSup, estSemaineDue } from '../utils/horaires';
 import { getJoursDisponiblesCourts } from './anamnese';
 
 // ── Types publics ─────────────────────────────────────────────────────────────
@@ -223,10 +223,16 @@ function assignerJoursSemaine(
     joursDispo: { date: string; jourKey: JourSemaine }[];
   };
   const candidats: CandidatJour[] = [];
+  // joursDeLaSemaine[0] est toujours le lundi (seul 'dim' est filtré par
+  // l'appelant) — utilisé comme date cible pour le calcul de périodicité.
+  const lundiSemaine = joursDeLaSemaine[0]?.date;
 
   for (const contrat of contrats) {
     if (contrat.statut !== 'actif') continue;
     if (contrat.exclureTournee) continue; // patient volontairement exclu de l'optimisation
+    // Contrat bi/tri-mensuel : cette semaine n'est pas due dans son cycle —
+    // ignoré silencieusement, comme exclureTournee (pas un échec à signaler).
+    if (lundiSemaine && !estSemaineDue(contrat.dateDebut, lundiSemaine, contrat.periodicite)) continue;
     const patient = participants.find(p => p.id === contrat.participantId);
     if (!patient) continue;
     if (!patient.coordonnees) {

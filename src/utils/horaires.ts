@@ -1,3 +1,5 @@
+import type { PeriodiciteContrat } from '../types';
+
 export function heureEnMinutes(heure: string): number {
   const [h, m] = heure.split(':').map(Number);
   return h * 60 + m;
@@ -115,27 +117,55 @@ export function calculerDateFinParFrequence(
 export function genererDatesSeances(
   dateDebut: string,
   dateFin: string,
-  joursFixe: string | string[]
+  joursFixe: string | string[],
+  periodicite: PeriodiciteContrat = 'semaine'
 ): string[] {
   const joursNums = toJoursNums(joursFixe);
   const dates: string[] = [];
   const current = new Date(dateDebut);
   const fin = new Date(dateFin);
   while (current <= fin) {
-    if (joursNums.has(current.getDay())) {
-      dates.push(current.toISOString().split('T')[0]);
+    const dateStr = current.toISOString().split('T')[0];
+    if (joursNums.has(current.getDay()) && estSemaineDue(dateDebut, dateStr, periodicite)) {
+      dates.push(dateStr);
     }
     current.setDate(current.getDate() + 1);
   }
   return dates;
 }
 
-function lundiDeLaSemaine(dateStr: string): string {
+export function lundiDeLaSemaine(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00');
   const dow = d.getDay();
   const back = dow === 0 ? 6 : dow - 1;
   d.setDate(d.getDate() - back);
   return d.toISOString().split('T')[0];
+}
+
+export const CYCLE_SEMAINES: Record<PeriodiciteContrat, number> = {
+  semaine: 1, deux_semaines: 2, trois_semaines: 3,
+};
+
+// Le cycle (toutes les 2/3 semaines) est ancré sur la semaine de dateDebut,
+// de façon fixe : si une semaine due est ratée (patient indisponible), le
+// cycle continue sur sa cadence normale plutôt que de "rattraper" la séance
+// manquée. Utilisé à la fois pour la génération initiale des séances
+// (genererDatesSeances) et par le planificateur de tournée semaine par
+// semaine (src/lib/planificateur.ts).
+export function estSemaineDue(
+  dateDebut: string,
+  dateCible: string,
+  periodicite: PeriodiciteContrat = 'semaine'
+): boolean {
+  const cycle = CYCLE_SEMAINES[periodicite];
+  if (cycle <= 1) return true;
+  const lundiDebut = lundiDeLaSemaine(dateDebut);
+  const lundiCible = lundiDeLaSemaine(dateCible);
+  const diffJours = Math.round(
+    (new Date(lundiCible + 'T12:00').getTime() - new Date(lundiDebut + 'T12:00').getTime()) / 86_400_000
+  );
+  const semaineIndex = Math.round(diffJours / 7);
+  return ((semaineIndex % cycle) + cycle) % cycle === 0;
 }
 
 // Pour des dates déjà triées chronologiquement (ex : genererDatesSeances),

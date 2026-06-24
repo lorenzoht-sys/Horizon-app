@@ -1,10 +1,40 @@
-import type { AntecedentMedical, Bilan, JourSemaine, MomentPrise, OrganisationData, Participant, SedentariteReponses, TraitementPatient } from '../types';
+import type { AntecedentMedical, Bilan, JourSemaine, MomentPrise, OrganisationData, Participant, PeriodiciteContrat, SedentariteReponses, TraitementPatient } from '../types';
 import { MOMENTS_PRISE_LABELS, TYPES_ANTECEDENT_LABELS } from '../types';
 
 // Disponibilités : 'Lun'/'Mar'/... (OPTIONS_JOURS_DISPONIBLES, ParticipantForm.tsx) → JourSemaine.
 const JOUR_DISPO_TO_JOUR_SEMAINE: Record<string, JourSemaine> = {
   Lun: 'lun', Mar: 'mar', Mer: 'mer', Jeu: 'jeu', Ven: 'ven', Sam: 'sam',
 };
+
+// Fréquence des séances : couvre à la fois le rythme hebdomadaire et
+// l'espacement bi/tri-mensuel — partagé entre la fiche patient
+// (ParticipantForm.tsx, préférence saisie sur anamnese.organisation) et le
+// formulaire de contrat (ContratNouveauPage.tsx), pour proposer exactement
+// le même choix aux deux endroits et permettre le préremplissage automatique
+// de l'un depuis l'autre.
+export interface OptionFrequence {
+  key: string;
+  label: string;
+  nbSeancesSemaine: number;
+  periodicite: PeriodiciteContrat;
+}
+
+export const OPTIONS_FREQUENCE: OptionFrequence[] = [
+  { key: '1-semaine', label: '1 séance/semaine', nbSeancesSemaine: 1, periodicite: 'semaine' },
+  { key: '2-semaine', label: '2 séances/semaine', nbSeancesSemaine: 2, periodicite: 'semaine' },
+  { key: '3-semaine', label: '3 séances/semaine', nbSeancesSemaine: 3, periodicite: 'semaine' },
+  { key: '4-semaine', label: '4 séances/semaine', nbSeancesSemaine: 4, periodicite: 'semaine' },
+  { key: '1-deux_semaines', label: '1 séance toutes les 2 semaines', nbSeancesSemaine: 1, periodicite: 'deux_semaines' },
+  { key: '1-trois_semaines', label: '1 séance toutes les 3 semaines', nbSeancesSemaine: 1, periodicite: 'trois_semaines' },
+];
+
+export function trouverOptionFrequence(
+  nbSeancesSemaine?: number | null,
+  periodicite?: PeriodiciteContrat | null
+): OptionFrequence | undefined {
+  if (!nbSeancesSemaine) return undefined;
+  return OPTIONS_FREQUENCE.find(o => o.nbSeancesSemaine === nbSeancesSemaine && o.periodicite === (periodicite ?? 'semaine'));
+}
 
 // Contre-indications : nouvelle source = fiche patient (anamnese),
 // avec repli sur l'ancien emplacement (bilan initial) pour les bilans déjà remplis.

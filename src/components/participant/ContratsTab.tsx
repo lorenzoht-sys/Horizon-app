@@ -15,6 +15,12 @@ const STATUT_BADGE: Record<string, { label: string; class: string }> = {
   a_venir:  { label: 'À venir',  class: 'bg-blue-100 text-blue-700' },
 };
 
+function labelFrequence(contrat: Contrat): string {
+  if (contrat.periodicite === 'deux_semaines') return '1 séance toutes les 2 semaines';
+  if (contrat.periodicite === 'trois_semaines') return '1 séance toutes les 3 semaines';
+  return `${contrat.nbSeancesSemaine} séance${contrat.nbSeancesSemaine > 1 ? 's' : ''}/semaine`;
+}
+
 interface Props {
   participantId: string;
 }
@@ -135,7 +141,7 @@ export default function ContratsTab({ participantId }: Props) {
                   {new Date(contrat.dateFin + 'T12:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
-                  {contrat.nbSeancesSemaine} séance{contrat.nbSeancesSemaine > 1 ? 's' : ''}/semaine
+                  {labelFrequence(contrat)}
                   {' · '}{contrat.heureDebut} · {contrat.dureeMinutes} min
                 </div>
               </div>

@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { differenceInDays } from 'date-fns';
 import { toast } from 'sonner';
-import type { Contrat, Seance, JourSemaine, StatutContrat } from '../types';
-import { calculerNbSeancesEstime, genererDatesSeances, indexerParSemaine, addMinutes } from '../utils/horaires';
+import type { Contrat, Seance, JourSemaine, StatutContrat, PeriodiciteContrat } from '../types';
+import { calculerNbSeancesEstime, genererDatesSeances, indexerParSemaine, addMinutes, CYCLE_SEMAINES } from '../utils/horaires';
 import { supabase } from '../lib/supabase';
 import { dbToContrat, contratToDb } from '../lib/mappers';
 
@@ -11,7 +11,10 @@ interface CreerContratData {
   participantId: string;
   dateDebut: string;
   dateFin: string;
+  /** Nombre de séances par occurrence du cycle (1 pour deux_semaines/trois_semaines). */
   nbSeancesSemaine: number;
+  /** Défaut 'semaine' si absent. */
+  periodicite?: PeriodiciteContrat;
   /** Jours dérivés des disponibilités patient, pour la génération initiale des séances (placement simple, affiné ensuite par le planificateur). Vide si aucune disponibilité connue. */
   joursPourGeneration: JourSemaine[];
   heureDebut: string;
@@ -47,13 +50,19 @@ export function useContrats() {
     adresse: string,
     coordonnees?: { lat: number; lng: number }
   ): Promise<{ contrat: Contrat; seancesData: Omit<Seance, 'id'>[] }> {
-    const nbSeances = calculerNbSeancesEstime(data.dateDebut, data.dateFin, data.nbSeancesSemaine);
+    const periodicite = data.periodicite ?? 'semaine';
+    // calculerNbSeancesEstime attend un taux hebdomadaire : pour un cycle de
+    // 2/3 semaines, nbSeancesSemaine (séances par occurrence, toujours 1) est
+    // dilué par la taille du cycle (1 séance toutes les 2 semaines = taux 0.5).
+    const tauxHebdo = data.nbSeancesSemaine / CYCLE_SEMAINES[periodicite];
+    const nbSeances = calculerNbSeancesEstime(data.dateDebut, data.dateFin, tauxHebdo);
     const contrat: Contrat = {
       id: uuidv4(),
       participantId: data.participantId,
       dateDebut: data.dateDebut,
       dateFin: data.dateFin,
       nbSeancesSemaine: data.nbSeancesSemaine,
+      periodicite,
       heureDebut: data.heureDebut,
       dureeMinutes: data.dureesSeances[0] ?? 45,
       dureesSeances: data.dureesSeances,
@@ -80,7 +89,7 @@ export function useContrats() {
     // patient n'a aucune disponibilité connue : le contrat existe sans séance.
     // Chaque séance reçoit la durée individuelle de son rang dans la semaine
     // (séance 1, séance 2...) — voir Contrat.dureesSeances.
-    const dates = genererDatesSeances(data.dateDebut, data.dateFin, data.joursPourGeneration);
+    const dates = genererDatesSeances(data.dateDebut, data.dateFin, data.joursPourGeneration, periodicite);
     const indices = indexerParSemaine(dates);
     const seancesData: Omit<Seance, 'id'>[] = dates.map((date, i) => {
       const duree = data.dureesSeances[indices[i]] ?? data.dureesSeances.at(-1) ?? 45;

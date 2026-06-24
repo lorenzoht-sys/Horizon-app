@@ -284,3 +284,60 @@ describe('planifierSemaine — heures arrondies au quart d\'heure supérieur', (
       || etapes[0].heureDebut.endsWith(':30') || etapes[0].heureDebut.endsWith(':45')).toBe(true);
   });
 });
+
+describe('planifierRecurrent — périodicité bi/tri-mensuelle', () => {
+  // Ancrage fixe sur dateDebut (= LUNDI, la 1ère semaine traitée par
+  // planifierRecurrent avec dateRef='2026-06-24') : semaine 0 = due pour tous
+  // les cycles ; semaine 1 jamais due (ni 2 ni 3 semaines) ; semaine 2 due
+  // seulement pour deux_semaines ; semaine 3 due seulement pour trois_semaines.
+  function lundiPlusJours(j: number): string {
+    const d = new Date(LUNDI + 'T12:00');
+    d.setDate(d.getDate() + j);
+    return d.toISOString().split('T')[0];
+  }
+
+  it('1 séance toutes les 2 semaines : due aux semaines 0 et 2, jamais aux semaines 1 et 3', () => {
+    const patient = makePatient({ id: 'p1' });
+    const contrat = makeContrat({
+      id: 'c1', participantId: 'p1', dateDebut: LUNDI, periodicite: 'deux_semaines', nbSeancesSemaine: 1,
+    });
+
+    const r = planifierRecurrent(makeParams({ participants: [patient], contrats: [contrat] }), '2026-06-24', 4);
+
+    const dates = toutesLesEtapes(r.jours).map(e => e.date).sort();
+    expect(dates).toEqual([LUNDI, lundiPlusJours(14)]);
+  });
+
+  it('1 séance toutes les 3 semaines : due aux semaines 0 et 3, jamais aux semaines 1 et 2', () => {
+    const patient = makePatient({ id: 'p1' });
+    const contrat = makeContrat({
+      id: 'c1', participantId: 'p1', dateDebut: LUNDI, periodicite: 'trois_semaines', nbSeancesSemaine: 1,
+    });
+
+    const r = planifierRecurrent(makeParams({ participants: [patient], contrats: [contrat] }), '2026-06-24', 4);
+
+    const dates = toutesLesEtapes(r.jours).map(e => e.date).sort();
+    expect(dates).toEqual([LUNDI, lundiPlusJours(21)]);
+  });
+
+  it('périodicité "semaine" (par défaut) : due chaque semaine, sans changement de comportement', () => {
+    const patient = makePatient({ id: 'p1' });
+    const contrat = makeContrat({ id: 'c1', participantId: 'p1', dateDebut: LUNDI, nbSeancesSemaine: 1 });
+
+    const r = planifierRecurrent(makeParams({ participants: [patient], contrats: [contrat] }), '2026-06-24', 4);
+
+    const dates = toutesLesEtapes(r.jours).map(e => e.date).sort();
+    expect(dates).toEqual([LUNDI, lundiPlusJours(7), lundiPlusJours(14), lundiPlusJours(21)]);
+  });
+
+  it('une semaine non due n\'apparaît pas en "à planifier manuellement" (ce n\'est pas un échec)', () => {
+    const patient = makePatient({ id: 'p1' });
+    const contrat = makeContrat({
+      id: 'c1', participantId: 'p1', dateDebut: LUNDI, periodicite: 'deux_semaines', nbSeancesSemaine: 1,
+    });
+
+    const r = planifierRecurrent(makeParams({ participants: [patient], contrats: [contrat] }), '2026-06-24', 4);
+
+    expect(r.impossibles).toHaveLength(0);
+  });
+});

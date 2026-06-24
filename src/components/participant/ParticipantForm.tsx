@@ -4,6 +4,7 @@ import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, 
 import { TYPES_ANTECEDENT_LABELS, TYPES_BLESSURE_CHUTE, MOMENTS_PRISE_LABELS } from '../../types';
 import { useStructures } from '../../hooks/useStructures';
 import { getBrouillonParticipant, sauvegarderBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
+import { OPTIONS_FREQUENCE } from '../../lib/anamnese';
 import { Save, X } from 'lucide-react';
 import GIRWidget from '../bilan/GIRWidget';
 import { EMPTY_SED, computeSedScore, getSedProfil, getFSSProfil, SectionSedentarite, SectionFatigue } from '../bilan/TestsAutonomie';
@@ -905,8 +906,6 @@ const OPTIONS_JOURS_DISPONIBLES = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 const JOURS_LABELS_COMPLET: Record<string, string> = {
   Lun: 'Lundi', Mar: 'Mardi', Mer: 'Mercredi', Jeu: 'Jeudi', Ven: 'Vendredi', Sam: 'Samedi',
 };
-const OPTIONS_DUREE_SEANCE = ['30 min', '45 min', '60 min', '90 min', '120 min'];
-const FREQUENCES_SEANCES = [1, 2, 3, 4] as const;
 const OPTIONS_DUREE_SEANCE_MIN = [30, 45, 60, 90, 120];
 const OPTIONS_HEURES = (() => {
   const heures: string[] = [];
@@ -1495,12 +1494,6 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
               onChange={v => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, creneauxParJour: v } }))}
             />
           </div>
-          <ChoixUnique
-            label="Durée habituelle"
-            options={OPTIONS_DUREE_SEANCE}
-            value={anamnese.organisation?.dureeSeance}
-            onChange={v => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, dureeSeance: v } }))}
-          />
           <div>
             <label className={CLS_LABEL}>Contraintes particulières</label>
             <textarea
@@ -1513,31 +1506,40 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
           </div>
           <div>
             <label className={CLS_LABEL}>
-              Nombre de séances par semaine{!enModification && ' *'}
+              Fréquence des séances{!enModification && ' *'}
             </label>
-            <div className="flex gap-2 flex-wrap">
-              {FREQUENCES_SEANCES.map(n => {
-                const selected = anamnese.organisation?.nbSeancesSemaine === n;
+            <div className="grid grid-cols-2 gap-2">
+              {OPTIONS_FREQUENCE.map(opt => {
+                const selected = anamnese.organisation?.nbSeancesSemaine === opt.nbSeancesSemaine
+                  && (anamnese.organisation?.periodicite ?? 'semaine') === opt.periodicite;
                 return (
                   <button
-                    key={n}
+                    key={opt.key}
                     type="button"
                     onClick={() => {
                       setErreurOrganisation(null);
                       setAnamnese(a => {
                         const prevDurees = a.organisation?.dureesSeances ?? [];
-                        const dureesSeances = Array.from({ length: n }, (_, i) => prevDurees[i] ?? 45);
-                        return { ...a, organisation: { ...a.organisation, nbSeancesSemaine: n, dureesSeances } };
+                        const dureesSeances = Array.from({ length: opt.nbSeancesSemaine }, (_, i) => prevDurees[i] ?? 45);
+                        return {
+                          ...a,
+                          organisation: {
+                            ...a.organisation,
+                            nbSeancesSemaine: opt.nbSeancesSemaine,
+                            periodicite: opt.periodicite,
+                            dureesSeances,
+                          },
+                        };
                       });
                     }}
-                    className="px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-colors"
+                    className="px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-colors text-left"
                     style={{
                       borderColor: selected ? '#1A5F9E' : '#E2EEF9',
                       background: selected ? '#1A5F9E' : 'white',
                       color: selected ? 'white' : '#4A6080',
                     }}
                   >
-                    {n}×
+                    {opt.label}
                   </button>
                 );
               })}
@@ -1547,7 +1549,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
             )}
             {enModification && !anamnese.organisation?.nbSeancesSemaine && (
               <p className="text-xs text-amber-600 mt-1.5">
-                Pensez à renseigner le nombre de séances/semaine pour l'optimisation de tournée.
+                Pensez à renseigner la fréquence des séances pour l'optimisation de tournée.
               </p>
             )}
           </div>
