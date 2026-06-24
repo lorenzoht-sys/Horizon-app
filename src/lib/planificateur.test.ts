@@ -244,6 +244,30 @@ describe('planifierSemaine — contrat non actif ignoré', () => {
   });
 });
 
+describe('planifierSemaine — contrat exclu de la tournée', () => {
+  it('un contrat actif avec exclureTournee=true ne génère aucune séance, sans apparaître en "à planifier manuellement"', () => {
+    const patient = makePatient({ id: 'p1' });
+    const contrat = makeContrat({ id: 'c1', participantId: 'p1', exclureTournee: true });
+
+    const r = planifierSemaine(makeParams({ participants: [patient], contrats: [contrat] }), LUNDI);
+
+    expect(toutesLesEtapes(r.jours)).toHaveLength(0);
+    expect(r.impossibles).toHaveLength(0);
+  });
+
+  it('un patient avec 2 contrats, l\'un exclu et l\'autre normal, ne reçoit une séance que pour le contrat non exclu', () => {
+    const patient = makePatient({ id: 'p1' });
+    const contratExclu = makeContrat({ id: 'cX', participantId: 'p1', exclureTournee: true });
+    const contratNormal = makeContrat({ id: 'cN', participantId: 'p1' });
+
+    const r = planifierSemaine(makeParams({ participants: [patient], contrats: [contratExclu, contratNormal] }), LUNDI);
+
+    const etapes = toutesLesEtapes(r.jours);
+    expect(etapes).toHaveLength(1);
+    expect(etapes[0].contrat.id).toBe('cN');
+  });
+});
+
 describe('planifierSemaine — heures arrondies au quart d\'heure supérieur', () => {
   it('un trajet menant à une heure non ronde est arrondi au quart d\'heure supérieur, jamais inférieur', () => {
     // depart -> patient = 600 sec = 10 min de trajet (buildMatrix). Départ

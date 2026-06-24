@@ -226,6 +226,7 @@ function assignerJoursSemaine(
 
   for (const contrat of contrats) {
     if (contrat.statut !== 'actif') continue;
+    if (contrat.exclureTournee) continue; // patient volontairement exclu de l'optimisation
     const patient = participants.find(p => p.id === contrat.participantId);
     if (!patient) continue;
     if (!patient.coordonnees) {

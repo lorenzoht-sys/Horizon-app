@@ -403,6 +403,10 @@ export interface Contrat {
   nombreSeancesRealisees: number;
   dureeIndeterminee?: boolean;
   tarifSeance?: number;
+  /** Si true, ce contrat est ignoré par le planificateur de tournée (Mode A et
+   * B) — le patient reste visible partout ailleurs dans l'app, mais n'est
+   * jamais candidaté pour une optimisation automatique. */
+  exclureTournee?: boolean;
 }
 
 export interface Seance {

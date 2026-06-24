@@ -20,7 +20,7 @@ interface Props {
 }
 
 export default function ContratsTab({ participantId }: Props) {
-  const { contratsDeParticipant, modifierStatut, supprimerContrat } = useContrats();
+  const { contratsDeParticipant, modifierStatut, toggleExclureTournee, supprimerContrat } = useContrats();
   const { seances } = useAgenda();
   const { participants } = useParticipants();
   const [modalPDF, setModalPDF] = useState<Contrat | null>(null);
@@ -57,6 +57,13 @@ export default function ContratsTab({ participantId }: Props) {
   function handleReactiver(contratId: string) {
     modifierStatut(contratId, 'actif');
     toast.success('Contrat réactivé');
+  }
+
+  function handleToggleExclureTournee(contratId: string, exclureTournee: boolean) {
+    toggleExclureTournee(contratId, exclureTournee);
+    toast.success(exclureTournee
+      ? 'Exclu de l\'optimisation de tournée'
+      : 'Réintégré dans l\'optimisation de tournée');
   }
 
   function handleSupprimer(contratId: string) {
@@ -113,6 +120,14 @@ export default function ContratsTab({ participantId }: Props) {
                   <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badge.class}`}>
                     {badge.label}
                   </span>
+                  {contrat.exclureTournee && (
+                    <span
+                      className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500"
+                      title="Ce contrat n'est jamais candidaté par le planificateur de tournée"
+                    >
+                      Hors tournée
+                    </span>
+                  )}
                 </div>
                 <div className="text-sm font-semibold text-dark">
                   {new Date(contrat.dateDebut + 'T12:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
@@ -155,6 +170,18 @@ export default function ContratsTab({ participantId }: Props) {
 
             {contrat.notes && (
               <div className="text-xs text-gray-400 italic mb-3">{contrat.notes}</div>
+            )}
+
+            {(contrat.statut === 'actif' || contrat.statut === 'a_venir') && (
+              <label className="flex items-center gap-2 cursor-pointer select-none mb-3">
+                <input
+                  type="checkbox"
+                  checked={!!contrat.exclureTournee}
+                  onChange={e => handleToggleExclureTournee(contrat.id, e.target.checked)}
+                  className="w-3.5 h-3.5 accent-primary"
+                />
+                <span className="text-xs text-gray-500">Ne pas inclure dans l'optimisation de tournée</span>
+              </label>
             )}
 
             {/* Actions */}

@@ -46,6 +46,7 @@ export default function ContratNouveauPage() {
   const [dureeIndeterminee, setDureeIndeterminee] = useState(false);
   const [nbSeancesPrescrites, setNbSeancesPrescrites] = useState(12);
   const [notes, setNotes] = useState('');
+  const [exclureTournee, setExclureTournee] = useState(false);
 
   // Préremplit la fréquence et les durées depuis les préférences saisies sur la fiche patient.
   useEffect(() => {
@@ -124,6 +125,7 @@ export default function ContratNouveauPage() {
           statut: 'actif',
           notes: notes || undefined,
           dureeIndeterminee: dureeIndeterminee || undefined,
+          exclureTournee,
         },
         adresse,
         coordonnees
@@ -363,6 +365,23 @@ export default function ContratNouveauPage() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Exclusion de la tournée */}
+          <div>
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={exclureTournee}
+                onChange={e => setExclureTournee(e.target.checked)}
+                className="w-4 h-4 accent-primary"
+              />
+              <span className="text-sm text-gray-700">Ne pas inclure dans l'optimisation de tournée</span>
+            </label>
+            <p className="text-xs text-gray-400 mt-1.5 ml-6">
+              Ce patient reste visible partout ailleurs dans l'app, mais le planificateur
+              (semaine ponctuelle et planning récurrent) ne lui proposera jamais de séance.
+            </p>
           </div>
 
           {/* Notes */}

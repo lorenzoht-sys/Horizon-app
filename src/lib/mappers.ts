@@ -305,6 +305,7 @@ export function dbToContrat(row: any): Contrat {
     nombreSeancesRealisees: row.nombre_seances_realisees,
     dureeIndeterminee: row.duree_indeterminee ?? false,
     tarifSeance: row.tarif_seance ?? undefined,
+    exclureTournee: row.exclure_tournee ?? false,
   };
 }
 
@@ -325,6 +326,7 @@ export function contratToDb(c: Contrat): Record<string, unknown> {
     nombre_seances_realisees: c.nombreSeancesRealisees,
     duree_indeterminee: c.dureeIndeterminee ?? false,
     tarif_seance: c.tarifSeance ?? null,
+    exclure_tournee: c.exclureTournee ?? false,
   };
 }
 

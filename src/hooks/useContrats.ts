@@ -20,6 +20,8 @@ interface CreerContratData {
   statut?: StatutContrat;
   notes?: string;
   dureeIndeterminee?: boolean;
+  /** Si true, ce contrat est ignoré par le planificateur de tournée (Mode A et B). */
+  exclureTournee?: boolean;
 }
 
 export function useContrats() {
@@ -61,6 +63,7 @@ export function useContrats() {
       dateCreation: new Date().toISOString().split('T')[0],
       nombreSeancesTotal: nbSeances,
       nombreSeancesRealisees: 0,
+      exclureTournee: data.exclureTournee ?? false,
     };
 
     if (supabase) {
@@ -106,6 +109,14 @@ export function useContrats() {
     setContrats(prev => prev.map(c => c.id === id ? { ...c, statut } : c));
   }
 
+  async function toggleExclureTournee(id: string, exclureTournee: boolean) {
+    if (supabase) {
+      const { error } = await supabase.from('contrats').update({ exclure_tournee: exclureTournee }).eq('id', id);
+      if (error) { console.error('Erreur modification exclure_tournee:', error); toast.error('Erreur : ' + error.message); return; }
+    }
+    setContrats(prev => prev.map(c => c.id === id ? { ...c, exclureTournee } : c));
+  }
+
   async function supprimerContrat(id: string) {
     if (supabase) {
       const { error } = await supabase.from('contrats').delete().eq('id', id);
@@ -147,6 +158,7 @@ export function useContrats() {
     contrats,
     creerContrat,
     modifierStatut,
+    toggleExclureTournee,
     supprimerContrat,
     incrementerSeancesRealisees,
     contratsDeParticipant,
