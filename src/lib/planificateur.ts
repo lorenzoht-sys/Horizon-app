@@ -248,8 +248,25 @@ function assignerJoursSemaine(
 
   const occupeParJour = new Map<JourSemaine, number[]>();
 
-  for (const { contrat, patient, idx, joursDispo } of candidats) {
+  // Jours déjà pris par patient, tous contrats confondus — garantit qu'un
+  // patient avec plusieurs contrats actifs simultanés n'est jamais programmé
+  // deux fois le même jour.
+  const joursPrisParPatient = new Map<string, Set<JourSemaine>>();
+
+  for (const { contrat, patient, idx, joursDispo: joursDispoContrat } of candidats) {
     const n = contrat.nbSeancesSemaine;
+    const joursDejaPris = joursPrisParPatient.get(patient.id) ?? new Set<JourSemaine>();
+    const joursDispo = joursDispoContrat.filter(j => !joursDejaPris.has(j.jourKey));
+
+    if (joursDispo.length === 0) {
+      impossibles.push({
+        patient,
+        raison: 'Aucun jour disponible cette semaine — déjà programmé(e) via un autre contrat actif',
+      });
+      assignations.set(contrat.id, []);
+      continue;
+    }
+
     let choisis: { date: string; jourKey: JourSemaine }[];
 
     if (joursDispo.length <= n) {
@@ -275,7 +292,9 @@ function assignerJoursSemaine(
       const occupants = occupeParJour.get(jour.jourKey) ?? [];
       occupants.push(idx);
       occupeParJour.set(jour.jourKey, occupants);
+      joursDejaPris.add(jour.jourKey);
     }
+    joursPrisParPatient.set(patient.id, joursDejaPris);
 
     const existantes = [...(seancesParContrat.get(contrat.id) ?? [])];
     assignations.set(contrat.id, choisis.map(jour => ({
