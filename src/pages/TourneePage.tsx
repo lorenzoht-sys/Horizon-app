@@ -746,7 +746,10 @@ export default function TourneePage() {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             {/* Planificateur de semaine */}
             <button
-              onClick={() => setShowPlanificateur(true)}
+              onClick={() => {
+                if (departErreur) { toast.error('Configurez votre adresse de départ dans Paramètres'); return; }
+                setShowPlanificateur(true);
+              }}
               className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors border-b border-gray-100"
             >
               <CalendarPlus size={15} className="text-primary" />
@@ -1044,6 +1047,7 @@ export default function TourneePage() {
             zones={zones}
             depart={depart}
             departAdresse={departAdresse}
+            departErreur={departErreur}
             heureDebutJournee={heureDepart}
             bulkCreerSeances={async (data) => { await bulkCreerSeances(data); }}
             modifierSeance={(id, updates) => modifierSeance(id, updates)}

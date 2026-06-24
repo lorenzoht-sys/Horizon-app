@@ -22,6 +22,7 @@ interface Props {
   zones?: ZoneGeographique[];
   depart: { lat: number; lng: number };
   departAdresse: string;
+  departErreur?: boolean;
   heureDebutJournee: string;
   bulkCreerSeances: (data: Omit<Seance, 'id'>[]) => Promise<void>;
   modifierSeance: (id: string, updates: Partial<Seance>) => Promise<boolean>;
@@ -54,7 +55,7 @@ function zoneDominanteJour(etapes: EtapePlanifiee[], zones: ZoneGeographique[]):
 
 export default function ModalPlanificateur({
   onClose, participants, contrats, seances, indispos, zones = [],
-  depart, departAdresse, heureDebutJournee,
+  depart, departAdresse, departErreur = false, heureDebutJournee,
   bulkCreerSeances, modifierSeance,
 }: Props) {
   const today = new Date().toISOString().split('T')[0];
@@ -77,6 +78,13 @@ export default function ModalPlanificateur({
   );
 
   async function handleGenerer() {
+    // Jamais de calcul à partir d'une adresse de départ par défaut (centre-ville
+    // de secours) — sans la vraie adresse de Pierre, la tournée entière serait
+    // faussée sans qu'il le sache.
+    if (departErreur) {
+      toast.error('Configurez votre adresse de départ dans Paramètres avant de planifier.');
+      return;
+    }
     setLoading(true);
     setResultat(null);
     setOrsWarn(false);
@@ -270,7 +278,7 @@ export default function ModalPlanificateur({
 
           <button
             onClick={handleGenerer}
-            disabled={loading}
+            disabled={loading || departErreur}
             className="flex items-center gap-2 bg-primary text-white text-sm font-semibold px-4 py-1.5 rounded-lg hover:bg-dark transition-colors disabled:opacity-50"
           >
             {loading ? <><Loader size={14} className="animate-spin" />Calcul en cours…</> : 'Générer le planning'}
@@ -278,6 +286,12 @@ export default function ModalPlanificateur({
         </div>
 
         {/* Warnings */}
+        {departErreur && (
+          <div className="mx-6 mt-3 flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-700">
+            <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
+            <span>Configurez votre adresse de départ dans Paramètres avant de planifier.</span>
+          </div>
+        )}
         {orsWarn && (
           <div className="mx-6 mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700">
             <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
