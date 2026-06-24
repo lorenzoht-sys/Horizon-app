@@ -1046,7 +1046,7 @@ export default function TourneePage() {
             departAdresse={departAdresse}
             heureDebutJournee={heureDepart}
             bulkCreerSeances={async (data) => { await bulkCreerSeances(data); }}
-            modifierSeance={async (id, updates) => { await modifierSeance(id, updates); }}
+            modifierSeance={(id, updates) => modifierSeance(id, updates)}
           />
         </Suspense>
       )}

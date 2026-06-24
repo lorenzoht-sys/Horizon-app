@@ -64,15 +64,19 @@ export function useAgenda() {
     return nouvelles;
   }
 
-  async function modifierSeance(id: string, updates: Partial<Seance>) {
+  // Retourne true si la modification a bien été persistée — permet aux appelants
+  // (ex: ModalPlanificateur) de détecter un échec partiel plutôt que de supposer
+  // un succès silencieux.
+  async function modifierSeance(id: string, updates: Partial<Seance>): Promise<boolean> {
     const current = seances.find(s => s.id === id);
-    if (!current) return;
+    if (!current) { console.error('Séance introuvable:', id); return false; }
     const merged = { ...current, ...updates };
     if (supabase) {
       const { error } = await supabase.from('seances').update(seanceToDb(merged)).eq('id', id);
-      if (error) { console.error('Erreur modification séance:', error); toast.error('Erreur : ' + error.message); return; }
+      if (error) { console.error('Erreur modification séance:', error); toast.error('Erreur : ' + error.message); return false; }
     }
     setSeances(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+    return true;
   }
 
   async function supprimerSeance(id: string) {

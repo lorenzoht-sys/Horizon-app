@@ -24,7 +24,7 @@ interface Props {
   departAdresse: string;
   heureDebutJournee: string;
   bulkCreerSeances: (data: Omit<Seance, 'id'>[]) => Promise<void>;
-  modifierSeance: (id: string, updates: Partial<Seance>) => Promise<void>;
+  modifierSeance: (id: string, updates: Partial<Seance>) => Promise<boolean>;
 }
 
 type Mode = 'A' | 'B';
@@ -166,11 +166,27 @@ export default function ModalPlanificateur({
             ? { lat: e.patient.coordonnees.lat, lng: e.patient.coordonnees.lng }
             : undefined,
         }));
+        // Insert unique côté Supabase : tout-ou-rien — si ça échoue, rien n'a
+        // été créé, et l'exception ci-dessous interrompt avant le toast de succès.
         await bulkCreerSeances(data);
       }
+
+      // Chaque modifierSeance() est une requête indépendante : on ne peut pas
+      // supposer qu'elles réussissent toutes. On compte les échecs réels pour ne
+      // jamais annoncer un succès qui ne correspond pas à l'état en base.
+      let echecsMaj = 0;
       for (const e of toUpdate) {
-        await modifierSeance(e.seanceExistanteId!, { date: e.date, heureDebut: e.heureDebut, heureFin: e.heureFin });
+        const ok = await modifierSeance(e.seanceExistanteId!, { date: e.date, heureDebut: e.heureDebut, heureFin: e.heureFin });
+        if (!ok) echecsMaj++;
       }
+
+      if (echecsMaj > 0) {
+        toast.error(
+          `${toCreate.length} créée${toCreate.length > 1 ? 's' : ''}, mais ${echecsMaj} mise${echecsMaj > 1 ? 's' : ''} à jour sur ${toUpdate.length} a${echecsMaj > 1 ? 'nt' : ''} échoué. Vérifiez votre connexion et réessayez.`
+        );
+        return; // on ne ferme pas la modale : permet de réessayer sans perdre la proposition
+      }
+
       const msg = [
         toCreate.length > 0 ? `${toCreate.length} créée${toCreate.length > 1 ? 's' : ''}` : '',
         toUpdate.length > 0 ? `${toUpdate.length} déplacée${toUpdate.length > 1 ? 's' : ''}/mise${toUpdate.length > 1 ? 's' : ''} à jour` : '',
