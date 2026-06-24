@@ -1040,6 +1040,12 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
 ) {
   const { structures } = useStructures();
 
+  // Modification d'une fiche existante (vs création) : déduit de la présence
+  // d'un id sur `initial`, jamais le cas pour un nouveau patient. Utilisé pour
+  // ne rendre le nb séances/semaine obligatoire qu'à la création — sur les
+  // fiches déjà créées, ne jamais bloquer la sauvegarde pour ce champ.
+  const enModification = Boolean(initial?.id);
+
   // ── Brouillon localStorage (page Nouveau participant / Modifier) ─
   const brouillon = draftKey ? getBrouillonParticipant(draftKey) : null;
   const seed: Partial<Participant> = brouillon?.data ? { ...initial, ...brouillon.data } : (initial ?? {});
@@ -1124,7 +1130,12 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
   // ── Organisation des séances : nb séances/semaine + durées obligatoires ──
   const [erreurOrganisation, setErreurOrganisation] = useState<string | null>(null);
 
+  // Obligatoire uniquement à la création — sur une fiche déjà existante, ce
+  // champ peut avoir toujours été vide et ne doit jamais bloquer un
+  // enregistrement sans rapport (téléphone, notes...). Voir le rappel
+  // discret non bloquant affiché à côté du champ en modification.
   function validerOrganisation(): string | null {
+    if (enModification) return null;
     const n = anamnese.organisation?.nbSeancesSemaine;
     if (!n || n <= 0) return 'Veuillez indiquer le nombre de séances par semaine.';
     const durees = anamnese.organisation?.dureesSeances ?? [];
@@ -1501,7 +1512,9 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
             />
           </div>
           <div>
-            <label className={CLS_LABEL}>Nombre de séances par semaine *</label>
+            <label className={CLS_LABEL}>
+              Nombre de séances par semaine{!enModification && ' *'}
+            </label>
             <div className="flex gap-2 flex-wrap">
               {FREQUENCES_SEANCES.map(n => {
                 const selected = anamnese.organisation?.nbSeancesSemaine === n;
@@ -1531,6 +1544,11 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
             </div>
             {erreurOrganisation && (
               <p className="text-xs text-red-500 mt-1.5">{erreurOrganisation}</p>
+            )}
+            {enModification && !anamnese.organisation?.nbSeancesSemaine && (
+              <p className="text-xs text-amber-600 mt-1.5">
+                Pensez à renseigner le nombre de séances/semaine pour l'optimisation de tournée.
+              </p>
             )}
           </div>
           {!!anamnese.organisation?.nbSeancesSemaine && (
