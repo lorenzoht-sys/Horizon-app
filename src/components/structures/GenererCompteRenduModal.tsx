@@ -6,9 +6,7 @@ import { useContrats } from '../../hooks/useContrats';
 import { useProgramme } from '../../hooks/useProgramme';
 import { useTemplatesStructure } from '../../hooks/useTemplatesStructure';
 import { detecterTypeTemplate, type DetectionTemplate } from '../../utils/detecterTypeTemplate';
-import { analyserDonneesDisponibles, buildCompteRenduStructurePrompt, buildChampsAcroFormPrompt } from '../../utils/buildCompteRenduStructureContext';
-import { downloadMarkdownAsPdf } from '../../utils/markdownToPdf';
-import { exportCompteRenduWord } from '../../utils/exportCompteRenduWord';
+import { analyserDonneesDisponibles, buildChampsAcroFormPrompt } from '../../utils/buildCompteRenduStructureContext';
 import { remplirEtTelechargerPdf } from '../../utils/remplirFormulairePdf';
 import { getAuthHeader } from '../../lib/supabase';
 
@@ -19,6 +17,9 @@ interface Props {
 }
 
 type Step = 1 | 2 | 3 | 4;
+
+const RAISON_TEMPLATE_SAUVEGARDE =
+  "Ce template a été sauvegardé sans le fichier original — le remplissage de formulaire n'est pas possible. Veuillez uploader à nouveau le fichier PDF de la structure.";
 
 export default function GenererCompteRenduModal({ patient, structure, onClose }: Props) {
   const { contrats } = useContrats();
@@ -43,18 +44,12 @@ export default function GenererCompteRenduModal({ patient, structure, onClose }:
   // Étape 3/4 — génération
   const [generating, setGenerating] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
-  const [resultat, setResultat] = useState<string>('');
   const [resultatChamps, setResultatChamps] = useState<Record<string, string> | null>(null);
 
   const apercu = useMemo(
     () => analyserDonneesDisponibles(patient, contratActif, programmeActif),
     [patient, contratActif, programmeActif],
   );
-
-  // Affiché uniquement pour un template choisi dans la liste sauvegardée : la base
-  // ne conserve que le texte extrait (pas le fichier PDF d'origine), donc le
-  // remplissage de formulaire AcroForm n'est possible que sur un upload frais.
-  const avertissementTemplateSauvegarde = templateSelectionneId && templateDetection?.format === 'pdf';
 
   async function handleFileUpload(file: File) {
     setExtracting(true);
@@ -63,7 +58,9 @@ export default function GenererCompteRenduModal({ patient, structure, onClose }:
       const detection = await detecterTypeTemplate(file);
       setTemplateDetection(detection);
       setTemplateSelectionneId(null);
-      setNomNouveauTemplate(file.name.replace(/\.(pdf|docx)$/i, ''));
+      if (detection.type === 'acroform') {
+        setNomNouveauTemplate(file.name.replace(/\.(pdf|docx)$/i, ''));
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Erreur lors de la lecture du fichier');
     } finally {
@@ -74,52 +71,43 @@ export default function GenererCompteRenduModal({ patient, structure, onClose }:
   function choisirTemplateExistant(id: string) {
     const t = templates.find(t => t.id === id);
     if (!t) return;
+    // La base ne conserve que le texte/les noms de champs, jamais le fichier PDF
+    // d'origine : le remplissage de formulaire nécessite toujours un re-upload.
     setTemplateSelectionneId(id);
-    setTemplateDetection({ type: 'statique', texte: t.contenuTexte, format: t.formatOrigine ?? 'pdf', pdfBytes: null, avertissement: null });
+    setTemplateDetection({ type: 'non_supporte', raison: RAISON_TEMPLATE_SAUVEGARDE });
     setSauvegarderTemplate(false);
   }
 
   async function passerEtape2() {
-    if (!templateDetection) return;
-    if (sauvegarderTemplate && !templateSelectionneId && templateDetection.type === 'statique' && nomNouveauTemplate.trim()) {
-      await creerTemplate({ nom: nomNouveauTemplate.trim(), contenuTexte: templateDetection.texte, formatOrigine: templateDetection.format });
+    if (templateDetection?.type !== 'acroform') return;
+    if (sauvegarderTemplate && !templateSelectionneId && nomNouveauTemplate.trim()) {
+      const contenuTexte = JSON.stringify(templateDetection.champs.map(c => c.nom));
+      await creerTemplate({ nom: nomNouveauTemplate.trim(), contenuTexte, formatOrigine: 'pdf' });
     }
     setStep(2);
   }
 
   async function lancerGeneration() {
-    if (!templateDetection) return;
+    if (templateDetection?.type !== 'acroform') return;
     setStep(3);
     setGenerating(true);
     setErreur(null);
     try {
-      if (templateDetection.type === 'acroform') {
-        const prompt = buildChampsAcroFormPrompt({ champs: templateDetection.champs, patient, structure, contratActif, programmeActif });
-        const res = await fetch('/api/claude', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
-          body: JSON.stringify({ prompt, model: 'claude-sonnet-4-6' }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur lors de la génération');
-        let valeurs: Record<string, string>;
-        try {
-          valeurs = JSON.parse(data.text ?? '{}');
-        } catch {
-          throw new Error('Réponse de l\'IA invalide — réessayez.');
-        }
-        setResultatChamps(valeurs);
-      } else {
-        const prompt = buildCompteRenduStructurePrompt({ templateTexte: templateDetection.texte, patient, structure, contratActif, programmeActif });
-        const res = await fetch('/api/claude', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
-          body: JSON.stringify({ prompt, model: 'claude-sonnet-4-6' }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur lors de la génération');
-        setResultat(data.text ?? '');
+      const prompt = buildChampsAcroFormPrompt({ champs: templateDetection.champs, patient, structure, contratActif, programmeActif });
+      const res = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
+        body: JSON.stringify({ prompt, model: 'claude-sonnet-4-6' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur lors de la génération');
+      let valeurs: Record<string, string>;
+      try {
+        valeurs = JSON.parse(data.text ?? '{}');
+      } catch {
+        throw new Error('Réponse de l\'IA invalide — réessayez.');
       }
+      setResultatChamps(valeurs);
       setStep(4);
     } catch (e) {
       setErreur(e instanceof Error ? e.message : 'Erreur inconnue lors de la génération');
@@ -131,14 +119,6 @@ export default function GenererCompteRenduModal({ patient, structure, onClose }:
   function nomFichier(ext: string): string {
     const date = new Date().toISOString().split('T')[0];
     return `CR-${structure.nom}_${patient.nom}-${patient.prenom}_${date}.${ext}`.replace(/\s+/g, '-');
-  }
-
-  function telechargerPdf() {
-    downloadMarkdownAsPdf({ markdownContent: resultat, filename: nomFichier('pdf') });
-  }
-
-  async function telechargerWord() {
-    await exportCompteRenduWord({ contenu: resultat, filename: nomFichier('docx') });
   }
 
   async function telechargerPdfRempli() {
@@ -191,13 +171,14 @@ export default function GenererCompteRenduModal({ patient, structure, onClose }:
               )}
 
               <div>
-                <p className="text-xs text-gray-500 mb-2">Ou uploader un nouveau template (PDF ou Word) :</p>
+                <p className="text-xs text-gray-500 mb-1">Ou uploader un nouveau template :</p>
                 <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-xl py-6 cursor-pointer hover:border-primary/50 transition-colors">
                   <Upload size={20} className="text-gray-400" />
-                  <span className="text-xs text-gray-500">{extracting ? 'Analyse en cours...' : 'Cliquer pour choisir un fichier .pdf ou .docx'}</span>
+                  <span className="text-xs text-gray-500">{extracting ? 'Analyse en cours...' : 'Cliquer pour choisir un fichier'}</span>
                   <input type="file" accept=".pdf,.docx" className="hidden" disabled={extracting}
                     onChange={e => { const f = e.target.files?.[0]; if (f) void handleFileUpload(f); }} />
                 </label>
+                <p className="text-xs text-gray-400 mt-1.5">Formats supportés : PDF avec champs de formulaire (AcroForm)</p>
               </div>
 
               {templateDetection?.type === 'acroform' && (
@@ -206,34 +187,27 @@ export default function GenererCompteRenduModal({ patient, structure, onClose }:
                   Formulaire PDF détecté — {templateDetection.champs.length} champ{templateDetection.champs.length > 1 ? 's' : ''} à remplir. Le PDF original sera rempli directement.
                 </div>
               )}
-              {templateDetection?.type === 'statique' && !templateSelectionneId && (
-                <div className="flex items-start gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-xs text-gray-500">
-                  <FileText size={14} className="flex-shrink-0 mt-0.5" />
-                  {templateDetection.format === 'pdf' ? 'PDF statique' : 'Document Word'} — le contenu sera généré par IA puis exporté.
-                </div>
-              )}
-              {avertissementTemplateSauvegarde && (
-                <div className="flex items-start gap-2 bg-orange-50 border border-orange-100 rounded-lg px-3 py-2 text-xs text-orange-700">
-                  <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
-                  Ce template a été sauvegardé en mode texte — pour utiliser le remplissage de formulaire PDF, uploadez à nouveau le fichier original.
+
+              {templateDetection?.type === 'non_supporte' && (
+                <div className="space-y-1.5">
+                  <div className="flex items-start gap-2 bg-orange-50 border border-orange-100 rounded-lg px-3 py-2 text-xs text-orange-700">
+                    <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+                    {templateDetection.raison}
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    Votre structure ne fournit pas ce format ? Demandez-leur un PDF interactif (formulaire avec champs).
+                  </p>
                 </div>
               )}
 
-              {templateDetection?.type === 'statique' && templateDetection.avertissement && (
-                <div className="flex items-start gap-2 bg-orange-50 border border-orange-100 rounded-lg px-3 py-2 text-xs text-orange-700">
-                  <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
-                  {templateDetection.avertissement}
-                </div>
-              )}
-
-              {templateDetection?.type === 'statique' && !templateSelectionneId && (
+              {templateDetection?.type === 'acroform' && !templateSelectionneId && (
                 <div className="flex items-center gap-2">
                   <input type="checkbox" id="save-template" checked={sauvegarderTemplate}
                     onChange={e => setSauvegarderTemplate(e.target.checked)} />
                   <label htmlFor="save-template" className="text-xs text-gray-600">Sauvegarder ce template pour {structure.nom} (prochaine fois)</label>
                 </div>
               )}
-              {sauvegarderTemplate && !templateSelectionneId && templateDetection?.type === 'statique' && (
+              {sauvegarderTemplate && !templateSelectionneId && templateDetection?.type === 'acroform' && (
                 <input type="text" value={nomNouveauTemplate} onChange={e => setNomNouveauTemplate(e.target.value)}
                   placeholder="Nom du template"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" />
@@ -321,13 +295,6 @@ export default function GenererCompteRenduModal({ patient, structure, onClose }:
               </div>
             </div>
           )}
-          {step === 4 && templateDetection?.type === 'statique' && (
-            <div className="space-y-3">
-              <p className="text-sm font-semibold text-gray-700">4. Compte rendu généré — modifiable avant export</p>
-              <textarea value={resultat} onChange={e => setResultat(e.target.value)} rows={16}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono leading-relaxed focus:outline-none focus:border-primary resize-none" />
-            </div>
-          )}
         </div>
 
         {/* Footer actions */}
@@ -335,7 +302,7 @@ export default function GenererCompteRenduModal({ patient, structure, onClose }:
           {step === 1 && (
             <>
               <button type="button" onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700">Annuler</button>
-              <button type="button" disabled={!templateDetection} onClick={passerEtape2}
+              <button type="button" disabled={templateDetection?.type !== 'acroform'} onClick={passerEtape2}
                 className="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-xl disabled:opacity-40">
                 Suivant
               </button>
@@ -359,25 +326,10 @@ export default function GenererCompteRenduModal({ patient, structure, onClose }:
                 className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 rounded-xl px-3 py-2">
                 <RefreshCw size={14} /> Régénérer
               </button>
-              <div className="flex items-center gap-2">
-                {templateDetection?.type === 'acroform' ? (
-                  <button type="button" onClick={() => void telechargerPdfRempli()}
-                    className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-xl px-3 py-2">
-                    <Download size={14} /> PDF rempli
-                  </button>
-                ) : (
-                  <>
-                    <button type="button" onClick={telechargerPdf}
-                      className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-xl px-3 py-2">
-                      <Download size={14} /> PDF
-                    </button>
-                    <button type="button" onClick={() => void telechargerWord()}
-                      className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-xl px-3 py-2">
-                      <Download size={14} /> Word
-                    </button>
-                  </>
-                )}
-              </div>
+              <button type="button" onClick={() => void telechargerPdfRempli()}
+                className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-xl px-3 py-2">
+                <Download size={14} /> PDF rempli
+              </button>
             </>
           )}
         </div>
