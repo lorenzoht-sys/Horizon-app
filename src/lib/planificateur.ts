@@ -1,7 +1,7 @@
 // Algorithme de planification de semaine — pur TypeScript, pas de dépendances React.
 // Utilisé par ModalPlanificateur pour les deux modes (ponctuel et récurrent).
 
-import type { Participant, Contrat, Seance, JourSemaine, IndisponibilitePierre } from '../types';
+import type { Participant, Contrat, Seance, JourSemaine, IndisponibilitePierre, ZoneGeographique } from '../types';
 import { addMinutes, heureEnMinutes, minutesEnHeure, arrondirAuQuartHeureSup, estSemaineDue } from '../utils/horaires';
 import { getJoursDisponiblesCourts } from './anamnese';
 
@@ -49,6 +49,7 @@ export interface PlanificateurParams {
   matrix: MatriceORS;
   indexMap: Map<string, number>; // coordKey → index matrice
   heureDebutJournee: string;     // heure de départ de Pierre (ex: "08:00")
+  zones?: ZoneGeographique[];    // zones géographiques pour guider l'assignation des jours
 }
 
 // ── Helpers internes ──────────────────────────────────────────────────────────
@@ -95,6 +96,69 @@ const CRENEAU_DEBUT: Record<string, string> = {
 const CRENEAU_FIN: Record<string, string> = {
   matin: '12:00', 'apres-midi': '18:00', soiree: '21:00',
 };
+
+// ── Paramètres de scoring ─────────────────────────────────────────────────────
+
+// Fraction minimale de la plage de travail couverte par des indispos pour
+// considérer un jour comme totalement bloqué et l'exclure de l'assignation.
+const SEUIL_BLOCAGE_JOUR = 0.90;
+
+// Réduction du coût ORS par patient de la même zone déjà placé ce jour.
+const BONUS_MEME_ZONE = 0.10;
+
+// Majoration du coût ORS si le jour n'est pas dans les joursAssignes de la
+// zone du patient. Volontairement fort (0.50) pour que les zones soient
+// réellement contraignantes, pas juste informatives.
+const MALUS_HORS_JOURS_ZONE = 0.50;
+
+// Heure de fin de journée de travail utilisée pour calculer la couverture
+// d'indisponibilité d'un jour (ne dépend pas de heureDebutJournee, qui varie).
+const HEURE_FIN_JOURNEE_TRAVAIL = '20:00';
+
+// ── Détection d'un jour totalement bloqué ────────────────────────────────────
+
+/**
+ * Retourne true si les indisponibilités du praticien couvrent >= SEUIL_BLOCAGE_JOUR
+ * de la plage [heureDebutTravail, HEURE_FIN_JOURNEE_TRAVAIL] pour ce jour.
+ * Fusionne les intervalles qui se chevauchent avant de calculer la couverture.
+ */
+function jourTotalementBloque(
+  jourKey: JourSemaine,
+  indispos: IndisponibilitePierre[],
+  heureDebutTravail: string,
+): boolean {
+  const indisposJour = indispos.filter(i => i.jour === jourKey);
+  if (indisposJour.length === 0) return false;
+
+  const debutMin = heureEnMinutes(heureDebutTravail);
+  const finMin   = heureEnMinutes(HEURE_FIN_JOURNEE_TRAVAIL);
+  const plageTotale = finMin - debutMin;
+  if (plageTotale <= 0) return false;
+
+  // Restreindre chaque indispo à la plage de travail, puis fusionner.
+  const intervals = indisposJour
+    .map(i => [
+      Math.max(debutMin, heureEnMinutes(i.heureDebut)),
+      Math.min(finMin,   heureEnMinutes(i.heureFin)),
+    ] as [number, number])
+    .filter(([s, e]) => s < e)
+    .sort((a, b) => a[0] - b[0]);
+
+  let couvert = 0;
+  let curFin  = -1;
+  for (const [start, end] of intervals) {
+    if (start > curFin) {
+      couvert += end - start;
+      curFin   = end;
+    } else if (end > curFin) {
+      couvert += end - curFin;
+      curFin   = end;
+    }
+  }
+  return couvert / plageTotale >= SEUIL_BLOCAGE_JOUR;
+}
+
+// ── Reste des helpers internes ────────────────────────────────────────────────
 
 function ajusterAuCreneauPatient(
   heure: string,
@@ -194,13 +258,11 @@ function ordonner(departIdx: number, candidates: Candidat[], matrix: MatriceORS)
 }
 
 // ── Assignation des jours de la semaine ────────────────────────────────────────
-// Remplace l'ancienne lecture de contrat.joursFixe : pour chaque contrat actif,
-// choisit nbSeancesSemaine jours parmi les disponibilités du patient
-// (anamnese.organisation), en optimisant les trajets (heuristique "most
-// constrained first" + coût = trajet vers le patient déjà placé le plus
-// proche ce jour-là, ou le départ si le jour est encore vide). Réutilise une
-// séance déjà planifiée cette semaine pour ce contrat (la "déplace" vers le
-// jour choisi) plutôt que d'en créer une en double.
+// Pour chaque contrat actif, choisit nbSeancesSemaine jours parmi les
+// disponibilités du patient (anamnese.organisation), en :
+//   1. Excluant les jours où Pierre est totalement indisponible (>= 90% bloqués).
+//   2. Optimisant les trajets (heuristique "most constrained first" + coût ORS).
+//   3. Appliquant un bonus/malus de zone géographique sur le scoring des jours.
 function assignerJoursSemaine(
   joursDeLaSemaine: { date: string; jourKey: JourSemaine }[],
   contrats: Contrat[],
@@ -209,6 +271,9 @@ function assignerJoursSemaine(
   matrix: MatriceORS,
   indexMap: Map<string, number>,
   departIdx: number,
+  indispos: IndisponibilitePierre[],
+  heureDebutJournee: string,
+  zones: ZoneGeographique[],
 ): {
   assignations: Map<string, { date: string; jourKey: JourSemaine; seanceExistanteId?: string }[]>;
   impossibles: { patient: Participant; raison: string }[];
@@ -252,7 +317,20 @@ function assignerJoursSemaine(
       impossibles.push({ patient, raison: 'Disponibilités du patient non renseignées (ou incompatibles cette semaine)' });
       continue;
     }
-    candidats.push({ contrat, patient, idx, joursDispo });
+
+    // Exclure les jours où Pierre est totalement indisponible sur sa plage de
+    // travail — un patient ne doit jamais être assigné à un jour où il ne peut
+    // pas être visité, même si ajusterAuCreneauPatient le rejetterait de toute
+    // façon (évite un "Créneau dépassé" trompeur côté UI).
+    const joursDispoFiltrés = joursDispo.filter(j =>
+      !jourTotalementBloque(j.jourKey, indispos, heureDebutJournee)
+    );
+    if (joursDispoFiltrés.length === 0) {
+      impossibles.push({ patient, raison: 'Aucun jour disponible cette semaine (indisponibilités praticien)' });
+      continue;
+    }
+
+    candidats.push({ contrat, patient, idx, joursDispo: joursDispoFiltrés });
   }
 
   // Most constrained first : les patients avec le moins de jours disponibles
@@ -271,6 +349,8 @@ function assignerJoursSemaine(
   }
 
   const occupeParJour = new Map<JourSemaine, number[]>();
+  // Suivi des IDs patients déjà placés par jour — nécessaire pour le scoring zone.
+  const patientsParJour = new Map<JourSemaine, string[]>();
 
   // Jours déjà pris par patient, tous contrats confondus — garantit qu'un
   // patient avec plusieurs contrats actifs simultanés n'est jamais programmé
@@ -313,10 +393,28 @@ function assignerJoursSemaine(
         });
       }
     } else {
+      const zonePatient = zones.length > 0
+        ? zones.find(z => z.participantIds.includes(patient.id))
+        : undefined;
+
       const scored = joursDispo.map(jour => {
         const occupants = occupeParJour.get(jour.jourKey) ?? [];
         const cibles = occupants.length > 0 ? occupants : [departIdx];
-        const cout = Math.min(...cibles.map(o => matrix.durees[idx]?.[o] ?? Infinity));
+        let cout = Math.min(...cibles.map(o => matrix.durees[idx]?.[o] ?? Infinity));
+
+        // Bonus/malus zone : secondaire par rapport au coût ORS réel, mais
+        // suffisamment fort (MALUS 50%) pour que les zones soient contraignantes.
+        if (zonePatient) {
+          const idsJour = patientsParJour.get(jour.jourKey) ?? [];
+          const nbMemeZone = idsJour.filter(pid => zonePatient.participantIds.includes(pid)).length;
+          // Bonus : chaque patient même zone déjà placé ce jour réduit le coût.
+          cout = Math.max(0, cout * (1 - BONUS_MEME_ZONE * nbMemeZone));
+          // Malus : jour hors des jours assignés à la zone du patient.
+          if (!zonePatient.joursAssignes.includes(jour.jourKey)) {
+            cout *= (1 + MALUS_HORS_JOURS_ZONE);
+          }
+        }
+
         return { jour, cout };
       });
       scored.sort((a, b) => a.cout - b.cout);
@@ -328,6 +426,10 @@ function assignerJoursSemaine(
       occupants.push(idx);
       occupeParJour.set(jour.jourKey, occupants);
       joursDejaPris.add(jour.jourKey);
+
+      const ids = patientsParJour.get(jour.jourKey) ?? [];
+      ids.push(patient.id);
+      patientsParJour.set(jour.jourKey, ids);
     }
     joursPrisParPatient.set(patient.id, joursDejaPris);
 
@@ -454,6 +556,7 @@ export function planifierSemaine(
 
   const { assignations, impossibles } = assignerJoursSemaine(
     joursDeLaSemaine, contrats, participants, seances, matrix, indexMap, departIdx,
+    indispos, heureDebutJournee, params.zones ?? [],
   );
   allImpossibles.push(...impossibles);
 
@@ -525,6 +628,7 @@ export function planifierRecurrent(
 
     const { assignations, impossibles } = assignerJoursSemaine(
       joursDeLaSemaine, contrats, participants, seances, matrix, indexMap, departIdx,
+      indispos, heureDebutJournee, params.zones ?? [],
     );
     for (const imp of impossibles) {
       if (!vusImpossible.has(imp.patient.id)) {
@@ -535,10 +639,10 @@ export function planifierRecurrent(
 
     for (const { date: dateStr, jourKey } of joursDeLaSemaine) {
       // IndisponibilitePierre n'a pas de date propre (seulement un jour de
-    // semaine) : qu'elle soit marquée "récurrente" ou non, elle s'applique à
-    // toute occurrence de ce jour — cohérent avec indisposDuJour (TourneePage),
-    // qui ne filtre pas non plus sur ce champ.
-    const indisposJour = indispos.filter(ind => ind.jour === jourKey);
+      // semaine) : qu'elle soit marquée "récurrente" ou non, elle s'applique à
+      // toute occurrence de ce jour — cohérent avec indisposDuJour (TourneePage),
+      // qui ne filtre pas non plus sur ce champ.
+      const indisposJour = indispos.filter(ind => ind.jour === jourKey);
 
       const candidates = candidatsDuJour(jourKey, assignations, contrats, participants)
         .map(c => ({ ...c, idx: indexMap.get(coordKey(c.patient.coordonnees!))! }));
