@@ -1,6 +1,7 @@
 import type { Bilan, Contrat, Participant, Programme, Structure } from '../types';
 import { EXERCICES_BASE } from '../data/exercices';
 import { computeTinettiScores, tinettiRisque } from '../data/tinetti';
+import type { ChampFormulaire } from './detecterTypeTemplate';
 
 function calcAge(dateNaissance: string): number {
   const today = new Date(), birth = new Date(dateNaissance);
@@ -102,14 +103,11 @@ export function analyserDonneesDisponibles(
   };
 }
 
-export function buildCompteRenduStructurePrompt(opts: {
-  templateTexte: string;
-  patient: Participant;
-  structure: Structure;
-  contratActif: Contrat | null;
-  programmeActif: Programme | null;
-}): string {
-  const { templateTexte, patient, structure, contratActif, programmeActif } = opts;
+function buildDonneesPatientText(
+  patient: Participant,
+  contratActif: Contrat | null,
+  programmeActif: Programme | null,
+): string {
   const sortedBilans = [...patient.bilans].sort((a, b) => b.date.localeCompare(a.date));
   const dernierBilan = sortedBilans[0] ?? null;
   const bilanInitial = sortedBilans.length > 1 ? sortedBilans[sortedBilans.length - 1] : null;
@@ -121,31 +119,7 @@ export function buildCompteRenduStructurePrompt(opts: {
     dernierBilan?.objectifsSuivants ? `Objectifs suivants (dernier bilan) : ${dernierBilan.objectifsSuivants}` : null,
   ].filter(Boolean).join('\n') || 'Non renseigné';
 
-  return `Tu es l'assistant d'un enseignant en Activité Physique Adaptée (APA) qui exerce en libéral et intervient auprès de structures (EHPAD, centres, associations).
-
-On te donne :
-1. Le contenu d'un template de compte rendu attendu par une structure (ce qu'elle veut voir dans le document).
-2. Les données réelles disponibles pour un patient suivi par cet enseignant.
-
-Ta tâche : rédiger le compte rendu en suivant la structure et les champs du template, rempli avec les données réelles fournies ci-dessous.
-
-RÈGLES STRICTES :
-- N'invente AUCUNE donnée. Si une information attendue par le template n'est pas disponible dans les données patient, écris "Non renseigné" à cet endroit plutôt que de la déduire ou de l'inventer.
-- Ne pose aucun diagnostic médical. Ne mentionne pas de pathologie au-delà de ce qui est explicitement indiqué dans les données patient.
-- N'extrapole pas de conclusion clinique non étayée par les chiffres fournis.
-- Ton sobre et professionnel, adapté à un document médico-social. Pas d'emojis.
-- Cite les valeurs exactes des tests quand tu en parles.
-- Réponds uniquement avec le texte du compte rendu rempli, sans commentaire annexe.
-
-═══════════════════════════════════════
-TEMPLATE DE LA STRUCTURE — ${structure.nom}
-═══════════════════════════════════════
-${templateTexte}
-
-═══════════════════════════════════════
-DONNÉES DU PATIENT
-═══════════════════════════════════════
-Identité : ${patient.prenom} ${patient.nom}, ${calcAge(patient.dateNaissance)} ans
+  return `Identité : ${patient.prenom} ${patient.nom}, ${calcAge(patient.dateNaissance)} ans
 Pathologie principale : ${patient.pathologie || 'non renseignée'}
 
 ${dernierBilan ? `DERNIER BILAN — ${fmtDate(dernierBilan.date)} (${dernierBilan.type === 'initial' ? 'initial' : `T${dernierBilan.trimestre}`})
@@ -166,4 +140,82 @@ ${objectifs}
 
 PROGRAMME EN COURS
 ${buildProgrammeText(programmeActif)}`;
+}
+
+const REGLES_STRICTES = `RÈGLES STRICTES :
+- N'invente AUCUNE donnée. Si une information attendue n'est pas disponible dans les données patient, écris "Non renseigné" à cet endroit plutôt que de la déduire ou de l'inventer.
+- Ne pose aucun diagnostic médical. Ne mentionne pas de pathologie au-delà de ce qui est explicitement indiqué dans les données patient.
+- N'extrapole pas de conclusion clinique non étayée par les chiffres fournis.
+- Ton sobre et professionnel, adapté à un document médico-social. Pas d'emojis.
+- Cite les valeurs exactes des tests quand tu en parles.`;
+
+export function buildCompteRenduStructurePrompt(opts: {
+  templateTexte: string;
+  patient: Participant;
+  structure: Structure;
+  contratActif: Contrat | null;
+  programmeActif: Programme | null;
+}): string {
+  const { templateTexte, patient, structure, contratActif, programmeActif } = opts;
+
+  return `Tu es l'assistant d'un enseignant en Activité Physique Adaptée (APA) qui exerce en libéral et intervient auprès de structures (EHPAD, centres, associations).
+
+On te donne :
+1. Le contenu d'un template de compte rendu attendu par une structure (ce qu'elle veut voir dans le document).
+2. Les données réelles disponibles pour un patient suivi par cet enseignant.
+
+Ta tâche : rédiger le compte rendu en suivant la structure et les champs du template, rempli avec les données réelles fournies ci-dessous.
+
+${REGLES_STRICTES}
+- Réponds uniquement avec le texte du compte rendu rempli, sans commentaire annexe.
+
+═══════════════════════════════════════
+TEMPLATE DE LA STRUCTURE — ${structure.nom}
+═══════════════════════════════════════
+${templateTexte}
+
+═══════════════════════════════════════
+DONNÉES DU PATIENT
+═══════════════════════════════════════
+${buildDonneesPatientText(patient, contratActif, programmeActif)}`;
+}
+
+function libelleTypeChamp(champ: ChampFormulaire): string {
+  if (champ.type === 'checkbox') return 'case à cocher — réponds "Oui" ou "Non"';
+  if (champ.type === 'radio') return `bouton radio${champ.options?.length ? ` — options possibles : ${champ.options.join(', ')}` : ''}`;
+  if (champ.type === 'dropdown') return `liste déroulante${champ.options?.length ? ` — options possibles : ${champ.options.join(', ')}` : ''}`;
+  if (champ.type === 'text') return 'champ texte';
+  return 'champ';
+}
+
+/** Prompt pour le remplissage d'un PDF AcroForm : Claude renvoie un JSON { nomChamp: valeur }. */
+export function buildChampsAcroFormPrompt(opts: {
+  champs: ChampFormulaire[];
+  patient: Participant;
+  structure: Structure;
+  contratActif: Contrat | null;
+  programmeActif: Programme | null;
+}): string {
+  const { champs, patient, structure, contratActif, programmeActif } = opts;
+  const listeChamps = champs.map(c => `- "${c.nom}" (${libelleTypeChamp(c)})`).join('\n');
+
+  return `Tu es l'assistant d'un enseignant en Activité Physique Adaptée (APA) qui exerce en libéral et intervient auprès de structures (EHPAD, centres, associations).
+
+On te donne la liste des champs d'un formulaire PDF utilisé par une structure, et les données réelles disponibles pour un patient suivi par cet enseignant.
+
+Ta tâche : pour chaque champ listé ci-dessous, indiquer la valeur à y inscrire à partir des données du patient.
+
+${REGLES_STRICTES}
+- Si une donnée manque pour un champ, utilise la valeur "Non renseigné" (ou "Non" pour une case à cocher).
+- Réponds UNIQUEMENT avec un objet JSON de la forme { "nomDuChamp": "valeur" }, une entrée pour chaque champ listé ci-dessous, rien d'autre avant ou après.
+
+═══════════════════════════════════════
+CHAMPS DU FORMULAIRE — ${structure.nom}
+═══════════════════════════════════════
+${listeChamps}
+
+═══════════════════════════════════════
+DONNÉES DU PATIENT
+═══════════════════════════════════════
+${buildDonneesPatientText(patient, contratActif, programmeActif)}`;
 }
