@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Participant, Contrat, Seance, IndisponibilitePierre } from '../types';
+import type { Participant, Contrat, Seance, IndisponibilitePierre, ZoneGeographique } from '../types';
 import {
   planifierSemaine,
   planifierRecurrent,
@@ -80,6 +80,8 @@ function makeParams(opts: {
   seances?: Seance[];
   indispos?: IndisponibilitePierre[];
   depart?: { lat: number; lng: number };
+  heureDebutJournee?: string;
+  zones?: ZoneGeographique[];
 }): PlanificateurParams {
   const depart = opts.depart ?? DEPART;
   const points = [depart, ...opts.participants.map(p => p.coordonnees!)];
@@ -92,8 +94,15 @@ function makeParams(opts: {
     depart,
     matrix,
     indexMap,
-    heureDebutJournee: '08:00',
+    heureDebutJournee: opts.heureDebutJournee ?? '08:00',
+    zones: opts.zones,
   };
+}
+
+function datePlusJours(base: string, j: number): string {
+  const d = new Date(base + 'T12:00');
+  d.setDate(d.getDate() + j);
+  return d.toISOString().split('T')[0];
 }
 
 const LUNDI = prochainLundi('2026-06-24'); // mercredi -> prochain lundi réel
@@ -339,5 +348,121 @@ describe('planifierRecurrent — périodicité bi/tri-mensuelle', () => {
     const r = planifierRecurrent(makeParams({ participants: [patient], contrats: [contrat] }), '2026-06-24', 4);
 
     expect(r.impossibles).toHaveLength(0);
+  });
+});
+
+// ── Nouvelles suites : indisponibilités + zones ────────────────────────────────
+
+describe('planifierSemaine — indisponibilité totale du praticien', () => {
+  it('un jour où Pierre est indispo 8h-20h ne reçoit aucun patient (même pas en "Créneau dépassé")', () => {
+    // Patient dispo lun/mar/ven, 2 séances/semaine. Mardi 8h-20h bloqué (100%).
+    // Attendu : 2 séances sur lun+ven, aucune sur mardi, aucun impossible.
+    const patient = makePatient({ id: 'p1', jours: ['Lun', 'Mar', 'Ven'] });
+    const contrat = makeContrat({ id: 'c1', participantId: 'p1', nbSeancesSemaine: 2 });
+    const indispoMardi: IndisponibilitePierre = {
+      id: 'i1', jour: 'mar', heureDebut: '08:00', heureFin: '20:00', recurrente: true,
+    };
+
+    const r = planifierSemaine(
+      makeParams({ participants: [patient], contrats: [contrat], indispos: [indispoMardi] }),
+      LUNDI,
+    );
+
+    const MARDI = datePlusJours(LUNDI, 1);
+    const etapes = toutesLesEtapes(r.jours);
+
+    expect(etapes).toHaveLength(2);
+    expect(etapes.some(e => e.date === MARDI)).toBe(false);
+    // Aucun impossible : le patient a bien 2 jours restants (lun+ven) pour ses 2 séances.
+    expect(r.impossibles).toHaveLength(0);
+  });
+
+  it('si tous les jours dispo du patient sont bloqués par des indispos → patient en "impossibles"', () => {
+    // Patient dispo uniquement mardi, indispo mardi toute la journée → aucun jour valide.
+    const patient = makePatient({ id: 'p1', jours: ['Mar'] });
+    const contrat = makeContrat({ id: 'c1', participantId: 'p1', nbSeancesSemaine: 1 });
+    const indispoMardi: IndisponibilitePierre = {
+      id: 'i1', jour: 'mar', heureDebut: '08:00', heureFin: '20:00', recurrente: true,
+    };
+
+    const r = planifierSemaine(
+      makeParams({ participants: [patient], contrats: [contrat], indispos: [indispoMardi] }),
+      LUNDI,
+    );
+
+    expect(toutesLesEtapes(r.jours)).toHaveLength(0);
+    expect(r.impossibles).toHaveLength(1);
+    expect(r.impossibles[0].raison).toMatch(/indisponibilités praticien/);
+  });
+});
+
+describe('planifierSemaine — indisponibilité partielle (déjeuner)', () => {
+  it('une indispo 12h-13h30 ne bloque pas le jour mais décale l\'arrivée à 13h30', () => {
+    // heureDebutJournee = 11h45, trajet 10 min → arrivée 12h00.
+    // Indispo 12h-13h30 → poussée à 13h30 par appliquerIndispos.
+    // Créneau patient : apres-midi (debut=13h30) → heureDebut = 13h30.
+    const patient = makePatient({ id: 'p1', jours: ['Lun'] });
+    patient.disponibilites = { joursDisponibles: ['lun'], creneauxPreference: ['apres-midi'], dureeSeanceMinutes: 45 };
+    const contrat = makeContrat({ id: 'c1', participantId: 'p1', nbSeancesSemaine: 1 });
+    const indispoLundi: IndisponibilitePierre = {
+      id: 'i1', jour: 'lun', heureDebut: '12:00', heureFin: '13:30', recurrente: true,
+    };
+
+    const r = planifierSemaine(
+      makeParams({
+        participants: [patient], contrats: [contrat],
+        indispos: [indispoLundi], heureDebutJournee: '11:45',
+      }),
+      LUNDI,
+    );
+
+    const etapes = toutesLesEtapes(r.jours);
+    expect(etapes).toHaveLength(1);
+    expect(etapes[0].heureDebut).toBe('13:30');
+    // Le jour lundi reste disponible (indispo ne couvre que 12.5% de 08h-20h).
+    expect(r.impossibles).toHaveLength(0);
+  });
+});
+
+describe('planifierSemaine — zones géographiques contraignantes', () => {
+  it('deux patients de la même zone finissent sur le même jour grâce au bonus de zone', () => {
+    // p1 (idx 1) et p2 (idx 2) dans Zone Z, joursAssignes=['lun'].
+    // p3 (idx 3) hors zone. Chacun 1 séance/semaine.
+    // Sans zones : p1 sur lun, p2 sur mar (nearest-neighbor), p3 sur mer.
+    // Avec zones et MALUS=0.50 : lundi coûte moins cher à p2 grâce au bonus zone → p1+p2 sur lun.
+    const p1 = makePatient({ id: 'p1', lat: 1, lng: 1 });
+    const p2 = makePatient({ id: 'p2', lat: 2, lng: 2 });
+    const p3 = makePatient({ id: 'p3', lat: 3, lng: 3 });
+
+    const contrat1 = makeContrat({ id: 'c1', participantId: 'p1', nbSeancesSemaine: 1 });
+    const contrat2 = makeContrat({ id: 'c2', participantId: 'p2', nbSeancesSemaine: 1 });
+    const contrat3 = makeContrat({ id: 'c3', participantId: 'p3', nbSeancesSemaine: 1 });
+
+    const zoneZ: ZoneGeographique = {
+      id: 'z1', nom: 'Zone Z', couleur: '#000',
+      participantIds: ['p1', 'p2'],
+      centroide: { lat: 1.5, lng: 1.5 },
+      joursAssignes: ['lun'],
+    };
+
+    const r = planifierSemaine(
+      makeParams({
+        participants: [p1, p2, p3],
+        contrats: [contrat1, contrat2, contrat3],
+        zones: [zoneZ],
+      }),
+      LUNDI,
+    );
+
+    const etapes = toutesLesEtapes(r.jours);
+    expect(etapes).toHaveLength(3);
+
+    const datesP1 = etapes.filter(e => e.patient.id === 'p1').map(e => e.date);
+    const datesP2 = etapes.filter(e => e.patient.id === 'p2').map(e => e.date);
+
+    // Les deux patients de la même zone doivent être planifiés le même jour.
+    expect(datesP1[0]).toBe(datesP2[0]);
+    // Et ce jour doit être lundi (le seul jour dans joursAssignes de la zone).
+    expect(datesP1[0]).toBe(LUNDI);
   });
 });
