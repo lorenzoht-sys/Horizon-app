@@ -111,6 +111,7 @@ export default function ModalPlanificateur({
       const params = {
         participants, contrats, seances, indispos,
         depart, matrix, indexMap, heureDebutJournee,
+        zones,
       };
 
       const r = mode === 'A'
