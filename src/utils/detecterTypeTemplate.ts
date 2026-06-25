@@ -1,9 +1,10 @@
-// Détection du type de template uploadé (PDF avec champs de formulaire
-// AcroForm vs document statique) afin de choisir le bon flux de
-// remplissage. Tout se passe côté client, pdf-lib est chargé en lazy
-// (comme mammoth) pour ne pas alourdir le bundle initial.
+// Détection des champs AcroForm d'un PDF template uploadé. Seul le PDF
+// interactif (formulaire avec champs) est supporté : un PDF statique ou
+// un Word ne peuvent pas être remplis fidèlement, donc non supportés ici.
+// pdf-lib est chargé en lazy (comme mammoth ailleurs) pour ne pas alourdir
+// le bundle initial.
 
-import { extraireTexteTemplate, detecterFormat, type TemplateFormat } from './extractTemplateText';
+import { detecterFormat } from './extractTemplateText';
 
 export type ChampTypeFormulaire = 'text' | 'checkbox' | 'radio' | 'dropdown' | 'autre';
 
@@ -14,8 +15,14 @@ export interface ChampFormulaire {
 }
 
 export type DetectionTemplate =
-  | { type: 'acroform'; champs: ChampFormulaire[]; pdfBytes: ArrayBuffer; format: 'pdf' }
-  | { type: 'statique'; texte: string; format: TemplateFormat; pdfBytes: ArrayBuffer | null; avertissement: string | null };
+  | { type: 'acroform'; champs: ChampFormulaire[]; pdfBytes: ArrayBuffer }
+  | { type: 'non_supporte'; raison: string };
+
+const MESSAGE_PDF_SANS_CHAMPS =
+  'Ce PDF ne contient pas de champs de formulaire. Pour utiliser cette fonctionnalité, demandez à la structure de vous fournir son template en PDF avec champs (formulaire interactif).';
+
+const MESSAGE_DOCX_NON_SUPPORTE =
+  'Les fichiers Word ne peuvent pas être remplis comme un formulaire. Pour utiliser cette fonctionnalité, demandez à la structure de vous fournir son template en PDF avec champs (formulaire interactif).';
 
 function typeChamp(nomClasse: string): ChampTypeFormulaire {
   if (nomClasse === 'PDFCheckBox') return 'checkbox';
@@ -50,24 +57,22 @@ async function detecterChampsAcroForm(buffer: ArrayBuffer): Promise<ChampFormula
   }
 }
 
-/** Détecte si un fichier uploadé est un PDF à remplir (AcroForm) ou un document statique. */
+/** Détecte si un fichier uploadé est un PDF à champs AcroForm (seul format supporté). */
 export async function detecterTypeTemplate(file: File): Promise<DetectionTemplate> {
   const format = detecterFormat(file);
   if (!format) {
-    throw new Error('Format de fichier non supporté — utilisez un PDF ou un document Word (.docx)');
+    throw new Error('Format de fichier non supporté — utilisez un PDF avec champs de formulaire (AcroForm)');
   }
 
   if (format === 'docx') {
-    const { texte, avertissement } = await extraireTexteTemplate(file);
-    return { type: 'statique', texte, format, pdfBytes: null, avertissement };
+    return { type: 'non_supporte', raison: MESSAGE_DOCX_NON_SUPPORTE };
   }
 
   const buffer = await file.arrayBuffer();
   const champs = await detecterChampsAcroForm(buffer);
-  if (champs) {
-    return { type: 'acroform', champs, pdfBytes: buffer, format: 'pdf' };
+  if (!champs) {
+    return { type: 'non_supporte', raison: MESSAGE_PDF_SANS_CHAMPS };
   }
 
-  const { texte, avertissement } = await extraireTexteTemplate(file);
-  return { type: 'statique', texte, format, pdfBytes: buffer, avertissement };
+  return { type: 'acroform', champs, pdfBytes: buffer };
 }

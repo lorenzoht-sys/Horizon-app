@@ -149,37 +149,6 @@ const REGLES_STRICTES = `RÈGLES STRICTES :
 - Ton sobre et professionnel, adapté à un document médico-social. Pas d'emojis.
 - Cite les valeurs exactes des tests quand tu en parles.`;
 
-export function buildCompteRenduStructurePrompt(opts: {
-  templateTexte: string;
-  patient: Participant;
-  structure: Structure;
-  contratActif: Contrat | null;
-  programmeActif: Programme | null;
-}): string {
-  const { templateTexte, patient, structure, contratActif, programmeActif } = opts;
-
-  return `Tu es l'assistant d'un enseignant en Activité Physique Adaptée (APA) qui exerce en libéral et intervient auprès de structures (EHPAD, centres, associations).
-
-On te donne :
-1. Le contenu d'un template de compte rendu attendu par une structure (ce qu'elle veut voir dans le document).
-2. Les données réelles disponibles pour un patient suivi par cet enseignant.
-
-Ta tâche : rédiger le compte rendu en suivant la structure et les champs du template, rempli avec les données réelles fournies ci-dessous.
-
-${REGLES_STRICTES}
-- Réponds uniquement avec le texte du compte rendu rempli, sans commentaire annexe.
-
-═══════════════════════════════════════
-TEMPLATE DE LA STRUCTURE — ${structure.nom}
-═══════════════════════════════════════
-${templateTexte}
-
-═══════════════════════════════════════
-DONNÉES DU PATIENT
-═══════════════════════════════════════
-${buildDonneesPatientText(patient, contratActif, programmeActif)}`;
-}
-
 function libelleTypeChamp(champ: ChampFormulaire): string {
   if (champ.type === 'checkbox') return 'case à cocher — réponds "Oui" ou "Non"';
   if (champ.type === 'radio') return `bouton radio${champ.options?.length ? ` — options possibles : ${champ.options.join(', ')}` : ''}`;
