@@ -14,7 +14,7 @@ import { geocodeAdresse } from '../utils/geocodeAdresse';
 import { Link, useNavigate } from 'react-router-dom';
 import { useIndispos } from '../hooks/useIndispos';
 import { useZones } from '../hooks/useZones';
-import { getAuthHeader } from '../lib/supabase';
+import { getAuthHeader, supabase } from '../lib/supabase';
 
 const ModalPlanificateur = lazy(() => import('../components/planning/ModalPlanificateur'));
 
@@ -341,9 +341,47 @@ export default function TourneePage() {
     [participants]
   );
 
-  const praticienSettings = useMemo(() => {
+  const [praticienSettings, setPraticienSettings] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); }
     catch { return {}; }
+  });
+
+  // App.tsx efface settings_praticien à chaque login → recharger l'adresse depuis Supabase.
+  useEffect(() => {
+    if (praticienSettings.adresseRue || praticienSettings.adresseVille) return;
+    if (!supabase) return;
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
+        .from('praticiens')
+        .select('adresse_rue, adresse_code_postal, adresse_ville')
+        .eq('id', user.id)
+        .single();
+      if (!data) return;
+      const patch = {
+        adresseRue:        String(data.adresse_rue        ?? ''),
+        adresseCodePostal: String(data.adresse_code_postal ?? ''),
+        adresseVille:      String(data.adresse_ville       ?? ''),
+      };
+      const merged = { ...praticienSettings, ...patch };
+      localStorage.setItem('settings_praticien', JSON.stringify(merged));
+      setPraticienSettings(merged);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // une seule fois au montage — uniquement si l'adresse est absente
+
+  // Se synchroniser si l'utilisateur modifie ses paramètres depuis SettingsPage.
+  useEffect(() => {
+    const handler = () => {
+      try {
+        const s = JSON.parse(localStorage.getItem('settings_praticien') || '{}');
+        setPraticienSettings(s);
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('settings_praticien_updated', handler);
+    return () => window.removeEventListener('settings_praticien_updated', handler);
   }, []);
 
   // Bandeau d'invitation à planifier : contrats actifs sans séances planifiées dans les 4 prochaines semaines
