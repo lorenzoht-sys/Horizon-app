@@ -334,6 +334,24 @@ for (const [label, r] of [['Mode A', resultatModeA], ['Mode B', resultatModeB]] 
   );
 }
 
+// ── 1b. Aucun doublon (participant, date, contrat) — invariant critique table rase
+// Après table rase, bulkCreerSeances insère tout d'un coup. Un doublon sur ce
+// triplet ferait échouer la contrainte UNIQUE seances_no_double_contrat_idx.
+for (const [label, r] of [['Mode A', resultatModeA], ['Mode B', resultatModeB]] as const) {
+  const etapes = toutesEtapes(r);
+  const vus = new Map<string, number>();
+  for (const e of etapes) {
+    const cle = `${e.patient.id}|${e.date}|${e.contrat.id}`;
+    vus.set(cle, (vus.get(cle) ?? 0) + 1);
+  }
+  const doublons = [...vus.entries()].filter(([, n]) => n > 1);
+  verifier(
+    `[${label}] Aucun doublon (patient, date, contrat) — prêt pour insertion bulk`,
+    doublons.length === 0,
+    `doublons trouvés : ${doublons.map(([cle, n]) => `${cle} (${n}x)`).join(', ')}`,
+  );
+}
+
 // ── 2. Toutes les heures sont arrondies au quart d'heure ───────────────────
 for (const [label, r] of [['Mode A', resultatModeA], ['Mode B', resultatModeB]] as const) {
   const etapes = toutesEtapes(r);

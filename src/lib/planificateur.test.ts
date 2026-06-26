@@ -209,35 +209,51 @@ describe('planifierSemaine / planifierRecurrent — point de départ manquant', 
   });
 });
 
-describe('planifierSemaine — réutilisation des séances existantes', () => {
-  it('réutilise (déplace) une séance "planifiee" existante cette semaine plutôt que d\'en créer une nouvelle', () => {
+describe('planifierSemaine — protection des séances realisee/annulee', () => {
+  it('une séance "realisee" ou "annulee" existante ne déclenche pas de conflit et le planificateur propose bien une nouvelle séance', () => {
+    // Invariant critique : la table rase (api/seances/supprimer-planifiees) ne
+    // supprime que statut='planifiee'. Le planificateur doit planifier normalement
+    // même si une séance realisee ou annulee existe déjà sur la même date.
     const patient = makePatient({ id: 'p1' });
     const contrat = makeContrat({ id: 'c1', participantId: 'p1', nbSeancesSemaine: 1 });
-    const seanceExistante = makeSeance({ id: 's1', participantId: 'p1', contratId: 'c1', date: LUNDI, statut: 'planifiee' });
-
-    const r = planifierSemaine(makeParams({ participants: [patient], contrats: [contrat], seances: [seanceExistante] }), LUNDI);
-
-    const etapes = toutesLesEtapes(r.jours);
-    expect(etapes).toHaveLength(1);
-    expect(etapes[0].seanceExistanteId).toBe('s1');
-    expect(etapes[0].alreadyPlanned).toBe(true);
-  });
-
-  it('ne réutilise jamais une séance "realisee" ou "annulee" — uniquement les "planifiee"', () => {
-    const patient = makePatient({ id: 'p1' });
-    const contrat = makeContrat({ id: 'c1', participantId: 'p1', nbSeancesSemaine: 1 });
-    const seances = [
+    const seancesExistantes = [
       makeSeance({ id: 's_realisee', participantId: 'p1', contratId: 'c1', date: LUNDI, statut: 'realisee' }),
       makeSeance({ id: 's_annulee', participantId: 'p1', contratId: 'c1', date: LUNDI, statut: 'annulee' }),
     ];
 
-    const r = planifierSemaine(makeParams({ participants: [patient], contrats: [contrat], seances }), LUNDI);
+    const r = planifierSemaine(makeParams({ participants: [patient], contrats: [contrat], seances: seancesExistantes }), LUNDI);
 
     const etapes = toutesLesEtapes(r.jours);
     expect(etapes).toHaveLength(1);
-    // Une nouvelle séance est proposée : ni la "realisee" ni l'"annulee" ne sont réutilisées.
-    expect(etapes[0].seanceExistanteId).toBeUndefined();
+    // La nouvelle séance peut être proposée sur LUNDI même si une realisee/annulee y est déjà.
     expect(etapes[0].alreadyPlanned).toBeFalsy();
+  });
+});
+
+describe('planifierSemaine / planifierRecurrent — aucun doublon dans le résultat', () => {
+  it('le résultat ne contient jamais deux séances pour le même (patient, date, contrat)', () => {
+    // Invariant anti-doublon : après table rase, bulkCreerSeances insère toutes les
+    // séances d'un coup. Si le planificateur produisait deux étapes pour le même
+    // triplet (patient, date, contrat), la contrainte UNIQUE côté base échouerait.
+    const patient = makePatient({ id: 'p1' });
+    const contrat = makeContrat({ id: 'c1', participantId: 'p1', nbSeancesSemaine: 2 });
+
+    const r = planifierSemaine(makeParams({ participants: [patient], contrats: [contrat] }), LUNDI);
+
+    const etapes = toutesLesEtapes(r.jours);
+    const cles = etapes.map(e => `${e.patient.id}|${e.date}|${e.contrat.id}`);
+    expect(new Set(cles).size).toBe(cles.length);
+  });
+
+  it('Mode B : aucun doublon sur plusieurs semaines pour le même contrat', () => {
+    const patient = makePatient({ id: 'p1' });
+    const contrat = makeContrat({ id: 'c1', participantId: 'p1', nbSeancesSemaine: 2 });
+
+    const r = planifierRecurrent(makeParams({ participants: [patient], contrats: [contrat] }), '2026-06-24', 4);
+
+    const etapes = toutesLesEtapes(r.jours);
+    const cles = etapes.map(e => `${e.patient.id}|${e.date}|${e.contrat.id}`);
+    expect(new Set(cles).size).toBe(cles.length);
   });
 });
 
