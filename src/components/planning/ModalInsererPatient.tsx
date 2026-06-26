@@ -207,16 +207,21 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
                     const key = `${c.jourSemaine}-${c.heureDebut}`;
                     const sel = creneauxChoisis.some(x => `${x.jourSemaine}-${x.heureDebut}` === key);
                     const disabled = !sel && creneauxChoisis.length >= nbBesoin;
+                    const dureeAffichee = contratChoisi.dureeMinutes;
+                    const heureFin = addMinutes(c.heureDebut, dureeAffichee);
                     return (
                       <button key={i} onClick={() => !disabled && toggleCreneau(c)} disabled={disabled}
                         className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${sel ? 'border-primary bg-primary/5' : 'border-gray-200 hover:bg-gray-50'} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>
                         <div className="flex items-center justify-between">
                           <div>
                             <span className="text-sm font-semibold text-dark">{c.nomJour}</span>
-                            <span className="text-sm text-gray-600 ml-2">{c.heureDebut} – {c.heureFin}</span>
+                            <span className="text-sm text-gray-600 ml-2">{c.heureDebut} → {heureFin}</span>
+                            {patient.adresseVille && (
+                              <span className="text-xs text-gray-400 ml-2">· {patient.adresseVille}</span>
+                            )}
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-400">{c.dureeMinutes} min</span>
+                            <span className="text-xs text-gray-400">{dureeAffichee} min</span>
                             {sel && <Check size={14} className="text-primary" />}
                           </div>
                         </div>
@@ -263,10 +268,19 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
                     {new Date(contratChoisi.dateFin + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Clock size={13} className="text-gray-400" />
+                <div className="flex items-start gap-3">
+                  <Clock size={13} className="text-gray-400 mt-0.5 flex-shrink-0" />
                   <span className="font-semibold text-primary">
-                    {seancesTotal} séance{seancesTotal > 1 ? 's' : ''} à créer
+                    {seancesTotal} séance{seancesTotal > 1 ? 's' : ''} à créer pour {patient.prenom}
+                    {creneauxChoisis.length > 0 && (
+                      <span className="font-normal text-gray-500">
+                        {' · '}{creneauxChoisis.map((c, i) => {
+                          const duree = contratChoisi.dureesSeances[i] ?? contratChoisi.dureeMinutes;
+                          const debut = addMinutes(c.heureDebut, MARGE_ENTRE_SEANCES_MIN);
+                          return `${c.nomJour.slice(0, 3)} ${debut}–${addMinutes(debut, duree)}`;
+                        }).join(' · ')}
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>
