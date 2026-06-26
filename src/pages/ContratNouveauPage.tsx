@@ -2,18 +2,15 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
-import { useAgenda } from '../hooks/useAgenda';
 import PageWrapper from '../components/layout/PageWrapper';
 import { ArrowLeft, Check, Calendar, Hash, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { calculerNbSeancesEstime, calculerDateFinParFrequence, CYCLE_SEMAINES } from '../utils/horaires';
-import { getOrganisation, getJoursDisponiblesCourts, OPTIONS_FREQUENCE, trouverOptionFrequence, type OptionFrequence } from '../lib/anamnese';
+import { getOrganisation, OPTIONS_FREQUENCE, trouverOptionFrequence, type OptionFrequence } from '../lib/anamnese';
 
 const JOURS_DISPO_LIST = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'] as const;
 const FREQUENCE_DEFAUT = OPTIONS_FREQUENCE[1]; // 2 séances/semaine
 
-// Heure de départ utilisée pour générer les séances initiales — sans incidence
-// réelle, le planificateur de tournée détermine les heures réelles de passage.
 const HEURE_DEBUT_DEFAUT = '08:00';
 
 type ModePeriode = 'duree' | 'seances';
@@ -23,14 +20,12 @@ export default function ContratNouveauPage() {
   const navigate = useNavigate();
   const { participants } = useParticipants();
   const { creerContrat } = useContrats();
-  const { bulkCreerSeances } = useAgenda();
 
   const participant = participants.find(p => p.id === id);
   const bilanInitial = participant?.bilans.find(b => b.type === 'initial');
 
   // Disponibilités : fiche patient (organisation des séances), avec repli sur l'ancien bilan initial.
   const organisation = participant ? getOrganisation(participant, bilanInitial) : null;
-  const joursDisponibles = participant ? getJoursDisponiblesCourts(participant, bilanInitial) : [];
   const creneauxParJour: Record<string, { debut: string; fin: string }[]> = organisation?.creneauxParJour ?? {};
   const joursDispoLabels = JOURS_DISPO_LIST.filter(j => (organisation?.joursDisponibles ?? []).includes(j));
 
@@ -110,42 +105,22 @@ export default function ContratNouveauPage() {
       return;
     }
 
-    const adresse = [participant.adresseRue, participant.adresseCodePostal, participant.adresseVille]
-      .filter(Boolean).join(', ');
-    const coordonnees = participant.coordonnees
-      ? { lat: participant.coordonnees.lat, lng: participant.coordonnees.lng }
-      : undefined;
-
-    // Placement initial simple (premiers jours disponibles) — affiné ensuite
-    // par le planificateur de tournée, qui optimise les trajets.
-    const joursPourGeneration = joursDisponibles.slice(0, nbSeancesSemaine);
-
     try {
-      const result = await creerContrat(
-        {
-          participantId: participant.id,
-          dateDebut,
-          dateFin: dateFinEffective,
-          nbSeancesSemaine,
-          periodicite,
-          joursPourGeneration,
-          heureDebut: HEURE_DEBUT_DEFAUT,
-          dureesSeances,
-          statut: 'actif',
-          notes: notes || undefined,
-          dureeIndeterminee: dureeIndeterminee || undefined,
-          exclureTournee,
-        },
-        adresse,
-        coordonnees
-      );
+      await creerContrat({
+        participantId: participant.id,
+        dateDebut,
+        dateFin: dateFinEffective,
+        nbSeancesSemaine,
+        periodicite,
+        heureDebut: HEURE_DEBUT_DEFAUT,
+        dureesSeances,
+        statut: 'actif',
+        notes: notes || undefined,
+        dureeIndeterminee: dureeIndeterminee || undefined,
+        exclureTournee,
+      });
 
-      await bulkCreerSeances(result.seancesData);
-      toast.success(
-        result.seancesData.length > 0
-          ? `Contrat créé — ${result.seancesData.length} séances générées automatiquement`
-          : 'Contrat créé — renseignez les disponibilités du patient pour générer les séances'
-      );
+      toast.success('Contrat créé. Allez sur Tournée → Planifier pour générer votre planning.');
       navigate(`/participant/${participant.id}`);
     } catch (err) {
       console.error('Erreur création contrat:', err);

@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { differenceInDays } from 'date-fns';
 import { toast } from 'sonner';
-import type { Contrat, Seance, JourSemaine, StatutContrat, PeriodiciteContrat } from '../types';
-import { calculerNbSeancesEstime, genererDatesSeances, indexerParSemaine, addMinutes, CYCLE_SEMAINES } from '../utils/horaires';
+import type { Contrat, StatutContrat, PeriodiciteContrat } from '../types';
+import { calculerNbSeancesEstime, CYCLE_SEMAINES } from '../utils/horaires';
 import { supabase } from '../lib/supabase';
 import { dbToContrat, contratToDb } from '../lib/mappers';
 
@@ -15,8 +15,6 @@ interface CreerContratData {
   nbSeancesSemaine: number;
   /** Défaut 'semaine' si absent. */
   periodicite?: PeriodiciteContrat;
-  /** Jours dérivés des disponibilités patient, pour la génération initiale des séances (placement simple, affiné ensuite par le planificateur). Vide si aucune disponibilité connue. */
-  joursPourGeneration: JourSemaine[];
   heureDebut: string;
   /** Durée de chaque séance de la semaine, dans l'ordre chronologique (séance 1, séance 2...). */
   dureesSeances: number[];
@@ -45,11 +43,7 @@ export function useContrats() {
     return () => { cancelled = true; };
   }, []);
 
-  async function creerContrat(
-    data: CreerContratData,
-    adresse: string,
-    coordonnees?: { lat: number; lng: number }
-  ): Promise<{ contrat: Contrat; seancesData: Omit<Seance, 'id'>[] }> {
+  async function creerContrat(data: CreerContratData): Promise<Contrat> {
     const periodicite = data.periodicite ?? 'semaine';
     // calculerNbSeancesEstime attend un taux hebdomadaire : pour un cycle de
     // 2/3 semaines, nbSeancesSemaine (séances par occurrence, toujours 1) est
@@ -83,31 +77,7 @@ export function useContrats() {
       }
     }
     setContrats(prev => [...prev, contrat]);
-
-    // Placement initial simple (premiers jours disponibles) — affiné ensuite
-    // par le planificateur de tournée, qui optimise les trajets. Vide si le
-    // patient n'a aucune disponibilité connue : le contrat existe sans séance.
-    // Chaque séance reçoit la durée individuelle de son rang dans la semaine
-    // (séance 1, séance 2...) — voir Contrat.dureesSeances.
-    const dates = genererDatesSeances(data.dateDebut, data.dateFin, data.joursPourGeneration, periodicite);
-    const indices = indexerParSemaine(dates);
-    const seancesData: Omit<Seance, 'id'>[] = dates.map((date, i) => {
-      const duree = data.dureesSeances[indices[i]] ?? data.dureesSeances.at(-1) ?? 45;
-      return {
-        participantId: data.participantId,
-        contratId: contrat.id,
-        date,
-        heureDebut: data.heureDebut,
-        heureFin: addMinutes(data.heureDebut, duree),
-        dureeMinutes: duree,
-        type: 'seance' as const,
-        statut: 'planifiee' as const,
-        adresse,
-        coordonnees,
-      };
-    });
-
-    return { contrat, seancesData };
+    return contrat;
   }
 
   async function modifierStatut(id: string, statut: StatutContrat) {
