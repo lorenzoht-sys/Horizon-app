@@ -7,6 +7,7 @@ import { Plus, PauseCircle, XCircle, RefreshCw, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Contrat } from '../../types';
 import ModalGenerationContrat from './ModalGenerationContrat';
+import { getAuthHeader } from '../../lib/supabase';
 
 const STATUT_BADGE: Record<string, { label: string; class: string }> = {
   actif:    { label: 'Actif',    class: 'bg-green-100 text-green-700' },
@@ -30,7 +31,10 @@ export default function ContratsTab({ participantId }: Props) {
   const { seances } = useAgenda();
   const { participants } = useParticipants();
   const [modalPDF, setModalPDF] = useState<Contrat | null>(null);
+  const [confirmSuppr, setConfirmSuppr] = useState<{ contratId: string; nbSeances: number } | null>(null);
+  const [supprimant, setSupprimant] = useState(false);
 
+  const today = new Date().toISOString().split('T')[0];
   const participant = participants.find(p => p.id === participantId);
 
   const contrats = contratsDeParticipant(participantId);
@@ -40,7 +44,6 @@ export default function ContratsTab({ participantId }: Props) {
   }
 
   function prochaineSeance(contrat: Contrat): string | null {
-    const today = new Date().toISOString().split('T')[0];
     const prochaine = seances
       .filter(s => s.contratId === contrat.id && s.statut === 'planifiee' && s.date >= today)
       .sort((a, b) => a.date.localeCompare(b.date))[0];
@@ -73,9 +76,46 @@ export default function ContratsTab({ participantId }: Props) {
   }
 
   function handleSupprimer(contratId: string) {
-    if (!confirm('Supprimer ce contrat définitivement ?')) return;
-    supprimerContrat(contratId);
-    toast.success('Contrat supprimé');
+    const nbFutures = seances.filter(
+      s => s.contratId === contratId && s.statut === 'planifiee' && s.date >= today
+    ).length;
+    if (nbFutures === 0) {
+      supprimerContrat(contratId);
+      toast.success('Contrat supprimé');
+      return;
+    }
+    setConfirmSuppr({ contratId, nbSeances: nbFutures });
+  }
+
+  async function handleSupprimerAvecSeances() {
+    if (!confirmSuppr) return;
+    setSupprimant(true);
+    try {
+      const authHeader = await getAuthHeader();
+      const r = await fetch('/api/seances/supprimer-planifiees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({ contratIds: [confirmSuppr.contratId], dateMin: today }),
+      });
+      if (!r.ok) {
+        const detail = await r.json().catch(() => ({}));
+        throw new Error(detail.error ?? 'Erreur suppression séances');
+      }
+      supprimerContrat(confirmSuppr.contratId);
+      toast.success('Contrat et séances futures supprimés');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur lors de la suppression');
+    } finally {
+      setSupprimant(false);
+      setConfirmSuppr(null);
+    }
+  }
+
+  function handleSupprimerSansSeances() {
+    if (!confirmSuppr) return;
+    supprimerContrat(confirmSuppr.contratId);
+    toast.success('Contrat supprimé (séances conservées)');
+    setConfirmSuppr(null);
   }
 
   if (contrats.length === 0) {
@@ -247,6 +287,45 @@ export default function ContratsTab({ participantId }: Props) {
           participant={participant}
           onClose={() => setModalPDF(null)}
         />
+      )}
+
+      {/* Dialog confirmation suppression avec séances */}
+      {confirmSuppr && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1001 }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-semibold text-dark">Supprimer ce contrat ?</h3>
+            <p className="text-sm text-gray-600">
+              Ce contrat a{' '}
+              <span className="font-semibold text-dark">
+                {confirmSuppr.nbSeances} séance{confirmSuppr.nbSeances > 1 ? 's' : ''} planifiée{confirmSuppr.nbSeances > 1 ? 's' : ''}
+              </span>{' '}
+              à venir. Voulez-vous les supprimer également ?
+            </p>
+            <div className="space-y-2">
+              <button
+                onClick={handleSupprimerAvecSeances}
+                disabled={supprimant}
+                className="w-full py-2.5 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600 transition-colors disabled:opacity-40"
+              >
+                {supprimant ? 'Suppression…' : 'Supprimer le contrat et les séances futures'}
+              </button>
+              <button
+                onClick={handleSupprimerSansSeances}
+                disabled={supprimant}
+                className="w-full py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-40"
+              >
+                Supprimer uniquement le contrat
+              </button>
+              <button
+                onClick={() => setConfirmSuppr(null)}
+                disabled={supprimant}
+                className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
