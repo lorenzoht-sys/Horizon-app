@@ -305,7 +305,7 @@ export default function ContratsTab({ participantId }: Props) {
               <button
                 onClick={handleSupprimerAvecSeances}
                 disabled={supprimant}
-                className="w-full py-2.5 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600 transition-colors disabled:opacity-40"
+                className="w-full py-2.5 bg-danger text-white rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-40"
               >
                 {supprimant ? 'Suppression…' : 'Supprimer le contrat et les séances futures'}
               </button>
