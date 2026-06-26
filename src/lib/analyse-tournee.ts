@@ -34,15 +34,14 @@ function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: numb
  * Détecte les créneaux libres récurrents dans les jours où le praticien a déjà
  * des séances proches du nouveau patient.
  *
- * Trois types de trous détectés sur chaque journée :
- *   - avant la 1ère séance (depuis HEURE_DEBUT_TRAVAIL)
- *   - entre deux séances consécutives
- *   - après la dernière séance (jusqu'à HEURE_FIN_TRAVAIL)
+ * Pour chaque jour de semaine avec ≥ 2 occurrences dans la zone :
+ *   1. Fusionne toutes les séances (tous patients, toutes dates confondus) en
+ *      une timeline unifiée — évite les doublons "08:00-Xh" / "08:00-Yh".
+ *   2. Fusionne les intervalles qui se chevauchent (union).
+ *   3. Détecte les trous avant la 1ère séance, entre séances et après la dernière.
  *
  * Matching prioritaire : rayon géographique ≤ RAYON_ZONE_KM km (Haversine).
  * Repli : matching par adresseVille exacte (insensible à la casse).
- *
- * Un créneau est retenu s'il apparaît sur ≥ 2 dates distinctes du même jour de semaine.
  */
 export function getTrousRecurrents(
   seances: Seance[],
@@ -68,13 +67,17 @@ export function getTrousRecurrents(
   const seancesZone = seances.filter(s => s.statut !== 'annulee' && dansLaZone(s.participantId));
   if (seancesZone.length === 0) return [];
 
-  // Grouper par jour de semaine
-  const parJour = new Map<number, { date: string; heureDebut: string; heureFin: string }[]>();
+  // Grouper par jour de semaine (toutes dates confondues)
+  const parJour = new Map<number, { debut: number; fin: number }[]>();
+  const datesParJour = new Map<number, Set<string>>();
   for (const s of seancesZone) {
     const dow = new Date(s.date + 'T12:00').getDay();
-    const existing = parJour.get(dow) ?? [];
-    existing.push({ date: s.date, heureDebut: s.heureDebut, heureFin: s.heureFin });
-    parJour.set(dow, existing);
+    const slots = parJour.get(dow) ?? [];
+    slots.push({ debut: heureEnMinutes(s.heureDebut), fin: heureEnMinutes(s.heureFin) });
+    parJour.set(dow, slots);
+    const dates = datesParJour.get(dow) ?? new Set();
+    dates.add(s.date);
+    datesParJour.set(dow, dates);
   }
 
   const debutTravailMin = heureEnMinutes(HEURE_DEBUT_TRAVAIL);
@@ -82,53 +85,54 @@ export function getTrousRecurrents(
 
   const result: CreneauLibre[] = [];
 
-  for (const [dow, occurrences] of parJour) {
-    const dates = [...new Set(occurrences.map(o => o.date))];
-    if (dates.length < 2) continue;
+  for (const [dow, slots] of parJour) {
+    // Ignorer les jours non récurrents (présents sur une seule date)
+    if ((datesParJour.get(dow)?.size ?? 0) < 2) continue;
 
-    const trousCandidats = new Map<string, number>(); // "HH:MM-HH:MM" → nb occurrences
-
-    for (const date of dates) {
-      const seancesJour = occurrences
-        .filter(o => o.date === date)
-        .sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
-
-      const premiere = seancesJour[0];
-      const derniere  = seancesJour[seancesJour.length - 1];
-
-      // Trou avant la 1ère séance
-      const avantPremiere = heureEnMinutes(premiere.heureDebut) - debutTravailMin;
-      if (avantPremiere >= TROU_MIN_SUGGESTION_MINUTES) {
-        const cle = `${HEURE_DEBUT_TRAVAIL}-${premiere.heureDebut}`;
-        trousCandidats.set(cle, (trousCandidats.get(cle) ?? 0) + 1);
-      }
-
-      // Trous entre séances consécutives
-      for (let i = 0; i < seancesJour.length - 1; i++) {
-        const gap = heureEnMinutes(seancesJour[i + 1].heureDebut) - heureEnMinutes(seancesJour[i].heureFin);
-        if (gap >= TROU_MIN_SUGGESTION_MINUTES) {
-          const cle = `${seancesJour[i].heureFin}-${seancesJour[i + 1].heureDebut}`;
-          trousCandidats.set(cle, (trousCandidats.get(cle) ?? 0) + 1);
-        }
-      }
-
-      // Trou après la dernière séance
-      const apresLastMin = finTravailMin - heureEnMinutes(derniere.heureFin);
-      if (apresLastMin >= TROU_MIN_SUGGESTION_MINUTES) {
-        const cle = `${derniere.heureFin}-${minutesEnHeure(finTravailMin)}`;
-        trousCandidats.set(cle, (trousCandidats.get(cle) ?? 0) + 1);
+    // Trier puis fusionner les intervalles qui se chevauchent (union)
+    slots.sort((a, b) => a.debut - b.debut);
+    const fusionnes: { debut: number; fin: number }[] = [];
+    for (const s of slots) {
+      if (fusionnes.length === 0 || s.debut > fusionnes[fusionnes.length - 1].fin) {
+        fusionnes.push({ ...s });
+      } else {
+        fusionnes[fusionnes.length - 1].fin = Math.max(fusionnes[fusionnes.length - 1].fin, s.fin);
       }
     }
 
-    for (const [cle, nb] of trousCandidats) {
-      if (nb < 2) continue;
-      const [debut, fin] = cle.split('-');
+    // Trou avant la 1ère séance
+    if (fusionnes[0].debut - debutTravailMin >= TROU_MIN_SUGGESTION_MINUTES) {
       result.push({
         jourSemaine: dow,
         nomJour: NOMS_JOURS[dow],
-        heureDebut: debut,
-        heureFin: fin,
-        dureeMinutes: heureEnMinutes(fin) - heureEnMinutes(debut),
+        heureDebut: HEURE_DEBUT_TRAVAIL,
+        heureFin:   minutesEnHeure(fusionnes[0].debut),
+        dureeMinutes: fusionnes[0].debut - debutTravailMin,
+      });
+    }
+
+    // Trous entre séances fusionnées consécutives
+    for (let i = 0; i < fusionnes.length - 1; i++) {
+      const gap = fusionnes[i + 1].debut - fusionnes[i].fin;
+      if (gap >= TROU_MIN_SUGGESTION_MINUTES) {
+        result.push({
+          jourSemaine: dow,
+          nomJour: NOMS_JOURS[dow],
+          heureDebut:  minutesEnHeure(fusionnes[i].fin),
+          heureFin:    minutesEnHeure(fusionnes[i + 1].debut),
+          dureeMinutes: gap,
+        });
+      }
+    }
+
+    // Trou après la dernière séance
+    if (finTravailMin - fusionnes[fusionnes.length - 1].fin >= TROU_MIN_SUGGESTION_MINUTES) {
+      result.push({
+        jourSemaine: dow,
+        nomJour: NOMS_JOURS[dow],
+        heureDebut:  minutesEnHeure(fusionnes[fusionnes.length - 1].fin),
+        heureFin:    HEURE_FIN_TRAVAIL,
+        dureeMinutes: finTravailMin - fusionnes[fusionnes.length - 1].fin,
       });
     }
   }
