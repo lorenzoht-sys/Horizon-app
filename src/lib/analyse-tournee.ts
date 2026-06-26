@@ -43,11 +43,21 @@ function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: numb
  * Matching prioritaire : rayon géographique ≤ RAYON_ZONE_KM km (Haversine).
  * Repli : matching par adresseVille exacte (insensible à la casse).
  */
+const DOW_TO_DISPO: Record<number, string> = {
+  1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam',
+};
+
+export type DisposPatient = {
+  joursDisponibles?: string[];
+  creneauxParJour?: Record<string, { debut: string; fin: string }[]>;
+};
+
 export function getTrousRecurrents(
   seances: Seance[],
   participants: Participant[],
   newPatientVille: string,
   newPatientCoords?: { lat: number; lng: number },
+  newPatientDispos?: DisposPatient,
 ): CreneauLibre[] {
   // Index participantId → participant
   const participantParId = new Map<string, Participant>();
@@ -137,9 +147,23 @@ export function getTrousRecurrents(
     }
   }
 
-  return result.sort((a, b) =>
+  const sorted = result.sort((a, b) =>
     a.jourSemaine !== b.jourSemaine
       ? a.jourSemaine - b.jourSemaine
       : a.heureDebut.localeCompare(b.heureDebut)
   );
+
+  if (!newPatientDispos) return sorted;
+
+  const { joursDisponibles = [], creneauxParJour = {} } = newPatientDispos;
+  return sorted.filter(c => {
+    const cleJour = DOW_TO_DISPO[c.jourSemaine];
+    if (!cleJour) return false;
+    if (joursDisponibles.length > 0 && !joursDisponibles.includes(cleJour)) return false;
+    const slots = creneauxParJour[cleJour];
+    if (!slots || slots.length === 0) return true;
+    const debutC = heureEnMinutes(c.heureDebut);
+    const finC   = heureEnMinutes(c.heureFin);
+    return slots.some(s => heureEnMinutes(s.debut) < finC && heureEnMinutes(s.fin) > debutC);
+  });
 }
