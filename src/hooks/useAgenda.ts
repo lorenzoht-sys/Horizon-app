@@ -130,12 +130,22 @@ export function useAgenda() {
     await modifierSeance(id, { statut });
   }
 
+  // Retire immédiatement du state local les séances planifiée supprimées côté DB
+  // par /api/seances/supprimer-planifiees, pour éviter qu'elles persistent à l'écran
+  // jusqu'au prochain rechargement de page.
+  function retirerPlanifieesLocales(contratIds: string[], dateMin: string) {
+    setSeances(prev => prev.filter(s =>
+      !(s.contratId != null && contratIds.includes(s.contratId) && s.statut === 'planifiee' && s.date >= dateMin)
+    ));
+  }
+
   return {
     seances,
     creerSeance,
     bulkCreerSeances,
     modifierSeance,
     supprimerSeance,
+    retirerPlanifieesLocales,
     seancesDeSemaine,
     seancesDuJour,
     detecterConflits,

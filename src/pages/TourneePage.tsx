@@ -330,7 +330,7 @@ const DEPART_FALLBACK = { lat: 47.2184, lng: -1.5536 };
 
 export default function TourneePage() {
   const { participants } = useParticipants();
-  const { seances, seancesDuJour, changerStatut, creerSeance, bulkCreerSeances, modifierSeance } = useAgenda();
+  const { seances, seancesDuJour, changerStatut, creerSeance, bulkCreerSeances, retirerPlanifieesLocales } = useAgenda();
   const { contrats } = useContrats();
   const { indispos, indisposDuJour } = useIndispos();
   const { zones } = useZones();
@@ -345,6 +345,20 @@ export default function TourneePage() {
     try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); }
     catch { return {}; }
   }, []);
+
+  // Bandeau d'invitation à planifier : contrats actifs sans séances planifiées dans les 4 prochaines semaines
+  const { afficherBandeau, nbContratsActifs } = useMemo(() => {
+    const aujourd = new Date().toISOString().split('T')[0];
+    const dans4Semaines = new Date();
+    dans4Semaines.setDate(dans4Semaines.getDate() + 28);
+    const dateMax = dans4Semaines.toISOString().split('T')[0];
+    const actifs = contrats.filter(c => c.statut === 'actif' && !c.exclureTournee);
+    const aDesSeances = seances.some(s =>
+      s.statut === 'planifiee' && s.date >= aujourd && s.date <= dateMax &&
+      actifs.some(c => c.id === s.contratId)
+    );
+    return { afficherBandeau: actifs.length > 0 && !aDesSeances, nbContratsActifs: actifs.length };
+  }, [contrats, seances]);
 
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [showAdHoc, setShowAdHoc] = useState(false);
@@ -610,6 +624,22 @@ export default function TourneePage() {
           <Link to="/agenda" className="text-xs text-primary hover:underline">Voir l'agenda →</Link>
         </div>
       </div>
+
+      {/* ── Bandeau invitation à planifier ─────────────────────── */}
+      {afficherBandeau && (
+        <div className="mb-5 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-2xl px-5 py-3">
+          <AlertCircle size={16} className="text-blue-500 flex-shrink-0" />
+          <span className="text-sm text-blue-800 flex-1">
+            Vous avez {nbContratsActifs} contrat{nbContratsActifs > 1 ? 's' : ''} actif{nbContratsActifs > 1 ? 's' : ''} sans séances planifiées dans les 4 prochaines semaines.
+          </span>
+          <button
+            onClick={() => setShowPlanificateur(true)}
+            className="text-xs font-semibold text-blue-700 hover:text-blue-900 underline underline-offset-2 flex-shrink-0"
+          >
+            Planifier →
+          </button>
+        </div>
+      )}
 
       {/* ── Stats ─────────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm mb-5 flex items-center gap-6 flex-wrap">
@@ -1049,8 +1079,15 @@ export default function TourneePage() {
             departAdresse={departAdresse}
             departErreur={departErreur}
             heureDebutJournee={heureDepart}
-            bulkCreerSeances={async (data) => { await bulkCreerSeances(data); }}
-            modifierSeance={(id, updates) => modifierSeance(id, updates)}
+            bulkCreerSeances={async (data) => {
+              // Retire les séances planifiees stale du state local avant d'insérer
+              // les nouvelles (la table rase vient d'être faite côté DB par la route
+              // /api/seances/supprimer-planifiees, mais le state React ne le sait pas encore).
+              const contratIds = [...new Set(data.map(s => s.contratId).filter((id): id is string => id != null))];
+              const aujourd = new Date().toISOString().split('T')[0];
+              retirerPlanifieesLocales(contratIds, aujourd);
+              await bulkCreerSeances(data);
+            }}
           />
         </Suspense>
       )}

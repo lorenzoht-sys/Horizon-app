@@ -25,7 +25,6 @@ interface Props {
   departErreur?: boolean;
   heureDebutJournee: string;
   bulkCreerSeances: (data: Omit<Seance, 'id'>[]) => Promise<void>;
-  modifierSeance: (id: string, updates: Partial<Seance>) => Promise<boolean>;
 }
 
 type Mode = 'A' | 'B';
@@ -56,7 +55,7 @@ function zoneDominanteJour(etapes: EtapePlanifiee[], zones: ZoneGeographique[]):
 export default function ModalPlanificateur({
   onClose, participants, contrats, seances, indispos, zones = [],
   depart, departAdresse, departErreur = false, heureDebutJournee,
-  bulkCreerSeances, modifierSeance,
+  bulkCreerSeances,
 }: Props) {
   const today = new Date().toISOString().split('T')[0];
   const [mode, setMode]         = useState<Mode>('A');
@@ -67,6 +66,8 @@ export default function ModalPlanificateur({
   const [resultat, setResultat] = useState<ResultatPlanification | null>(null);
   const [localJours, setLocalJours] = useState<JourPlanifie[]>([]);
   const [applying, setApplying] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [seancesRemplacees, setSeancesRemplacees] = useState(0);
 
   // Patients candidats (avec coordonnées, contrat actif)
   const patientsActifs = useMemo(() =>
@@ -141,69 +142,62 @@ export default function ModalPlanificateur({
 
   const etapesAcceptees: EtapePlanifiee[] = localJours.flatMap(j => j.etapes.filter(e => e.accepted));
 
-  async function handleAppliquer() {
+  // Étape 1 : calcule le nombre de séances planifiées qui seront remplacées et
+  // ouvre la boîte de confirmation. N'écrit rien en base.
+  function handleDemanderConfirmation() {
     if (etapesAcceptees.length === 0) { toast('Aucune séance acceptée.'); return; }
+    const contratIds = [...new Set(etapesAcceptees.map(e => e.contrat.id))];
+    const nbRemplacees = seances.filter(s =>
+      s.contratId != null &&
+      contratIds.includes(s.contratId) &&
+      s.statut === 'planifiee' &&
+      s.date >= today
+    ).length;
+    setSeancesRemplacees(nbRemplacees);
+    setShowConfirm(true);
+  }
+
+  // Étape 2 : table rase puis recréation. Appelé après confirmation explicite.
+  async function handleConfirmerAppliquer() {
+    setShowConfirm(false);
     setApplying(true);
     try {
-      // Les deux modes peuvent désormais créer de nouvelles séances et déplacer
-      // (jour + horaire) celles déjà planifiées cette semaine-là — les jours ne
-      // sont plus figés sur contrat.joursFixe, ils sont ré-optimisés à chaque
-      // exécution du planificateur (src/lib/planificateur.ts).
-      // Garde-fou unicité (participant_id, date) — évite les doublons si seances est désynchronisé
-      const existeDeja = (participantId: string, date: string) =>
-        seances.some(s => s.participantId === participantId && s.date === date && s.statut !== 'annulee');
+      const contratIds = [...new Set(etapesAcceptees.map(e => e.contrat.id))];
+      const authHeader = await getAuthHeader();
 
-      const toCreate = etapesAcceptees.filter(e =>
-        !e.alreadyPlanned && !existeDeja(e.patient.id, e.date)
-      );
-      const toUpdate = etapesAcceptees.filter(e =>
-        e.alreadyPlanned && !!e.seanceExistanteId
-      );
-      if (toCreate.length > 0) {
-        const data: Omit<Seance, 'id'>[] = toCreate.map(e => ({
-          participantId: e.patient.id,
-          contratId: e.contrat.id,
-          date: e.date,
-          heureDebut: e.heureDebut,
-          heureFin: e.heureFin,
-          dureeMinutes: e.contrat.dureeMinutes,
-          type: 'seance' as const,
-          statut: 'planifiee' as const,
-          adresse: [e.patient.adresseRue, e.patient.adresseCodePostal, e.patient.adresseVille]
-            .filter(Boolean).join(', '),
-          coordonnees: e.patient.coordonnees
-            ? { lat: e.patient.coordonnees.lat, lng: e.patient.coordonnees.lng }
-            : undefined,
-        }));
-        // Insert unique côté Supabase : tout-ou-rien — si ça échoue, rien n'a
-        // été créé, et l'exception ci-dessous interrompt avant le toast de succès.
-        await bulkCreerSeances(data);
+      // Supprime toutes les séances planifiee futures de ces contrats
+      const r = await fetch('/api/seances/supprimer-planifiees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({ contratIds, dateMin: today }),
+      });
+      if (!r.ok) {
+        const detail = await r.json().catch(() => ({}));
+        throw new Error(detail.error ?? 'Erreur suppression séances');
       }
 
-      // Chaque modifierSeance() est une requête indépendante : on ne peut pas
-      // supposer qu'elles réussissent toutes. On compte les échecs réels pour ne
-      // jamais annoncer un succès qui ne correspond pas à l'état en base.
-      let echecsMaj = 0;
-      for (const e of toUpdate) {
-        const ok = await modifierSeance(e.seanceExistanteId!, { date: e.date, heureDebut: e.heureDebut, heureFin: e.heureFin });
-        if (!ok) echecsMaj++;
-      }
+      // Crée toutes les séances optimisées (table rase garantit zéro doublon)
+      const data: Omit<Seance, 'id'>[] = etapesAcceptees.map(e => ({
+        participantId: e.patient.id,
+        contratId: e.contrat.id,
+        date: e.date,
+        heureDebut: e.heureDebut,
+        heureFin: e.heureFin,
+        dureeMinutes: e.contrat.dureeMinutes,
+        type: 'seance' as const,
+        statut: 'planifiee' as const,
+        adresse: [e.patient.adresseRue, e.patient.adresseCodePostal, e.patient.adresseVille]
+          .filter(Boolean).join(', '),
+        coordonnees: e.patient.coordonnees
+          ? { lat: e.patient.coordonnees.lat, lng: e.patient.coordonnees.lng }
+          : undefined,
+      }));
+      await bulkCreerSeances(data);
 
-      if (echecsMaj > 0) {
-        toast.error(
-          `${toCreate.length} créée${toCreate.length > 1 ? 's' : ''}, mais ${echecsMaj} mise${echecsMaj > 1 ? 's' : ''} à jour sur ${toUpdate.length} a${echecsMaj > 1 ? 'nt' : ''} échoué. Vérifiez votre connexion et réessayez.`
-        );
-        return; // on ne ferme pas la modale : permet de réessayer sans perdre la proposition
-      }
-
-      const msg = [
-        toCreate.length > 0 ? `${toCreate.length} créée${toCreate.length > 1 ? 's' : ''}` : '',
-        toUpdate.length > 0 ? `${toUpdate.length} déplacée${toUpdate.length > 1 ? 's' : ''}/mise${toUpdate.length > 1 ? 's' : ''} à jour` : '',
-      ].filter(Boolean).join(', ');
-      toast.success(`Séances appliquées : ${msg}`);
+      toast.success(`Planning appliqué : ${etapesAcceptees.length} séance${etapesAcceptees.length > 1 ? 's' : ''} planifiée${etapesAcceptees.length > 1 ? 's' : ''}`);
       onClose();
-    } catch {
-      toast.error('Erreur lors de l\'application du planning');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur lors de l\'application du planning');
     } finally {
       setApplying(false);
     }
@@ -412,22 +406,51 @@ export default function ModalPlanificateur({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between gap-3">
-          <button onClick={onClose}
-            className="px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-            Annuler
-          </button>
-          {resultat && totalEtapes > 0 && (
-            <button
-              onClick={handleAppliquer}
-              disabled={applying || etapesAcceptees.length === 0}
-              className="flex items-center gap-2 bg-primary text-white text-sm font-semibold px-5 py-2 rounded-xl hover:bg-dark transition-colors disabled:opacity-50"
-            >
-              {applying
-                ? <><Loader size={14} className="animate-spin" />Application…</>
-                : `Appliquer ${etapesAcceptees.length} séance${etapesAcceptees.length > 1 ? 's' : ''}`}
-            </button>
+        <div className="px-6 py-4 border-t border-gray-100 space-y-3">
+          {showConfirm && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+              <p className="font-semibold mb-1">Confirmer l'application du planning ?</p>
+              <p className="text-xs text-amber-700 mb-3">
+                {seancesRemplacees > 0
+                  ? `Ceci va supprimer ${seancesRemplacees} séance${seancesRemplacees > 1 ? 's' : ''} planifiée${seancesRemplacees > 1 ? 's' : ''} existante${seancesRemplacees > 1 ? 's' : ''} et les remplacer par ${etapesAcceptees.length} séance${etapesAcceptees.length > 1 ? 's' : ''} optimisées.`
+                  : `Ceci va créer ${etapesAcceptees.length} séance${etapesAcceptees.length > 1 ? 's' : ''} dans votre planning.`
+                }
+                {' '}Les séances déjà réalisées ne seront pas affectées.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowConfirm(false)}
+                  className="px-3 py-1.5 border border-amber-300 rounded-lg text-xs text-amber-700 hover:bg-amber-100 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleConfirmerAppliquer}
+                  disabled={applying}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-dark transition-colors disabled:opacity-50"
+                >
+                  {applying ? <><Loader size={12} className="animate-spin" />Application…</> : 'Confirmer'}
+                </button>
+              </div>
+            </div>
           )}
+          <div className="flex items-center justify-between gap-3">
+            <button onClick={onClose}
+              className="px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+              Annuler
+            </button>
+            {resultat && totalEtapes > 0 && !showConfirm && (
+              <button
+                onClick={handleDemanderConfirmation}
+                disabled={applying || etapesAcceptees.length === 0}
+                className="flex items-center gap-2 bg-primary text-white text-sm font-semibold px-5 py-2 rounded-xl hover:bg-dark transition-colors disabled:opacity-50"
+              >
+                {applying
+                  ? <><Loader size={14} className="animate-spin" />Application…</>
+                  : `Appliquer ${etapesAcceptees.length} séance${etapesAcceptees.length > 1 ? 's' : ''}`}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
