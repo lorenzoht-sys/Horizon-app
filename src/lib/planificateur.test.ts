@@ -3,6 +3,7 @@ import type { Participant, Contrat, Seance, IndisponibilitePierre, ZoneGeographi
 import {
   planifierSemaine,
   planifierRecurrent,
+  calculerRapport,
   coordKey,
   prochainLundi,
   type MatriceORS,
@@ -109,6 +110,16 @@ const LUNDI = prochainLundi('2026-06-24'); // mercredi -> prochain lundi réel
 
 function toutesLesEtapes(jours: ReturnType<typeof planifierSemaine>['jours']) {
   return jours.flatMap(j => j.etapes);
+}
+
+// Matrice plate : tous les trajets ont le même coût (600 s) — seule la charge
+// différencie les jours, ce qui permet de tester l'équilibre de charge.
+function buildFlatMatrix(points: { lat: number; lng: number }[]): { matrix: MatriceORS; indexMap: Map<string, number> } {
+  const n = points.length;
+  const durees   = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => i === j ? 0 : 600));
+  const distances = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => i === j ? 0 : 6000));
+  const indexMap  = new Map(points.map((p, i) => [coordKey(p), i]));
+  return { matrix: { durees, distances, fallback: false }, indexMap };
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -480,5 +491,142 @@ describe('planifierSemaine — zones géographiques contraignantes', () => {
     expect(datesP1[0]).toBe(datesP2[0]);
     // Et ce jour doit être lundi (le seul jour dans joursAssignes de la zone).
     expect(datesP1[0]).toBe(LUNDI);
+  });
+});
+
+describe('planifierSemaine — équilibre de charge (POIDS_CHARGE)', () => {
+  it('avec 5 patients équidistants, chaque jour reçoit exactement 1 patient', () => {
+    // Matrice plate : tous les trajets coûtent pareil → seule la charge discrimine.
+    // Avec POIDS_CHARGE=0.20, un jour déjà occupé coûte plus cher → distribution uniforme.
+    const patients = [1, 2, 3, 4, 5].map(i =>
+      makePatient({ id: `p${i}`, lat: i * 0.001, lng: 0 })
+    );
+    const contrats = patients.map(p =>
+      makeContrat({ id: `c${p.id}`, participantId: p.id, nbSeancesSemaine: 1 })
+    );
+    const depart = DEPART;
+    const points = [depart, ...patients.map(p => p.coordonnees!)];
+    const { matrix, indexMap } = buildFlatMatrix(points);
+    const params: PlanificateurParams = {
+      participants: patients, contrats, seances: [], indispos: [],
+      depart, matrix, indexMap, heureDebutJournee: '08:00',
+    };
+
+    const r = planifierSemaine(params, LUNDI);
+
+    const etapesParJour = r.jours.map(j => j.etapes.length);
+    expect(r.jours).toHaveLength(5);          // 5 jours occupés
+    expect(Math.max(...etapesParJour)).toBe(1); // aucun jour n'a plus d'1 patient
+  });
+
+  it('aucun jour ne dépasse 2x la charge moyenne', () => {
+    // Scénario plus réaliste : 8 patients disponibles lun-ven, 1 séance chacun.
+    const patients = Array.from({ length: 8 }, (_, i) =>
+      makePatient({ id: `p${i}`, lat: i * 0.001, lng: 0 })
+    );
+    const contrats = patients.map(p =>
+      makeContrat({ id: `c${p.id}`, participantId: p.id, nbSeancesSemaine: 1 })
+    );
+    const depart = DEPART;
+    const points = [depart, ...patients.map(p => p.coordonnees!)];
+    const { matrix, indexMap } = buildFlatMatrix(points);
+    const params: PlanificateurParams = {
+      participants: patients, contrats, seances: [], indispos: [],
+      depart, matrix, indexMap, heureDebutJournee: '08:00',
+    };
+
+    const r = planifierSemaine(params, LUNDI);
+
+    const charges = r.jours.map(j => j.etapes.reduce((s, e) => s + e.contrat.dureeMinutes, 0));
+    const moyenne = charges.reduce((a, b) => a + b, 0) / charges.length;
+    const max = Math.max(...charges);
+    expect(max).toBeLessThanOrEqual(moyenne * 2);
+  });
+});
+
+describe('planifierJour — nearest neighbor', () => {
+  it('le premier patient visité est le plus proche du point de départ', () => {
+    // depart=idx0, p_near=idx1 (600s), p_far=idx2 (1200s) via buildMatrix.
+    // nearest neighbor dans ordonner() doit placer p_near avant p_far.
+    const p_near = makePatient({ id: 'p_near', lat: 1, lng: 0 });
+    const p_far  = makePatient({ id: 'p_far',  lat: 2, lng: 0 });
+    const c_near = makeContrat({ id: 'c_near', participantId: 'p_near', nbSeancesSemaine: 1 });
+    const c_far  = makeContrat({ id: 'c_far',  participantId: 'p_far',  nbSeancesSemaine: 1 });
+
+    const r = planifierSemaine(
+      makeParams({ participants: [p_near, p_far], contrats: [c_near, c_far] }),
+      LUNDI,
+    );
+
+    // Les deux doivent se trouver sur le même jour (le scoring les regroupe).
+    const jourCommun = r.jours.find(j => j.etapes.length === 2);
+    expect(jourCommun).toBeDefined();
+    // Le patient le plus proche du départ est toujours le premier visité.
+    expect(jourCommun!.etapes[0].patient.id).toBe('p_near');
+  });
+});
+
+describe('planifierRecurrent — stabilité hebdomadaire (POIDS_STABILITE)', () => {
+  it('un patient garde le même jour entre deux semaines consécutives si géographiquement indifférent', () => {
+    // Matrice plate : tous les jours ont le même coût de trajet.
+    // La seule différence entre semaines : le malus de stabilité (POIDS=0.15).
+    // Un patient placé lundi S1 doit rester lundi S2.
+    const patient = makePatient({ id: 'p1', lat: 0.001, lng: 0 });
+    const contrat = makeContrat({ id: 'c1', participantId: 'p1', nbSeancesSemaine: 1, dateDebut: LUNDI });
+    const depart = DEPART;
+    const points = [depart, patient.coordonnees!];
+    const { matrix, indexMap } = buildFlatMatrix(points);
+    const params: PlanificateurParams = {
+      participants: [patient], contrats: [contrat], seances: [], indispos: [],
+      depart, matrix, indexMap, heureDebutJournee: '08:00',
+    };
+
+    const r = planifierRecurrent(params, '2026-06-24', 2);
+
+    const etapes = toutesLesEtapes(r.jours);
+    expect(etapes).toHaveLength(2);
+
+    const [semaine1, semaine2] = [etapes[0], etapes[1]];
+    const jourS1 = r.jours.find(j => j.date === semaine1.date)?.jourKey;
+    const jourS2 = r.jours.find(j => j.date === semaine2.date)?.jourKey;
+    // Même jour les deux semaines.
+    expect(jourS1).toBe(jourS2);
+  });
+});
+
+describe('calculerRapport — rapport de qualité', () => {
+  it('nbPlanifies et nbTotal sont corrects', () => {
+    const p1 = makePatient({ id: 'p1' });
+    const p2 = makePatient({ id: 'p2' });
+    const c1 = makeContrat({ id: 'c1', participantId: 'p1' });
+    const c2 = makeContrat({ id: 'c2', participantId: 'p2', statut: 'termine' }); // sera en impossible
+
+    const r = planifierSemaine(makeParams({ participants: [p1, p2], contrats: [c1, c2] }), LUNDI);
+    const rapport = calculerRapport(r, [], 1);
+
+    expect(rapport.nbPlanifies).toBe(1);     // seul p1 planifié
+    expect(rapport.nbTotal).toBeGreaterThanOrEqual(1); // p1 au moins
+  });
+
+  it('distanceSemaineKm divise par nbSemaines en mode B', () => {
+    const patient = makePatient({ id: 'p1' });
+    const contrat = makeContrat({ id: 'c1', participantId: 'p1' });
+    const r = planifierRecurrent(makeParams({ participants: [patient], contrats: [contrat] }), '2026-06-24', 4);
+    const rapport = calculerRapport(r, [], 4);
+
+    // La distance par semaine doit être ≤ distance totale (divisée par 4).
+    const distanceTotale = toutesLesEtapes(r.jours).reduce((s, e) => s + e.distanceKm, 0);
+    expect(rapport.distanceSemaineKm).toBeCloseTo(distanceTotale / 4, 1);
+  });
+
+  it('jourLePlusCharge est bien le jour avec le plus de séances', () => {
+    // 3 patients disponibles uniquement lundi → tout sur lundi → max = lundi.
+    const patients = [1, 2, 3].map(i => makePatient({ id: `p${i}`, jours: ['Lun'] }));
+    const contrats  = patients.map(p => makeContrat({ id: `c${p.id}`, participantId: p.id }));
+    const r = planifierSemaine(makeParams({ participants: patients, contrats }), LUNDI);
+    const rapport = calculerRapport(r, [], 1);
+
+    expect(rapport.jourLePlusCharge).not.toBeNull();
+    expect(rapport.jourLePlusCharge!.date).toBe(LUNDI);
   });
 });
