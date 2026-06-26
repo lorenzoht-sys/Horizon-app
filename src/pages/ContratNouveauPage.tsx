@@ -131,10 +131,15 @@ export default function ContratNouveauPage() {
     }
   }
 
-  // Créneaux libres récurrents dans la même ville que le nouveau patient
+  // Créneaux libres récurrents dans la zone du nouveau patient (rayon 5 km, repli ville)
   const creneauxSuggeres = useMemo(() =>
-    getTrousRecurrents(seances, participants, participant?.adresseVille ?? ''),
-    [seances, participants, participant?.adresseVille]
+    getTrousRecurrents(
+      seances,
+      participants,
+      participant?.adresseVille ?? '',
+      participant?.coordonnees ?? undefined,
+    ),
+    [seances, participants, participant?.adresseVille, participant?.coordonnees]
   );
 
   if (!participant) {

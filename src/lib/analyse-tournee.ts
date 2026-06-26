@@ -4,50 +4,70 @@
 import type { Seance, Participant } from '../types';
 import { heureEnMinutes } from '../utils/horaires';
 
-const TROU_MIN_SUGGESTION_MINUTES = 60; // créneau libre minimum pour être suggéré
+const TROU_MIN_SUGGESTION_MINUTES = 60;
+const RAYON_ZONE_KM = 5;
 
 export interface CreneauLibre {
   jourSemaine: number;        // 0=dim…6=sam (JS Date.getDay())
   nomJour: string;            // 'Lundi', 'Mardi'…
-  heureDebut: string;         // début du trou (ex: '10:30')
-  heureFin: string;           // fin du trou (ex: '12:00')
+  heureDebut: string;
+  heureFin: string;
   dureeMinutes: number;
 }
 
 const NOMS_JOURS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
+// Formule Haversine — identique à kmeans.ts (non exportée là-bas)
+function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLon = (b.lng - a.lng) * Math.PI / 180;
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
 /**
  * Détecte les créneaux libres récurrents dans les jours où le praticien a déjà
- * des séances proches du nouveau patient (même ville).
+ * des séances proches du nouveau patient.
  *
- * Approche : pour chaque jour de semaine où ≥2 occurrences de séances
- * chez des patients de la même ville existent, cherche les écarts > seuil
- * entre séances consécutives sur ce jour.
+ * Matching prioritaire : rayon géographique ≤ RAYON_ZONE_KM km (Haversine) si les
+ * coordonnées GPS du nouveau patient sont disponibles.
+ * Repli : matching par adresseVille exacte (insensible à la casse).
+ *
+ * Un créneau est retenu s'il apparaît sur ≥ 2 dates distinctes du même jour de semaine.
  */
 export function getTrousRecurrents(
   seances: Seance[],
   participants: Participant[],
   newPatientVille: string,
+  newPatientCoords?: { lat: number; lng: number },
 ): CreneauLibre[] {
-  if (!newPatientVille.trim()) return [];
+  // Index participantId → participant (pour coordonnées et ville)
+  const participantParId = new Map<string, Participant>();
+  for (const p of participants) participantParId.set(p.id, p);
 
-  const villeRef = newPatientVille.trim().toLowerCase();
+  // Détermine si un participant existant est "dans la même zone" que le nouveau patient
+  function dansLaZone(participantId: string): boolean {
+    const p = participantParId.get(participantId);
+    if (!p) return false;
 
-  // Index participantId → ville
-  const villeParParticipant = new Map<string, string>();
-  for (const p of participants) {
-    if (p.adresseVille) villeParParticipant.set(p.id, p.adresseVille.trim().toLowerCase());
+    if (newPatientCoords && p.coordonnees) {
+      return distanceKm(newPatientCoords, p.coordonnees) <= RAYON_ZONE_KM;
+    }
+
+    // Repli par ville
+    const villeRef = newPatientVille.trim().toLowerCase();
+    if (!villeRef) return false;
+    return (p.adresseVille ?? '').trim().toLowerCase() === villeRef;
   }
 
-  // Séances de patients dans la même ville, non annulées
-  const seancesZone = seances.filter(s =>
-    s.statut !== 'annulee' &&
-    (villeParParticipant.get(s.participantId) ?? '') === villeRef
-  );
-
+  // Séances de patients dans la zone, non annulées
+  const seancesZone = seances.filter(s => s.statut !== 'annulee' && dansLaZone(s.participantId));
   if (seancesZone.length === 0) return [];
 
-  // Grouper par jour de semaine → liste de { heureDebut, heureFin } par occurrence de date
+  // Grouper par jour de semaine
   const parJour = new Map<number, { date: string; heureDebut: string; heureFin: string }[]>();
   for (const s of seancesZone) {
     const dow = new Date(s.date + 'T12:00').getDay();
@@ -59,14 +79,10 @@ export function getTrousRecurrents(
   const result: CreneauLibre[] = [];
 
   for (const [dow, occurrences] of parJour) {
-    // Garder uniquement les jours avec au moins 2 occurrences (pattern récurrent)
     const dates = [...new Set(occurrences.map(o => o.date))];
     if (dates.length < 2) continue;
 
-    // Moyenne des positions de séances sur ce jour pour représenter un "jour type"
-    // On groupe par date, puis on cherche les trous sur chaque journée, et on ne
-    // retient que les trous qui apparaissent sur au moins 2 dates distinctes.
-    const trousCandidats = new Map<string, number>(); // clé "HH:MM-HH:MM" → nb occurrences
+    const trousCandidats = new Map<string, number>(); // "HH:MM-HH:MM" → nb occurrences
 
     for (const date of dates) {
       const seancesJour = occurrences
@@ -83,7 +99,7 @@ export function getTrousRecurrents(
     }
 
     for (const [cleHeure, nb] of trousCandidats) {
-      if (nb < 2) continue; // non récurrent
+      if (nb < 2) continue;
       const [debut, fin] = cleHeure.split('-');
       result.push({
         jourSemaine: dow,
@@ -95,7 +111,6 @@ export function getTrousRecurrents(
     }
   }
 
-  // Trier par jour de semaine (lun → sam), puis par heure de début
   return result.sort((a, b) =>
     a.jourSemaine !== b.jourSemaine
       ? a.jourSemaine - b.jourSemaine
