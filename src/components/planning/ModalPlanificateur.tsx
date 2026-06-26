@@ -72,6 +72,20 @@ export default function ModalPlanificateur({
   const [applying, setApplying] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [seancesRemplacees, setSeancesRemplacees] = useState(0);
+  const [trousDetailsOuverts, setTrousDetailsOuverts] = useState(false);
+
+  // Trous regroupés par récurrence (même paire A→B, même jourKey), triés par durée décroissante
+  const trousGroupes = useMemo(() => {
+    if (!rapport?.trous.length) return [];
+    const map = new Map<string, { trou: TrouCalendrier; count: number }>();
+    for (const t of rapport.trous) {
+      const key = `${t.nomPatientA}→${t.nomPatientB}@${t.jourKey}`;
+      const existing = map.get(key);
+      if (existing) { existing.count++; }
+      else { map.set(key, { trou: t, count: 1 }); }
+    }
+    return [...map.values()].sort((a, b) => b.trou.dureeMinutes - a.trou.dureeMinutes);
+  }, [rapport]);
 
   // Patients candidats (avec coordonnées, contrat actif)
   const patientsActifs = useMemo(() =>
@@ -310,43 +324,62 @@ export default function ModalPlanificateur({
 
           {/* Rapport de qualité */}
           {rapport && rapport.nbPlanifies > 0 && (
-            <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 space-y-1.5">
-              <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Résumé du planning</p>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-blue-800">
-                <span>
-                  <span className="font-semibold">{rapport.nbPlanifies}</span>
-                  <span className="text-blue-600">/{rapport.nbTotal} patients planifiés</span>
-                </span>
-                <span>
-                  <span className="font-semibold">~{rapport.distanceSemaineKm} km</span>
-                  <span className="text-blue-600">/semaine</span>
-                </span>
-                {rapport.jourLePlusCharge && rapport.jourLeMoinsCharge && rapport.jourLePlusCharge.date !== rapport.jourLeMoinsCharge.date && (
-                  <span className="col-span-2 text-blue-600">
-                    Plus chargé : <span className="font-semibold text-blue-800">{rapport.jourLePlusCharge.label.split(' ').slice(0, 2).join(' ')}</span>
-                    {' · '}
-                    Moins chargé : <span className="font-semibold text-blue-800">{rapport.jourLeMoinsCharge.label.split(' ').slice(0, 2).join(' ')}</span>
-                  </span>
+            <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 space-y-2">
+              {/* Résumé condensé */}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-blue-800">
+                <span className="font-semibold">{rapport.nbPlanifies}/{rapport.nbTotal} patients</span>
+                <span className="text-blue-400">·</span>
+                <span>~{rapport.distanceSemaineKm} km/sem</span>
+                {trousGroupes.length > 0 && (
+                  <>
+                    <span className="text-blue-400">·</span>
+                    <span className="text-amber-600 font-medium">
+                      {trousGroupes.filter(g => g.count > 1).length || trousGroupes.length} trou{trousGroupes.length > 1 ? 's' : ''} récurrent{trousGroupes.length > 1 ? 's' : ''} détecté{trousGroupes.length > 1 ? 's' : ''}
+                    </span>
+                  </>
                 )}
                 {rapport.nbHorsZone > 0 && (
-                  <span className="col-span-2 text-amber-600">
-                    {rapport.nbHorsZone} séance{rapport.nbHorsZone > 1 ? 's' : ''} hors zone assignée
-                    <span className="text-amber-500"> (contrainte géographique)</span>
-                  </span>
+                  <>
+                    <span className="text-blue-400">·</span>
+                    <span className="text-amber-600">{rapport.nbHorsZone} hors zone</span>
+                  </>
+                )}
+                {rapport.jourLePlusCharge && rapport.jourLeMoinsCharge && rapport.jourLePlusCharge.date !== rapport.jourLeMoinsCharge.date && (
+                  <>
+                    <span className="text-blue-400">·</span>
+                    <span className="text-blue-600">
+                      + chargé : <span className="font-medium text-blue-800">{rapport.jourLePlusCharge.label.split(' ').slice(0, 2).join(' ')}</span>
+                    </span>
+                  </>
                 )}
               </div>
-              {rapport.trous.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {rapport.trous.map((t: TrouCalendrier, i: number) => {
+
+              {/* Trous récurrents */}
+              {trousGroupes.length > 0 && (
+                <div className="space-y-1">
+                  {(trousDetailsOuverts ? trousGroupes : trousGroupes.slice(0, 5)).map(({ trou: t, count }, i) => {
                     const h = Math.floor(t.dureeMinutes / 60);
                     const m = t.dureeMinutes % 60;
                     const dureeLabel = h > 0 ? `${h}h${m > 0 ? m : ''}` : `${m}min`;
+                    const jourLabel = t.labelJour.split(' ')[0]; // 'Lundi'
+                    const recurrence = count > 1 ? ` — récurrent (${count}×)` : '';
                     return (
                       <p key={i} className="text-xs text-amber-700">
-                        ⚠️ Trou de {dureeLabel} entre {t.nomPatientA} et {t.nomPatientB} ({t.labelJour.split(' ').slice(0, 2).join(' ')}) — envisagez d'ajouter un patient sur ce créneau
+                        ⚠️ Trou de {dureeLabel} les {jourLabel.toLowerCase()}s entre {t.nomPatientA} et {t.nomPatientB}{recurrence} — envisagez d'ajouter un patient
                       </p>
                     );
                   })}
+                  {trousGroupes.length > 5 && (
+                    <button
+                      type="button"
+                      onClick={() => setTrousDetailsOuverts(v => !v)}
+                      className="text-xs text-blue-600 hover:text-blue-800 underline"
+                    >
+                      {trousDetailsOuverts
+                        ? 'Réduire'
+                        : `Voir tous les détails (+${trousGroupes.length - 5})`}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
