@@ -6,9 +6,11 @@ import { getAuthHeader } from '../../lib/supabase';
 import {
   planifierSemaine,
   planifierRecurrent,
+  calculerRapport,
   coordKey,
   prochainLundi,
   type ResultatPlanification,
+  type RapportQualite,
   type JourPlanifie,
   type EtapePlanifiee,
 } from '../../lib/planificateur';
@@ -64,6 +66,7 @@ export default function ModalPlanificateur({
   const [loading, setLoading]   = useState(false);
   const [orsWarn, setOrsWarn]   = useState(false);
   const [resultat, setResultat] = useState<ResultatPlanification | null>(null);
+  const [rapport, setRapport]   = useState<RapportQualite | null>(null);
   const [localJours, setLocalJours] = useState<JourPlanifie[]>([]);
   const [applying, setApplying] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -88,6 +91,7 @@ export default function ModalPlanificateur({
     }
     setLoading(true);
     setResultat(null);
+    setRapport(null);
     setOrsWarn(false);
 
     try {
@@ -120,6 +124,7 @@ export default function ModalPlanificateur({
         : planifierRecurrent(params, today, nbSemaines);
 
       setResultat(r);
+      setRapport(calculerRapport(r, zones, mode === 'B' ? nbSemaines : 1));
       setLocalJours(r.jours.map(j => ({ ...j, etapes: j.etapes.map(e => ({ ...e })) })));
 
       if (r.jours.length === 0 && r.impossibles.length === 0) {
@@ -300,6 +305,36 @@ export default function ModalPlanificateur({
             <p className="text-sm text-gray-400 text-center py-8">
               Cliquez sur "Générer le planning" pour calculer une proposition.
             </p>
+          )}
+
+          {/* Rapport de qualité */}
+          {rapport && rapport.nbPlanifies > 0 && (
+            <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 space-y-1.5">
+              <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Résumé du planning</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-blue-800">
+                <span>
+                  <span className="font-semibold">{rapport.nbPlanifies}</span>
+                  <span className="text-blue-600">/{rapport.nbTotal} patients planifiés</span>
+                </span>
+                <span>
+                  <span className="font-semibold">~{rapport.distanceSemaineKm} km</span>
+                  <span className="text-blue-600">/semaine</span>
+                </span>
+                {rapport.jourLePlusCharge && rapport.jourLeMoinsCharge && rapport.jourLePlusCharge.date !== rapport.jourLeMoinsCharge.date && (
+                  <span className="col-span-2 text-blue-600">
+                    Plus chargé : <span className="font-semibold text-blue-800">{rapport.jourLePlusCharge.label.split(' ').slice(0, 2).join(' ')}</span>
+                    {' · '}
+                    Moins chargé : <span className="font-semibold text-blue-800">{rapport.jourLeMoinsCharge.label.split(' ').slice(0, 2).join(' ')}</span>
+                  </span>
+                )}
+                {rapport.nbHorsZone > 0 && (
+                  <span className="col-span-2 text-amber-600">
+                    {rapport.nbHorsZone} séance{rapport.nbHorsZone > 1 ? 's' : ''} hors zone assignée
+                    <span className="text-amber-500"> (contrainte géographique)</span>
+                  </span>
+                )}
+              </div>
+            </div>
           )}
 
           {/* Jours planifiés */}
