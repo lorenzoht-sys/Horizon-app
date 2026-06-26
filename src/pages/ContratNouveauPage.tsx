@@ -200,7 +200,7 @@ export default function ContratNouveauPage() {
         )}
 
         {/* Suggestion de créneaux — uniquement si des trous récurrents existent dans la même ville */}
-        {creneauxSuggeres.length > 0 && participant.adresseVille && (
+        {creneauxSuggeres.length > 0 && (
           <div className="bg-blue-50 border border-blue-200 rounded-2xl px-5 py-4 mb-6">
             <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1.5">
               💡 Créneaux disponibles dans votre planning

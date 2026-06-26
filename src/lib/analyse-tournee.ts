@@ -2,10 +2,12 @@
 // Utilisé par ContratNouveauPage pour suggérer des créneaux lors de la création d'un contrat.
 
 import type { Seance, Participant } from '../types';
-import { heureEnMinutes } from '../utils/horaires';
+import { heureEnMinutes, minutesEnHeure } from '../utils/horaires';
 
 const TROU_MIN_SUGGESTION_MINUTES = 60;
 const RAYON_ZONE_KM = 5;
+const HEURE_DEBUT_TRAVAIL = '08:00'; // plage de travail de Pierre — début
+const HEURE_FIN_TRAVAIL   = '19:00'; // plage de travail de Pierre — fin
 
 export interface CreneauLibre {
   jourSemaine: number;        // 0=dim…6=sam (JS Date.getDay())
@@ -32,8 +34,12 @@ function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: numb
  * Détecte les créneaux libres récurrents dans les jours où le praticien a déjà
  * des séances proches du nouveau patient.
  *
- * Matching prioritaire : rayon géographique ≤ RAYON_ZONE_KM km (Haversine) si les
- * coordonnées GPS du nouveau patient sont disponibles.
+ * Trois types de trous détectés sur chaque journée :
+ *   - avant la 1ère séance (depuis HEURE_DEBUT_TRAVAIL)
+ *   - entre deux séances consécutives
+ *   - après la dernière séance (jusqu'à HEURE_FIN_TRAVAIL)
+ *
+ * Matching prioritaire : rayon géographique ≤ RAYON_ZONE_KM km (Haversine).
  * Repli : matching par adresseVille exacte (insensible à la casse).
  *
  * Un créneau est retenu s'il apparaît sur ≥ 2 dates distinctes du même jour de semaine.
@@ -44,26 +50,21 @@ export function getTrousRecurrents(
   newPatientVille: string,
   newPatientCoords?: { lat: number; lng: number },
 ): CreneauLibre[] {
-  // Index participantId → participant (pour coordonnées et ville)
+  // Index participantId → participant
   const participantParId = new Map<string, Participant>();
   for (const p of participants) participantParId.set(p.id, p);
 
-  // Détermine si un participant existant est "dans la même zone" que le nouveau patient
   function dansLaZone(participantId: string): boolean {
     const p = participantParId.get(participantId);
     if (!p) return false;
-
     if (newPatientCoords && p.coordonnees) {
       return distanceKm(newPatientCoords, p.coordonnees) <= RAYON_ZONE_KM;
     }
-
-    // Repli par ville
     const villeRef = newPatientVille.trim().toLowerCase();
     if (!villeRef) return false;
     return (p.adresseVille ?? '').trim().toLowerCase() === villeRef;
   }
 
-  // Séances de patients dans la zone, non annulées
   const seancesZone = seances.filter(s => s.statut !== 'annulee' && dansLaZone(s.participantId));
   if (seancesZone.length === 0) return [];
 
@@ -75,6 +76,9 @@ export function getTrousRecurrents(
     existing.push({ date: s.date, heureDebut: s.heureDebut, heureFin: s.heureFin });
     parJour.set(dow, existing);
   }
+
+  const debutTravailMin = heureEnMinutes(HEURE_DEBUT_TRAVAIL);
+  const finTravailMin   = heureEnMinutes(HEURE_FIN_TRAVAIL);
 
   const result: CreneauLibre[] = [];
 
@@ -89,18 +93,36 @@ export function getTrousRecurrents(
         .filter(o => o.date === date)
         .sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
 
+      const premiere = seancesJour[0];
+      const derniere  = seancesJour[seancesJour.length - 1];
+
+      // Trou avant la 1ère séance
+      const avantPremiere = heureEnMinutes(premiere.heureDebut) - debutTravailMin;
+      if (avantPremiere >= TROU_MIN_SUGGESTION_MINUTES) {
+        const cle = `${HEURE_DEBUT_TRAVAIL}-${premiere.heureDebut}`;
+        trousCandidats.set(cle, (trousCandidats.get(cle) ?? 0) + 1);
+      }
+
+      // Trous entre séances consécutives
       for (let i = 0; i < seancesJour.length - 1; i++) {
         const gap = heureEnMinutes(seancesJour[i + 1].heureDebut) - heureEnMinutes(seancesJour[i].heureFin);
         if (gap >= TROU_MIN_SUGGESTION_MINUTES) {
-          const cleHeure = `${seancesJour[i].heureFin}-${seancesJour[i + 1].heureDebut}`;
-          trousCandidats.set(cleHeure, (trousCandidats.get(cleHeure) ?? 0) + 1);
+          const cle = `${seancesJour[i].heureFin}-${seancesJour[i + 1].heureDebut}`;
+          trousCandidats.set(cle, (trousCandidats.get(cle) ?? 0) + 1);
         }
+      }
+
+      // Trou après la dernière séance
+      const apresLastMin = finTravailMin - heureEnMinutes(derniere.heureFin);
+      if (apresLastMin >= TROU_MIN_SUGGESTION_MINUTES) {
+        const cle = `${derniere.heureFin}-${minutesEnHeure(finTravailMin)}`;
+        trousCandidats.set(cle, (trousCandidats.get(cle) ?? 0) + 1);
       }
     }
 
-    for (const [cleHeure, nb] of trousCandidats) {
+    for (const [cle, nb] of trousCandidats) {
       if (nb < 2) continue;
-      const [debut, fin] = cleHeure.split('-');
+      const [debut, fin] = cle.split('-');
       result.push({
         jourSemaine: dow,
         nomJour: NOMS_JOURS[dow],
