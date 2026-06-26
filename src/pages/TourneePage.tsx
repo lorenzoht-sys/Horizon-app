@@ -6,7 +6,7 @@ import { useParticipants } from '../hooks/useParticipants';
 import { useAgenda, addMinutes } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import PageWrapper from '../components/layout/PageWrapper';
-import { Route, MapPin, Clock, Navigation, CalendarPlus, Home, AlertCircle, Loader, CheckCircle, XCircle, ChevronDown, ChevronUp, NotebookPen } from 'lucide-react';
+import { UserPlus, MapPin, Clock, Navigation, CalendarPlus, AlertCircle, CheckCircle, XCircle, NotebookPen } from 'lucide-react';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
 import { toast } from 'sonner';
 import type { Participant, Seance, IndisponibilitePierre, JourSemaine, CreneauPreference } from '../types';
@@ -17,6 +17,7 @@ import { useZones } from '../hooks/useZones';
 import { getAuthHeader, supabase } from '../lib/supabase';
 
 const ModalPlanificateur = lazy(() => import('../components/planning/ModalPlanificateur'));
+const ModalInsererPatient = lazy(() => import('../components/planning/ModalInsererPatient'));
 
 // ── Fix icônes Leaflet ─────────────────────────────────────────────────────────
 
@@ -332,14 +333,9 @@ export default function TourneePage() {
   const { participants } = useParticipants();
   const { seances, seancesDuJour, changerStatut, creerSeance, bulkCreerSeances, retirerPlanifieesLocales } = useAgenda();
   const { contrats } = useContrats();
-  const { indispos, indisposDuJour } = useIndispos();
+  const { indispos } = useIndispos();
   const { zones } = useZones();
   const navigate = useNavigate();
-
-  const avecCoords = useMemo(
-    () => participants.filter(p => p.coordonnees && !p.geocodeFailed),
-    [participants]
-  );
 
   const [praticienSettings, setPraticienSettings] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); }
@@ -399,16 +395,11 @@ export default function TourneePage() {
   }, [contrats, seances]);
 
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [showAdHoc, setShowAdHoc] = useState(false);
   const [noteModal, setNoteModal] = useState<typeof seancesEnrichies[number] | null>(null);
   const [heureDepart, setHeureDepart] = useState('08:00');
-  const [selectionIds, setSelectionIds] = useState<Set<string>>(new Set());
-  const [, setTournee] = useState<Participant[]>([]);
   const [etapes, setEtapes] = useState<EtapePatient[]>([]);
-  const [impossibles, setImpossibles] = useState<{ patient: Participant; raison: string }[]>([]);
-  const [orsLoading, setOrsLoading] = useState(false);
-  const [orsFallback, setOrsFallback] = useState(false);
   const [showPlanificateur, setShowPlanificateur] = useState(false);
+  const [showInserer, setShowInserer] = useState(false);
 
   // Séances du jour depuis les contrats
   const seancesDuJourData = useMemo(() => seancesDuJour(date), [seances, date]);
@@ -455,39 +446,6 @@ export default function TourneePage() {
   }, [praticienSettings.adresseRue, praticienSettings.adresseVille]);
 
   const jourChoisi = useMemo(() => jourDeLaDate(date), [date]);
-  const indisposJour = useMemo(() => indisposDuJour(jourChoisi), [indisposDuJour, jourChoisi]);
-
-  const { disponibles, nonDisponibles } = useMemo(() => {
-    const d: Participant[] = [], nd: Participant[] = [];
-    for (const p of avecCoords) (estDisponible(p, jourChoisi) ? d : nd).push(p);
-    return { disponibles: d, nonDisponibles: nd };
-  }, [avecCoords, jourChoisi]);
-
-  // Patients déjà dans les séances du jour → exclus de la section ad hoc
-  const participantIdsAujourdhui = useMemo(
-    () => new Set(seancesEnrichies.map(s => s.participantId)),
-    [seancesEnrichies]
-  );
-  const disponiblesHorsJour = useMemo(
-    () => disponibles.filter(p => !participantIdsAujourdhui.has(p.id)),
-    [disponibles, participantIdsAujourdhui]
-  );
-
-  // IDs des patients dont la zone couvre le jour sélectionné
-  const patientsZoneDuJourIds = useMemo(() => {
-    if (jourChoisi === 'dim') return new Set<string>();
-    const ids = new Set<string>();
-    zones
-      .filter(z => z.joursAssignes.includes(jourChoisi as JourSemaine))
-      .forEach(z => z.participantIds.forEach(id => ids.add(id)));
-    return ids;
-  }, [zones, jourChoisi]);
-
-  // Patients zone du jour en tête, puis les autres
-  const disponiblesHorsJourTries = useMemo(() => [
-    ...disponiblesHorsJour.filter(p => patientsZoneDuJourIds.has(p.id)),
-    ...disponiblesHorsJour.filter(p => !patientsZoneDuJourIds.has(p.id)),
-  ], [disponiblesHorsJour, patientsZoneDuJourIds]);
 
   // Carte : contrats (par défaut) OU résultats de l'optimiseur
   const mapPatients = useMemo(() =>
@@ -505,91 +463,6 @@ export default function TourneePage() {
     [depart.lat, depart.lng],
     ...mapPatients.filter(p => p.coordonnees).map(p => [p.coordonnees!.lat, p.coordonnees!.lng] as [number, number]),
   ];
-
-  function toggleSelection(id: string) {
-    setSelectionIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
-  }
-
-  async function handleOptimiser() {
-    const selectionnes = avecCoords.filter(p => selectionIds.has(p.id));
-    if (!selectionnes.length) { toast.error('Sélectionnez au moins un patient'); return; }
-    if (departErreur) { toast.error('Renseignez votre adresse dans les Paramètres'); return; }
-
-    const horsDispos = selectionnes.filter(p => !estDisponible(p, jourChoisi));
-    if (horsDispos.length) {
-      toast(`⚠️ ${horsDispos.map(p => p.prenom).join(', ')} : non disponible${horsDispos.length > 1 ? 's' : ''} ce jour`, { duration: 4000 });
-    }
-
-    // ── Matrice de trajets réels (ORS) ────────────────────────────────────────
-    const coordKey = (p: LatLng) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;
-    const points: LatLng[] = [depart, ...selectionnes.map(p => p.coordonnees!)];
-
-    let getTravelSec: TravelFn = (a, b) => distanceKm(a, b) * 126; // Haversine fallback (≈ km × 2 min)
-    let getTravelMin: TravelFn = (a, b) => Math.max(1, distanceKm(a, b) * 2.1);
-    let getDistKm: TravelFn    = (a, b) => distanceKm(a, b);
-    let usedFallback = false;
-
-    setOrsLoading(true);
-    try {
-      const authHeader = await getAuthHeader();
-      const res = await fetch('/api/tournee/matrice-trajets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
-        body: JSON.stringify({ coordonnees: points }),
-      });
-
-      if (res.ok) {
-        const matrix: { durees: number[][]; distances: number[][]; fallback: boolean } = await res.json();
-        usedFallback = matrix.fallback;
-
-        const indexMap = new Map(points.map((p, i) => [coordKey(p), i]));
-        const lookup = (mat: number[][], a: LatLng, b: LatLng): number => {
-          const ia = indexMap.get(coordKey(a));
-          const ib = indexMap.get(coordKey(b));
-          return (ia !== undefined && ib !== undefined) ? mat[ia][ib] : 0;
-        };
-
-        if (!matrix.fallback) {
-          getTravelSec = (a, b) => lookup(matrix.durees, a, b);
-          getTravelMin = (a, b) => Math.max(1, Math.round(lookup(matrix.durees, a, b) / 60));
-          getDistKm    = (a, b) => Math.round(lookup(matrix.distances, a, b)) / 1000;
-        }
-      } else {
-        usedFallback = true;
-      }
-    } catch {
-      usedFallback = true;
-    } finally {
-      setOrsLoading(false);
-    }
-
-    setOrsFallback(usedFallback);
-
-    // ── Optimisation ──────────────────────────────────────────────────────────
-    const optimise = optimiserTournee(depart, selectionnes, getTravelSec);
-    const getPatientDuree = (id: string) =>
-      contrats.find(c => c.participantId === id && c.statut === 'actif')?.dureeMinutes ?? 45;
-    const { etapes: it, impossibles: imp } = calculerItineraire(
-      depart, optimise, heureDepart, indisposJour, getPatientDuree, getTravelMin, getDistKm,
-    );
-    setTournee(optimise);
-    setEtapes(it);
-    setImpossibles(imp);
-
-    if (usedFallback) {
-      toast(`⚠️ Temps de trajet estimés · Vérifiez votre connexion ou configurez ORS_API_KEY`, { duration: 6000 });
-    }
-    if (imp.length > 0) {
-      toast.error(
-        `${imp.map(i => i.patient.prenom).join(', ')} : créneau dépassé — retirés de la tournée`,
-        { duration: 6000 }
-      );
-    }
-    const nbInterruptions = it.reduce((acc, e) => acc + e.interruptions.length, 0);
-    if (it.length > 0) {
-      toast.success(`${it.length} patient${it.length > 1 ? 's' : ''} planifié${it.length > 1 ? 's' : ''}${nbInterruptions ? ` · ${nbInterruptions} pause(s) intégrée(s)` : ''}`);
-    }
-  }
 
   function handleOuvrirGoogleMaps() {
     if (etapes.length === 0) return;
@@ -820,171 +693,23 @@ export default function TourneePage() {
               }}
               className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors border-b border-gray-100"
             >
-              <CalendarPlus size={15} className="text-primary" />
-              Planifier la semaine
+              <CalendarPlus size={15} className="text-primary flex-shrink-0" />
+              <div className="text-left">
+                <div>Générer le planning</div>
+                <div className="text-xs text-gray-400 font-normal">Crée ou recrée l'ensemble du planning</div>
+              </div>
             </button>
 
             <button
-              onClick={() => setShowAdHoc(v => !v)}
-              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              onClick={() => setShowInserer(true)}
+              className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
             >
-              <span className="flex items-center gap-2">
-                <Route size={15} className="text-primary" />
-                Optimiser / ajouter des patients
-                {disponiblesHorsJour.length > 0 && (
-                  <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{disponiblesHorsJour.length} disponibles</span>
-                )}
-              </span>
-              {showAdHoc ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
-
-            {showAdHoc && (
-              <div className="border-t border-gray-100 p-4 space-y-4">
-                {/* Point de départ */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                    <Home size={11} className="inline mr-1" />Point de départ
-                  </label>
-                  {departLoading ? (
-                    <div className="flex items-center gap-2 text-xs text-gray-400 bg-gray-50 rounded-xl px-3 py-2">
-                      <Loader size={12} className="animate-spin" />Localisation…
-                    </div>
-                  ) : departErreur ? (
-                    <div className="bg-warning/10 border border-warning/30 rounded-xl px-3 py-2">
-                      <p className="text-xs font-semibold text-warning flex items-center gap-1 mb-1">
-                        <AlertCircle size={12} />Adresse non configurée
-                      </p>
-                      <Link to="/settings" className="text-xs text-primary underline">Paramètres →</Link>
-                    </div>
-                  ) : (
-                    <div className="bg-dark/5 rounded-xl px-3 py-2 text-xs text-dark font-medium">
-                      📍 {departAdresse || [praticienSettings.adresseRue, praticienSettings.adresseVille].filter(Boolean).join(', ')}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Heure de départ</label>
-                  <input type="time" value={heureDepart} onChange={e => setHeureDepart(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary" />
-                </div>
-
-                {indisposJour.length > 0 && (
-                  <div className="bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5">
-                    <p className="text-xs font-semibold text-orange-700 mb-1">🚫 Vos indisponibilités — {LABELS_JOUR[jourChoisi]}</p>
-                    {indisposJour.map(i => (
-                      <div key={i.id} className="text-xs text-orange-600">{i.heureDebut} → {i.heureFin}{i.label ? ` · ${i.label}` : ''}</div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="space-y-1 max-h-60 overflow-y-auto">
-                  {disponiblesHorsJourTries.length > 0 && (
-                    <div className="text-xs font-semibold text-green-700 flex items-center gap-1 mb-1.5">
-                      <CheckCircle size={11} />Disponibles ({disponiblesHorsJourTries.length})
-                    </div>
-                  )}
-
-                  {/* ── Patients de la zone du jour (en tête) ── */}
-                  {patientsZoneDuJourIds.size > 0 && disponiblesHorsJourTries.some(p => patientsZoneDuJourIds.has(p.id)) && (
-                    <div className="text-xs text-primary/70 font-medium flex items-center gap-1 mb-1">
-                      <MapPin size={10} />Zone du jour
-                    </div>
-                  )}
-                  {disponiblesHorsJourTries.filter(p => patientsZoneDuJourIds.has(p.id)).map(p => (
-                    <label key={p.id} className="flex items-start gap-2.5 cursor-pointer p-2 rounded-xl hover:bg-gray-50 transition-colors">
-                      <input type="checkbox" checked={selectionIds.has(p.id)} onChange={() => toggleSelection(p.id)}
-                        className="w-4 h-4 accent-primary mt-0.5 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-dark truncate">{p.prenom} {p.nom}</div>
-                        {p.disponibilites && (
-                          <div className="text-xs text-green-700">
-                            {p.disponibilites.creneauxPreference.map(c =>
-                              c === 'matin' ? '☀️ Matin' : c === 'apres-midi' ? '🌤 Après-midi' : '🌙 Soirée'
-                            ).join(' · ')} · {p.disponibilites.dureeSeanceMinutes} min
-                          </div>
-                        )}
-                      </div>
-                    </label>
-                  ))}
-
-                  {/* ── Autres patients disponibles ── */}
-                  {patientsZoneDuJourIds.size > 0 && disponiblesHorsJourTries.some(p => !patientsZoneDuJourIds.has(p.id)) && (
-                    <div className="text-xs text-gray-400 border-t border-gray-100 pt-1.5 mt-1.5 mb-1">Autres</div>
-                  )}
-                  {disponiblesHorsJourTries.filter(p => !patientsZoneDuJourIds.has(p.id)).map(p => (
-                    <label key={p.id} className="flex items-start gap-2.5 cursor-pointer p-2 rounded-xl hover:bg-gray-50 transition-colors">
-                      <input type="checkbox" checked={selectionIds.has(p.id)} onChange={() => toggleSelection(p.id)}
-                        className="w-4 h-4 accent-primary mt-0.5 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-dark truncate">{p.prenom} {p.nom}</div>
-                        {p.disponibilites && (
-                          <div className="text-xs text-green-700">
-                            {p.disponibilites.creneauxPreference.map(c =>
-                              c === 'matin' ? '☀️ Matin' : c === 'apres-midi' ? '🌤 Après-midi' : '🌙 Soirée'
-                            ).join(' · ')} · {p.disponibilites.dureeSeanceMinutes} min
-                          </div>
-                        )}
-                      </div>
-                    </label>
-                  ))}
-                  {nonDisponibles.length > 0 && (
-                    <>
-                      <div className="text-xs font-semibold text-gray-400 flex items-center gap-1 mt-2 mb-1.5">
-                        <XCircle size={11} />Non disponibles ({nonDisponibles.length})
-                      </div>
-                      {nonDisponibles.map(p => (
-                        <label key={p.id} className="flex items-start gap-2.5 cursor-pointer p-2 rounded-xl hover:bg-gray-50 opacity-50">
-                          <input type="checkbox" checked={selectionIds.has(p.id)} onChange={() => toggleSelection(p.id)}
-                            className="w-4 h-4 accent-primary mt-0.5 flex-shrink-0" />
-                          <div className="text-sm font-medium text-gray-500 line-through truncate">{p.prenom} {p.nom}</div>
-                        </label>
-                      ))}
-                    </>
-                  )}
-                </div>
-
-                {disponiblesHorsJourTries.length > 0 && (
-                  <div className="flex gap-2">
-                    <button onClick={() => setSelectionIds(new Set(disponiblesHorsJourTries.map(p => p.id)))}
-                      className="flex-1 text-xs py-1.5 border border-green-200 text-green-700 rounded-lg hover:bg-green-50 font-medium">
-                      Tous les disponibles
-                    </button>
-                    <button onClick={() => setSelectionIds(new Set())}
-                      className="text-xs py-1.5 px-3 border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50">
-                      Aucun
-                    </button>
-                  </div>
-                )}
-
-                <button onClick={handleOptimiser} disabled={selectionIds.size === 0 || orsLoading}
-                  className="w-full flex items-center justify-center gap-2 bg-primary text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                  {orsLoading
-                    ? <><Loader size={15} className="animate-spin" />Calcul des trajets…</>
-                    : <><Route size={15} />Optimiser la tournée</>}
-                </button>
-
-                {orsFallback && etapes.length > 0 && (
-                  <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-xs text-amber-700">
-                    <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
-                    <span>Temps de trajet estimés (vol d'oiseau) — ORS indisponible</span>
-                  </div>
-                )}
-
-                {impossibles.length > 0 && (
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-3">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-red-700 mb-1.5">
-                      <XCircle size={12} />{impossibles.length} patient{impossibles.length > 1 ? 's' : ''} retiré{impossibles.length > 1 ? 's' : ''}
-                    </div>
-                    {impossibles.map(({ patient, raison }) => (
-                      <div key={patient.id} className="text-xs text-red-600">
-                        <span className="font-semibold">{patient.prenom}</span> — {raison}
-                      </div>
-                    ))}
-                  </div>
-                )}
+              <UserPlus size={15} className="text-primary flex-shrink-0" />
+              <div className="text-left">
+                <div>Insérer un patient</div>
+                <div className="text-xs text-gray-400 font-normal">Ajoute un nouveau patient dans votre planning existant</div>
               </div>
-            )}
+            </button>
           </div>
         </div>
 
@@ -1126,6 +851,18 @@ export default function TourneePage() {
               retirerPlanifieesLocales(contratIds, aujourd);
               await bulkCreerSeances(data);
             }}
+          />
+        </Suspense>
+      )}
+
+      {showInserer && (
+        <Suspense fallback={null}>
+          <ModalInsererPatient
+            onClose={() => setShowInserer(false)}
+            participants={participants}
+            contrats={contrats}
+            seances={seances}
+            bulkCreerSeances={bulkCreerSeances}
           />
         </Suspense>
       )}
