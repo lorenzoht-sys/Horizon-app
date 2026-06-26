@@ -126,10 +126,10 @@ export async function patientEnregistrerTestEtalon(
   payload: { testId: string; valeur: number },
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const res = await fetch('/api/patient/test-etalon', {
+    const res = await fetch('/api/patient/activite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ type: 'test-etalon', ...payload }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: data?.error };
@@ -144,10 +144,10 @@ export async function patientMarquerExerciceLibre(
   payload: { exerciceId: string; fait: boolean; note?: string },
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const res = await fetch('/api/patient/exercice-libre', {
+    const res = await fetch('/api/patient/activite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ type: 'exercice-libre', ...payload }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: data?.error };
