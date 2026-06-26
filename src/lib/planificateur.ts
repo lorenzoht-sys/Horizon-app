@@ -164,10 +164,31 @@ function jourTotalementBloque(
 
 // ── Reste des helpers internes ────────────────────────────────────────────────
 
+// Conversion JourSemaine → clé utilisée dans creneauxParJour (ex: 'lun' → 'Lun')
+const JOUR_SEMAINE_TO_DISPO: Record<JourSemaine, string> = {
+  lun: 'Lun', mar: 'Mar', mer: 'Mer', jeu: 'Jeu', ven: 'Ven', sam: 'Sam',
+};
+
 function ajusterAuCreneauPatient(
   heure: string,
   patient: Participant,
+  jourKey: JourSemaine,
 ): { heure: string; impossible: boolean; raison?: string } {
+  // Créneaux précis du jour (ex: 09:00–12:00) — priorité sur creneauxPreference.
+  // Les clés de creneauxParJour sont en format abrégé majuscule ('Lun', 'Mar'...).
+  const cleJour = JOUR_SEMAINE_TO_DISPO[jourKey];
+  const creneauxJour = patient.anamnese?.organisation?.creneauxParJour?.[cleJour];
+  if (creneauxJour?.length) {
+    const tries = [...creneauxJour].sort((a, b) => a.debut.localeCompare(b.debut));
+    for (const c of tries) {
+      if (heure < c.debut) return { heure: c.debut, impossible: false };
+      if (heure < c.fin)   return { heure, impossible: false };
+    }
+    const dernier = tries[tries.length - 1];
+    return { heure, impossible: true, raison: `Créneau dépassé — dernier créneau terminé à ${dernier.fin}` };
+  }
+
+  // Fallback : creneauxPreference (matin / apres-midi / soiree)
   const prefs = patient.disponibilites?.creneauxPreference;
   if (!prefs?.length) return { heure, impossible: false };
 
@@ -470,7 +491,7 @@ function assignerJoursSemaine(
 // Cœur de l'algorithme : ordonne et chronomètre une journée
 function planifierJour(
   date: string,
-  _jourKey: JourSemaine,
+  jourKey: JourSemaine,
   candidates: Candidat[],
   departIdx: number,
   indisposJour: IndisponibilitePierre[],
@@ -491,7 +512,7 @@ function planifierJour(
     let heureArrivee = arrondirHeure(addMinutes(heure, trajet)); // après trajet
     heureArrivee = arrondirHeure(appliquerIndispos(heureArrivee, indisposJour)); // après pause
 
-    const slot = ajusterAuCreneauPatient(heureArrivee, patient);
+    const slot = ajusterAuCreneauPatient(heureArrivee, patient, jourKey);
     if (slot.impossible) {
       impossibles.push({
         patient,
