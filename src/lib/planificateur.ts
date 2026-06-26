@@ -743,6 +743,7 @@ export function planifierRecurrent(
 export interface TrouCalendrier {
   date: string;           // 'YYYY-MM-DD'
   labelJour: string;      // 'Lundi 23 juin'
+  jourKey: JourSemaine;
   dureeMinutes: number;
   nomPatientA: string;    // patient dont la séance précède le trou
   nomPatientB: string;    // patient dont la séance suit le trou
@@ -801,7 +802,7 @@ export function calculerRapport(
       if (gap > TROU_MAX_MINUTES) {
         const nomA = [a.patient.prenom, a.patient.nom].filter(Boolean).join(' ') || 'Patient';
         const nomB = [b.patient.prenom, b.patient.nom].filter(Boolean).join(' ') || 'Patient';
-        trous.push({ date: jour.date, labelJour: jour.label, dureeMinutes: gap, nomPatientA: nomA, nomPatientB: nomB });
+        trous.push({ date: jour.date, labelJour: jour.label, jourKey: jour.jourKey, dureeMinutes: gap, nomPatientA: nomA, nomPatientB: nomB });
       }
     }
   }
