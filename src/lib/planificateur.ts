@@ -101,14 +101,17 @@ const CRENEAU_FIN: Record<string, string> = {
 // PARAMÈTRES DE L'ALGORITHME — ajustables selon les préférences de Pierre
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Pondération du scoring multi-critères (total = 1.0)
+// Pondération du scoring multi-critères (total = 0.90)
 const POIDS_TRAJET    = 0.40; // Minimiser les temps de trajet (priorité principale)
 const POIDS_ZONE      = 0.25; // Respecter les zones géographiques assignées
-const POIDS_CHARGE    = 0.20; // Équilibrer la charge entre les jours de la semaine
+const POIDS_CHARGE    = 0.10; // Équilibrer la charge entre les jours (réduit : Pierre préfère des journées pleines)
 const POIDS_STABILITE = 0.15; // Stabiliser les jours habituels des patients (malus doux)
 
 // Capacité journalière de Pierre (minutes de travail disponibles)
-const CAPACITE_JOURNEE_MINUTES = 480; // 8h par défaut
+const CAPACITE_JOURNEE_MINUTES = 600; // 10h — journées bien remplies acceptées
+
+// Marge tampon entre la fin d'une séance et le début de la suivante (en plus du trajet)
+const MARGE_ENTRE_SEANCES_MIN = 10;
 
 // Fraction minimale de la plage de travail couverte par des indispos pour
 // considérer un jour comme totalement bloqué et l'exclure de l'assignation.
@@ -537,7 +540,7 @@ function planifierJour(
       accepted: true,
     });
 
-    heure  = heureFin;
+    heure  = addMinutes(heureFin, MARGE_ENTRE_SEANCES_MIN);
     posIdx = idx;
   }
 
