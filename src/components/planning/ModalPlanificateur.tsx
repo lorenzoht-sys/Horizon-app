@@ -11,6 +11,7 @@ import {
   prochainLundi,
   type ResultatPlanification,
   type RapportQualite,
+  type TrouCalendrier,
   type JourPlanifie,
   type EtapePlanifiee,
 } from '../../lib/planificateur';
@@ -334,6 +335,20 @@ export default function ModalPlanificateur({
                   </span>
                 )}
               </div>
+              {rapport.trous.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {rapport.trous.map((t: TrouCalendrier, i: number) => {
+                    const h = Math.floor(t.dureeMinutes / 60);
+                    const m = t.dureeMinutes % 60;
+                    const dureeLabel = h > 0 ? `${h}h${m > 0 ? m : ''}` : `${m}min`;
+                    return (
+                      <p key={i} className="text-xs text-amber-700">
+                        ⚠️ Trou de {dureeLabel} entre {t.nomPatientA} et {t.nomPatientB} ({t.labelJour.split(' ').slice(0, 2).join(' ')}) — envisagez d'ajouter un patient sur ce créneau
+                      </p>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 

@@ -113,6 +113,10 @@ const CAPACITE_JOURNEE_MINUTES = 600; // 10h — journées bien remplies accept�
 // Marge tampon entre la fin d'une séance et le début de la suivante (en plus du trajet)
 const MARGE_ENTRE_SEANCES_MIN = 10;
 
+// Au-delà de ce seuil entre la fin d'une séance et le début de la suivante,
+// un trou est signalé dans le rapport qualité.
+const TROU_MAX_MINUTES = 60;
+
 // Fraction minimale de la plage de travail couverte par des indispos pour
 // considérer un jour comme totalement bloqué et l'exclure de l'assignation.
 const SEUIL_BLOCAGE_JOUR = 0.90;
@@ -736,6 +740,14 @@ export function planifierRecurrent(
 
 // ── Rapport de qualité du planning ───────────────────────────────────────────
 
+export interface TrouCalendrier {
+  date: string;           // 'YYYY-MM-DD'
+  labelJour: string;      // 'Lundi 23 juin'
+  dureeMinutes: number;
+  nomPatientA: string;    // patient dont la séance précède le trou
+  nomPatientB: string;    // patient dont la séance suit le trou
+}
+
 export interface RapportQualite {
   nbPlanifies: number;    // patients distincts avec au moins une séance
   nbTotal: number;        // nbPlanifies + patients en impossibles
@@ -743,6 +755,7 @@ export interface RapportQualite {
   jourLePlusCharge:  { label: string; date: string; minutes: number } | null;
   jourLeMoinsCharge: { label: string; date: string; minutes: number } | null;
   nbHorsZone: number;     // séances placées hors des joursAssignes de la zone
+  trous: TrouCalendrier[]; // trous > TROU_MAX_MINUTES entre deux séances consécutives
 }
 
 export function calculerRapport(
@@ -778,6 +791,21 @@ export function calculerRapport(
   const entries = [...chargeParDate.entries()].map(([date, v]) => ({ date, ...v }));
   entries.sort((a, b) => b.minutes - a.minutes);
 
+  // Détection des trous : gap > TROU_MAX_MINUTES entre deux séances consécutives du même jour.
+  const trous: TrouCalendrier[] = [];
+  for (const jour of resultat.jours) {
+    for (let i = 0; i < jour.etapes.length - 1; i++) {
+      const a = jour.etapes[i];
+      const b = jour.etapes[i + 1];
+      const gap = heureEnMinutes(b.heureDebut) - heureEnMinutes(a.heureFin);
+      if (gap > TROU_MAX_MINUTES) {
+        const nomA = [a.patient.prenom, a.patient.nom].filter(Boolean).join(' ') || 'Patient';
+        const nomB = [b.patient.prenom, b.patient.nom].filter(Boolean).join(' ') || 'Patient';
+        trous.push({ date: jour.date, labelJour: jour.label, dureeMinutes: gap, nomPatientA: nomA, nomPatientB: nomB });
+      }
+    }
+  }
+
   const patientsImpossibles = new Set(resultat.impossibles.map(i => i.patient.id));
   const nbTotal = patientsPlanifies.size
     + [...patientsImpossibles].filter(id => !patientsPlanifies.has(id)).length;
@@ -789,6 +817,7 @@ export function calculerRapport(
     jourLePlusCharge:  entries.length > 0 ? { label: entries[0].label, date: entries[0].date, minutes: entries[0].minutes } : null,
     jourLeMoinsCharge: entries.length > 0 ? { label: entries[entries.length - 1].label, date: entries[entries.length - 1].date, minutes: entries[entries.length - 1].minutes } : null,
     nbHorsZone,
+    trous,
   };
 }
 
