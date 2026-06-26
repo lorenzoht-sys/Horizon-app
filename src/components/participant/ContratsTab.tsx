@@ -97,17 +97,22 @@ export default function ContratsTab({ participantId }: Props) {
         headers: { 'Content-Type': 'application/json', ...authHeader },
         body: JSON.stringify({ contratIds: [confirmSuppr.contratId], dateMin: today }),
       });
+      const body = await r.json().catch(() => ({}));
       if (!r.ok) {
-        const detail = await r.json().catch(() => ({}));
-        throw new Error(detail.error ?? 'Erreur suppression séances');
+        throw new Error(body.error ?? 'Erreur suppression séances');
       }
       supprimerContrat(confirmSuppr.contratId);
-      toast.success('Contrat et séances futures supprimés');
+      if ((body.supprimees ?? -1) === 0) {
+        toast.warning('Contrat supprimé mais aucune séance n\'a pu être retirée — vérifiez votre agenda manuellement');
+      } else {
+        toast.success('Contrat et séances futures supprimés');
+      }
+      setConfirmSuppr(null);
     } catch (err) {
+      console.error('[handleSupprimerAvecSeances]', err);
       toast.error(err instanceof Error ? err.message : 'Erreur lors de la suppression');
     } finally {
       setSupprimant(false);
-      setConfirmSuppr(null);
     }
   }
 

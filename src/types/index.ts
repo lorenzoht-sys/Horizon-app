@@ -393,6 +393,7 @@ export type PeriodiciteContrat = 'semaine' | 'deux_semaines' | 'trois_semaines';
 export interface Contrat {
   id: string;
   participantId: string;
+  praticienId?: string;
   dateDebut: string;
   dateFin: string;
   /** @deprecated remplacé par nbSeancesSemaine — les jours réels sont décidés par le planificateur (src/lib/planificateur.ts) selon les disponibilités patient. Conservé pour les anciens contrats. */

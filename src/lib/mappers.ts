@@ -285,6 +285,7 @@ export function dbToContrat(row: any): Contrat {
   return {
     id: row.id,
     participantId: row.participant_id,
+    praticienId: row.praticien_id ?? undefined,
     dateDebut: row.date_debut,
     dateFin: row.date_fin,
     joursFixe,
@@ -314,6 +315,7 @@ export function contratToDb(c: Contrat): Record<string, unknown> {
   return {
     id: c.id,
     participant_id: c.participantId,
+    praticien_id: c.praticienId ?? null,
     date_debut: c.dateDebut,
     date_fin: c.dateFin,
     nb_seances_semaine: c.nbSeancesSemaine,
