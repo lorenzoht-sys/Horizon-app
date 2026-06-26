@@ -97,23 +97,27 @@ const CRENEAU_FIN: Record<string, string> = {
   matin: '12:00', 'apres-midi': '18:00', soiree: '21:00',
 };
 
-// ── Paramètres de scoring ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// PARAMÈTRES DE L'ALGORITHME — ajustables selon les préférences de Pierre
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Pondération du scoring multi-critères (total = 1.0)
+const POIDS_TRAJET    = 0.40; // Minimiser les temps de trajet (priorité principale)
+const POIDS_ZONE      = 0.25; // Respecter les zones géographiques assignées
+const POIDS_CHARGE    = 0.20; // Équilibrer la charge entre les jours de la semaine
+const POIDS_STABILITE = 0.15; // Stabiliser les jours habituels des patients (malus doux)
+
+// Capacité journalière de Pierre (minutes de travail disponibles)
+const CAPACITE_JOURNEE_MINUTES = 480; // 8h par défaut
 
 // Fraction minimale de la plage de travail couverte par des indispos pour
 // considérer un jour comme totalement bloqué et l'exclure de l'assignation.
 const SEUIL_BLOCAGE_JOUR = 0.90;
 
-// Réduction du coût ORS par patient de la même zone déjà placé ce jour.
-const BONUS_MEME_ZONE = 0.10;
-
-// Majoration du coût ORS si le jour n'est pas dans les joursAssignes de la
-// zone du patient. Volontairement fort (0.50) pour que les zones soient
-// réellement contraignantes, pas juste informatives.
-const MALUS_HORS_JOURS_ZONE = 0.50;
-
-// Heure de fin de journée de travail utilisée pour calculer la couverture
-// d'indisponibilité d'un jour (ne dépend pas de heureDebutJournee, qui varie).
+// Heure de fin de journée utilisée pour calculer la couverture d'indisponibilité.
 const HEURE_FIN_JOURNEE_TRAVAIL = '20:00';
+
+// ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Détection d'un jour totalement bloqué ────────────────────────────────────
 
@@ -274,6 +278,7 @@ function assignerJoursSemaine(
   indispos: IndisponibilitePierre[],
   heureDebutJournee: string,
   zones: ZoneGeographique[],
+  joursPrecedents?: Map<string, JourSemaine[]>,
 ): {
   assignations: Map<string, { date: string; jourKey: JourSemaine; seanceExistanteId?: string }[]>;
   impossibles: { patient: Participant; raison: string }[];
@@ -351,6 +356,8 @@ function assignerJoursSemaine(
   const occupeParJour = new Map<JourSemaine, number[]>();
   // Suivi des IDs patients déjà placés par jour — nécessaire pour le scoring zone.
   const patientsParJour = new Map<JourSemaine, string[]>();
+  // Charge cumulée par jour (minutes de séances + trajets estimés) — scoring équilibre.
+  const chargeParJour = new Map<JourSemaine, number>();
 
   // Jours déjà pris par patient, tous contrats confondus — garantit qu'un
   // patient avec plusieurs contrats actifs simultanés n'est jamais programmé
@@ -397,32 +404,46 @@ function assignerJoursSemaine(
         ? zones.find(z => z.participantIds.includes(patient.id))
         : undefined;
 
-      const scored = joursDispo.map(jour => {
+      // Scoring multi-critères normalisé : on calcule les composantes brutes,
+      // puis on normalise le trajet entre 0 et 1 avant d'appliquer les poids.
+      const rawScores = joursDispo.map(jour => {
         const occupants = occupeParJour.get(jour.jourKey) ?? [];
         const cibles = occupants.length > 0 ? occupants : [departIdx];
-        let cout = Math.min(...cibles.map(o => matrix.durees[idx]?.[o] ?? Infinity));
+        const rawTrajet = Math.min(...cibles.map(o => matrix.durees[idx]?.[o] ?? Infinity));
 
-        // Bonus/malus zone : secondaire par rapport au coût ORS réel, mais
-        // suffisamment fort (MALUS 50%) pour que les zones soient contraignantes.
-        if (zonePatient) {
-          const idsJour = patientsParJour.get(jour.jourKey) ?? [];
-          const nbMemeZone = idsJour.filter(pid => zonePatient.participantIds.includes(pid)).length;
-          // Bonus : chaque patient même zone déjà placé ce jour réduit le coût.
-          cout = Math.max(0, cout * (1 - BONUS_MEME_ZONE * nbMemeZone));
-          // Malus : jour hors des jours assignés à la zone du patient.
-          if (!zonePatient.joursAssignes.includes(jour.jourKey)) {
-            cout *= (1 + MALUS_HORS_JOURS_ZONE);
-          }
-        }
+        // Zone : malus binaire si le jour n'est pas dans joursAssignes de la zone.
+        const malusZone = zonePatient && !zonePatient.joursAssignes.includes(jour.jourKey) ? 1 : 0;
 
-        return { jour, cout };
+        // Charge : part des minutes déjà planifiées ce jour, plafonnée à 1.
+        const chargeNorm = Math.min((chargeParJour.get(jour.jourKey) ?? 0) / CAPACITE_JOURNEE_MINUTES, 1);
+
+        // Stabilité : malus doux si le patient était sur un autre jour la semaine précédente.
+        const joursPrecContrat = joursPrecedents?.get(contrat.id) ?? [];
+        const malusStabilite = joursPrecContrat.length > 0 && !joursPrecContrat.includes(jour.jourKey) ? 1 : 0;
+
+        return { jour, rawTrajet, malusZone, chargeNorm, malusStabilite };
       });
-      scored.sort((a, b) => a.cout - b.cout);
+
+      // Normaliser les trajets entre 0 et 1 pour que les poids soient comparables.
+      const maxTrajet = Math.max(...rawScores.map(s => s.rawTrajet).filter(Number.isFinite), 1);
+      const scored = rawScores.map(s => ({
+        jour: s.jour,
+        score: POIDS_TRAJET    * (Number.isFinite(s.rawTrajet) ? s.rawTrajet / maxTrajet : 0)
+             + POIDS_ZONE      * s.malusZone
+             + POIDS_CHARGE    * s.chargeNorm
+             + POIDS_STABILITE * s.malusStabilite,
+      }));
+      scored.sort((a, b) => a.score - b.score);
       choisis = scored.slice(0, n).map(s => s.jour);
     }
 
     for (const jour of choisis) {
       const occupants = occupeParJour.get(jour.jourKey) ?? [];
+      // Trajet estimé depuis le plus proche occupant avant ajout de ce patient.
+      const ciblesCharge = occupants.length > 0 ? occupants : [departIdx];
+      const trajetEstimeMin = Math.round(
+        Math.min(...ciblesCharge.map(o => matrix.durees[idx]?.[o] ?? 0)) / 60
+      );
       occupants.push(idx);
       occupeParJour.set(jour.jourKey, occupants);
       joursDejaPris.add(jour.jourKey);
@@ -430,6 +451,8 @@ function assignerJoursSemaine(
       const ids = patientsParJour.get(jour.jourKey) ?? [];
       ids.push(patient.id);
       patientsParJour.set(jour.jourKey, ids);
+
+      chargeParJour.set(jour.jourKey, (chargeParJour.get(jour.jourKey) ?? 0) + contrat.dureeMinutes + trajetEstimeMin);
     }
     joursPrisParPatient.set(patient.id, joursDejaPris);
 
@@ -611,6 +634,9 @@ export function planifierRecurrent(
   startDate.setDate(today.getDate() + jump);
 
   const vusImpossible = new Set<string>();
+  // Jours choisis la semaine précédente par contrat — passés à assignerJoursSemaine
+  // pour favoriser la stabilité (le patient retrouve son praticien le même jour).
+  let joursPrecedents: Map<string, JourSemaine[]> | undefined = undefined;
 
   for (let semaine = 0; semaine < nbSemaines; semaine++) {
     const lundi = new Date(startDate);
@@ -629,7 +655,17 @@ export function planifierRecurrent(
     const { assignations, impossibles } = assignerJoursSemaine(
       joursDeLaSemaine, contrats, participants, seances, matrix, indexMap, departIdx,
       indispos, heureDebutJournee, params.zones ?? [],
+      joursPrecedents,
     );
+
+    // Mémoriser les jours choisis pour la stabilité de la semaine suivante.
+    joursPrecedents = new Map<string, JourSemaine[]>();
+    for (const [contratId, joursAssignes] of assignations) {
+      if (joursAssignes.length > 0) {
+        joursPrecedents.set(contratId, joursAssignes.map(j => j.jourKey));
+      }
+    }
+
     for (const imp of impossibles) {
       if (!vusImpossible.has(imp.patient.id)) {
         allImpossibles.push(imp);
@@ -674,6 +710,66 @@ export function planifierRecurrent(
 
 // ── Calcul du prochain lundi ──────────────────────────────────────────────────
 
+// ── Rapport de qualité du planning ───────────────────────────────────────────
+
+export interface RapportQualite {
+  nbPlanifies: number;    // patients distincts avec au moins une séance
+  nbTotal: number;        // nbPlanifies + patients en impossibles
+  distanceSemaineKm: number; // distance totale par semaine (moyenne en mode B)
+  jourLePlusCharge:  { label: string; date: string; minutes: number } | null;
+  jourLeMoinsCharge: { label: string; date: string; minutes: number } | null;
+  nbHorsZone: number;     // séances placées hors des joursAssignes de la zone
+}
+
+export function calculerRapport(
+  resultat: ResultatPlanification,
+  zones: ZoneGeographique[],
+  nbSemaines = 1,
+): RapportQualite {
+  const patientsPlanifies = new Set<string>();
+  let distanceTotaleKm = 0;
+  let nbHorsZone = 0;
+
+  // Charge par date (minutes séance + trajet) — pour identifier le jour le +/- chargé.
+  const chargeParDate = new Map<string, { label: string; minutes: number }>();
+
+  for (const jour of resultat.jours) {
+    let minutesJour = 0;
+    for (const etape of jour.etapes) {
+      patientsPlanifies.add(etape.patient.id);
+      distanceTotaleKm += etape.distanceKm;
+      minutesJour += etape.contrat.dureeMinutes + etape.dureeTrajetMinutes;
+
+      if (zones.length > 0) {
+        const zonePatient = zones.find(z => z.participantIds.includes(etape.patient.id));
+        if (zonePatient && !zonePatient.joursAssignes.includes(jour.jourKey)) nbHorsZone++;
+      }
+    }
+    chargeParDate.set(jour.date, {
+      label: jour.label,
+      minutes: (chargeParDate.get(jour.date)?.minutes ?? 0) + minutesJour,
+    });
+  }
+
+  const entries = [...chargeParDate.entries()].map(([date, v]) => ({ date, ...v }));
+  entries.sort((a, b) => b.minutes - a.minutes);
+
+  const patientsImpossibles = new Set(resultat.impossibles.map(i => i.patient.id));
+  const nbTotal = patientsPlanifies.size
+    + [...patientsImpossibles].filter(id => !patientsPlanifies.has(id)).length;
+
+  return {
+    nbPlanifies: patientsPlanifies.size,
+    nbTotal,
+    distanceSemaineKm: Math.round((distanceTotaleKm / Math.max(nbSemaines, 1)) * 10) / 10,
+    jourLePlusCharge:  entries.length > 0 ? { label: entries[0].label, date: entries[0].date, minutes: entries[0].minutes } : null,
+    jourLeMoinsCharge: entries.length > 0 ? { label: entries[entries.length - 1].label, date: entries[entries.length - 1].date, minutes: entries[entries.length - 1].minutes } : null,
+    nbHorsZone,
+  };
+}
+
+// ── Calcul du prochain lundi ──────────────────────────────────────────────────
+
 export function prochainLundi(today: string): string {
   const d = new Date(today + 'T12:00');
   const dow = d.getDay();
@@ -682,4 +778,4 @@ export function prochainLundi(today: string): string {
   return d.toISOString().split('T')[0];
 }
 
-export { JOURS_ORDRE, LABELS_JOURS };
+export { JOURS_ORDRE, LABELS_JOURS, POIDS_TRAJET, POIDS_ZONE, POIDS_CHARGE, POIDS_STABILITE, CAPACITE_JOURNEE_MINUTES };
