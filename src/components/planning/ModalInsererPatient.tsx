@@ -5,6 +5,7 @@ import type { Participant, Contrat, Seance } from '../../types';
 import { getTrousRecurrents, type CreneauLibre } from '../../lib/analyse-tournee';
 import { getOrganisation } from '../../lib/anamnese';
 import { addMinutes, estSemaineDue } from '../../utils/horaires';
+import { MARGE_ENTRE_SEANCES_MIN } from '../../lib/planificateur';
 
 interface Props {
   onClose: () => void;
@@ -107,12 +108,13 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
           const dateStr = cur.toISOString().split('T')[0];
           if (cur.getDay() === creneau.jourSemaine &&
               estSemaineDue(contratChoisi.dateDebut, dateStr, contratChoisi.periodicite ?? 'semaine')) {
+            const heureDebut = addMinutes(creneau.heureDebut, MARGE_ENTRE_SEANCES_MIN);
             seancesACreer.push({
               participantId: contratChoisi.participantId,
               contratId: contratChoisi.id,
               date: dateStr,
-              heureDebut: creneau.heureDebut,
-              heureFin: addMinutes(creneau.heureDebut, duree),
+              heureDebut,
+              heureFin: addMinutes(heureDebut, duree),
               dureeMinutes: duree,
               type: 'seance',
               statut: 'planifiee',
@@ -245,9 +247,10 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
                   <div className="space-y-0.5">
                     {creneauxChoisis.map((c, i) => {
                       const duree = contratChoisi.dureesSeances[i] ?? contratChoisi.dureeMinutes;
+                      const debut = addMinutes(c.heureDebut, MARGE_ENTRE_SEANCES_MIN);
                       return (
                         <div key={i} className="font-medium text-dark">
-                          {c.nomJour} · {c.heureDebut} – {addMinutes(c.heureDebut, duree)}
+                          {c.nomJour} · {debut} – {addMinutes(debut, duree)}
                         </div>
                       );
                     })}
