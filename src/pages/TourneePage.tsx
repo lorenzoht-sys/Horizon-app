@@ -3,18 +3,18 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useParticipants } from '../hooks/useParticipants';
-import { useAgenda, addMinutes } from '../hooks/useAgenda';
+import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import PageWrapper from '../components/layout/PageWrapper';
 import { UserPlus, MapPin, Clock, Navigation, CalendarPlus, AlertCircle, CheckCircle, XCircle, NotebookPen } from 'lucide-react';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
 import { toast } from 'sonner';
-import type { Participant, Seance, IndisponibilitePierre, JourSemaine, CreneauPreference } from '../types';
+import type { Participant, Seance, IndisponibilitePierre, JourSemaine } from '../types';
 import { geocodeAdresse } from '../utils/geocodeAdresse';
 import { Link, useNavigate } from 'react-router-dom';
 import { useIndispos } from '../hooks/useIndispos';
 import { useZones } from '../hooks/useZones';
-import { getAuthHeader, supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 const ModalPlanificateur = lazy(() => import('../components/planning/ModalPlanificateur'));
 const ModalInsererPatient = lazy(() => import('../components/planning/ModalInsererPatient'));
@@ -51,130 +51,6 @@ function MapResizer() {
   return null;
 }
 
-// ── Créneaux horaires ──────────────────────────────────────────────────────────
-
-const SLOT_DEBUT: Record<CreneauPreference, string> = {
-  'matin':     '08:00',
-  'apres-midi': '13:30',
-  'soiree':    '18:00',
-};
-const SLOT_FIN: Record<CreneauPreference, string> = {
-  'matin':     '12:00',
-  'apres-midi': '18:00',
-  'soiree':    '21:00',
-};
-const SLOT_LABEL: Record<CreneauPreference, string> = {
-  'matin':     'Matin (8h-12h)',
-  'apres-midi': 'Après-midi (13h30-18h)',
-  'soiree':    'Soirée (18h-21h)',
-};
-
-// Priorité pour le tri : matin=0, apres-midi=1, soirée=2
-function prioriteCreneau(p: Participant): number {
-  if (!p.disponibilites?.creneauxPreference.length) return 0;
-  const pref = p.disponibilites.creneauxPreference;
-  if (pref.includes('matin')) return 0;
-  if (pref.includes('apres-midi')) return 1;
-  return 2;
-}
-
-// Trouver le prochain créneau valide d'un patient à partir d'une heure donnée
-// Retourne impossible:true si tous ses créneaux sont passés → patient à exclure
-function prochainSlotPatient(heure: string, patient: Participant): {
-  heureDebut: string;
-  attendu: boolean;
-  impossible: boolean;
-  raison?: string;
-} {
-  if (!patient.disponibilites?.creneauxPreference.length) {
-    return { heureDebut: heure, attendu: false, impossible: false };
-  }
-
-  const creneaux = [...patient.disponibilites.creneauxPreference].sort(
-    (a, b) => SLOT_DEBUT[a].localeCompare(SLOT_DEBUT[b])
-  );
-
-  for (const creneau of creneaux) {
-    const debut = SLOT_DEBUT[creneau];
-    const fin   = SLOT_FIN[creneau];
-    if (heure < debut) {
-      // Pierre arrive trop tôt → attendre le début du créneau
-      return {
-        heureDebut: debut,
-        attendu: true,
-        impossible: false,
-        raison: `${patient.prenom} n'est disponible qu'à partir de ${debut} (${SLOT_LABEL[creneau]})`,
-      };
-    }
-    if (heure < fin) {
-      // Dans le créneau → OK
-      return { heureDebut: heure, attendu: false, impossible: false };
-    }
-    // Ce créneau est dépassé → vérifier le suivant
-  }
-
-  // Tous les créneaux de la journée sont passés → impossible
-  const dernierCreneau = creneaux[creneaux.length - 1];
-  return {
-    heureDebut: heure,
-    attendu: false,
-    impossible: true,
-    raison: `Plus de créneau disponible (dernier créneau terminé à ${SLOT_FIN[dernierCreneau]})`,
-  };
-}
-
-// ── Haversine ─────────────────────────────────────────────────────────────────
-
-function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
-  const R = 6371;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLon = ((b.lng - a.lng) * Math.PI) / 180;
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-}
-
-// ── Nearest neighbor dans un groupe ───────────────────────────────────────────
-
-type LatLng = { lat: number; lng: number };
-type TravelFn = (from: LatLng, to: LatLng) => number;
-
-function nearestNeighbor(start: LatLng, patients: Participant[], getTravelSec: TravelFn): Participant[] {
-  const restants = [...patients];
-  const visite: Participant[] = [];
-  let pos = start;
-  while (restants.length > 0) {
-    let idx = 0, minSec = Infinity;
-    for (let i = 0; i < restants.length; i++) {
-      const c = restants[i].coordonnees;
-      if (!c) continue;
-      const s = getTravelSec(pos, c);
-      if (s < minSec) { minSec = s; idx = i; }
-    }
-    const [next] = restants.splice(idx, 1);
-    visite.push(next);
-    if (next.coordonnees) pos = next.coordonnees;
-  }
-  return visite;
-}
-
-// Optimisation : grouper par créneau (matin → après-midi → soirée),
-// puis nearest-neighbor dans chaque groupe
-function optimiserTournee(depart: LatLng, patients: Participant[], getTravelSec: TravelFn): Participant[] {
-  const groupes = [0, 1, 2].map(prio => patients.filter(p => prioriteCreneau(p) === prio));
-  const result: Participant[] = [];
-  let pos = depart;
-  for (const groupe of groupes) {
-    if (!groupe.length) continue;
-    const optimise = nearestNeighbor(pos, groupe, getTravelSec);
-    result.push(...optimise);
-    const dernier = optimise[optimise.length - 1];
-    if (dernier?.coordonnees) pos = dernier.coordonnees;
-  }
-  return result;
-}
-
 // ── Types itinéraire ──────────────────────────────────────────────────────────
 
 interface Interruption {
@@ -194,109 +70,6 @@ interface EtapePatient {
   interruptions: Interruption[]; // pauses + attentes AVANT cette séance
 }
 
-// ── Calcul itinéraire respectant créneaux + indispos ──────────────────────────
-
-interface ResultatItineraire {
-  etapes: EtapePatient[];
-  impossibles: { patient: Participant; raison: string }[];
-}
-
-function calculerItineraire(
-  depart: LatLng,
-  tournee: Participant[],
-  heureDepart: string,
-  indispos: IndisponibilitePierre[],
-  getPatientDuree: (patientId: string) => number,
-  getTravelMin: TravelFn,
-  getDistKm: TravelFn,
-): ResultatItineraire {
-  const etapes: EtapePatient[] = [];
-  const impossibles: { patient: Participant; raison: string }[] = [];
-  let pos = depart;
-  let heure = heureDepart;
-
-  for (const patient of tournee) {
-    const c = patient.coordonnees!;
-    const trajet = Math.max(1, Math.round(getTravelMin(pos, c)));
-
-    let heureDebut = addMinutes(heure, trajet);
-    const interruptions: Interruption[] = [];
-    const pausesVues = new Set<string>();
-    let patientImpossible = false;
-
-    // Boucle de résolution des contraintes (max 10 itérations sécurité)
-    let changed = true;
-    let guard = 0;
-    while (changed && guard < 10) {
-      changed = false;
-      guard++;
-
-      // 1. Indisponibilités Pierre
-      for (const indispo of indispos) {
-        if (heureDebut >= indispo.heureDebut && heureDebut < indispo.heureFin) {
-          if (!pausesVues.has(indispo.id)) {
-            interruptions.push({
-              kind: 'pause',
-              de: indispo.heureDebut,
-              a: indispo.heureFin,
-              label: indispo.label || 'Pause',
-              indispo,
-            });
-            pausesVues.add(indispo.id);
-          }
-          heureDebut = indispo.heureFin;
-          changed = true;
-          break;
-        }
-      }
-      if (changed) continue;
-
-      // 2. Créneau patient
-      const slot = prochainSlotPatient(heureDebut, patient);
-
-      if (slot.impossible) {
-        // Plus aucun créneau disponible ce jour → exclure ce patient
-        patientImpossible = true;
-        impossibles.push({ patient, raison: slot.raison ?? 'Plus de créneau disponible aujourd\'hui' });
-        break;
-      }
-
-      if (slot.attendu) {
-        interruptions.push({
-          kind: 'attente',
-          de: heureDebut,
-          a: slot.heureDebut,
-          label: slot.raison ?? `Attente — ${patient.prenom} disponible à ${slot.heureDebut}`,
-        });
-        heureDebut = slot.heureDebut;
-        changed = true;
-      }
-    }
-
-    if (patientImpossible) {
-      // Ne pas avancer heure ni pos — le patient est sauté
-      continue;
-    }
-
-    const duree = getPatientDuree(patient.id);
-    const heureFin = addMinutes(heureDebut, duree);
-
-    etapes.push({
-      patient,
-      heureArrivee: heureDebut,
-      heureDepart: heureFin,
-      dureeTrajetMinutes: trajet,
-      distanceKm: Math.round(getDistKm(pos, c) * 10) / 10,
-      interruptions,
-    });
-
-    heure = heureFin;
-    pos = c;
-  }
-
-  return { etapes, impossibles };
-}
-
 // ── Utilitaires divers ────────────────────────────────────────────────────────
 
 const JS_TO_JOUR: Record<number, JourSemaine | 'dim'> = {
@@ -311,13 +84,6 @@ function jourDeLaDate(dateStr: string): JourSemaine | 'dim' {
   const [y, m, d] = dateStr.split('-').map(Number);
   return JS_TO_JOUR[new Date(y, m - 1, d).getDay()];
 }
-
-function estDisponible(p: Participant, jour: JourSemaine | 'dim'): boolean {
-  if (!p.disponibilites) return true;
-  if (jour === 'dim') return false;
-  return p.disponibilites.joursDisponibles.includes(jour as JourSemaine);
-}
-
 
 function minutesAttente(de: string, a: string): number {
   const [h1, m1] = de.split(':').map(Number);
@@ -396,7 +162,7 @@ export default function TourneePage() {
 
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [noteModal, setNoteModal] = useState<typeof seancesEnrichies[number] | null>(null);
-  const [heureDepart, setHeureDepart] = useState('08:00');
+  const heureDepart = '08:00';
   const [etapes, setEtapes] = useState<EtapePatient[]>([]);
   const [showPlanificateur, setShowPlanificateur] = useState(false);
   const [showInserer, setShowInserer] = useState(false);
@@ -432,17 +198,14 @@ export default function TourneePage() {
 
   const [depart, setDepart] = useState<{ lat: number; lng: number }>(DEPART_FALLBACK);
   const [departAdresse, setDepartAdresse] = useState('');
-  const [departLoading, setDepartLoading] = useState(false);
   const [departErreur, setDepartErreur] = useState(false);
 
   useEffect(() => {
     const { adresseRue, adresseCodePostal, adresseVille } = praticienSettings;
     if (!adresseRue && !adresseVille) { setDepartErreur(true); return; }
-    setDepartLoading(true);
     setDepartErreur(false);
     geocodeAdresse(adresseRue ?? '', adresseCodePostal ?? '', adresseVille ?? '')
-      .then(r => { if (r) { setDepart({ lat: r.lat, lng: r.lng }); setDepartAdresse(r.adresseNormalisee); } else setDepartErreur(true); })
-      .finally(() => setDepartLoading(false));
+      .then(r => { if (r) { setDepart({ lat: r.lat, lng: r.lng }); setDepartAdresse(r.adresseNormalisee); } else setDepartErreur(true); });
   }, [praticienSettings.adresseRue, praticienSettings.adresseVille]);
 
   const jourChoisi = useMemo(() => jourDeLaDate(date), [date]);
@@ -530,7 +293,7 @@ export default function TourneePage() {
         </div>
         <div className="flex items-center gap-3">
           <input type="date" value={date}
-            onChange={e => { setDate(e.target.value); setTournee([]); setEtapes([]); setImpossibles([]); setShowAdHoc(false); }}
+            onChange={e => { setDate(e.target.value); setEtapes([]); }}
             className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary" />
           <Link to="/agenda" className="text-xs text-primary hover:underline">Voir l'agenda →</Link>
         </div>

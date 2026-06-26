@@ -11,7 +11,7 @@ interface Props {
   participants: Participant[];
   contrats: Contrat[];
   seances: Seance[];
-  bulkCreerSeances: (data: Omit<Seance, 'id'>[]) => Promise<void>;
+  bulkCreerSeances: (data: Omit<Seance, 'id'>[]) => Promise<Seance[] | void>;
 }
 
 export default function ModalInsererPatient({ onClose, participants, contrats, seances, bulkCreerSeances }: Props) {
