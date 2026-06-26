@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
+import { useAgenda } from '../hooks/useAgenda';
 import PageWrapper from '../components/layout/PageWrapper';
 import { ArrowLeft, Check, Calendar, Hash, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { calculerNbSeancesEstime, calculerDateFinParFrequence, CYCLE_SEMAINES } from '../utils/horaires';
 import { getOrganisation, OPTIONS_FREQUENCE, trouverOptionFrequence, type OptionFrequence } from '../lib/anamnese';
+import { getTrousRecurrents } from '../lib/analyse-tournee';
 
 const JOURS_DISPO_LIST = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'] as const;
 const FREQUENCE_DEFAUT = OPTIONS_FREQUENCE[1]; // 2 séances/semaine
@@ -21,6 +23,7 @@ export default function ContratNouveauPage() {
   const { participants } = useParticipants();
   const { creerContrat } = useContrats();
 
+  const { seances } = useAgenda();
   const participant = participants.find(p => p.id === id);
   const bilanInitial = participant?.bilans.find(b => b.type === 'initial');
 
@@ -128,6 +131,12 @@ export default function ContratNouveauPage() {
     }
   }
 
+  // Créneaux libres récurrents dans la même ville que le nouveau patient
+  const creneauxSuggeres = useMemo(() =>
+    getTrousRecurrents(seances, participants, participant?.adresseVille ?? ''),
+    [seances, participants, participant?.adresseVille]
+  );
+
   if (!participant) {
     return (
       <PageWrapper>
@@ -182,6 +191,27 @@ export default function ContratNouveauPage() {
                 Aller à la fiche patient
               </Link>
             </div>
+          </div>
+        )}
+
+        {/* Suggestion de créneaux — uniquement si des trous récurrents existent dans la même ville */}
+        {creneauxSuggeres.length > 0 && participant.adresseVille && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl px-5 py-4 mb-6">
+            <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1.5">
+              💡 Créneaux disponibles dans votre planning
+            </div>
+            <p className="text-sm text-blue-800 mb-2">
+              Ce patient habite <span className="font-semibold">{participant.adresseVille}</span>. Dans votre planning actuel, vous avez des trous récurrents dans cette zone :
+            </p>
+            <ul className="space-y-0.5">
+              {creneauxSuggeres.map((c, i) => (
+                <li key={i} className="text-sm text-blue-700">
+                  · <span className="font-medium">{c.nomJour} {c.heureDebut}–{c.heureFin}</span>
+                  <span className="text-blue-500"> ({c.dureeMinutes} min libres)</span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-blue-500 mt-2">Ces créneaux pourraient correspondre aux disponibilités du patient.</p>
           </div>
         )}
 
