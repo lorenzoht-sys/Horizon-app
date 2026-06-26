@@ -314,7 +314,7 @@ function PopupSeance({ seance, rang, totalContrat, onClose, onDelete, onStatut, 
             )}
             <button
               onClick={() => { if (confirm('Supprimer cette séance ?')) { onDelete(); onClose(); } }}
-              className="flex items-center justify-center border border-red-200 text-red-400 rounded-xl px-3 py-2 hover:bg-red-50 transition-colors"
+              className="flex items-center justify-center border border-red-200 text-red-400 rounded-xl px-3 py-2 hover:bg-red-light transition-colors"
             >
               <Trash2 size={13} />
             </button>

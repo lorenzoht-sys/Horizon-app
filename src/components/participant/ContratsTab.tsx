@@ -252,7 +252,7 @@ export default function ContratsTab({ participantId }: Props) {
                   </button>
                   <button
                     onClick={() => handleTerminer(contrat.id)}
-                    className="flex items-center gap-1.5 text-xs border border-red-200 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                    className="flex items-center gap-1.5 text-xs border border-red-200 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-light transition-colors"
                   >
                     <XCircle size={12} />
                     Terminer

@@ -102,7 +102,7 @@ function VariableABC({
                     ? 'bg-green-500 border-green-500 text-white'
                     : letter === 'B'
                     ? 'bg-orange-400 border-orange-400 text-white'
-                    : 'bg-red-500 border-red-500 text-white'
+                    : 'bg-danger border-red-500 text-white'
                   : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'
               }`}
             >

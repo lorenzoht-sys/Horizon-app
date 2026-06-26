@@ -173,7 +173,7 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
         </div>
         <div className="p-4 space-y-3">
           {error && (
-            <div className="flex items-start gap-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl p-3">
+            <div className="flex items-start gap-2 text-xs text-red-600 bg-red-light border border-red-100 rounded-xl p-3">
               <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>

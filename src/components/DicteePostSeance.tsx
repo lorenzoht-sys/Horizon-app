@@ -336,10 +336,10 @@ export default function DicteePostSeance({ participant, onClose, onSave }: Props
           {etat === 'recording' && (
             <div className="flex flex-col items-center px-5 py-8">
               <div className="relative mb-5">
-                <span className="absolute inset-0 rounded-full bg-red-400 animate-ping opacity-40" />
+                <span className="absolute inset-0 rounded-full bg-danger animate-ping opacity-40" />
                 <button
                   onClick={handleToggleMic}
-                  className="relative flex items-center justify-center rounded-full bg-red-500 hover:bg-red-600 transition-colors shadow-xl"
+                  className="relative flex items-center justify-center rounded-full bg-danger hover:bg-danger transition-colors shadow-xl"
                   style={{ width: 96, height: 96, minWidth: 96, minHeight: 96 }}
                   aria-label="Arrêter l'enregistrement"
                 >
@@ -369,7 +369,7 @@ export default function DicteePostSeance({ participant, onClose, onSave }: Props
               </div>
 
               {speechError && (
-                <div className="mt-3 w-full bg-red-50 border border-red-200 rounded-xl p-3">
+                <div className="mt-3 w-full bg-red-light border border-red-200 rounded-xl p-3">
                   <p className="text-xs text-red-600">{speechError}</p>
                 </div>
               )}
@@ -544,7 +544,7 @@ export default function DicteePostSeance({ participant, onClose, onSave }: Props
           )}
 
           {etat === 'recording' && (
-            <button onClick={handleToggleMic} className="w-full flex items-center justify-center gap-2 bg-red-500 text-white py-3.5 rounded-xl text-sm font-semibold hover:bg-red-600 transition-colors">
+            <button onClick={handleToggleMic} className="w-full flex items-center justify-center gap-2 bg-danger text-white py-3.5 rounded-xl text-sm font-semibold hover:bg-danger transition-colors">
               <MicOff size={16} /> Arrêter et analyser
             </button>
           )}

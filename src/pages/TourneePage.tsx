@@ -377,7 +377,7 @@ export default function TourneePage() {
                       )}
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                         s.statut === 'realisee' ? 'bg-green-100 text-green-700' :
-                        s.statut === 'annulee' ? 'bg-red-100 text-red-600' :
+                        s.statut === 'annulee' ? 'bg-red-light text-red-600' :
                         s.statut === 'reportee' ? 'bg-orange-100 text-orange-600' :
                         'bg-blue-100 text-blue-700'
                       }`}>

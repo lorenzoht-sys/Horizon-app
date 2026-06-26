@@ -22,7 +22,7 @@ export const CATEGORIE_COLORS: Record<CategorieExercice, string> = {
   force:     'bg-green-100 text-green-700',
   mobilite:  'bg-yellow-100 text-yellow-700',
   souplesse: 'bg-orange-100 text-orange-700',
-  endurance: 'bg-red-100 text-red-700',
+  endurance: 'bg-red-light text-red-700',
   memoire:   'bg-purple-100 text-purple-700',
 };
 

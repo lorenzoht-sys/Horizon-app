@@ -471,7 +471,7 @@ export default function Dashboard() {
 
         {/* Alertes ressentis — À surveiller */}
         {patientsASurveiller.length > 0 && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-2xl px-5 py-4">
+          <div className="mb-6 bg-red-light border border-red-200 rounded-2xl px-5 py-4">
             <div className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-2">
               ⚠️ {patientsASurveiller.length} patient{patientsASurveiller.length > 1 ? 's' : ''} à surveiller — ressentis dégradés
             </div>
@@ -742,7 +742,7 @@ export default function Dashboard() {
                 })}
               </div>
               {alertes.length > 0 && (
-                <div className="mt-3 rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700 font-medium">
+                <div className="mt-3 rounded-xl bg-red-light border border-red-200 px-3 py-2 text-xs text-red-700 font-medium">
                   📉 {alertes.length} patient{alertes.length > 1 ? 's' : ''} avec un taux de réalisation &lt; 50% cette semaine
                 </div>
               )}
@@ -796,7 +796,7 @@ export default function Dashboard() {
                 })}
               </div>
               {alertesDouleur.length > 0 && (
-                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-700 font-medium">
+                <div className="bg-red-light border border-red-200 rounded-xl px-3 py-2 text-xs text-red-700 font-medium">
                   ⚠️ {alertesDouleur.length} alerte{alertesDouleur.length > 1 ? 's' : ''} douleur signalée{alertesDouleur.length > 1 ? 's' : ''} aujourd'hui
                 </div>
               )}

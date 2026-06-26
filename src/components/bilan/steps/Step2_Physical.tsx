@@ -38,7 +38,7 @@ function SouplesseInput({
         {([
           [1,  '+ (dépasse)',     'bg-green-700 border-green-700'],
           [0,  '0 (touche)',      'bg-primary border-primary'],
-          [-1, '− (n\'atteint pas)', 'bg-red-500 border-red-500'],
+          [-1, '− (n\'atteint pas)', 'bg-danger border-red-500'],
         ] as const).map(([s, label, activeClass]) => (
           <button key={s} type="button"
             onClick={() => handleSigne(s as -1 | 0 | 1)}

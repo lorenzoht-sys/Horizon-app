@@ -290,7 +290,7 @@ export default function ImportExcelModal({ onClose, participants, addParticipant
                 )}
 
                 {result.erreurs.length > 0 && (
-                  <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                  <div className="bg-red-light border border-red-200 rounded-xl px-4 py-3">
                     <div className="flex items-center gap-2 mb-2">
                       <AlertCircle size={16} className="text-red-500 flex-shrink-0" />
                       <span className="text-sm font-semibold text-red-800">

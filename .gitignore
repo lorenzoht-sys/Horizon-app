@@ -38,3 +38,4 @@ supabase/_staging_schema_dump.sql
 *.njsproj
 *.sln
 *.sw?
+.vercel

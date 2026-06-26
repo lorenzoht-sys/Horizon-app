@@ -103,7 +103,7 @@ export default function BilanTimeline({ bilans, participantId, onDelete }: Props
                     <button
                       onClick={() => setConfirmDeleteId(bilan.id)}
                       title="Supprimer ce bilan"
-                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-light rounded-lg transition-colors"
                     >
                       <Trash2 size={13} />
                     </button>
@@ -113,13 +113,13 @@ export default function BilanTimeline({ bilans, participantId, onDelete }: Props
 
               {/* Modal de confirmation de suppression */}
               {confirmDeleteId === bilan.id && (
-                <div className="mt-2 bg-red-50 border border-red-200 rounded-xl p-3">
+                <div className="mt-2 bg-red-light border border-red-200 rounded-xl p-3">
                   <p className="text-sm font-semibold text-red-700 mb-1">⚠️ Supprimer ce bilan ?</p>
                   <p className="text-xs text-red-600 mb-3">Cette action est irréversible. Toutes les données de ce bilan seront perdues.</p>
                   <div className="flex gap-2">
                     <button
                       onClick={() => { onDelete!(bilan.id); setConfirmDeleteId(null); }}
-                      className="flex-1 bg-red-500 text-white text-xs font-semibold py-2 rounded-lg hover:bg-red-700 transition-colors"
+                      className="flex-1 bg-danger text-white text-xs font-semibold py-2 rounded-lg hover:bg-danger transition-colors"
                     >
                       Supprimer définitivement
                     </button>

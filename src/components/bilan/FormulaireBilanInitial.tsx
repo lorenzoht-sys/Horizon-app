@@ -617,7 +617,7 @@ function RenduQuestion({
         <p className="text-xs text-gray-400 italic mt-1.5">{question.aide}</p>
       )}
       {showAlerte && question.alerteMessage && (
-        <div className="mt-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 flex gap-2.5 items-start">
+        <div className="mt-2 bg-red-light border border-red-200 rounded-xl px-3 py-2.5 flex gap-2.5 items-start">
           <span className="flex-shrink-0 text-base">⚠️</span>
           <div>
             <div className="text-xs font-bold text-red-700">Chute très récente signalée</div>

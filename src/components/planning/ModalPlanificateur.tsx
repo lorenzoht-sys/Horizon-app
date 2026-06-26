@@ -302,7 +302,7 @@ export default function ModalPlanificateur({
 
         {/* Warnings */}
         {departErreur && (
-          <div className="mx-6 mt-3 flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-700">
+          <div className="mx-6 mt-3 flex items-start gap-2 bg-red-light border border-red-200 rounded-xl px-3 py-2 text-xs text-red-700">
             <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
             <span>Configurez votre adresse de départ dans Paramètres avant de planifier.</span>
           </div>

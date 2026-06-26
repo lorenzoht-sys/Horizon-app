@@ -1253,7 +1253,7 @@ export default function ParticipantProfile() {
                 {!participant.rgpd?.consentementObtenu && (
                   <button
                     onClick={() => handleAction('rgpd')}
-                    className="inline-flex items-center gap-0.5 text-[11px] font-bold px-2 py-0.5 rounded-full border transition-colors hover:bg-red-50"
+                    className="inline-flex items-center gap-0.5 text-[11px] font-bold px-2 py-0.5 rounded-full border transition-colors hover:bg-red-light"
                     style={{ borderColor: '#E24B4A', color: '#E24B4A' }}
                   >
                     RGPD ⚠
@@ -1392,7 +1392,7 @@ export default function ParticipantProfile() {
                         {participant.profilHandicap && (
                           <button
                             onClick={() => { updateParticipant(id!, { profilHandicap: undefined }).catch(err => { console.error('Erreur retrait profil:', err); toast.error('Erreur lors de la sauvegarde, réessayez'); }); setShowProfilPicker(false); }}
-                            className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2"
+                            className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-light flex items-center gap-2"
                           >
                             ✕ Retirer le profil
                           </button>
@@ -1429,7 +1429,7 @@ export default function ParticipantProfile() {
                         onClick={() => !item.disabled && handleAction(item.action)}
                         disabled={item.disabled}
                         className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-colors text-left
-                          ${item.danger ? 'text-red-500 hover:bg-red-50' : 'text-gray-700 hover:bg-gray-50'}
+                          ${item.danger ? 'text-red-500 hover:bg-red-light' : 'text-gray-700 hover:bg-gray-50'}
                           ${item.disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                       >
                         <item.Icon size={13} />
@@ -1875,7 +1875,7 @@ export default function ParticipantProfile() {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[1100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 rounded-full bg-red-light flex items-center justify-center flex-shrink-0">
                 <Trash2 size={18} className="text-red-500" />
               </div>
               <h2 className="font-heading font-bold text-gray-900 text-lg">Supprimer le programme ?</h2>
@@ -1895,7 +1895,7 @@ export default function ParticipantProfile() {
                     toast.error('Erreur lors de la suppression, réessayez');
                   }
                 }}
-                className="flex-1 bg-red-500 text-white rounded-xl py-2.5 font-semibold text-sm hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 bg-danger text-white rounded-xl py-2.5 font-semibold text-sm hover:bg-danger transition-colors flex items-center justify-center gap-2"
               >
                 <Trash2 size={14} /> Supprimer
               </button>
@@ -1909,7 +1909,7 @@ export default function ParticipantProfile() {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[1100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 rounded-full bg-red-light flex items-center justify-center flex-shrink-0">
                 <Trash2 size={18} className="text-red-500" />
               </div>
               <h2 className="font-heading font-bold text-gray-900 text-lg">Supprimer ce patient ?</h2>

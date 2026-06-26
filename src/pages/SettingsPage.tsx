@@ -453,7 +453,7 @@ function Field({
 function inputClass(error?: string) {
   return `w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-colors font-sans ${
     error
-      ? 'border-red-300 bg-red-50/40 focus:border-red-400 focus:ring-red-100'
+      ? 'border-red-300 bg-red-light/40 focus:border-red-400 focus:ring-red-100'
       : 'border-gray-200 bg-white focus:border-primary focus:ring-primary/10'
   }`;
 }
@@ -773,7 +773,7 @@ export default function SettingsPage() {
                   {form.logoPraticien && (
                     <button
                       onClick={() => set('logoPraticien', '')}
-                      className="flex items-center gap-2 border border-red-200 text-red-500 hover:bg-red-50 px-3 py-2 rounded-xl text-sm transition-colors"
+                      className="flex items-center gap-2 border border-red-200 text-red-500 hover:bg-red-light px-3 py-2 rounded-xl text-sm transition-colors"
                     >
                       <Trash2 size={14} />
                     </button>

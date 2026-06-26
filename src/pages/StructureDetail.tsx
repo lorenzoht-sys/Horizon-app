@@ -205,7 +205,7 @@ export default function StructureDetail() {
               <div className="space-y-3">
                 {[...factEnRetard, ...factAEnvoyer, ...factEnvoyees].map(f => (
                   <div key={f.id} className={`border rounded-xl p-4 ${
-                    f.statut === 'en_retard' ? 'border-red-200 bg-red-50' :
+                    f.statut === 'en_retard' ? 'border-red-200 bg-red-light' :
                     f.statut === 'envoyee' ? 'border-emerald-200 bg-emerald-50/50' :
                     'border-gray-200 bg-white'
                   }`}>
@@ -390,7 +390,7 @@ export default function StructureDetail() {
             {!confirmSuppr ? (
               <button
                 onClick={() => setConfirmSuppr(true)}
-                className="text-xs font-medium text-red-500 border border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+                className="text-xs font-medium text-red-500 border border-red-200 hover:bg-red-light px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5"
               >
                 <Trash2 size={12} /> Supprimer cette structure
               </button>
@@ -406,7 +406,7 @@ export default function StructureDetail() {
                       toast.success('Structure supprimée');
                       navigate('/');
                     }}
-                    className="flex-1 text-xs font-semibold bg-red-500 text-white rounded-lg py-2 hover:bg-red-600"
+                    className="flex-1 text-xs font-semibold bg-danger text-white rounded-lg py-2 hover:bg-danger"
                   >
                     Confirmer
                   </button>

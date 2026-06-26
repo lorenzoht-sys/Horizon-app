@@ -41,7 +41,7 @@ class ErrorBoundary extends Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center h-40 rounded-xl bg-red-50 text-red-500 text-sm p-4">
+        <div className="flex flex-col items-center justify-center h-40 rounded-xl bg-red-light text-red-500 text-sm p-4">
           <span className="font-medium">Erreur de chargement</span>
           <span className="text-xs text-red-400 mt-1">{(this.state.error as Error | null)?.message}</span>
         </div>
@@ -545,7 +545,7 @@ function SectionAlertes({
 
   const nbRouges  = alertes.filter(a => a.type === 'rouge').length;
   const COLOR: Record<Alerte['type'], string> = {
-    rouge:  'border-red-200 bg-red-50',
+    rouge:  'border-red-200 bg-red-light',
     orange: 'border-amber-200 bg-amber-50',
     bleu:   'border-blue-100 bg-blue-50',
   };
@@ -557,14 +557,14 @@ function SectionAlertes({
   };
 
   return (
-    <div className={`rounded-2xl border p-4 mb-4 ${nbRouges > 0 ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
+    <div className={`rounded-2xl border p-4 mb-4 ${nbRouges > 0 ? 'border-red-200 bg-red-light' : 'border-amber-200 bg-amber-50'}`}>
       <div className="flex items-center gap-2 mb-3">
         <span className="text-base">⚠️</span>
         <div className="text-sm font-bold text-gray-900">
           {alertes.length} alerte{alertes.length > 1 ? 's' : ''} à traiter
         </div>
         {nbRouges > 0 && (
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-light text-red-700">
             {nbRouges} urgente{nbRouges > 1 ? 's' : ''}
           </span>
         )}
@@ -822,7 +822,7 @@ function SectionFactures({
     const c = f.participantId ? contratActif(f.participantId) : undefined;
     const tarif = c?.tarifSeance ?? tarifDefaut;
     return (
-      <div className={`${CARD_CLS} ${showRappel ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'}`}>
+      <div className={`${CARD_CLS} ${showRappel ? 'border-red-200 bg-red-light' : 'border-gray-200 bg-white'}`}>
         <div className="flex items-start justify-between gap-3 mb-2">
           <div>
             <div className="font-semibold text-gray-900 text-sm">{nom}</div>
@@ -876,7 +876,7 @@ function SectionFactures({
           <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
             💶 Factures à envoyer
             {(enRetard.length + aEnvoyer.length) > 0 && (
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-light text-red-700">
                 {enRetard.length + aEnvoyer.length} en attente
               </span>
             )}
@@ -911,7 +911,7 @@ function SectionFactures({
           {enRetard.length > 0 && (
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 rounded-full bg-red-500" />
+                <div className="w-2 h-2 rounded-full bg-danger" />
                 <div className="text-xs font-bold text-red-700 uppercase tracking-wide">
                   En retard ({enRetard.length})
                 </div>
