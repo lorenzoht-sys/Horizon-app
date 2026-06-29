@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react';
-import { X, Calendar, Clock, Check, Loader } from 'lucide-react';
+import { X, Calendar, Clock, Check, Loader, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Participant, Contrat, Seance, IndisponibilitePierre, JourSemaine } from '../../types';
 import { getTrousRecurrents, getCreneauxLibresGlobal, type CreneauLibre } from '../../lib/analyse-tournee';
 import { getOrganisation } from '../../lib/anamnese';
-import { addMinutes, estSemaineDue } from '../../utils/horaires';
+import { addMinutes, estSemaineDue, heureEnMinutes, minutesEnHeure } from '../../utils/horaires';
 import { MARGE_ENTRE_SEANCES_MIN } from '../../lib/planificateur';
 
 interface Props {
@@ -22,6 +22,7 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
   const [contratChoisi, setContratChoisi] = useState<Contrat | null>(null);
   const [creneauxChoisis, setCreneauxChoisis] = useState<CreneauLibre[]>([]);
   const [applying, setApplying] = useState(false);
+  const [modeForce, setModeForce] = useState(false);
 
   const eligibles = useMemo(() =>
     contrats.filter(c =>
@@ -41,6 +42,14 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
     [indispos]
   );
 
+  const WORK_DAYS: { dow: number; jourKey: JourSemaine; nom: string; cleJour: string }[] = [
+    { dow: 1, jourKey: 'lun', nom: 'Lundi',    cleJour: 'Lun' },
+    { dow: 2, jourKey: 'mar', nom: 'Mardi',    cleJour: 'Mar' },
+    { dow: 3, jourKey: 'mer', nom: 'Mercredi', cleJour: 'Mer' },
+    { dow: 4, jourKey: 'jeu', nom: 'Jeudi',    cleJour: 'Jeu' },
+    { dow: 5, jourKey: 'ven', nom: 'Vendredi', cleJour: 'Ven' },
+  ];
+
   const { creneauxLibres, estFallbackGlobal } = useMemo(() => {
     if (!patient || !contratChoisi) return { creneauxLibres: [], estFallbackGlobal: false };
     const org = getOrganisation(patient);
@@ -50,6 +59,36 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
     const global = getCreneauxLibresGlobal(seances, participants, patient.coordonnees, dispos, joursIndispos);
     return { creneauxLibres: global, estFallbackGlobal: true };
   }, [patient, seances, participants, contratChoisi, joursIndispos]);
+
+  const creneauxForce = useMemo(() => {
+    if (!modeForce || !patient || !contratChoisi) return [];
+    const org = getOrganisation(patient);
+    const slots: CreneauLibre[] = [];
+    for (const { dow, jourKey, nom, cleJour } of WORK_DAYS) {
+      if (joursIndispos.includes(jourKey)) continue;
+      const joursDispos = org.joursDisponibles ?? [];
+      if (joursDispos.length > 0 && !joursDispos.includes(cleJour)) continue;
+      const creneauxJour = org.creneauxParJour?.[cleJour];
+      const windows: { debut: string; fin: string }[] = creneauxJour?.length
+        ? creneauxJour
+        : [{ debut: '08:00', fin: '19:00' }];
+      for (const win of windows) {
+        let t = heureEnMinutes(win.debut);
+        const tMax = heureEnMinutes(win.fin) - contratChoisi.dureeMinutes;
+        while (t <= tMax) {
+          slots.push({
+            jourSemaine: dow,
+            nomJour: nom,
+            heureDebut: minutesEnHeure(t),
+            heureFin: minutesEnHeure(t + contratChoisi.dureeMinutes),
+            dureeMinutes: contratChoisi.dureeMinutes,
+          });
+          t += 15;
+        }
+      }
+    }
+    return slots;
+  }, [modeForce, patient, contratChoisi, joursIndispos]);
 
   function toggleCreneau(c: CreneauLibre) {
     const key = `${c.jourSemaine}-${c.heureDebut}`;
@@ -66,6 +105,7 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
     if (etape === 1) {
       if (!contratChoisi) { toast.error('Sélectionnez un patient'); return; }
       setCreneauxChoisis([]);
+      setModeForce(false);
       setEtape(2);
     } else if (etape === 2) {
       if (creneauxChoisis.length === 0) { toast.error('Sélectionnez au moins un créneau'); return; }
@@ -75,7 +115,7 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
 
   function goBack() {
     if (etape === 3) setEtape(2);
-    else if (etape === 2) setEtape(1);
+    else if (etape === 2) { setModeForce(false); setEtape(1); }
   }
 
   const seancesTotal = useMemo(() => {
@@ -201,48 +241,106 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
                 Choisissez {nbBesoin} créneau{nbBesoin > 1 ? 'x' : ''} pour{' '}
                 <span className="font-semibold text-dark">{patient.prenom}</span>.
               </p>
-              {creneauxLibres.length === 0 ? (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
-                  Aucun créneau libre détecté dans le planning. Planifiez d'abord d'autres séances.
-                </div>
-              ) : (
+
+              {/* Mode automatique — créneaux trouvés */}
+              {creneauxLibres.length > 0 && (
                 <>
                   {estFallbackGlobal && (
                     <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 text-xs text-blue-700">
                       Aucun patient dans le secteur de {patient.prenom} — créneaux libres du planning général.
                     </div>
                   )}
+                  <div className="space-y-2">
+                    {creneauxLibres.map((c, i) => {
+                      const key = `${c.jourSemaine}-${c.heureDebut}`;
+                      const sel = creneauxChoisis.some(x => `${x.jourSemaine}-${x.heureDebut}` === key);
+                      const disabled = !sel && creneauxChoisis.length >= nbBesoin;
+                      const heureFin = addMinutes(c.heureDebut, contratChoisi.dureeMinutes);
+                      return (
+                        <button key={i} onClick={() => !disabled && toggleCreneau(c)} disabled={disabled}
+                          className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${sel ? 'border-primary bg-primary/5' : 'border-gray-200 hover:bg-gray-50'} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="text-sm font-semibold text-dark">{c.nomJour}</span>
+                              <span className="text-sm text-gray-600 ml-2">{c.heureDebut} → {heureFin}</span>
+                              {patient.adresseVille && (
+                                <span className="text-xs text-gray-400 ml-2">· {patient.adresseVille}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-400">{contratChoisi.dureeMinutes} min</span>
+                              {sel && <Check size={14} className="text-primary" />}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </>
               )}
-              {creneauxLibres.length > 0 && (
-                <div className="space-y-2">
-                  {creneauxLibres.map((c, i) => {
-                    const key = `${c.jourSemaine}-${c.heureDebut}`;
-                    const sel = creneauxChoisis.some(x => `${x.jourSemaine}-${x.heureDebut}` === key);
-                    const disabled = !sel && creneauxChoisis.length >= nbBesoin;
-                    const dureeAffichee = contratChoisi.dureeMinutes;
-                    const heureFin = addMinutes(c.heureDebut, dureeAffichee);
-                    return (
-                      <button key={i} onClick={() => !disabled && toggleCreneau(c)} disabled={disabled}
-                        className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${sel ? 'border-primary bg-primary/5' : 'border-gray-200 hover:bg-gray-50'} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <span className="text-sm font-semibold text-dark">{c.nomJour}</span>
-                            <span className="text-sm text-gray-600 ml-2">{c.heureDebut} → {heureFin}</span>
-                            {patient.adresseVille && (
-                              <span className="text-xs text-gray-400 ml-2">· {patient.adresseVille}</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-400">{dureeAffichee} min</span>
-                            {sel && <Check size={14} className="text-primary" />}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
+
+              {/* Aucun créneau automatique — proposition du mode force */}
+              {creneauxLibres.length === 0 && !modeForce && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+                  <p className="text-sm text-amber-700">
+                    Aucun créneau libre détecté dans le planning pour {patient.prenom}.
+                  </p>
+                  <button
+                    onClick={() => setModeForce(true)}
+                    className="w-full py-2 text-sm font-medium text-amber-800 border border-amber-300 rounded-lg hover:bg-amber-100 transition-colors"
+                  >
+                    Sélectionner manuellement
+                  </button>
                 </div>
               )}
+
+              {/* Mode force — sélection manuelle */}
+              {modeForce && (
+                <>
+                  <div className="flex items-start gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5">
+                    <AlertTriangle size={14} className="text-orange-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-orange-700">
+                      Mode force — créneau potentiellement occupé. Vérifiez le planning après insertion.
+                    </p>
+                  </div>
+                  {creneauxForce.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-4">
+                      Aucun jour disponible en commun avec {patient.prenom}.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {WORK_DAYS.filter(wd => creneauxForce.some(c => c.jourSemaine === wd.dow)).map(wd => {
+                        const slotsJour = creneauxForce.filter(c => c.jourSemaine === wd.dow);
+                        return (
+                          <div key={wd.dow}>
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{wd.nom}</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {slotsJour.map((c, i) => {
+                                const key = `${c.jourSemaine}-${c.heureDebut}`;
+                                const sel = creneauxChoisis.some(x => `${x.jourSemaine}-${x.heureDebut}` === key);
+                                const disabled = !sel && creneauxChoisis.length >= nbBesoin;
+                                return (
+                                  <button
+                                    key={i}
+                                    onClick={() => !disabled && toggleCreneau(c)}
+                                    disabled={disabled}
+                                    className={`px-2.5 py-1 text-xs rounded-lg border font-medium transition-colors
+                                      ${sel ? 'bg-primary border-primary text-white' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}
+                                      ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                  >
+                                    {c.heureDebut}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+
               {creneauxChoisis.length > 0 && (
                 <p className="text-xs text-primary font-medium">
                   {creneauxChoisis.length} / {nbBesoin} créneau{nbBesoin > 1 ? 'x' : ''} sélectionné{creneauxChoisis.length > 1 ? 's' : ''}
@@ -255,6 +353,12 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
           {etape === 3 && patient && contratChoisi && (
             <>
               <p className="text-sm text-gray-500">Vérifiez avant d'appliquer.</p>
+              {modeForce && (
+                <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2">
+                  <AlertTriangle size={13} className="text-orange-500 flex-shrink-0" />
+                  <p className="text-xs text-orange-700 font-medium">Créneau forcé — vérifiez le planning pour les conflits.</p>
+                </div>
+              )}
               <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-2.5 text-sm">
                 <div className="flex items-center gap-3">
                   <span className="text-gray-400 w-16">Patient</span>
