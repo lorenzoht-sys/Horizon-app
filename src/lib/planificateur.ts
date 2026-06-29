@@ -108,14 +108,14 @@ const POIDS_CHARGE    = 0.10; // Équilibrer la charge entre les jours (réduit 
 const POIDS_STABILITE = 0.15; // Stabiliser les jours habituels des patients (malus doux)
 
 // Capacité journalière de Pierre (minutes de travail disponibles)
-const CAPACITE_JOURNEE_MINUTES = 600; // 10h — journées bien remplies acceptées
+const CAPACITE_JOURNEE_MINUTES = 660; // 11h — plage complète 08:00–19:00
 
 // Marge tampon entre la fin d'une séance et le début de la suivante (en plus du trajet)
 const MARGE_ENTRE_SEANCES_MIN = 10;
 
 // Au-delà de ce seuil entre la fin d'une séance et le début de la suivante,
 // un trou est signalé dans le rapport qualité.
-const TROU_MAX_MINUTES = 60;
+const TROU_MAX_MINUTES = 45;
 
 // Fraction minimale de la plage de travail couverte par des indispos pour
 // considérer un jour comme totalement bloqué et l'exclure de l'assignation.

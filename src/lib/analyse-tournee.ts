@@ -3,6 +3,7 @@
 
 import type { Seance, Participant, JourSemaine } from '../types';
 import { heureEnMinutes, minutesEnHeure } from '../utils/horaires';
+import { MARGE_ENTRE_SEANCES_MIN } from './planificateur';
 
 const TROU_MIN_SUGGESTION_MINUTES = 45;
 const RAYON_ZONE_KM = 5;
@@ -111,13 +112,15 @@ export function getCreneauxLibresGlobal(
       result.push({ jourSemaine: dow, nomJour: NOMS_JOURS[dow], heureDebut: HEURE_DEBUT_TRAVAIL, heureFin: minutesEnHeure(fusionnes[0].debut), dureeMinutes: fusionnes[0].debut - debutTravailMin });
     }
     for (let i = 0; i < fusionnes.length - 1; i++) {
-      const gap = fusionnes[i + 1].debut - fusionnes[i].fin;
+      const debutCreneau = fusionnes[i].fin + MARGE_ENTRE_SEANCES_MIN;
+      const gap = fusionnes[i + 1].debut - debutCreneau;
       if (gap >= TROU_MIN_SUGGESTION_MINUTES) {
-        result.push({ jourSemaine: dow, nomJour: NOMS_JOURS[dow], heureDebut: minutesEnHeure(fusionnes[i].fin), heureFin: minutesEnHeure(fusionnes[i + 1].debut), dureeMinutes: gap });
+        result.push({ jourSemaine: dow, nomJour: NOMS_JOURS[dow], heureDebut: minutesEnHeure(debutCreneau), heureFin: minutesEnHeure(fusionnes[i + 1].debut), dureeMinutes: gap });
       }
     }
-    if (finTravailMin - fusionnes[fusionnes.length - 1].fin >= TROU_MIN_SUGGESTION_MINUTES) {
-      result.push({ jourSemaine: dow, nomJour: NOMS_JOURS[dow], heureDebut: minutesEnHeure(fusionnes[fusionnes.length - 1].fin), heureFin: HEURE_FIN_TRAVAIL, dureeMinutes: finTravailMin - fusionnes[fusionnes.length - 1].fin });
+    const debutApres = fusionnes[fusionnes.length - 1].fin + MARGE_ENTRE_SEANCES_MIN;
+    if (finTravailMin - debutApres >= TROU_MIN_SUGGESTION_MINUTES) {
+      result.push({ jourSemaine: dow, nomJour: NOMS_JOURS[dow], heureDebut: minutesEnHeure(debutApres), heureFin: HEURE_FIN_TRAVAIL, dureeMinutes: finTravailMin - debutApres });
     }
   }
 
@@ -214,12 +217,13 @@ export function getTrousRecurrents(
 
     // Trous entre séances fusionnées consécutives
     for (let i = 0; i < fusionnes.length - 1; i++) {
-      const gap = fusionnes[i + 1].debut - fusionnes[i].fin;
+      const debutCreneau = fusionnes[i].fin + MARGE_ENTRE_SEANCES_MIN;
+      const gap = fusionnes[i + 1].debut - debutCreneau;
       if (gap >= TROU_MIN_SUGGESTION_MINUTES) {
         result.push({
           jourSemaine: dow,
           nomJour: NOMS_JOURS[dow],
-          heureDebut:  minutesEnHeure(fusionnes[i].fin),
+          heureDebut:  minutesEnHeure(debutCreneau),
           heureFin:    minutesEnHeure(fusionnes[i + 1].debut),
           dureeMinutes: gap,
         });
@@ -227,13 +231,14 @@ export function getTrousRecurrents(
     }
 
     // Trou après la dernière séance
-    if (finTravailMin - fusionnes[fusionnes.length - 1].fin >= TROU_MIN_SUGGESTION_MINUTES) {
+    const debutApres = fusionnes[fusionnes.length - 1].fin + MARGE_ENTRE_SEANCES_MIN;
+    if (finTravailMin - debutApres >= TROU_MIN_SUGGESTION_MINUTES) {
       result.push({
         jourSemaine: dow,
         nomJour: NOMS_JOURS[dow],
-        heureDebut:  minutesEnHeure(fusionnes[fusionnes.length - 1].fin),
+        heureDebut:  minutesEnHeure(debutApres),
         heureFin:    HEURE_FIN_TRAVAIL,
-        dureeMinutes: finTravailMin - fusionnes[fusionnes.length - 1].fin,
+        dureeMinutes: finTravailMin - debutApres,
       });
     }
   }
