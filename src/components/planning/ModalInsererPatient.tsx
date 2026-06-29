@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { X, Calendar, Clock, Check, Loader } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Participant, Contrat, Seance } from '../../types';
+import type { Participant, Contrat, Seance, IndisponibilitePierre, JourSemaine } from '../../types';
 import { getTrousRecurrents, getCreneauxLibresGlobal, type CreneauLibre } from '../../lib/analyse-tournee';
 import { getOrganisation } from '../../lib/anamnese';
 import { addMinutes, estSemaineDue } from '../../utils/horaires';
@@ -12,10 +12,11 @@ interface Props {
   participants: Participant[];
   contrats: Contrat[];
   seances: Seance[];
+  indispos: IndisponibilitePierre[];
   bulkCreerSeances: (data: Omit<Seance, 'id'>[]) => Promise<Seance[] | void>;
 }
 
-export default function ModalInsererPatient({ onClose, participants, contrats, seances, bulkCreerSeances }: Props) {
+export default function ModalInsererPatient({ onClose, participants, contrats, seances, indispos, bulkCreerSeances }: Props) {
   const today = new Date().toISOString().split('T')[0];
   const [etape, setEtape] = useState<1 | 2 | 3>(1);
   const [contratChoisi, setContratChoisi] = useState<Contrat | null>(null);
@@ -35,15 +36,20 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
     [participants, contratChoisi]
   );
 
+  const joursIndispos = useMemo(() =>
+    [...new Set(indispos.map(i => i.jour).filter((j): j is JourSemaine => j !== 'dim'))],
+    [indispos]
+  );
+
   const { creneauxLibres, estFallbackGlobal } = useMemo(() => {
     if (!patient || !contratChoisi) return { creneauxLibres: [], estFallbackGlobal: false };
     const org = getOrganisation(patient);
     const dispos = { joursDisponibles: org.joursDisponibles, creneauxParJour: org.creneauxParJour };
-    const zone = getTrousRecurrents(seances, participants, patient.adresseVille ?? '', patient.coordonnees, dispos);
+    const zone = getTrousRecurrents(seances, participants, patient.adresseVille ?? '', patient.coordonnees, dispos, joursIndispos);
     if (zone.length > 0) return { creneauxLibres: zone, estFallbackGlobal: false };
-    const global = getCreneauxLibresGlobal(seances, dispos);
+    const global = getCreneauxLibresGlobal(seances, dispos, joursIndispos);
     return { creneauxLibres: global, estFallbackGlobal: true };
-  }, [patient, seances, participants, contratChoisi]);
+  }, [patient, seances, participants, contratChoisi, joursIndispos]);
 
   function toggleCreneau(c: CreneauLibre) {
     const key = `${c.jourSemaine}-${c.heureDebut}`;

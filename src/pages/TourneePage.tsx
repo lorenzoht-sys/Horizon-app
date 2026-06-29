@@ -625,6 +625,7 @@ export default function TourneePage() {
             participants={participants}
             contrats={contrats}
             seances={seances}
+            indispos={indispos}
             bulkCreerSeances={bulkCreerSeances}
           />
         </Suspense>

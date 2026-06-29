@@ -1,7 +1,7 @@
 // Analyses sur les séances existantes — complémentaires au planificateur.
 // Utilisé par ContratNouveauPage pour suggérer des créneaux lors de la création d'un contrat.
 
-import type { Seance, Participant } from '../types';
+import type { Seance, Participant, JourSemaine } from '../types';
 import { heureEnMinutes, minutesEnHeure } from '../utils/horaires';
 
 const TROU_MIN_SUGGESTION_MINUTES = 45;
@@ -19,6 +19,11 @@ export interface CreneauLibre {
 
 const NOMS_JOURS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
+// Mapping JS getDay() → JourSemaine (dim exclu = undefined)
+const DOW_TO_JOUR_SEMAINE: Record<number, JourSemaine | undefined> = {
+  1: 'lun', 2: 'mar', 3: 'mer', 4: 'jeu', 5: 'ven', 6: 'sam',
+};
+
 // Formule Haversine — identique à kmeans.ts (non exportée là-bas)
 function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
   const R = 6371;
@@ -28,6 +33,14 @@ function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: numb
     Math.sin(dLat / 2) ** 2 +
     Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+function filtrerParIndispos(slots: CreneauLibre[], indisponibilites?: JourSemaine[]): CreneauLibre[] {
+  if (!indisponibilites?.length) return slots;
+  return slots.filter(c => {
+    const jour = DOW_TO_JOUR_SEMAINE[c.jourSemaine];
+    return jour === undefined || !indisponibilites.includes(jour);
+  });
 }
 
 /**
@@ -60,6 +73,7 @@ export type DisposPatient = {
 export function getCreneauxLibresGlobal(
   seances: Seance[],
   newPatientDispos?: DisposPatient,
+  indisponibilites?: JourSemaine[],
 ): CreneauLibre[] {
   const seancesActives = seances.filter(s => s.statut !== 'annulee');
   if (seancesActives.length === 0) return [];
@@ -111,10 +125,12 @@ export function getCreneauxLibresGlobal(
     a.jourSemaine !== b.jourSemaine ? a.jourSemaine - b.jourSemaine : a.heureDebut.localeCompare(b.heureDebut)
   );
 
-  if (!newPatientDispos) return sorted;
+  const filtres = filtrerParIndispos(sorted, indisponibilites);
+
+  if (!newPatientDispos) return filtres;
 
   const { joursDisponibles = [], creneauxParJour = {} } = newPatientDispos;
-  return sorted.filter(c => {
+  return filtres.filter(c => {
     const cleJour = DOW_TO_DISPO[c.jourSemaine];
     if (!cleJour) return false;
     if (joursDisponibles.length > 0 && !joursDisponibles.includes(cleJour)) return false;
@@ -132,6 +148,7 @@ export function getTrousRecurrents(
   newPatientVille: string,
   newPatientCoords?: { lat: number; lng: number },
   newPatientDispos?: DisposPatient,
+  indisponibilites?: JourSemaine[],
 ): CreneauLibre[] {
   // Index participantId → participant
   const participantParId = new Map<string, Participant>();
@@ -227,10 +244,12 @@ export function getTrousRecurrents(
       : a.heureDebut.localeCompare(b.heureDebut)
   );
 
-  if (!newPatientDispos) return sorted;
+  const filtres = filtrerParIndispos(sorted, indisponibilites);
+
+  if (!newPatientDispos) return filtres;
 
   const { joursDisponibles = [], creneauxParJour = {} } = newPatientDispos;
-  return sorted.filter(c => {
+  return filtres.filter(c => {
     const cleJour = DOW_TO_DISPO[c.jourSemaine];
     if (!cleJour) return false;
     if (joursDisponibles.length > 0 && !joursDisponibles.includes(cleJour)) return false;
