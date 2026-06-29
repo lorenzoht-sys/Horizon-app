@@ -46,6 +46,11 @@ function margeTrajet(
   return Math.max(MARGE_ENTRE_SEANCES_MIN, Math.round(distanceKm(coordsPrecedent, newPatientCoords) * 2.5));
 }
 
+// Arrondit un nombre de minutes à la tranche de 5 min supérieure (jamais inférieure).
+function arrondirA5Min(minutes: number): number {
+  return Math.ceil(minutes / 5) * 5;
+}
+
 function filtrerParIndispos(slots: CreneauLibre[], indisponibilites?: JourSemaine[]): CreneauLibre[] {
   if (!indisponibilites?.length) return slots;
   return slots.filter(c => {
@@ -136,7 +141,7 @@ export function getCreneauxLibresGlobal(
     for (let i = 0; i < fusionnes.length - 1; i++) {
       const coordsPrev = participantParId.get(fusionnes[i].participantId)?.coordonnees;
       const marge = margeTrajet(coordsPrev, newPatientCoords);
-      const debutCreneau = fusionnes[i].fin + marge;
+      const debutCreneau = arrondirA5Min(fusionnes[i].fin + marge);
       const gap = fusionnes[i + 1].debut - debutCreneau;
       if (gap >= TROU_MIN_SUGGESTION_MINUTES) {
         result.push({ jourSemaine: dow, nomJour: NOMS_JOURS[dow], heureDebut: minutesEnHeure(debutCreneau), heureFin: minutesEnHeure(fusionnes[i + 1].debut), dureeMinutes: gap });
@@ -145,7 +150,7 @@ export function getCreneauxLibresGlobal(
     const last = fusionnes[fusionnes.length - 1];
     const coordsPrev = participantParId.get(last.participantId)?.coordonnees;
     const margeApres = margeTrajet(coordsPrev, newPatientCoords);
-    const debutApres = last.fin + margeApres;
+    const debutApres = arrondirA5Min(last.fin + margeApres);
     if (finTravailMin - debutApres >= TROU_MIN_SUGGESTION_MINUTES) {
       result.push({ jourSemaine: dow, nomJour: NOMS_JOURS[dow], heureDebut: minutesEnHeure(debutApres), heureFin: HEURE_FIN_TRAVAIL, dureeMinutes: finTravailMin - debutApres });
     }
@@ -250,7 +255,7 @@ export function getTrousRecurrents(
     for (let i = 0; i < fusionnes.length - 1; i++) {
       const coordsPrev = participantParId.get(fusionnes[i].participantId)?.coordonnees;
       const marge = margeTrajet(coordsPrev, newPatientCoords);
-      const debutCreneau = fusionnes[i].fin + marge;
+      const debutCreneau = arrondirA5Min(fusionnes[i].fin + marge);
       const gap = fusionnes[i + 1].debut - debutCreneau;
       if (gap >= TROU_MIN_SUGGESTION_MINUTES) {
         result.push({
@@ -267,7 +272,7 @@ export function getTrousRecurrents(
     const last = fusionnes[fusionnes.length - 1];
     const coordsPrev = participantParId.get(last.participantId)?.coordonnees;
     const margeApres = margeTrajet(coordsPrev, newPatientCoords);
-    const debutApres = last.fin + margeApres;
+    const debutApres = arrondirA5Min(last.fin + margeApres);
     if (finTravailMin - debutApres >= TROU_MIN_SUGGESTION_MINUTES) {
       result.push({
         jourSemaine: dow,
