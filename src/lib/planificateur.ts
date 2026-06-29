@@ -601,11 +601,6 @@ function planifierJour(
   heureDebutJournee: string,
 ): { etapes: EtapePlanifiee[]; impossibles: { patient: Participant; raison: string }[] } {
   const ordered = ordonner(departIdx, candidates, matrix);
-  if (ordered[0]?.patient.nom === 'Poindessault') {
-    console.log(
-      `[ORDRE-JOURNEE] jourKey=${jourKey} ordre=[${ordered.map(c => c.patient.nom).join(' → ')}]`,
-    );
-  }
   const etapes: EtapePlanifiee[] = [];
   const impossibles: { patient: Participant; raison: string }[] = [];
 
@@ -658,36 +653,41 @@ function planifierJour(
     // à l'heure naturelle (heureArriveeNaturelle + durée₁ + trajet(1→2)).
     // heureDebut = max(creneauDebut premier, heureDebutSecondEffectif - trajet(1→2) - durée1 - MARGE)
     if (iOrd === 0 && ordered.length > 1) {
-      const secondCand = ordered[1];
-      const trajetVersSecond = travelMin(matrix, idx, secondCand.idx);
-      const arriveeSimuleeMin =
-        heureEnMinutes(heureArriveeNaturelle) + contrat.dureeMinutes + MARGE_ENTRE_SEANCES_MIN + trajetVersSecond;
-      const arriveeSimuleeStr = appliquerIndispos(minutesEnHeure(arriveeSimuleeMin), indisposJour);
+      // Trouver le premier patient suivant dont le créneau effectif est valide.
+      // Si le second patient est impossible, tenter index 2, 3... jusqu'au premier slot valide.
+      let refSlot: { heure: string; impossible: boolean; finCreneau?: string } | null = null;
+      let refTrajet = 0;
+      let refContratDuree = 0;
+      for (let r = 1; r < ordered.length; r++) {
+        const refCand = ordered[r];
+        const trajetVersRef = travelMin(matrix, idx, refCand.idx);
+        const arriveeSimuleeMin =
+          heureEnMinutes(heureArriveeNaturelle) + contrat.dureeMinutes + MARGE_ENTRE_SEANCES_MIN + trajetVersRef;
+        const arriveeSimuleeStr = appliquerIndispos(minutesEnHeure(arriveeSimuleeMin), indisposJour);
 
-      // Cherche le premier créneau du second patient qui contient sa séance entière.
-      // Si la séance déborde du créneau retourné, avance à la fin du créneau et réessaie.
-      let probeSecond = arriveeSimuleeStr;
-      let secondSlot = ajusterAuCreneauPatient(probeSecond, secondCand.patient, jourKey);
-      for (let t = 0; t < 4 && !secondSlot.impossible; t++) {
-        const finSession = minutesEnHeure(heureEnMinutes(secondSlot.heure) + secondCand.contrat.dureeMinutes);
-        if (secondSlot.finCreneau === undefined || finSession <= secondSlot.finCreneau) break;
-        // Séance déborde : avancer au début du prochain créneau
-        probeSecond = secondSlot.finCreneau;
-        secondSlot = ajusterAuCreneauPatient(probeSecond, secondCand.patient, jourKey);
+        // Cherche le premier créneau du patient de référence qui contient sa séance entière.
+        let probe = arriveeSimuleeStr;
+        let candidatSlot = ajusterAuCreneauPatient(probe, refCand.patient, jourKey);
+        for (let t = 0; t < 4 && !candidatSlot.impossible; t++) {
+          const finSession = minutesEnHeure(heureEnMinutes(candidatSlot.heure) + refCand.contrat.dureeMinutes);
+          if (candidatSlot.finCreneau === undefined || finSession <= candidatSlot.finCreneau) break;
+          probe = candidatSlot.finCreneau;
+          candidatSlot = ajusterAuCreneauPatient(probe, refCand.patient, jourKey);
+        }
+
+        if (!candidatSlot.impossible) {
+          refSlot = candidatSlot;
+          refTrajet = trajetVersRef;
+          refContratDuree = refCand.contrat.dureeMinutes;
+          break;
+        }
       }
 
-      if (patient.nom === 'Poindessault') {
-        console.log(
-          `[DECALAGE-P1] ${patient.nom} → ${secondCand.patient.nom} |`,
-          `secondSlot=${secondSlot.heure} impossible=${secondSlot.impossible} |`,
-          `condition >13h: ${secondSlot.heure > '13:00'}`,
-        );
-      }
-      if (!secondSlot.impossible && secondSlot.heure > '13:00') {
+      if (refSlot !== null && refSlot.heure > '13:00') {
         const fenetre = getFenetreTemporelle(patient, jourKey);
         if (fenetre !== null && (fenetre.fin - fenetre.debut) > 240) {
-          const cibleMin = heureEnMinutes(secondSlot.heure)
-            - trajetVersSecond
+          const cibleMin = heureEnMinutes(refSlot.heure)
+            - refTrajet
             - contrat.dureeMinutes
             - MARGE_ENTRE_SEANCES_MIN;
           const candidatMin = Math.max(heureEnMinutes(slot.heure), cibleMin);
