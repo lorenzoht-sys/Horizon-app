@@ -113,10 +113,10 @@ const CRENEAU_FIN: Record<string, string> = {
 // PARAMÈTRES DE L'ALGORITHME — ajustables selon les préférences de Pierre
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Pondération du scoring multi-critères (total = 0.90)
-const POIDS_TRAJET    = 0.25; // Minimiser les temps de trajet
-const POIDS_ZONE      = 0.40; // Cohérence géographique d'une journée (priorité principale)
-const POIDS_CHARGE    = 0.10; // Équilibrer la charge entre les jours (réduit : Pierre préfère des journées pleines)
+// Pondération du scoring multi-critères (total = 1.00)
+const POIDS_TRAJET    = 0.35; // Minimiser les temps de trajet
+const POIDS_ZONE      = 0.20; // Cohérence géographique (secondaire — n'écrase plus la charge)
+const POIDS_CHARGE    = 0.30; // Densifier les journées en priorité
 const POIDS_STABILITE = 0.15; // Stabiliser les jours habituels des patients (malus doux)
 
 // Capacité journalière de Pierre (minutes de travail disponibles)
@@ -128,6 +128,10 @@ const MARGE_ENTRE_SEANCES_MIN = 10;
 // Au-delà de ce seuil entre la fin d'une séance et le début de la suivante,
 // un trou est signalé dans le rapport qualité.
 const TROU_MAX_MINUTES = 45;
+
+// Seuil du malus trou structurel dans assignerJoursSemaine — ne pénaliser
+// que les écarts vraiment handicapants (> 2h), pas les trous d'1h acceptables.
+const TROU_STRUCTUREL_MALUS_MINUTES = 120;
 
 // Fraction minimale de la plage de travail couverte par des indispos pour
 // considérer un jour comme totalement bloqué et l'exclure de l'assignation.
@@ -523,14 +527,14 @@ function assignerJoursSemaine(
         const malusStabilite = joursPrecContrat.length > 0 && !joursPrecContrat.includes(jour.jourKey) ? 1 : 0;
 
         // Trou horaire structurel : malus si la fenêtre temporelle du nouveau patient
-        // est séparée de celle d'un patient existant par un gap inévitable > TROU_MAX_MINUTES.
+        // est séparée de celle d'un patient existant par un gap inévitable > TROU_STRUCTUREL_MALUS_MINUTES.
         const fenNouv = getFenetreTemporelle(patient, jour.jourKey);
         const existants = participantsParJour.get(jour.jourKey) ?? [];
         const malusTrouStructurel = (fenNouv && existants.some(ep => {
           const fenEx = getFenetreTemporelle(ep, jour.jourKey);
           if (!fenEx) return false;
           const gap = Math.max(0, Math.max(fenNouv.debut - fenEx.fin, fenEx.debut - fenNouv.fin));
-          return gap > TROU_MAX_MINUTES;
+          return gap > TROU_STRUCTUREL_MALUS_MINUTES;
         })) ? 0.30 : 0;
 
         return { jour, rawTrajet, malusZone, chargeNorm, malusStabilite, malusTrouStructurel };
