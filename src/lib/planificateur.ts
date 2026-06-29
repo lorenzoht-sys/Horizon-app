@@ -355,6 +355,26 @@ function ordonner(departIdx: number, candidates: Candidat[], matrix: MatriceORS)
 }
 
 // ── Assignation des jours de la semaine ────────────────────────────────────────
+// Somme des durées de créneaux disponibles d'un patient sur ses jours dispos.
+// Patients avec creneauxParJour précis → somme des plages exactes.
+// Sans creneauxParJour → 660 min par jour (plage 08h-19h complète).
+function tailleFenetreDisponibilite(
+  patient: Participant,
+  joursDispo: { jourKey: JourSemaine }[],
+): number {
+  let total = 0;
+  for (const { jourKey } of joursDispo) {
+    const cleJour = JOUR_SEMAINE_TO_DISPO[jourKey];
+    const creneaux = patient.anamnese?.organisation?.creneauxParJour?.[cleJour];
+    if (creneaux?.length) {
+      for (const c of creneaux) total += heureEnMinutes(c.fin) - heureEnMinutes(c.debut);
+    } else {
+      total += 660;
+    }
+  }
+  return total;
+}
+
 // Pour chaque contrat actif, choisit nbSeancesSemaine jours parmi les
 // disponibilités du patient (anamnese.organisation), en :
 //   1. Excluant les jours où Pierre est totalement indisponible (>= 90% bloqués).
@@ -431,9 +451,13 @@ function assignerJoursSemaine(
     candidats.push({ contrat, patient, idx, joursDispo: joursDispoFiltrés });
   }
 
-  // Most constrained first : les patients avec le moins de jours disponibles
-  // sont placés en premier, pour ne pas leur laisser que des jours saturés.
-  candidats.sort((a, b) => a.joursDispo.length - b.joursDispo.length);
+  // Most constrained first : les patients avec la fenêtre de disponibilité totale
+  // la plus étroite sont placés en premier — ils ont moins de créneaux acceptables
+  // et risquent d'être évincés si les patients flexibles remplissent les journées avant eux.
+  candidats.sort((a, b) =>
+    tailleFenetreDisponibilite(a.patient, a.joursDispo) -
+    tailleFenetreDisponibilite(b.patient, b.joursDispo)
+  );
 
   // Séances déjà planifiées cette semaine, par contrat — réutilisées (déplacées
   // vers le nouveau jour choisi) plutôt que dupliquées.
