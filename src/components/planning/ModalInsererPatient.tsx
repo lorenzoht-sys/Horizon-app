@@ -42,6 +42,11 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
     [indispos]
   );
 
+  const participantParId = useMemo(
+    () => new Map(participants.map(p => [p.id, p])),
+    [participants]
+  );
+
   const WORK_DAYS: { dow: number; jourKey: JourSemaine; nom: string; cleJour: string }[] = [
     { dow: 1, jourKey: 'lun', nom: 'Lundi',    cleJour: 'Lun' },
     { dow: 2, jourKey: 'mar', nom: 'Mardi',    cleJour: 'Mar' },
@@ -89,6 +94,20 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
     }
     return slots;
   }, [modeForce, patient, contratChoisi, joursIndispos]);
+
+  // Pour chaque jour de semaine (DOW), liste des plages horaires des séances existantes
+  const seancesParDow = useMemo(() => {
+    if (!modeForce) return new Map<number, { debutMin: number; finMin: number; participantId: string }[]>();
+    const map = new Map<number, { debutMin: number; finMin: number; participantId: string }[]>();
+    for (const s of seances) {
+      if (s.statut === 'annulee') continue;
+      const dow = new Date(s.date + 'T12:00').getDay();
+      const arr = map.get(dow) ?? [];
+      arr.push({ debutMin: heureEnMinutes(s.heureDebut), finMin: heureEnMinutes(s.heureFin), participantId: s.participantId });
+      map.set(dow, arr);
+    }
+    return map;
+  }, [modeForce, seances]);
 
   function toggleCreneau(c: CreneauLibre) {
     const key = `${c.jourSemaine}-${c.heureDebut}`;
@@ -319,16 +338,30 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
                                 const key = `${c.jourSemaine}-${c.heureDebut}`;
                                 const sel = creneauxChoisis.some(x => `${x.jourSemaine}-${x.heureDebut}` === key);
                                 const disabled = !sel && creneauxChoisis.length >= nbBesoin;
+                                const debutMin = heureEnMinutes(c.heureDebut);
+                                const collision = (seancesParDow.get(c.jourSemaine) ?? []).find(
+                                  s => s.debutMin <= debutMin && debutMin < s.finMin
+                                );
+                                const occupant = collision ? participantParId.get(collision.participantId) : null;
                                 return (
                                   <button
                                     key={i}
                                     onClick={() => !disabled && toggleCreneau(c)}
                                     disabled={disabled}
-                                    className={`px-2.5 py-1 text-xs rounded-lg border font-medium transition-colors
-                                      ${sel ? 'bg-primary border-primary text-white' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}
+                                    className={`px-2.5 py-1.5 text-xs rounded-lg border font-medium transition-colors flex flex-col items-center min-w-[52px]
+                                      ${sel
+                                        ? 'bg-primary border-primary text-white'
+                                        : occupant
+                                          ? 'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100'
+                                          : 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'}
                                       ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                                   >
-                                    {c.heureDebut}
+                                    <span>{c.heureDebut}</span>
+                                    {!sel && (
+                                      <span className="text-[10px] leading-tight font-normal mt-0.5 opacity-80">
+                                        {occupant ? occupant.prenom : 'Libre'}
+                                      </span>
+                                    )}
                                   </button>
                                 );
                               })}
