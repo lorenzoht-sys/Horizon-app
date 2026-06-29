@@ -267,24 +267,53 @@ type Candidat = {
   idx: number;
 };
 
-// Nearest-neighbor groupé par priorité de créneau
+function permutations<T>(arr: T[]): T[][] {
+  if (arr.length <= 1) return [[...arr]];
+  const result: T[][] = [];
+  for (let i = 0; i < arr.length; i++) {
+    const rest = [...arr.slice(0, i), ...arr.slice(i + 1)];
+    for (const p of permutations(rest)) result.push([arr[i], ...p]);
+  }
+  return result;
+}
+
+// Ordonnancement optimal par groupe de créneau.
+// Groupes ≤ 7 : exhaustif (7! = 5040 perms max) — garantit le trajet minimum.
+// Groupes > 7  : nearest-neighbor glouton.
 function ordonner(departIdx: number, candidates: Candidat[], matrix: MatriceORS): Candidat[] {
   const groups = [0, 1, 2].map(p => candidates.filter(c => prioriteCreneau(c.patient) === p));
   const result: Candidat[] = [];
   let pos = departIdx;
   for (const group of groups) {
-    const remaining = [...group];
-    while (remaining.length > 0) {
-      let best = 0;
-      let minSec = Infinity;
-      for (let i = 0; i < remaining.length; i++) {
-        const s = matrix.durees[pos]?.[remaining[i].idx] ?? Infinity;
-        if (s < minSec) { minSec = s; best = i; }
+    if (group.length === 0) continue;
+    let bestOrder: Candidat[] = group;
+    if (group.length <= 7) {
+      let minCost = Infinity;
+      for (const perm of permutations(group)) {
+        let cost = matrix.durees[pos]?.[perm[0].idx] ?? Infinity;
+        for (let i = 0; i < perm.length - 1; i++) {
+          cost += matrix.durees[perm[i].idx]?.[perm[i + 1].idx] ?? Infinity;
+        }
+        if (cost < minCost) { minCost = cost; bestOrder = perm; }
       }
-      const [next] = remaining.splice(best, 1);
-      result.push(next);
-      pos = next.idx;
+    } else {
+      const remaining = [...group];
+      bestOrder = [];
+      let cur = pos;
+      while (remaining.length > 0) {
+        let best = 0;
+        let minSec = Infinity;
+        for (let i = 0; i < remaining.length; i++) {
+          const s = matrix.durees[cur]?.[remaining[i].idx] ?? Infinity;
+          if (s < minSec) { minSec = s; best = i; }
+        }
+        const [next] = remaining.splice(best, 1);
+        bestOrder.push(next);
+        cur = next.idx;
+      }
     }
+    result.push(...bestOrder);
+    pos = bestOrder[bestOrder.length - 1].idx;
   }
   return result;
 }
@@ -382,8 +411,6 @@ function assignerJoursSemaine(
   }
 
   const occupeParJour = new Map<JourSemaine, number[]>();
-  // Suivi des IDs patients déjà placés par jour — nécessaire pour le scoring zone.
-  const patientsParJour = new Map<JourSemaine, string[]>();
   // Charge cumulée par jour (minutes de séances + trajets estimés) — scoring équilibre.
   const chargeParJour = new Map<JourSemaine, number>();
 
@@ -475,10 +502,6 @@ function assignerJoursSemaine(
       occupants.push(idx);
       occupeParJour.set(jour.jourKey, occupants);
       joursDejaPris.add(jour.jourKey);
-
-      const ids = patientsParJour.get(jour.jourKey) ?? [];
-      ids.push(patient.id);
-      patientsParJour.set(jour.jourKey, ids);
 
       chargeParJour.set(jour.jourKey, (chargeParJour.get(jour.jourKey) ?? 0) + contrat.dureeMinutes + trajetEstimeMin);
     }
