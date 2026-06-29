@@ -127,7 +127,7 @@ const MARGE_ENTRE_SEANCES_MIN = 10;
 
 // Au-delà de ce seuil entre la fin d'une séance et le début de la suivante,
 // un trou est signalé dans le rapport qualité.
-const TROU_MAX_MINUTES = 45;
+const TROU_MAX_MINUTES = 60;
 
 // Seuil du malus trou structurel dans assignerJoursSemaine — ne pénaliser
 // que les écarts vraiment handicapants (> 2h), pas les trous d'1h acceptables.
@@ -135,7 +135,7 @@ const TROU_STRUCTUREL_MALUS_MINUTES = 120;
 
 // Fraction minimale de la plage de travail couverte par des indispos pour
 // considérer un jour comme totalement bloqué et l'exclure de l'assignation.
-const SEUIL_BLOCAGE_JOUR = 0.90;
+const SEUIL_BLOCAGE_JOUR = 0.80;
 
 // Heure de fin de journée utilisée pour calculer la couverture d'indisponibilité.
 const HEURE_FIN_JOURNEE_TRAVAIL = '19:00';
@@ -564,7 +564,7 @@ function assignerJoursSemaine(
         // Créneau court : si le candidat est flexible (> 480 min totaux sur ses jours dispo)
         // ET qu'un patient déjà assigné ce jour a une fenêtre très étroite ce jour-là (< 180 min),
         // pénaliser fortement pour libérer ce créneau aux patients contraints.
-        const candidatFlexible = tailleFenetreDisponibilite(patient, joursDispo) > 480;
+        const candidatFlexible = tailleFenetreDisponibilite(patient, joursDispoContrat) > 480;
         const malusCreneauxCourts = (candidatFlexible && existants.some(ep => {
           const cleJourEp = JOUR_SEMAINE_TO_DISPO[jour.jourKey];
           const creneauxEp = ep.anamnese?.organisation?.creneauxParJour?.[cleJourEp];
