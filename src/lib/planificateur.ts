@@ -647,6 +647,29 @@ function planifierJour(
       }
     }
 
+    // Premier patient : si le second a un créneau tardif (> 13h00), décaler le premier
+    // pour qu'il finisse juste avant le départ vers le second (pas de temps mort entre eux).
+    // heureDebut = max(creneauDebut premier, heureDebutSecond - trajet(1→2) - durée1 - MARGE)
+    if (iOrd === 0 && ordered.length > 1) {
+      const secondCand = ordered[1];
+      const secondSlot = ajusterAuCreneauPatient(heureDebutJournee, secondCand.patient, jourKey);
+      if (!secondSlot.impossible && secondSlot.heure > '13:00') {
+        const fenetre = getFenetreTemporelle(patient, jourKey);
+        if (fenetre !== null && (fenetre.fin - fenetre.debut) > 240) {
+          const trajetVersSecond = travelMin(matrix, idx, secondCand.idx);
+          const cibleMin = heureEnMinutes(secondSlot.heure)
+            - trajetVersSecond
+            - contrat.dureeMinutes
+            - MARGE_ENTRE_SEANCES_MIN;
+          const candidatMin = Math.max(heureEnMinutes(slot.heure), cibleMin);
+          // Sécurité : le début calculé et la fin de séance doivent rester dans la fenêtre.
+          if (candidatMin >= fenetre.debut && candidatMin + contrat.dureeMinutes <= fenetre.fin) {
+            heureDebut = arrondirHeure(minutesEnHeure(candidatMin));
+          }
+        }
+      }
+    }
+
     const heureFin = addMinutes(heureDebut, contrat.dureeMinutes);
 
     etapes.push({
