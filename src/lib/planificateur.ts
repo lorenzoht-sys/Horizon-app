@@ -653,8 +653,14 @@ function planifierJour(
     if (iOrd === 0 && ordered.length > 1) {
       const secondCand = ordered[1];
       const secondSlot = ajusterAuCreneauPatient(heureDebutJournee, secondCand.patient, jourKey);
+      const fenetre = getFenetreTemporelle(patient, jourKey);
+      console.log(
+        `[DECALAGE-P1] patient=${patient.nom}, iOrd=${iOrd},`,
+        `heureArriveeNaturelle=${heureArriveeNaturelle}, creneauDebut=${slot.heure},`,
+        `fenetre=${fenetre ? fenetre.fin - fenetre.debut : 'null'}min,`,
+        `secondPatient=${secondCand.patient.nom}, secondSlot=${secondSlot.heure}, secondImpossible=${secondSlot.impossible}`,
+      );
       if (!secondSlot.impossible && secondSlot.heure > '13:00') {
-        const fenetre = getFenetreTemporelle(patient, jourKey);
         if (fenetre !== null && (fenetre.fin - fenetre.debut) > 240) {
           const trajetVersSecond = travelMin(matrix, idx, secondCand.idx);
           const cibleMin = heureEnMinutes(secondSlot.heure)
@@ -662,11 +668,17 @@ function planifierJour(
             - contrat.dureeMinutes
             - MARGE_ENTRE_SEANCES_MIN;
           const candidatMin = Math.max(heureEnMinutes(slot.heure), cibleMin);
-          // Sécurité : le début calculé et la fin de séance doivent rester dans la fenêtre.
           if (candidatMin >= fenetre.debut && candidatMin + contrat.dureeMinutes <= fenetre.fin) {
             heureDebut = arrondirHeure(minutesEnHeure(candidatMin));
+            console.log(`[DECALAGE-P1 ACTIVE] cibleMin=${cibleMin}min (${minutesEnHeure(cibleMin)}), candidatMin=${candidatMin}min, heureDebut=${heureDebut}`);
+          } else {
+            console.log(`[DECALAGE-P1 SKIP] raison=securite_fenetre candidatMin=${candidatMin}min fenetre=[${fenetre.debut}-${fenetre.fin}] duree=${contrat.dureeMinutes}`);
           }
+        } else {
+          console.log(`[DECALAGE-P1 SKIP] raison=fenetre_trop_petite fenetre=${fenetre ? fenetre.fin - fenetre.debut : 'null'}min (seuil=240)`);
         }
+      } else {
+        console.log(`[DECALAGE-P1 SKIP] raison=${secondSlot.impossible ? 'second_impossible' : 'second_pas_tardif'} secondSlot.heure=${secondSlot.heure}`);
       }
     }
 
