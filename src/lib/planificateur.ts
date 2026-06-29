@@ -606,25 +606,48 @@ function planifierJour(
 
   let heure = arrondirHeure(heureDebutJournee); // heure de départ initiale
   let posIdx = departIdx;
+  const debutJourneeMin = heureEnMinutes(heureDebutJournee);
 
-  for (const { patient, contrat, seanceExistanteId, alreadyPlanned, idx } of ordered) {
+  for (let iOrd = 0; iOrd < ordered.length; iOrd++) {
+    const { patient, contrat, seanceExistanteId, alreadyPlanned, idx } = ordered[iOrd];
     const trajet = travelMin(matrix, posIdx, idx);
     const dist   = distKm(matrix, posIdx, idx);
 
-    let heureArrivee = arrondirHeure(addMinutes(heure, trajet)); // après trajet
-    heureArrivee = arrondirHeure(appliquerIndispos(heureArrivee, indisposJour)); // après pause
+    const heureArriveeNaturelle = arrondirHeure(appliquerIndispos(
+      arrondirHeure(addMinutes(heure, trajet)),
+      indisposJour,
+    ));
 
-    const slot = ajusterAuCreneauPatient(heureArrivee, patient, jourKey);
+    const slot = ajusterAuCreneauPatient(heureArriveeNaturelle, patient, jourKey);
     if (slot.impossible) {
-      impossibles.push({
-        patient,
-        raison: slot.raison ?? 'Créneau patient dépassé',
-      });
+      impossibles.push({ patient, raison: slot.raison ?? 'Créneau patient dépassé' });
       continue;
     }
-    heureArrivee = slot.heure;
 
-    const heureFin = addMinutes(heureArrivee, contrat.dureeMinutes);
+    // Décalage intelligent : si le patient est poussé vers son creneauDebut et que
+    // cela crée un trou > 120 min avec le patient suivant, essayer de planifier dès
+    // l'arrivée naturelle — à condition que celle-ci soit dans les heures de travail
+    // et que la fenêtre du patient soit suffisamment large (> 4h).
+    let heureDebut = slot.heure;
+    if (slot.heure > heureArriveeNaturelle) {
+      const fenetre = getFenetreTemporelle(patient, jourKey);
+      const largeFenetre = fenetre !== null && (fenetre.fin - fenetre.debut) > 240;
+      const dansHeuresTravail = heureEnMinutes(heureArriveeNaturelle) >= debutJourneeMin;
+      const nextCand = ordered[iOrd + 1];
+      if (largeFenetre && dansHeuresTravail && nextCand) {
+        const heureFinSiCreneau = addMinutes(slot.heure, contrat.dureeMinutes);
+        const nextArriveeMin =
+          heureEnMinutes(heureFinSiCreneau) + MARGE_ENTRE_SEANCES_MIN + travelMin(matrix, idx, nextCand.idx);
+        const nextArriveeStr = appliquerIndispos(minutesEnHeure(nextArriveeMin), indisposJour);
+        const nextSlot = ajusterAuCreneauPatient(nextArriveeStr, nextCand.patient, jourKey);
+        if (!nextSlot.impossible) {
+          const gap = heureEnMinutes(nextSlot.heure) - heureEnMinutes(heureFinSiCreneau);
+          if (gap > 120) heureDebut = heureArriveeNaturelle;
+        }
+      }
+    }
+
+    const heureFin = addMinutes(heureDebut, contrat.dureeMinutes);
 
     etapes.push({
       patient,
@@ -632,7 +655,7 @@ function planifierJour(
       seanceExistanteId,
       alreadyPlanned,
       date,
-      heureDebut: heureArrivee,
+      heureDebut,
       heureFin,
       dureeTrajetMinutes: trajet,
       distanceKm: dist,
