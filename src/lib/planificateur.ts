@@ -601,6 +601,11 @@ function planifierJour(
   heureDebutJournee: string,
 ): { etapes: EtapePlanifiee[]; impossibles: { patient: Participant; raison: string }[] } {
   const ordered = ordonner(departIdx, candidates, matrix);
+  if (ordered[0]?.patient.nom === 'Poindessault') {
+    console.log(
+      `[ORDRE-JOURNEE] jourKey=${jourKey} ordre=[${ordered.map(c => c.patient.nom).join(' → ')}]`,
+    );
+  }
   const etapes: EtapePlanifiee[] = [];
   const impossibles: { patient: Participant; raison: string }[] = [];
 
