@@ -216,7 +216,7 @@ function ajusterAuCreneauPatient(
   heure: string,
   patient: Participant,
   jourKey: JourSemaine,
-): { heure: string; impossible: boolean; raison?: string } {
+): { heure: string; impossible: boolean; raison?: string; finCreneau?: string } {
   // Créneaux précis du jour (ex: 09:00–12:00) — priorité sur creneauxPreference.
   // Les clés de creneauxParJour sont en format abrégé majuscule ('Lun', 'Mar'...).
   const cleJour = JOUR_SEMAINE_TO_DISPO[jourKey];
@@ -224,8 +224,8 @@ function ajusterAuCreneauPatient(
   if (creneauxJour?.length) {
     const tries = [...creneauxJour].sort((a, b) => a.debut.localeCompare(b.debut));
     for (const c of tries) {
-      if (heure < c.debut) return { heure: c.debut, impossible: false };
-      if (heure < c.fin)   return { heure, impossible: false };
+      if (heure < c.debut) return { heure: c.debut, impossible: false, finCreneau: c.fin };
+      if (heure < c.fin)   return { heure, impossible: false, finCreneau: c.fin };
     }
     const dernier = tries[tries.length - 1];
     return { heure, impossible: true, raison: `Créneau dépassé — dernier créneau terminé à ${dernier.fin}` };
@@ -240,8 +240,8 @@ function ajusterAuCreneauPatient(
   );
 
   for (const pref of tries) {
-    if (heure < CRENEAU_DEBUT[pref]) return { heure: CRENEAU_DEBUT[pref], impossible: false };
-    if (heure < CRENEAU_FIN[pref])   return { heure, impossible: false };
+    if (heure < CRENEAU_DEBUT[pref]) return { heure: CRENEAU_DEBUT[pref], impossible: false, finCreneau: CRENEAU_FIN[pref] };
+    if (heure < CRENEAU_FIN[pref])   return { heure, impossible: false, finCreneau: CRENEAU_FIN[pref] };
   }
 
   const dernier = tries[tries.length - 1];
@@ -658,14 +658,19 @@ function planifierJour(
       const arriveeSimuleeMin =
         heureEnMinutes(heureArriveeNaturelle) + contrat.dureeMinutes + MARGE_ENTRE_SEANCES_MIN + trajetVersSecond;
       const arriveeSimuleeStr = appliquerIndispos(minutesEnHeure(arriveeSimuleeMin), indisposJour);
-      const secondSlot = ajusterAuCreneauPatient(arriveeSimuleeStr, secondCand.patient, jourKey);
-      console.log(
-        `[DECALAGE-P1] ${patient.nom} → ${secondCand.patient.nom} |`,
-        `heureArriveeNaturelle=${heureArriveeNaturelle} durée=${contrat.dureeMinutes}min trajet=${trajetVersSecond}min |`,
-        `arriveeSimuleeMin=${arriveeSimuleeMin} (${arriveeSimuleeStr}) |`,
-        `secondSlot=${secondSlot.heure} impossible=${secondSlot.impossible} |`,
-        `condition ">13:00" : ${secondSlot.heure} > "13:00" = ${!secondSlot.impossible && secondSlot.heure > '13:00'}`,
-      );
+
+      // Cherche le premier créneau du second patient qui contient sa séance entière.
+      // Si la séance déborde du créneau retourné, avance à la fin du créneau et réessaie.
+      let probeSecond = arriveeSimuleeStr;
+      let secondSlot = ajusterAuCreneauPatient(probeSecond, secondCand.patient, jourKey);
+      for (let t = 0; t < 4 && !secondSlot.impossible; t++) {
+        const finSession = minutesEnHeure(heureEnMinutes(secondSlot.heure) + secondCand.contrat.dureeMinutes);
+        if (secondSlot.finCreneau === undefined || finSession <= secondSlot.finCreneau) break;
+        // Séance déborde : avancer au début du prochain créneau
+        probeSecond = secondSlot.finCreneau;
+        secondSlot = ajusterAuCreneauPatient(probeSecond, secondCand.patient, jourKey);
+      }
+
       if (!secondSlot.impossible && secondSlot.heure > '13:00') {
         const fenetre = getFenetreTemporelle(patient, jourKey);
         if (fenetre !== null && (fenetre.fin - fenetre.debut) > 240) {
