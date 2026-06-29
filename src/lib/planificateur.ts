@@ -58,6 +58,18 @@ export function coordKey(p: { lat: number; lng: number }): string {
   return `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;
 }
 
+// Formule Haversine locale — intentionnellement dupliquée (analyse-tournee.ts
+// l'importe déjà depuis ce fichier, importer en sens inverse créerait un cycle).
+function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLon = (b.lng - a.lng) * Math.PI / 180;
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
 // Garde-fou explicite : sans un vrai point de départ, toute la tournée
 // calculée serait fausse sans que personne ne le sache (cf. audit §3 — point
 // de départ non configuré). L'UI (TourneePage/ModalPlanificateur) bloque déjà
@@ -411,6 +423,8 @@ function assignerJoursSemaine(
   }
 
   const occupeParJour = new Map<JourSemaine, number[]>();
+  // Coordonnées GPS des patients assignés par jour — pour le scoring centroïde (P2).
+  const gpsCoordsParJour = new Map<JourSemaine, { lat: number; lng: number }[]>();
   // Charge cumulée par jour (minutes de séances + trajets estimés) — scoring équilibre.
   const chargeParJour = new Map<JourSemaine, number>();
 
@@ -462,9 +476,19 @@ function assignerJoursSemaine(
       // Scoring multi-critères normalisé : on calcule les composantes brutes,
       // puis on normalise le trajet entre 0 et 1 avant d'appliquer les poids.
       const rawScores = joursDispo.map(jour => {
-        const occupants = occupeParJour.get(jour.jourKey) ?? [];
-        const cibles = occupants.length > 0 ? occupants : [departIdx];
-        const rawTrajet = Math.min(...cibles.map(o => matrix.durees[idx]?.[o] ?? Infinity));
+        const gpsExistants = gpsCoordsParJour.get(jour.jourKey) ?? [];
+        let rawTrajet: number;
+        if (gpsExistants.length > 0 && patient.coordonnees) {
+          // Centroïde GPS des patients déjà assignés ce jour → distance au nouveau.
+          const centLat = gpsExistants.reduce((s, c) => s + c.lat, 0) / gpsExistants.length;
+          const centLng = gpsExistants.reduce((s, c) => s + c.lng, 0) / gpsExistants.length;
+          rawTrajet = haversineKm(patient.coordonnees, { lat: centLat, lng: centLng }) * 2.5 * 60;
+        } else {
+          // Fallback : distance au départ ou via matrice ORS si coords absentes.
+          const occupants = occupeParJour.get(jour.jourKey) ?? [];
+          const cibles = occupants.length > 0 ? occupants : [departIdx];
+          rawTrajet = Math.min(...cibles.map(o => matrix.durees[idx]?.[o] ?? Infinity));
+        }
 
         // Zone : malus binaire si le jour n'est pas dans joursAssignes de la zone.
         const malusZone = zonePatient && !zonePatient.joursAssignes.includes(jour.jourKey) ? 1 : 0;
@@ -502,6 +526,12 @@ function assignerJoursSemaine(
       occupants.push(idx);
       occupeParJour.set(jour.jourKey, occupants);
       joursDejaPris.add(jour.jourKey);
+
+      if (patient.coordonnees) {
+        const coords = gpsCoordsParJour.get(jour.jourKey) ?? [];
+        coords.push(patient.coordonnees);
+        gpsCoordsParJour.set(jour.jourKey, coords);
+      }
 
       chargeParJour.set(jour.jourKey, (chargeParJour.get(jour.jourKey) ?? 0) + contrat.dureeMinutes + trajetEstimeMin);
     }
