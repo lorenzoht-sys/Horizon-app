@@ -188,6 +188,26 @@ const JOUR_SEMAINE_TO_DISPO: Record<JourSemaine, string> = {
   lun: 'Lun', mar: 'Mar', mer: 'Mer', jeu: 'Jeu', ven: 'Ven', sam: 'Sam',
 };
 
+// Retourne la fenêtre temporelle effective d'un patient pour un jour donné (en minutes).
+// null = disponible toute la journée (pas de contrainte horaire détectée).
+function getFenetreTemporelle(
+  patient: Participant,
+  jourKey: JourSemaine,
+): { debut: number; fin: number } | null {
+  const cleJour = JOUR_SEMAINE_TO_DISPO[jourKey];
+  const creneauxJour = patient.anamnese?.organisation?.creneauxParJour?.[cleJour];
+  if (creneauxJour?.length) {
+    const debuts = creneauxJour.map(c => heureEnMinutes(c.debut));
+    const fins   = creneauxJour.map(c => heureEnMinutes(c.fin));
+    return { debut: Math.min(...debuts), fin: Math.max(...fins) };
+  }
+  const prefs = patient.disponibilites?.creneauxPreference;
+  if (!prefs?.length) return null;
+  const debuts = prefs.map(p => heureEnMinutes(CRENEAU_DEBUT[p]));
+  const fins   = prefs.map(p => heureEnMinutes(CRENEAU_FIN[p]));
+  return { debut: Math.min(...debuts), fin: Math.max(...fins) };
+}
+
 function ajusterAuCreneauPatient(
   heure: string,
   patient: Participant,
@@ -425,6 +445,8 @@ function assignerJoursSemaine(
   const occupeParJour = new Map<JourSemaine, number[]>();
   // Coordonnées GPS des patients assignés par jour — pour le scoring centroïde (P2).
   const gpsCoordsParJour = new Map<JourSemaine, { lat: number; lng: number }[]>();
+  // Patients assignés par jour — pour détecter les trous horaires structurels (P3).
+  const participantsParJour = new Map<JourSemaine, Participant[]>();
   // Charge cumulée par jour (minutes de séances + trajets estimés) — scoring équilibre.
   const chargeParJour = new Map<JourSemaine, number>();
 
@@ -500,7 +522,18 @@ function assignerJoursSemaine(
         const joursPrecContrat = joursPrecedents?.get(contrat.id) ?? [];
         const malusStabilite = joursPrecContrat.length > 0 && !joursPrecContrat.includes(jour.jourKey) ? 1 : 0;
 
-        return { jour, rawTrajet, malusZone, chargeNorm, malusStabilite };
+        // Trou horaire structurel : malus si la fenêtre temporelle du nouveau patient
+        // est séparée de celle d'un patient existant par un gap inévitable > TROU_MAX_MINUTES.
+        const fenNouv = getFenetreTemporelle(patient, jour.jourKey);
+        const existants = participantsParJour.get(jour.jourKey) ?? [];
+        const malusTrouStructurel = (fenNouv && existants.some(ep => {
+          const fenEx = getFenetreTemporelle(ep, jour.jourKey);
+          if (!fenEx) return false;
+          const gap = Math.max(0, Math.max(fenNouv.debut - fenEx.fin, fenEx.debut - fenNouv.fin));
+          return gap > TROU_MAX_MINUTES;
+        })) ? 0.30 : 0;
+
+        return { jour, rawTrajet, malusZone, chargeNorm, malusStabilite, malusTrouStructurel };
       });
 
       // Normaliser les trajets entre 0 et 1 pour que les poids soient comparables.
@@ -510,7 +543,8 @@ function assignerJoursSemaine(
         score: POIDS_TRAJET    * (Number.isFinite(s.rawTrajet) ? s.rawTrajet / maxTrajet : 0)
              + POIDS_ZONE      * s.malusZone
              + POIDS_CHARGE    * s.chargeNorm
-             + POIDS_STABILITE * s.malusStabilite,
+             + POIDS_STABILITE * s.malusStabilite
+             + s.malusTrouStructurel,
       }));
       scored.sort((a, b) => a.score - b.score);
       choisis = scored.slice(0, n).map(s => s.jour);
@@ -532,6 +566,10 @@ function assignerJoursSemaine(
         coords.push(patient.coordonnees);
         gpsCoordsParJour.set(jour.jourKey, coords);
       }
+
+      const patientsJour = participantsParJour.get(jour.jourKey) ?? [];
+      patientsJour.push(patient);
+      participantsParJour.set(jour.jourKey, patientsJour);
 
       chargeParJour.set(jour.jourKey, (chargeParJour.get(jour.jourKey) ?? 0) + contrat.dureeMinutes + trajetEstimeMin);
     }
