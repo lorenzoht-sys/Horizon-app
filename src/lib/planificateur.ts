@@ -675,13 +675,17 @@ function planifierJour(
           candidatSlot = ajusterAuCreneauPatient(probe, refCand.patient, jourKey);
         }
 
-        if (!candidatSlot.impossible) {
+        if (candidatSlot.impossible) {
+          if (patient.nom === 'Poindessault') console.log(`[DECALAGE-P1 SKIP-IMPOSSIBLE] ${refCand.patient.nom} impossible — cherche prochain patient disponible (r=${r})`);
+        } else {
           refSlot = candidatSlot;
           refTrajet = trajetVersRef;
           refContratDuree = refCand.contrat.dureeMinutes;
+          if (patient.nom === 'Poindessault') console.log(`[DECALAGE-P1 FOUND] référence=${refCand.patient.nom} slot=${refSlot.heure} finCreneau=${refSlot.finCreneau} trajet=${refTrajet}min | condition >13h: ${refSlot.heure > '13:00'}`);
           break;
         }
       }
+      if (patient.nom === 'Poindessault' && refSlot === null) console.log(`[DECALAGE-P1 FOUND] aucun patient de référence valide trouvé`);
 
       if (refSlot !== null && refSlot.heure > '13:00') {
         const fenetre = getFenetreTemporelle(patient, jourKey);
