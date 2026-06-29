@@ -47,7 +47,7 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
     const dispos = { joursDisponibles: org.joursDisponibles, creneauxParJour: org.creneauxParJour };
     const zone = getTrousRecurrents(seances, participants, patient.adresseVille ?? '', patient.coordonnees, dispos, joursIndispos);
     if (zone.length > 0) return { creneauxLibres: zone, estFallbackGlobal: false };
-    const global = getCreneauxLibresGlobal(seances, dispos, joursIndispos);
+    const global = getCreneauxLibresGlobal(seances, participants, patient.coordonnees, dispos, joursIndispos);
     return { creneauxLibres: global, estFallbackGlobal: true };
   }, [patient, seances, participants, contratChoisi, joursIndispos]);
 

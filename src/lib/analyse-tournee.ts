@@ -36,6 +36,16 @@ function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: numb
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
+// Marge dynamique : trajet estimé depuis le patient précédent vers le nouveau.
+// ~24 km/h en zone rurale/périurbaine → 2.5 min/km. Minimum = MARGE_ENTRE_SEANCES_MIN.
+function margeTrajet(
+  coordsPrecedent: { lat: number; lng: number } | undefined,
+  newPatientCoords: { lat: number; lng: number } | undefined,
+): number {
+  if (!coordsPrecedent || !newPatientCoords) return MARGE_ENTRE_SEANCES_MIN;
+  return Math.max(MARGE_ENTRE_SEANCES_MIN, Math.round(distanceKm(coordsPrecedent, newPatientCoords) * 2.5));
+}
+
 function filtrerParIndispos(slots: CreneauLibre[], indisponibilites?: JourSemaine[]): CreneauLibre[] {
   if (!indisponibilites?.length) return slots;
   return slots.filter(c => {
@@ -66,6 +76,9 @@ export type DisposPatient = {
   creneauxParJour?: Record<string, { debut: string; fin: string }[]>;
 };
 
+// Slot interne incluant le participantId pour la marge dynamique.
+type SlotInternal = { debut: number; fin: number; participantId: string };
+
 /**
  * Créneaux libres récurrents sur l'ensemble du planning de Pierre (sans filtre zone).
  * Utilisé en fallback quand aucune séance n'existe dans la zone du nouveau patient.
@@ -73,18 +86,23 @@ export type DisposPatient = {
  */
 export function getCreneauxLibresGlobal(
   seances: Seance[],
+  participants: Participant[],
+  newPatientCoords?: { lat: number; lng: number },
   newPatientDispos?: DisposPatient,
   indisponibilites?: JourSemaine[],
 ): CreneauLibre[] {
   const seancesActives = seances.filter(s => s.statut !== 'annulee');
   if (seancesActives.length === 0) return [];
 
-  const parJour = new Map<number, { debut: number; fin: number }[]>();
+  const participantParId = new Map<string, Participant>();
+  for (const p of participants) participantParId.set(p.id, p);
+
+  const parJour = new Map<number, SlotInternal[]>();
   const datesParJour = new Map<number, Set<string>>();
   for (const s of seancesActives) {
     const dow = new Date(s.date + 'T12:00').getDay();
     const slots = parJour.get(dow) ?? [];
-    slots.push({ debut: heureEnMinutes(s.heureDebut), fin: heureEnMinutes(s.heureFin) });
+    slots.push({ debut: heureEnMinutes(s.heureDebut), fin: heureEnMinutes(s.heureFin), participantId: s.participantId });
     parJour.set(dow, slots);
     const dates = datesParJour.get(dow) ?? new Set();
     dates.add(s.date);
@@ -99,12 +117,16 @@ export function getCreneauxLibresGlobal(
     if ((datesParJour.get(dow)?.size ?? 0) < 2) continue;
 
     slots.sort((a, b) => a.debut - b.debut);
-    const fusionnes: { debut: number; fin: number }[] = [];
+    const fusionnes: SlotInternal[] = [];
     for (const s of slots) {
       if (fusionnes.length === 0 || s.debut > fusionnes[fusionnes.length - 1].fin) {
         fusionnes.push({ ...s });
       } else {
-        fusionnes[fusionnes.length - 1].fin = Math.max(fusionnes[fusionnes.length - 1].fin, s.fin);
+        const last = fusionnes[fusionnes.length - 1];
+        if (s.fin > last.fin) {
+          last.fin = s.fin;
+          last.participantId = s.participantId;
+        }
       }
     }
 
@@ -112,13 +134,18 @@ export function getCreneauxLibresGlobal(
       result.push({ jourSemaine: dow, nomJour: NOMS_JOURS[dow], heureDebut: HEURE_DEBUT_TRAVAIL, heureFin: minutesEnHeure(fusionnes[0].debut), dureeMinutes: fusionnes[0].debut - debutTravailMin });
     }
     for (let i = 0; i < fusionnes.length - 1; i++) {
-      const debutCreneau = fusionnes[i].fin + MARGE_ENTRE_SEANCES_MIN;
+      const coordsPrev = participantParId.get(fusionnes[i].participantId)?.coordonnees;
+      const marge = margeTrajet(coordsPrev, newPatientCoords);
+      const debutCreneau = fusionnes[i].fin + marge;
       const gap = fusionnes[i + 1].debut - debutCreneau;
       if (gap >= TROU_MIN_SUGGESTION_MINUTES) {
         result.push({ jourSemaine: dow, nomJour: NOMS_JOURS[dow], heureDebut: minutesEnHeure(debutCreneau), heureFin: minutesEnHeure(fusionnes[i + 1].debut), dureeMinutes: gap });
       }
     }
-    const debutApres = fusionnes[fusionnes.length - 1].fin + MARGE_ENTRE_SEANCES_MIN;
+    const last = fusionnes[fusionnes.length - 1];
+    const coordsPrev = participantParId.get(last.participantId)?.coordonnees;
+    const margeApres = margeTrajet(coordsPrev, newPatientCoords);
+    const debutApres = last.fin + margeApres;
     if (finTravailMin - debutApres >= TROU_MIN_SUGGESTION_MINUTES) {
       result.push({ jourSemaine: dow, nomJour: NOMS_JOURS[dow], heureDebut: minutesEnHeure(debutApres), heureFin: HEURE_FIN_TRAVAIL, dureeMinutes: finTravailMin - debutApres });
     }
@@ -172,12 +199,12 @@ export function getTrousRecurrents(
   if (seancesZone.length === 0) return [];
 
   // Grouper par jour de semaine (toutes dates confondues)
-  const parJour = new Map<number, { debut: number; fin: number }[]>();
+  const parJour = new Map<number, SlotInternal[]>();
   const datesParJour = new Map<number, Set<string>>();
   for (const s of seancesZone) {
     const dow = new Date(s.date + 'T12:00').getDay();
     const slots = parJour.get(dow) ?? [];
-    slots.push({ debut: heureEnMinutes(s.heureDebut), fin: heureEnMinutes(s.heureFin) });
+    slots.push({ debut: heureEnMinutes(s.heureDebut), fin: heureEnMinutes(s.heureFin), participantId: s.participantId });
     parJour.set(dow, slots);
     const dates = datesParJour.get(dow) ?? new Set();
     dates.add(s.date);
@@ -195,16 +222,20 @@ export function getTrousRecurrents(
 
     // Trier puis fusionner les intervalles qui se chevauchent (union)
     slots.sort((a, b) => a.debut - b.debut);
-    const fusionnes: { debut: number; fin: number }[] = [];
+    const fusionnes: SlotInternal[] = [];
     for (const s of slots) {
       if (fusionnes.length === 0 || s.debut > fusionnes[fusionnes.length - 1].fin) {
         fusionnes.push({ ...s });
       } else {
-        fusionnes[fusionnes.length - 1].fin = Math.max(fusionnes[fusionnes.length - 1].fin, s.fin);
+        const last = fusionnes[fusionnes.length - 1];
+        if (s.fin > last.fin) {
+          last.fin = s.fin;
+          last.participantId = s.participantId;
+        }
       }
     }
 
-    // Trou avant la 1ère séance
+    // Trou avant la 1ère séance — pas de patient précédent, pas de marge trajet
     if (fusionnes[0].debut - debutTravailMin >= TROU_MIN_SUGGESTION_MINUTES) {
       result.push({
         jourSemaine: dow,
@@ -217,7 +248,9 @@ export function getTrousRecurrents(
 
     // Trous entre séances fusionnées consécutives
     for (let i = 0; i < fusionnes.length - 1; i++) {
-      const debutCreneau = fusionnes[i].fin + MARGE_ENTRE_SEANCES_MIN;
+      const coordsPrev = participantParId.get(fusionnes[i].participantId)?.coordonnees;
+      const marge = margeTrajet(coordsPrev, newPatientCoords);
+      const debutCreneau = fusionnes[i].fin + marge;
       const gap = fusionnes[i + 1].debut - debutCreneau;
       if (gap >= TROU_MIN_SUGGESTION_MINUTES) {
         result.push({
@@ -231,7 +264,10 @@ export function getTrousRecurrents(
     }
 
     // Trou après la dernière séance
-    const debutApres = fusionnes[fusionnes.length - 1].fin + MARGE_ENTRE_SEANCES_MIN;
+    const last = fusionnes[fusionnes.length - 1];
+    const coordsPrev = participantParId.get(last.participantId)?.coordonnees;
+    const margeApres = margeTrajet(coordsPrev, newPatientCoords);
+    const debutApres = last.fin + margeApres;
     if (finTravailMin - debutApres >= TROU_MIN_SUGGESTION_MINUTES) {
       result.push({
         jourSemaine: dow,
