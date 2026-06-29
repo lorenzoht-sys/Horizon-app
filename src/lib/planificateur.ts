@@ -657,7 +657,6 @@ function planifierJour(
       // Si le second patient est impossible, tenter index 2, 3... jusqu'au premier slot valide.
       let refSlot: { heure: string; impossible: boolean; finCreneau?: string } | null = null;
       let refTrajet = 0;
-      let refContratDuree = 0;
       for (let r = 1; r < ordered.length; r++) {
         const refCand = ordered[r];
         const trajetVersRef = travelMin(matrix, idx, refCand.idx);
@@ -680,7 +679,6 @@ function planifierJour(
         } else {
           refSlot = candidatSlot;
           refTrajet = trajetVersRef;
-          refContratDuree = refCand.contrat.dureeMinutes;
           if (patient.nom === 'Poindessault') console.log(`[DECALAGE-P1 FOUND] référence=${refCand.patient.nom} slot=${refSlot.heure} finCreneau=${refSlot.finCreneau} trajet=${refTrajet}min | condition >13h: ${refSlot.heure > '13:00'}`);
           break;
         }
