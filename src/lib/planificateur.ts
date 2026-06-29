@@ -561,7 +561,20 @@ function assignerJoursSemaine(
           return gap > TROU_STRUCTUREL_MALUS_MINUTES;
         })) ? 0.30 : 0;
 
-        return { jour, rawTrajet, malusZone, chargeNorm, malusStabilite, malusTrouStructurel };
+        // Créneau court : si le candidat est flexible (> 480 min totaux sur ses jours dispo)
+        // ET qu'un patient déjà assigné ce jour a une fenêtre très étroite ce jour-là (< 180 min),
+        // pénaliser fortement pour libérer ce créneau aux patients contraints.
+        const candidatFlexible = tailleFenetreDisponibilite(patient, joursDispo) > 480;
+        const malusCreneauxCourts = (candidatFlexible && existants.some(ep => {
+          const cleJourEp = JOUR_SEMAINE_TO_DISPO[jour.jourKey];
+          const creneauxEp = ep.anamnese?.organisation?.creneauxParJour?.[cleJourEp];
+          const fenetreEpJour = creneauxEp?.length
+            ? creneauxEp.reduce((s, c) => s + heureEnMinutes(c.fin) - heureEnMinutes(c.debut), 0)
+            : 660;
+          return fenetreEpJour < 180;
+        })) ? 0.40 : 0;
+
+        return { jour, rawTrajet, malusZone, chargeNorm, malusStabilite, malusTrouStructurel, malusCreneauxCourts };
       });
 
       // Normaliser les trajets entre 0 et 1 pour que les poids soient comparables.
@@ -572,7 +585,8 @@ function assignerJoursSemaine(
              + POIDS_ZONE      * s.malusZone
              + POIDS_CHARGE    * s.chargeNorm
              + POIDS_STABILITE * s.malusStabilite
-             + s.malusTrouStructurel,
+             + s.malusTrouStructurel
+             + s.malusCreneauxCourts,
       }));
       scored.sort((a, b) => a.score - b.score);
       choisis = scored.slice(0, n).map(s => s.jour);
