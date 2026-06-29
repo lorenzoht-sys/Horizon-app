@@ -671,6 +671,13 @@ function planifierJour(
         secondSlot = ajusterAuCreneauPatient(probeSecond, secondCand.patient, jourKey);
       }
 
+      if (patient.nom === 'Poindessault') {
+        console.log(
+          `[DECALAGE-P1] ${patient.nom} → ${secondCand.patient.nom} |`,
+          `secondSlot=${secondSlot.heure} impossible=${secondSlot.impossible} |`,
+          `condition >13h: ${secondSlot.heure > '13:00'}`,
+        );
+      }
       if (!secondSlot.impossible && secondSlot.heure > '13:00') {
         const fenetre = getFenetreTemporelle(patient, jourKey);
         if (fenetre !== null && (fenetre.fin - fenetre.debut) > 240) {
