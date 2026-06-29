@@ -112,7 +112,7 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
           const dateStr = cur.toISOString().split('T')[0];
           if (cur.getDay() === creneau.jourSemaine &&
               estSemaineDue(contratChoisi.dateDebut, dateStr, contratChoisi.periodicite ?? 'semaine')) {
-            const heureDebut = addMinutes(creneau.heureDebut, MARGE_ENTRE_SEANCES_MIN);
+            const heureDebut = creneau.heureDebut;
             seancesACreer.push({
               participantId: contratChoisi.participantId,
               contratId: contratChoisi.id,
