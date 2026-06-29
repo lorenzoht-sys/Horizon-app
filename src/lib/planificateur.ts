@@ -134,7 +134,7 @@ const TROU_MAX_MINUTES = 45;
 const SEUIL_BLOCAGE_JOUR = 0.90;
 
 // Heure de fin de journée utilisée pour calculer la couverture d'indisponibilité.
-const HEURE_FIN_JOURNEE_TRAVAIL = '20:00';
+const HEURE_FIN_JOURNEE_TRAVAIL = '19:00';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -752,7 +752,9 @@ export function planifierRecurrent(
   const startDate = new Date(today);
   startDate.setDate(today.getDate() + jump);
 
-  const vusImpossible = new Set<string>();
+  // Compte les semaines impossibles par patient — permet de rapporter
+  // "raison (3/8 semaines)" au lieu de dédupliquer silencieusement.
+  const impossiblesParPatient = new Map<string, { imp: { patient: Participant; raison: string }; count: number }>();
   // Jours choisis la semaine précédente par contrat — passés à assignerJoursSemaine
   // pour favoriser la stabilité (le patient retrouve son praticien le même jour).
   let joursPrecedents: Map<string, JourSemaine[]> | undefined = undefined;
@@ -786,9 +788,11 @@ export function planifierRecurrent(
     }
 
     for (const imp of impossibles) {
-      if (!vusImpossible.has(imp.patient.id)) {
-        allImpossibles.push(imp);
-        vusImpossible.add(imp.patient.id);
+      const existing = impossiblesParPatient.get(imp.patient.id);
+      if (existing) {
+        existing.count++;
+      } else {
+        impossiblesParPatient.set(imp.patient.id, { imp, count: 1 });
       }
     }
 
@@ -810,15 +814,26 @@ export function planifierRecurrent(
       );
 
       for (const imp of impJour) {
-        if (!vusImpossible.has(imp.patient.id)) {
-          allImpossibles.push(imp);
-          vusImpossible.add(imp.patient.id);
+        const existing = impossiblesParPatient.get(imp.patient.id);
+        if (existing) {
+          existing.count++;
+        } else {
+          impossiblesParPatient.set(imp.patient.id, { imp, count: 1 });
         }
       }
       if (etapes.length > 0) {
         jours.push({ jourKey, date: dateStr, label: labelDate(dateStr), etapes });
       }
     }
+  }
+
+  // Consolider les impossibles : raison enrichie du nombre de semaines concernées.
+  for (const { imp, count } of impossiblesParPatient.values()) {
+    allImpossibles.push(
+      count > 1
+        ? { ...imp, raison: `${imp.raison} (${count}/${nbSemaines} sem.)` }
+        : imp,
+    );
   }
 
   // Trier par date
