@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { X, Calendar, Clock, Check, Loader } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Participant, Contrat, Seance } from '../../types';
-import { getTrousRecurrents, type CreneauLibre } from '../../lib/analyse-tournee';
+import { getTrousRecurrents, getCreneauxLibresGlobal, type CreneauLibre } from '../../lib/analyse-tournee';
 import { getOrganisation } from '../../lib/anamnese';
 import { addMinutes, estSemaineDue } from '../../utils/horaires';
 import { MARGE_ENTRE_SEANCES_MIN } from '../../lib/planificateur';
@@ -35,16 +35,14 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
     [participants, contratChoisi]
   );
 
-  const creneauxLibres = useMemo(() => {
-    if (!patient || !contratChoisi) return [];
+  const { creneauxLibres, estFallbackGlobal } = useMemo(() => {
+    if (!patient || !contratChoisi) return { creneauxLibres: [], estFallbackGlobal: false };
     const org = getOrganisation(patient);
-    return getTrousRecurrents(
-      seances,
-      participants,
-      patient.adresseVille ?? '',
-      patient.coordonnees,
-      { joursDisponibles: org.joursDisponibles, creneauxParJour: org.creneauxParJour },
-    );
+    const dispos = { joursDisponibles: org.joursDisponibles, creneauxParJour: org.creneauxParJour };
+    const zone = getTrousRecurrents(seances, participants, patient.adresseVille ?? '', patient.coordonnees, dispos);
+    if (zone.length > 0) return { creneauxLibres: zone, estFallbackGlobal: false };
+    const global = getCreneauxLibresGlobal(seances, dispos);
+    return { creneauxLibres: global, estFallbackGlobal: true };
   }, [patient, seances, participants, contratChoisi]);
 
   function toggleCreneau(c: CreneauLibre) {
@@ -199,9 +197,18 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
               </p>
               {creneauxLibres.length === 0 ? (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
-                  Aucun créneau libre détecté dans la zone de {patient.prenom}. Planifiez d'abord des séances dans son secteur.
+                  Aucun créneau libre détecté dans le planning. Planifiez d'abord d'autres séances.
                 </div>
               ) : (
+                <>
+                  {estFallbackGlobal && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 text-xs text-blue-700">
+                      Aucun patient dans le secteur de {patient.prenom} — créneaux libres du planning général.
+                    </div>
+                  )}
+                </>
+              )}
+              {creneauxLibres.length > 0 && (
                 <div className="space-y-2">
                   {creneauxLibres.map((c, i) => {
                     const key = `${c.jourSemaine}-${c.heureDebut}`;

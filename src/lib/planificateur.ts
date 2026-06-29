@@ -102,8 +102,8 @@ const CRENEAU_FIN: Record<string, string> = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Pondération du scoring multi-critères (total = 0.90)
-const POIDS_TRAJET    = 0.40; // Minimiser les temps de trajet (priorité principale)
-const POIDS_ZONE      = 0.25; // Respecter les zones géographiques assignées
+const POIDS_TRAJET    = 0.25; // Minimiser les temps de trajet
+const POIDS_ZONE      = 0.40; // Cohérence géographique d'une journée (priorité principale)
 const POIDS_CHARGE    = 0.10; // Équilibrer la charge entre les jours (réduit : Pierre préfère des journées pleines)
 const POIDS_STABILITE = 0.15; // Stabiliser les jours habituels des patients (malus doux)
 
