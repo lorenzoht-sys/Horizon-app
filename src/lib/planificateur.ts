@@ -659,6 +659,13 @@ function planifierJour(
         heureEnMinutes(heureArriveeNaturelle) + contrat.dureeMinutes + MARGE_ENTRE_SEANCES_MIN + trajetVersSecond;
       const arriveeSimuleeStr = appliquerIndispos(minutesEnHeure(arriveeSimuleeMin), indisposJour);
       const secondSlot = ajusterAuCreneauPatient(arriveeSimuleeStr, secondCand.patient, jourKey);
+      console.log(
+        `[DECALAGE-P1] ${patient.nom} → ${secondCand.patient.nom} |`,
+        `heureArriveeNaturelle=${heureArriveeNaturelle} durée=${contrat.dureeMinutes}min trajet=${trajetVersSecond}min |`,
+        `arriveeSimuleeMin=${arriveeSimuleeMin} (${arriveeSimuleeStr}) |`,
+        `secondSlot=${secondSlot.heure} impossible=${secondSlot.impossible} |`,
+        `condition ">13:00" : ${secondSlot.heure} > "13:00" = ${!secondSlot.impossible && secondSlot.heure > '13:00'}`,
+      );
       if (!secondSlot.impossible && secondSlot.heure > '13:00') {
         const fenetre = getFenetreTemporelle(patient, jourKey);
         if (fenetre !== null && (fenetre.fin - fenetre.debut) > 240) {
