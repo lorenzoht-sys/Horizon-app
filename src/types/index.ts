@@ -29,9 +29,11 @@ export interface Bilan {
     repetitions?: number | null;
     fcAvant: number | null;
     fcApres: number | null;
+    fc1min?: number | null;
     fc2min: number | null;
     spo2Avant: number | null;
     spo2Apres: number | null;
+    spo21min?: number | null;
     spo22min: number | null;
     borgRPE: number | null;
     dureeMode: 'fixe' | 'libre' | null;
@@ -41,6 +43,9 @@ export interface Bilan {
     dureePausesSecondes: number | null;
     notesPauses: string;
     pausesDetail?: { debutSecondes: number; dureeSecondes: number }[];
+    mesuresParMinute?: { bpm: number | null; spo2: number | null }[];
+    nbPas?: number | null;
+    nbTours?: number | null;
   };
 
   memoire: {

@@ -197,8 +197,57 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10" />
           </div>
 
-          {/* Grille 3 colonnes AVANT / JUSTE APRÈS / 2 MIN APRÈS */}
-          <div className="grid grid-cols-3 gap-3 mb-3">
+          {/* Mesures par minute pendant le test */}
+          <div className="mb-4">
+            <p className="text-xs font-medium text-gray-600 mb-2">Mesures pendant le test (par minute)</p>
+            <div className="rounded-xl border border-gray-200 overflow-hidden">
+              <div className="grid grid-cols-3 gap-0 bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wide">
+                <div className="px-3 py-2">Min</div>
+                <div className="px-3 py-2 text-center border-l border-gray-200">FC (bpm)</div>
+                <div className="px-3 py-2 text-center border-l border-gray-200">SpO₂ (%)</div>
+              </div>
+              {Array.from({ length: 6 }, (_, i) => {
+                const mesures = tm6.mesuresParMinute ?? Array(6).fill({ bpm: null, spo2: null });
+                const m = mesures[i] ?? { bpm: null, spo2: null };
+                return (
+                  <div key={i} className={`grid grid-cols-3 gap-0 ${i % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'} border-b border-gray-100 last:border-b-0`}>
+                    <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 flex items-center">Min {i + 1}</div>
+                    <div className="px-2 py-1.5 border-l border-gray-100">
+                      <input type="number" min={40} max={220} value={m.bpm ?? ''}
+                        onChange={e => {
+                          const next = [...(tm6.mesuresParMinute ?? Array(6).fill({ bpm: null, spo2: null }))];
+                          next[i] = { ...next[i], bpm: e.target.value === '' ? null : Number(e.target.value) };
+                          setTm6({ mesuresParMinute: next });
+                        }}
+                        className="w-full text-xs border-0 focus:outline-none bg-transparent text-center placeholder-gray-300"
+                        placeholder="—" />
+                    </div>
+                    <div className="px-2 py-1.5 border-l border-gray-100">
+                      <input type="number" min={70} max={100} value={m.spo2 ?? ''}
+                        onChange={e => {
+                          const next = [...(tm6.mesuresParMinute ?? Array(6).fill({ bpm: null, spo2: null }))];
+                          next[i] = { ...next[i], spo2: e.target.value === '' ? null : Number(e.target.value) };
+                          setTm6({ mesuresParMinute: next });
+                        }}
+                        className="w-full text-xs border-0 focus:outline-none bg-transparent text-center placeholder-gray-300"
+                        placeholder="—" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Comptage variantes : pas (stepper) et tours (pédalier) */}
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <Num label="Nombre de pas (stepper)" value={tm6.nbPas ?? null} unit="pas" min={0} max={10000}
+              onChange={v => setTm6({ nbPas: v })} />
+            <Num label="Nombre de tours (pédalier)" value={tm6.nbTours ?? null} unit="tours" min={0} max={5000}
+              onChange={v => setTm6({ nbTours: v })} />
+          </div>
+
+          {/* Grille 4 colonnes AVANT / JUSTE APRÈS / 1 MIN APRÈS / 2 MIN APRÈS */}
+          <div className="grid grid-cols-4 gap-2 mb-3">
             <div>
               <div className="text-xs font-bold text-blue-700 text-center mb-2 pb-1 border-b border-blue-100">AVANT</div>
               <div className="space-y-2">
@@ -218,6 +267,15 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
               </div>
             </div>
             <div>
+              <div className="text-xs font-bold text-orange-600 text-center mb-2 pb-1 border-b border-orange-100">1 MIN APRÈS</div>
+              <div className="space-y-2">
+                <Num label="FC (bpm)" value={tm6.fc1min ?? null} min={40} max={200}
+                  onChange={v => setTm6({ fc1min: v })} />
+                <Num label="SpO₂ (%)" value={tm6.spo21min ?? null} min={70} max={100}
+                  onChange={v => setTm6({ spo21min: v })} />
+              </div>
+            </div>
+            <div>
               <div className="text-xs font-bold text-green-700 text-center mb-2 pb-1 border-b border-green-100">2 MIN APRÈS</div>
               <div className="space-y-2">
                 <Num label="FC (bpm)" value={tm6.fc2min} min={40} max={200}
@@ -229,7 +287,7 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
           </div>
 
           <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-4">
-            💡 La mesure à 2 min après permet d'évaluer la récupération cardiaque du patient.
+            💡 Les mesures à 1 min et 2 min après permettent d'évaluer la récupération cardiaque du patient.
           </p>
 
           {/* Échelle de Borg RPE 6-20 */}
