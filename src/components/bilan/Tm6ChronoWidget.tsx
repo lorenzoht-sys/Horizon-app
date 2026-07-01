@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 
-// Chrono dédié au TM6 : durée fixe (2-12 min) ou libre, avec pause/reprise.
-// Composant séparé de ChronoWidget.tsx (partagé avec équilibre/TUG) pour ne pas
-// risquer de casser ces autres tests.
+// Chrono TM6 : le minuteur tourne en continu même pendant les pauses.
+// Une pause enregistre son heure de début (au clic Pause) et sa durée
+// (calculée au clic Reprendre). Le temps affiché est le temps réel écoulé.
 
 interface Tm6ChronoResult {
   dureeReelleSecondes: number;
@@ -45,7 +45,7 @@ function playBeep() {
       osc.stop(ctx.currentTime + d + 0.25);
     });
   } catch {
-    // audio non disponible (navigateur sans Web Audio API) — pas de blocage
+    // audio non disponible
   }
 }
 
@@ -53,11 +53,10 @@ export default function Tm6ChronoWidget({ dureeMode, dureeCibleSecondes, onTermi
   const [status, setStatus] = useState<Status>('idle');
   const [elapsedSecondes, setElapsedSecondes] = useState(0);
   const [pausesDetail, setPausesDetail] = useState<{ debutSecondes: number; dureeSecondes: number }[]>([]);
-  const [pauseEnCoursSecondes, setPauseEnCoursSecondes] = useState(0);
+  // Moment (en secondes écoulées depuis le début) où la pause en cours a démarré
+  const [pauseDebutSecondes, setPauseDebutSecondes] = useState<number | null>(null);
 
   const startRef = useRef(0);
-  const baseElapsedRef = useRef(0);
-  const pauseStartRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const alerteJoueeRef = useRef(false);
 
@@ -69,7 +68,7 @@ export default function Tm6ChronoWidget({ dureeMode, dureeCibleSecondes, onTermi
   }
 
   function tick() {
-    const ecoule = baseElapsedRef.current + (performance.now() - startRef.current) / 1000;
+    const ecoule = (performance.now() - startRef.current) / 1000;
     setElapsedSecondes(ecoule);
     if (dureeMode === 'fixe' && ecoule >= dureeCibleSecondes && !alerteJoueeRef.current) {
       alerteJoueeRef.current = true;
@@ -79,46 +78,39 @@ export default function Tm6ChronoWidget({ dureeMode, dureeCibleSecondes, onTermi
 
   function demarrer() {
     startRef.current = performance.now();
-    baseElapsedRef.current = 0;
+    alerteJoueeRef.current = false;
     setElapsedSecondes(0);
+    setPausesDetail([]);
+    setPauseDebutSecondes(null);
     setStatus('running');
     intervalRef.current = setInterval(tick, 200);
   }
 
   function mettreEnPause() {
-    clearTimer();
-    baseElapsedRef.current = baseElapsedRef.current + (performance.now() - startRef.current) / 1000;
-    pauseStartRef.current = performance.now();
-    setPauseEnCoursSecondes(0);
+    // Le chrono CONTINUE — on note juste le moment de début de pause
+    const debutPause = (performance.now() - startRef.current) / 1000;
+    setPauseDebutSecondes(debutPause);
     setStatus('paused');
-    intervalRef.current = setInterval(() => {
-      setPauseEnCoursSecondes((performance.now() - pauseStartRef.current) / 1000);
-    }, 200);
   }
 
-  function reprendre() {
-    clearTimer();
-    const dureePause = (performance.now() - pauseStartRef.current) / 1000;
+  function reprendre(currentPauseDebut: number) {
+    const fin = (performance.now() - startRef.current) / 1000;
+    const dureePause = fin - currentPauseDebut;
     setPausesDetail(prev => [
       ...prev,
-      { debutSecondes: baseElapsedRef.current, dureeSecondes: dureePause },
+      { debutSecondes: currentPauseDebut, dureeSecondes: dureePause },
     ]);
-    setPauseEnCoursSecondes(0);
-    startRef.current = performance.now();
+    setPauseDebutSecondes(null);
     setStatus('running');
-    intervalRef.current = setInterval(tick, 200);
   }
 
   function terminer() {
     clearTimer();
+    const dureeReelle = (performance.now() - startRef.current) / 1000;
     let pauses = pausesDetail;
-    let dureeReelle = baseElapsedRef.current;
-    if (status === 'running') {
-      dureeReelle = baseElapsedRef.current + (performance.now() - startRef.current) / 1000;
-    } else if (status === 'paused') {
-      const dureePause = (performance.now() - pauseStartRef.current) / 1000;
-      pauses = [...pausesDetail, { debutSecondes: baseElapsedRef.current, dureeSecondes: dureePause }];
-      dureeReelle = baseElapsedRef.current;
+    if (status === 'paused' && pauseDebutSecondes !== null) {
+      const dureePause = dureeReelle - pauseDebutSecondes;
+      pauses = [...pausesDetail, { debutSecondes: pauseDebutSecondes, dureeSecondes: dureePause }];
     }
     setStatus('done');
     const dureePausesSecondes = pauses.reduce((acc, p) => acc + p.dureeSecondes, 0);
@@ -151,24 +143,27 @@ export default function Tm6ChronoWidget({ dureeMode, dureeCibleSecondes, onTermi
     : elapsedSecondes;
   const tempsEcoule = dureeMode === 'fixe' && elapsedSecondes >= dureeCibleSecondes;
 
+  // Durée de la pause en cours (le chrono tourne donc elapsed continue de monter)
+  const pauseEnCoursSecondes =
+    status === 'paused' && pauseDebutSecondes !== null
+      ? elapsedSecondes - pauseDebutSecondes
+      : 0;
+
   return (
     <div style={{ background: 'var(--color-ink)' }} className="rounded-xl p-4 flex flex-col items-center gap-3">
+      {/* Temps principal */}
       <div style={{ fontFamily: 'monospace', color: 'white', fontSize: 40, fontWeight: 700, letterSpacing: 2 }}>
         {formatMMSS(tempsAffiche)}
       </div>
 
+      {/* Indicateur pause en cours */}
       {status === 'paused' && (
         <span className="text-orange-300 text-sm font-semibold">
-          En pause — {formatMMSS(pauseEnCoursSecondes)}
+          ⏸ Pause en cours — {formatMMSS(pauseEnCoursSecondes)}
         </span>
       )}
 
-      {pausesDetail.length > 0 && status !== 'idle' && (
-        <span className="text-gray-300 text-xs">
-          Pauses : {pausesDetail.length} · {formatMMSS(pausesDetail.reduce((a, p) => a + p.dureeSecondes, 0) + (status === 'paused' ? pauseEnCoursSecondes : 0))} d'arrêt
-        </span>
-      )}
-
+      {/* Signal fin de temps */}
       {tempsEcoule && status !== 'done' && (
         <span className="text-green-400 text-sm font-semibold animate-pulse">
           Temps écoulé — appuyez sur Terminer
@@ -179,6 +174,7 @@ export default function Tm6ChronoWidget({ dureeMode, dureeCibleSecondes, onTermi
         <span className="text-green-400 text-sm font-semibold">Test terminé</span>
       )}
 
+      {/* Boutons */}
       <div className="w-full flex flex-col gap-2">
         {status === 'idle' && (
           <button type="button" onClick={demarrer}
@@ -205,7 +201,7 @@ export default function Tm6ChronoWidget({ dureeMode, dureeCibleSecondes, onTermi
 
         {status === 'paused' && (
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={reprendre}
+            <button type="button" onClick={() => pauseDebutSecondes !== null && reprendre(pauseDebutSecondes)}
               style={{ background: '#1D9E75' }}
               className="py-4 rounded-xl text-white text-base font-bold">
               ▶ Reprendre
@@ -218,6 +214,24 @@ export default function Tm6ChronoWidget({ dureeMode, dureeCibleSecondes, onTermi
           </div>
         )}
       </div>
+
+      {/* Liste des pauses enregistrées */}
+      {(pausesDetail.length > 0 || status === 'paused') && status !== 'idle' && (
+        <div className="w-full space-y-1">
+          {pausesDetail.map((p, i) => (
+            <div key={i} className="flex justify-between text-xs text-gray-300 px-1">
+              <span>Pause {i + 1}</span>
+              <span>{formatMMSS(p.dureeSecondes)} à {formatMMSS(p.debutSecondes)}</span>
+            </div>
+          ))}
+          {status === 'paused' && pauseDebutSecondes !== null && (
+            <div className="flex justify-between text-xs text-orange-300 px-1">
+              <span>Pause {pausesDetail.length + 1} (en cours)</span>
+              <span>{formatMMSS(pauseEnCoursSecondes)} à {formatMMSS(pauseDebutSecondes)}</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
