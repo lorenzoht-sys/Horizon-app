@@ -455,9 +455,19 @@ export default function Step2_Physical({ form, update, previous, testsActifs }: 
       {/* Berg Balance Scale */}
       {active.includes('berg') && (
         <section>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Berg Balance Scale</h3>
             <DeltaIndicator delta={d.bergScore} unit="pts" />
+          </div>
+          <div className="flex justify-end mb-3">
+            <a
+              href="https://www.stroke.ahajournals.org/content/suppl/2009/02/03/STROKEAHA.108.527580.DC1/Berg_Balance_Scale.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-primary hover:underline flex items-center gap-1"
+            >
+              📋 Voir le test Berg
+            </a>
           </div>
           <BergTest
             value={form.berg}

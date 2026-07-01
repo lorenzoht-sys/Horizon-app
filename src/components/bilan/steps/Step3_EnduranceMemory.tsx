@@ -406,7 +406,17 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
           </div>
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Score MoCA</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-gray-600">Score MoCA</label>
+                <a
+                  href="https://mocatest.org/the-moca-test/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                >
+                  📋 Voir le test MoCA
+                </a>
+              </div>
               <div className="flex items-center gap-3">
                 <input
                   type="number" min={0} max={30} step={1}
