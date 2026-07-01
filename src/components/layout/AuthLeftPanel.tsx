@@ -17,7 +17,7 @@ export default function AuthLeftPanel() {
         pointerEvents: 'none', userSelect: 'none', zIndex: 0, opacity: 0.07,
       }}>
         <img
-          src="/LOGO FOND LOGIN.png"
+          src="/LOGO_FOND_LOGIN.png"
           alt=""
           style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
           onError={e => { console.error('[watermark] image non trouvée :', (e.target as HTMLImageElement).src); }}
@@ -30,7 +30,7 @@ export default function AuthLeftPanel() {
       {/* Logo */}
       <div style={{ flexShrink: 0 }}>
         <img
-          src="/LOGO noir pour login.png"
+          src="/LOGO_noir_pour_login.png"
           alt="Horizon"
           style={{ height: 44, width: 'auto', display: 'block' }}
           onError={e => { console.error('[logo] image non trouvée :', (e.target as HTMLImageElement).src); }}
