@@ -72,6 +72,11 @@ export interface Bilan {
     notes: string;
   };
   tinetti?: TinettiData;
+  berg?: BergData | null;
+  mocaScore?: number | null;
+  marche10m?: { habituel: number | null; max: number | null } | null;
+  adl?: AdlData | null;
+  iadl?: IadlData | null;
   douleurEva?: number | null;
   notesProfessionnelles: string;
   objectifsSuivants: string;
@@ -120,7 +125,34 @@ export type TagPatient = 'senior' | 'post_op' | 'chronique' | 'adulte_blessure';
 export type ProfilHandicap = 'fauteuil_roulant' | 'avc_hemiplegie' | 'parkinson' | 'sep';
 export type ProfilPathologie = 'obesite' | 'diabete' | 'prothese_hanche' | 'prothese_genou';
 
-export type TestKey = 'equilibre' | 'chairStand' | 'handGrip' | 'tug' | 'souplesse' | 'tm6' | 'memoire' | 'apley' | 'tinetti' | 'eva';
+export type TestKey = 'equilibre' | 'chairStand' | 'handGrip' | 'tug' | 'souplesse' | 'tm6' | 'memoire' | 'apley' | 'tinetti' | 'eva' | 'berg' | 'moca' | 'marche10m' | 'adl';
+
+// ── Berg Balance Scale ────────────────────────────────────────────────────────
+export type BergScore = 0 | 1 | 2 | 3 | 4;
+export interface BergData {
+  items: (BergScore | null)[];
+}
+
+// ── ADL / IADL (Katz) ────────────────────────────────────────────────────────
+export interface AdlData {
+  bain: boolean;
+  habillage: boolean;
+  toilette: boolean;
+  transfert: boolean;
+  continence: boolean;
+  alimentation: boolean;
+}
+
+export interface IadlData {
+  telephone: boolean;
+  courses: boolean;
+  cuisine: boolean;
+  menage: boolean;
+  linge: boolean;
+  transport: boolean;
+  medicaments: boolean;
+  argent: boolean;
+}
 
 // ============================================================
 // TEST DE TINETTI (POMA) — équilibre & marche

@@ -15,6 +15,10 @@ export const NORMES_SCORING: Record<string, NormeScoring> = {
   memoire:           { note1: 3,   note2: 5,   note3: 7,   note4: 9,   lowerIsBetter: false },
   apley:             { note1: 1.49, note2: 2.49, note3: 3.49, note4: 4.0, lowerIsBetter: false },
   tinetti:           { note1: 18,   note2: 18,   note3: 23,   note4: 23,  lowerIsBetter: false },
+  berg:              { note1: 20,  note2: 35,  note3: 44,  note4: 48,  lowerIsBetter: false },
+  moca:              { note1: 18,  note2: 22,  note3: 25,  note4: 28,  lowerIsBetter: false },
+  marche10m:         { note1: 25,  note2: 17,  note3: 12.5, note4: 10, lowerIsBetter: true  },
+  adlIadl:           { note1: 4,   note2: 7,   note3: 10,  note4: 13,  lowerIsBetter: false },
 };
 
 // ── Durées disponibles pour le TM6 en mode "durée fixe" (secondes) ───────

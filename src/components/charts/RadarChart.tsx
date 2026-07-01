@@ -10,6 +10,7 @@ import {
 import type { Bilan, TestKey } from '../../types';
 import { useNormalize } from '../../hooks/useNormalize';
 import { TEST_RADAR_LABELS, ALL_TESTS } from '../../data/profiles';
+import { computeBergScore } from '../../data/berg';
 
 interface Props {
   initial: Bilan | null;
@@ -40,11 +41,25 @@ function bilanAxisValue(key: TestKey, bilan: Bilan, normalize: ReturnType<typeof
     case 'apley':
       return bilan.apley?.score != null ? Math.round((bilan.apley.score / 4) * 100) : 0;
     case 'tinetti':
-      // pas d'axe radar pour Tinetti (absent de TEST_RADAR_LABELS) — filtré avant d'arriver ici
       return 0;
     case 'eva':
-      // EVA absent de TEST_RADAR_LABELS — filtré avant d'arriver ici
       return 0;
+    case 'berg': {
+      const score = computeBergScore(bilan.berg);
+      return score !== null ? Math.round((score / 56) * 100) : 0;
+    }
+    case 'moca':
+      return bilan.mocaScore != null ? Math.round((bilan.mocaScore / 30) * 100) : 0;
+    case 'marche10m': {
+      const h = bilan.marche10m?.habituel;
+      if (!h || h <= 0) return 0;
+      return Math.min(100, Math.round(((10 / h) / 2.0) * 100));
+    }
+    case 'adl': {
+      const adlScore = bilan.adl ? Object.values(bilan.adl).filter(Boolean).length : 0;
+      const iadlScore = bilan.iadl ? Object.values(bilan.iadl).filter(Boolean).length : 0;
+      return Math.round(((adlScore + iadlScore) / 14) * 100);
+    }
   }
 }
 

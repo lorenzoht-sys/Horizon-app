@@ -6,7 +6,7 @@ interface TestInfo {
   key: TestKey;
   label: string;
   description: string;
-  categorie: 'physique' | 'endurance' | 'cognitif';
+  categorie: 'physique' | 'endurance' | 'cognitif' | 'autonomie';
 }
 
 const TESTS_INFO: TestInfo[] = [
@@ -17,15 +17,20 @@ const TESTS_INFO: TestInfo[] = [
   { key: 'souplesse',  label: 'Souplesse scapulaire',         description: 'Distance doigts/pieds — flexibilité postérieure',                 categorie: 'physique'  },
   { key: 'apley',      label: 'Apley Scratch Test',           description: 'Amplitude épaule en 4 niveaux — mobilité du membre supérieur',    categorie: 'physique'  },
   { key: 'tinetti',    label: 'Tinetti (POMA)',               description: 'Grille équilibre & marche gériatrique — score /28 (HAS chutes)', categorie: 'physique'  },
+  { key: 'berg',       label: 'Berg Balance Scale',           description: 'Grille 14 items, score /56 — gold standard risque de chute',      categorie: 'physique'  },
+  { key: 'marche10m',  label: 'Test de marche 10 m',         description: 'Vitesse de marche habituelle & max (m/s) — mobilité fonctionnelle', categorie: 'physique' },
   { key: 'eva',        label: 'Douleur EVA',                  description: 'Échelle numérique 0-10 — douleur ressentie au moment du bilan',   categorie: 'physique'  },
   { key: 'tm6',        label: 'TM6 — Marche 6 minutes',      description: 'Endurance cardio-respiratoire — distance, FC, SpO₂ (HAS)',        categorie: 'endurance' },
   { key: 'memoire',    label: 'Mémoire (Dubois MIS)',         description: 'Rappel libre et indicé — dépistage trouble mnésique',             categorie: 'cognitif'  },
+  { key: 'moca',       label: 'MoCA (/30)',                   description: 'Montreal Cognitive Assessment — dépistage troubles cognitifs légers', categorie: 'cognitif' },
+  { key: 'adl',        label: 'ADL / IADL (Katz)',           description: 'Autonomie de base (6) + instrumentale (8) — score total /14',     categorie: 'autonomie' },
 ];
 
 const CATEGORIES: { key: TestInfo['categorie']; label: string }[] = [
   { key: 'physique',   label: 'Tests physiques' },
   { key: 'endurance',  label: 'Endurance' },
   { key: 'cognitif',   label: 'Cognitif' },
+  { key: 'autonomie',  label: 'Autonomie' },
 ];
 
 function computeDefauts(participant: Participant): TestKey[] {
@@ -34,7 +39,7 @@ function computeDefauts(participant: Participant): TestKey[] {
   );
   const defauts: TestKey[] = ['equilibre', 'chairStand', 'tug', 'tm6'];
   if (age >= 70) {
-    defauts.push('tinetti', 'memoire');
+    defauts.push('tinetti', 'memoire', 'berg', 'moca', 'adl');
   }
   return defauts;
 }

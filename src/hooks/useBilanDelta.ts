@@ -1,5 +1,6 @@
 import type { Bilan, DeltaResult, Direction } from '../types';
 import { computeTinettiScores } from '../data/tinetti';
+import { computeBergScore } from '../data/berg';
 
 function calcDelta(current: number | null, previous: number | null, lowerIsBetter: boolean): DeltaResult {
   if (current === null) {
@@ -25,6 +26,14 @@ function calcDelta(current: number | null, previous: number | null, lowerIsBette
   return { current, previous, delta, direction, lowerIsBetter, isPositive };
 }
 
+function adlTotal(b: Bilan | null): number | null {
+  if (!b) return null;
+  const a = b.adl ? Object.values(b.adl).filter(Boolean).length : null;
+  const i = b.iadl ? Object.values(b.iadl).filter(Boolean).length : null;
+  if (a === null && i === null) return null;
+  return (a ?? 0) + (i ?? 0);
+}
+
 export function useBilanDelta(current: Bilan, previous: Bilan | null) {
   const p = previous;
   const tinettiCur = computeTinettiScores(current.tinetti);
@@ -47,15 +56,16 @@ export function useBilanDelta(current: Bilan, previous: Bilan | null) {
       p?.memoire.dubois?.scoreMIS ?? null,
       false,
     ),
-    apleyScore: calcDelta(
-      current.apley?.score ?? null,
-      p?.apley?.score ?? null,
-      false,
-    ),
+    apleyScore: calcDelta(current.apley?.score ?? null, p?.apley?.score ?? null, false),
     tinettiScore: calcDelta(
       tinettiCur?.complet ? tinettiCur.scoreTotal : null,
       tinettiPrev?.complet ? tinettiPrev.scoreTotal : null,
       false,
     ),
+    bergScore: calcDelta(computeBergScore(current.berg), computeBergScore(p?.berg ?? null), false),
+    mocaScore: calcDelta(current.mocaScore ?? null, p?.mocaScore ?? null, false),
+    marche10mHabituel: calcDelta(current.marche10m?.habituel ?? null, p?.marche10m?.habituel ?? null, true),
+    marche10mMax: calcDelta(current.marche10m?.max ?? null, p?.marche10m?.max ?? null, true),
+    adlIadlTotal: calcDelta(adlTotal(current), adlTotal(p), false),
   };
 }

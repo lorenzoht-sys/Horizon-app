@@ -55,7 +55,7 @@ function Num({ label, value, onChange, unit, min, max, step = 1 }: {
   );
 }
 
-const ENDO_TESTS: TestKey[] = ['tm6', 'memoire'];
+const ENDO_TESTS: TestKey[] = ['tm6', 'memoire', 'moca'];
 
 export default function Step3_EnduranceMemory({ form, update, previous, testsActifs }: Props) {
   const d = useBilanDelta(form as Bilan, previous);
@@ -73,7 +73,7 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
     : ENDO_TESTS;
 
   // memoire est toujours obligatoire, ne pas proposer de l'ajouter
-  const addable = ENDO_TESTS.filter(k => !active.includes(k) && k !== 'memoire');
+  const addable = ENDO_TESTS.filter(k => !active.includes(k) && k !== 'memoire' && k !== 'tm6');
   const hasAny = active.length > 0;
 
   return (
@@ -394,6 +394,52 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
               });
             }}
           />
+        </section>
+      )}
+
+      {/* MoCA — Montreal Cognitive Assessment */}
+      {active.includes('moca') && (
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">MoCA — Évaluation cognitive</h3>
+            <DeltaIndicator delta={d.mocaScore} unit="pts" />
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Score MoCA</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number" min={0} max={30} step={1}
+                  value={form.mocaScore ?? ''}
+                  onChange={e => update({ mocaScore: e.target.value === '' ? null : Math.min(30, Math.max(0, Number(e.target.value))) })}
+                  className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  placeholder="—"
+                />
+                <span className="text-xs text-gray-400">/ 30</span>
+                {form.mocaScore !== null && form.mocaScore !== undefined && (() => {
+                  const s = form.mocaScore!;
+                  const color = s >= 26 ? 'bg-green-100 text-green-700 border-green-200'
+                    : s >= 22 ? 'bg-orange-100 text-orange-700 border-orange-200'
+                    : 'bg-red-100 text-red-700 border-red-200';
+                  const label = s >= 26 ? 'Normal' : s >= 22 ? 'Trouble léger à modéré' : 'Trouble sévère';
+                  return (
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${color}`}>
+                      {label}
+                    </span>
+                  );
+                })()}
+              </div>
+            </div>
+            <p className="text-xs text-gray-400">
+              Seuil : ≥ 26 = normal · 22-25 = trouble cognitif léger · &lt; 22 = atteinte significative
+            </p>
+            {form.mocaScore !== null && form.mocaScore !== undefined && (
+              <button type="button" onClick={() => update({ mocaScore: null })}
+                className="text-xs text-gray-400 hover:text-gray-600 underline">
+                Effacer
+              </button>
+            )}
+          </div>
         </section>
       )}
 

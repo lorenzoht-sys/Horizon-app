@@ -10,7 +10,7 @@ export interface ProfileConfig {
   introMessage: string;
 }
 
-export const ALL_TESTS: TestKey[] = ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse', 'tm6', 'memoire', 'apley', 'tinetti', 'eva'];
+export const ALL_TESTS: TestKey[] = ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse', 'tm6', 'memoire', 'apley', 'tinetti', 'eva', 'berg', 'moca', 'marche10m', 'adl'];
 
 export const PROFILES: Record<ProfilPatient, ProfileConfig> = {
   senior_chutes: {
@@ -71,6 +71,10 @@ export const TEST_LABELS: Record<TestKey, string> = {
   apley:      'Apley Scratch Test',
   tinetti:    'Tinetti (POMA) — Équilibre & Marche',
   eva:        'Douleur EVA',
+  berg:       'Berg Balance Scale',
+  moca:       'MoCA — Cognition',
+  marche10m:  'Test de marche 10 m',
+  adl:        'ADL / IADL (Katz)',
 };
 
 // ── Système de tags multiples ──────────────────────────────────
@@ -90,7 +94,7 @@ export const TAG_CONFIG: Record<TagPatient, TagConfig> = {
     emoji: '🧓',
     description: 'Prévention des chutes · Équilibre · Mémoire',
     color: '#1A5F9E',
-    tests: ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse', 'tm6', 'memoire'],
+    tests: ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse', 'tm6', 'memoire', 'berg', 'moca', 'marche10m', 'adl'],
     introMessage: 'Bravo {prenom}, votre équilibre et votre forme progressent !',
   },
   post_op: {
@@ -98,7 +102,7 @@ export const TAG_CONFIG: Record<TagPatient, TagConfig> = {
     emoji: '🏥',
     description: 'Rééducation chirurgicale · Force · Mobilité',
     color: '#BA7517',
-    tests: ['chairStand', 'handGrip', 'tug', 'souplesse'],
+    tests: ['chairStand', 'handGrip', 'tug', 'souplesse', 'berg', 'marche10m'],
     introMessage: 'Belle progression dans votre récupération, {prenom} !',
   },
   chronique: {
@@ -106,7 +110,7 @@ export const TAG_CONFIG: Record<TagPatient, TagConfig> = {
     emoji: '💊',
     description: 'Cardiaque · BPCO · Diabète · Cancer...',
     color: '#534AB7',
-    tests: ['chairStand', 'tug', 'tm6'],
+    tests: ['chairStand', 'tug', 'tm6', 'marche10m', 'adl'],
     introMessage: "Votre endurance s'améliore semaine après semaine, {prenom} !",
   },
   adulte_blessure: {
@@ -144,4 +148,8 @@ export const TEST_RADAR_LABELS: Partial<Record<TestKey, string>> = {
   souplesse:  'Souplesse',
   tm6:        'Endurance',
   memoire:    'Mémoire',
+  berg:       'Berg',
+  adl:        'Autonomie',
+  marche10m:  'Vitesse',
+  moca:       'MoCA',
 };

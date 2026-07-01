@@ -6,6 +6,8 @@ import { TEST_LABELS } from '../../../data/profiles';
 import { Plus } from 'lucide-react';
 import ChronoWidget from '../ChronoWidget';
 import TinettiTest from '../TinettiTest';
+import BergTest from '../BergTest';
+import AdlTest from '../AdlTest';
 
 
 // ─── Souplesse +/- ──────────────────────────────────────────────
@@ -114,7 +116,7 @@ function Num({ label, value, onChange, unit, min, max, step = 0.1 }: {
   );
 }
 
-const PHYSICAL_TESTS: TestKey[] = ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse', 'apley', 'tinetti', 'eva'];
+const PHYSICAL_TESTS: TestKey[] = ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse', 'apley', 'tinetti', 'eva', 'berg', 'marche10m', 'adl'];
 
 // ─── Apley's Scratch Test ───────────────────────────────────────────
 
@@ -447,6 +449,86 @@ export default function Step2_Physical({ form, update, previous, testsActifs }: 
               Effacer
             </button>
           )}
+        </section>
+      )}
+
+      {/* Berg Balance Scale */}
+      {active.includes('berg') && (
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Berg Balance Scale</h3>
+            <DeltaIndicator delta={d.bergScore} unit="pts" />
+          </div>
+          <BergTest
+            value={form.berg}
+            onChange={v => update({ berg: v })}
+          />
+        </section>
+      )}
+
+      {/* Test de marche 10 mètres */}
+      {active.includes('marche10m') && (
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Test de marche 10 m</h3>
+            <DeltaIndicator delta={d.marche10mHabituel} unit="s" />
+          </div>
+          <div className="grid grid-cols-2 gap-4 mb-3">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-600">Vitesse habituelle</p>
+              <ChronoWidget
+                mode="up-MMSScc"
+                onStop={s => update({ marche10m: { ...form.marche10m, habituel: parseFloat(s.toFixed(2)) } })}
+              />
+              <Num label="Temps (s)" value={form.marche10m?.habituel ?? null} unit="s" min={0} max={120} step={0.01}
+                onChange={v => update({ marche10m: { habituel: v, max: form.marche10m?.max ?? null } })} />
+              {form.marche10m?.habituel != null && form.marche10m.habituel > 0 && (() => {
+                const v = 10 / form.marche10m.habituel;
+                const color = v >= 1.0 ? 'text-green-700 bg-green-50 border-green-200'
+                  : v >= 0.8 ? 'text-orange-700 bg-orange-50 border-orange-200'
+                  : 'text-red-700 bg-red-50 border-red-200';
+                return (
+                  <div className={`text-xs font-semibold px-2 py-1 rounded-lg border ${color}`}>
+                    {v.toFixed(2)} m/s
+                    {v < 0.8 && ' — Risque de chute'}
+                    {v >= 0.8 && v < 1.0 && ' — Limite'}
+                    {v >= 1.0 && ' — Normal'}
+                  </div>
+                );
+              })()}
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-600">Vitesse maximale</p>
+              <ChronoWidget
+                mode="up-MMSScc"
+                onStop={s => update({ marche10m: { ...form.marche10m, max: parseFloat(s.toFixed(2)) } })}
+              />
+              <Num label="Temps (s)" value={form.marche10m?.max ?? null} unit="s" min={0} max={120} step={0.01}
+                onChange={v => update({ marche10m: { habituel: form.marche10m?.habituel ?? null, max: v } })} />
+              {form.marche10m?.max != null && form.marche10m.max > 0 && (
+                <div className="text-xs font-semibold px-2 py-1 rounded-lg border text-primary bg-primary/5 border-primary/20">
+                  {(10 / form.marche10m.max).toFixed(2)} m/s max
+                </div>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-gray-400">Seuil : &lt; 0,8 m/s = risque de chute · &gt; 1,0 m/s = autonomie préservée</p>
+        </section>
+      )}
+
+      {/* ADL / IADL (Katz) */}
+      {active.includes('adl') && (
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">ADL / IADL — Autonomie fonctionnelle</h3>
+            <DeltaIndicator delta={d.adlIadlTotal} unit="pts" />
+          </div>
+          <AdlTest
+            adl={form.adl}
+            iadl={form.iadl}
+            onAdlChange={v => update({ adl: v })}
+            onIadlChange={v => update({ iadl: v })}
+          />
         </section>
       )}
 
