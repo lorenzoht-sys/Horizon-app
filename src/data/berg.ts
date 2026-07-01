@@ -157,7 +157,7 @@ export function computeBergScore(berg: BergData | null | undefined): number | nu
   if (!berg) return null;
   const filled = berg.items.filter((v): v is BergScore => v !== null);
   if (filled.length === 0) return null;
-  return filled.reduce((s, v) => s + v, 0);
+  return filled.reduce((s, v) => s + v, 0 as number);
 }
 
 export type BergRisque = 'faible' | 'modere' | 'eleve';

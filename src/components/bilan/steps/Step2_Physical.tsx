@@ -478,7 +478,7 @@ export default function Step2_Physical({ form, update, previous, testsActifs }: 
               <p className="text-xs font-semibold text-gray-600">Vitesse habituelle</p>
               <ChronoWidget
                 mode="up-MMSScc"
-                onStop={s => update({ marche10m: { ...form.marche10m, habituel: parseFloat(s.toFixed(2)) } })}
+                onStop={s => update({ marche10m: { habituel: parseFloat(s.toFixed(2)), max: form.marche10m?.max ?? null } })}
               />
               <Num label="Temps (s)" value={form.marche10m?.habituel ?? null} unit="s" min={0} max={120} step={0.01}
                 onChange={v => update({ marche10m: { habituel: v, max: form.marche10m?.max ?? null } })} />
@@ -501,7 +501,7 @@ export default function Step2_Physical({ form, update, previous, testsActifs }: 
               <p className="text-xs font-semibold text-gray-600">Vitesse maximale</p>
               <ChronoWidget
                 mode="up-MMSScc"
-                onStop={s => update({ marche10m: { ...form.marche10m, max: parseFloat(s.toFixed(2)) } })}
+                onStop={s => update({ marche10m: { habituel: form.marche10m?.habituel ?? null, max: parseFloat(s.toFixed(2)) } })}
               />
               <Num label="Temps (s)" value={form.marche10m?.max ?? null} unit="s" min={0} max={120} step={0.01}
                 onChange={v => update({ marche10m: { habituel: form.marche10m?.habituel ?? null, max: v } })} />
