@@ -18,6 +18,7 @@ import { supabase } from '../lib/supabase';
 
 const ModalPlanificateur = lazy(() => import('../components/planning/ModalPlanificateur'));
 const ModalInsererPatient = lazy(() => import('../components/planning/ModalInsererPatient'));
+const AgendaPatientView = lazy(() => import('../components/planning/AgendaPatientView'));
 
 // ── Fix icônes Leaflet ─────────────────────────────────────────────────────────
 
@@ -160,6 +161,7 @@ export default function TourneePage() {
     return { afficherBandeau: actifs.length > 0 && !aDesSeances, nbContratsActifs: actifs.length };
   }, [contrats, seances]);
 
+  const [vue, setVue] = useState<'tournee' | 'agenda'>('tournee');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [noteModal, setNoteModal] = useState<typeof seancesEnrichies[number] | null>(null);
   const heureDepart = '08:00';
@@ -286,18 +288,49 @@ export default function TourneePage() {
   return (
     <PageWrapper>
       {/* ── Header ─────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
-          <h1 className="font-heading font-bold text-2xl text-dark">Tournée du jour</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Séances depuis vos contrats · patients à optimiser géographiquement</p>
+          <h1 className="font-heading font-bold text-2xl text-dark">
+            {vue === 'tournee' ? 'Tournée du jour' : 'Agenda patient'}
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {vue === 'tournee'
+              ? 'Séances depuis vos contrats · patients à optimiser géographiquement'
+              : 'Disponibilités et créneaux hebdomadaires par patient'}
+          </p>
         </div>
         <div className="flex items-center gap-3">
-          <input type="date" value={date}
-            onChange={e => { setDate(e.target.value); setEtapes([]); }}
-            className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary" />
+          {vue === 'tournee' && (
+            <input type="date" value={date}
+              onChange={e => { setDate(e.target.value); setEtapes([]); }}
+              className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary" />
+          )}
           <Link to="/agenda" className="text-xs text-primary hover:underline">Voir l'agenda →</Link>
         </div>
       </div>
+
+      {/* ── Onglets vue ────────────────────────────────────────────── */}
+      <div className="flex gap-1 border-b border-gray-200 mb-5">
+        {(['tournee', 'agenda'] as const).map(v => (
+          <button
+            key={v}
+            onClick={() => setVue(v)}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              vue === v
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-dark'
+            }`}
+          >
+            {v === 'tournee' ? 'Tournée du jour' : 'Agenda patient'}
+          </button>
+        ))}
+      </div>
+
+      {vue === 'agenda' ? (
+        <Suspense fallback={null}>
+          <AgendaPatientView participants={participants} seances={seances} />
+        </Suspense>
+      ) : (<>
 
       {/* ── Bandeau invitation à planifier ─────────────────────── */}
       {afficherBandeau && (
@@ -579,6 +612,9 @@ export default function TourneePage() {
           )}
         </div>
       </div>
+
+      </>)}
+
       {noteModal && (() => {
         const p = noteModal.patient!;
         return (
