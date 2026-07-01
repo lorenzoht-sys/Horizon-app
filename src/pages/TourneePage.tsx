@@ -13,12 +13,11 @@ import type { Participant, Seance, IndisponibilitePierre, JourSemaine } from '..
 import { geocodeAdresse } from '../utils/geocodeAdresse';
 import { Link, useNavigate } from 'react-router-dom';
 import { useIndispos } from '../hooks/useIndispos';
-import { useZones } from '../hooks/useZones';
 import { supabase } from '../lib/supabase';
 
 const ModalPlanificateur = lazy(() => import('../components/planning/ModalPlanificateur'));
 const ModalInsererPatient = lazy(() => import('../components/planning/ModalInsererPatient'));
-const AgendaPatientView = lazy(() => import('../components/planning/AgendaPatientView'));
+const PlanningGrilleView = lazy(() => import('../components/planning/PlanningGrilleView'));
 
 // ── Fix icônes Leaflet ─────────────────────────────────────────────────────────
 
@@ -101,7 +100,6 @@ export default function TourneePage() {
   const { seances, seancesDuJour, changerStatut, creerSeance, bulkCreerSeances, retirerPlanifieesLocales } = useAgenda();
   const { contrats } = useContrats();
   const { indispos } = useIndispos();
-  const { zones } = useZones();
   const navigate = useNavigate();
 
   const [praticienSettings, setPraticienSettings] = useState<Record<string, string>>(() => {
@@ -328,7 +326,13 @@ export default function TourneePage() {
 
       {vue === 'agenda' ? (
         <Suspense fallback={null}>
-          <AgendaPatientView participants={participants} seances={seances} />
+          <PlanningGrilleView
+            participants={participants}
+            seances={seances}
+            contrats={contrats}
+            indispos={indispos}
+            bulkCreerSeances={bulkCreerSeances}
+          />
         </Suspense>
       ) : (<>
 
@@ -632,23 +636,12 @@ export default function TourneePage() {
         <Suspense fallback={null}>
           <ModalPlanificateur
             onClose={() => setShowPlanificateur(false)}
-            participants={participants}
             contrats={contrats}
             seances={seances}
-            indispos={indispos}
-            zones={zones}
-            depart={depart}
-            departAdresse={departAdresse}
-            departErreur={departErreur}
-            heureDebutJournee={heureDepart}
-            bulkCreerSeances={async (data) => {
-              // Retire les séances planifiees stale du state local avant d'insérer
-              // les nouvelles (la table rase vient d'être faite côté DB par la route
-              // /api/seances/supprimer-planifiees, mais le state React ne le sait pas encore).
-              const contratIds = [...new Set(data.map(s => s.contratId).filter((id): id is string => id != null))];
+            onSuccess={() => {
+              const actifIds = contrats.filter(c => c.statut === 'actif').map(c => c.id);
               const aujourd = new Date().toISOString().split('T')[0];
-              retirerPlanifieesLocales(contratIds, aujourd);
-              await bulkCreerSeances(data);
+              retirerPlanifieesLocales(actifIds, aujourd);
             }}
           />
         </Suspense>
