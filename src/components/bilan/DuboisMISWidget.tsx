@@ -20,11 +20,11 @@ type Step = 'closed' | 'step1' | 'step2' | 'step3' | 'step4' | 'done';
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
 const MOTS = [
-  { mot: 'BÉBÉ',    categorie: 'Prénom' },
-  { mot: 'SOLEIL',  categorie: 'Astre' },
-  { mot: 'BRUN',    categorie: 'Couleur' },
-  { mot: 'LIBERTÉ', categorie: 'Sentiment' },
-  { mot: 'CHAPEAU', categorie: 'Vêtement' },
+  { mot: 'MUSETTE',    indice: "C'est un type de sac" },
+  { mot: 'SOLEIL',     indice: "C'est un astre" },
+  { mot: 'MAIRIE',     indice: "C'est un bâtiment public" },
+  { mot: 'MARGUERITE', indice: "C'est une fleur" },
+  { mot: 'CAMION',     indice: "C'est un véhicule" },
 ];
 
 const TIMER_INITIAL = 300; // 5 minutes en secondes
@@ -113,9 +113,9 @@ function IndiciageSection({
       <p className="text-xs font-semibold text-amber-800">
         Donner les indices catégoriels pour les mots manquants :
       </p>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-amber-700">
+      <div className="flex flex-col gap-1 text-xs text-amber-700">
         {MOTS.map(m => (
-          <span key={m.mot}>Quel était le <strong>{m.categorie}</strong> ?</span>
+          <span key={m.mot}><strong>{m.indice}</strong> — quel était ce mot ?</span>
         ))}
       </div>
       <div className="flex items-center gap-3 pt-1">
@@ -271,7 +271,7 @@ export default function DuboisMISWidget({ value, onChange }: Props) {
             {MOTS.map(m => (
               <div key={m.mot} className="flex items-center gap-4 py-2 border-b border-slate-100 last:border-0">
                 <span className="text-xl font-black text-slate-800 w-28">{m.mot}</span>
-                <span className="text-sm text-slate-500">→ catégorie : <strong>{m.categorie}</strong></span>
+                <span className="text-sm text-slate-500 italic">{m.indice}</span>
               </div>
             ))}
           </div>
