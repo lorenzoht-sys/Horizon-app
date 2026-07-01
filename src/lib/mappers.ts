@@ -173,6 +173,7 @@ export function dbToBilan(row: any): Bilan {
       mesuresParMinute: row.tm6_mesures_par_minute ?? undefined,
       nbPas: row.tm6_nb_pas ?? null,
       nbTours: row.tm6_nb_tours ?? null,
+      varianteId: row.tm6_variante_id ?? null,
     },
     memoire: {
       scoreImmediat: row.memoire_score_immediat,
@@ -228,6 +229,7 @@ export function bilanToDb(participantId: string, b: Omit<Bilan, 'id'> & { id?: s
     tm6_mesures_par_minute: b.tm6?.mesuresParMinute ?? null,
     tm6_nb_pas: b.tm6?.nbPas ?? null,
     tm6_nb_tours: b.tm6?.nbTours ?? null,
+    tm6_variante_id: b.tm6?.varianteId ?? null,
     memoire_score_immediat: b.memoire?.scoreImmediat ?? null,
     memoire_score_differe: b.memoire?.scoreDiffere ?? null,
     memoire_dubois: b.memoire?.dubois ?? null,

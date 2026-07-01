@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Bilan, TestKey, ProfilHandicap } from '../../../types';
+import { useTm6Variantes } from '../../../hooks/useTm6Variantes';
 
 const BORG_RPE_LEVELS = [
   { v: 6,  label: 'Aucun effort' },
@@ -59,6 +60,7 @@ const ENDO_TESTS: TestKey[] = ['tm6', 'memoire'];
 export default function Step3_EnduranceMemory({ form, update, previous, testsActifs }: Props) {
   const d = useBilanDelta(form as Bilan, previous);
   const [extras, setExtras] = useState<TestKey[]>([]);
+  const { variantes } = useTm6Variantes();
   const tm6 = form.tm6;
   const setTm6 = (patch: Partial<typeof tm6>) => update({ tm6: { ...tm6, ...patch } });
   const dureeModeEff: 'fixe' | 'libre' = tm6.dureeMode ?? 'fixe';
@@ -113,6 +115,23 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
               ))}
             </div>
           </div>
+
+          {/* Variante du test */}
+          {variantes.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs font-medium text-gray-600 mb-2">Variante du test</p>
+              <select
+                value={tm6.varianteId ?? ''}
+                onChange={e => setTm6({ varianteId: e.target.value || null })}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
+              >
+                <option value="">Standard (marche 6 min)</option>
+                {variantes.map(v => (
+                  <option key={v.id} value={v.id}>{v.nom}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Durée du test */}
           <div className="mb-4">

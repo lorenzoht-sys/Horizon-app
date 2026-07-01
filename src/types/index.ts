@@ -46,6 +46,7 @@ export interface Bilan {
     mesuresParMinute?: { bpm: number | null; spo2: number | null }[];
     nbPas?: number | null;
     nbTours?: number | null;
+    varianteId?: string | null;
   };
 
   memoire: {
@@ -826,5 +827,14 @@ export interface ProgrammeV2 {
   planning: ProgrammePlanningV2[];
   /** Objectif de séances AUTONOMES (réalisées par le patient seul) fixé par le praticien. Distinct du champ texte `objectif` et des séances ENCADRÉES (contrats). */
   objectifSeancesAutonomes?: number;
+}
+
+export interface Tm6Variante {
+  id: string;
+  nom: string;
+  distanceRef?: number | null;
+  typeMesure: 'distance' | 'pas' | 'tours';
+  intervalles?: unknown;
+  createdAt?: string;
 }
 

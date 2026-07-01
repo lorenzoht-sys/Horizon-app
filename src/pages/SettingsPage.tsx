@@ -8,6 +8,8 @@ import { SectionApplication } from '../components/pwa/PWAComponents';
 import { supabase } from '../lib/supabase';
 import { dbToParticipant, participantToDb, bilanToDb, programmeToDb } from '../lib/mappers';
 import { useRappelPreferences, type RappelPreferences } from '../hooks/useRappelPreferences';
+import { useTm6Variantes } from '../hooks/useTm6Variantes';
+import type { Tm6Variante } from '../types';
 
 const JOURS_LABELS: Record<JourSemaine | 'dim', string> = {
   lun: 'Lundi', mar: 'Mardi', mer: 'Mercredi', jeu: 'Jeudi',
@@ -89,6 +91,110 @@ function ModalAjoutIndispo({ onSave, onClose }: ModalIndispoProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Section variantes TM6 ─────────────────────────────────────────────────────
+
+const TYPE_MESURE_LABELS: Record<Tm6Variante['typeMesure'], string> = {
+  distance: 'Distance (mètres)',
+  pas: 'Nombre de pas',
+  tours: 'Nombre de tours',
+};
+
+function SectionTm6Variantes() {
+  const { variantes, loading, creer, supprimer } = useTm6Variantes();
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState<{ nom: string; typeMesure: Tm6Variante['typeMesure']; distanceRef: string }>({
+    nom: '', typeMesure: 'distance', distanceRef: '',
+  });
+
+  async function handleSave() {
+    if (!form.nom.trim()) { toast.error('Nom requis'); return; }
+    await creer(form.nom.trim(), form.typeMesure, form.distanceRef ? Number(form.distanceRef) : null);
+    setForm({ nom: '', typeMesure: 'distance', distanceRef: '' });
+    setShowForm(false);
+    toast.success('Variante ajoutée');
+  }
+
+  async function handleDelete(id: string, nom: string) {
+    if (!confirm(`Supprimer la variante "${nom}" ?`)) return;
+    await supprimer(id);
+    toast.success('Variante supprimée');
+  }
+
+  return (
+    <section>
+      <SectionTitle title="🚶 TM6 — Variantes" />
+      <p className="text-xs text-gray-500 mb-3">
+        Créez des variantes du test de marche 6 minutes (stepper, pédalier, couloir…).
+        Elles apparaissent dans le formulaire de bilan.
+      </p>
+
+      {loading ? (
+        <p className="text-xs text-gray-400">Chargement…</p>
+      ) : (
+        <div className="space-y-2 mb-3">
+          {variantes.length === 0 ? (
+            <p className="text-xs text-gray-400 italic">Aucune variante. Seul le test standard est disponible.</p>
+          ) : variantes.map(v => (
+            <div key={v.id} className="flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-xl border border-gray-200">
+              <div>
+                <span className="text-sm font-medium text-dark">{v.nom}</span>
+                <span className="ml-2 text-xs text-gray-400">{TYPE_MESURE_LABELS[v.typeMesure]}</span>
+                {v.distanceRef && <span className="ml-2 text-xs text-gray-400">ref. {v.distanceRef} m</span>}
+              </div>
+              <button onClick={() => handleDelete(v.id, v.nom)} className="text-gray-400 hover:text-red-500 transition-colors">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showForm ? (
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Nom</label>
+            <input type="text" value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))}
+              placeholder="ex : Stepper Tunturi, Pédalier couché, Couloir 30m"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Mesure</label>
+              <select value={form.typeMesure} onChange={e => setForm(f => ({ ...f, typeMesure: e.target.value as Tm6Variante['typeMesure'] }))}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary">
+                {(Object.entries(TYPE_MESURE_LABELS) as [Tm6Variante['typeMesure'], string][]).map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Distance référence (m) — optionnel</label>
+              <input type="number" min={0} value={form.distanceRef} onChange={e => setForm(f => ({ ...f, distanceRef: e.target.value }))}
+                placeholder="ex : 400"
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleSave}
+              className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-dark transition-colors">
+              <Save size={14} /> Enregistrer
+            </button>
+            <button onClick={() => setShowForm(false)}
+              className="px-4 py-2 text-sm text-gray-500 hover:text-dark transition-colors">
+              Annuler
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setShowForm(true)}
+          className="flex items-center gap-2 border border-dashed border-gray-300 text-gray-500 hover:text-dark hover:border-gray-400 px-4 py-2 rounded-xl text-sm transition-colors">
+          <Plus size={14} /> Ajouter une variante
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -822,6 +928,9 @@ export default function SettingsPage() {
 
           {/* ── Rappels automatiques ── */}
           <SectionRappelsGlobal />
+
+          {/* ── TM6 variantes ── */}
+          <SectionTm6Variantes />
 
           {/* ── Indisponibilités ── */}
           <SectionIndisponibilites />
