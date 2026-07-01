@@ -35,6 +35,7 @@ function emptyBilan(trimestre: number): BilanForm {
       nbPauses: 0, dureePausesSecondes: 0, notesPauses: '',
     },
     memoire: { scoreImmediat: null, scoreDiffere: null },
+    douleurEva: null,
     notesProfessionnelles: '', objectifsSuivants: '', pointsVigilance: '', messageClient: '',
     notesBilan: undefined,
     interpretationIA: null,
@@ -231,9 +232,9 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
       );
       case 1: return (
         <div className="space-y-8">
-          <Step2_Physical form={form} update={update} previous={previous} testsActifs={ALL_TESTS} profilHandicap={participant.profilHandicap} />
+          <Step2_Physical form={form} update={update} previous={previous} testsActifs={participant.testsActifs ?? ALL_TESTS} profilHandicap={participant.profilHandicap} />
           <div className="border-t border-gray-100 pt-6">
-            <Step3_EnduranceMemory form={form} update={update} previous={previous} testsActifs={ALL_TESTS} profilHandicap={participant.profilHandicap} />
+            <Step3_EnduranceMemory form={form} update={update} previous={previous} testsActifs={participant.testsActifs ?? ALL_TESTS} profilHandicap={participant.profilHandicap} />
           </div>
         </div>
       );

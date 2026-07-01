@@ -72,6 +72,7 @@ export interface Bilan {
     notes: string;
   };
   tinetti?: TinettiData;
+  douleurEva?: number | null;
   notesProfessionnelles: string;
   objectifsSuivants: string;
   pointsVigilance: string;
@@ -119,7 +120,7 @@ export type TagPatient = 'senior' | 'post_op' | 'chronique' | 'adulte_blessure';
 export type ProfilHandicap = 'fauteuil_roulant' | 'avc_hemiplegie' | 'parkinson' | 'sep';
 export type ProfilPathologie = 'obesite' | 'diabete' | 'prothese_hanche' | 'prothese_genou';
 
-export type TestKey = 'equilibre' | 'chairStand' | 'handGrip' | 'tug' | 'souplesse' | 'tm6' | 'memoire' | 'apley' | 'tinetti';
+export type TestKey = 'equilibre' | 'chairStand' | 'handGrip' | 'tug' | 'souplesse' | 'tm6' | 'memoire' | 'apley' | 'tinetti' | 'eva';
 
 // ============================================================
 // TEST DE TINETTI (POMA) — équilibre & marche

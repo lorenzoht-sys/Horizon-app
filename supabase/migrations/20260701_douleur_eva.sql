@@ -1,0 +1,1 @@
+ALTER TABLE bilans ADD COLUMN IF NOT EXISTS douleur_eva INTEGER;

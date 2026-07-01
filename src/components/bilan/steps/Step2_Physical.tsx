@@ -114,7 +114,7 @@ function Num({ label, value, onChange, unit, min, max, step = 0.1 }: {
   );
 }
 
-const PHYSICAL_TESTS: TestKey[] = ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse', 'apley', 'tinetti'];
+const PHYSICAL_TESTS: TestKey[] = ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse', 'apley', 'tinetti', 'eva'];
 
 // ─── Apley's Scratch Test ───────────────────────────────────────────
 
@@ -405,6 +405,48 @@ export default function Step2_Physical({ form, update, previous, testsActifs }: 
             value={form.tinetti}
             onChange={v => update({ tinetti: v })}
           />
+        </section>
+      )}
+
+      {/* Douleur EVA */}
+      {active.includes('eva') && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Douleur ressentie (EVA)</h3>
+            {form.douleurEva !== null && form.douleurEva !== undefined && (
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                form.douleurEva <= 3 ? 'bg-green-100 text-green-700' :
+                form.douleurEva <= 6 ? 'bg-yellow-100 text-yellow-700' :
+                'bg-red-100 text-red-700'
+              }`}>
+                {form.douleurEva}/10
+              </span>
+            )}
+          </div>
+          <div className="flex gap-1 mb-2">
+            {Array.from({ length: 11 }, (_, i) => (
+              <button key={i} type="button"
+                onClick={() => update({ douleurEva: i })}
+                className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-colors ${
+                  form.douleurEva === i
+                    ? i <= 3 ? 'bg-green-600 text-white' : i <= 6 ? 'bg-yellow-500 text-white' : 'bg-red-600 text-white'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}>
+                {i}
+              </button>
+            ))}
+          </div>
+          <div className="flex justify-between text-[10px] text-gray-400 px-0.5">
+            <span>Aucune</span>
+            <span>Modérée</span>
+            <span>Maximale</span>
+          </div>
+          {form.douleurEva !== null && form.douleurEva !== undefined && (
+            <button type="button" onClick={() => update({ douleurEva: null })}
+              className="mt-2 text-xs text-gray-400 hover:text-gray-600 underline">
+              Effacer
+            </button>
+          )}
         </section>
       )}
 

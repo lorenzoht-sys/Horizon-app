@@ -7,15 +7,16 @@ import {
 } from '../hooks/useBrouillonBilan';
 import BilanStepper from '../components/bilan/BilanStepper';
 import ModalRepriseBrouillon from '../components/bilan/ModalRepriseBrouillon';
+import ModalSelectionTests from '../components/bilan/ModalSelectionTests';
 import PageWrapper from '../components/layout/PageWrapper';
 import { ArrowLeft } from 'lucide-react';
-import type { Bilan } from '../types';
+import type { Bilan, TestKey } from '../types';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 
 export default function NewBilan() {
   const { id } = useParams<{ id: string }>();
-  const { participants, addBilan } = useParticipants();
+  const { participants, addBilan, updateParticipant } = useParticipants();
   const navigate = useNavigate();
 
   // Lecture localStorage (synchrone, prioritaire)
@@ -25,6 +26,7 @@ export default function NewBilan() {
   const [showModal, setShowModal]                         = useState(() => Boolean(id && getBrouillon(id)));
   const [brouillonPourReprise, setBrouillonPourReprise]   = useState<BrouillonBilan | null>(null);
   const [checkingCloud, setCheckingCloud]                 = useState(false);
+  const [showSelectionTests, setShowSelectionTests]       = useState(false);
 
   // Si pas de brouillon localStorage → vérifier Supabase (cross-device recovery)
   useEffect(() => {
@@ -55,6 +57,10 @@ export default function NewBilan() {
     </PageWrapper>
   );
 
+  // Premier bilan sans sélection de tests enregistrée → proposer la modale
+  const isPremierBilan = participant.bilans.length === 0;
+  const testsPasEncoreChoisis = !participant.testsActifs || participant.testsActifs.length === 0;
+
   if (checkingCloud) return (
     <PageWrapper>
       <div className="text-center py-20">
@@ -84,6 +90,28 @@ export default function NewBilan() {
             onRecommencer={() => { supprimerBrouillon(participant.id); setShowModal(false); }}
           />
         </div>
+      </PageWrapper>
+    );
+  }
+
+  // ── Modale sélection tests (premier bilan uniquement) ────────────────────
+  if ((showSelectionTests || (isPremierBilan && testsPasEncoreChoisis)) && !showModal) {
+    return (
+      <PageWrapper>
+        <Link to={`/participant/${id}`} className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-primary mb-6 transition-colors">
+          <ArrowLeft size={15} /> Retour au profil
+        </Link>
+        <ModalSelectionTests
+          participant={participant}
+          onValider={async (tests: TestKey[]) => {
+            await updateParticipant(participant.id, { testsActifs: tests });
+            setShowSelectionTests(false);
+          }}
+          onCancel={() => {
+            // Ignorer → continuer avec tous les tests
+            setShowSelectionTests(false);
+          }}
+        />
       </PageWrapper>
     );
   }

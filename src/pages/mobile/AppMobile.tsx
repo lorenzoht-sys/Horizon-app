@@ -5,6 +5,7 @@ import { useAgenda } from '../../hooks/useAgenda';
 import { useContrats } from '../../hooks/useContrats';
 import { useCompteRenduSeance } from '../../hooks/useCompteRenduSeance';
 import BilanStepper from '../../components/bilan/BilanStepper';
+import ModalSelectionTests from '../../components/bilan/ModalSelectionTests';
 import DicteePostSeance from '../../components/DicteePostSeance';
 import ModalEspacePatient from '../../components/participant/ModalEspacePatient';
 import type { Bilan } from '../../types';
@@ -606,13 +607,23 @@ function NouveauPatientMobile({ onBack }: { onBack: () => void }) {
 // ── Nouveau bilan mobile ───────────────────────────────────────────────────────
 
 function NouveauBilanMobile({ onBack, onVoirFiche }: { onBack: () => void; onVoirFiche?: (id: string) => void }) {
-  const { participants, addBilan } = useParticipants();
+  const { participants, addBilan, updateParticipant } = useParticipants();
   const [participantId, setParticipantId] = useState('');
   const [etape, setEtape] = useState<'choix' | 'bilan'>('choix');
 
   const participant = participants.find(p => p.id === participantId);
 
   if (etape === 'bilan' && participant) {
+    const premierBilanSansTests = participant.bilans.length === 0 && (!participant.testsActifs || participant.testsActifs.length === 0);
+    if (premierBilanSansTests) {
+      return (
+        <ModalSelectionTests
+          participant={participant}
+          onValider={async tests => { await updateParticipant(participant.id, { testsActifs: tests }); }}
+          onCancel={() => {}}
+        />
+      );
+    }
     return (
       <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
@@ -1305,7 +1316,7 @@ function EditPatientMobile({ participant, onBack }: { participant: import('../..
 // ── Fiche patient mobile ───────────────────────────────────────────────────────
 
 function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { participantId: string; onBack: () => void; onOpenAssistant?: (id: string) => void }) {
-  const { participants, addBilan } = useParticipants();
+  const { participants, addBilan, updateParticipant } = useParticipants();
   const { seances } = useAgenda();
   const { contratActifDeParticipant } = useContrats();
   const { ajouterCompteRendu, compteRendus } = useCompteRenduSeance(participantId);
@@ -1319,7 +1330,17 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
   if (!p) return null;
   if (bilanDetail) return <DetailBilanMobile bilan={bilanDetail} onBack={() => setBilanDetail(null)} />;
   if (showEdit) return <EditPatientMobile participant={p} onBack={() => setShowEdit(false)} />;
-  if (showNewBilan) return (
+  if (showNewBilan) {
+    if (p.bilans.length === 0 && (!p.testsActifs || p.testsActifs.length === 0)) {
+      return (
+        <ModalSelectionTests
+          participant={p}
+          onValider={async tests => { await updateParticipant(p.id, { testsActifs: tests }); }}
+          onCancel={() => {}}
+        />
+      );
+    }
+    return (
     <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <button onClick={() => setShowNewBilan(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
@@ -1340,7 +1361,8 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
         onCancel={() => setShowNewBilan(false)}
       />
     </div>
-  );
+    );
+  }
 
   const bilanInitial = p.bilans.find(b => b.type === 'initial') ?? null;
   const contreIndicationsTexte: string | null = getContreIndications(p, bilanInitial).detail;
