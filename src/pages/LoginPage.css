@@ -1,70 +1,78 @@
-@keyframes fadeInLeft {
-  from { opacity: 0; transform: translateX(-16px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
+/* ── Animations chips flottants ─────────────────────────────────── */
+@keyframes loginF1 { 0%,100%{transform:translateY(0px) rotate(-1.5deg)} 50%{transform:translateY(-9px) rotate(-1.5deg)} }
+@keyframes loginF2 { 0%,100%{transform:translateY(0px) rotate(2deg)}    50%{transform:translateY(-7px) rotate(2deg)} }
+@keyframes loginF3 { 0%,100%{transform:translateY(0px) rotate(-1deg)}   50%{transform:translateY(-11px) rotate(-1deg)} }
+@keyframes loginF4 { 0%,100%{transform:translateY(0px) rotate(1.5deg)}  50%{transform:translateY(-6px) rotate(1.5deg)} }
+@keyframes loginFadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
 
-@keyframes fadeInRight {
-  from { opacity: 0; transform: translateX(16px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
+/* ── Keyframes anciens — conservés pour RegisterPage / ForgotPasswordPage ── */
+@keyframes fadeInLeft  { from{opacity:0;transform:translateX(-16px)} to{opacity:1;transform:translateX(0)} }
+@keyframes fadeInRight { from{opacity:0;transform:translateX(16px)}  to{opacity:1;transform:translateX(0)} }
+@keyframes fadeInUp    { from{opacity:0;transform:translateY(12px)}  to{opacity:1;transform:translateY(0)} }
 .login-left  { animation: fadeInLeft  0.5s ease both; }
 .login-right { animation: fadeInRight 0.5s ease both; }
-
 .pat-card-main  { animation: fadeInUp 0.5s ease 0.10s both; }
 .pat-card-stats { animation: fadeInUp 0.5s ease 0.25s both; }
 .pat-card-curve { animation: fadeInUp 0.5s ease 0.40s both; }
 
+/* ── Classes animations nouvelles ─────────────────────────────────── */
+.login-chip-1 { animation: loginF1 4.4s ease-in-out infinite; }
+.login-chip-2 { animation: loginF2 5.2s ease-in-out infinite; }
+.login-chip-3 { animation: loginF3 3.9s ease-in-out infinite; }
+.login-chip-4 { animation: loginF4 4.8s ease-in-out infinite; }
+.login-panel-fadein { animation: loginFadeIn 0.6s 0.1s ease both; }
+.login-stats-fadein { animation: loginFadeIn 0.6s 0.2s ease both; }
+
+/* ── Input ──────────────────────────────────────────────────────── */
 .login-input {
-  border: 1.5px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 11px 16px;
-  background: var(--color-surface);
-  font-size: 14px;
-  font-family: var(--font-sans);
-  color: var(--color-ink);
-  transition: var(--transition);
-  outline: none;
   width: 100%;
+  padding: 12px 15px;
+  border: 1.5px solid #e2eae6;
+  border-radius: 12px;
+  font-size: 14.5px;
+  color: #0f2e2a;
+  background: #f7faf8;
+  outline: none;
   box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  font-family: 'Plus Jakarta Sans', sans-serif;
 }
 .login-input:focus {
-  border-color: var(--color-teal);
-  background: var(--color-surface);
-  box-shadow: 0 0 0 3px rgba(43, 184, 154, 0.10);
+  border-color: #0d9488;
+  box-shadow: 0 0 0 3px rgba(13,148,136,0.12);
+  background: #ffffff;
 }
-.login-input::placeholder {
-  color: var(--color-ink-3);
-}
+.login-input::placeholder { color: #9eafc0; }
 
+/* ── Bouton principal ─────────────────────────────────────────────── */
 .login-btn {
-  background: var(--color-teal);
-  color: white;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 13px;
-  font-size: 14px;
-  font-weight: 700;
-  font-family: var(--font-sans);
   width: 100%;
+  padding: 14px 24px;
+  border-radius: 12px;
+  background: #0d9488;
+  border: none;
+  color: #fff;
+  font-size: 15.5px;
+  font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  transition: var(--transition);
-  box-shadow: var(--shadow-teal);
+  gap: 9px;
+  letter-spacing: -0.1px;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+  box-shadow: 0 4px 16px rgba(13,148,136,0.32);
+  font-family: 'Plus Jakarta Sans', sans-serif;
 }
-.login-btn:hover:not(:disabled) { background: var(--color-teal-dark); }
-.login-btn:active:not(:disabled) { transform: scale(0.99); }
-.login-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+.login-btn:hover:not(:disabled) {
+  background: #0b7a70;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(13,148,136,0.4);
+}
+.login-btn:active:not(:disabled) { transform: translateY(0); }
+.login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-@media (max-width: 768px) {
-  .login-left  { display: none !important; }
-  .login-right { width: 100% !important; }
+/* ── Responsive ───────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .login-panel-left { display: none !important; }
 }
