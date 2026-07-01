@@ -9,20 +9,19 @@ export default function AuthLeftPanel() {
       flex: '0 0 52%',
     }}>
 
-      {/* Watermark — marque Horizon en filigrane */}
+      {/* Watermark — icône logo en filigrane */}
       <div aria-hidden="true" style={{
         position: 'absolute', left: '50%', top: '50%',
         transform: 'translate(-50%, -50%)',
         width: 620, height: 620,
         pointerEvents: 'none', userSelect: 'none', zIndex: 0, opacity: 0.07,
       }}>
-        <svg viewBox="0 0 560 560" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
-          <circle cx="280" cy="60" r="55" fill="#0d9488" />
-          <path d="M80 160 Q180 240 280 280" stroke="#0d9488" strokeWidth="55" strokeLinecap="round" />
-          <path d="M480 160 Q380 240 280 280" stroke="#0d9488" strokeWidth="55" strokeLinecap="round" />
-          <path d="M280 280 Q180 370 80 500" stroke="#0d9488" strokeWidth="55" strokeLinecap="round" />
-          <path d="M280 280 Q380 370 480 500" stroke="#0d9488" strokeWidth="55" strokeLinecap="round" />
-        </svg>
+        <img
+          src="/LOGO FOND LOGIN.png"
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+          onError={e => { console.error('[watermark] image non trouvée :', (e.target as HTMLImageElement).src); }}
+        />
       </div>
 
       {/* Contenu principal au-dessus du watermark */}
@@ -31,10 +30,10 @@ export default function AuthLeftPanel() {
       {/* Logo */}
       <div style={{ flexShrink: 0 }}>
         <img
-          src="/logo-horizon.png.png"
+          src="/LOGO noir pour login.png"
           alt="Horizon"
           style={{ height: 44, width: 'auto', display: 'block' }}
-          onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }}
+          onError={e => { console.error('[logo] image non trouvée :', (e.target as HTMLImageElement).src); }}
         />
       </div>
 
