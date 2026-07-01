@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Bilan, TestKey, ProfilHandicap } from '../../../types';
 import DeltaIndicator from '../DeltaIndicator';
 import { useBilanDelta } from '../../../hooks/useBilanDelta';
@@ -20,6 +20,13 @@ function SouplesseInput({
   const initSigne = valeur === null ? 1 : valeur > 0 ? 1 : valeur < 0 ? -1 : 0;
   const [signe, setSigne] = useState<-1 | 0 | 1>(initSigne as -1 | 0 | 1);
   const absVal = valeur !== null ? Math.abs(valeur) : null;
+
+  // Sync le signe quand valeur change depuis l'extérieur (chargement async du bilan existant)
+  useEffect(() => {
+    if (valeur === null) return;
+    const expected: -1 | 0 | 1 = valeur > 0 ? 1 : valeur < 0 ? -1 : 0;
+    setSigne(expected);
+  }, [valeur]);
 
   function handleSigne(s: -1 | 0 | 1) {
     setSigne(s);
