@@ -42,6 +42,9 @@ function bilanAxisValue(key: TestKey, bilan: Bilan, normalize: ReturnType<typeof
     case 'tinetti':
       // pas d'axe radar pour Tinetti (absent de TEST_RADAR_LABELS) — filtré avant d'arriver ici
       return 0;
+    case 'eva':
+      // EVA absent de TEST_RADAR_LABELS — filtré avant d'arriver ici
+      return 0;
   }
 }
 
