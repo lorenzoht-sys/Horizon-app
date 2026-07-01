@@ -48,14 +48,11 @@ export default function LoginPage({ onLogin }: Props) {
     <div style={{
       minHeight: '100vh',
       background: '#edf1ee',
-      display: 'flex',
-      alignItems: 'stretch',
-      justifyContent: 'center',
       fontFamily: "'Plus Jakarta Sans', sans-serif",
     }}>
       <div className="login-grid" style={{
-        width: '100%',
         maxWidth: 1440,
+        margin: '0 auto',
         display: 'grid',
         gridTemplateColumns: '1fr 500px',
         minHeight: '100vh',
