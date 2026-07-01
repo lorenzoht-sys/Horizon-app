@@ -9,6 +9,19 @@ export default function AuthLeftPanel() {
       flex: '0 0 52%',
     }}>
 
+      {/* Watermark — grosse icône logo très pâle en fond */}
+      <div aria-hidden="true" style={{
+        position: 'absolute', left: '50%', top: '50%',
+        transform: 'translate(-62%, -50%)',
+        width: 620, height: 620,
+        pointerEvents: 'none', userSelect: 'none', zIndex: 0, opacity: 0.07,
+      }}>
+        <img src="/logo-horizon.png.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+      </div>
+
+      {/* Contenu principal au-dessus du watermark */}
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+
       {/* Logo */}
       <div style={{ flexShrink: 0 }}>
         <img
@@ -127,6 +140,7 @@ export default function AuthLeftPanel() {
         </div>
       </div>
 
+      </div>{/* fin contenu principal */}
     </div>
   );
 }
