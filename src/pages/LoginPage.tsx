@@ -46,18 +46,21 @@ export default function LoginPage({ onLogin }: Props) {
 
   return (
     <div style={{
-      height: '100vh',
-      width: '100%',
+      minHeight: '100vh',
       background: '#edf1ee',
-      display: 'grid',
-      gridTemplateColumns: '1fr 500px',
-      overflow: 'hidden',
       fontFamily: "'Plus Jakarta Sans', sans-serif",
     }}>
+      <div className="login-grid" style={{
+        maxWidth: 1440,
+        margin: '0 auto',
+        display: 'grid',
+        gridTemplateColumns: '1fr 500px',
+        minHeight: '100vh',
+      }}>
       <AuthLeftPanel />
 
       {/* ── Panneau droit — formulaire ─────────────────────────────── */}
-      <div style={{
+      <div className="login-right-panel" style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '32px 48px 32px 16px',
       }}>
@@ -215,6 +218,7 @@ export default function LoginPage({ onLogin }: Props) {
 
         </div>
       </div>
+      </div>{/* fin login-grid */}
     </div>
   );
 }

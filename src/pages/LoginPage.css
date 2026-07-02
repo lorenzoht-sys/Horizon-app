@@ -74,5 +74,14 @@
 
 /* ── Responsive ───────────────────────────────────────────────────── */
 @media (max-width: 900px) {
+  .login-grid {
+    grid-template-columns: 1fr !important;
+    min-height: 100vh;
+  }
   .login-panel-left { display: none !important; }
+  .login-right-panel {
+    padding: 24px 16px !important;
+    align-items: flex-start !important;
+    padding-top: 40px !important;
+  }
 }

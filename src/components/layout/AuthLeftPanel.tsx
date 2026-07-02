@@ -9,13 +9,31 @@ export default function AuthLeftPanel() {
       flex: '0 0 52%',
     }}>
 
+      {/* Watermark — icône logo en filigrane */}
+      <div aria-hidden="true" style={{
+        position: 'absolute', left: '50%', top: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: 620, height: 620,
+        pointerEvents: 'none', userSelect: 'none', zIndex: 0, opacity: 0.07,
+      }}>
+        <img
+          src="/LOGO_FOND_LOGIN.png"
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+          onError={e => { console.error('[watermark] image non trouvée :', (e.target as HTMLImageElement).src); }}
+        />
+      </div>
+
+      {/* Contenu principal au-dessus du watermark */}
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+
       {/* Logo */}
       <div style={{ flexShrink: 0 }}>
         <img
-          src="/logo-horizon.png.png"
+          src="/LOGO_noir_pour_login.png"
           alt="Horizon"
           style={{ height: 44, width: 'auto', display: 'block' }}
-          onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }}
+          onError={e => { console.error('[logo] image non trouvée :', (e.target as HTMLImageElement).src); }}
         />
       </div>
 
@@ -127,6 +145,7 @@ export default function AuthLeftPanel() {
         </div>
       </div>
 
+      </div>{/* fin contenu principal */}
     </div>
   );
 }
