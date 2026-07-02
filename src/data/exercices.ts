@@ -397,7 +397,7 @@ export const EXERCICES_BASE: Exercice[] = [
     id: 'mem-jeu-paires',
     nom: 'Jeu des paires verbal',
     categorie: 'memoire',
-    description: 'Pierre énonce 5 paires de mots. Le patient les répète immédiatement, puis après 5 minutes.',
+    description: 'Pierre énonce 5 paires de mots. Le bénéficiaire les répète immédiatement, puis après 5 minutes.',
     niveaux: {
       debutant: '3 paires de mots simples',
       intermediaire: '5 paires de mots variés',
@@ -462,7 +462,7 @@ export const EXERCICES_BASE: Exercice[] = [
     nom: 'Transfert assis-debout assisté',
     categorie: 'force',
     description: 'Passage de la position assise à debout avec appui si nécessaire.',
-    consigneSecurite: 'Prévoir un appui stable des deux côtés. Ne pas forcer si refus du patient.',
+    consigneSecurite: 'Prévoir un appui stable des deux côtés. Ne pas forcer si refus du bénéficiaire.',
     niveaux: {
       debutant: '5 répétitions avec aide des deux bras',
       intermediaire: '8 répétitions avec aide d\'un bras',
@@ -1154,7 +1154,7 @@ export const EXERCICES_BASE: Exercice[] = [
     nom: 'Sarbacane — précision et respiration',
     categorie: 'memoire',
     description: 'Souffler dans une sarbacane pour atteindre des cibles à différentes distances. Travaille simultanément la respiration, la coordination œil-main et la concentration.',
-    consigneSecurite: 'Ne jamais aspirer. Hygiène de la sarbacane entre patients.',
+    consigneSecurite: 'Ne jamais aspirer. Hygiène de la sarbacane entre bénéficiaires.',
     niveaux: {
       debutant: '3 × 5 tirs sur grande cible à 1 mètre',
       intermediaire: '3 × 5 tirs sur cible moyenne à 1.5 mètre',
@@ -1167,7 +1167,7 @@ export const EXERCICES_BASE: Exercice[] = [
     niveauMobilite: 'minimal',
     adaptations: {
       sep: 'Position assise, éviter effort respiratoire intense si fatigue sévère.',
-      parkinson: 'Améliore contrôle respiratoire et précision motrice. Très apprécié des patients.',
+      parkinson: 'Améliore contrôle respiratoire et précision motrice. Très apprécié des bénéficiaires.',
       fauteuil_roulant: 'Idéal en fauteuil. Adapter la distance des cibles.',
     },
     reference: 'APA handisport et EHPAD — Outil spécifiquement recommandé en APA',

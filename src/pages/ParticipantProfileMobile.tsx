@@ -719,7 +719,7 @@ export default function ParticipantProfileMobile() {
         {/* Retour */}
         <div className="px-4 pb-2">
           <Link to="/" className="inline-flex items-center gap-1" style={{ color: '#9FE1CB', fontSize: 12 }}>
-            <ArrowLeft size={14} /> Mes patients
+            <ArrowLeft size={14} /> Mes bénéficiaires
           </Link>
         </div>
 
@@ -904,7 +904,7 @@ export default function ParticipantProfileMobile() {
           <div className="bg-white rounded-t-2xl w-full p-6">
             <div className="flex items-center gap-3 mb-4">
               <Trash2 size={20} className="text-red-500 flex-shrink-0" />
-              <h2 className="font-bold text-gray-900">Supprimer ce patient ?</h2>
+              <h2 className="font-bold text-gray-900">Supprimer ce bénéficiaire ?</h2>
             </div>
             <p className="text-[13px] text-gray-600 mb-4">
               Supprimer <strong>{participant.prenom} {participant.nom}</strong> et toutes ses données ? Cette action est irréversible.
@@ -917,7 +917,7 @@ export default function ParticipantProfileMobile() {
               <button
                 onClick={() => {
                   deleteParticipant(participant.id);
-                  toast.success('Patient supprimé.');
+                  toast.success('Bénéficiaire supprimé.');
                   navigate('/');
                 }}
                 style={{ backgroundColor: '#E24B4A', color: 'white', border: 'none' }}

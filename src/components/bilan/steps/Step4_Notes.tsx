@@ -33,7 +33,7 @@ export default function Step4_Notes({ form, update, onGenerateMessage }: Props) 
       <h2 className="text-lg font-heading font-semibold text-dark">Notes professionnelles & Message</h2>
 
       <TextArea
-        label="Notes professionnelles (non visibles du patient)"
+        label="Notes professionnelles (non visibles du bénéficiaire)"
         value={form.notesProfessionnelles}
         onChange={v => update({ notesProfessionnelles: v })}
         placeholder="Observations cliniques, comportement, ressenti général..."
@@ -56,7 +56,7 @@ export default function Step4_Notes({ form, update, onGenerateMessage }: Props) 
 
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <label className="text-sm font-medium text-gray-700">Message pour le patient</label>
+          <label className="text-sm font-medium text-gray-700">Message pour le bénéficiaire</label>
           <button
             type="button"
             onClick={onGenerateMessage}
@@ -70,10 +70,10 @@ export default function Step4_Notes({ form, update, onGenerateMessage }: Props) 
           value={form.messageClient}
           onChange={e => update({ messageClient: e.target.value })}
           rows={4}
-          placeholder="Message bienveillant et motivant pour le patient..."
+          placeholder="Message bienveillant et motivant pour le bénéficiaire..."
           className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/10 resize-none"
         />
-        <p className="text-xs text-gray-400 mt-1">Ce message sera visible dans l'espace client du patient.</p>
+        <p className="text-xs text-gray-400 mt-1">Ce message sera visible dans l'espace client du bénéficiaire.</p>
       </div>
     </div>
   );

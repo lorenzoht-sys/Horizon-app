@@ -152,7 +152,7 @@ function CarteStructure({ structure, nbPatients, derniereSeance }: {
         </div>
         <div className="text-right">
           <div className="text-xl font-bold text-primary">{nbPatients}</div>
-          <div className="text-xs text-gray-400">patient{nbPatients !== 1 ? 's' : ''}</div>
+          <div className="text-xs text-gray-400">bénéficiaire{nbPatients !== 1 ? 's' : ''}</div>
         </div>
       </div>
       {structure.contactNom && (
@@ -168,7 +168,7 @@ function CarteStructure({ structure, nbPatients, derniereSeance }: {
           onClick={() => navigate(`/structures/${structure.id}`, { state: { structure } })}
           className="flex-1 text-xs font-semibold text-primary border border-primary/30 hover:bg-primary/5 px-3 py-2 rounded-lg transition-colors text-center"
         >
-          Voir les patients →
+          Voir les bénéficiaires →
         </button>
         <button
           onClick={() => navigate(`/structures/${structure.id}`, { state: { structure } })}
@@ -330,7 +330,7 @@ export default function Dashboard() {
             className="mt-1 m-0"
             style={{ fontFamily: 'var(--font-sans)', fontSize: 14, color: 'var(--color-ink-2)' }}
           >
-            {participants.length} patient{participants.length !== 1 ? 's' : ''} suivi{participants.length !== 1 ? 's' : ''}
+            {participants.length} bénéficiaire{participants.length !== 1 ? 's' : ''} suivi{participants.length !== 1 ? 's' : ''}
           </p>
         </div>
 
@@ -473,7 +473,7 @@ export default function Dashboard() {
         {patientsASurveiller.length > 0 && (
           <div className="mb-6 bg-red-light border border-red-200 rounded-2xl px-5 py-4">
             <div className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-2">
-              ⚠️ {patientsASurveiller.length} patient{patientsASurveiller.length > 1 ? 's' : ''} à surveiller — ressentis dégradés
+              ⚠️ {patientsASurveiller.length} bénéficiaire{patientsASurveiller.length > 1 ? 's' : ''} à surveiller — ressentis dégradés
             </div>
             <div className="space-y-1">
               {patientsASurveiller.map(p => (
@@ -509,7 +509,7 @@ export default function Dashboard() {
               <div className="text-center py-20 text-gray-400">
                 <Building2 size={56} className="mx-auto mb-4 opacity-20" />
                 <p className="font-medium text-lg">Aucune structure</p>
-                <p className="text-sm mt-1">Créez une structure pour regrouper vos patients d'EHPAD, centres...</p>
+                <p className="text-sm mt-1">Créez une structure pour regrouper vos bénéficiaires d'EHPAD, centres...</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -635,7 +635,7 @@ export default function Dashboard() {
 
               {aRelancer.length > 0 && (
                 <p className="text-xs text-warning font-medium">
-                  ⚠️ {aRelancer.length} patient{aRelancer.length > 1 ? 's' : ''} sans séance depuis plus de 3 semaines
+                  ⚠️ {aRelancer.length} bénéficiaire{aRelancer.length > 1 ? 's' : ''} sans séance depuis plus de 3 semaines
                 </p>
               )}
             </div>
@@ -666,7 +666,7 @@ export default function Dashboard() {
                     <div key={b.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-semibold text-dark truncate">
-                          {p ? `${p.prenom} ${p.nom}` : 'Patient inconnu'}
+                          {p ? `${p.prenom} ${p.nom}` : 'Bénéficiaire inconnu'}
                         </div>
                         <div className="text-xs text-gray-400">
                           {b.completionPct}% complété · Étape {b.etapeActuelle + 1} · {modifLabel}
@@ -743,7 +743,7 @@ export default function Dashboard() {
               </div>
               {alertes.length > 0 && (
                 <div className="mt-3 rounded-xl bg-red-light border border-red-200 px-3 py-2 text-xs text-red-700 font-medium">
-                  📉 {alertes.length} patient{alertes.length > 1 ? 's' : ''} avec un taux de réalisation &lt; 50% cette semaine
+                  📉 {alertes.length} bénéficiaire{alertes.length > 1 ? 's' : ''} avec un taux de réalisation &lt; 50% cette semaine
                 </div>
               )}
             </div>

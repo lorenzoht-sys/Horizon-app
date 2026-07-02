@@ -192,7 +192,7 @@ function VueProgressPatient({ p, seances }: { p: Participant; seances: Seance[] 
           </>
         ) : (
           <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
-            Aucun bilan réalisé pour ce patient.<br />
+            Aucun bilan réalisé pour ce bénéficiaire.<br />
             Le premier bilan permettra de mesurer les capacités de départ et de définir les objectifs.
           </div>
         )}
@@ -210,7 +210,7 @@ function VueProgressPatient({ p, seances }: { p: Participant; seances: Seance[] 
             <div style={{ fontSize: 12, color: C.muted }}>Mis à jour le {fmtCourt(programmeActif.dateCreation)}</div>
           </>
         ) : (
-          <div style={{ fontSize: 13, color: C.muted }}>Aucun programme en cours pour ce patient.</div>
+          <div style={{ fontSize: 13, color: C.muted }}>Aucun programme en cours pour ce bénéficiaire.</div>
         )}
       </div>
 
@@ -330,7 +330,7 @@ export default function PortailStructure() {
 
     const patientHeader = (
       <div style={{ background: C.dark, padding: isMobile ? '14px 16px' : '20px 24px', position: 'sticky', top: 0, zIndex: 20 }}>
-        <button onClick={() => setSelectedPatient(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: 0, marginBottom: 10 }}>← Retour aux patients</button>
+        <button onClick={() => setSelectedPatient(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: 0, marginBottom: 10 }}>← Retour aux bénéficiaires</button>
         <div style={{ fontSize: isMobile ? 17 : 19, fontWeight: 800, color: 'white' }}>
           {selectedPatient.prenom} {selectedPatient.nom}{selectedPatient.dateNaissance && ` · ${calcAge(selectedPatient.dateNaissance)} ans`}
         </div>
@@ -381,7 +381,7 @@ export default function PortailStructure() {
           Documents partagés
         </div>
         {documentsPatient.length === 0 ? (
-          <div style={{ fontSize: 13, color: C.muted }}>Aucun document partagé pour ce patient.</div>
+          <div style={{ fontSize: 13, color: C.muted }}>Aucun document partagé pour ce bénéficiaire.</div>
         ) : (
           documentsPatient.map((d: any) => (
             <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: `1px solid ${C.bg}`, gap: 10 }}>
@@ -444,7 +444,7 @@ export default function PortailStructure() {
   const bilansAFaireCount = participants.filter(p => statutPatient(p, []).label === 'Bilan à faire').length;
 
   const TABS: { id: Tab; label: string }[] = [
-    { id: 'patients',    label: `👥 Mes patients (${participants.length})` },
+    { id: 'patients',    label: `👥 Mes bénéficiaires (${participants.length})` },
     { id: 'seances',     label: '📅 Séances' },
     { id: 'progression', label: '📈 Progression' },
     { id: 'documents',   label: '📄 Documents' },
@@ -509,7 +509,7 @@ export default function PortailStructure() {
           Résumé {fmtMois(now.getMonth() + 1, now.getFullYear())}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, color: C.dark }}>
-          <div>👥 {participants.length} patient{participants.length !== 1 ? 's' : ''} suivi{participants.length !== 1 ? 's' : ''}</div>
+          <div>👥 {participants.length} bénéficiaire{participants.length !== 1 ? 's' : ''} suivi{participants.length !== 1 ? 's' : ''}</div>
           <div>📅 {seancesMoisCount} séance{seancesMoisCount !== 1 ? 's' : ''} réalisée{seancesMoisCount !== 1 ? 's' : ''}</div>
           <div>📊 {tauxPresenceMois}% taux de présence</div>
           <div>⚠️ {bilansAFaireCount} bilan{bilansAFaireCount !== 1 ? 's' : ''} à faire</div>
@@ -555,11 +555,11 @@ export default function PortailStructure() {
         {tab === 'patients' && (
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
-              {participants.length} patient{participants.length !== 1 ? 's' : ''} suivis
+              {participants.length} bénéficiaire{participants.length !== 1 ? 's' : ''} suivis
             </div>
             {participants.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px', color: C.muted }}>
-                Aucun patient rattaché à cette structure.
+                Aucun bénéficiaire rattaché à cette structure.
               </div>
             ) : (
               participants.map(p => {
@@ -683,7 +683,7 @@ export default function PortailStructure() {
                   <tr style={{ background: C.bg }}>
                     <th style={{ textAlign: 'left', padding: '10px 16px', color: C.muted, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mois</th>
                     <th style={{ textAlign: 'right', padding: '10px 16px', color: C.muted, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Séances</th>
-                    <th style={{ textAlign: 'right', padding: '10px 16px', color: C.muted, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Patients</th>
+                    <th style={{ textAlign: 'right', padding: '10px 16px', color: C.muted, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bénéficiaires</th>
                     <th style={{ textAlign: 'right', padding: '10px 16px', color: C.muted, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Présence</th>
                   </tr>
                 </thead>
@@ -710,12 +710,12 @@ export default function PortailStructure() {
         {tab === 'progression' && (
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>
-              Progression de vos patients
+              Progression de vos bénéficiaires
             </div>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>Données basées sur les bilans fonctionnels</div>
             {participants.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px', color: C.muted }}>
-                Aucun patient rattaché à cette structure.
+                Aucun bénéficiaire rattaché à cette structure.
               </div>
             ) : (
               participants.map(p => {

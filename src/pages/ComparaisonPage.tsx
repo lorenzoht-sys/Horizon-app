@@ -287,7 +287,7 @@ Réponds UNIQUEMENT en JSON valide :
       {!resume && !loading && (
         <div className="text-center py-8 text-gray-400">
           <Sparkles size={32} className="mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Cliquez sur "Générer le résumé" pour obtenir une analyse IA de l'évolution du patient.</p>
+          <p className="text-sm">Cliquez sur "Générer le résumé" pour obtenir une analyse IA de l'évolution du bénéficiaire.</p>
         </div>
       )}
 
@@ -305,7 +305,7 @@ Réponds UNIQUEMENT en JSON valide :
             <p className="text-sm text-dark leading-relaxed">{resume.resumePro}</p>
           </div>
           <div className="bg-green-50 border border-green-100 rounded-xl p-4">
-            <div className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Message pour le patient</div>
+            <div className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Message pour le bénéficiaire</div>
             <p className="text-sm text-dark leading-relaxed italic">{resume.messagePatient}</p>
           </div>
           <button

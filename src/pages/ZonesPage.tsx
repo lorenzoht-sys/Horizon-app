@@ -130,7 +130,7 @@ export default function ZonesPage() {
   }, [avecCoords]);
 
   function handleCalculer() {
-    if (avecCoords.length < 2) { toast.error('Au moins 2 patients géolocalisés requis'); return; }
+    if (avecCoords.length < 2) { toast.error('Au moins 2 bénéficiaires géolocalisés requis'); return; }
     setCalcul(true);
     setTimeout(() => {
       calculerZones(participants, Math.min(nbZones, avecCoords.length));
@@ -155,7 +155,7 @@ export default function ZonesPage() {
         <div>
           <h1 className="font-heading font-bold text-2xl text-dark">Mes zones géographiques</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Regroupez vos patients par secteur et assignez des jours de visite
+            Regroupez vos bénéficiaires par secteur et assignez des jours de visite
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -181,7 +181,7 @@ export default function ZonesPage() {
 
       {sansCoords.length > 0 && (
         <div className="mb-4 bg-warning/10 border border-warning/30 rounded-xl px-4 py-3 text-sm text-warning">
-          ⚠️ {sansCoords.length} patient{sansCoords.length > 1 ? 's' : ''} sans adresse géolocalisée —
+          ⚠️ {sansCoords.length} bénéficiaire{sansCoords.length > 1 ? 's' : ''} sans adresse géolocalisée —
           non inclus dans les zones.{' '}
           <Link to="/" className="underline font-medium">Compléter les fiches →</Link>
         </div>
@@ -217,7 +217,7 @@ export default function ZonesPage() {
                     <div style={{ minWidth: 170 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: zone.couleur }}>{zone.nom}</div>
                       <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 6 }}>
-                        {patientsZone.length} patient{patientsZone.length > 1 ? 's' : ''}
+                        {patientsZone.length} bénéficiaire{patientsZone.length > 1 ? 's' : ''}
                         {zone.joursAssignes.length > 0 && <> · {zone.joursAssignes.join(', ')}</>}
                         {trajet > 0 && <> · ~{trajet} min</>}
                       </div>
@@ -271,7 +271,7 @@ export default function ZonesPage() {
               </p>
               <p className="text-xs text-gray-400">
                 Cliquez sur <strong>Suggérer des zones</strong> pour regrouper automatiquement
-                vos patients. Vous pourrez ensuite renommer et ajuster chaque zone.
+                vos bénéficiaires. Vous pourrez ensuite renommer et ajuster chaque zone.
               </p>
             </div>
           ) : zones.map(zone => {

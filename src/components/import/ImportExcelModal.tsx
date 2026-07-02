@@ -78,7 +78,7 @@ export default function ImportExcelModal({ onClose, participants, addParticipant
       const withAddr = parsed.succes.filter(d => d.adresseRue && d.adresseVille).length;
       if (withAddr > 0) {
         setTimeout(() => {
-          toast(`📍 Géolocalisation de ${withAddr} patient${withAddr > 1 ? 's' : ''} en cours…`, {
+          toast(`📍 Géolocalisation de ${withAddr} bénéficiaire${withAddr > 1 ? 's' : ''} en cours…`, {
             duration: 4000,
           });
         }, 600);
@@ -106,7 +106,7 @@ export default function ImportExcelModal({ onClose, participants, addParticipant
 
   function handleExportAll() {
     exportPatientsExcel(participants);
-    toast.success(`${participants.length} patients exportés`);
+    toast.success(`${participants.length} bénéficiaires exportés`);
   }
 
   const isEmpty = result && result.succes === 0 && result.erreurs.length === 0 && result.ignores.length === 0;
@@ -118,7 +118,7 @@ export default function ImportExcelModal({ onClose, participants, addParticipant
         {/* En-tête */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
           <div>
-            <h2 className="font-heading font-bold text-dark text-lg">Import / Export patients</h2>
+            <h2 className="font-heading font-bold text-dark text-lg">Import / Export bénéficiaires</h2>
             <p className="text-sm text-gray-400 mt-0.5">Fichier Excel (.xlsx, .xls, .csv)</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-dark transition-colors p-1">
@@ -210,9 +210,9 @@ export default function ImportExcelModal({ onClose, participants, addParticipant
                   className="flex items-center gap-2 border border-gray-200 text-gray-600 hover:bg-gray-50 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-40 w-full"
                 >
                   <FileDown size={15} />
-                  Exporter tous mes patients en Excel
+                  Exporter tous mes bénéficiaires en Excel
                   <span className="ml-auto text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
-                    {participants.length} patient{participants.length !== 1 ? 's' : ''}
+                    {participants.length} bénéficiaire{participants.length !== 1 ? 's' : ''}
                   </span>
                 </button>
                 <p className="text-xs text-gray-400 mt-1.5">
@@ -234,7 +234,7 @@ export default function ImportExcelModal({ onClose, participants, addParticipant
               ) : (
                 <>
                   <p className="text-sm font-medium text-gray-700">
-                    Import en cours… {progress.done}/{progress.total} patients
+                    Import en cours… {progress.done}/{progress.total} bénéficiaires
                   </p>
                   <div className="w-48 mx-auto mt-3 bg-gray-100 rounded-full h-1.5">
                     <div
@@ -266,7 +266,7 @@ export default function ImportExcelModal({ onClose, participants, addParticipant
                   <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
                     <CheckCircle size={17} className="text-green-600 flex-shrink-0" />
                     <span className="text-sm font-semibold text-green-800">
-                      {result.succes} patient{result.succes > 1 ? 's' : ''} importé{result.succes > 1 ? 's' : ''} avec succès
+                      {result.succes} bénéficiaire{result.succes > 1 ? 's' : ''} importé{result.succes > 1 ? 's' : ''} avec succès
                     </span>
                   </div>
                 )}
@@ -328,7 +328,7 @@ export default function ImportExcelModal({ onClose, participants, addParticipant
                   onClick={onClose}
                   className="flex-1 bg-primary text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-dark transition-colors"
                 >
-                  {result.succes > 0 ? 'Voir les patients →' : 'Fermer'}
+                  {result.succes > 0 ? 'Voir les bénéficiaires →' : 'Fermer'}
                 </button>
               </div>
             </div>

@@ -185,7 +185,7 @@ describe('planifierSemaine — patient sans disponibilités', () => {
     expect(toutesLesEtapes(r.jours)).toHaveLength(0);
     expect(r.impossibles).toHaveLength(1);
     expect(r.impossibles[0].patient.id).toBe('p1');
-    expect(r.impossibles[0].raison).toMatch(/Disponibilités du patient non renseignées/);
+    expect(r.impossibles[0].raison).toMatch(/Disponibilités du bénéficiaire non renseignées/);
   });
 
   it('anamnese absente (organisation jamais saisie) → "à planifier manuellement", pas de crash', () => {
@@ -196,7 +196,7 @@ describe('planifierSemaine — patient sans disponibilités', () => {
     const r = planifierSemaine(makeParams({ participants: [patient], contrats: [contrat] }), LUNDI);
 
     expect(toutesLesEtapes(r.jours)).toHaveLength(0);
-    expect(r.impossibles[0].raison).toMatch(/Disponibilités du patient non renseignées/);
+    expect(r.impossibles[0].raison).toMatch(/Disponibilités du bénéficiaire non renseignées/);
   });
 });
 

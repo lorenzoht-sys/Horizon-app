@@ -53,8 +53,8 @@ export default function ParticipantFormPage() {
         </h1>
         <p className="text-gray-500 text-sm mt-1">
           {participant
-            ? 'Mettez à jour les informations de la fiche patient.'
-            : 'Renseignez les informations du nouveau patient, étape par étape.'}
+            ? 'Mettez à jour les informations de la fiche bénéficiaire.'
+            : 'Renseignez les informations du nouveau bénéficiaire, étape par étape.'}
         </p>
       </div>
 

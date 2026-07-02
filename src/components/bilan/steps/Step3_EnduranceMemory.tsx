@@ -373,7 +373,7 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
             <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 mb-4">
               <span className="text-base flex-shrink-0">💬</span>
               <p className="text-xs text-blue-700 leading-relaxed">
-                Demander au patient :{' '}
+                Demander au bénéficiaire :{' '}
                 <strong>« Sur cette échelle de 6 à 20, comment estimez-vous votre effort pendant le test ? »</strong>
               </p>
             </div>

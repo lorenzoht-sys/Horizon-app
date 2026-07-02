@@ -356,7 +356,7 @@ function PatientChips({ participants, onSelect }: { participants: Participant[];
       {showSearch && (
         <div style={{ position: 'relative', marginBottom: 10 }}>
           <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }} />
-          <input type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher un patient…" autoFocus
+          <input type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher un bénéficiaire…" autoFocus
             style={{ width: '100%', padding: '8px 10px 8px 30px', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box', background: '#F9FAFB' }} />
         </div>
       )}
@@ -455,7 +455,7 @@ function LeftColumn({
       {/* Contexte patient */}
       <div style={{ padding: '14px 14px 10px' }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
-          Contexte patient
+          Contexte bénéficiaire
         </div>
 
         {selectedPatient ? (
@@ -479,14 +479,14 @@ function LeftColumn({
             </div>
             <button onClick={() => setShowPatientSearch(v => !v)}
               style={{ marginTop: 8, width: '100%', padding: '6px 10px', background: 'none', border: '1px solid #E5E7EB', borderRadius: 7, cursor: 'pointer', fontSize: 12, color: '#6B7280', textAlign: 'center' }}>
-              Changer de patient
+              Changer de bénéficiaire
             </button>
           </div>
         ) : (
           <button onClick={() => setShowPatientSearch(v => !v)}
             style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 8, cursor: 'pointer' }}>
             <Search size={13} style={{ color: '#9CA3AF' }} />
-            <span style={{ fontSize: 12, color: '#9CA3AF' }}>Sélectionner un patient…</span>
+            <span style={{ fontSize: 12, color: '#9CA3AF' }}>Sélectionner un bénéficiaire…</span>
           </button>
         )}
 
@@ -669,7 +669,7 @@ export default function AssistantPage() {
         id: newId(), role: 'assistant',
         content: p
           ? `Contexte de ${p.prenom} ${p.nom} chargé avec ${p.bilans.length} bilan(s). Posez votre question.`
-          : 'Bonjour ! Je suis votre assistant clinique APA. Posez votre question, ou sélectionnez un patient dans la colonne gauche.',
+          : 'Bonjour ! Je suis votre assistant clinique APA. Posez votre question, ou sélectionnez un bénéficiaire dans la colonne gauche.',
       };
       setMessages([greeting]);
       return;
@@ -677,7 +677,7 @@ export default function AssistantPage() {
 
     const label = ACTION_LABELS[action];
     setMessages([
-      { id: newId(), role: 'assistant', content: `Pour quel patient souhaitez-vous ${label} ?` },
+      { id: newId(), role: 'assistant', content: `Pour quel bénéficiaire souhaitez-vous ${label} ?` },
       { id: newId(), role: 'patient_select', content: '' },
     ]);
     setAwaitingPatient(true);
@@ -1037,7 +1037,7 @@ export default function AssistantPage() {
                           else toast.error('Erreur lors du partage');
                         }}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: 'var(--color-ink)', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                        👁️ Partager avec le patient
+                        👁️ Partager avec le bénéficiaire
                       </button>
                     )}
                     {showPdfBar && selectedPatient?.structureId && (
@@ -1066,7 +1066,7 @@ export default function AssistantPage() {
             <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
               <div style={{ background: 'white', border: '0.5px solid #E5E7EB', borderRadius: '12px 12px 12px 2px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <RefreshCw size={12} className="animate-spin" style={{ color: 'var(--color-teal)' }} />
-                <span style={{ fontSize: 13, color: '#9CA3AF' }}>L'assistant analyse les données du patient…</span>
+                <span style={{ fontSize: 13, color: '#9CA3AF' }}>L'assistant analyse les données du bénéficiaire…</span>
               </div>
             </div>
           )}

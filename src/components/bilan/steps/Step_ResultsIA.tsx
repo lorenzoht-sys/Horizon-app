@@ -265,7 +265,7 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
           {/* Message client éditable */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Message pour le patient <span className="text-gray-400 font-normal">(modifiable)</span>
+              Message pour le bénéficiaire <span className="text-gray-400 font-normal">(modifiable)</span>
             </label>
             <textarea
               value={interpretation.messageClient}
@@ -276,7 +276,7 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
               rows={3}
               className="w-full border border-secondary/40 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-secondary resize-none"
             />
-            <p className="text-xs text-gray-400 mt-1">Ce message sera visible dans l'espace client du patient.</p>
+            <p className="text-xs text-gray-400 mt-1">Ce message sera visible dans l'espace client du bénéficiaire.</p>
           </div>
         </div>
       )}

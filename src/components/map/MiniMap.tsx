@@ -16,7 +16,7 @@ export default function MiniMap({ participants }: Props) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Map size={16} className="text-primary" />
-          <span className="text-sm font-semibold text-dark">Mes patients</span>
+          <span className="text-sm font-semibold text-dark">Mes bénéficiaires</span>
         </div>
         <span className="text-xs text-gray-400">{located.length} localisé{located.length !== 1 ? 's' : ''}</span>
       </div>

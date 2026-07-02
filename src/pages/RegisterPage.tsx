@@ -126,7 +126,7 @@ export default function RegisterPage() {
           Créer mon compte
         </div>
         <div style={{ fontSize: 13, color: '#8B9BB4', marginBottom: 28, lineHeight: 1.5 }}>
-          Rejoignez Horizon et gérez vos patients professionnellement
+          Rejoignez Horizon et gérez vos bénéficiaires professionnellement
         </div>
 
         <form onSubmit={handleSubmit}>

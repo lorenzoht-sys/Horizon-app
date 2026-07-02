@@ -89,7 +89,7 @@ function ModalCreerSeance({ onClose, initial }: ModalCreerProps) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.participantId) { toast.error('Choisissez un patient'); return; }
+    if (!form.participantId) { toast.error('Choisissez un bénéficiaire'); return; }
     const heureFin = heureFinCalc();
     const conflits = detecterConflits(form.date, form.heureDebut, heureFin);
     if (conflits.length > 0) { toast.error('Conflit horaire avec une autre séance'); return; }
@@ -118,10 +118,10 @@ function ModalCreerSeance({ onClose, initial }: ModalCreerProps) {
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Patient *</label>
+            <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Bénéficiaire *</label>
             <select value={form.participantId} onChange={e => setForm(f => ({ ...f, participantId: e.target.value }))}
               className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary">
-              <option value="">Choisir un patient...</option>
+              <option value="">Choisir un bénéficiaire...</option>
               {participants.map(p => <option key={p.id} value={p.id}>{p.prenom} {p.nom}</option>)}
             </select>
           </div>
@@ -514,7 +514,7 @@ export default function AgendaPage() {
 
       {aRelancer.length > 0 && (
         <div className="mb-4 bg-warning/10 border border-warning/20 rounded-xl px-4 py-2.5 text-sm text-warning">
-          ⚠️ {aRelancer.length} patient{aRelancer.length > 1 ? 's' : ''} sans bilan depuis plus de 85 jours
+          ⚠️ {aRelancer.length} bénéficiaire{aRelancer.length > 1 ? 's' : ''} sans bilan depuis plus de 85 jours
         </div>
       )}
 

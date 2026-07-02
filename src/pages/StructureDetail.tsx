@@ -148,7 +148,7 @@ export default function StructureDetail() {
         <div>
           <h1 className="font-heading font-bold text-dark text-xl">{structure.nom}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {patientsStr.length} patient{patientsStr.length !== 1 ? 's' : ''} ·
+            {patientsStr.length} bénéficiaire{patientsStr.length !== 1 ? 's' : ''} ·
             {structure.contactNom && ` Contact : ${structure.contactNom}`}
           </p>
         </div>
@@ -161,10 +161,10 @@ export default function StructureDetail() {
           {/* Patients */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="text-sm font-bold text-gray-800 mb-4">
-              👥 Patients ({patientsStr.length})
+              👥 Bénéficiaires ({patientsStr.length})
             </div>
             {patientsStr.length === 0 ? (
-              <p className="text-sm text-gray-400">Aucun patient rattaché à cette structure.</p>
+              <p className="text-sm text-gray-400">Aucun bénéficiaire rattaché à cette structure.</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {patientsStr.map(p => (
@@ -397,7 +397,7 @@ export default function StructureDetail() {
             ) : (
               <div>
                 <p className="text-xs text-red-600 mb-3">
-                  Les {patientsStr.length} patients seront détachés (non supprimés).
+                  Les {patientsStr.length} bénéficiaires seront détachés (non supprimés).
                 </p>
                 <div className="flex gap-2">
                   <button

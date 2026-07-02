@@ -289,12 +289,12 @@ export default function TourneePage() {
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
           <h1 className="font-heading font-bold text-2xl text-dark">
-            {vue === 'tournee' ? 'Tournée du jour' : 'Agenda patient'}
+            {vue === 'tournee' ? 'Tournée du jour' : 'Agenda bénéficiaire'}
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
             {vue === 'tournee'
-              ? 'Séances depuis vos contrats · patients à optimiser géographiquement'
-              : 'Disponibilités et créneaux hebdomadaires par patient'}
+              ? 'Séances depuis vos contrats · bénéficiaires à optimiser géographiquement'
+              : 'Disponibilités et créneaux hebdomadaires par bénéficiaire'}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -319,7 +319,7 @@ export default function TourneePage() {
                 : 'border-transparent text-gray-500 hover:text-dark'
             }`}
           >
-            {v === 'tournee' ? 'Tournée du jour' : 'Agenda patient'}
+            {v === 'tournee' ? 'Tournée du jour' : 'Agenda bénéficiaire'}
           </button>
         ))}
       </div>
@@ -355,7 +355,7 @@ export default function TourneePage() {
       {/* ── Stats ─────────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm mb-5 flex items-center gap-6 flex-wrap">
         <div>
-          <div className="text-xs text-gray-400 uppercase tracking-wide">Patients</div>
+          <div className="text-xs text-gray-400 uppercase tracking-wide">Bénéficiaires</div>
           <div className="text-2xl font-heading font-bold text-dark">{seancesEnrichies.length}</div>
         </div>
         <div>
@@ -460,7 +460,7 @@ export default function TourneePage() {
                         <MapPin size={15} />
                       </button>
                     )}
-                    <button onClick={() => navigate(`/participant/${p.id}`)} className="text-gray-400 hover:text-primary transition-colors p-1" title="Fiche patient">
+                    <button onClick={() => navigate(`/participant/${p.id}`)} className="text-gray-400 hover:text-primary transition-colors p-1" title="Fiche bénéficiaire">
                       <Navigation size={15} />
                     </button>
                   </div>
@@ -506,8 +506,8 @@ export default function TourneePage() {
             >
               <UserPlus size={15} className="text-primary flex-shrink-0" />
               <div className="text-left">
-                <div>Insérer un patient</div>
-                <div className="text-xs text-gray-400 font-normal">Ajoute un nouveau patient dans votre planning existant</div>
+                <div>Insérer un bénéficiaire</div>
+                <div className="text-xs text-gray-400 font-normal">Ajoute un nouveau bénéficiaire dans votre planning existant</div>
               </div>
             </button>
           </div>
@@ -611,7 +611,7 @@ export default function TourneePage() {
             <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm text-center">
               <div className="text-4xl mb-3">🗺️</div>
               <p className="text-sm text-gray-500">Aucune séance pour ce jour</p>
-              <p className="text-xs text-gray-400 mt-1">Ajoutez des patients via la section ci-contre</p>
+              <p className="text-xs text-gray-400 mt-1">Ajoutez des bénéficiaires via la section ci-contre</p>
             </div>
           )}
         </div>

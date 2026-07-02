@@ -26,7 +26,7 @@ export async function geocodeAdresse(
     const data = await res.json();
     const feature = data?.features?.[0];
     if (!feature) {
-      toast.error('Adresse introuvable — vérifiez l\'adresse du patient', { id: 'geocode-fail' });
+      toast.error('Adresse introuvable — vérifiez l\'adresse du bénéficiaire', { id: 'geocode-fail' });
       return null;
     }
 

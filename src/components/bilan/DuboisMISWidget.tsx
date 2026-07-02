@@ -265,7 +265,7 @@ export default function DuboisMISWidget({ value, onChange }: Props) {
 
         <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-5 space-y-3">
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Montrez ces 5 mots au patient
+            Montrez ces 5 mots au bénéficiaire
           </p>
           <div className="space-y-2">
             {MOTS.map(m => (
@@ -276,7 +276,7 @@ export default function DuboisMISWidget({ value, onChange }: Props) {
             ))}
           </div>
           <p className="text-xs text-slate-500 italic mt-2">
-            Laissez le patient lire et mémoriser pendant environ 1 minute.
+            Laissez le bénéficiaire lire et mémoriser pendant environ 1 minute.
           </p>
         </div>
 
@@ -285,7 +285,7 @@ export default function DuboisMISWidget({ value, onChange }: Props) {
           onClick={() => setStep('step2')}
           className="w-full px-4 py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
         >
-          ✓ Le patient a mémorisé → Rappel immédiat
+          ✓ Le bénéficiaire a mémorisé → Rappel immédiat
         </button>
       </div>
     );
@@ -301,7 +301,7 @@ export default function DuboisMISWidget({ value, onChange }: Props) {
         </div>
 
         <div className="space-y-3">
-          <p className="text-sm text-gray-700">Quels mots le patient se souvient-il ?</p>
+          <p className="text-sm text-gray-700">Quels mots le bénéficiaire se souvient-il ?</p>
           <ScoreButtons value={ril} onChange={setRIL} />
 
           {ril !== null && (

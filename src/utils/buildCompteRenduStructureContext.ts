@@ -89,7 +89,7 @@ export function analyserDonneesDisponibles(
   if (sortedBilans.length === 0) avertissements.push('Aucun bilan enregistré — le compte rendu sera incomplet.');
   if (!contratActif) avertissements.push('Aucun contrat de suivi actif — assiduité et organisation des séances non disponibles.');
   if (!programmeActif) avertissements.push('Aucun programme d\'exercices actif.');
-  if (!aObjectifs) avertissements.push('Aucun objectif renseigné pour ce patient.');
+  if (!aObjectifs) avertissements.push('Aucun objectif renseigné pour ce bénéficiaire.');
 
   return {
     nbBilans: sortedBilans.length,

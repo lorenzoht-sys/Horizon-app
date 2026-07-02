@@ -90,7 +90,7 @@ function ModalConfirmDrop({ info, patient, onConfirm, onCancel }: {
         <div className="px-6 py-4 space-y-4">
           {/* Patient */}
           <div className="bg-gray-50 rounded-xl px-4 py-3">
-            <p className="text-xs text-gray-500 mb-0.5">Patient</p>
+            <p className="text-xs text-gray-500 mb-0.5">Bénéficiaire</p>
             <p className="text-sm font-semibold text-dark">
               {patient ? `${patient.prenom} ${patient.nom}` : '—'}
             </p>
@@ -233,7 +233,7 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
     if (!pid) return;
     const contrat = contrats.find(c => c.participantId === pid && c.statut === 'actif');
     if (!contrat) {
-      toast.error("Ce patient n'a pas de contrat actif. Créez d'abord un contrat.");
+      toast.error("Ce bénéficiaire n'a pas de contrat actif. Créez d'abord un contrat.");
       return;
     }
     setDropPendant({ participantId: pid, jour, heure, contrat });
@@ -279,12 +279,12 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
       {/* ── Colonne gauche : patients ─────────────────────────────── */}
       <div className="w-60 flex-shrink-0 flex flex-col gap-3">
         <input
-          type="text" placeholder="Rechercher un patient…" value={search}
+          type="text" placeholder="Rechercher un bénéficiaire…" value={search}
           onChange={e => setSearch(e.target.value)}
           className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
 
         <p className="text-[11px] text-gray-400 px-1">
-          Glissez un patient sur la grille pour placer une séance.
+          Glissez un bénéficiaire sur la grille pour placer une séance.
         </p>
 
         <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: FRISE_TOTAL_H }}>
@@ -312,7 +312,7 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
             );
           })}
           {patientsFiltres.length === 0 && (
-            <p className="text-xs text-gray-400 text-center py-4">Aucun patient trouvé</p>
+            <p className="text-xs text-gray-400 text-center py-4">Aucun bénéficiaire trouvé</p>
           )}
         </div>
       </div>
@@ -363,7 +363,7 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
         <div className="flex items-center gap-4 mt-3 px-1">
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-sm bg-green-100 border border-green-200" />
-            <span className="text-[11px] text-gray-500">Disponibilités patient</span>
+            <span className="text-[11px] text-gray-500">Disponibilités bénéficiaire</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-sm bg-slate-200 border border-slate-300" />
@@ -375,7 +375,7 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
             <span className="text-[11px] text-gray-500">Indisponibilités Pierre</span>
           </div>
           {!patientSelectionne && (
-            <span className="text-[11px] text-gray-400 ml-auto">← Sélectionnez un patient pour voir ses disponibilités</span>
+            <span className="text-[11px] text-gray-400 ml-auto">← Sélectionnez un bénéficiaire pour voir ses disponibilités</span>
           )}
         </div>
       </div>

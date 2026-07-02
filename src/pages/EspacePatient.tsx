@@ -2121,7 +2121,7 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
           fontSize: 13, fontWeight: 600, color: C.muted,
         }}
       >
-        🔄 Changer de patient
+        🔄 Changer de bénéficiaire
       </button>
     </div>
   );

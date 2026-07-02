@@ -424,7 +424,7 @@ function assignerJoursSemaine(
     }
     const idx = indexMap.get(coordKey(patient.coordonnees));
     if (idx === undefined) {
-      impossibles.push({ patient, raison: 'Patient absent de la matrice de trajets' });
+      impossibles.push({ patient, raison: 'Bénéficiaire absent de la matrice de trajets' });
       continue;
     }
     const joursPatient = getJoursDisponiblesCourts(patient);
@@ -432,7 +432,7 @@ function assignerJoursSemaine(
       joursPatient.includes(jourKey) && contrat.dateDebut <= date && contrat.dateFin >= date
     );
     if (joursDispo.length === 0) {
-      impossibles.push({ patient, raison: 'Disponibilités du patient non renseignées (ou incompatibles cette semaine)' });
+      impossibles.push({ patient, raison: 'Disponibilités du bénéficiaire non renseignées (ou incompatibles cette semaine)' });
       continue;
     }
 
@@ -658,7 +658,7 @@ function planifierJour(
 
     const slot = ajusterAuCreneauPatient(heureArriveeNaturelle, patient, jourKey);
     if (slot.impossible) {
-      impossibles.push({ patient, raison: slot.raison ?? 'Créneau patient dépassé' });
+      impossibles.push({ patient, raison: slot.raison ?? 'Créneau bénéficiaire dépassé' });
       continue;
     }
 
@@ -1022,8 +1022,8 @@ export function calculerRapport(
       const b = jour.etapes[i + 1];
       const gap = heureEnMinutes(b.heureDebut) - heureEnMinutes(a.heureFin);
       if (gap > TROU_MAX_MINUTES) {
-        const nomA = [a.patient.prenom, a.patient.nom].filter(Boolean).join(' ') || 'Patient';
-        const nomB = [b.patient.prenom, b.patient.nom].filter(Boolean).join(' ') || 'Patient';
+        const nomA = [a.patient.prenom, a.patient.nom].filter(Boolean).join(' ') || 'Bénéficiaire';
+        const nomB = [b.patient.prenom, b.patient.nom].filter(Boolean).join(' ') || 'Bénéficiaire';
         trous.push({ date: jour.date, labelJour: jour.label, jourKey: jour.jourKey, dureeMinutes: gap, nomPatientA: nomA, nomPatientB: nomB });
       }
     }

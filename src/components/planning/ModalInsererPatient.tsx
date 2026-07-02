@@ -129,7 +129,7 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
 
   function handleNext() {
     if (etape === 1) {
-      if (!contratChoisi) { toast.error('Sélectionnez un patient'); return; }
+      if (!contratChoisi) { toast.error('Sélectionnez un bénéficiaire'); return; }
       setCreneauxChoisis([]);
       setJourForceIdx(0);
       setEtape(2);
@@ -218,7 +218,7 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
-            <h2 className="font-semibold text-dark">Insérer un patient</h2>
+            <h2 className="font-semibold text-dark">Insérer un bénéficiaire</h2>
             <p className="text-xs text-gray-400 mt-0.5">Étape {etape} / 3</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-dark transition-colors">
@@ -232,10 +232,10 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
           {/* Étape 1 — Choisir le contrat */}
           {etape === 1 && (
             <>
-              <p className="text-sm text-gray-500">Sélectionnez le patient à planifier.</p>
+              <p className="text-sm text-gray-500">Sélectionnez le bénéficiaire à planifier.</p>
               {eligibles.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-8">
-                  Tous les patients actifs ont déjà des séances planifiées.
+                  Tous les bénéficiaires actifs ont déjà des séances planifiées.
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -274,7 +274,7 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
                   </p>
                   {estFallbackGlobal && (
                     <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 text-xs text-blue-700">
-                      Aucun patient dans le secteur de {patient.prenom} — créneaux libres du planning général.
+                      Aucun bénéficiaire dans le secteur de {patient.prenom} — créneaux libres du planning général.
                     </div>
                   )}
                   <div className="space-y-2">
@@ -374,7 +374,7 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
               {vraimentAucun && (
                 <div className="py-4">
                   <p className="text-sm text-gray-700 leading-relaxed">
-                    Aucun créneau disponible pour ce patient. Ses disponibilités sont incompatibles avec le planning actuel. Contactez le patient pour élargir ses créneaux.
+                    Aucun créneau disponible pour ce bénéficiaire. Ses disponibilités sont incompatibles avec le planning actuel. Contactez le bénéficiaire pour élargir ses créneaux.
                   </p>
                 </div>
               )}
@@ -387,7 +387,7 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
               <p className="text-sm text-gray-500">Vérifiez avant d'appliquer.</p>
               <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-2.5 text-sm">
                 <div className="flex items-center gap-3">
-                  <span className="text-gray-400 w-16">Patient</span>
+                  <span className="text-gray-400 w-16">Bénéficiaire</span>
                   <span className="font-semibold text-dark">{patient.prenom} {patient.nom}</span>
                 </div>
                 <div className="flex items-start gap-3">

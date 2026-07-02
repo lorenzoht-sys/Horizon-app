@@ -43,9 +43,9 @@ export default function MapPage() {
     <PageWrapper>
       <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="font-heading font-bold text-dark text-2xl">🗺️ Carte des patients</h1>
+          <h1 className="font-heading font-bold text-dark text-2xl">🗺️ Carte des bénéficiaires</h1>
           <p className="text-gray-500 text-sm mt-0.5">
-            {located.length} patient{located.length !== 1 ? 's' : ''} localisé{located.length !== 1 ? 's' : ''}
+            {located.length} bénéficiaire{located.length !== 1 ? 's' : ''} localisé{located.length !== 1 ? 's' : ''}
             {hidden > 0 && ` · ${hidden} masqué${hidden !== 1 ? 's' : ''} par les filtres`}
             {noAddress.length > 0 && ` · ${noAddress.length} sans adresse`}
           </p>
@@ -93,7 +93,7 @@ export default function MapPage() {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2 text-orange-700 font-medium text-sm">
                   <AlertCircle size={15} />
-                  {unlocated.length} patient{unlocated.length > 1 ? 's' : ''} en attente de géolocalisation
+                  {unlocated.length} bénéficiaire{unlocated.length > 1 ? 's' : ''} en attente de géolocalisation
                 </div>
                 {unlocated.length > 1 && (
                   <button
@@ -143,7 +143,7 @@ export default function MapPage() {
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2 text-gray-600 font-medium text-sm">
                 <MapPin size={15} />
-                {noAddress.length} patient{noAddress.length > 1 ? 's' : ''} sans adresse renseignée
+                {noAddress.length} bénéficiaire{noAddress.length > 1 ? 's' : ''} sans adresse renseignée
               </div>
               <div className="space-y-1">
                 {noAddress.map(p => (

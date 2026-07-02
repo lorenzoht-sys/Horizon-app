@@ -494,7 +494,7 @@ function SectionAlertes({
       type: 'orange',
       emoji: '🟡',
       texte: `${bilansEnRetard.length} bilan${bilansEnRetard.length > 1 ? 's' : ''} à faire (> 3 mois)`,
-      action: 'Voir les patients',
+      action: 'Voir les bénéficiaires',
       href: '/',
     });
   }
@@ -528,8 +528,8 @@ function SectionAlertes({
     alertes.push({
       type: 'bleu',
       emoji: '🔵',
-      texte: `${patientsInactifs.length} patient${patientsInactifs.length > 1 ? 's' : ''} sans séance depuis > 2 semaines`,
-      action: 'Voir les patients',
+      texte: `${patientsInactifs.length} bénéficiaire${patientsInactifs.length > 1 ? 's' : ''} sans séance depuis > 2 semaines`,
+      action: 'Voir les bénéficiaires',
       href: '/',
     });
   }
@@ -648,7 +648,7 @@ function SectionSantePortefeuille({
       <div className="flex items-center gap-2 mb-4">
         <span className="text-base">🏥</span>
         <div className="text-sm font-bold text-gray-900">Santé du portefeuille</div>
-        <div className="text-xs text-gray-400">{patientsActifs} patient{patientsActifs !== 1 ? 's' : ''} actif{patientsActifs !== 1 ? 's' : ''}</div>
+        <div className="text-xs text-gray-400">{patientsActifs} bénéficiaire{patientsActifs !== 1 ? 's' : ''} actif{patientsActifs !== 1 ? 's' : ''}</div>
       </div>
 
       {bilansEnRetard.length > 0 && (
@@ -694,7 +694,7 @@ function SectionSantePortefeuille({
       {patientsInactifs.length > 0 && (
         <div>
           <div className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">
-            🔵 Patients inactifs (&gt; 2 semaines) — {patientsInactifs.length}
+            🔵 Bénéficiaires inactifs (&gt; 2 semaines) — {patientsInactifs.length}
           </div>
           {patientsInactifs.map(({ p, derniereSeance }) => (
             <div key={p.id} className={rowCls} onClick={() => navigate(`/participant/${p.id}`)}>
@@ -786,7 +786,7 @@ function SectionFactures({
 
   function envoyerRappelEmail(_factureId: string, participantId: string, periodeMois: number, periodeAnnee: number) {
     const p = participants.find(x => x.id === participantId);
-    if (!p?.email) { toast.error('Aucun email renseigné pour ce patient'); return; }
+    if (!p?.email) { toast.error('Aucun email renseigné pour ce bénéficiaire'); return; }
     const periode = nomMoisAnnee(periodeMois, periodeAnnee);
     const subject = encodeURIComponent(`Facture APA — ${periode}`);
     const body = encodeURIComponent(
@@ -1122,7 +1122,7 @@ function SectionProgression({ participants }: { participants: Participant[] }) {
             <div className="flex justify-between text-xs mb-1">
               <span className="text-gray-700 font-medium">{r.label}</span>
               <span className="font-semibold" style={{ color }}>
-                {pct > 0 ? '+' : ''}{pct}% <span className="text-gray-400 font-normal">({r.n} patient{r.n > 1 ? 's' : ''})</span>
+                {pct > 0 ? '+' : ''}{pct}% <span className="text-gray-400 font-normal">({r.n} bénéficiaire{r.n > 1 ? 's' : ''})</span>
               </span>
             </div>
             <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -1232,7 +1232,7 @@ function SectionRepartition({ participants }: { participants: Participant[] }) {
   const COLORS = ['#1A5F9E','var(--color-teal)','#F59E0B','#1D9E75','#888780'];
 
   if (filteredData.length === 0) {
-    return <p className="text-xs text-gray-400 italic py-4">Aucun patient enregistré.</p>;
+    return <p className="text-xs text-gray-400 italic py-4">Aucun bénéficiaire enregistré.</p>;
   }
 
   const total = filteredData.reduce((a, b) => a + b, 0);
@@ -1254,7 +1254,7 @@ function SectionRepartition({ participants }: { participants: Participant[] }) {
       legend: { display: false },
       tooltip: {
         callbacks: {
-          label: (ctx: any) => `${ctx.label} : ${ctx.parsed} patient${ctx.parsed > 1 ? 's' : ''}`,
+          label: (ctx: any) => `${ctx.label} : ${ctx.parsed} bénéficiaire${ctx.parsed > 1 ? 's' : ''}`,
         },
       },
     },
@@ -1325,7 +1325,7 @@ export default function StatsPage() {
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Mon tableau de bord</h1>
           <div className="text-sm text-gray-500 mt-0.5">
-            {formatMoisAnnee(now)} · {patientsActifs} patient{patientsActifs > 1 ? 's' : ''} actif{patientsActifs > 1 ? 's' : ''}
+            {formatMoisAnnee(now)} · {patientsActifs} bénéficiaire{patientsActifs > 1 ? 's' : ''} actif{patientsActifs > 1 ? 's' : ''}
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -1443,12 +1443,12 @@ export default function StatsPage() {
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <div className="text-sm font-semibold text-gray-800 mb-3">Répartition patients</div>
+          <div className="text-sm font-semibold text-gray-800 mb-3">Répartition bénéficiaires</div>
           <ErrorBoundary>
             <SectionRepartition participants={participants} />
           </ErrorBoundary>
           <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
-            Total : <span className="font-semibold text-gray-700">{participants.length} patient{participants.length > 1 ? 's' : ''}</span>
+            Total : <span className="font-semibold text-gray-700">{participants.length} bénéficiaire{participants.length > 1 ? 's' : ''}</span>
           </div>
         </div>
       </div>
@@ -1487,7 +1487,7 @@ export default function StatsPage() {
                 ~{(patientsActifs * (parseFloat(loadSettingsPro().tarifHoraire) || 45) * 4).toLocaleString('fr-FR')} €
               </div>
               <div className="text-xs text-blue-500 mt-0.5">
-                Basé sur {patientsActifs} patients actifs × ~4 séances/mois
+                Basé sur {patientsActifs} bénéficiaires actifs × ~4 séances/mois
               </div>
             </div>
           )}

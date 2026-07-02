@@ -886,7 +886,7 @@ function SectionRappelsPatient({ participantId }: { participantId: string }) {
     setSaving(true);
     const ok = await reinitialiser();
     setSaving(false);
-    toast[ok ? 'success' : 'error'](ok ? 'Réglages globaux rétablis pour ce patient' : 'Erreur');
+    toast[ok ? 'success' : 'error'](ok ? 'Réglages globaux rétablis pour ce bénéficiaire' : 'Erreur');
   }
 
   if (loading) return <div className="text-sm text-gray-400">Chargement…</div>;
@@ -908,7 +908,7 @@ function SectionRappelsPatient({ participantId }: { participantId: string }) {
         </div>
         {nbAppareils === 0 && (
           <p className="text-[12px] text-gray-400 mt-1.5">
-            Le patient peut les activer depuis son espace patient (bouton « Activer les rappels »).
+            Le bénéficiaire peut les activer depuis son espace bénéficiaire (bouton « Activer les rappels »).
           </p>
         )}
       </div>
@@ -918,7 +918,7 @@ function SectionRappelsPatient({ participantId }: { participantId: string }) {
         <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-3">Réglages</div>
         {herite && (
           <div className="rounded-lg px-3 py-2.5 text-[12px] mb-3" style={{ background: '#F3F4F6', color: '#6B7280' }}>
-            Ce patient suit les réglages globaux (Paramètres → Rappels automatiques). Modifiez-les ci-dessous pour les personnaliser uniquement pour lui.
+            Ce bénéficiaire suit les réglages globaux (Paramètres → Rappels automatiques). Modifiez-les ci-dessous pour les personnaliser uniquement pour lui.
           </div>
         )}
         <div className="space-y-4">
@@ -943,7 +943,7 @@ function SectionRappelsPatient({ participantId }: { participantId: string }) {
           <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200/70 p-3">
             <div>
               <div className="text-sm font-medium text-gray-800">Rappel jour de séance</div>
-              <p className="text-[12px] text-gray-400 mt-0.5">La veille au soir, si le patient a une séance prévue le lendemain.</p>
+              <p className="text-[12px] text-gray-400 mt-0.5">La veille au soir, si le bénéficiaire a une séance prévue le lendemain.</p>
             </div>
             <input type="checkbox" checked={local.rappelJourSeanceActif}
               onChange={e => setLocal(l => ({ ...l, rappelJourSeanceActif: e.target.checked }))}
@@ -967,7 +967,7 @@ function SectionRappelsPatient({ participantId }: { participantId: string }) {
           className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
         >
           <Save size={13} />
-          {saving ? 'Enregistrement…' : herite ? 'Personnaliser pour ce patient' : 'Enregistrer'}
+          {saving ? 'Enregistrement…' : herite ? 'Personnaliser pour ce bénéficiaire' : 'Enregistrer'}
         </button>
         {!herite && (
           <button
@@ -1171,7 +1171,7 @@ export default function ParticipantProfile() {
   }
 
   const MENU_ACTIONS = [
-    { Icon: Pencil,     label: 'Modifier le patient',    action: 'modifier' },
+    { Icon: Pencil,     label: 'Modifier le bénéficiaire',    action: 'modifier' },
     { Icon: TrendingUp, label: "Rapport d'évolution",    action: 'evolution', disabled: participant.bilans.length < 2 },
     { Icon: Share2,     label: 'Lien client',             action: 'lien' },
     { Icon: Download,   label: 'Mes données (JSON)',      action: 'export' },
@@ -1497,15 +1497,15 @@ export default function ParticipantProfile() {
                 onClick={() => setShowEspacePatient(true)}
                 className="flex items-center gap-1.5 text-gray-400 text-[13px] font-medium px-3 py-[7px] rounded-lg hover:bg-gray-100 hover:text-gray-600 transition-colors"
               >
-                Espace patient
+                Espace bénéficiaire
               </button>
               <button
                 onClick={handleVoirEspacePatient}
                 disabled={ouvertureEspacePatient}
-                title="Ouvrir l'espace patient de ce participant dans un nouvel onglet"
+                title="Ouvrir l'espace bénéficiaire de ce participant dans un nouvel onglet"
                 className="flex items-center gap-1.5 text-gray-400 text-[13px] font-medium px-3 py-[7px] rounded-lg hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50"
               >
-                <ExternalLink size={13} /> {ouvertureEspacePatient ? 'Ouverture…' : "Voir l'espace patient"}
+                <ExternalLink size={13} /> {ouvertureEspacePatient ? 'Ouverture…' : "Voir l'espace bénéficiaire"}
               </button>
             </div>
           </div>
@@ -1630,7 +1630,7 @@ export default function ParticipantProfile() {
             <div className="text-center py-12 text-gray-400">
               <div className="text-4xl mb-3">📊</div>
               <p className="font-medium">Aucune séance enregistrée</p>
-              <p className="text-sm mt-1">Les séances faites par le patient via l'espace patient apparaîtront ici.</p>
+              <p className="text-sm mt-1">Les séances faites par le bénéficiaire via l'espace bénéficiaire apparaîtront ici.</p>
             </div>
           );
 
@@ -1912,7 +1912,7 @@ export default function ParticipantProfile() {
               <div className="w-10 h-10 rounded-full bg-red-light flex items-center justify-center flex-shrink-0">
                 <Trash2 size={18} className="text-red-500" />
               </div>
-              <h2 className="font-heading font-bold text-gray-900 text-lg">Supprimer ce patient ?</h2>
+              <h2 className="font-heading font-bold text-gray-900 text-lg">Supprimer ce bénéficiaire ?</h2>
             </div>
             <p className="text-sm text-gray-600 mb-1">
               Vous allez supprimer <strong>{participant.prenom} {participant.nom}</strong> et toutes ses données.

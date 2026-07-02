@@ -130,7 +130,7 @@ export default function BilanDetail() {
         <div className="bg-gradient-to-br from-secondary/15 to-secondary/5 rounded-2xl border border-secondary/20 p-5">
           <div className="flex items-center gap-2 mb-3 text-secondary">
             <MessageSquare size={16} />
-            <h3 className="font-semibold text-sm">Message pour le patient</h3>
+            <h3 className="font-semibold text-sm">Message pour le bénéficiaire</h3>
           </div>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}

@@ -85,7 +85,7 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.dark }}>Espace patient</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.dark }}>Espace bénéficiaire</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
               {participant.prenom} {participant.nom}
             </div>
@@ -123,7 +123,7 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
                 Code non généré
               </div>
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 8, lineHeight: 1.5 }}>
-                Ce patient n'a pas encore de code d'accès. Demandez à votre
+                Ce bénéficiaire n'a pas encore de code d'accès. Demandez à votre
                 administrateur d'exécuter le script de génération des codes.
               </div>
             </>
@@ -152,7 +152,7 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
               />
             </div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 10, lineHeight: 1.4 }}>
-              Le patient scanne → ouvre son suivi<br/>sans saisir le code ✓
+              Le bénéficiaire scanne → ouvre son suivi<br/>sans saisir le code ✓
             </div>
           </div>
         )}
@@ -257,7 +257,7 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
         {/* Dernier accès */}
         {local.dernierAcces && (
           <div style={{ fontSize: 11, color: C.muted, marginTop: 12 }}>
-            Dernier accès patient : {new Date(local.dernierAcces).toLocaleDateString('fr-FR')}
+            Dernier accès bénéficiaire : {new Date(local.dernierAcces).toLocaleDateString('fr-FR')}
           </div>
         )}
 

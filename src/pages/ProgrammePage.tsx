@@ -375,7 +375,7 @@ function ConfigIAModal({
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
               Pour {participant.prenom} {participant.nom} · {age} ans{participant.pathologie ? ` · ${participant.pathologie}` : ''}
             </div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>L'IA s'adaptera automatiquement au profil du patient.</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>L'IA s'adaptera automatiquement au profil du bénéficiaire.</div>
           </div>
           <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8, padding: 8, cursor: 'pointer', color: 'white', flexShrink: 0 }}>
             <X size={16} />
@@ -517,7 +517,7 @@ function PreviewIAModal({
             <input
               value={programme.message_motivation}
               onChange={e => onChange({ ...programme, message_motivation: e.target.value })}
-              placeholder="Message de motivation pour le patient…"
+              placeholder="Message de motivation pour le bénéficiaire…"
               style={{ fontSize: 13, color: '#6B7280', border: 'none', width: '100%', padding: '6px 0', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' as const }}
             />
           </div>
@@ -704,7 +704,7 @@ function ExercicePickerModal({
               </div>
 
               <div>
-                <div style={{ fontSize: 10, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Profil patient</div>
+                <div style={{ fontSize: 10, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>Profil bénéficiaire</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 5 }}>
                   {PROFILE_CHIPS.map(p => (
                     <button key={p.value} onClick={() => setProfileFilter(p.value)} style={chipBtn(profileFilter === p.value, true)}>{p.label}</button>
@@ -861,11 +861,11 @@ function Step1({ data, onChange }: {
           style={inputStyle}
         />
         <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-          Nombre de séances que le patient doit réaliser seul. Affiché comme progression dans son espace patient.
+          Nombre de séances que le bénéficiaire doit réaliser seul. Affiché comme progression dans son espace bénéficiaire.
         </div>
       </div>
       <div>
-        <label style={labelStyle}>Message de motivation <span style={{ color: '#94A3B8', fontWeight: 400 }}>(visible par le patient)</span></label>
+        <label style={labelStyle}>Message de motivation <span style={{ color: '#94A3B8', fontWeight: 400 }}>(visible par le bénéficiaire)</span></label>
         <textarea
           value={data.messageMotivation}
           onChange={e => onChange({ messageMotivation: e.target.value })}
@@ -1859,7 +1859,7 @@ export default function ProgrammePage() {
       } else {
         const ok = await createProgramme(payload);
         if (ok) {
-          toast.success('Programme créé et partagé avec le patient !');
+          toast.success('Programme créé et partagé avec le bénéficiaire !');
           closeWizard();
         } else {
           toast.error('Erreur lors de la création du programme');

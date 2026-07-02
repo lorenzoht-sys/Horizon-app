@@ -898,7 +898,7 @@ const OPTIONS_ORIGINE_DEMARCHE = [
 // ─── Cognition & humeur : plaintes mémoire / suivi psychologique ──────────────
 
 const OPTIONS_DEPUIS_QUAND = ['< 6 mois', '6-12 mois', '> 1 an'];
-const OPTIONS_SIGNALE_PAR = ['Le patient lui-même', "L'entourage", 'Les deux'];
+const OPTIONS_SIGNALE_PAR = ['Le bénéficiaire lui-même', "L'entourage", 'Les deux'];
 const OPTIONS_SUIVI_PSY_QUI = ['Psychologue', 'Psychiatre', 'Psychothérapeute', 'Autre'];
 const OPTIONS_SUIVI_PSY_FREQUENCE = ['Hebdomadaire', 'Mensuel', 'Occasionnel', 'En pause'];
 
@@ -1351,7 +1351,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
 
       {/* ── ADRESSE ── */}
       <div>
-        <label className={CLS_LABEL}>Adresse domicile <span className="text-gray-400 font-normal">(pour la carte patients)</span></label>
+        <label className={CLS_LABEL}>Adresse domicile <span className="text-gray-400 font-normal">(pour la carte bénéficiaires)</span></label>
         <input name="adresseRue" value={form.adresseRue} onChange={handleChange}
           placeholder="12 rue des Lilas" className={`${CLS_INPUT} mb-2`} />
         <div className="grid grid-cols-3 gap-2">
@@ -1423,14 +1423,14 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
             <span className="text-lg">🏢</span>
             <div>
               <div className="font-semibold text-dark text-sm">Rattachement</div>
-              <div className="text-xs text-gray-500">Patient indépendant ou rattaché à une structure</div>
+              <div className="text-xs text-gray-500">Bénéficiaire indépendant ou rattaché à une structure</div>
             </div>
           </div>
           <div className="p-4">
             <div className="flex flex-col gap-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="rattachement" checked={!structureId} onChange={() => setStructureId(undefined)} className="accent-primary" />
-                <span className="text-sm text-gray-700">Patient indépendant</span>
+                <span className="text-sm text-gray-700">Bénéficiaire indépendant</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="rattachement" checked={!!structureId} onChange={() => setStructureId(structures[0]?.id)} className="accent-primary" />
@@ -1456,12 +1456,12 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
           <span className="text-lg">🎯</span>
           <div>
             <div className="font-semibold text-dark text-sm">Objectifs</div>
-            <div className="text-xs text-gray-500">Ce que le patient souhaite atteindre</div>
+            <div className="text-xs text-gray-500">Ce que le bénéficiaire souhaite atteindre</div>
           </div>
         </div>
         <div className="p-4 space-y-4">
           <ChoixMultiple
-            label="Objectifs du patient"
+            label="Objectifs du bénéficiaire"
             options={OPTIONS_OBJECTIFS_PATIENT}
             value={profilActivite.objectifsPatient}
             onChange={v => setProfilActivite(p => ({ ...p, objectifsPatient: v }))}
@@ -1591,7 +1591,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
           <span className="text-lg">🩺</span>
           <div>
             <div className="font-semibold text-dark text-sm">État de santé général</div>
-            <div className="text-xs text-gray-500">Ressenti au quotidien du patient</div>
+            <div className="text-xs text-gray-500">Ressenti au quotidien du bénéficiaire</div>
           </div>
         </div>
         <div className="p-4 space-y-4">
@@ -1622,7 +1622,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
                 className={`mt-2 ${CLS_INPUT}`}
               />
             )}
-            <p className="text-xs text-gray-400 mt-1.5">Ces contre-indications seront affichées en alerte dans la fiche patient et tous les PDFs.</p>
+            <p className="text-xs text-gray-400 mt-1.5">Ces contre-indications seront affichées en alerte dans la fiche bénéficiaire et tous les PDFs.</p>
           </div>
         </div>
       </div>
@@ -1726,7 +1726,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
           </div>
 
           <ChoixUnique
-            label="Pourquoi le patient est-il là aujourd'hui ?"
+            label="Pourquoi le bénéficiaire est-il là aujourd'hui ?"
             options={OPTIONS_ORIGINE_DEMARCHE}
             value={anamnese.cognition?.origineDemarche}
             onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, origineDemarche: v } }))}
@@ -2012,12 +2012,12 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
         </div>
         <div className="p-4 space-y-4">
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-600 leading-relaxed">
-            <div className="font-semibold text-gray-700 mb-1.5">📋 À lire au patient</div>
+            <div className="font-semibold text-gray-700 mb-1.5">📋 À lire au bénéficiaire</div>
             <p>"Dans le cadre de votre suivi en APA, je collecte vos données personnelles et de santé. Utilisées uniquement pour votre suivi. Droits d'accès, rectification, effacement : <strong>{emailPraticien}</strong>"</p>
           </div>
           <div className="space-y-2.5">
             {([
-              { key: 'consentementObtenu', label: 'Le patient a été informé et a consenti' },
+              { key: 'consentementObtenu', label: 'Le bénéficiaire a été informé et a consenti' },
               { key: 'droitAcces',         label: "Droit d'accès expliqué" },
               { key: 'droitRectification', label: 'Droit de rectification expliqué' },
               { key: 'droitEffacement',    label: "Droit à l'effacement expliqué" },

@@ -319,7 +319,7 @@ function SectionDonnees() {
       a.download = `horizon-backup-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success(`Export réussi — ${mapped.length} patients`);
+      toast.success(`Export réussi — ${mapped.length} bénéficiaires`);
     } catch (err) {
       toast.error('Erreur lors de l\'export');
       console.error(err);
@@ -373,7 +373,7 @@ function SectionDonnees() {
         inserted++;
       }
 
-      toast.success(`Import réussi — ${inserted} patients ajoutés`);
+      toast.success(`Import réussi — ${inserted} bénéficiaires ajoutés`);
       setPendingFile(null);
       setImportStats(null);
       setTimeout(() => window.location.reload(), 800);
@@ -445,14 +445,14 @@ function SectionDonnees() {
                 Cette action ajoutera à votre compte :
               </p>
               <ul className="mt-2 space-y-1">
-                <li className="text-sm font-semibold text-dark">• {importStats.patients} patient{importStats.patients > 1 ? 's' : ''}</li>
+                <li className="text-sm font-semibold text-dark">• {importStats.patients} bénéficiaire{importStats.patients > 1 ? 's' : ''}</li>
                 <li className="text-sm font-semibold text-dark">• {importStats.bilans} bilan{importStats.bilans > 1 ? 's' : ''}</li>
                 {importStats.programmes > 0 && (
                   <li className="text-sm font-semibold text-dark">• {importStats.programmes} programme{importStats.programmes > 1 ? 's' : ''}</li>
                 )}
               </ul>
               <p className="text-xs text-gray-500 mt-2">
-                Les patients existants (même identifiant) seront mis à jour.
+                Les bénéficiaires existants (même identifiant) seront mis à jour.
               </p>
             </div>
 
@@ -595,14 +595,14 @@ function SectionRappelsGlobal() {
     <section>
       <SectionTitle title="🔔 Rappels automatiques" />
       <p className="text-xs text-gray-400 mb-4">
-        Réglages par défaut pour tous vos patients (notifications push — gratuites). Personnalisable
-        par patient depuis sa fiche, onglet « Rappels ».
+        Réglages par défaut pour tous vos bénéficiaires (notifications push — gratuites). Personnalisable
+        par bénéficiaire depuis sa fiche, onglet « Rappels ».
       </p>
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-sm font-medium text-dark">Rappel avant la séance</div>
-            <p className="text-xs text-gray-400 mt-0.5">Le patient reçoit une notification avant son rendez-vous.</p>
+            <p className="text-xs text-gray-400 mt-0.5">Le bénéficiaire reçoit une notification avant son rendez-vous.</p>
           </div>
           <input type="checkbox" checked={local.rappelSeanceActif}
             onChange={e => setLocal(l => ({ ...l, rappelSeanceActif: e.target.checked }))}
@@ -619,7 +619,7 @@ function SectionRappelsGlobal() {
         <div className="flex items-center justify-between gap-4 pt-4 border-t border-gray-100">
           <div>
             <div className="text-sm font-medium text-dark">Rappel jour de séance</div>
-            <p className="text-xs text-gray-400 mt-0.5">La veille au soir, si le patient a une séance prévue le lendemain.</p>
+            <p className="text-xs text-gray-400 mt-0.5">La veille au soir, si le bénéficiaire a une séance prévue le lendemain.</p>
           </div>
           <input type="checkbox" checked={local.rappelJourSeanceActif}
             onChange={e => setLocal(l => ({ ...l, rappelJourSeanceActif: e.target.checked }))}

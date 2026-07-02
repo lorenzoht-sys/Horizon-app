@@ -198,7 +198,7 @@ function InfoLigne({ icon, texte }: { icon: string; texte: string }) {
 
 const NAV = [
   { id: 'aujourdhui', icon: 'ti-home',       label: 'Accueil' },
-  { id: 'patients',   icon: 'ti-users',      label: 'Patients' },
+  { id: 'patients',   icon: 'ti-users',      label: 'Bénéfic.' },
   { id: 'saisie',     icon: 'ti-plus',       label: 'Saisie', principal: true },
   { id: 'tournee',    icon: 'ti-route',      label: 'Tournée' },
   { id: 'assistant',  icon: 'ti-robot',      label: 'Assistant' },
@@ -303,7 +303,7 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
               <span style={{ fontSize: 22 }}>👥</span>
               <div>
                 <div style={{ fontSize: 24, fontWeight: 800, color: C.primary, lineHeight: 1 }}>{participants.length}</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>patients actifs</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>bénéficiaires actifs</div>
               </div>
             </div>
             <div style={divider} />
@@ -463,7 +463,7 @@ function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
   return (
     <div>
       <div style={{ background: 'white', paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 12, borderBottom: `1px solid ${C.border}`, position: 'sticky', top: 0, zIndex: 10 }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>Mes patients</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>Mes bénéficiaires</div>
         <input type="search" placeholder="Rechercher..." value={q} onChange={e => setQ(e.target.value)}
           style={{ width: '100%', padding: '10px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, background: C.bg, outline: 'none', boxSizing: 'border-box', marginBottom: 10 }} />
         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
@@ -479,7 +479,7 @@ function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
 
       <div style={{ padding: '8px 16px' }}>
         {filtered.length === 0 && (
-          <div style={{ color: C.muted, textAlign: 'center', padding: 30 }}>Aucun patient trouvé</div>
+          <div style={{ color: C.muted, textAlign: 'center', padding: 30 }}>Aucun bénéficiaire trouvé</div>
         )}
         {filtered.map(p => {
           const prochaine = seances.filter(s => s.participantId === p.id && s.date >= today && s.statut === 'planifiee').sort((a, b) => a.date.localeCompare(b.date))[0];
@@ -538,7 +538,7 @@ function ChoixSaisie({ onPatient, onBilan }: { onPatient: () => void; onBilan: (
       </button>
       <button onClick={onPatient} style={btn}>
         <span style={{ fontSize: 28 }}>👤</span>
-        <div><div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Nouveau patient</div><div style={{ fontSize: 12, color: C.muted }}>Créer une fiche patient</div></div>
+        <div><div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Nouveau bénéficiaire</div><div style={{ fontSize: 12, color: C.muted }}>Créer une fiche bénéficiaire</div></div>
         <i className="ti ti-chevron-right" style={{ fontSize: 18, color: '#D0DCDC', marginLeft: 'auto' }} />
       </button>
     </div>
@@ -578,7 +578,7 @@ function NouveauPatientMobile({ onBack }: { onBack: () => void }) {
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
           <i className="ti ti-arrow-left" style={{ fontSize: 22, color: C.text }} />
         </button>
-        <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Nouveau patient</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Nouveau bénéficiaire</div>
       </div>
 
       <label style={label}>Prénom *</label>
@@ -598,7 +598,7 @@ function NouveauPatientMobile({ onBack }: { onBack: () => void }) {
 
       <button onClick={sauvegarder}
         style={{ width: '100%', padding: 16, background: C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginTop: 8 }}>
-        ✅ Créer le patient
+        ✅ Créer le bénéficiaire
       </button>
     </div>
   );
@@ -663,10 +663,10 @@ function NouveauBilanMobile({ onBack, onVoirFiche }: { onBack: () => void; onVoi
         <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Nouveau bilan</div>
       </div>
 
-      <label style={label}>Sélectionner le patient</label>
+      <label style={label}>Sélectionner le bénéficiaire</label>
       <select value={participantId} onChange={e => setParticipantId(e.target.value)}
         style={{ width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, background: 'white', color: C.text, outline: 'none', marginBottom: 20 }}>
-        <option value="">Choisir un patient...</option>
+        <option value="">Choisir un bénéficiaire...</option>
         {participants.map(p => (
           <option key={p.id} value={p.id}>{p.prenom} {p.nom}</option>
         ))}
@@ -698,7 +698,7 @@ function EcranTournee() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Ma tournée</div>
-            <div style={{ fontSize: 12, color: C.muted }}>{seances.length} patient{seances.length !== 1 ? 's' : ''} · {formatDateLong(new Date())}</div>
+            <div style={{ fontSize: 12, color: C.muted }}>{seances.length} bénéficiaire{seances.length !== 1 ? 's' : ''} · {formatDateLong(new Date())}</div>
           </div>
         </div>
         {seances.length > 0 && (
@@ -885,10 +885,10 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
           </div>
           <div style={{ background: 'white', borderRadius: 12, border: '1px solid #FECACA', padding: '14px 16px' }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>
-              🗑️ Supprimer les données patients
+              🗑️ Supprimer les données bénéficiaires
             </div>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
-              Supprime tous les patients, bilans, contrats et séances. Les exercices et paramètres sont conservés.
+              Supprime tous les bénéficiaires, bilans, contrats et séances. Les exercices et paramètres sont conservés.
             </div>
             <button onClick={() => setShowConfirmReset(true)} style={{ padding: '10px 16px', background: 'none', border: '1px solid #E85050', borderRadius: 10, color: '#E85050', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
               Réinitialiser les données
@@ -905,7 +905,7 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
               ⚠️ Confirmer la suppression
             </div>
             <p style={{ fontSize: 14, color: '#4A6080', lineHeight: 1.6, marginBottom: 20 }}>
-              Tous les <strong>patients, bilans, contrats et séances</strong> seront supprimés.<br />
+              Tous les <strong>bénéficiaires, bilans, contrats et séances</strong> seront supprimés.<br />
               Les exercices et paramètres sont conservés.<br />
               <strong style={{ color: '#E85050' }}>Cette action est irréversible.</strong>
             </p>
@@ -986,7 +986,7 @@ function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout:
       <SectionMobile titre="Mon activité">
         <ItemMobile icon="ti-route" label="Tournée du jour" onClick={() => onNaviguerOnglet('tournee')} />
         <ItemMobile icon="ti-calendar" label="Agenda complet" onClick={() => toast('Accessible depuis l\'ordinateur 💻', { icon: 'ℹ️' })} />
-        <ItemMobile icon="ti-map-pin" label="Carte patients" onClick={() => toast('Accessible depuis l\'ordinateur 💻', { icon: 'ℹ️' })} />
+        <ItemMobile icon="ti-map-pin" label="Carte bénéficiaires" onClick={() => toast('Accessible depuis l\'ordinateur 💻', { icon: 'ℹ️' })} />
       </SectionMobile>
 
       {/* Section Contenu */}
@@ -1443,7 +1443,7 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
             <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
             <rect x="3" y="14" width="7" height="7"/><path d="M14 14h7v7"/>
           </svg>
-          <span style={{ fontSize: 11, color: 'white', fontWeight: 700 }}>Espace patient</span>
+          <span style={{ fontSize: 11, color: 'white', fontWeight: 700 }}>Espace bénéficiaire</span>
         </button>
         <button onClick={() => { setOnglet('journal'); setShowDictee(true); }} style={actionBtn}>
           <i className="ti ti-microphone" style={{ fontSize: 22, color: C.primary }} />
@@ -2049,7 +2049,7 @@ function EcranAssistant({
             onClick={e => e.stopPropagation()}>
             <div style={{ padding: '16px 16px 8px' }}>
               <div style={{ width: 40, height: 4, borderRadius: 2, background: '#E5E7EB', margin: '0 auto 14px' }} />
-              <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 10 }}>Sélectionner un patient</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 10 }}>Sélectionner un bénéficiaire</div>
               <input
                 type="search"
                 value={searchQ}
@@ -2066,7 +2066,7 @@ function EcranAssistant({
                   style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', marginBottom: 6, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, cursor: 'pointer', textAlign: 'left' }}
                 >
                   <span style={{ fontSize: 16 }}>✕</span>
-                  <span style={{ fontSize: 13, color: '#DC2626', fontWeight: 600 }}>Retirer le contexte patient</span>
+                  <span style={{ fontSize: 13, color: '#DC2626', fontWeight: 600 }}>Retirer le contexte bénéficiaire</span>
                 </button>
               )}
               {filteredPatients.map(p => (

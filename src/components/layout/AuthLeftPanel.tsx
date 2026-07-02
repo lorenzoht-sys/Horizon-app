@@ -45,9 +45,8 @@ export default function AuthLeftPanel() {
         </p>
 
         <h1 style={{ fontSize: 'clamp(52px,5.5vw,80px)', fontWeight: 800, color: '#0f2e2a', lineHeight: 0.94, letterSpacing: '-3px', margin: 0 }}>
-          Vos patients<br />
-          <em style={{ fontStyle: 'italic', color: '#0d9488' }}>vous</em><br />
-          attendent.
+          Tout votre suivi,<br />
+          <em style={{ fontStyle: 'italic', color: '#0d9488' }}>au même</em>{' '}endroit.
         </h1>
 
         <p style={{ fontSize: 16, color: '#5a7a72', marginTop: 22, fontWeight: 400, lineHeight: 1.65, maxWidth: 400 }}>
@@ -131,7 +130,7 @@ export default function AuthLeftPanel() {
       <div className="login-stats-fadein" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
         <div style={{ paddingRight: 28 }}>
           <p style={{ fontSize: 24, fontWeight: 800, color: '#0f2e2a', letterSpacing: '-0.8px', lineHeight: 1 }}>127</p>
-          <p style={{ fontSize: 10.5, fontWeight: 600, color: '#94a3b8', marginTop: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>patients suivis</p>
+          <p style={{ fontSize: 10.5, fontWeight: 600, color: '#94a3b8', marginTop: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>bénéficiaires suivis</p>
         </div>
         <div style={{ width: 1, height: 36, background: '#cdd8d2' }} />
         <div style={{ padding: '0 28px' }}>

@@ -171,10 +171,10 @@ export default function ContratNouveauPage() {
         {joursDispoLabels.length > 0 ? (
           <div className="bg-blue-50 border border-blue-200 rounded-2xl px-5 py-4 mb-6">
             <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">
-              Disponibilités du patient
+              Disponibilités du bénéficiaire
             </div>
             <div className="text-sm text-blue-800">
-              Ce patient est disponible :{' '}
+              Ce bénéficiaire est disponible :{' '}
               {joursDispoLabels.map(j =>
                 (creneauxParJour[j]?.length ?? 0) > 0
                   ? `${j.toLowerCase()} ${creneauxParJour[j].map(c => `${c.debut}-${c.fin}`).join(', ')}`
@@ -189,11 +189,11 @@ export default function ContratNouveauPage() {
           <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-2.5">
             <AlertTriangle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-amber-800">
-              Renseignez d'abord les disponibilités de ce patient pour que le planificateur
+              Renseignez d'abord les disponibilités de ce bénéficiaire pour que le planificateur
               puisse générer les séances. Le contrat peut être créé sans, mais aucune séance
               ne sera placée automatiquement.{' '}
               <Link to={`/participants/${id}/modifier`} className="font-semibold underline">
-                Aller à la fiche patient
+                Aller à la fiche bénéficiaire
               </Link>
             </div>
           </div>
@@ -206,7 +206,7 @@ export default function ContratNouveauPage() {
               💡 Créneaux disponibles dans votre planning
             </div>
             <p className="text-sm text-blue-800 mb-2">
-              Ce patient habite <span className="font-semibold">{participant.adresseVille}</span>. Dans votre planning actuel, vous avez des trous récurrents dans cette zone :
+              Ce bénéficiaire habite <span className="font-semibold">{participant.adresseVille}</span>. Dans votre planning actuel, vous avez des trous récurrents dans cette zone :
             </p>
             <ul className="space-y-0.5">
               {creneauxSuggeres.map((c, i) => (
@@ -216,7 +216,7 @@ export default function ContratNouveauPage() {
                 </li>
               ))}
             </ul>
-            <p className="text-xs text-blue-500 mt-2">Ces créneaux pourraient correspondre aux disponibilités du patient.</p>
+            <p className="text-xs text-blue-500 mt-2">Ces créneaux pourraient correspondre aux disponibilités du bénéficiaire.</p>
           </div>
         )}
 
@@ -358,7 +358,7 @@ export default function ContratNouveauPage() {
             </div>
             <p className="text-xs text-gray-400 mt-2">
               Les jours réels de passage sont décidés par le planificateur de tournée,
-              selon les disponibilités du patient et l'optimisation des trajets.
+              selon les disponibilités du bénéficiaire et l'optimisation des trajets.
             </p>
           </div>
 
@@ -398,7 +398,7 @@ export default function ContratNouveauPage() {
               <span className="text-sm text-gray-700">Ne pas inclure dans l'optimisation de tournée</span>
             </label>
             <p className="text-xs text-gray-400 mt-1.5 ml-6">
-              Ce patient reste visible partout ailleurs dans l'app, mais le planificateur
+              Ce bénéficiaire reste visible partout ailleurs dans l'app, mais le planificateur
               (semaine ponctuelle et planning récurrent) ne lui proposera jamais de séance.
             </p>
           </div>
