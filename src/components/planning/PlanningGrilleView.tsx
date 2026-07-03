@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader, X } from 'lucide-react';
 import type { Contrat, IndisponibilitePierre, JourSemaine, Participant, Seance } from '../../types';
@@ -13,6 +14,14 @@ import FrisePlanningJour, {
 // Les 7 jours sont toujours affichés (voir joursIndisposComplete plus bas) —
 // samedi/dimanche restent visibles et déposables, seulement grisés quand
 // Pierre y est indisponible toute la journée.
+
+// Hauteur visible de la grille avant défilement interne. À la nouvelle
+// échelle (HAUTEUR_HEURE_PX = 96px/h), la journée complète 8h–19h occupe
+// ~1056px de haut — plus que ce qu'un écran affiche confortablement sous les
+// en-têtes de jours. Ce plafond garde ces en-têtes visibles en permanence :
+// seul le corps de la grille (colonne heures + frises) défile, dans son
+// propre conteneur.
+const HAUTEUR_GRILLE_VISIBLE = 600;
 
 const JOURS_ORDRES = [
   { key: 'lun' as JourSemaine | 'dim', label: 'Lundi',    cleJour: 'Lun', dow: 1 },
@@ -60,15 +69,19 @@ interface Props {
 
 // ── Modal confirmation drop ───────────────────────────────────────────────────
 
-function ModalConfirmDrop({ info, patient, seances, participantMap, onConfirm, onCancel }: {
+function ModalConfirmDrop({ info, patient, seances, participantMap, windows, onConfirm, onCancel }: {
   info: DropPendant;
   patient: Participant | undefined;
   seances: Seance[];
   participantMap: Map<string, Participant>;
-  onConfirm: (duree: number) => Promise<void>;
+  windows: { debut: string; fin: string }[];
+  onConfirm: (duree: number, heureDebut: string) => Promise<void>;
   onCancel: () => void;
 }) {
   const [duree, setDuree] = useState(info.contrat.dureeMinutes);
+  // Pré-rempli avec l'heure déjà aimantée/calée par FrisePlanningJour ;
+  // reste éditable pour les cas particuliers (ex : 9h35 imposé par un trajet).
+  const [heureDebut, setHeureDebut] = useState(info.heure);
   const [loading, setLoading] = useState(false);
 
   const dates = useMemo(
@@ -76,7 +89,14 @@ function ModalConfirmDrop({ info, patient, seances, participantMap, onConfirm, o
     [info.jour.key, info.contrat],
   );
 
-  const heureFin = addMinutes(info.heure, duree);
+  const heureFin = addMinutes(heureDebut, duree);
+
+  // Le champ heure étant librement éditable au clavier, on revalide contre
+  // les disponibilités déclarées — même logique que FrisePlanningJour/
+  // ModalInsererPatient (créneau entièrement contenu dans une fenêtre).
+  const heureHorsDispo = windows.length > 0 && !windows.some(w =>
+    heureDebut >= w.debut && heureFin <= w.fin,
+  );
 
   // Chevauchements : vérifiés sur toutes les occurrences récurrentes, pas
   // seulement la première — un rendez-vous fixe côté autre bénéficiaire
@@ -85,14 +105,17 @@ function ModalConfirmDrop({ info, patient, seances, participantMap, onConfirm, o
   const conflits = useMemo(
     () => trouveChevauchements(
       seances,
-      dates.map(date => ({ date, heureDebut: info.heure, heureFin })),
+      dates.map(date => ({ date, heureDebut, heureFin })),
     ),
-    [seances, dates, info.heure, heureFin],
+    [seances, dates, heureDebut, heureFin],
   );
 
   async function handleConfirmer() {
+    // Filet de sécurité : le bouton est désactivé dans ce cas, mais on ne
+    // laisse aucune voie (ex : soumission clavier) créer un chevauchement.
+    if (conflits.length > 0) return;
     setLoading(true);
-    try { await onConfirm(duree); } finally { setLoading(false); }
+    try { await onConfirm(duree, heureDebut); } finally { setLoading(false); }
   }
 
   return (
@@ -120,10 +143,24 @@ function ModalConfirmDrop({ info, patient, seances, participantMap, onConfirm, o
               <p className="text-sm font-semibold text-dark">{info.jour.label}</p>
             </div>
             <div className="bg-gray-50 rounded-xl px-4 py-3">
-              <p className="text-xs text-gray-500 mb-0.5">Heure</p>
-              <p className="text-sm font-semibold text-dark">{info.heure} → {heureFin}</p>
+              <label className="block text-xs text-gray-500 mb-0.5">Heure de début</label>
+              <input
+                type="time"
+                step={60}
+                value={heureDebut}
+                onChange={e => setHeureDebut(e.target.value)}
+                className="w-full bg-transparent text-sm font-semibold text-dark focus:outline-none"
+              />
+              <p className="text-xs text-gray-400 mt-0.5">→ fin {heureFin}</p>
             </div>
           </div>
+
+          {heureHorsDispo && (
+            <p className="text-xs text-orange-700 bg-orange-50 rounded-xl px-4 py-3">
+              Ce créneau ({heureDebut}–{heureFin}) sort des disponibilités déclarées de{' '}
+              {patient ? patient.prenom : 'ce bénéficiaire'}.
+            </p>
+          )}
 
           {/* Durée (selector si plusieurs options) */}
           {info.contrat.dureesSeances.length > 1 ? (
@@ -157,17 +194,30 @@ function ModalConfirmDrop({ info, patient, seances, participantMap, onConfirm, o
             </p>
           )}
 
-          {/* Avertissement chevauchement */}
+          {/* Chevauchement avec une séance existante : toujours bloquant — pas
+              de "continuer quand même" ici, ni d'action pour déplacer/supprimer
+              la séance en place à sa place. L'utilisateur doit soit changer
+              l'heure/la durée, soit aller gérer lui-même la séance existante. */}
           {conflits.length > 0 && (() => {
             const premier = conflits[0];
             const nomExistant = participantMap.get(premier.existante.participantId);
+            const nomAffiche = nomExistant ? `${nomExistant.prenom} ${nomExistant.nom[0]}.` : 'un autre bénéficiaire';
             return (
               <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
                 <p className="text-xs font-semibold text-red-700">
-                  Ce créneau chevauche une séance existante avec{' '}
-                  {nomExistant ? `${nomExistant.prenom} ${nomExistant.nom[0]}.` : 'un autre bénéficiaire'}
-                  {' '}le {formatDate(premier.creneau.date)} ({premier.existante.heureDebut}–{premier.existante.heureFin})
-                  — continuer quand même ?
+                  Créneau indisponible — chevauche une séance existante avec{' '}
+                  {nomAffiche}{' '}le {formatDate(premier.creneau.date)} ({premier.existante.heureDebut}–{premier.existante.heureFin}).
+                </p>
+                <p className="text-xs text-red-600 mt-1">
+                  Modifiez l'heure ou la durée pour lever le conflit.
+                  {nomExistant && (
+                    <>
+                      {' '}
+                      <Link to={`/participant/${premier.existante.participantId}`} className="underline font-medium hover:text-red-800">
+                        Voir la séance de {nomAffiche}
+                      </Link>
+                    </>
+                  )}
                 </p>
                 {conflits.length > 1 && (
                   <p className="text-xs text-red-500 mt-1">
@@ -184,17 +234,21 @@ function ModalConfirmDrop({ info, patient, seances, participantMap, onConfirm, o
             className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
             Annuler
           </button>
-          <button onClick={handleConfirmer} disabled={loading || dates.length === 0}
+          <button onClick={handleConfirmer} disabled={loading || dates.length === 0 || conflits.length > 0}
             className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
               conflits.length > 0
-                ? 'bg-red-500 text-white hover:bg-red-600'
-                : 'bg-primary text-white hover:bg-dark'
+                ? 'bg-red-500 text-white cursor-not-allowed'
+                : heureHorsDispo
+                  ? 'bg-orange-500 text-white hover:bg-orange-600'
+                  : 'bg-primary text-white hover:bg-dark'
             }`}>
             {loading
               ? <><Loader size={14} className="animate-spin" />En cours…</>
               : conflits.length > 0
-                ? 'Continuer quand même'
-                : `Confirmer ${dates.length > 0 ? `(${dates.length})` : ''}`}
+                ? 'Créneau occupé — impossible'
+                : heureHorsDispo
+                  ? 'Continuer quand même'
+                  : `Confirmer ${dates.length > 0 ? `(${dates.length})` : ''}`}
           </button>
         </div>
       </div>
@@ -289,14 +343,14 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
     setDropPendant({ participantId: pid, jour, heure, contrat });
   }
 
-  async function handleConfirmerDrop(duree: number) {
+  async function handleConfirmerDrop(duree: number, heureDebut: string) {
     if (!dropPendant) return;
-    const { participantId, jour, heure, contrat } = dropPendant;
+    const { participantId, jour, contrat } = dropPendant;
     const patient = participantMap.get(participantId);
     const dates = creerDatesRecurrentes(jour.key, contrat);
     if (!dates.length) { toast.error('Aucune date disponible dans ce contrat.'); setDropPendant(null); return; }
 
-    const heureFin = addMinutes(heure, duree);
+    const heureFin = addMinutes(heureDebut, duree);
     const adresse = patient
       ? [patient.adresseRue, patient.adresseCodePostal, patient.adresseVille].filter(Boolean).join(', ')
       : '';
@@ -305,7 +359,7 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
       participantId,
       contratId: contrat.id,
       date,
-      heureDebut: heure,
+      heureDebut,
       heureFin,
       dureeMinutes: duree,
       type: 'seance' as const,
@@ -314,8 +368,10 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
       coordonnees: patient?.coordonnees ? { lat: patient.coordonnees.lat, lng: patient.coordonnees.lng } : undefined,
     }));
 
-    // Le chevauchement a déjà été vérifié et, le cas échéant, affiché à
-    // l'utilisateur dans ModalConfirmDrop avant qu'il ne clique sur Confirmer.
+    // Le chevauchement a déjà été vérifié dans ModalConfirmDrop, qui bloque
+    // la confirmation tant qu'un conflit existe (aucun cas légitime) — on
+    // n'atteint ce point que sans conflit. ignorerChevauchements évite un
+    // double contrôle redondant, pas un contournement.
     await bulkCreerSeances(data, { ignorerChevauchements: true });
     toast.success(`${dates.length} séance${dates.length > 1 ? 's' : ''} planifiée${dates.length > 1 ? 's' : ''} chaque ${jour.label.toLowerCase()}`);
     setDropPendant(null);
@@ -339,7 +395,7 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
           Glissez un bénéficiaire sur la grille pour placer une séance.
         </p>
 
-        <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: FRISE_TOTAL_H }}>
+        <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: HAUTEUR_GRILLE_VISIBLE }}>
           {patientsFiltres.map(p => {
             const aContrat = contrats.some(c => c.participantId === p.id && c.statut === 'actif');
             const selected = patientSelectionneId === p.id;
@@ -385,35 +441,40 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
           ))}
         </div>
 
-        {/* Corps grille */}
-        <div className="flex gap-1">
-          {/* Colonne heures partagée */}
-          <div className="relative flex-shrink-0" style={{ width: 36, height: FRISE_TOTAL_H }}>
-            {heureMarks.map(m => (
-              <div key={m} className="absolute right-1.5 text-[10px] text-gray-400 leading-none"
-                style={{ top: friseToY(m) - 4 }}>
-                {m / 60}h
+        {/* Corps grille — défile verticalement dans son propre conteneur,
+            sous les en-têtes de jours qui restent fixes au-dessus. Colonne
+            heures et frises des 7 jours partagent ce même scroll (siblings
+            d'un seul conteneur) pour rester alignées entre elles. */}
+        <div className="overflow-y-auto" style={{ maxHeight: HAUTEUR_GRILLE_VISIBLE }}>
+          <div className="flex gap-1">
+            {/* Colonne heures partagée */}
+            <div className="relative flex-shrink-0" style={{ width: 36, height: FRISE_TOTAL_H }}>
+              {heureMarks.map(m => (
+                <div key={m} className="absolute right-1.5 text-[10px] text-gray-400 leading-none"
+                  style={{ top: friseToY(m) - 4 }}>
+                  {m / 60}h
+                </div>
+              ))}
+            </div>
+
+            {/* Une frise par jour (7/7) */}
+            {JOURS_ORDRES.map(j => (
+              <div key={j.key} className={`flex-1 min-w-[92px] ${joursOff.has(j.key) ? 'opacity-60' : ''}`}>
+                <FrisePlanningJour
+                  seancesDuJour={seancesParDow.get(j.dow) ?? []}
+                  participantMap={participantMap}
+                  dureeNouveau={dureeNouveau}
+                  windowsPatient={patientSelectionne ? windowsForJour(j.cleJour) : []}
+                  selectedHeure={null}
+                  onSelect={() => {}}
+                  canSelect={false}
+                  showHours={false}
+                  onDrop={heure => handleDrop(j, heure)}
+                  indisposPierre={indisposForJour(j.key)}
+                />
               </div>
             ))}
           </div>
-
-          {/* Une frise par jour (7/7) */}
-          {JOURS_ORDRES.map(j => (
-            <div key={j.key} className={`flex-1 min-w-[92px] ${joursOff.has(j.key) ? 'opacity-60' : ''}`}>
-              <FrisePlanningJour
-                seancesDuJour={seancesParDow.get(j.dow) ?? []}
-                participantMap={participantMap}
-                dureeNouveau={dureeNouveau}
-                windowsPatient={patientSelectionne ? windowsForJour(j.cleJour) : []}
-                selectedHeure={null}
-                onSelect={() => {}}
-                canSelect={false}
-                showHours={false}
-                onDrop={heure => handleDrop(j, heure)}
-                indisposPierre={indisposForJour(j.key)}
-              />
-            </div>
-          ))}
         </div>
 
         {/* Légende */}
@@ -438,16 +499,28 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
       </div>
 
       {/* ── Modal confirmation drop ────────────────────────────────── */}
-      {dropPendant && (
-        <ModalConfirmDrop
-          info={dropPendant}
-          patient={participantMap.get(dropPendant.participantId)}
-          seances={seances}
-          participantMap={participantMap}
-          onConfirm={handleConfirmerDrop}
-          onCancel={() => setDropPendant(null)}
-        />
-      )}
+      {dropPendant && (() => {
+        // Calculé pour le bénéficiaire déposé (pas patientSelectionne) : plus
+        // sûr que de dépendre implicitement de la synchronisation faite dans
+        // onDragStart.
+        const patientDuDrop = participantMap.get(dropPendant.participantId);
+        const orgDuDrop = patientDuDrop ? getOrganisation(patientDuDrop) : null;
+        const crenJourDuDrop = orgDuDrop?.creneauxParJour?.[dropPendant.jour.cleJour];
+        const windowsDuDrop = orgDuDrop
+          ? (crenJourDuDrop?.length ? crenJourDuDrop : [{ debut: '08:00', fin: '19:00' }])
+          : [];
+        return (
+          <ModalConfirmDrop
+            info={dropPendant}
+            patient={patientDuDrop}
+            seances={seances}
+            participantMap={participantMap}
+            windows={windowsDuDrop}
+            onConfirm={handleConfirmerDrop}
+            onCancel={() => setDropPendant(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

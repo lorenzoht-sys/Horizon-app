@@ -31,6 +31,41 @@ export function estDansPlage(heure: string, debut: string, fin: string): boolean
   return h >= heureEnMinutes(debut) && h < heureEnMinutes(fin);
 }
 
+// ── Aimantation au pas (grille de planification manuelle) ────────────────────
+// Pas de la grille de placement manuel (glisser-déposer / clic sur frise) —
+// configurable ici plutôt qu'en valeur en dur éparpillée dans les composants.
+export const PAS_MINUTES = 15;
+
+// Arrondit au multiple de PAS_MINUTES le plus proche (contrairement à
+// arrondirAuQuartHeureSup qui arrondit toujours au-dessus).
+export function arrondirAuPas(minutes: number, pas: number = PAS_MINUTES): number {
+  return Math.round(minutes / pas) * pas;
+}
+
+export interface FenetreMinutes {
+  debut: number;
+  fin: number;
+}
+
+// Cale un créneau de durée `duree` démarrant à `minutesDebut` (déjà arrondi
+// au pas) à l'intérieur de la fenêtre de disponibilité qui contient ce début.
+// Si la durée déborde la fin de cette fenêtre (ex : arrondi qui tombe trop
+// près de la fin de la dispo), recale sur le dernier début valide qui tient
+// entièrement dans la fenêtre, plutôt que de rejeter le placement. Renvoie
+// null si minutesDebut ne tombe dans aucune fenêtre, ou si la séance ne tient
+// dans aucun cas dans la fenêtre visée (fenêtre plus courte que la durée).
+export function calerDansFenetre(
+  minutesDebut: number,
+  duree: number,
+  fenetres: FenetreMinutes[],
+): number | null {
+  const fenetre = fenetres.find(f => minutesDebut >= f.debut && minutesDebut < f.fin);
+  if (!fenetre) return null;
+  const dernierDebutPossible = fenetre.fin - duree;
+  if (dernierDebutPossible < fenetre.debut) return null;
+  return Math.max(fenetre.debut, Math.min(minutesDebut, dernierDebutPossible));
+}
+
 // ── Détection de chevauchement entre créneaux ─────────────────────────────────
 // Logique partagée : useAgenda.detecterConflits (création simple), les deux
 // interfaces de planification manuelle (ModalInsererPatient, PlanningGrilleView)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { estSemaineDue, genererDatesSeances, heuresChevauchent, trouveChevauchement, trouveChevauchements } from './horaires';
+import { estSemaineDue, genererDatesSeances, heuresChevauchent, trouveChevauchement, trouveChevauchements, arrondirAuPas, calerDansFenetre } from './horaires';
 import type { Seance } from '../types';
 
 function fakeSeance(overrides: Partial<Seance> = {}): Seance {
@@ -148,5 +148,54 @@ describe('trouveChevauchements (bulk)', () => {
     const existantes = [fakeSeance({ id: 'e1', date: '2026-07-13', heureDebut: '08:00', heureFin: '08:45' })];
     const candidats = [{ date: '2026-07-13', heureDebut: '10:00', heureFin: '10:45' }];
     expect(trouveChevauchements(existantes, candidats)).toHaveLength(0);
+  });
+});
+
+describe('arrondirAuPas', () => {
+  it('arrondit au multiple de 15 le plus proche (par défaut)', () => {
+    expect(arrondirAuPas(9 * 60 + 7)).toBe(9 * 60);        // 9h07 → 9h00
+    expect(arrondirAuPas(9 * 60 + 23)).toBe(9 * 60 + 30);  // 9h23 → 9h30
+    expect(arrondirAuPas(9 * 60 + 8)).toBe(9 * 60 + 15);   // 9h08 → 9h15 (arrondi au plus proche)
+  });
+
+  it('laisse inchangé un horaire déjà sur la grille', () => {
+    expect(arrondirAuPas(10 * 60)).toBe(10 * 60);
+  });
+
+  it('accepte un pas différent (configurable)', () => {
+    expect(arrondirAuPas(9 * 60 + 12, 10)).toBe(9 * 60 + 10);
+    expect(arrondirAuPas(9 * 60 + 12, 30)).toBe(9 * 60);
+  });
+});
+
+describe('calerDansFenetre', () => {
+  const FENETRE_8_12 = [{ debut: 8 * 60, fin: 12 * 60 }]; // 08:00–12:00
+
+  it('renvoie l\'heure telle quelle quand la séance tient dans la fenêtre', () => {
+    const debut = arrondirAuPas(9 * 60 + 7); // 9h00
+    expect(calerDansFenetre(debut, 45, FENETRE_8_12)).toBe(9 * 60);
+  });
+
+  it('recale sur le dernier début valide quand l\'arrondi ferait déborder la fin de fenêtre', () => {
+    // Dispo jusqu'à 12h, séance d'1h déposée à 11h50 → arrondie à 11h45 →
+    // finirait à 12h45 (hors zone) → doit être recalée sur 11h00 (11h–12h).
+    const snappe = arrondirAuPas(11 * 60 + 50);
+    expect(snappe).toBe(11 * 60 + 45);
+    expect(calerDansFenetre(snappe, 60, FENETRE_8_12)).toBe(11 * 60);
+  });
+
+  it('ne dépasse jamais le début de la fenêtre en recalant', () => {
+    // Fenêtre de 30 min seulement, séance de 45 min : ne tient jamais.
+    const fenetreCourte = [{ debut: 8 * 60, fin: 8 * 60 + 30 }];
+    expect(calerDansFenetre(8 * 60, 45, fenetreCourte)).toBeNull();
+  });
+
+  it('renvoie null si le début ne tombe dans aucune fenêtre', () => {
+    expect(calerDansFenetre(14 * 60, 45, FENETRE_8_12)).toBeNull();
+  });
+
+  it('choisit la fenêtre qui contient réellement le début, parmi plusieurs', () => {
+    const fenetres = [{ debut: 8 * 60, fin: 10 * 60 }, { debut: 14 * 60, fin: 18 * 60 }];
+    expect(calerDansFenetre(15 * 60, 30, fenetres)).toBe(15 * 60);
   });
 });
