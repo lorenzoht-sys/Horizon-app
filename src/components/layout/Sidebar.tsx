@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { IndicateurConnexion, BoutonInstallerApp } from '../pwa/PWAComponents';
 import { supabase } from '../../lib/supabase';
+import LegalFooterLinks from '../legal/LegalFooterLinks';
 
 interface Props {
   onLogout: () => void;
@@ -180,6 +181,8 @@ export default function Sidebar({ onLogout }: Props) {
         >
           <LogOut size={14} />
         </button>
+
+        <LegalFooterLinks variant="dark" style={{ marginTop: 14 }} />
       </div>
     </div>
   );

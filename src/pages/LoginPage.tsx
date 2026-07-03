@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AuthLeftPanel from '../components/layout/AuthLeftPanel';
+import LegalFooterLinks from '../components/legal/LegalFooterLinks';
 import './LoginPage.css';
 
 interface Props {
@@ -217,6 +218,8 @@ export default function LoginPage({ onLogin }: Props) {
           </div>
 
         </div>
+
+        <LegalFooterLinks style={{ marginTop: 20 }} />
       </div>
       </div>{/* fin login-grid */}
     </div>

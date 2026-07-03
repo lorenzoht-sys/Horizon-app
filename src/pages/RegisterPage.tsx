@@ -2,6 +2,7 @@ import { useState, type FormEvent, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AuthLeftPanel from '../components/layout/AuthLeftPanel';
+import LegalFooterLinks from '../components/legal/LegalFooterLinks';
 import './LoginPage.css';
 
 const inputStyle: CSSProperties = {
@@ -276,6 +277,8 @@ export default function RegisterPage() {
             Se connecter
           </Link>
         </div>
+
+        <LegalFooterLinks style={{ marginTop: 20 }} />
       </div>
     </div>
   );

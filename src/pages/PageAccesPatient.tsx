@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { patientLogin } from '../lib/patientApi';
 import { getSessionPatient, sauvegarderSessionPatient } from '../hooks/useAccesPatients';
+import LegalFooterLinks from '../components/legal/LegalFooterLinks';
 
 export default function PageAccesPatient() {
   const [code, setCode] = useState('');
@@ -161,6 +162,8 @@ export default function PageAccesPatient() {
           🔑 Votre code vous a été remis par votre enseignant APA.<br />
           Si vous ne le retrouvez pas, contactez-le directement.
         </div>
+
+        <LegalFooterLinks style={{ marginTop: 24 }} />
 
       </div>
 

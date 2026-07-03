@@ -37,6 +37,9 @@ const BilanDetail        = lazy(() => import('./pages/BilanDetail'));
 const NewBilan           = lazy(() => import('./pages/NewBilan'));
 const ProgrammePage      = lazy(() => import('./pages/ProgrammePage'));
 const ParticipantFormPage = lazy(() => import('./pages/ParticipantFormPage'));
+const PolitiqueConfidentialite = lazy(() => import('./pages/PolitiqueConfidentialite'));
+const MentionsLegales     = lazy(() => import('./pages/MentionsLegales'));
+const CGU                = lazy(() => import('./pages/CGU'));
 
 function DesktopContent({ onLogout }: { onLogout: () => void }) {
   const location = useLocation();
@@ -252,6 +255,17 @@ export default function App() {
         } />
         <Route path="/forgot-password" element={
           isLoggedIn ? <Navigate to="/" replace /> : <ForgotPasswordPage />
+        } />
+
+        {/* Pages légales — publiques, sans auth */}
+        <Route path="/politique-confidentialite" element={
+          <Suspense fallback={null}><PolitiqueConfidentialite /></Suspense>
+        } />
+        <Route path="/mentions-legales" element={
+          <Suspense fallback={null}><MentionsLegales /></Suspense>
+        } />
+        <Route path="/cgu" element={
+          <Suspense fallback={null}><CGU /></Suspense>
         } />
 
         {/* Vue client : pas de sidebar */}
