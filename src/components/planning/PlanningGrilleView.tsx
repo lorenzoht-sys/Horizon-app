@@ -3,36 +3,38 @@ import { toast } from 'sonner';
 import { Loader, X } from 'lucide-react';
 import type { Contrat, IndisponibilitePierre, JourSemaine, Participant, Seance } from '../../types';
 import { getOrganisation } from '../../lib/anamnese';
-import { heureEnMinutes } from '../../utils/horaires';
+import { heureEnMinutes, genererDatesSeances, trouveChevauchements } from '../../utils/horaires';
 import { addMinutes } from '../../hooks/useAgenda';
 import FrisePlanningJour, {
   FRISE_H_DEBUT, FRISE_H_FIN, FRISE_TOTAL_H, friseToY,
 } from './FrisePlanningJour';
 
-// ── Jours disponibles (Lun → Ven) ────────────────────────────────────────────
+// ── Jours de la semaine (Lun → Dim) ───────────────────────────────────────────
+// Les 7 jours sont toujours affichés (voir joursIndisposComplete plus bas) —
+// samedi/dimanche restent visibles et déposables, seulement grisés quand
+// Pierre y est indisponible toute la journée.
 
 const JOURS_ORDRES = [
-  { key: 'lun' as JourSemaine, label: 'Lundi',    cleJour: 'Lun', dow: 1 },
-  { key: 'mar' as JourSemaine, label: 'Mardi',    cleJour: 'Mar', dow: 2 },
-  { key: 'mer' as JourSemaine, label: 'Mercredi', cleJour: 'Mer', dow: 3 },
-  { key: 'jeu' as JourSemaine, label: 'Jeudi',    cleJour: 'Jeu', dow: 4 },
-  { key: 'ven' as JourSemaine, label: 'Vendredi', cleJour: 'Ven', dow: 5 },
+  { key: 'lun' as JourSemaine | 'dim', label: 'Lundi',    cleJour: 'Lun', dow: 1 },
+  { key: 'mar' as JourSemaine | 'dim', label: 'Mardi',    cleJour: 'Mar', dow: 2 },
+  { key: 'mer' as JourSemaine | 'dim', label: 'Mercredi', cleJour: 'Mer', dow: 3 },
+  { key: 'jeu' as JourSemaine | 'dim', label: 'Jeudi',    cleJour: 'Jeu', dow: 4 },
+  { key: 'ven' as JourSemaine | 'dim', label: 'Vendredi', cleJour: 'Ven', dow: 5 },
+  { key: 'sam' as JourSemaine | 'dim', label: 'Samedi',   cleJour: 'Sam', dow: 6 },
+  { key: 'dim' as JourSemaine | 'dim', label: 'Dimanche', cleJour: 'Dim', dow: 0 },
 ];
 
 // ── Calcul des dates récurrentes d'un jour de la semaine ──────────────────────
+// Délègue à genererDatesSeances (utils/horaires) — logique partagée avec
+// ModalInsererPatient, qui respecte déjà contrat.periodicite (hebdo / 1
+// semaine sur 2 / 1 semaine sur 3) via estSemaineDue(). dateAncrage reste le
+// vrai dateDebut du contrat même si la génération démarre plus tard
+// (aujourd'hui), pour ne pas décaler le cycle bimensuel/trimestriel.
 
-function creerDatesRecurrentes(dow: number, dateDebutContrat: string, dateFinContrat: string): string[] {
+function creerDatesRecurrentes(jourKey: JourSemaine | 'dim', contrat: Contrat): string[] {
   const today = new Date().toISOString().split('T')[0];
-  const start = dateDebutContrat > today ? dateDebutContrat : today;
-  const cursor = new Date(start + 'T12:00');
-  while (cursor.getDay() !== dow) cursor.setDate(cursor.getDate() + 1);
-  const end = new Date(dateFinContrat + 'T12:00');
-  const dates: string[] = [];
-  while (cursor <= end) {
-    dates.push(cursor.toISOString().split('T')[0]);
-    cursor.setDate(cursor.getDate() + 7);
-  }
-  return dates;
+  const start = contrat.dateDebut > today ? contrat.dateDebut : today;
+  return genererDatesSeances(start, contrat.dateFin, jourKey, contrat.periodicite ?? 'semaine', contrat.dateDebut);
 }
 
 function formatDate(d: string) {
@@ -53,14 +55,16 @@ interface Props {
   seances: Seance[];
   contrats: Contrat[];
   indispos: IndisponibilitePierre[];
-  bulkCreerSeances: (data: Omit<Seance, 'id'>[]) => Promise<unknown>;
+  bulkCreerSeances: (data: Omit<Seance, 'id'>[], options?: { ignorerChevauchements?: boolean }) => Promise<unknown>;
 }
 
 // ── Modal confirmation drop ───────────────────────────────────────────────────
 
-function ModalConfirmDrop({ info, patient, onConfirm, onCancel }: {
+function ModalConfirmDrop({ info, patient, seances, participantMap, onConfirm, onCancel }: {
   info: DropPendant;
   patient: Participant | undefined;
+  seances: Seance[];
+  participantMap: Map<string, Participant>;
   onConfirm: (duree: number) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -68,11 +72,23 @@ function ModalConfirmDrop({ info, patient, onConfirm, onCancel }: {
   const [loading, setLoading] = useState(false);
 
   const dates = useMemo(
-    () => creerDatesRecurrentes(info.jour.dow, info.contrat.dateDebut, info.contrat.dateFin),
-    [info.jour.dow, info.contrat.dateDebut, info.contrat.dateFin],
+    () => creerDatesRecurrentes(info.jour.key, info.contrat),
+    [info.jour.key, info.contrat],
   );
 
   const heureFin = addMinutes(info.heure, duree);
+
+  // Chevauchements : vérifiés sur toutes les occurrences récurrentes, pas
+  // seulement la première — un rendez-vous fixe côté autre bénéficiaire
+  // entre en collision chaque semaine, mais un cas isolé (séance reportée)
+  // peut ne toucher qu'une occurrence.
+  const conflits = useMemo(
+    () => trouveChevauchements(
+      seances,
+      dates.map(date => ({ date, heureDebut: info.heure, heureFin })),
+    ),
+    [seances, dates, info.heure, heureFin],
+  );
 
   async function handleConfirmer() {
     setLoading(true);
@@ -140,6 +156,27 @@ function ModalConfirmDrop({ info, patient, onConfirm, onCancel }: {
               Aucune date disponible dans ce contrat.
             </p>
           )}
+
+          {/* Avertissement chevauchement */}
+          {conflits.length > 0 && (() => {
+            const premier = conflits[0];
+            const nomExistant = participantMap.get(premier.existante.participantId);
+            return (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                <p className="text-xs font-semibold text-red-700">
+                  Ce créneau chevauche une séance existante avec{' '}
+                  {nomExistant ? `${nomExistant.prenom} ${nomExistant.nom[0]}.` : 'un autre bénéficiaire'}
+                  {' '}le {formatDate(premier.creneau.date)} ({premier.existante.heureDebut}–{premier.existante.heureFin})
+                  — continuer quand même ?
+                </p>
+                {conflits.length > 1 && (
+                  <p className="text-xs text-red-500 mt-1">
+                    {conflits.length} des {dates.length} séances générées sont concernées.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
@@ -148,8 +185,16 @@ function ModalConfirmDrop({ info, patient, onConfirm, onCancel }: {
             Annuler
           </button>
           <button onClick={handleConfirmer} disabled={loading || dates.length === 0}
-            className="flex-1 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-dark transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-            {loading ? <><Loader size={14} className="animate-spin" />En cours…</> : `Confirmer ${dates.length > 0 ? `(${dates.length})` : ''}`}
+            className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
+              conflits.length > 0
+                ? 'bg-red-500 text-white hover:bg-red-600'
+                : 'bg-primary text-white hover:bg-dark'
+            }`}>
+            {loading
+              ? <><Loader size={14} className="animate-spin" />En cours…</>
+              : conflits.length > 0
+                ? 'Continuer quand même'
+                : `Confirmer ${dates.length > 0 ? `(${dates.length})` : ''}`}
           </button>
         </div>
       </div>
@@ -165,13 +210,18 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
   const [dragPatientId, setDragPatientId] = useState<string | null>(null);
   const [dropPendant, setDropPendant] = useState<DropPendant | null>(null);
 
-  // Jours actifs : exclure les jours où Pierre est indisponible toute la journée
-  const joursActifs = useMemo(() => {
-    return JOURS_ORDRES.filter(j => {
-      return !indispos.filter(i => i.jour === j.key).some(i =>
+  // Jours off : Pierre indisponible toute la journée — restent affichés
+  // (grisés) plutôt que masqués, pour visualiser le planning sur 7 jours et
+  // pouvoir exceptionnellement y déposer une séance (ex : un samedi travaillé).
+  const joursOff = useMemo(() => {
+    const off = new Set<string>();
+    for (const j of JOURS_ORDRES) {
+      const horsJournee = indispos.filter(i => i.jour === j.key).some(i =>
         heureEnMinutes(i.heureDebut) <= FRISE_H_DEBUT && heureEnMinutes(i.heureFin) >= FRISE_H_FIN,
       );
-    });
+      if (horsJournee) off.add(j.key);
+    }
+    return off;
   }, [indispos]);
 
   // Séances groupées par jour de la semaine
@@ -208,7 +258,7 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
   }
 
   // Indispos de Pierre pour un jour donné
-  function indisposForJour(jourKey: JourSemaine): { debut: string; fin: string }[] {
+  function indisposForJour(jourKey: JourSemaine | 'dim'): { debut: string; fin: string }[] {
     return indispos.filter(i => i.jour === jourKey).map(i => ({ debut: i.heureDebut, fin: i.heureFin }));
   }
 
@@ -243,7 +293,7 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
     if (!dropPendant) return;
     const { participantId, jour, heure, contrat } = dropPendant;
     const patient = participantMap.get(participantId);
-    const dates = creerDatesRecurrentes(jour.dow, contrat.dateDebut, contrat.dateFin);
+    const dates = creerDatesRecurrentes(jour.key, contrat);
     if (!dates.length) { toast.error('Aucune date disponible dans ce contrat.'); setDropPendant(null); return; }
 
     const heureFin = addMinutes(heure, duree);
@@ -264,7 +314,9 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
       coordonnees: patient?.coordonnees ? { lat: patient.coordonnees.lat, lng: patient.coordonnees.lng } : undefined,
     }));
 
-    await bulkCreerSeances(data);
+    // Le chevauchement a déjà été vérifié et, le cas échéant, affiché à
+    // l'utilisateur dans ModalConfirmDrop avant qu'il ne clique sur Confirmer.
+    await bulkCreerSeances(data, { ignorerChevauchements: true });
     toast.success(`${dates.length} séance${dates.length > 1 ? 's' : ''} planifiée${dates.length > 1 ? 's' : ''} chaque ${jour.label.toLowerCase()}`);
     setDropPendant(null);
   }
@@ -320,16 +372,21 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
       {/* ── Grille principale ─────────────────────────────────────── */}
       <div className="flex-1 min-w-0 overflow-x-auto">
         {/* En-têtes jours */}
-        <div className="flex mb-1" style={{ paddingLeft: 36 + 8 }}>
-          {joursActifs.map(j => (
-            <div key={j.key} className="flex-1 min-w-[120px] text-center text-xs font-semibold text-gray-600 pb-1">
+        <div className="flex gap-1 mb-1" style={{ paddingLeft: 36 + 8 }}>
+          {JOURS_ORDRES.map(j => (
+            <div key={j.key} className={`flex-1 min-w-[92px] text-center text-xs font-semibold pb-1 ${
+              joursOff.has(j.key) ? 'text-gray-400' : 'text-gray-600'
+            }`}>
               {j.label}
+              {joursOff.has(j.key) && (
+                <span className="block text-[9px] font-normal text-gray-400">Indispo</span>
+              )}
             </div>
           ))}
         </div>
 
         {/* Corps grille */}
-        <div className="flex gap-2">
+        <div className="flex gap-1">
           {/* Colonne heures partagée */}
           <div className="relative flex-shrink-0" style={{ width: 36, height: FRISE_TOTAL_H }}>
             {heureMarks.map(m => (
@@ -340,9 +397,9 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
             ))}
           </div>
 
-          {/* Une frise par jour actif */}
-          {joursActifs.map(j => (
-            <div key={j.key} className="flex-1 min-w-[120px]">
+          {/* Une frise par jour (7/7) */}
+          {JOURS_ORDRES.map(j => (
+            <div key={j.key} className={`flex-1 min-w-[92px] ${joursOff.has(j.key) ? 'opacity-60' : ''}`}>
               <FrisePlanningJour
                 seancesDuJour={seancesParDow.get(j.dow) ?? []}
                 participantMap={participantMap}
@@ -385,6 +442,8 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
         <ModalConfirmDrop
           info={dropPendant}
           patient={participantMap.get(dropPendant.participantId)}
+          seances={seances}
+          participantMap={participantMap}
           onConfirm={handleConfirmerDrop}
           onCancel={() => setDropPendant(null)}
         />

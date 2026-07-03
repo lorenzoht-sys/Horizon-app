@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import type { Participant, Contrat, Seance, IndisponibilitePierre, JourSemaine } from '../../types';
 import { getTrousRecurrents, getCreneauxLibresGlobal, type CreneauLibre } from '../../lib/analyse-tournee';
 import { getOrganisation } from '../../lib/anamnese';
-import { addMinutes, estSemaineDue } from '../../utils/horaires';
+import { addMinutes, genererDatesSeances, trouveChevauchements } from '../../utils/horaires';
 import { MARGE_ENTRE_SEANCES_MIN } from '../../lib/planificateur';
 import FrisePlanningJour from './FrisePlanningJour';
 
@@ -14,8 +14,15 @@ interface Props {
   contrats: Contrat[];
   seances: Seance[];
   indispos: IndisponibilitePierre[];
-  bulkCreerSeances: (data: Omit<Seance, 'id'>[]) => Promise<Seance[] | void>;
+  bulkCreerSeances: (data: Omit<Seance, 'id'>[], options?: { ignorerChevauchements?: boolean }) => Promise<Seance[] | void>;
 }
+
+// Conversion jour numérique (Date.getDay()) → clé utilisée par
+// genererDatesSeances (utils/horaires), pour partager la même logique de
+// génération de dates récurrentes que PlanningGrilleView.
+const DOW_KEY: Record<number, JourSemaine | 'dim'> = {
+  0: 'dim', 1: 'lun', 2: 'mar', 3: 'mer', 4: 'jeu', 5: 'ven', 6: 'sam',
+};
 
 const ALL_WORK_DAYS: { cleJour: string; dow: number; nom: string; jourKey: JourSemaine }[] = [
   { cleJour: 'Lun', dow: 1, nom: 'Lundi',    jourKey: 'lun' },
@@ -144,60 +151,54 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
     else if (etape === 2) setEtape(1);
   }
 
-  const seancesTotal = useMemo(() => {
-    if (!contratChoisi || creneauxChoisis.length === 0) return 0;
+  // Liste des séances à créer, partagée entre le comptage (étape 3), la
+  // détection de chevauchement et la création effective (appliquer) — évite
+  // de recalculer/dupliquer la génération de dates récurrentes trois fois.
+  const seancesACreer = useMemo((): Omit<Seance, 'id'>[] => {
+    if (!contratChoisi || creneauxChoisis.length === 0 || !patient) return [];
+    const adressePatient = [patient.adresseRue, patient.adresseCodePostal, patient.adresseVille]
+      .filter(Boolean).join(', ');
     const startDate = contratChoisi.dateDebut >= today ? contratChoisi.dateDebut : today;
-    let count = 0;
-    creneauxChoisis.forEach(creneau => {
-      const cur = new Date(startDate + 'T12:00');
-      const fin = new Date(contratChoisi.dateFin + 'T12:00');
-      while (cur <= fin) {
-        const dateStr = cur.toISOString().split('T')[0];
-        if (cur.getDay() === creneau.jourSemaine &&
-            estSemaineDue(contratChoisi.dateDebut, dateStr, contratChoisi.periodicite ?? 'semaine'))
-          count++;
-        cur.setDate(cur.getDate() + 1);
-      }
+    const result: Omit<Seance, 'id'>[] = [];
+    creneauxChoisis.forEach((creneau, idx) => {
+      const duree = contratChoisi.dureesSeances[idx] ?? contratChoisi.dureeMinutes;
+      const heureDebut = creneau.heureDebut;
+      const dates = genererDatesSeances(
+        startDate, contratChoisi.dateFin, DOW_KEY[creneau.jourSemaine],
+        contratChoisi.periodicite ?? 'semaine', contratChoisi.dateDebut,
+      );
+      dates.forEach(dateStr => {
+        result.push({
+          participantId: contratChoisi.participantId,
+          contratId: contratChoisi.id,
+          date: dateStr,
+          heureDebut,
+          heureFin: addMinutes(heureDebut, duree),
+          dureeMinutes: duree,
+          type: 'seance',
+          statut: 'planifiee',
+          adresse: adressePatient,
+          coordonnees: patient.coordonnees
+            ? { lat: patient.coordonnees.lat, lng: patient.coordonnees.lng }
+            : undefined,
+        });
+      });
     });
-    return count;
-  }, [contratChoisi, creneauxChoisis, today]);
+    return result;
+  }, [contratChoisi, creneauxChoisis, patient, today]);
 
-  async function appliquer() {
-    if (!contratChoisi || creneauxChoisis.length === 0 || !patient) return;
+  const seancesTotal = seancesACreer.length;
+
+  const conflits = useMemo(
+    () => trouveChevauchements(seances, seancesACreer),
+    [seances, seancesACreer],
+  );
+
+  async function appliquer(ignorerChevauchements = false) {
+    if (!contratChoisi || seancesACreer.length === 0 || !patient) return;
     setApplying(true);
     try {
-      const adressePatient = [patient.adresseRue, patient.adresseCodePostal, patient.adresseVille]
-        .filter(Boolean).join(', ');
-      const seancesACreer: Omit<Seance, 'id'>[] = [];
-      const startDate = contratChoisi.dateDebut >= today ? contratChoisi.dateDebut : today;
-      creneauxChoisis.forEach((creneau, idx) => {
-        const duree = contratChoisi.dureesSeances[idx] ?? contratChoisi.dureeMinutes;
-        const cur = new Date(startDate + 'T12:00');
-        const fin = new Date(contratChoisi.dateFin + 'T12:00');
-        while (cur <= fin) {
-          const dateStr = cur.toISOString().split('T')[0];
-          if (cur.getDay() === creneau.jourSemaine &&
-              estSemaineDue(contratChoisi.dateDebut, dateStr, contratChoisi.periodicite ?? 'semaine')) {
-            const heureDebut = creneau.heureDebut;
-            seancesACreer.push({
-              participantId: contratChoisi.participantId,
-              contratId: contratChoisi.id,
-              date: dateStr,
-              heureDebut,
-              heureFin: addMinutes(heureDebut, duree),
-              dureeMinutes: duree,
-              type: 'seance',
-              statut: 'planifiee',
-              adresse: adressePatient,
-              coordonnees: patient.coordonnees
-                ? { lat: patient.coordonnees.lat, lng: patient.coordonnees.lng }
-                : undefined,
-            });
-          }
-          cur.setDate(cur.getDate() + 1);
-        }
-      });
-      await bulkCreerSeances(seancesACreer);
+      await bulkCreerSeances(seancesACreer, { ignorerChevauchements });
       toast.success(`${seancesACreer.length} séance${seancesACreer.length > 1 ? 's' : ''} créée${seancesACreer.length > 1 ? 's' : ''} pour ${patient.prenom} ✅`);
       onClose();
     } catch {
@@ -427,6 +428,27 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
                   </span>
                 </div>
               </div>
+
+              {conflits.length > 0 && (() => {
+                const premier = conflits[0];
+                const nomExistant = participants.find(p => p.id === premier.existante.participantId);
+                return (
+                  <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                    <p className="text-xs font-semibold text-red-700">
+                      Ce créneau chevauche une séance existante avec{' '}
+                      {nomExistant ? `${nomExistant.prenom} ${nomExistant.nom[0]}.` : 'un autre bénéficiaire'}
+                      {' '}le {new Date(premier.creneau.date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {' '}({premier.existante.heureDebut}–{premier.existante.heureFin})
+                      — continuer quand même ?
+                    </p>
+                    {conflits.length > 1 && (
+                      <p className="text-xs text-red-500 mt-1">
+                        {conflits.length} des {seancesTotal} séances générées sont concernées.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </>
           )}
         </div>
@@ -452,9 +474,15 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
                   Suivant
                 </button>
               ) : (
-                <button onClick={appliquer} disabled={applying}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-dark transition-colors disabled:opacity-40">
-                  {applying ? <><Loader size={14} className="animate-spin" />Création…</> : 'Appliquer'}
+                <button onClick={() => appliquer(conflits.length > 0)} disabled={applying}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-40 ${
+                    conflits.length > 0
+                      ? 'bg-red-500 text-white hover:bg-red-600'
+                      : 'bg-primary text-white hover:bg-dark'
+                  }`}>
+                  {applying
+                    ? <><Loader size={14} className="animate-spin" />Création…</>
+                    : conflits.length > 0 ? 'Appliquer quand même' : 'Appliquer'}
                 </button>
               )}
             </>

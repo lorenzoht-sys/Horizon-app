@@ -6,6 +6,7 @@ import type { Seance, StatutSeance } from '../types';
 import { useParticipants } from './useParticipants';
 import { supabase } from '../lib/supabase';
 import { dbToSeance, seanceToDb } from '../lib/mappers';
+import { heuresChevauchent, trouveChevauchements, ChevauchementError } from '../utils/horaires';
 
 function addMinutes(heure: string, minutes: number): string {
   const [h, m] = heure.split(':').map(Number);
@@ -50,7 +51,14 @@ export function useAgenda() {
     return nouvelle;
   }
 
-  async function bulkCreerSeances(data: Omit<Seance, 'id'>[]): Promise<Seance[]> {
+  async function bulkCreerSeances(
+    data: Omit<Seance, 'id'>[],
+    options?: { ignorerChevauchements?: boolean },
+  ): Promise<Seance[]> {
+    if (!options?.ignorerChevauchements) {
+      const conflits = trouveChevauchements(seances, data);
+      if (conflits.length > 0) throw new ChevauchementError(conflits);
+    }
     const nouvelles: Seance[] = data.map(d => ({ ...d, id: uuidv4() }));
     if (supabase) {
       const { error } = await supabase.from('seances').insert(nouvelles.map(s => seanceToDb(s)));
@@ -111,8 +119,7 @@ export function useAgenda() {
       s.id !== excludeId &&
       s.date === date &&
       s.statut !== 'annulee' &&
-      s.heureDebut < heureFin &&
-      s.heureFin > heureDebut
+      heuresChevauchent(heureDebut, heureFin, s.heureDebut, s.heureFin)
     );
   }
 

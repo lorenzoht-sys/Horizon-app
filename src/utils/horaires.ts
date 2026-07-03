@@ -1,4 +1,4 @@
-import type { PeriodiciteContrat } from '../types';
+import type { PeriodiciteContrat, Seance } from '../types';
 
 export function heureEnMinutes(heure: string): number {
   const [h, m] = heure.split(':').map(Number);
@@ -31,6 +31,64 @@ export function estDansPlage(heure: string, debut: string, fin: string): boolean
   return h >= heureEnMinutes(debut) && h < heureEnMinutes(fin);
 }
 
+// ── Détection de chevauchement entre créneaux ─────────────────────────────────
+// Logique partagée : useAgenda.detecterConflits (création simple), les deux
+// interfaces de planification manuelle (ModalInsererPatient, PlanningGrilleView)
+// et bulkCreerSeances (garde-fou final avant écriture en base).
+
+export function heuresChevauchent(debutA: string, finA: string, debutB: string, finB: string): boolean {
+  return debutA < finB && finA > debutB;
+}
+
+export interface CreneauCandidat {
+  date: string;
+  heureDebut: string;
+  heureFin: string;
+}
+
+// Cherche, parmi les séances existantes (hors annulées), celle qui chevauche
+// le créneau donné le même jour. excludeId permet d'ignorer la séance
+// elle-même lors d'une modification.
+export function trouveChevauchement(
+  seancesExistantes: Seance[],
+  creneau: CreneauCandidat,
+  excludeId?: string,
+): Seance | undefined {
+  return seancesExistantes.find(s =>
+    s.id !== excludeId &&
+    s.statut !== 'annulee' &&
+    s.date === creneau.date &&
+    heuresChevauchent(creneau.heureDebut, creneau.heureFin, s.heureDebut, s.heureFin)
+  );
+}
+
+// Variante bulk : vérifie une liste de créneaux candidats d'un coup (ex :
+// toutes les occurrences récurrentes générées pour un contrat) et renvoie
+// chaque paire (créneau candidat, séance existante en collision).
+export function trouveChevauchements<T extends CreneauCandidat>(
+  seancesExistantes: Seance[],
+  creneaux: T[],
+): { creneau: T; existante: Seance }[] {
+  const resultats: { creneau: T; existante: Seance }[] = [];
+  for (const creneau of creneaux) {
+    const existante = trouveChevauchement(seancesExistantes, creneau);
+    if (existante) resultats.push({ creneau, existante });
+  }
+  return resultats;
+}
+
+// Levée par bulkCreerSeances quand des chevauchements sont détectés et non
+// explicitement ignorés — garde-fou pour tout appelant (présent ou futur) qui
+// oublierait de vérifier lui-même avant d'insérer en base.
+export class ChevauchementError extends Error {
+  conflits: { creneau: CreneauCandidat; existante: Seance }[];
+  constructor(conflits: { creneau: CreneauCandidat; existante: Seance }[]) {
+    super('Chevauchement avec une séance existante');
+    this.name = 'ChevauchementError';
+    this.conflits = conflits;
+  }
+}
+
 export const PLAGES = {
   matin:       { debut: '08:00', fin: '12:00', label: 'Matin (8h-12h)' },
   'apres-midi': { debut: '13:30', fin: '18:00', label: 'Après-midi (13h30-18h)' },
@@ -38,16 +96,16 @@ export const PLAGES = {
 } as const;
 
 const JOURS_NUM: Record<string, number> = {
-  lun: 1, mar: 2, mer: 3, jeu: 4, ven: 5, sam: 6,
+  dim: 0, lun: 1, mar: 2, mer: 3, jeu: 4, ven: 5, sam: 6,
 };
 
 export const LABELS_JOURS_COURT: Record<string, string> = {
-  lun: 'Lun', mar: 'Mar', mer: 'Mer', jeu: 'Jeu', ven: 'Ven', sam: 'Sam',
+  lun: 'Lun', mar: 'Mar', mer: 'Mer', jeu: 'Jeu', ven: 'Ven', sam: 'Sam', dim: 'Dim',
 };
 
 export const LABELS_JOURS_LONG: Record<string, string> = {
   lun: 'Lundi', mar: 'Mardi', mer: 'Mercredi',
-  jeu: 'Jeudi', ven: 'Vendredi', sam: 'Samedi',
+  jeu: 'Jeudi', ven: 'Vendredi', sam: 'Samedi', dim: 'Dimanche',
 };
 
 function toJoursNums(joursFixe: string | string[]): Set<number> {
@@ -114,11 +172,18 @@ export function calculerDateFinParFrequence(
   return d.toISOString().split('T')[0];
 }
 
+// dateAncrage : semaine de référence pour le cycle de périodicité (2/3
+// semaines). Par défaut égale à dateDebut, mais peut être fournie séparément
+// quand la génération démarre plus tard que le vrai début du contrat (ex :
+// on ne génère qu'à partir d'aujourd'hui un contrat commencé il y a
+// plusieurs semaines) — sans ça, le cycle bimensuel/trimestriel se
+// décalerait par rapport aux séances déjà générées pour ce même contrat.
 export function genererDatesSeances(
   dateDebut: string,
   dateFin: string,
   joursFixe: string | string[],
-  periodicite: PeriodiciteContrat = 'semaine'
+  periodicite: PeriodiciteContrat = 'semaine',
+  dateAncrage: string = dateDebut
 ): string[] {
   const joursNums = toJoursNums(joursFixe);
   const dates: string[] = [];
@@ -126,7 +191,7 @@ export function genererDatesSeances(
   const fin = new Date(dateFin);
   while (current <= fin) {
     const dateStr = current.toISOString().split('T')[0];
-    if (joursNums.has(current.getDay()) && estSemaineDue(dateDebut, dateStr, periodicite)) {
+    if (joursNums.has(current.getDay()) && estSemaineDue(dateAncrage, dateStr, periodicite)) {
       dates.push(dateStr);
     }
     current.setDate(current.getDate() + 1);

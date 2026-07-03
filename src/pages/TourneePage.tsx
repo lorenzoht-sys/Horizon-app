@@ -6,7 +6,7 @@ import { useParticipants } from '../hooks/useParticipants';
 import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import PageWrapper from '../components/layout/PageWrapper';
-import { UserPlus, MapPin, Clock, Navigation, CalendarPlus, AlertCircle, CheckCircle, XCircle, NotebookPen } from 'lucide-react';
+import { UserPlus, MapPin, Clock, Navigation, CalendarPlus, AlertCircle, CheckCircle, XCircle, NotebookPen, RotateCcw } from 'lucide-react';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
 import { toast } from 'sonner';
 import type { Participant, Seance, IndisponibilitePierre, JourSemaine } from '../types';
@@ -344,7 +344,7 @@ export default function TourneePage() {
             Vous avez {nbContratsActifs} contrat{nbContratsActifs > 1 ? 's' : ''} actif{nbContratsActifs > 1 ? 's' : ''} sans séances planifiées dans les 4 prochaines semaines.
           </span>
           <button
-            onClick={() => setShowPlanificateur(true)}
+            onClick={() => setShowInserer(true)}
             className="text-xs font-semibold text-blue-700 hover:text-blue-900 underline underline-offset-2 flex-shrink-0"
           >
             Planifier →
@@ -485,18 +485,15 @@ export default function TourneePage() {
 
           {/* ── Patients hors contrat (ad hoc) ─────────────────── */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            {/* Planificateur de semaine */}
+            {/* Remise à zéro du planning */}
             <button
-              onClick={() => {
-                if (departErreur) { toast.error('Configurez votre adresse de départ dans Paramètres'); return; }
-                setShowPlanificateur(true);
-              }}
+              onClick={() => setShowPlanificateur(true)}
               className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors border-b border-gray-100"
             >
-              <CalendarPlus size={15} className="text-primary flex-shrink-0" />
+              <RotateCcw size={15} className="text-primary flex-shrink-0" />
               <div className="text-left">
-                <div>Générer le planning</div>
-                <div className="text-xs text-gray-400 font-normal">Crée ou recrée l'ensemble du planning</div>
+                <div>Remettre à zéro le planning</div>
+                <div className="text-xs text-gray-400 font-normal">Supprime les séances planifiées à venir pour recommencer</div>
               </div>
             </button>
 
