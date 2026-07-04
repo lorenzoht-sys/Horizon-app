@@ -246,6 +246,9 @@ export const CYCLE_SEMAINES: Record<PeriodiciteContrat, number> = {
   semaine: 1, deux_semaines: 2, trois_semaines: 3,
 };
 
+// Marge tampon entre la fin d'une séance et le début de la suivante (en plus du trajet)
+export const MARGE_ENTRE_SEANCES_MIN = 10;
+
 // Le cycle (toutes les 2/3 semaines) est ancré sur la semaine de dateDebut,
 // de façon fixe : si une semaine due est ratée (patient indisponible), le
 // cycle continue sur sa cadence normale plutôt que de "rattraper" la séance

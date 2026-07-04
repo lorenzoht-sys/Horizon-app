@@ -2,8 +2,7 @@
 // Utilisé par ContratNouveauPage pour suggérer des créneaux lors de la création d'un contrat.
 
 import type { Seance, Participant, JourSemaine } from '../types';
-import { heureEnMinutes, minutesEnHeure } from '../utils/horaires';
-import { MARGE_ENTRE_SEANCES_MIN } from './planificateur';
+import { heureEnMinutes, minutesEnHeure, MARGE_ENTRE_SEANCES_MIN } from '../utils/horaires';
 
 const TROU_MIN_SUGGESTION_MINUTES = 45;
 const RAYON_ZONE_KM = 5;

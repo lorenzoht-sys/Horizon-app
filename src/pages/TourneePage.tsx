@@ -6,10 +6,9 @@ import { useParticipants } from '../hooks/useParticipants';
 import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import PageWrapper from '../components/layout/PageWrapper';
-import { UserPlus, MapPin, Clock, Navigation, CalendarPlus, AlertCircle, CheckCircle, XCircle, NotebookPen, RotateCcw } from 'lucide-react';
+import { UserPlus, MapPin, Navigation, AlertCircle, CheckCircle, XCircle, NotebookPen, RotateCcw } from 'lucide-react';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
 import { toast } from 'sonner';
-import type { Participant, Seance, IndisponibilitePierre, JourSemaine } from '../types';
 import { geocodeAdresse } from '../utils/geocodeAdresse';
 import { Link, useNavigate } from 'react-router-dom';
 import { useIndispos } from '../hooks/useIndispos';
@@ -51,45 +50,7 @@ function MapResizer() {
   return null;
 }
 
-// ── Types itinéraire ──────────────────────────────────────────────────────────
-
-interface Interruption {
-  kind: 'pause' | 'attente';
-  de: string;
-  a: string;
-  label: string;
-  indispo?: IndisponibilitePierre;
-}
-
-interface EtapePatient {
-  patient: Participant;
-  heureArrivee: string;   // début de la séance (après toutes les interruptions)
-  heureDepart: string;    // fin de la séance
-  dureeTrajetMinutes: number;
-  distanceKm: number;
-  interruptions: Interruption[]; // pauses + attentes AVANT cette séance
-}
-
 // ── Utilitaires divers ────────────────────────────────────────────────────────
-
-const JS_TO_JOUR: Record<number, JourSemaine | 'dim'> = {
-  0: 'dim', 1: 'lun', 2: 'mar', 3: 'mer', 4: 'jeu', 5: 'ven', 6: 'sam',
-};
-const LABELS_JOUR: Record<JourSemaine | 'dim', string> = {
-  lun: 'Lundi', mar: 'Mardi', mer: 'Mercredi', jeu: 'Jeudi',
-  ven: 'Vendredi', sam: 'Samedi', dim: 'Dimanche',
-};
-
-function jourDeLaDate(dateStr: string): JourSemaine | 'dim' {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return JS_TO_JOUR[new Date(y, m - 1, d).getDay()];
-}
-
-function minutesAttente(de: string, a: string): number {
-  const [h1, m1] = de.split(':').map(Number);
-  const [h2, m2] = a.split(':').map(Number);
-  return (h2 * 60 + m2) - (h1 * 60 + m1);
-}
 
 const DEPART_FALLBACK = { lat: 47.2184, lng: -1.5536 };
 
@@ -97,7 +58,7 @@ const DEPART_FALLBACK = { lat: 47.2184, lng: -1.5536 };
 
 export default function TourneePage() {
   const { participants } = useParticipants();
-  const { seances, seancesDuJour, changerStatut, creerSeance, bulkCreerSeances, retirerPlanifieesLocales } = useAgenda();
+  const { seances, seancesDuJour, changerStatut, bulkCreerSeances, retirerPlanifieesLocales } = useAgenda();
   const { contrats } = useContrats();
   const { indispos } = useIndispos();
   const navigate = useNavigate();
@@ -162,8 +123,6 @@ export default function TourneePage() {
   const [vue, setVue] = useState<'tournee' | 'agenda'>('tournee');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [noteModal, setNoteModal] = useState<typeof seancesEnrichies[number] | null>(null);
-  const heureDepart = '08:00';
-  const [etapes, setEtapes] = useState<EtapePatient[]>([]);
   const [showPlanificateur, setShowPlanificateur] = useState(false);
   const [showInserer, setShowInserer] = useState(false);
 
@@ -208,14 +167,9 @@ export default function TourneePage() {
       .then(r => { if (r) { setDepart({ lat: r.lat, lng: r.lng }); setDepartAdresse(r.adresseNormalisee); } else setDepartErreur(true); });
   }, [praticienSettings.adresseRue, praticienSettings.adresseVille]);
 
-  const jourChoisi = useMemo(() => jourDeLaDate(date), [date]);
-
-  // Carte : contrats (par défaut) OU résultats de l'optimiseur
   const mapPatients = useMemo(() =>
-    etapes.length > 0
-      ? etapes.map(e => e.patient)
-      : seancesEnrichies.map(s => s.patient!).filter(p => !!p.coordonnees),
-    [etapes, seancesEnrichies]
+    seancesEnrichies.map(s => s.patient!).filter(p => !!p.coordonnees),
+    [seancesEnrichies]
   );
 
   const mapCenter: [number, number] = mapPatients.length > 0 && mapPatients[0].coordonnees
@@ -226,44 +180,6 @@ export default function TourneePage() {
     [depart.lat, depart.lng],
     ...mapPatients.filter(p => p.coordonnees).map(p => [p.coordonnees!.lat, p.coordonnees!.lng] as [number, number]),
   ];
-
-  function handleOuvrirGoogleMaps() {
-    if (etapes.length === 0) return;
-    // Adresse textuelle en priorité, coordonnées GPS en fallback
-    const resolveAddr = (patient: Participant) => {
-      const txt = [patient.adresseRue, patient.adresseVille].filter(Boolean).join(', ');
-      return txt || (patient.coordonnees ? `${patient.coordonnees.lat},${patient.coordonnees.lng}` : '');
-    };
-    const origin = encodeURIComponent(departAdresse || 'Mon domicile');
-    const waypoints = etapes.slice(0, -1)
-      .map(e => resolveAddr(e.patient)).filter(Boolean)
-      .map(a => encodeURIComponent(a))
-      .join('|');
-    const destination = resolveAddr(etapes.at(-1)!.patient);
-    if (!destination) return;
-    const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${encodeURIComponent(destination)}${waypoints ? `&waypoints=${waypoints}` : ''}&travelmode=driving`;
-    window.open(url, '_blank');
-  }
-
-  function handleAjouterAgenda() {
-    if (!etapes.length) return;
-    etapes.forEach(et => {
-      const s: Omit<Seance, 'id'> = {
-        participantId: et.patient.id, date,
-        heureDebut: et.heureArrivee, heureFin: et.heureDepart,
-        dureeMinutes: contrats.find(c => c.participantId === et.patient.id && c.statut === 'actif')?.dureeMinutes ?? 45,
-        type: 'seance', statut: 'planifiee',
-        adresse: [et.patient.adresseRue, et.patient.adresseCodePostal, et.patient.adresseVille].filter(Boolean).join(', '),
-        coordonnees: et.patient.coordonnees ? { lat: et.patient.coordonnees.lat, lng: et.patient.coordonnees.lng } : undefined,
-      };
-      creerSeance(s);
-    });
-    toast.success(`${etapes.length} séance${etapes.length > 1 ? 's' : ''} ajoutée${etapes.length > 1 ? 's' : ''} à l'agenda`);
-  }
-
-  const totalTrajetMin = etapes.length > 0
-    ? etapes.reduce((acc, e) => acc + e.dureeTrajetMinutes, 0)
-    : totalTrajetEstime;
 
   function ouvrirMapsContrats() {
     // s.adresse est '' quand la séance a été créée sans adresse stockée → fallback patient
@@ -280,8 +196,8 @@ export default function TourneePage() {
     window.open(`https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}${wps ? `&waypoints=${wps}` : ''}&travelmode=driving`, '_blank');
   }
 
-  const heureDebutJour = seancesEnrichies[0]?.heureDebut ?? (etapes[0]?.heureArrivee ?? '--');
-  const heureFinJour = seancesEnrichies.at(-1)?.heureFin ?? (etapes.at(-1)?.heureDepart ?? '--');
+  const heureDebutJour = seancesEnrichies[0]?.heureDebut ?? '--';
+  const heureFinJour = seancesEnrichies.at(-1)?.heureFin ?? '--';
 
   return (
     <PageWrapper>
@@ -300,7 +216,7 @@ export default function TourneePage() {
         <div className="flex items-center gap-3">
           {vue === 'tournee' && (
             <input type="date" value={date}
-              onChange={e => { setDate(e.target.value); setEtapes([]); }}
+              onChange={e => setDate(e.target.value)}
               className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary" />
           )}
           <Link to="/agenda" className="text-xs text-primary hover:underline">Voir l'agenda →</Link>
@@ -360,23 +276,16 @@ export default function TourneePage() {
         </div>
         <div>
           <div className="text-xs text-gray-400 uppercase tracking-wide">Trajet estimé</div>
-          <div className="text-2xl font-heading font-bold text-dark">{totalTrajetMin} min</div>
+          <div className="text-2xl font-heading font-bold text-dark">{totalTrajetEstime} min</div>
         </div>
         <div>
           <div className="text-xs text-gray-400 uppercase tracking-wide">Journée</div>
           <div className="text-2xl font-heading font-bold text-dark">{heureDebutJour} → {heureFinJour}</div>
         </div>
         <div className="ml-auto flex gap-2">
-          {etapes.length > 0 && (
-            <button onClick={handleAjouterAgenda}
-              className="flex items-center gap-2 border border-success text-success px-4 py-2 rounded-xl text-sm font-medium hover:bg-success/5 transition-colors">
-              <CalendarPlus size={15} />
-              Ajouter à l'agenda ({etapes.length})
-            </button>
-          )}
-          {(seancesEnrichies.some(s => s.patient?.coordonnees) || etapes.length > 0) && (
+          {seancesEnrichies.some(s => s.patient?.coordonnees) && (
             <button
-              onClick={etapes.length > 0 ? handleOuvrirGoogleMaps : ouvrirMapsContrats}
+              onClick={ouvrirMapsContrats}
               className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-dark transition-colors">
               🗺️ Ouvrir dans Maps
             </button>
@@ -529,82 +438,14 @@ export default function TourneePage() {
                 <Marker key={p.id} position={[p.coordonnees.lat, p.coordonnees.lng]} icon={makeNumberIcon(i + 1)}>
                   <Popup>
                     <strong>{p.prenom} {p.nom}</strong><br />
-                    {etapes[i] ? `${etapes[i].heureArrivee} → ${etapes[i].heureDepart}` : seancesEnrichies[i] ? `${seancesEnrichies[i].heureDebut} → ${seancesEnrichies[i].heureFin}` : ''}
+                    {seancesEnrichies[i] ? `${seancesEnrichies[i].heureDebut} → ${seancesEnrichies[i].heureFin}` : ''}
                   </Popup>
                 </Marker>
               ))}
             </MapContainer>
           </div>
 
-          {/* Itinéraire optimiseur (si lancé) */}
-          {etapes.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="font-semibold text-dark text-sm">
-                    {LABELS_JOUR[jourChoisi]} {new Date(date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
-                  </h2>
-                  <p className="text-xs text-gray-400 mt-0.5">Patients regroupés par créneau, trajet optimisé</p>
-                </div>
-                <div className="flex items-center gap-3 text-xs text-gray-500">
-                  <span className="flex items-center gap-1"><Clock size={12} />{totalTrajetMin} min</span>
-                  <span className="flex items-center gap-1"><Navigation size={12} />{Math.round((etapes.reduce((a, e) => a + e.distanceKm, 0)) * 10) / 10} km</span>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-full bg-dark/10 flex items-center justify-center flex-shrink-0">🏠</div>
-                  <div>
-                    <div className="text-sm font-medium text-dark">Départ — {heureDepart}</div>
-                    {departAdresse && <div className="text-xs text-gray-400">{departAdresse}</div>}
-                  </div>
-                </div>
-
-                {etapes.map((etape, idx) => (
-                  <div key={etape.patient.id}>
-                    <div className="flex items-center gap-2 text-xs text-gray-400 pl-3.5 py-1">
-                      <div className="w-px h-3 bg-gray-200 ml-0.5" />
-                      🚗 {etape.dureeTrajetMinutes} min · {etape.distanceKm} km
-                    </div>
-                    {etape.interruptions.map((inter, iIdx) => (
-                      <div key={iIdx}>
-                        {inter.kind === 'pause' ? (
-                          <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 mb-1">
-                            <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 text-sm">☕</div>
-                            <div>
-                              <div className="text-xs font-semibold text-orange-700">{inter.label}</div>
-                              <div className="text-xs text-orange-500">{inter.de} → {inter.a}</div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 mb-1">
-                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 text-sm">⏱</div>
-                            <div>
-                              <div className="text-xs font-semibold text-blue-700">Attente — {minutesAttente(inter.de, inter.a)} min</div>
-                              <div className="text-xs text-blue-500">{inter.label}</div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">{idx + 1}</div>
-                      <div className="flex-1">
-                        <div className="text-sm font-semibold text-dark">{etape.patient.prenom} {etape.patient.nom}</div>
-                        <div className="text-xs text-gray-500">
-                          {etape.heureArrivee} → {etape.heureDepart} · {etape.patient.disponibilites?.dureeSeanceMinutes ?? 45} min
-                          {etape.patient.adresseVille && ` · ${etape.patient.adresseVille}`}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {etapes.length === 0 && seancesEnrichies.length === 0 && (
+          {seancesEnrichies.length === 0 && (
             <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm text-center">
               <div className="text-4xl mb-3">🗺️</div>
               <p className="text-sm text-gray-500">Aucune séance pour ce jour</p>

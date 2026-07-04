@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback } from 'react';
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay, addDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -405,12 +405,6 @@ export default function AgendaPage() {
     return contrats.find(c => c.id === contratId) ?? null;
   }, [contrats]);
 
-  // Masquer les week-ends si aucune séance le samedi
-  const joursSamedi = useMemo(() =>
-    seances.some(s => new Date(s.date + 'T12:00').getDay() === 6 && s.statut !== 'annulee'),
-    [seances]
-  );
-
   const events: CalEvent[] = seances.map(s => ({
     id: s.id,
     title: s.participantId,
@@ -563,7 +557,6 @@ export default function AgendaPage() {
             dayHeaderFormat: (date: Date) =>
               date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }),
           }}
-          {...(!joursSamedi ? {} : {})}
         />
       </div>
 

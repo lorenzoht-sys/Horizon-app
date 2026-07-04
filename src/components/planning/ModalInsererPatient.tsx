@@ -4,8 +4,7 @@ import { toast } from 'sonner';
 import type { Participant, Contrat, Seance, IndisponibilitePierre, JourSemaine } from '../../types';
 import { getTrousRecurrents, getCreneauxLibresGlobal, type CreneauLibre } from '../../lib/analyse-tournee';
 import { getOrganisation } from '../../lib/anamnese';
-import { addMinutes, genererDatesSeances, trouveChevauchements } from '../../utils/horaires';
-import { MARGE_ENTRE_SEANCES_MIN } from '../../lib/planificateur';
+import { addMinutes, genererDatesSeances, trouveChevauchements, MARGE_ENTRE_SEANCES_MIN } from '../../utils/horaires';
 import FrisePlanningJour from './FrisePlanningJour';
 
 interface Props {
