@@ -28,6 +28,9 @@ dist-ssr
 # voir supabase/migrations/SETUP_STAGING.md), ne doit jamais être commité.
 supabase/_staging_schema_dump.sql
 
+# Éviter la re-création accidentelle du dossier de migrations imbriqué (nettoyage du 04/07/2026)
+supabase/migrations/migrations/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
