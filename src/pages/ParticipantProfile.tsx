@@ -21,6 +21,8 @@ import { useJournalSeance } from '../hooks/useJournalSeance';
 import { useCompteRenduSeance } from '../hooks/useCompteRenduSeance';
 import { getBrouillon } from '../hooks/useBrouillonBilan';
 import PageWrapper from '../components/layout/PageWrapper';
+import BadgeSeancesRestantes from '../components/ui/BadgeSeancesRestantes';
+import { calculerStatutSeancesSemaine } from '../utils/horaires';
 import RadarChart from '../components/charts/RadarChart';
 import BilanEvolutionCharts from '../components/charts/BilanEvolutionCharts';
 import BilanTimeline from '../components/bilan/BilanTimeline';
@@ -168,14 +170,16 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // ── CarteStats ────────────────────────────────────────────────────────────────
 
-function CarteStats({ participant, contratActif, prochaineSeance }: {
+function CarteStats({ participant, contratActif, prochaineSeance, seances }: {
   participant: Participant;
   contratActif: Contrat | null;
   prochaineSeance: Seance | null;
+  seances: Seance[];
 }) {
   const navigate = useNavigate();
   const joursAvantFin = contratActif
     ? differenceInDays(new Date(contratActif.dateFin), new Date()) : null;
+  const statutSeances = calculerStatutSeancesSemaine(contratActif, seances);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200/60 p-4 shadow-sm">
@@ -199,7 +203,10 @@ function CarteStats({ participant, contratActif, prochaineSeance }: {
             />
           </div>
           <div className="space-y-1 text-[13px] text-gray-500">
-            <div>📅 {contratActif.nbSeancesSemaine} séance{contratActif.nbSeancesSemaine > 1 ? 's' : ''}/semaine · {contratActif.heureDebut} · {contratActif.dureeMinutes} min</div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span>📅 {contratActif.nbSeancesSemaine} séance{contratActif.nbSeancesSemaine > 1 ? 's' : ''}/semaine · {contratActif.heureDebut} · {contratActif.dureeMinutes} min</span>
+              <BadgeSeancesRestantes statut={statutSeances} />
+            </div>
             <div>📆 {new Date(contratActif.dateDebut + 'T12:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })} → {new Date(contratActif.dateFin + 'T12:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })}</div>
           </div>
 
@@ -1521,7 +1528,7 @@ export default function ParticipantProfile() {
             participant={participant}
             onSave={data => updateParticipant(id!, data)}
           />
-          <CarteStats participant={participant} contratActif={contratActif} prochaineSeance={prochaineSeance} />
+          <CarteStats participant={participant} contratActif={contratActif} prochaineSeance={prochaineSeance} seances={seances} />
         </div>
         {/* Colonne droite */}
         <div className="flex flex-col gap-3">

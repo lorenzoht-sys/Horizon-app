@@ -1,4 +1,4 @@
-import type { PeriodiciteContrat, Seance } from '../types';
+import type { Contrat, PeriodiciteContrat, Seance } from '../types';
 
 export function heureEnMinutes(heure: string): number {
   const [h, m] = heure.split(':').map(Number);
@@ -280,4 +280,50 @@ export function indexerParSemaine(dates: string[]): number[] {
     compteurParSemaine.set(semaine, i + 1);
     return i;
   });
+}
+
+// ── Séances restant à planifier (indicateur carte bénéficiaire) ──────────────
+
+export type StatutSeancesSemaine =
+  | { etat: 'sans_contrat' }
+  | { etat: 'nb_non_defini' }
+  // Semaine hors cycle d'un contrat "1 semaine sur 2/3" : 0 séance prévue,
+  // à ne pas confondre visuellement avec "complet" (rien n'était à planifier).
+  | { etat: 'semaine_non_due' }
+  | { etat: 'complet'; prevu: number; planifie: number }
+  | { etat: 'a_planifier'; prevu: number; planifie: number; restant: number };
+
+// dateReference : n'importe quel jour de la semaine à évaluer (par défaut
+// aujourd'hui). Compare le nombre de séances prévues par le contrat actif
+// (contrat.nbSeancesSemaine, uniquement si la semaine est due pour sa
+// périodicité) au nombre de séances déjà placées dans l'agenda cette
+// semaine-là (lundi → dimanche, tout statut sauf 'annulee').
+export function calculerStatutSeancesSemaine(
+  contrat: Contrat | null,
+  seances: Seance[],
+  dateReference: string = new Date().toISOString().split('T')[0],
+): StatutSeancesSemaine {
+  if (!contrat) return { etat: 'sans_contrat' };
+  const prevu = contrat.nbSeancesSemaine;
+  if (!prevu || prevu <= 0) return { etat: 'nb_non_defini' };
+
+  const periodicite = contrat.periodicite ?? 'semaine';
+  if (!estSemaineDue(contrat.dateDebut, dateReference, periodicite)) {
+    return { etat: 'semaine_non_due' };
+  }
+
+  const lundi = lundiDeLaSemaine(dateReference);
+  const dimanche = new Date(lundi + 'T12:00');
+  dimanche.setDate(dimanche.getDate() + 6);
+  const dimancheStr = dimanche.toISOString().split('T')[0];
+
+  const planifie = seances.filter(s =>
+    s.participantId === contrat.participantId &&
+    s.statut !== 'annulee' &&
+    s.date >= lundi && s.date <= dimancheStr
+  ).length;
+
+  const restant = prevu - planifie;
+  if (restant <= 0) return { etat: 'complet', prevu, planifie };
+  return { etat: 'a_planifier', prevu, planifie, restant };
 }

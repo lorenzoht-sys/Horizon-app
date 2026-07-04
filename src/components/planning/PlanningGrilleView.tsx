@@ -4,8 +4,9 @@ import { toast } from 'sonner';
 import { Loader, X } from 'lucide-react';
 import type { Contrat, IndisponibilitePierre, JourSemaine, Participant, Seance } from '../../types';
 import { getOrganisation } from '../../lib/anamnese';
-import { heureEnMinutes, genererDatesSeances, trouveChevauchements } from '../../utils/horaires';
+import { heureEnMinutes, genererDatesSeances, trouveChevauchements, calculerStatutSeancesSemaine } from '../../utils/horaires';
 import { addMinutes } from '../../hooks/useAgenda';
+import BadgeSeancesRestantes from '../ui/BadgeSeancesRestantes';
 import FrisePlanningJour, {
   FRISE_H_DEBUT, FRISE_H_FIN, FRISE_TOTAL_H, friseToY,
 } from './FrisePlanningJour';
@@ -397,8 +398,10 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
 
         <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: HAUTEUR_GRILLE_VISIBLE }}>
           {patientsFiltres.map(p => {
-            const aContrat = contrats.some(c => c.participantId === p.id && c.statut === 'actif');
+            const contratActifP = contrats.find(c => c.participantId === p.id && c.statut === 'actif') ?? null;
+            const aContrat = contratActifP !== null;
             const selected = patientSelectionneId === p.id;
+            const statutSeances = calculerStatutSeancesSemaine(contratActifP, seances);
             return (
               <div key={p.id}
                 draggable={aContrat}
@@ -413,9 +416,12 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
                     : 'border-gray-200 bg-white hover:border-primary/40 hover:bg-gray-50'
                 }`}>
                 <p className="text-sm font-medium text-dark truncate">{p.prenom} {p.nom}</p>
-                <p className={`text-xs mt-0.5 ${aContrat ? 'text-green-600' : 'text-gray-400'}`}>
-                  {aContrat ? 'Contrat actif' : 'Sans contrat'}
-                </p>
+                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                  <p className={`text-xs ${aContrat ? 'text-green-600' : 'text-gray-400'}`}>
+                    {aContrat ? 'Contrat actif' : 'Sans contrat'}
+                  </p>
+                  <BadgeSeancesRestantes statut={statutSeances} />
+                </div>
               </div>
             );
           })}

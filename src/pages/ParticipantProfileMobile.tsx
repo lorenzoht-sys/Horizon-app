@@ -18,6 +18,8 @@ import ModalEspacePatient from '../components/participant/ModalEspacePatient';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
 import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
 import { exportDossierPraticien } from '../utils/exportDossierPDF';
+import BadgeSeancesRestantes from '../components/ui/BadgeSeancesRestantes';
+import { calculerStatutSeancesSemaine } from '../utils/horaires';
 import { TAG_CONFIG } from '../data/profiles';
 import { toast } from 'sonner';
 import type { Bilan, Participant, RessentiSeance } from '../types';
@@ -151,6 +153,7 @@ export default function ParticipantProfileMobile() {
   const contreIndicationsTexte: string | null = getContreIndications(participant, bilanInitial).detail;
   const latestBilan    = sortedBilans[sortedBilans.length - 1] ?? null;
   const contratActif   = contrats.find(c => c.participantId === participant.id && c.statut === 'actif') ?? null;
+  const statutSeances  = calculerStatutSeancesSemaine(contratActif, seances);
   const notes          = notesParPatient(participant.id);
   const age            = calcAge(participant.dateNaissance);
   const today          = new Date().toISOString().slice(0, 10);
@@ -312,7 +315,10 @@ export default function ParticipantProfileMobile() {
         {contratActif && (
           <MobileCard title="Suivi en cours">
             <div className="text-[13px] text-gray-600 space-y-1 pt-1">
-              <div>📅 {contratActif.nbSeancesSemaine} séance{contratActif.nbSeancesSemaine > 1 ? 's' : ''}/semaine · {contratActif.heureDebut} · {contratActif.dureeMinutes} min</div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span>📅 {contratActif.nbSeancesSemaine} séance{contratActif.nbSeancesSemaine > 1 ? 's' : ''}/semaine · {contratActif.heureDebut} · {contratActif.dureeMinutes} min</span>
+                <BadgeSeancesRestantes statut={statutSeances} />
+              </div>
               <div>
                 Séances : <strong className="text-gray-800">{contratActif.nombreSeancesRealisees}/{contratActif.nombreSeancesTotal}</strong>
               </div>
