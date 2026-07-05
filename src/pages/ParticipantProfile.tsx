@@ -601,7 +601,7 @@ function CarteJournalFusion({ compteRendus, onDicter }: {
 
 // ── CarteDisponibilites ───────────────────────────────────────────────────────
 
-const JOURS_DISPO_LIST = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'] as const;
+const JOURS_DISPO_LIST = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
 
 const HEURES_DISPO = (() => {
   const h: string[] = [];

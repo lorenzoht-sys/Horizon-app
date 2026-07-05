@@ -10,7 +10,7 @@ import { calculerNbSeancesEstime, calculerDateFinParFrequence, CYCLE_SEMAINES } 
 import { getOrganisation, OPTIONS_FREQUENCE, trouverOptionFrequence, type OptionFrequence } from '../lib/anamnese';
 import { getTrousRecurrents } from '../lib/analyse-tournee';
 
-const JOURS_DISPO_LIST = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'] as const;
+const JOURS_DISPO_LIST = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
 const FREQUENCE_DEFAUT = OPTIONS_FREQUENCE[1]; // 2 séances/semaine
 
 const HEURE_DEBUT_DEFAUT = '08:00';

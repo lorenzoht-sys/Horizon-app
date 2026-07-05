@@ -72,7 +72,7 @@ function filtrerParIndispos(slots: CreneauLibre[], indisponibilites?: JourSemain
  * Repli : matching par adresseVille exacte (insensible à la casse).
  */
 const DOW_TO_DISPO: Record<number, string> = {
-  1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam',
+  0: 'Dim', 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam',
 };
 
 export type DisposPatient = {

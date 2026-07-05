@@ -902,9 +902,9 @@ const OPTIONS_SIGNALE_PAR = ['Le bénéficiaire lui-même', "L'entourage", 'Les 
 const OPTIONS_SUIVI_PSY_QUI = ['Psychologue', 'Psychiatre', 'Psychothérapeute', 'Autre'];
 const OPTIONS_SUIVI_PSY_FREQUENCE = ['Hebdomadaire', 'Mensuel', 'Occasionnel', 'En pause'];
 
-const OPTIONS_JOURS_DISPONIBLES = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+const OPTIONS_JOURS_DISPONIBLES = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const JOURS_LABELS_COMPLET: Record<string, string> = {
-  Lun: 'Lundi', Mar: 'Mardi', Mer: 'Mercredi', Jeu: 'Jeudi', Ven: 'Vendredi', Sam: 'Samedi',
+  Lun: 'Lundi', Mar: 'Mardi', Mer: 'Mercredi', Jeu: 'Jeudi', Ven: 'Vendredi', Sam: 'Samedi', Dim: 'Dimanche',
 };
 const OPTIONS_DUREE_SEANCE_MIN = [30, 45, 60, 90, 120];
 const OPTIONS_HEURES = (() => {

@@ -23,12 +23,14 @@ const DOW_KEY: Record<number, JourSemaine | 'dim'> = {
   0: 'dim', 1: 'lun', 2: 'mar', 3: 'mer', 4: 'jeu', 5: 'ven', 6: 'sam',
 };
 
-const ALL_WORK_DAYS: { cleJour: string; dow: number; nom: string; jourKey: JourSemaine }[] = [
+const ALL_WORK_DAYS: { cleJour: string; dow: number; nom: string; jourKey: JourSemaine | 'dim' }[] = [
   { cleJour: 'Lun', dow: 1, nom: 'Lundi',    jourKey: 'lun' },
   { cleJour: 'Mar', dow: 2, nom: 'Mardi',    jourKey: 'mar' },
   { cleJour: 'Mer', dow: 3, nom: 'Mercredi', jourKey: 'mer' },
   { cleJour: 'Jeu', dow: 4, nom: 'Jeudi',    jourKey: 'jeu' },
   { cleJour: 'Ven', dow: 5, nom: 'Vendredi', jourKey: 'ven' },
+  { cleJour: 'Sam', dow: 6, nom: 'Samedi',   jourKey: 'sam' },
+  { cleJour: 'Dim', dow: 0, nom: 'Dimanche', jourKey: 'dim' },
 ];
 
 export default function ModalInsererPatient({ onClose, participants, contrats, seances, indispos, bulkCreerSeances }: Props) {
@@ -73,7 +75,10 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
     const org = getOrganisation(patient);
     const joursDispos = org.joursDisponibles ?? [];
     return ALL_WORK_DAYS.filter(wd =>
-      !joursIndispos.includes(wd.jourKey) &&
+      // joursIndispos ne contient jamais 'dim' (limitation préexistante de
+      // analyse-tournee.ts, hors périmètre) — le dimanche n'est donc jamais
+      // exclu pour indispo de Pierre, comme avant l'ajout du 7e jour ici.
+      (wd.jourKey === 'dim' || !joursIndispos.includes(wd.jourKey)) &&
       (joursDispos.length === 0 || joursDispos.includes(wd.cleJour))
     );
   }, [patient, contratChoisi, creneauxLibres, joursIndispos]);

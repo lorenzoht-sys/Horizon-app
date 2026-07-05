@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader, X } from 'lucide-react';
-import type { Contrat, IndisponibilitePierre, JourSemaine, Participant, Seance } from '../../types';
+import type { Contrat, IndisponibilitePierre, JourSemaine, OrganisationData, Participant, Seance } from '../../types';
 import { getOrganisation } from '../../lib/anamnese';
 import { heureEnMinutes, genererDatesSeances, trouveChevauchements, calculerStatutSeancesSemaine } from '../../utils/horaires';
 import { addMinutes } from '../../hooks/useAgenda';
@@ -49,6 +49,19 @@ function creerDatesRecurrentes(jourKey: JourSemaine | 'dim', contrat: Contrat): 
 
 function formatDate(d: string) {
   return new Date(d + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// Fenêtres de disponibilité réellement renseignées pour un jour donné.
+// Mode strict : un jour n'est disponible que s'il est à la fois coché dans
+// joursDisponibles ET pourvu de créneaux dans creneauxParJour — aucune plage
+// par défaut n'est inventée quand la donnée est absente.
+function windowsDispoPourJour(
+  org: OrganisationData | null,
+  cleJour: string
+): { debut: string; fin: string }[] {
+  if (!org) return [];
+  if (!org.joursDisponibles?.includes(cleJour)) return [];
+  return org.creneauxParJour?.[cleJour] ?? [];
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -307,9 +320,7 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
 
   // Fenêtres dispo du patient pour un jour donné
   function windowsForJour(cleJour: string): { debut: string; fin: string }[] {
-    if (!orgPatient) return [];
-    const crenJour = orgPatient.creneauxParJour?.[cleJour];
-    return crenJour?.length ? crenJour : [{ debut: '08:00', fin: '19:00' }];
+    return windowsDispoPourJour(orgPatient, cleJour);
   }
 
   // Indispos de Pierre pour un jour donné
@@ -511,10 +522,7 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
         // onDragStart.
         const patientDuDrop = participantMap.get(dropPendant.participantId);
         const orgDuDrop = patientDuDrop ? getOrganisation(patientDuDrop) : null;
-        const crenJourDuDrop = orgDuDrop?.creneauxParJour?.[dropPendant.jour.cleJour];
-        const windowsDuDrop = orgDuDrop
-          ? (crenJourDuDrop?.length ? crenJourDuDrop : [{ debut: '08:00', fin: '19:00' }])
-          : [];
+        const windowsDuDrop = windowsDispoPourJour(orgDuDrop, dropPendant.jour.cleJour);
         return (
           <ModalConfirmDrop
             info={dropPendant}
