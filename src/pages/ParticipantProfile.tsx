@@ -632,11 +632,16 @@ function CarteDisponibilites({
   }
 
   function toggleJour(jour: string) {
-    setEditJours(prev => {
-      if (prev.includes(jour)) return prev.filter(j => j !== jour);
-      return [...prev, jour];
-    });
+    const dejaCoche = editJours.includes(jour);
+    setEditJours(prev => dejaCoche ? prev.filter(j => j !== jour) : [...prev, jour]);
     setEditCreneaux(prev => {
+      if (dejaCoche) {
+        // Jour décoché : on retire son entrée plutôt que de la laisser en
+        // créneau fantôme (jamais lu tant que le jour reste décoché, mais
+        // pollue les données enregistrées).
+        const { [jour]: _retire, ...reste } = prev;
+        return reste;
+      }
       if (!prev[jour]) return { ...prev, [jour]: [{ debut: '09:00', fin: '12:00' }] };
       return prev;
     });

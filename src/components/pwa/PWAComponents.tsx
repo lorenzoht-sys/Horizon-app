@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useConnexion } from '../../hooks/useConnexion';
 
 function formatHeure(date: Date): string {
@@ -72,17 +73,23 @@ export function IndicateurConnexion() {
 }
 
 // ── Notification mise à jour ──────────────────────────────────────────────────
+// Piloté par le hook officiel de vite-plugin-pwa (virtual:pwa-register/react) :
+// needRefresh passe à true quand workbox détecte qu'une nouvelle version du
+// service worker est installée. Remplace l'ancien événement DOM 'sw-updated'
+// qui n'était jamais déclenché nulle part — le bandeau ne s'affichait donc
+// jamais en production.
 
 export function NotificationMiseAJour() {
-  const [miseAJourDispo, setMiseAJourDispo] = useState(false);
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW({
+    onRegisterError(error) {
+      console.error('Erreur enregistrement service worker', error);
+    },
+  });
 
-  useEffect(() => {
-    const handler = () => setMiseAJourDispo(true);
-    document.addEventListener('sw-updated', handler);
-    return () => document.removeEventListener('sw-updated', handler);
-  }, []);
-
-  if (!miseAJourDispo) return null;
+  if (!needRefresh) return null;
 
   return (
     <div style={{
@@ -103,23 +110,45 @@ export function NotificationMiseAJour() {
         🔄 Mise à jour disponible
       </div>
       <div style={{ fontSize: 12, opacity: 0.85 }}>
-        Une nouvelle version de Mouv'APA est prête.
+        Une nouvelle version est disponible.
       </div>
-      <button
-        onClick={() => window.location.reload()}
-        style={{
-          background: 'var(--color-teal)',
-          color: 'white',
-          border: 'none',
-          borderRadius: 8,
-          padding: '8px 14px',
-          fontWeight: 700,
-          fontSize: 13,
-          cursor: 'pointer',
-        }}
-      >
-        Mettre à jour maintenant
-      </button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={() => updateServiceWorker(true)}
+          style={{
+            flex: 1,
+            background: 'var(--color-teal)',
+            color: 'white',
+            border: 'none',
+            borderRadius: 8,
+            padding: '8px 14px',
+            fontWeight: 700,
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          Mettre à jour
+        </button>
+        <button
+          // Cache le bandeau sans rien annuler : le service worker déjà
+          // installé prend de toute façon le contrôle au prochain
+          // rechargement naturel de la page (skipWaiting + clientsClaim
+          // sont actifs dans le SW généré, voir vite.config.ts).
+          onClick={() => setNeedRefresh(false)}
+          style={{
+            background: 'transparent',
+            color: 'rgba(255,255,255,0.7)',
+            border: '1px solid rgba(255,255,255,0.25)',
+            borderRadius: 8,
+            padding: '8px 12px',
+            fontWeight: 600,
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          Plus tard
+        </button>
+      </div>
     </div>
   );
 }
