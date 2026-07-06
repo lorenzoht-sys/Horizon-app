@@ -112,6 +112,130 @@ export function trouveChevauchements<T extends CreneauCandidat>(
   return resultats;
 }
 
+// ── Anti-doublon à la création (glisser un bénéficiaire) ──────────────────────
+// Reflète très exactement la contrainte d'unicité posée en base
+// (seances_no_double_contrat_idx : participant_id, date, contrat_id, hors
+// séances annulées — voir supabase/migrations/20260622_unique_seances_patient.sql).
+// Un bénéficiaire ne peut avoir qu'une seule séance non-annulée par contrat et
+// par jour, quelle que soit l'heure. Filtre les dates déjà couvertes AVANT
+// tout insert, pour ne jamais tenter un doublon — plutôt que de laisser la
+// contrainte base le rejeter après coup.
+export function datesManquantes(seances: Seance[], participantId: string, contratId: string, dates: string[]): string[] {
+  const dejaPresentes = new Set(
+    seances
+      .filter(s => s.participantId === participantId && s.contratId === contratId && s.statut !== 'annulee')
+      .map(s => s.date)
+  );
+  return dates.filter(d => !dejaPresentes.has(d));
+}
+
+// ── Messages d'erreur humains pour les opérations sur les séances ────────────
+// Ne jamais laisser fuiter un message Postgres brut ("duplicate key value
+// violates unique constraint ...") jusqu'à l'utilisateur — traduit les
+// signatures d'erreur connues, avec repli générique sinon. Le code SQLSTATE
+// '23505' (unique_violation) est le signal le plus fiable, indépendant du
+// texte exact du message.
+export function messageErreurSeance(error: { message: string; code?: string }): string {
+  const estViolationUnicite = error.code === '23505' || error.message.includes('duplicate key value violates unique constraint');
+  if (estViolationUnicite) {
+    if (error.message.includes('seances_no_double_contrat_idx')) {
+      return 'Ce bénéficiaire a déjà une séance planifiée à cette date pour ce contrat.';
+    }
+    return 'Cette séance existe déjà.';
+  }
+  return "Une erreur est survenue lors de l'enregistrement. Réessayez.";
+}
+
+// ── Identification d'une « série » récurrente (planning manuel) ──────────────
+// Il n'existe aucun identifiant de récurrence en base (table `seances` : pas
+// de colonne recurrence_id) — le seul lien structurel est contratId, qui ne
+// suffit pas seul (un contrat peut porter plusieurs créneaux hebdomadaires
+// différents si nbSeancesSemaine > 1, ex : lundi + mercredi + vendredi). On
+// identifie donc une série par une clé composite calculée à la volée :
+// bénéficiaire + contrat + jour de la semaine.
+//
+// L'heure n'entre PAS dans la clé (contrairement à une version antérieure) :
+// règle métier confirmée — un bénéficiaire n'a jamais deux séances le même
+// jour pour le même contrat, donc (participantId, contratId, jourSemaine)
+// identifie déjà un rythme sans ambiguïté. Inclure l'heure cassait le
+// déplacement en masse dès qu'un léger écart d'heure existait entre
+// occurrences d'un même jour (dérive historique, ou correction manuelle
+// ponctuelle) : la série se scindait en plusieurs sous-groupes invisibles
+// les uns des autres, et « déplacer cette séance et les suivantes » n'en
+// déplaçait qu'un sous-ensemble, laissant les autres au jour d'origine.
+//
+// Une occurrence déplacée à un autre JOUR sort naturellement de cette clé
+// (jourSemaine change) — c'est le comportement voulu pour isoler un
+// déplacement ponctuel. Un simple changement d'heure sur le même jour ne
+// l'isole plus : elle reste rattachée au rythme de ce jour, et un futur
+// déplacement de masse la rattrape — c'est exactement l'effet recherché
+// (unifier une dérive d'heure au sein d'un même jour).
+export function cleSerieRecurrente(s: Seance): string {
+  const jourSemaine = new Date(s.date + 'T12:00').getDay();
+  return `${s.participantId}::${s.contratId ?? ''}::${jourSemaine}`;
+}
+
+// Renvoie tous les membres de la même série qu'une séance de référence (elle
+// incluse), triés par date croissante — hors séances annulées.
+export function trouverSerieRecurrente(seances: Seance[], reference: Seance): Seance[] {
+  const cle = cleSerieRecurrente(reference);
+  return seances
+    .filter(s => s.statut !== 'annulee' && cleSerieRecurrente(s) === cle)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export interface BlocRecurrent {
+  seance: Seance;
+  totalOccurrences: number;
+}
+
+// Regroupe les séances d'un même jour de la semaine par créneau récurrent
+// (voir cleSerieRecurrente) pour l'affichage en un seul bloc visuel par
+// créneau — extrait de FrisePlanningJour pour être testable indépendamment
+// du rendu React. Représentant choisi : la prochaine occurrence à venir par
+// rapport à `aujourdHui` (paramétrable pour les tests).
+//
+// Un créneau sans AUCUNE occurrence future ne produit plus de bloc du tout
+// (auparavant, la dernière occurrence passée était affichée par défaut).
+// Corrigé suite à un bug observé : après une suppression « et les
+// suivantes », qui n'efface jamais l'historique par conception, une
+// occurrence passée du même créneau réapparaissait comme représentante —
+// donnant l'impression que « la séance supprimée est encore là » alors qu'il
+// s'agissait d'une séance différente, plus ancienne. Cette grille sert à
+// planifier l'avenir (glisser un bénéficiaire, déplacer un rendez-vous à
+// venir) ; l'historique déjà réalisé n'a pas sa place ici et se consulte
+// via l'agenda ou la fiche bénéficiaire — le supprimer de ce regroupement
+// élimine la confusion à la source plutôt que de la documenter seulement.
+export function regrouperParCreneau(seancesDuJour: Seance[], aujourdHui: string = new Date().toISOString().split('T')[0]): BlocRecurrent[] {
+  const parCle = new Map<string, Seance[]>();
+  for (const s of seancesDuJour) {
+    const cle = cleSerieRecurrente(s);
+    const arr = parCle.get(cle);
+    if (arr) arr.push(s); else parCle.set(cle, [s]);
+  }
+  const blocs: BlocRecurrent[] = [];
+  for (const occurrences of parCle.values()) {
+    const futures = occurrences.filter(o => o.date >= aujourdHui).sort((a, b) => a.date.localeCompare(b.date));
+    if (futures.length === 0) continue;
+    blocs.push({ seance: futures[0], totalOccurrences: occurrences.length });
+  }
+  return blocs;
+}
+
+// Décale une date vers le jour de la semaine ciblé, en restant dans la même
+// semaine calendaire (ex : mardi → vendredi de cette même semaine). Utilisé
+// pour le déplacement (seul ou en série) d'une séance existante dans la
+// grille de planning : la grille regroupe les blocs par jour de la semaine
+// (motif récurrent), donc déposer sur une autre colonne ne dit que le
+// nouveau jour de semaine visé — la semaine réelle reste celle de la séance
+// d'origine (chaque occurrence garde sa propre semaine lors d'un déplacement
+// de série).
+export function dateDansMemeSemaine(dateOrigine: string, dowCible: number): string {
+  const d = new Date(dateOrigine + 'T12:00');
+  d.setDate(d.getDate() + (dowCible - d.getDay()));
+  return d.toISOString().split('T')[0];
+}
+
 // Levée par bulkCreerSeances quand des chevauchements sont détectés et non
 // explicitement ignorés — garde-fou pour tout appelant (présent ou futur) qui
 // oublierait de vérifier lui-même avant d'insérer en base.

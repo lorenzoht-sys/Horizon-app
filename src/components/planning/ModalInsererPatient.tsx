@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import type { Participant, Contrat, Seance, IndisponibilitePierre, JourSemaine } from '../../types';
 import { getTrousRecurrents, getCreneauxLibresGlobal, type CreneauLibre } from '../../lib/analyse-tournee';
 import { getOrganisation } from '../../lib/anamnese';
-import { addMinutes, genererDatesSeances, trouveChevauchements, MARGE_ENTRE_SEANCES_MIN } from '../../utils/horaires';
+import { addMinutes, genererDatesSeances, trouveChevauchements, datesManquantes, MARGE_ENTRE_SEANCES_MIN } from '../../utils/horaires';
 import FrisePlanningJour from './FrisePlanningJour';
 
 interface Props {
@@ -167,10 +167,15 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
     creneauxChoisis.forEach((creneau, idx) => {
       const duree = contratChoisi.dureesSeances[idx] ?? contratChoisi.dureeMinutes;
       const heureDebut = creneau.heureDebut;
-      const dates = genererDatesSeances(
+      const datesGenerees = genererDatesSeances(
         startDate, contratChoisi.dateFin, DOW_KEY[creneau.jourSemaine],
         contratChoisi.periodicite ?? 'semaine', contratChoisi.dateDebut,
       );
+      // Ne jamais réinsérer une date où ce bénéficiaire a déjà une séance
+      // pour ce contrat (contrainte seances_no_double_contrat_idx) — sinon
+      // l'insert en lot échoue en bloc (une seule ligne en violation suffit
+      // à faire échouer tout l'INSERT groupé, y compris les dates valides).
+      const dates = datesManquantes(seances, contratChoisi.participantId, contratChoisi.id, datesGenerees);
       dates.forEach(dateStr => {
         result.push({
           participantId: contratChoisi.participantId,
@@ -189,7 +194,7 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
       });
     });
     return result;
-  }, [contratChoisi, creneauxChoisis, patient, today]);
+  }, [contratChoisi, creneauxChoisis, patient, today, seances]);
 
   const seancesTotal = seancesACreer.length;
 
@@ -199,7 +204,11 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
   );
 
   async function appliquer(ignorerChevauchements = false) {
-    if (!contratChoisi || seancesACreer.length === 0 || !patient) return;
+    if (!contratChoisi || !patient) return;
+    if (seancesACreer.length === 0) {
+      toast.error(`${patient.prenom} a déjà une séance planifiée à chacune de ces dates pour ce contrat.`);
+      return;
+    }
     setApplying(true);
     try {
       await bulkCreerSeances(seancesACreer, { ignorerChevauchements });

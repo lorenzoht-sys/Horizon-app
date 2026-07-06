@@ -58,7 +58,7 @@ const DEPART_FALLBACK = { lat: 47.2184, lng: -1.5536 };
 
 export default function TourneePage() {
   const { participants } = useParticipants();
-  const { seances, seancesDuJour, changerStatut, bulkCreerSeances, retirerPlanifieesLocales } = useAgenda();
+  const { seances, seancesDuJour, changerStatut, bulkCreerSeances, modifierSeance, supprimerSeance, retirerPlanifieesLocales } = useAgenda();
   const { contrats } = useContrats();
   const { indispos } = useIndispos();
   const navigate = useNavigate();
@@ -248,6 +248,8 @@ export default function TourneePage() {
             contrats={contrats}
             indispos={indispos}
             bulkCreerSeances={bulkCreerSeances}
+            modifierSeance={modifierSeance}
+            supprimerSeance={supprimerSeance}
           />
         </Suspense>
       ) : (<>

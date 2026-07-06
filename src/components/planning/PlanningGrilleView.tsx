@@ -1,14 +1,20 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Loader, X } from 'lucide-react';
-import type { Contrat, IndisponibilitePierre, JourSemaine, OrganisationData, Participant, Seance } from '../../types';
+import { Loader, X, Trash2 } from 'lucide-react';
+import type { Contrat, IndisponibilitePierre, JourSemaine, OrganisationData, Participant, Seance, StatutSeance } from '../../types';
 import { getOrganisation } from '../../lib/anamnese';
-import { heureEnMinutes, genererDatesSeances, trouveChevauchements, calculerStatutSeancesSemaine } from '../../utils/horaires';
+import { heureEnMinutes, genererDatesSeances, trouveChevauchements, trouveChevauchement, dateDansMemeSemaine, datesManquantes, calculerStatutSeancesSemaine } from '../../utils/horaires';
 import { addMinutes } from '../../hooks/useAgenda';
+import {
+  calculerFutures, estDeplacementNoop, estDeplacementExistant,
+  planDeplacerUnique, planDeplacerSerie, planEditerUnique, planEditerSerie,
+  planSupprimerUnique, planSupprimerSerie, executerOperations,
+  type MiseAJourSeance,
+} from '../../lib/planificationManuelle';
 import BadgeSeancesRestantes from '../ui/BadgeSeancesRestantes';
 import FrisePlanningJour, {
-  FRISE_H_DEBUT, FRISE_H_FIN, FRISE_TOTAL_H, friseToY,
+  FRISE_H_DEBUT, FRISE_H_FIN, FRISE_TOTAL_H, friseToY, DRAG_MIME_TYPE, type DragPayload,
 } from './FrisePlanningJour';
 
 // ── Jours de la semaine (Lun → Dim) ───────────────────────────────────────────
@@ -73,13 +79,42 @@ interface DropPendant {
   contrat: Contrat;
 }
 
+// Séance actuellement saisie pour édition (clic) ou glissée pour déplacement —
+// accompagnée de totalOccurrences (voir FrisePlanningJour) pour prévenir
+// l'utilisateur quand l'action ne portera que sur une occurrence parmi
+// plusieurs d'un même créneau récurrent.
+interface SeanceActive {
+  seance: Seance;
+  totalOccurrences: number;
+}
+
+// Choix en attente entre « cette occurrence seule » et « cette occurrence et
+// toutes les suivantes » — n'est ouvert que lorsque futures.length > 1 (voir
+// trouverSerieRecurrente). onUnique/onSerie effectuent l'action elles-mêmes ;
+// aucune n'est présélectionnée dans ModalChoixSerie (voir plus bas) pour
+// qu'un déplacement de masse reste un choix conscient.
+interface ChoixSerie {
+  titre: string;
+  futures: Seance[];
+  onUnique: () => Promise<void>;
+  onSerie: () => Promise<void>;
+}
+
 interface Props {
   participants: Participant[];
   seances: Seance[];
   contrats: Contrat[];
   indispos: IndisponibilitePierre[];
   bulkCreerSeances: (data: Omit<Seance, 'id'>[], options?: { ignorerChevauchements?: boolean }) => Promise<unknown>;
+  modifierSeance: (id: string, updates: Partial<Seance>) => Promise<boolean>;
+  supprimerSeance: (id: string) => Promise<void>;
 }
+
+const CLE_JOUR_PAR_DOW: Record<number, string> = { 0: 'Dim', 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam' };
+
+const LABEL_STATUT_SEANCE: Record<StatutSeance, string> = {
+  planifiee: 'Planifiée', realisee: 'Réalisée', reportee: 'Reportée', annulee: 'Annulée',
+};
 
 // ── Modal confirmation drop ───────────────────────────────────────────────────
 
@@ -98,9 +133,20 @@ function ModalConfirmDrop({ info, patient, seances, participantMap, windows, onC
   const [heureDebut, setHeureDebut] = useState(info.heure);
   const [loading, setLoading] = useState(false);
 
-  const dates = useMemo(
+  // datesGenerees : toutes les dates du rythme demandé sur la durée du
+  // contrat. dates : seulement celles qui n'ont pas déjà une séance non
+  // annulée pour ce bénéficiaire/contrat — reflète la contrainte d'unicité
+  // seances_no_double_contrat_idx (participant_id, date, contrat_id). Ne
+  // jamais réinsérer une date déjà couverte : filtré ici, AVANT tout appel
+  // à bulkCreerSeances, plutôt que de laisser la contrainte base rejeter
+  // l'insert après coup.
+  const datesGenerees = useMemo(
     () => creerDatesRecurrentes(info.jour.key, info.contrat),
     [info.jour.key, info.contrat],
+  );
+  const dates = useMemo(
+    () => datesManquantes(seances, info.participantId, info.contrat.id, datesGenerees),
+    [seances, info.participantId, info.contrat.id, datesGenerees],
   );
 
   const heureFin = addMinutes(heureDebut, duree);
@@ -129,7 +175,16 @@ function ModalConfirmDrop({ info, patient, seances, participantMap, windows, onC
     // laisse aucune voie (ex : soumission clavier) créer un chevauchement.
     if (conflits.length > 0) return;
     setLoading(true);
-    try { await onConfirm(duree, heureDebut); } finally { setLoading(false); }
+    try {
+      await onConfirm(duree, heureDebut);
+    } catch {
+      // Déjà signalé à l'utilisateur par un toast (message humain, voir
+      // messageErreurSeance dans useAgenda) — on évite seulement que la
+      // promesse rejetée reste non gérée ; la modale reste ouverte pour
+      // laisser l'utilisateur ajuster et réessayer.
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -204,7 +259,9 @@ function ModalConfirmDrop({ info, patient, seances, participantMap, windows, onC
             </div>
           ) : (
             <p className="text-xs text-orange-700 bg-orange-50 rounded-xl px-4 py-3">
-              Aucune date disponible dans ce contrat.
+              {datesGenerees.length === 0
+                ? 'Aucune date disponible dans ce contrat.'
+                : `${patient ? patient.prenom : 'Ce bénéficiaire'} a déjà une séance planifiée à chacune de ces dates pour ce contrat.`}
             </p>
           )}
 
@@ -217,24 +274,24 @@ function ModalConfirmDrop({ info, patient, seances, participantMap, windows, onC
             const nomExistant = participantMap.get(premier.existante.participantId);
             const nomAffiche = nomExistant ? `${nomExistant.prenom} ${nomExistant.nom[0]}.` : 'un autre bénéficiaire';
             return (
-              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                <p className="text-xs font-semibold text-red-700">
+              <div className="bg-red-light border border-red/20 rounded-xl px-4 py-3">
+                <p className="text-xs font-semibold text-red">
                   Créneau indisponible — chevauche une séance existante avec{' '}
                   {nomAffiche}{' '}le {formatDate(premier.creneau.date)} ({premier.existante.heureDebut}–{premier.existante.heureFin}).
                 </p>
-                <p className="text-xs text-red-600 mt-1">
+                <p className="text-xs text-red mt-1">
                   Modifiez l'heure ou la durée pour lever le conflit.
                   {nomExistant && (
                     <>
                       {' '}
-                      <Link to={`/participant/${premier.existante.participantId}`} className="underline font-medium hover:text-red-800">
+                      <Link to={`/participant/${premier.existante.participantId}`} className="underline font-medium hover:opacity-80">
                         Voir la séance de {nomAffiche}
                       </Link>
                     </>
                   )}
                 </p>
                 {conflits.length > 1 && (
-                  <p className="text-xs text-red-500 mt-1">
+                  <p className="text-xs text-red mt-1">
                     {conflits.length} des {dates.length} séances générées sont concernées.
                   </p>
                 )}
@@ -251,7 +308,7 @@ function ModalConfirmDrop({ info, patient, seances, participantMap, windows, onC
           <button onClick={handleConfirmer} disabled={loading || dates.length === 0 || conflits.length > 0}
             className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
               conflits.length > 0
-                ? 'bg-red-500 text-white cursor-not-allowed'
+                ? 'bg-red text-white cursor-not-allowed'
                 : heureHorsDispo
                   ? 'bg-orange-500 text-white hover:bg-orange-600'
                   : 'bg-primary text-white hover:bg-dark'
@@ -270,13 +327,239 @@ function ModalConfirmDrop({ info, patient, seances, participantMap, windows, onC
   );
 }
 
+// ── Modal choix de portée (occurrence seule vs série) ────────────────────────
+// N'apparaît que lorsque l'action (déplacer/modifier/supprimer) touche un
+// créneau qui a au moins une autre occurrence future (voir trouverSerieRecurrente
+// dans les appelants). Aucun bouton n'est présélectionné/focus par défaut —
+// l'utilisateur doit cliquer explicitement l'un des deux pour qu'un
+// déplacement de masse reste un choix conscient, jamais un défaut.
+function ModalChoixSerie({ titre, futures, loading, onUnique, onSerie, onCancel }: {
+  titre: string;
+  futures: Seance[];
+  loading: boolean;
+  onUnique: () => void;
+  onSerie: () => void;
+  onCancel: () => void;
+}) {
+  const premiere = futures[0];
+  const derniere = futures[futures.length - 1];
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1030 }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <h3 className="text-base font-bold text-dark mb-1">{titre}</h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Ce créneau se répète {futures.length} fois (du {formatDate(premiere.date)} au {formatDate(derniere.date)}). Quelle portée ?
+        </p>
+        <div className="space-y-2">
+          <button onClick={onUnique} disabled={loading}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-dark transition-colors disabled:opacity-50">
+            Cette séance uniquement ({formatDate(premiere.date)})
+          </button>
+          <button onClick={onSerie} disabled={loading}
+            className="w-full py-2.5 rounded-xl text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50">
+            Cette séance et les {futures.length - 1} suivantes
+          </button>
+          <button onClick={onCancel} disabled={loading}
+            className="w-full py-2 rounded-xl text-sm text-gray-400 hover:text-gray-600 transition-colors">
+            {loading ? <span className="inline-flex items-center gap-2"><Loader size={13} className="animate-spin" />En cours…</span> : 'Annuler'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal édition/suppression d'une séance existante ─────────────────────────
+
+function ModalEditSeance({ actif, patient, seances, orgPatient, contrat, onSave, onDelete, onClose }: {
+  actif: SeanceActive;
+  patient: Participant | undefined;
+  seances: Seance[];
+  orgPatient: OrganisationData | null;
+  contrat: Contrat | null;
+  // Déclenchent l'action côté parent, qui décide seul s'il faut ouvrir la
+  // boîte de choix « cette occurrence / toute la série » avant d'appliquer
+  // quoi que ce soit — cette modale n'a donc plus besoin d'attendre/fermer
+  // elle-même après onSave/onDelete, le parent ferme dans tous les cas.
+  onSave: (updates: MiseAJourSeance) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const { seance } = actif;
+  const [date, setDate] = useState(seance.date);
+  const [heureDebut, setHeureDebut] = useState(seance.heureDebut);
+  const [duree, setDuree] = useState(seance.dureeMinutes);
+  const [statut, setStatut] = useState<StatutSeance>(seance.statut);
+  const [confirmSuppr, setConfirmSuppr] = useState(false);
+
+  const heureFin = addMinutes(heureDebut, duree);
+
+  // Occurrences futures (celle-ci incluse) du même créneau récurrent — c'est
+  // exactement ce périmètre que « cette séance et les suivantes » modifierait,
+  // donc ce compte doit refléter la même logique que la boîte de choix
+  // (calculerFutures), pas un total générique passé en prop.
+  const futures = useMemo(() => calculerFutures(seances, seance), [seances, seance]);
+
+  // Fenêtres de dispo recalculées sur le jour de la semaine actuellement
+  // saisi dans le formulaire (peut changer si l'utilisateur modifie la date).
+  const windows = useMemo(
+    () => windowsDispoPourJour(orgPatient, CLE_JOUR_PAR_DOW[new Date(date + 'T12:00').getDay()]),
+    [orgPatient, date],
+  );
+
+  const heureHorsDispo = windows.length > 0 && !windows.some(w => heureDebut >= w.debut && heureFin <= w.fin);
+
+  const conflit = useMemo(
+    () => trouveChevauchement(seances, { date, heureDebut, heureFin }, seance.id),
+    [seances, date, heureDebut, heureFin, seance.id],
+  );
+
+  function handleEnregistrer() {
+    if (conflit) return;
+    onSave({ date, heureDebut, heureFin, dureeMinutes: duree, statut });
+    onClose();
+  }
+
+  function handleSupprimer() {
+    onDelete();
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1010 }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
+          <h3 className="text-base font-bold text-dark">Modifier la séance</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1"><X size={16} /></button>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          <div className="bg-gray-50 rounded-xl px-4 py-3">
+            <p className="text-xs text-gray-500 mb-0.5">Bénéficiaire</p>
+            <p className="text-sm font-semibold text-dark">{patient ? `${patient.prenom} ${patient.nom}` : '—'}</p>
+          </div>
+
+          {/* Cette vue regroupe par jour/heure de la semaine : un même bloc
+              représente en général plusieurs séances réelles (une par
+              semaine du contrat). On demandera la portée (cette occurrence
+              seule ou toute la série) au moment d'Enregistrer/Supprimer —
+              ce simple rappel évite la surprise avant même d'en arriver là. */}
+          {futures.length > 1 && (
+            <p className="text-xs text-blue-700 bg-blue-50 rounded-xl px-4 py-3">
+              Ce créneau se répète encore {futures.length} fois (jusqu'au {formatDate(futures[futures.length - 1].date)}). La portée (cette séance seule ou toute la série) sera demandée à l'enregistrement.
+            </p>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-50 rounded-xl px-4 py-3">
+              <label className="block text-xs text-gray-500 mb-0.5">Date</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                className="w-full bg-transparent text-sm font-semibold text-dark focus:outline-none" />
+            </div>
+            <div className="bg-gray-50 rounded-xl px-4 py-3">
+              <label className="block text-xs text-gray-500 mb-0.5">Heure de début</label>
+              <input type="time" step={60} value={heureDebut} onChange={e => setHeureDebut(e.target.value)}
+                className="w-full bg-transparent text-sm font-semibold text-dark focus:outline-none" />
+              <p className="text-xs text-gray-400 mt-0.5">→ fin {heureFin}</p>
+            </div>
+          </div>
+
+          {heureHorsDispo && (
+            <p className="text-xs text-orange-700 bg-orange-50 rounded-xl px-4 py-3">
+              Ce créneau ({heureDebut}–{heureFin}) sort des disponibilités déclarées de{' '}
+              {patient ? patient.prenom : 'ce bénéficiaire'}.
+            </p>
+          )}
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Durée de la séance</label>
+            {contrat && contrat.dureesSeances.length > 1 ? (
+              <select value={duree} onChange={e => setDuree(Number(e.target.value))}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                {contrat.dureesSeances.map(d => <option key={d} value={d}>{d} min</option>)}
+              </select>
+            ) : (
+              <input type="number" min={5} step={5} value={duree} onChange={e => setDuree(Number(e.target.value))}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Statut</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['planifiee', 'realisee', 'reportee', 'annulee'] as StatutSeance[]).map(s => (
+                <button key={s} onClick={() => setStatut(s)}
+                  className={`py-1.5 px-3 rounded-lg text-xs font-medium border transition-colors text-left ${
+                    statut === s ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary/40'
+                  }`}>
+                  {LABEL_STATUT_SEANCE[s]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {conflit && (
+            <div className="bg-red-light border border-red/20 rounded-xl px-4 py-3">
+              <p className="text-xs font-semibold text-red">
+                Créneau indisponible — chevauche une autre séance ({conflit.heureDebut}–{conflit.heureFin}) le {formatDate(conflit.date)}.
+              </p>
+              <p className="text-xs text-red mt-1">Modifiez l'heure, la date ou la durée pour lever le conflit.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+          <button onClick={() => setConfirmSuppr(true)}
+            className="flex items-center justify-center border border-red/20 text-red rounded-xl px-3 hover:bg-red-light transition-colors">
+            <Trash2 size={15} />
+          </button>
+          <button onClick={onClose}
+            className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+            Annuler
+          </button>
+          <button onClick={handleEnregistrer} disabled={!!conflit}
+            className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${
+              conflit ? 'bg-red text-white cursor-not-allowed' : 'bg-primary text-white hover:bg-dark'
+            }`}>
+            {conflit ? 'Créneau occupé' : 'Enregistrer'}
+          </button>
+        </div>
+      </div>
+
+      {confirmSuppr && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1020 }}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <p className="text-sm text-dark font-medium mb-1">Supprimer cette séance ?</p>
+            <p className="text-xs text-gray-500 mb-4">
+              {patient ? `${patient.prenom} ${patient.nom}` : ''} — {formatDate(seance.date)} {seance.heureDebut}–{seance.heureFin}. Action irréversible.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmSuppr(false)} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
+                Annuler
+              </button>
+              <button onClick={handleSupprimer}
+                className="flex-1 py-2 rounded-xl text-sm font-semibold bg-red text-white hover:opacity-90">
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Composant principal ───────────────────────────────────────────────────────
 
-export default function PlanningGrilleView({ participants, seances, contrats, indispos, bulkCreerSeances }: Props) {
+export default function PlanningGrilleView({ participants, seances, contrats, indispos, bulkCreerSeances, modifierSeance, supprimerSeance }: Props) {
   const [search, setSearch] = useState('');
   const [patientSelectionneId, setPatientSelectionneId] = useState<string | null>(null);
   const [dragPatientId, setDragPatientId] = useState<string | null>(null);
   const [dropPendant, setDropPendant] = useState<DropPendant | null>(null);
+  const [dragSeance, setDragSeance] = useState<SeanceActive | null>(null);
+  const [seanceEditee, setSeanceEditee] = useState<SeanceActive | null>(null);
+  const [choixSerie, setChoixSerie] = useState<ChoixSerie | null>(null);
+  const [choixSerieLoading, setChoixSerieLoading] = useState(false);
 
   // Jours off : Pierre indisponible toute la journée — restent affichés
   // (grisés) plutôt que masqués, pour visualiser le planning sur 7 jours et
@@ -343,8 +626,14 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
     return c?.dureeMinutes ?? 45;
   }, [patientSelectionneId, contrats]);
 
-  // Gestion du drop sur la grille
-  function handleDrop(jour: typeof JOURS_ORDRES[number], heure: string) {
+  // Gestion du drop sur la grille — distingue « créer » (bénéficiaire glissé
+  // depuis la colonne de gauche) de « déplacer » (séance existante) via le
+  // flag posé dans le dataTransfer au dragstart (voir FrisePlanningJour).
+  function handleDrop(jour: typeof JOURS_ORDRES[number], heure: string, payload: DragPayload) {
+    if (estDeplacementExistant(payload)) {
+      handleDeplacerSeance(payload.seanceId, jour, heure);
+      return;
+    }
     const pid = dragPatientId ?? patientSelectionneId;
     if (!pid) return;
     const contrat = contrats.find(c => c.participantId === pid && c.statut === 'actif');
@@ -355,12 +644,127 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
     setDropPendant({ participantId: pid, jour, heure, contrat });
   }
 
+  // Affiche le détail d'un conflit détecté par planDeplacerSerie/planEditerSerie
+  // (déjà vérifié AVANT toute écriture — voir lib/planificationManuelle).
+  function toastConflitSerie(conflits: { date: string; occupePar: string }[]) {
+    const detail = conflits
+      .map(c => `${formatDate(c.date)} (occupé par ${participantMap.get(c.occupePar)?.prenom ?? 'une autre séance'})`)
+      .join(', ');
+    toast.error(`Action annulée — conflit sur ${conflits.length} semaine${conflits.length > 1 ? 's' : ''} : ${detail}`);
+  }
+
+  // Déplace une séance existante vers un nouveau jour/heure. Si le créneau a
+  // d'autres occurrences futures (même série récurrente, voir
+  // calculerFutures), demande la portée avant d'appliquer quoi que ce soit —
+  // jamais de choix par défaut pour un déplacement de masse. Toute la
+  // décision (quelles lignes, quels champs, conflits) est calculée par les
+  // fonctions pures de lib/planificationManuelle ; ce handler ne fait que les
+  // appeler puis exécuter le plan retourné (executerOperations n'accepte pas
+  // de fonction de création — un INSERT y est structurellement impossible).
+  async function handleDeplacerSeance(seanceId: string, jour: typeof JOURS_ORDRES[number], heureDebut: string) {
+    const s = seances.find(x => x.id === seanceId);
+    if (!s) return;
+    const nouvelleDate = dateDansMemeSemaine(s.date, jour.dow);
+    const heureFin = addMinutes(heureDebut, s.dureeMinutes);
+    if (estDeplacementNoop(s, nouvelleDate, heureDebut, heureFin)) return;
+
+    const futures = calculerFutures(seances, s);
+
+    const deplacerUnique = async () => {
+      await executerOperations([planDeplacerUnique(s, nouvelleDate, heureDebut, heureFin)], modifierSeance, supprimerSeance);
+      toast.success(`Séance déplacée au ${jour.label.toLowerCase()} ${heureDebut}`);
+    };
+
+    if (futures.length <= 1) {
+      await deplacerUnique();
+      return;
+    }
+
+    setChoixSerie({
+      titre: `Déplacer au ${jour.label.toLowerCase()} ${heureDebut}`,
+      futures,
+      onUnique: deplacerUnique,
+      onSerie: async () => {
+        const plan = planDeplacerSerie(seances, futures, jour.dow, heureDebut);
+        if (!plan.ok) { toastConflitSerie(plan.conflits); return; }
+        const nb = await executerOperations(plan.operations, modifierSeance, supprimerSeance);
+        toast.success(`${nb} séances déplacées au ${jour.label.toLowerCase()} ${heureDebut}`);
+      },
+    });
+  }
+
+  // Enregistre les modifications saisies dans ModalEditSeance — même logique
+  // de portée que le déplacement.
+  async function handleEnregistrerSeance(seance: Seance, updates: MiseAJourSeance) {
+    const futures = calculerFutures(seances, seance);
+
+    const enregistrerUnique = async () => {
+      await executerOperations([planEditerUnique(seance, updates)], modifierSeance, supprimerSeance);
+      toast.success('Séance modifiée');
+    };
+
+    if (futures.length <= 1) {
+      await enregistrerUnique();
+      return;
+    }
+
+    const dowCible = new Date(updates.date + 'T12:00').getDay();
+    setChoixSerie({
+      titre: 'Modifier la séance',
+      futures,
+      onUnique: enregistrerUnique,
+      onSerie: async () => {
+        const plan = planEditerSerie(seances, futures, dowCible, updates);
+        if (!plan.ok) { toastConflitSerie(plan.conflits); return; }
+        const nb = await executerOperations(plan.operations, modifierSeance, supprimerSeance);
+        toast.success(`${nb} séances modifiées`);
+      },
+    });
+  }
+
+  // Supprime une séance — même logique de portée. « Toutes les suivantes »
+  // ne touche jamais l'historique (date < celle de l'occurrence supprimée).
+  async function handleSupprimerSeanceModal(seance: Seance) {
+    const futures = calculerFutures(seances, seance);
+
+    if (futures.length <= 1) {
+      await executerOperations([planSupprimerUnique(seance)], modifierSeance, supprimerSeance);
+      toast.success('Séance supprimée');
+      return;
+    }
+
+    setChoixSerie({
+      titre: 'Supprimer la séance',
+      futures,
+      onUnique: async () => {
+        await executerOperations([planSupprimerUnique(seance)], modifierSeance, supprimerSeance);
+        toast.success('Séance supprimée');
+      },
+      onSerie: async () => {
+        const nb = await executerOperations(planSupprimerSerie(futures), modifierSeance, supprimerSeance);
+        toast.success(`${nb} séances supprimées`);
+      },
+    });
+  }
+
   async function handleConfirmerDrop(duree: number, heureDebut: string) {
     if (!dropPendant) return;
     const { participantId, jour, contrat } = dropPendant;
     const patient = participantMap.get(participantId);
-    const dates = creerDatesRecurrentes(jour.key, contrat);
-    if (!dates.length) { toast.error('Aucune date disponible dans ce contrat.'); setDropPendant(null); return; }
+    const datesGenerees = creerDatesRecurrentes(jour.key, contrat);
+    if (!datesGenerees.length) { toast.error('Aucune date disponible dans ce contrat.'); setDropPendant(null); return; }
+
+    // Recalculé ici (pas seulement dans ModalConfirmDrop) : entre l'ouverture
+    // de la modale et le clic sur Confirmer, une séance a pu être créée par
+    // ailleurs (planificateur, autre onglet) — on ne tente jamais d'insérer
+    // une date déjà couverte pour ce bénéficiaire/contrat (contrainte
+    // seances_no_double_contrat_idx).
+    const dates = datesManquantes(seances, participantId, contrat.id, datesGenerees);
+    if (!dates.length) {
+      toast.error(`${patient ? patient.prenom : 'Ce bénéficiaire'} a déjà une séance planifiée à chacune de ces dates pour ce contrat.`);
+      setDropPendant(null);
+      return;
+    }
 
     const heureFin = addMinutes(heureDebut, duree);
     const adresse = patient
@@ -385,7 +789,11 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
     // n'atteint ce point que sans conflit. ignorerChevauchements évite un
     // double contrôle redondant, pas un contournement.
     await bulkCreerSeances(data, { ignorerChevauchements: true });
-    toast.success(`${dates.length} séance${dates.length > 1 ? 's' : ''} planifiée${dates.length > 1 ? 's' : ''} chaque ${jour.label.toLowerCase()}`);
+    const nbIgnorees = datesGenerees.length - dates.length;
+    toast.success(
+      `${dates.length} séance${dates.length > 1 ? 's' : ''} planifiée${dates.length > 1 ? 's' : ''} chaque ${jour.label.toLowerCase()}`
+      + (nbIgnorees > 0 ? ` (${nbIgnorees} déjà existante${nbIgnorees > 1 ? 's' : ''} ignorée${nbIgnorees > 1 ? 's' : ''})` : '')
+    );
     setDropPendant(null);
   }
 
@@ -416,7 +824,11 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
             return (
               <div key={p.id}
                 draggable={aContrat}
-                onDragStart={() => { setDragPatientId(p.id); setPatientSelectionneId(p.id); }}
+                onDragStart={e => {
+                  e.dataTransfer.effectAllowed = 'copy';
+                  e.dataTransfer.setData(DRAG_MIME_TYPE, JSON.stringify({ type: 'nouvelle' } satisfies DragPayload));
+                  setDragPatientId(p.id); setPatientSelectionneId(p.id);
+                }}
                 onDragEnd={() => setDragPatientId(null)}
                 onClick={() => setPatientSelectionneId(selected ? null : p.id)}
                 className={`rounded-xl px-3 py-2.5 border transition-colors select-none ${
@@ -486,8 +898,15 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
                   onSelect={() => {}}
                   canSelect={false}
                   showHours={false}
-                  onDrop={heure => handleDrop(j, heure)}
+                  onDrop={(heure, payload) => handleDrop(j, heure, payload)}
                   indisposPierre={indisposForJour(j.key)}
+                  seanceEnDeplacement={dragSeance ? { id: dragSeance.seance.id, dureeMinutes: dragSeance.seance.dureeMinutes } : null}
+                  onSeanceClick={(seance, totalOccurrences) => setSeanceEditee({ seance, totalOccurrences })}
+                  onSeanceDragStart={(seance, totalOccurrences) => {
+                    setDragSeance({ seance, totalOccurrences });
+                    setPatientSelectionneId(seance.participantId);
+                  }}
+                  onSeanceDragEnd={() => setDragSeance(null)}
                 />
               </div>
             ))}
@@ -535,6 +954,45 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
           />
         );
       })()}
+
+      {/* ── Modal édition/suppression d'une séance existante ─────────── */}
+      {seanceEditee && (() => {
+        const patientEdite = participantMap.get(seanceEditee.seance.participantId);
+        const orgEdite = patientEdite ? getOrganisation(patientEdite) : null;
+        const contratEdite = contrats.find(c => c.id === seanceEditee.seance.contratId)
+          ?? contrats.find(c => c.participantId === seanceEditee.seance.participantId && c.statut === 'actif')
+          ?? null;
+        return (
+          <ModalEditSeance
+            actif={seanceEditee}
+            patient={patientEdite}
+            seances={seances}
+            orgPatient={orgEdite}
+            contrat={contratEdite}
+            onSave={updates => handleEnregistrerSeance(seanceEditee.seance, updates)}
+            onDelete={() => handleSupprimerSeanceModal(seanceEditee.seance)}
+            onClose={() => setSeanceEditee(null)}
+          />
+        );
+      })()}
+
+      {/* ── Modal choix de portée (occurrence seule vs série) ────────── */}
+      {choixSerie && (
+        <ModalChoixSerie
+          titre={choixSerie.titre}
+          futures={choixSerie.futures}
+          loading={choixSerieLoading}
+          onUnique={async () => {
+            setChoixSerieLoading(true);
+            try { await choixSerie.onUnique(); } finally { setChoixSerieLoading(false); setChoixSerie(null); }
+          }}
+          onSerie={async () => {
+            setChoixSerieLoading(true);
+            try { await choixSerie.onSerie(); } finally { setChoixSerieLoading(false); setChoixSerie(null); }
+          }}
+          onCancel={() => setChoixSerie(null)}
+        />
+      )}
     </div>
   );
 }

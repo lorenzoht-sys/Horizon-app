@@ -1,7 +1,17 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import type { Seance, Participant } from '../../types';
-import { heureEnMinutes, minutesEnHeure, arrondirAuPas, calerDansFenetre, heuresChevauchent } from '../../utils/horaires';
+import { heureEnMinutes, minutesEnHeure, arrondirAuPas, calerDansFenetre, heuresChevauchent, regrouperParCreneau } from '../../utils/horaires';
+
+// Type MIME custom utilisé comme discriminant dans le dataTransfer natif du
+// glisser-déposer : distingue le geste « créer une séance » (bénéficiaire
+// glissé depuis la colonne de gauche) du geste « déplacer une séance déjà
+// posée » (bloc existant de la grille), pour que onDrop sache lequel traiter.
+export const DRAG_MIME_TYPE = 'application/x-mouvtrack-seance-drag';
+
+export type DragPayload =
+  | { type: 'nouvelle' }
+  | { type: 'existante'; seanceId: string };
 
 export const FRISE_H_DEBUT = 8 * 60;
 export const FRISE_H_FIN   = 19 * 60;
@@ -31,8 +41,16 @@ interface Props {
   onSelect: (heure: string | null) => void;
   canSelect: boolean;
   showHours?: boolean;
-  onDrop?: (heure: string) => void;
+  onDrop?: (heure: string, payload: DragPayload) => void;
   indisposPierre?: { debut: string; fin: string }[];
+  // Interactivité des séances déjà posées (déplacement + édition) — optionnels
+  // et non fournis par ModalInsererPatient, qui garde ses blocs purement
+  // visuels (pas de régression sur son usage existant : draggable/onClick
+  // restent conditionnés à la présence de ces callbacks, voir rendu plus bas).
+  seanceEnDeplacement?: { id: string; dureeMinutes: number } | null;
+  onSeanceClick?: (seance: Seance, totalOccurrences: number) => void;
+  onSeanceDragStart?: (seance: Seance, totalOccurrences: number) => void;
+  onSeanceDragEnd?: () => void;
 }
 
 // Aperçu affiché pendant le survol en glisser-déposer (voir calculerApercuDrag) :
@@ -58,19 +76,24 @@ export default function FrisePlanningJour({
   showHours = true,
   onDrop,
   indisposPierre,
+  seanceEnDeplacement,
+  onSeanceClick,
+  onSeanceDragStart,
+  onSeanceDragEnd,
 }: Props) {
   const [dragOver, setDragOver] = useState(false);
   const [dragApercu, setDragApercu] = useState<ApercuDrag | null>(null);
-  // Déduplique : même participantId + heureDebut + heureFin = un seul bloc visuel
-  const blocs = useMemo(() => {
-    const seen = new Set<string>();
-    return seancesDuJour.filter(s => {
-      const key = `${s.participantId}-${s.heureDebut}-${s.heureFin}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }, [seancesDuJour]);
+
+  // Regroupe par même créneau récurrent (participantId + heureDebut + heureFin) :
+  // un contrat hebdomadaire génère une ligne par semaine en base, mais elles
+  // tombent toutes sur le même jour/heure dans cette vue « motif de semaine » —
+  // un seul bloc visuel les représente. Le bloc reste néanmoins un objet
+  // Seance bien précis (un id réel) : on choisit comme représentant la
+  // prochaine occurrence à venir (celle que l'utilisateur veut concrètement
+  // déplacer/éditer), ou à défaut la plus récente déjà passée. totalOccurrences
+  // permet de prévenir l'utilisateur quand une action ne portera que sur cette
+  // seule occurrence parmi plusieurs (voir onSeanceClick / onSeanceDragStart).
+  const blocs = useMemo(() => regrouperParCreneau(seancesDuJour), [seancesDuJour]);
 
   // Chevauchements déjà présents (créés avant cette règle, ou par une autre
   // voie) : deux séances qui se chevauchent en heure sont toujours une
@@ -80,7 +103,7 @@ export default function FrisePlanningJour({
     const enConflit = new Set<number>();
     for (let i = 0; i < blocs.length; i++) {
       for (let j = i + 1; j < blocs.length; j++) {
-        if (heuresChevauchent(blocs[i].heureDebut, blocs[i].heureFin, blocs[j].heureDebut, blocs[j].heureFin)) {
+        if (heuresChevauchent(blocs[i].seance.heureDebut, blocs[i].seance.heureFin, blocs[j].seance.heureDebut, blocs[j].seance.heureFin)) {
           enConflit.add(i);
           enConflit.add(j);
         }
@@ -120,16 +143,23 @@ export default function FrisePlanningJour({
   // — hors dispo, on affiche quand même l'heure visée avec un indicateur,
   // plutôt que de ne rien montrer.
   function calculerApercuDrag(y: number): ApercuDrag {
+    // En déplacement d'une séance existante, on utilise SA propre durée (pas
+    // celle du contrat actuellement sélectionné dans la colonne de gauche),
+    // et on l'exclut de la détection de conflit — sinon elle se
+    // chevaucherait toujours avec elle-même sur son créneau d'origine.
+    const duree = seanceEnDeplacement?.dureeMinutes ?? dureeNouveau;
     const rawMin = H_DEBUT + (y / TOTAL_H) * PLAGE;
-    const snapped = Math.max(H_DEBUT, Math.min(H_FIN - dureeNouveau, arrondirAuPas(rawMin)));
-    const cale = calerDansFenetre(snapped, dureeNouveau, fenetresMin);
+    const snapped = Math.max(H_DEBUT, Math.min(H_FIN - duree, arrondirAuPas(rawMin)));
+    const cale = calerDansFenetre(snapped, duree, fenetresMin);
     const debutMin = cale ?? snapped;
-    const finMin = debutMin + dureeNouveau;
+    const finMin = debutMin + duree;
     const heureDebut = minutesEnHeure(debutMin);
     const heureFin = minutesEnHeure(finMin);
-    const conflit = blocs.find(s => heuresChevauchent(heureDebut, heureFin, s.heureDebut, s.heureFin));
+    const conflit = blocs.find(b =>
+      b.seance.id !== seanceEnDeplacement?.id && heuresChevauchent(heureDebut, heureFin, b.seance.heureDebut, b.seance.heureFin)
+    );
     const conflitNom = conflit
-      ? (() => { const p = participantMap.get(conflit.participantId); return p ? `${p.prenom} ${p.nom[0]}.` : 'une autre séance'; })()
+      ? (() => { const p = participantMap.get(conflit.seance.participantId); return p ? `${p.prenom} ${p.nom[0]}.` : 'une autre séance'; })()
       : null;
     return { debutMin, finMin, heureDebut, heureFin, horsDispo: cale === null, conflitNom };
   }
@@ -181,7 +211,18 @@ export default function FrisePlanningJour({
       toast.error(`Créneau déjà occupé par ${apercu.conflitNom} (${apercu.heureDebut}–${apercu.heureFin}) — dépôt annulé.`);
       return;
     }
-    onDrop(apercu.heureDebut);
+    // Distingue « créer » (bénéficiaire glissé depuis la colonne de gauche)
+    // de « déplacer » (séance existante) via le flag posé dans le
+    // dataTransfer au dragstart — seul endroit où sa valeur est fiable à lire
+    // (les navigateurs bloquent la lecture des données pendant le dragover,
+    // seuls les types y sont visibles ; la valeur elle-même n'est garantie
+    // lisible qu'au drop).
+    const raw = e.dataTransfer.getData(DRAG_MIME_TYPE);
+    let payload: DragPayload = { type: 'nouvelle' };
+    if (raw) {
+      try { payload = JSON.parse(raw) as DragPayload; } catch { /* garde 'nouvelle' par défaut */ }
+    }
+    onDrop(apercu.heureDebut, payload);
   }
 
   return (
@@ -251,7 +292,8 @@ export default function FrisePlanningJour({
         })}
 
         {/* Séances existantes */}
-        {blocs.map((s, i) => {
+        {blocs.map((b, i) => {
+          const s = b.seance;
           const dMin = heureEnMinutes(s.heureDebut);
           const fMin = heureEnMinutes(s.heureFin);
           if (dMin >= H_FIN || fMin <= H_DEBUT) return null;
@@ -259,18 +301,36 @@ export default function FrisePlanningJour({
           const height = Math.max(toY(Math.min(fMin, H_FIN)) - top, 14);
           const p = participantMap.get(s.participantId);
           const enConflit = blocsEnConflit.has(i);
+          // draggable/onClick restent conditionnés à la présence des callbacks
+          // (non fournis par ModalInsererPatient) — pointer-events-none n'est
+          // conservé QUE dans ce cas-là, pour ne rien changer à son
+          // comportement actuel (clic qui traverse jusqu'à la frise).
+          const interactif = !!(onSeanceClick || onSeanceDragStart);
+          const enDeplacement = seanceEnDeplacement?.id === s.id;
           return (
             <div
-              key={i}
-              className={`absolute left-0.5 right-0.5 rounded px-1.5 overflow-hidden pointer-events-none border ${
-                enConflit ? 'bg-red-100 border-red-400' : 'bg-slate-200 border-slate-300'
+              key={s.id}
+              draggable={!!onSeanceDragStart}
+              onDragStart={onSeanceDragStart ? (e) => {
+                e.stopPropagation();
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData(DRAG_MIME_TYPE, JSON.stringify({ type: 'existante', seanceId: s.id } satisfies DragPayload));
+                onSeanceDragStart(s, b.totalOccurrences);
+              } : undefined}
+              onDragEnd={onSeanceDragEnd}
+              onClick={onSeanceClick ? (e) => { e.stopPropagation(); onSeanceClick(s, b.totalOccurrences); } : undefined}
+              className={`absolute left-0.5 right-0.5 rounded px-1.5 overflow-hidden border transition-opacity ${
+                enConflit ? 'bg-red-light border-red' : 'bg-slate-200 border-slate-300'
+              } ${interactif ? 'cursor-pointer hover:ring-2 hover:ring-primary/50' : 'pointer-events-none'} ${
+                enDeplacement ? 'opacity-30' : ''
               }`}
               style={{ top, height }}
-              title={enConflit ? 'Chevauche une autre séance — à corriger manuellement' : undefined}
+              title={enConflit ? 'Chevauche une autre séance — à corriger manuellement' : (interactif ? 'Cliquer pour modifier, glisser pour déplacer' : undefined)}
             >
               {height >= 16 && (
-                <p className={`text-[10px] font-medium truncate leading-tight mt-px ${enConflit ? 'text-red-700' : 'text-slate-700'}`}>
+                <p className={`text-[10px] font-medium truncate leading-tight mt-px ${enConflit ? 'text-red' : 'text-slate-700'}`}>
                   {enConflit && '⚠ '}{p ? `${p.prenom} ${p.nom[0]}.` : '—'}
+                  {b.totalOccurrences > 1 && <span className="ml-1 opacity-60">↻{b.totalOccurrences}</span>}
                 </p>
               )}
               {height >= 30 && (
@@ -303,7 +363,7 @@ export default function FrisePlanningJour({
             recouvrir la zone de dépose visée). */}
         {dragOver && dragApercu && (() => {
           const couleur = dragApercu.conflitNom
-            ? { bordure: 'border-red-500', fond: 'bg-red-500/15', badge: 'bg-red-500' }
+            ? { bordure: 'border-red', fond: 'bg-red/15', badge: 'bg-red' }
             : dragApercu.horsDispo
               ? { bordure: 'border-orange-500', fond: 'bg-orange-500/10', badge: 'bg-orange-500' }
               : { bordure: 'border-primary', fond: 'bg-primary/15', badge: 'bg-primary' };

@@ -6,7 +6,7 @@ import type { Seance, StatutSeance } from '../types';
 import { useParticipants } from './useParticipants';
 import { supabase } from '../lib/supabase';
 import { dbToSeance, seanceToDb } from '../lib/mappers';
-import { heuresChevauchent, trouveChevauchements, ChevauchementError } from '../utils/horaires';
+import { heuresChevauchent, trouveChevauchements, ChevauchementError, messageErreurSeance } from '../utils/horaires';
 
 function addMinutes(heure: string, minutes: number): string {
   const [h, m] = heure.split(':').map(Number);
@@ -43,8 +43,9 @@ export function useAgenda() {
       const { error } = await supabase.from('seances').insert(seanceToDb(nouvelle));
       if (error) {
         console.error('Erreur création séance:', error);
-        toast.error('Erreur : ' + error.message);
-        throw new Error(error.message);
+        const message = messageErreurSeance(error);
+        toast.error(message);
+        throw new Error(message);
       }
     }
     setSeances(prev => [...prev, nouvelle]);
@@ -64,8 +65,9 @@ export function useAgenda() {
       const { error } = await supabase.from('seances').insert(nouvelles.map(s => seanceToDb(s)));
       if (error) {
         console.error('Erreur bulk création séances:', error);
-        toast.error('Erreur : ' + error.message);
-        throw new Error(error.message);
+        const message = messageErreurSeance(error);
+        toast.error(message);
+        throw new Error(message);
       }
     }
     setSeances(prev => [...prev, ...nouvelles]);
@@ -81,7 +83,7 @@ export function useAgenda() {
     const merged = { ...current, ...updates };
     if (supabase) {
       const { error } = await supabase.from('seances').update(seanceToDb(merged)).eq('id', id);
-      if (error) { console.error('Erreur modification séance:', error); toast.error('Erreur : ' + error.message); return false; }
+      if (error) { console.error('Erreur modification séance:', error); toast.error(messageErreurSeance(error)); return false; }
     }
     setSeances(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
     return true;
@@ -90,7 +92,7 @@ export function useAgenda() {
   async function supprimerSeance(id: string) {
     if (supabase) {
       const { error } = await supabase.from('seances').delete().eq('id', id);
-      if (error) { console.error('Erreur suppression séance:', error); toast.error('Erreur : ' + error.message); return; }
+      if (error) { console.error('Erreur suppression séance:', error); toast.error(messageErreurSeance(error)); return; }
     }
     setSeances(prev => prev.filter(s => s.id !== id));
   }
