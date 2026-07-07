@@ -32,8 +32,10 @@ import type { Seance, StatutSeance, TypeSeance, Participant, Contrat, Indisponib
 // AGENDA UNIFIÉ — ÉTAPE 2 (création par glisser) + ÉTAPE 3 (déplacement /
 // édition / suppression des séances existantes)
 // ============================================================================
-// Route /agenda-v2, toujours hors menu. PlanningGrilleView / AgendaPage /
-// TourneePage ne sont PAS modifiés.
+// Route /agenda-v2, accessible depuis le menu (Sidebar) sous "Agenda (bêta)"
+// — en parallèle de l'agenda habituel, pas en remplacement (étape 6 :
+// bascule finale et retrait des anciens écrans, après période d'usage réel).
+// PlanningGrilleView / AgendaPage / TourneePage ne sont PAS modifiés.
 //
 // Étape 2 — réutilise telle quelle la logique métier existante :
 // genererDatesSeances, datesManquantes, trouveChevauchements, bulkCreerSeances
@@ -863,14 +865,14 @@ export default function AgendaV2Page() {
   return (
     <PageWrapper>
       <div className="mb-4">
-        <h1 className="font-heading font-bold text-2xl text-dark">Agenda (nouveau — étapes 2, 3 &amp; 5)</h1>
+        <h1 className="font-heading font-bold text-2xl text-dark">Agenda (bêta)</h1>
         <p className="text-xs text-gray-400 mt-0.5">
-          Création par glisser-déposer, déplacement, édition et suppression des séances, disponibilités/indisponibilités en fond. Vraies dates, vraies données.
+          Création par glisser-déposer, déplacement, édition et suppression des séances, disponibilités/indisponibilités en fond, filtre par zone. Vraies dates, vraies données.
         </p>
       </div>
 
       <div className="mb-4 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 text-xs text-dark">
-        🚧 Route <code>/agenda-v2</code>, pas encore dans le menu. Glisser-déposer testé à la souris (bureau) — le geste tactile équivalent (glisser depuis la liste) est en attente, sera traité séparément.
+        🧪 Version bêta du nouvel agenda, en test en parallèle de l'agenda habituel (onglet <strong>Agenda</strong>) — les deux affichent les mêmes séances réelles, aucune n'est prioritaire. Glisser-déposer testé à la souris (bureau) — le geste tactile équivalent (glisser depuis la liste) est en attente, sera traité séparément.
       </div>
 
       <div className="flex gap-4">
