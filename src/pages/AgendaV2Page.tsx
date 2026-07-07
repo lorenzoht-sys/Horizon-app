@@ -1,56 +1,65 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
 import * as DragAndDropAddon from 'react-big-calendar/lib/addons/dragAndDrop';
-import type { DragFromOutsideItemArgs } from 'react-big-calendar/lib/addons/dragAndDrop';
+import type { DragFromOutsideItemArgs, EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { toast } from 'sonner';
-import { X, Loader } from 'lucide-react';
+import { X, Loader, Trash2 } from 'lucide-react';
 import { useAgenda } from '../hooks/useAgenda';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
 import BadgeSeancesRestantes from '../components/ui/BadgeSeancesRestantes';
 import PageWrapper from '../components/layout/PageWrapper';
 import {
-  genererDatesSeances, datesManquantes, trouveChevauchements,
+  genererDatesSeances, datesManquantes, trouveChevauchements, trouveChevauchement,
   calculerStatutSeancesSemaine, addMinutes,
 } from '../utils/horaires';
+import {
+  calculerFutures, estDeplacementNoop,
+  planDeplacerUnique, planDeplacerSerie, planEditerUnique, planEditerSerie,
+  planSupprimerUnique, planSupprimerSerie, executerOperations,
+  type MiseAJourSeance,
+} from '../lib/planificationManuelle';
 import type { Seance, StatutSeance, TypeSeance, Participant, Contrat } from '../types';
 
 // ============================================================================
-// AGENDA UNIFIÉ — ÉTAPE 2 : création de séances par glisser
+// AGENDA UNIFIÉ — ÉTAPE 2 (création par glisser) + ÉTAPE 3 (déplacement /
+// édition / suppression des séances existantes)
 // ============================================================================
 // Route /agenda-v2, toujours hors menu. PlanningGrilleView / AgendaPage /
 // TourneePage ne sont PAS modifiés.
 //
-// Réutilisation de la logique métier existante, SANS LA MODIFIER :
-//   - genererDatesSeances (utils/horaires) : même fonction que celle appelée
-//     par creerDatesRecurrentes dans PlanningGrilleView.tsx — mais cette
-//     dernière n'est pas exportée (fonction locale à un fichier qu'on ne
-//     touche pas), donc on rappelle directement genererDatesSeances ici,
-//     avec la vraie date déposée comme point de départ (au lieu de "today"
-//     dans la version grille, qui n'a jamais de date réelle à disposition).
-//   - datesManquantes : anti-doublon, appelée à l'identique.
-//   - trouveChevauchement(s) : détection de conflit, appelée à l'identique.
-//   - bulkCreerSeances (useAgenda) : appelée à l'identique — la traduction
-//     d'erreurs (messageErreurSeance) y est déjà branchée, donc aucune
-//     erreur Postgres brute ne peut fuiter ici non plus.
-// Aucune de ces fonctions n'a été modifiée pour cette étape.
+// Étape 2 — réutilise telle quelle la logique métier existante :
+// genererDatesSeances, datesManquantes, trouveChevauchements, bulkCreerSeances
+// (useAgenda, qui branche déjà messageErreurSeance).
 //
-// ModalConfirmDrop (PlanningGrilleView.tsx) n'est pas exporté non plus : la
-// modale ci-dessous est une nouvelle implémentation (même rôle, mêmes
-// données), pas un import direct — comme pour le mapping couleur en étape 1.
+// Bug corrigé (glisser-déposer réel à la souris impossible, curseur "interdit"
+// permanent) : le dragstart de la carte bénéficiaire n'appelait jamais
+// e.dataTransfer.setData()/effectAllowed. react-big-calendar (Selection.js)
+// appelle bien preventDefault() sur dragover/drop en interne — ce n'était donc
+// pas la cause : sans dataTransfer initialisé au dragstart, la session de
+// glisser-déposer HTML5 native n'est jamais valide côté navigateur (Chrome et
+// surtout Firefox), quel que soit le comportement de la cible. Un test
+// automatisé par dispatch direct de DragEvent (sans vraie souris) ne pouvait
+// pas détecter ce bug : dispatchEvent contourne entièrement la validation
+// native du navigateur. Corrigé en alignant sur le pattern déjà éprouvé de
+// PlanningGrilleView.tsx (setData + effectAllowed au dragstart).
 //
-// Glisser-déposer : withDragAndDropCalendar + onDropFromOutside (API HTML5
-// native). Fonctionne à la souris. Le geste tactile équivalent (glisser
-// depuis une liste externe) est CONNU pour ne pas fonctionner nativement sur
-// mobile (cf. étape 0) — non traité ici, prévu séparément plus tard.
+// Étape 3 — déplacement via onEventDrop (mécanisme interne de
+// react-big-calendar basé sur de vrais événements souris, pas sur le
+// glisser-déposer HTML5 natif : aucun risque de retomber sur le même bug).
+// Réutilise sans modification lib/planificationManuelle.ts + utils/horaires.ts :
+// calculerFutures, estDeplacementNoop, planDeplacerUnique, planDeplacerSerie,
+// planEditerUnique, planEditerSerie, planSupprimerUnique, planSupprimerSerie,
+// executerOperations, trouveChevauchement, messageErreurSeance (déjà branché
+// dans modifierSeance/supprimerSeance de useAgenda). Aucun INSERT possible sur
+// ce chemin : OperationSeance n'a pas de variante 'create'.
 //
-// Toujours lecture seule pour les séances déjà existantes : cliquer dessus
-// ouvre encore la popup d'info de l'étape 1, rien n'est éditable/déplaçable
-// ici (étape 3).
+// Glisser un bénéficiaire depuis la liste externe reste connu pour ne pas
+// fonctionner nativement au toucher sur mobile (cf. étape 0) — non traité ici.
 // ============================================================================
 
 // L'import profond 'react-big-calendar/lib/addons/dragAndDrop' est un module
@@ -85,10 +94,7 @@ const LABEL_TYPE: Record<TypeSeance, string> = {
 };
 
 const LABEL_STATUT: Record<StatutSeance, string> = {
-  planifiee: '📅 Planifiée',
-  realisee: '✅ Réalisée',
-  annulee: '❌ Annulée',
-  reportee: '🔄 Reportée',
+  planifiee: 'Planifiée', realisee: 'Réalisée', reportee: 'Reportée', annulee: 'Annulée',
 };
 
 // Reproduit exactement getCouleurEvenement de AgendaPage.tsx.
@@ -107,6 +113,10 @@ function heureToDate(date: string, heure: string): Date {
   return d;
 }
 
+function formatDate(d: string): string {
+  return new Date(d + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 // Jour de semaine JS (Date.getDay(), 0=dim) → clé attendue par
 // genererDatesSeances. Équivalent local de CLE_JOUR_PAR_DOW (PlanningGrilleView.tsx,
 // non exporté).
@@ -118,51 +128,6 @@ interface CalEvent {
   start: Date;
   end: Date;
   resource: Seance;
-}
-
-// ── Popup lecture seule (identique étape 1) ──────────────────────────────────
-
-function PopupInfoSeance({ seance, nomBeneficiaire, onClose }: {
-  seance: Seance;
-  nomBeneficiaire: string;
-  onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
-        <div className="px-5 py-4 rounded-t-2xl" style={{ backgroundColor: getCouleurEvenement(seance) }}>
-          <div className="flex items-start justify-between">
-            <div className="text-white">
-              <div className="text-xs font-medium opacity-80">{LABEL_TYPE[seance.type]}</div>
-              <div className="font-heading font-bold text-lg leading-tight">{nomBeneficiaire}</div>
-              <div className="text-sm opacity-80 mt-0.5">
-                {new Date(seance.date + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                {' · '}{seance.heureDebut} → {seance.heureFin}
-              </div>
-            </div>
-            <button onClick={onClose} className="text-white/70 hover:text-white transition-colors mt-0.5">
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-        <div className="p-5 space-y-3">
-          <div className="bg-gray-50 rounded-xl px-4 py-3">
-            <p className="text-xs text-gray-500 mb-0.5">Statut</p>
-            <p className="text-sm font-semibold text-dark">{LABEL_STATUT[seance.statut]}</p>
-          </div>
-          {seance.adresse && (
-            <div className="bg-gray-50 rounded-xl px-4 py-3">
-              <p className="text-xs text-gray-500 mb-0.5">Adresse</p>
-              <p className="text-sm text-dark">{seance.adresse}</p>
-            </div>
-          )}
-          <p className="text-xs text-gray-400 text-center pt-1">
-            Lecture seule pour les séances existantes — déplacement/édition prévus à l'étape 3.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ── Confirmation de création (équivalent de ModalConfirmDrop, non exporté
@@ -270,7 +235,7 @@ function ModalConfirmerCreation({ info, seances, participantMap, onConfirm, onCa
                 {' '}à créer sur la durée du contrat
               </p>
               <p className="text-xs text-gray-400 mt-0.5">
-                {new Date(dates[0] + 'T12:00').toLocaleDateString('fr-FR')} → {new Date(dates[dates.length - 1] + 'T12:00').toLocaleDateString('fr-FR')}
+                {formatDate(dates[0])} → {formatDate(dates[dates.length - 1])}
               </p>
               {datesGenerees.length > dates.length && (
                 <p className="text-xs text-gray-400 mt-0.5">
@@ -293,7 +258,7 @@ function ModalConfirmerCreation({ info, seances, participantMap, onConfirm, onCa
             return (
               <div className="bg-red-light border border-red/20 rounded-xl px-4 py-3">
                 <p className="text-xs font-semibold text-red">
-                  Créneau indisponible — chevauche une séance existante avec {nomAffiche} le {new Date(premier.creneau.date + 'T12:00').toLocaleDateString('fr-FR')} ({premier.existante.heureDebut}–{premier.existante.heureFin}).
+                  Créneau indisponible — chevauche une séance existante avec {nomAffiche} le {formatDate(premier.creneau.date)} ({premier.existante.heureDebut}–{premier.existante.heureFin}).
                 </p>
                 <p className="text-xs text-red mt-1">Modifiez l'heure ou la durée pour lever le conflit.</p>
               </div>
@@ -324,17 +289,221 @@ function ModalConfirmerCreation({ info, seances, participantMap, onConfirm, onCa
   );
 }
 
+// ── Choix de portée (occurrence seule vs série) — port de ModalChoixSerie
+//    (PlanningGrilleView.tsx, non exportée) : aucun bouton présélectionné,
+//    un déplacement/édition/suppression de masse doit rester un choix
+//    conscient. ─────────────────────────────────────────────────────────────
+
+interface ChoixSerie {
+  titre: string;
+  futures: Seance[];
+  onUnique: () => Promise<void>;
+  onSerie: () => Promise<void>;
+}
+
+function ModalChoixSerie({ titre, futures, loading, onUnique, onSerie, onCancel }: {
+  titre: string;
+  futures: Seance[];
+  loading: boolean;
+  onUnique: () => void;
+  onSerie: () => void;
+  onCancel: () => void;
+}) {
+  const premiere = futures[0];
+  const derniere = futures[futures.length - 1];
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1030 }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <h3 className="text-base font-bold text-dark mb-1">{titre}</h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Ce créneau se répète {futures.length} fois (du {formatDate(premiere.date)} au {formatDate(derniere.date)}). Quelle portée ?
+        </p>
+        <div className="space-y-2">
+          <button onClick={onUnique} disabled={loading}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-dark transition-colors disabled:opacity-50">
+            Cette séance uniquement ({formatDate(premiere.date)})
+          </button>
+          <button onClick={onSerie} disabled={loading}
+            className="w-full py-2.5 rounded-xl text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50">
+            Cette séance et les {futures.length - 1} suivantes
+          </button>
+          <button onClick={onCancel} disabled={loading}
+            className="w-full py-2 rounded-xl text-sm text-gray-400 hover:text-gray-600 transition-colors">
+            {loading ? <span className="inline-flex items-center gap-2"><Loader size={13} className="animate-spin" />En cours…</span> : 'Annuler'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Édition / suppression d'une séance existante (étape 3) — remplace la
+//    popup lecture seule de l'étape 2. Port de ModalEditSeance
+//    (PlanningGrilleView.tsx), sans le volet disponibilités/organisation :
+//    non demandé ici, périmètre propre à cet écran-là. ──────────────────────
+
+function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, onDelete, onClose }: {
+  seance: Seance;
+  nomBeneficiaire: string;
+  seances: Seance[];
+  contrat: Contrat | null;
+  onSave: (updates: MiseAJourSeance) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const [date, setDate] = useState(seance.date);
+  const [heureDebut, setHeureDebut] = useState(seance.heureDebut);
+  const [duree, setDuree] = useState(seance.dureeMinutes);
+  const [statut, setStatut] = useState<StatutSeance>(seance.statut);
+  const [confirmSuppr, setConfirmSuppr] = useState(false);
+
+  const heureFin = addMinutes(heureDebut, duree);
+
+  // Occurrences futures (celle-ci incluse) du même créneau récurrent — le
+  // périmètre exact que « cette séance et les suivantes » modifierait.
+  const futures = useMemo(() => calculerFutures(seances, seance), [seances, seance]);
+
+  const conflit = useMemo(
+    () => trouveChevauchement(seances, { date, heureDebut, heureFin }, seance.id),
+    [seances, date, heureDebut, heureFin, seance.id],
+  );
+
+  function handleEnregistrer() {
+    if (conflit) return;
+    onSave({ date, heureDebut, heureFin, dureeMinutes: duree, statut });
+    onClose();
+  }
+
+  function handleSupprimer() {
+    onDelete();
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1010 }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
+          <h3 className="text-base font-bold text-dark">Modifier la séance</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1"><X size={16} /></button>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          <div className="bg-gray-50 rounded-xl px-4 py-3">
+            <p className="text-xs text-gray-500 mb-0.5">Bénéficiaire</p>
+            <p className="text-sm font-semibold text-dark">{nomBeneficiaire}</p>
+          </div>
+
+          {futures.length > 1 && (
+            <p className="text-xs text-blue-700 bg-blue-50 rounded-xl px-4 py-3">
+              Ce créneau se répète encore {futures.length} fois (jusqu'au {formatDate(futures[futures.length - 1].date)}). La portée (cette séance seule ou toute la série) sera demandée à l'enregistrement.
+            </p>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-50 rounded-xl px-4 py-3">
+              <label className="block text-xs text-gray-500 mb-0.5">Date</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                className="w-full bg-transparent text-sm font-semibold text-dark focus:outline-none" />
+            </div>
+            <div className="bg-gray-50 rounded-xl px-4 py-3">
+              <label className="block text-xs text-gray-500 mb-0.5">Heure de début</label>
+              <input type="time" step={60} value={heureDebut} onChange={e => setHeureDebut(e.target.value)}
+                className="w-full bg-transparent text-sm font-semibold text-dark focus:outline-none" />
+              <p className="text-xs text-gray-400 mt-0.5">→ fin {heureFin}</p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Durée de la séance</label>
+            {contrat && contrat.dureesSeances.length > 1 ? (
+              <select value={duree} onChange={e => setDuree(Number(e.target.value))}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                {contrat.dureesSeances.map(d => <option key={d} value={d}>{d} min</option>)}
+              </select>
+            ) : (
+              <input type="number" min={5} step={5} value={duree} onChange={e => setDuree(Number(e.target.value))}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Statut</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['planifiee', 'realisee', 'reportee', 'annulee'] as StatutSeance[]).map(s => (
+                <button key={s} onClick={() => setStatut(s)}
+                  className={`py-1.5 px-3 rounded-lg text-xs font-medium border transition-colors text-left ${
+                    statut === s ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary/40'
+                  }`}>
+                  {LABEL_STATUT[s]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {conflit && (
+            <div className="bg-red-light border border-red/20 rounded-xl px-4 py-3">
+              <p className="text-xs font-semibold text-red">
+                Créneau indisponible — chevauche une autre séance ({conflit.heureDebut}–{conflit.heureFin}) le {formatDate(conflit.date)}.
+              </p>
+              <p className="text-xs text-red mt-1">Modifiez l'heure, la date ou la durée pour lever le conflit.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+          <button onClick={() => setConfirmSuppr(true)}
+            className="flex items-center justify-center border border-red/20 text-red rounded-xl px-3 hover:bg-red-light transition-colors">
+            <Trash2 size={15} />
+          </button>
+          <button onClick={onClose}
+            className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+            Annuler
+          </button>
+          <button onClick={handleEnregistrer} disabled={!!conflit}
+            className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${
+              conflit ? 'bg-red text-white cursor-not-allowed' : 'bg-primary text-white hover:bg-dark'
+            }`}>
+            {conflit ? 'Créneau occupé' : 'Enregistrer'}
+          </button>
+        </div>
+      </div>
+
+      {confirmSuppr && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1020 }}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <p className="text-sm text-dark font-medium mb-1">Supprimer cette séance ?</p>
+            <p className="text-xs text-gray-500 mb-4">
+              {nomBeneficiaire} — {formatDate(seance.date)} {seance.heureDebut}–{seance.heureFin}. Action irréversible.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmSuppr(false)} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
+                Annuler
+              </button>
+              <button onClick={handleSupprimer}
+                className="flex-1 py-2 rounded-xl text-sm font-semibold bg-red text-white hover:opacity-90">
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page principale ────────────────────────────────────────────────────────────
 
 export default function AgendaV2Page() {
-  const { seances, bulkCreerSeances } = useAgenda();
+  const { seances, bulkCreerSeances, modifierSeance, supprimerSeance } = useAgenda();
   const { participants } = useParticipants();
-  const { contratActifDeParticipant } = useContrats();
+  const { contrats, contratActifDeParticipant } = useContrats();
 
-  const [seanceSelectionnee, setSeanceSelectionnee] = useState<Seance | null>(null);
+  const [seanceEditee, setSeanceEditee] = useState<Seance | null>(null);
   const [search, setSearch] = useState('');
   const [beneficiaireGlisse, setBeneficiaireGlisse] = useState<Participant | null>(null);
   const [dropPendant, setDropPendant] = useState<DropPendant | null>(null);
+  const [choixSerie, setChoixSerie] = useState<ChoixSerie | null>(null);
+  const [choixSerieLoading, setChoixSerieLoading] = useState(false);
 
   const participantMap = useMemo(
     () => new Map(participants.map(p => [p.id, p])),
@@ -359,9 +528,19 @@ export default function AgendaV2Page() {
     };
   }), [seances, participantMap]);
 
-  const nomBeneficiaireSelectionne = seanceSelectionnee
-    ? (() => { const p = participantMap.get(seanceSelectionnee.participantId); return p ? `${p.prenom} ${p.nom}` : LABEL_TYPE[seanceSelectionnee.type]; })()
-    : '';
+  function nomBeneficiaireDe(s: Seance): string {
+    const p = participantMap.get(s.participantId);
+    return p ? `${p.prenom} ${p.nom}` : LABEL_TYPE[s.type];
+  }
+
+  // Affiche le détail d'un conflit détecté par planDeplacerSerie/planEditerSerie
+  // (déjà vérifié AVANT toute écriture — voir lib/planificationManuelle).
+  function toastConflitSerie(conflits: { date: string; occupePar: string }[]) {
+    const detail = conflits
+      .map(c => `${formatDate(c.date)} (occupé par ${participantMap.get(c.occupePar)?.prenom ?? 'une autre séance'})`)
+      .join(', ');
+    toast.error(`Action annulée — conflit sur ${conflits.length} semaine${conflits.length > 1 ? 's' : ''} : ${detail}`);
+  }
 
   // Événement fantôme affiché pendant le survol du calendrier par un
   // bénéficiaire glissé — doit être un vrai objet Seance pour que
@@ -443,12 +622,118 @@ export default function AgendaV2Page() {
     setDropPendant(null);
   }
 
+  // Déplace une séance existante (glisser un événement du calendrier) — passe
+  // par de vrais événements souris internes à react-big-calendar (Selection),
+  // pas par le glisser-déposer HTML5 natif : le bug de dataTransfer (voir
+  // commentaire d'en-tête) ne s'applique pas à ce chemin. Si le créneau a
+  // d'autres occurrences futures (calculerFutures), demande la portée avant
+  // d'appliquer quoi que ce soit — jamais de choix par défaut sur un
+  // déplacement de masse. executerOperations n'accepte pas de fonction de
+  // création : un INSERT est structurellement impossible ici.
+  async function handleEventDrop({ event, start }: EventInteractionArgs<CalEvent>) {
+    const s = event.resource;
+    const nouvelleDateObj = new Date(start);
+    const nouvelleDate = format(nouvelleDateObj, 'yyyy-MM-dd');
+    const heureDebut = format(nouvelleDateObj, 'HH:mm');
+    const heureFin = addMinutes(heureDebut, s.dureeMinutes);
+    if (estDeplacementNoop(s, nouvelleDate, heureDebut, heureFin)) return;
+
+    const jourLabel = nouvelleDateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' });
+    const futures = calculerFutures(seances, s);
+
+    // Contrairement à FrisePlanningJour (grille jour-de-semaine), rien ne
+    // bloque encore le dépôt avant ce point sur un calendrier daté — le
+    // conflit est donc vérifié ici, avant toute écriture.
+    const deplacerUnique = async () => {
+      const conflit = trouveChevauchement(seances, { date: nouvelleDate, heureDebut, heureFin }, s.id);
+      if (conflit) {
+        const nom = participantMap.get(conflit.participantId);
+        toast.error(`Créneau déjà occupé par ${nom ? `${nom.prenom} ${nom.nom[0]}.` : 'une autre séance'} (${conflit.heureDebut}–${conflit.heureFin}) — déplacement annulé.`);
+        return;
+      }
+      await executerOperations([planDeplacerUnique(s, nouvelleDate, heureDebut, heureFin)], modifierSeance, supprimerSeance);
+      toast.success(`Séance déplacée au ${jourLabel} ${heureDebut}`);
+    };
+
+    if (futures.length <= 1) {
+      await deplacerUnique();
+      return;
+    }
+
+    const dowCible = nouvelleDateObj.getDay();
+    setChoixSerie({
+      titre: `Déplacer au ${jourLabel} ${heureDebut}`,
+      futures,
+      onUnique: deplacerUnique,
+      onSerie: async () => {
+        const plan = planDeplacerSerie(seances, futures, dowCible, heureDebut);
+        if (!plan.ok) { toastConflitSerie(plan.conflits); return; }
+        const nb = await executerOperations(plan.operations, modifierSeance, supprimerSeance);
+        toast.success(`${nb} séances déplacées au ${jourLabel} ${heureDebut}`);
+      },
+    });
+  }
+
+  // Enregistre les modifications saisies dans ModalEditSeance — même logique
+  // de portée que le déplacement.
+  async function handleEnregistrerSeance(seance: Seance, updates: MiseAJourSeance) {
+    const futures = calculerFutures(seances, seance);
+
+    const enregistrerUnique = async () => {
+      await executerOperations([planEditerUnique(seance, updates)], modifierSeance, supprimerSeance);
+      toast.success('Séance modifiée');
+    };
+
+    if (futures.length <= 1) {
+      await enregistrerUnique();
+      return;
+    }
+
+    const dowCible = new Date(updates.date + 'T12:00').getDay();
+    setChoixSerie({
+      titre: 'Modifier la séance',
+      futures,
+      onUnique: enregistrerUnique,
+      onSerie: async () => {
+        const plan = planEditerSerie(seances, futures, dowCible, updates);
+        if (!plan.ok) { toastConflitSerie(plan.conflits); return; }
+        const nb = await executerOperations(plan.operations, modifierSeance, supprimerSeance);
+        toast.success(`${nb} séances modifiées`);
+      },
+    });
+  }
+
+  // Supprime une séance — même logique de portée. « Toutes les suivantes »
+  // ne touche jamais l'historique (date < celle de l'occurrence supprimée).
+  async function handleSupprimerSeance(seance: Seance) {
+    const futures = calculerFutures(seances, seance);
+
+    if (futures.length <= 1) {
+      await executerOperations([planSupprimerUnique(seance)], modifierSeance, supprimerSeance);
+      toast.success('Séance supprimée');
+      return;
+    }
+
+    setChoixSerie({
+      titre: 'Supprimer la séance',
+      futures,
+      onUnique: async () => {
+        await executerOperations([planSupprimerUnique(seance)], modifierSeance, supprimerSeance);
+        toast.success('Séance supprimée');
+      },
+      onSerie: async () => {
+        const nb = await executerOperations(planSupprimerSerie(futures), modifierSeance, supprimerSeance);
+        toast.success(`${nb} séances supprimées`);
+      },
+    });
+  }
+
   return (
     <PageWrapper>
       <div className="mb-4">
-        <h1 className="font-heading font-bold text-2xl text-dark">Agenda (nouveau — étape 2)</h1>
+        <h1 className="font-heading font-bold text-2xl text-dark">Agenda (nouveau — étapes 2 &amp; 3)</h1>
         <p className="text-xs text-gray-400 mt-0.5">
-          Création de séances par glisser-déposer. Vraies dates, vraies données. Déplacement/édition : étape 3.
+          Création par glisser-déposer, déplacement, édition et suppression des séances. Vraies dates, vraies données.
         </p>
       </div>
 
@@ -476,7 +761,15 @@ export default function AgendaV2Page() {
               return (
                 <div key={p.id}
                   draggable={aContrat}
-                  onDragStart={() => setBeneficiaireGlisse(p)}
+                  onDragStart={e => {
+                    // Requis pour que le glisser-déposer HTML5 natif soit
+                    // valide côté navigateur (voir commentaire d'en-tête) —
+                    // sans setData/effectAllowed, le dépôt échoue toujours,
+                    // même si la cible gère bien dragover/preventDefault.
+                    e.dataTransfer.effectAllowed = 'copy';
+                    e.dataTransfer.setData('text/plain', `${p.prenom} ${p.nom}`);
+                    setBeneficiaireGlisse(p);
+                  }}
                   onDragEnd={() => setBeneficiaireGlisse(null)}
                   className={`rounded-xl px-3 py-2.5 border transition-colors select-none ${
                     aContrat ? 'cursor-grab active:cursor-grabbing border-gray-200 bg-white hover:border-primary/40 hover:bg-gray-50' : 'cursor-default opacity-60 border-gray-200 bg-white'
@@ -538,9 +831,11 @@ export default function AgendaV2Page() {
                   fontSize: 12,
                 },
               })}
-              onSelectEvent={(event: CalEvent) => setSeanceSelectionnee(event.resource)}
+              onSelectEvent={(event: CalEvent) => setSeanceEditee(event.resource)}
               onDropFromOutside={onDropFromOutside}
               dragFromOutsideItem={dragFromOutsideItem}
+              onEventDrop={handleEventDrop}
+              resizable={false}
               step={15}
               timeslots={4}
               min={new Date(0, 0, 0, 7, 0)}
@@ -554,13 +849,22 @@ export default function AgendaV2Page() {
         </div>
       </div>
 
-      {seanceSelectionnee && (
-        <PopupInfoSeance
-          seance={seanceSelectionnee}
-          nomBeneficiaire={nomBeneficiaireSelectionne}
-          onClose={() => setSeanceSelectionnee(null)}
-        />
-      )}
+      {seanceEditee && (() => {
+        const contratEdite = contrats.find(c => c.id === seanceEditee.contratId)
+          ?? contrats.find(c => c.participantId === seanceEditee.participantId && c.statut === 'actif')
+          ?? null;
+        return (
+          <ModalEditSeance
+            seance={seanceEditee}
+            nomBeneficiaire={nomBeneficiaireDe(seanceEditee)}
+            seances={seances}
+            contrat={contratEdite}
+            onSave={updates => handleEnregistrerSeance(seanceEditee, updates)}
+            onDelete={() => handleSupprimerSeance(seanceEditee)}
+            onClose={() => setSeanceEditee(null)}
+          />
+        );
+      })()}
 
       {dropPendant && (
         <ModalConfirmerCreation
@@ -569,6 +873,23 @@ export default function AgendaV2Page() {
           participantMap={participantMap}
           onConfirm={handleConfirmerCreation}
           onCancel={() => setDropPendant(null)}
+        />
+      )}
+
+      {choixSerie && (
+        <ModalChoixSerie
+          titre={choixSerie.titre}
+          futures={choixSerie.futures}
+          loading={choixSerieLoading}
+          onUnique={async () => {
+            setChoixSerieLoading(true);
+            try { await choixSerie.onUnique(); } finally { setChoixSerieLoading(false); setChoixSerie(null); }
+          }}
+          onSerie={async () => {
+            setChoixSerieLoading(true);
+            try { await choixSerie.onSerie(); } finally { setChoixSerieLoading(false); setChoixSerie(null); }
+          }}
+          onCancel={() => setChoixSerie(null)}
         />
       )}
     </PageWrapper>
