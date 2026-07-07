@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
 import * as DragAndDropAddon from 'react-big-calendar/lib/addons/dragAndDrop';
 import type { DragFromOutsideItemArgs, EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop';
@@ -7,11 +7,12 @@ import { fr } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { toast } from 'sonner';
-import { X, Loader, Trash2 } from 'lucide-react';
+import { X, Loader, Trash2, ChevronDown } from 'lucide-react';
 import { useAgenda } from '../hooks/useAgenda';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
 import { useIndispos } from '../hooks/useIndispos';
+import { useZones } from '../hooks/useZones';
 import { getOrganisation } from '../lib/anamnese';
 import BadgeSeancesRestantes from '../components/ui/BadgeSeancesRestantes';
 import PageWrapper from '../components/layout/PageWrapper';
@@ -547,6 +548,12 @@ export default function AgendaV2Page() {
   const { participants } = useParticipants();
   const { contrats, contratActifDeParticipant } = useContrats();
   const { indisposDuJour } = useIndispos();
+  // Zones géographiques définies par le praticien dans l'onglet Zones — la
+  // zone d'un bénéficiaire est stockée sur la zone elle-même (participantIds),
+  // pas sur le participant. zoneDePatient est la fonction déjà écrite dans ce
+  // hook pour retrouver la zone d'un bénéficiaire donné, réutilisée telle
+  // quelle (aucune logique de zone redupliquée ici).
+  const { zones, zoneDePatient } = useZones();
 
   const [seanceEditee, setSeanceEditee] = useState<Seance | null>(null);
   const [search, setSearch] = useState('');
@@ -558,6 +565,30 @@ export default function AgendaV2Page() {
   // uniquement l'affichage des zones de disponibilité en fond, comme dans
   // PlanningGrilleView.tsx (patientSelectionneId).
   const [participantSelectionneId, setParticipantSelectionneId] = useState<string | null>(null);
+  // Filtre par zone (multi-sélection) — aucune case cochée = toutes les
+  // zones affichées (comportement par défaut, pas de filtrage).
+  const [zonesFiltreIds, setZonesFiltreIds] = useState<Set<string>>(new Set());
+  const [zoneDropdownOuvert, setZoneDropdownOuvert] = useState(false);
+  const zoneDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!zoneDropdownOuvert) return;
+    function handleClickDehors(e: MouseEvent) {
+      if (zoneDropdownRef.current && !zoneDropdownRef.current.contains(e.target as Node)) {
+        setZoneDropdownOuvert(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickDehors);
+    return () => document.removeEventListener('mousedown', handleClickDehors);
+  }, [zoneDropdownOuvert]);
+
+  function toggleZoneFiltre(zoneId: string) {
+    setZonesFiltreIds(prev => {
+      const next = new Set(prev);
+      if (next.has(zoneId)) next.delete(zoneId); else next.add(zoneId);
+      return next;
+    });
+  }
 
   const participantMap = useMemo(
     () => new Map(participants.map(p => [p.id, p])),
@@ -575,8 +606,12 @@ export default function AgendaV2Page() {
     const q = search.toLowerCase().trim();
     return [...participants]
       .filter(p => !q || `${p.prenom} ${p.nom}`.toLowerCase().includes(q))
+      .filter(p => zonesFiltreIds.size === 0 || (() => {
+        const zone = zoneDePatient(p.id);
+        return !!zone && zonesFiltreIds.has(zone.id);
+      })())
       .sort((a, b) => a.nom.localeCompare(b.nom));
-  }, [participants, search]);
+  }, [participants, search, zonesFiltreIds, zoneDePatient]);
 
   const events: CalEvent[] = useMemo(() => seances.map(s => {
     const p = participantMap.get(s.participantId);
@@ -847,6 +882,43 @@ export default function AgendaV2Page() {
             type="text" placeholder="Rechercher un bénéficiaire…" value={search}
             onChange={e => setSearch(e.target.value)}
             className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+
+          {/* Filtre par zone — multi-sélection, zones telles que définies par
+              le praticien dans l'onglet Zones (useZones), pas de liste figée.
+              Aucune case cochée = toutes les zones (comportement par défaut). */}
+          <div className="relative" ref={zoneDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setZoneDropdownOuvert(o => !o)}
+              className="w-full flex items-center justify-between gap-2 border border-gray-200 rounded-xl px-3 py-2 text-sm text-left hover:border-primary/40 transition-colors focus:outline-none focus:border-primary"
+            >
+              <span className="truncate text-gray-700">
+                {zonesFiltreIds.size === 0
+                  ? 'Toutes les zones'
+                  : `${zonesFiltreIds.size} zone${zonesFiltreIds.size > 1 ? 's' : ''} sélectionnée${zonesFiltreIds.size > 1 ? 's' : ''}`}
+              </span>
+              <ChevronDown size={14} className={`flex-shrink-0 text-gray-400 transition-transform ${zoneDropdownOuvert ? 'rotate-180' : ''}`} />
+            </button>
+            {zoneDropdownOuvert && (
+              <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg p-2 space-y-0.5 max-h-56 overflow-y-auto">
+                {zones.length === 0 ? (
+                  <p className="text-xs text-gray-400 px-2 py-1.5">Aucune zone définie (onglet Zones).</p>
+                ) : zones.map(z => (
+                  <label key={z.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      checked={zonesFiltreIds.has(z.id)}
+                      onChange={() => toggleZoneFiltre(z.id)}
+                      className="w-3.5 h-3.5 accent-primary flex-shrink-0"
+                    />
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: z.couleur }} />
+                    <span className="flex-1 truncate text-dark">{z.nom}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
           <p className="text-[11px] text-gray-400 px-1">
             Glissez un bénéficiaire sur le calendrier pour planifier une séance. Cliquez sur sa fiche pour voir ses disponibilités en fond.
           </p>
