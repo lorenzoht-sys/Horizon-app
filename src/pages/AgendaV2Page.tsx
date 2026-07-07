@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
 import * as DragAndDropAddon from 'react-big-calendar/lib/addons/dragAndDrop';
 import type { DragFromOutsideItemArgs, EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop';
@@ -11,6 +11,8 @@ import { X, Loader, Trash2 } from 'lucide-react';
 import { useAgenda } from '../hooks/useAgenda';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
+import { useIndispos } from '../hooks/useIndispos';
+import { getOrganisation } from '../lib/anamnese';
 import BadgeSeancesRestantes from '../components/ui/BadgeSeancesRestantes';
 import PageWrapper from '../components/layout/PageWrapper';
 import {
@@ -23,7 +25,7 @@ import {
   planSupprimerUnique, planSupprimerSerie, executerOperations,
   type MiseAJourSeance,
 } from '../lib/planificationManuelle';
-import type { Seance, StatutSeance, TypeSeance, Participant, Contrat } from '../types';
+import type { Seance, StatutSeance, TypeSeance, Participant, Contrat, IndisponibilitePierre, OrganisationData } from '../types';
 
 // ============================================================================
 // AGENDA UNIFIÉ — ÉTAPE 2 (création par glisser) + ÉTAPE 3 (déplacement /
@@ -60,6 +62,30 @@ import type { Seance, StatutSeance, TypeSeance, Participant, Contrat } from '../
 //
 // Glisser un bénéficiaire depuis la liste externe reste connu pour ne pas
 // fonctionner nativement au toucher sur mobile (cf. étape 0) — non traité ici.
+//
+// Étape 5 — disponibilités du bénéficiaire sélectionné (vert) + indisponibilités
+// de Pierre (hachuré) en fond de grille horaire. L'ancienne grille
+// (FrisePlanningJour.tsx) les affichait via des divs positionnées en pixels
+// absolus — mécanisme propre à ce rendu custom, non transposable ici.
+// Choix retenu : slotPropGetter (react-big-calendar) plutôt que backgroundEvents.
+// Les deux existent dans la version installée (^1.19.4), mais backgroundEvents
+// crée de vrais "événements" qui passent par le même algorithme de layout en
+// colonnes que les séances réelles (DayEventLayout.getStyledEvents) et portent
+// leurs propres gestionnaires onClick/onDoubleClick/onKeyPress — risque de
+// gêner la largeur d'affichage des vraies séances et l'interaction de
+// glisser-déposer. slotPropGetter se contente de renvoyer className/style pour
+// les cellules de la grille déjà "vides" (TimeSlotGroup.js), sans ajouter
+// aucun élément interactif : zéro risque pour le drag, par construction.
+// Appelé une fois par créneau de 15 min (step/timeslots déjà configurés),
+// uniquement sur les vues Semaine/Jour (TimeGrid) — la vue Mois n'a pas de
+// notion de "slot" horaire et n'appelle pas ce getter, ce qui correspond
+// exactement à la recommandation : le détail dispo/indispo n'a pas de sens à
+// cette granularité, la vue Mois reste donc simplifiée sans code spécifique.
+// Réutilise sans modification windowsDispoPourJour/getOrganisation
+// (mode strict déjà validé, commit dbd0471) et useIndispos (déjà utilisé par
+// PlanningGrilleView). La sélection d'un bénéficiaire (clic sur sa carte,
+// distinct du glisser) est nouvelle sur cet écran — reprend le pattern déjà
+// en place dans PlanningGrilleView (patientSelectionneId).
 // ============================================================================
 
 // L'import profond 'react-big-calendar/lib/addons/dragAndDrop' est un module
@@ -121,6 +147,29 @@ function formatDate(d: string): string {
 // genererDatesSeances. Équivalent local de CLE_JOUR_PAR_DOW (PlanningGrilleView.tsx,
 // non exporté).
 const CLE_JOUR_PAR_DOW: Record<number, string> = { 0: 'dim', 1: 'lun', 2: 'mar', 3: 'mer', 4: 'jeu', 5: 'ven', 6: 'sam' };
+
+// Même Date.getDay() → clé, mais capitalisée : c'est la casse utilisée par
+// OrganisationData.joursDisponibles/creneauxParJour (voir
+// OPTIONS_JOURS_DISPONIBLES dans ParticipantForm.tsx et JOURS_ORDRES dans
+// PlanningGrilleView.tsx), différente de CLE_JOUR_PAR_DOW ci-dessus qui sert
+// un autre appelant (genererDatesSeances). Deux conventions de casse
+// préexistantes dans le code, pas une invention de cette étape.
+const CLE_JOUR_CAPITALISE_PAR_DOW: Record<number, string> = { 0: 'Dim', 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam' };
+
+// Fenêtres de disponibilité réellement renseignées pour un jour donné — copie
+// exacte de la fonction non exportée du même nom dans PlanningGrilleView.tsx.
+// Mode strict : un jour n'est disponible que s'il est à la fois coché dans
+// joursDisponibles ET pourvu de créneaux dans creneauxParJour — aucune plage
+// par défaut n'est inventée quand la donnée est absente (voir commit
+// dbd0471, "affichage strict des dispos bénéficiaires").
+function windowsDispoPourJour(
+  org: OrganisationData | null,
+  cleJour: string,
+): { debut: string; fin: string }[] {
+  if (!org) return [];
+  if (!org.joursDisponibles?.includes(cleJour)) return [];
+  return org.creneauxParJour?.[cleJour] ?? [];
+}
 
 interface CalEvent {
   id: string;
@@ -497,6 +546,7 @@ export default function AgendaV2Page() {
   const { seances, bulkCreerSeances, modifierSeance, supprimerSeance } = useAgenda();
   const { participants } = useParticipants();
   const { contrats, contratActifDeParticipant } = useContrats();
+  const { indisposDuJour } = useIndispos();
 
   const [seanceEditee, setSeanceEditee] = useState<Seance | null>(null);
   const [search, setSearch] = useState('');
@@ -504,10 +554,21 @@ export default function AgendaV2Page() {
   const [dropPendant, setDropPendant] = useState<DropPendant | null>(null);
   const [choixSerie, setChoixSerie] = useState<ChoixSerie | null>(null);
   const [choixSerieLoading, setChoixSerieLoading] = useState(false);
+  // Bénéficiaire sélectionné par clic (distinct du glisser) — pilote
+  // uniquement l'affichage des zones de disponibilité en fond, comme dans
+  // PlanningGrilleView.tsx (patientSelectionneId).
+  const [participantSelectionneId, setParticipantSelectionneId] = useState<string | null>(null);
 
   const participantMap = useMemo(
     () => new Map(participants.map(p => [p.id, p])),
     [participants],
+  );
+
+  const participantSelectionne = participantSelectionneId ? participantMap.get(participantSelectionneId) ?? null : null;
+
+  const orgSelectionne = useMemo(
+    () => participantSelectionne ? getOrganisation(participantSelectionne) : null,
+    [participantSelectionne],
   );
 
   const patientsFiltres = useMemo(() => {
@@ -570,6 +631,42 @@ export default function AgendaV2Page() {
       resource: seanceFantome,
     };
   }, [beneficiaireGlisse, contratActifDeParticipant]);
+
+  // Fond de grille horaire (étape 5) : disponibilités du bénéficiaire
+  // sélectionné (teal clair de la charte, #0d9488 à faible opacité — pas le
+  // vert générique de FrisePlanningJour.tsx, trop pâle pour être vraiment
+  // visible ici) + indisponibilités de Pierre (hachuré, couleurs identiques
+  // à l'ancienne grille). Les deux peuvent se superposer (ex : Pierre
+  // indisponible sur une plage où le bénéficiaire a déclaré une dispo) :
+  // backgroundColor et backgroundImage sont deux propriétés CSS distinctes
+  // qui se superposent nativement, reproduisant le même empilement que les
+  // deux calques absolus de l'ancienne grille — pas besoin de choisir une
+  // priorité entre les deux.
+  const slotPropGetter = useCallback((date: Date) => {
+    const dow = date.getDay();
+    const heure = format(date, 'HH:mm');
+    const style: CSSProperties = {};
+
+    // Indisponibilités de Pierre — toujours affichées, indépendamment du
+    // bénéficiaire sélectionné.
+    const jourIndispo = CLE_JOUR_PAR_DOW[dow] as IndisponibilitePierre['jour'];
+    const enIndispo = indisposDuJour(jourIndispo).some(i => heure >= i.heureDebut && heure < i.heureFin);
+    if (enIndispo) {
+      style.backgroundImage = 'repeating-linear-gradient(45deg,#fee2e2,#fee2e2 3px,#fef2f2 3px,#fef2f2 9px)';
+      style.opacity = 0.85;
+    }
+
+    // Disponibilités du bénéficiaire sélectionné — mode strict : rien si ce
+    // jour n'a pas de créneau réellement saisi (windowsDispoPourJour).
+    if (orgSelectionne) {
+      const jourDispo = CLE_JOUR_CAPITALISE_PAR_DOW[dow];
+      const windows = windowsDispoPourJour(orgSelectionne, jourDispo);
+      const enDispo = windows.some(w => heure >= w.debut && heure < w.fin);
+      if (enDispo) style.backgroundColor = 'rgba(13, 148, 136, 0.16)'; // #0d9488 (teal charte) à 16% d'opacité
+    }
+
+    return Object.keys(style).length > 0 ? { style } : {};
+  }, [indisposDuJour, orgSelectionne]);
 
   // Ne crée rien directement : ouvre la modale de confirmation, comme
   // ModalConfirmDrop dans PlanningGrilleView.tsx. L'aimantation au pas de 15
@@ -731,14 +828,14 @@ export default function AgendaV2Page() {
   return (
     <PageWrapper>
       <div className="mb-4">
-        <h1 className="font-heading font-bold text-2xl text-dark">Agenda (nouveau — étapes 2 &amp; 3)</h1>
+        <h1 className="font-heading font-bold text-2xl text-dark">Agenda (nouveau — étapes 2, 3 &amp; 5)</h1>
         <p className="text-xs text-gray-400 mt-0.5">
-          Création par glisser-déposer, déplacement, édition et suppression des séances. Vraies dates, vraies données.
+          Création par glisser-déposer, déplacement, édition et suppression des séances, disponibilités/indisponibilités en fond. Vraies dates, vraies données.
         </p>
       </div>
 
       <div className="mb-4 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 text-xs text-dark">
-        🚧 Route <code>/agenda-v2</code>, pas encore dans le menu. Glisser-déposer testé à la souris (bureau) — le geste tactile équivalent (glisser depuis la liste) est en attente, sera traité séparément. Disponibilités/indispos en fond toujours reportées à l'étape 5.
+        🚧 Route <code>/agenda-v2</code>, pas encore dans le menu. Glisser-déposer testé à la souris (bureau) — le geste tactile équivalent (glisser depuis la liste) est en attente, sera traité séparément.
       </div>
 
       <div className="flex gap-4">
@@ -751,13 +848,14 @@ export default function AgendaV2Page() {
             onChange={e => setSearch(e.target.value)}
             className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
           <p className="text-[11px] text-gray-400 px-1">
-            Glissez un bénéficiaire sur le calendrier pour planifier une séance à cette date.
+            Glissez un bénéficiaire sur le calendrier pour planifier une séance. Cliquez sur sa fiche pour voir ses disponibilités en fond.
           </p>
           <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: 600 }}>
             {patientsFiltres.map(p => {
               const contratActifP = contratActifDeParticipant(p.id) ?? null;
               const aContrat = contratActifP !== null;
               const statutSeances = calculerStatutSeancesSemaine(contratActifP, seances);
+              const selectionne = participantSelectionneId === p.id;
               return (
                 <div key={p.id}
                   draggable={aContrat}
@@ -771,9 +869,12 @@ export default function AgendaV2Page() {
                     setBeneficiaireGlisse(p);
                   }}
                   onDragEnd={() => setBeneficiaireGlisse(null)}
+                  onClick={() => setParticipantSelectionneId(selectionne ? null : p.id)}
                   className={`rounded-xl px-3 py-2.5 border transition-colors select-none ${
-                    aContrat ? 'cursor-grab active:cursor-grabbing border-gray-200 bg-white hover:border-primary/40 hover:bg-gray-50' : 'cursor-default opacity-60 border-gray-200 bg-white'
-                  }`}>
+                    aContrat ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                  } ${
+                    selectionne ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white hover:border-primary/40 hover:bg-gray-50'
+                  } ${aContrat ? '' : 'opacity-60'}`}>
                   <p className="text-sm font-medium text-dark truncate">{p.prenom} {p.nom}</p>
                   <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                     <p className={`text-xs ${aContrat ? 'text-green-600' : 'text-gray-400'}`}>
@@ -807,6 +908,18 @@ export default function AgendaV2Page() {
                 {label}
               </div>
             ))}
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: 'rgba(13, 148, 136, 0.16)', border: '1px solid rgba(13, 148, 136, 0.4)' }} />
+              Dispo bénéficiaire sélectionné
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: 'repeating-linear-gradient(45deg,#fee2e2,#fee2e2 3px,#fef2f2 3px,#fef2f2 9px)' }} />
+              Indispo Pierre
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: '#0d9488' }} />
+              Séance du bénéficiaire sélectionné
+            </div>
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm" style={{ height: 660 }}>
@@ -821,21 +934,35 @@ export default function AgendaV2Page() {
                 month: 'Mois', week: 'Semaine', day: 'Jour',
                 showMore: (n: number) => `+${n} de plus`,
               }}
-              eventPropGetter={(event: CalEvent) => ({
-                style: {
-                  backgroundColor: getCouleurEvenement(event.resource),
-                  opacity: event.resource.statut === 'annulee' ? 0.5 : 1,
-                  borderRadius: 6,
-                  border: 'none',
-                  color: 'white',
-                  fontSize: 12,
-                },
-              })}
+              eventPropGetter={(event: CalEvent) => {
+                // Séances déjà existantes du bénéficiaire sélectionné :
+                // remplacent la couleur habituelle par statut par un vert
+                // (teal #0d9488) plein — choix assumé, repérer où est ce
+                // bénéficiaire prime sur le statut visuel ici ; le statut
+                // réel reste consultable au clic (modale d'édition). Plein
+                // (pas d'opacité réduite) pour rester bien distinct du fond
+                // de disponibilité (même teal, mais à 16% d'opacité sur les
+                // créneaux vides — voir slotPropGetter). Uniquement du
+                // style, aucun élément ajouté : même prudence que
+                // slotPropGetter, zéro risque pour le glisser-déposer.
+                const estDuBeneficiaireSelectionne = participantSelectionne && event.resource.participantId === participantSelectionne.id;
+                return {
+                  style: {
+                    backgroundColor: estDuBeneficiaireSelectionne ? '#0d9488' : getCouleurEvenement(event.resource),
+                    opacity: !estDuBeneficiaireSelectionne && event.resource.statut === 'annulee' ? 0.5 : 1,
+                    borderRadius: 6,
+                    border: 'none',
+                    color: 'white',
+                    fontSize: 12,
+                  },
+                };
+              }}
               onSelectEvent={(event: CalEvent) => setSeanceEditee(event.resource)}
               onDropFromOutside={onDropFromOutside}
               dragFromOutsideItem={dragFromOutsideItem}
               onEventDrop={handleEventDrop}
               resizable={false}
+              slotPropGetter={slotPropGetter}
               step={15}
               timeslots={4}
               min={new Date(0, 0, 0, 7, 0)}
