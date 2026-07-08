@@ -24,6 +24,11 @@ export interface MiseAJourSeance {
   heureFin: string;
   dureeMinutes: number;
   statut: Seance['statut'];
+  // Raison d'annulation (facultative) — n'a de sens que si statut === 'annulee'.
+  // Absents (undefined) sinon, pour ne jamais laisser traîner une ancienne
+  // raison quand une séance repasse à un autre statut.
+  motifAnnulation?: Seance['motifAnnulation'];
+  motifAnnulationDetail?: string;
 }
 
 export type OperationSeance =
@@ -67,27 +72,7 @@ export function planDeplacerSerie(
   dowCible: number,
   heureDebut: string,
 ): PlanSerie {
-  const idsSerie = new Set(futures.map(f => f.id));
-  const autresSeances = seances.filter(s => !idsSerie.has(s.id));
-
-  const cibles = futures.map(f => {
-    const date = dateDansMemeSemaine(f.date, dowCible);
-    const heureFin = addMinutes(heureDebut, f.dureeMinutes);
-    return { id: f.id, date, heureDebut, heureFin };
-  });
-
-  const conflits = cibles
-    .map(c => ({ c, conflit: trouveChevauchement(autresSeances, { date: c.date, heureDebut: c.heureDebut, heureFin: c.heureFin }) }))
-    .filter((x): x is { c: typeof cibles[number]; conflit: Seance } => !!x.conflit);
-
-  if (conflits.length > 0) {
-    return { ok: false, conflits: conflits.map(({ c, conflit }) => ({ date: c.date, occupePar: conflit.participantId })) };
-  }
-
-  return {
-    ok: true,
-    operations: cibles.map(c => ({ type: 'update', id: c.id, updates: { date: c.date, heureDebut: c.heureDebut, heureFin: c.heureFin } })),
-  };
+  return planActionSurSelection(seances, futures.map(f => f.id), { type: 'deplacer', dowCible, heureDebut });
 }
 
 // ── Édition ───────────────────────────────────────────────────────────────────
@@ -105,10 +90,77 @@ export function planEditerSerie(
   dowCible: number,
   updates: MiseAJourSeance,
 ): PlanSerie {
-  const idsSerie = new Set(futures.map(f => f.id));
-  const autresSeances = seances.filter(s => !idsSerie.has(s.id));
+  return planActionSurSelection(seances, futures.map(f => f.id), { type: 'editer', dowCible, updates });
+}
 
-  const cibles = futures.map(f => ({ id: f.id, date: dateDansMemeSemaine(f.date, dowCible) }));
+// ── Suppression ────────────────────────────────────────────────────────────────
+
+export function planSupprimerUnique(seance: Seance): OperationSeance {
+  return { type: 'delete', id: seance.id };
+}
+
+export function planSupprimerSerie(futures: Seance[]): OperationSeance[] {
+  return futures.map(f => ({ type: 'delete', id: f.id }));
+}
+
+// ── Sélection explicite ────────────────────────────────────────────────────────
+// Généralisation de planDeplacerSerie/planEditerSerie/planSupprimerSerie : au
+// lieu d'un critère "toutes les futures", prend une liste d'ids choisis à la
+// main (case à cocher par occurrence dans ModalChoixSerie, option
+// "Sélectionner les séances concernées"). planDeplacerSerie/planEditerSerie
+// sont maintenant de simples appels à cette fonction avec
+// futures.map(f => f.id) comme sélection — même comportement qu'avant,
+// logique de conflit non dupliquée.
+//
+// Suite à l'incident Pierre Poindessault (14 séances annulées d'un coup via
+// "et les suivantes" alors que 2 seulement étaient voulues) : cette option
+// intermédiaire permet de cocher précisément un sous-ensemble non contigu
+// (ex : la 1ère et la 3ème occurrence, pas la 2ème) plutôt que tout ou rien.
+export type ActionSeance =
+  | { type: 'deplacer'; dowCible: number; heureDebut: string }
+  | { type: 'editer'; dowCible: number; updates: MiseAJourSeance }
+  | { type: 'supprimer' };
+
+export function planActionSurSelection(
+  seances: Seance[],
+  idsSelectionnes: string[],
+  action: ActionSeance,
+): PlanSerie {
+  if (action.type === 'supprimer') {
+    return { ok: true, operations: idsSelectionnes.map(id => ({ type: 'delete', id })) };
+  }
+
+  const idsSet = new Set(idsSelectionnes);
+  const seanceParId = new Map(seances.map(s => [s.id, s]));
+  // Ordre de idsSelectionnes préservé (celui dans lequel l'appelant a coché
+  // les cases), pas l'ordre de `seances`.
+  const selection = idsSelectionnes.map(id => seanceParId.get(id)).filter((s): s is Seance => !!s);
+  const autresSeances = seances.filter(s => !idsSet.has(s.id));
+
+  if (action.type === 'deplacer') {
+    const cibles = selection.map(f => {
+      const date = dateDansMemeSemaine(f.date, action.dowCible);
+      const heureFin = addMinutes(action.heureDebut, f.dureeMinutes);
+      return { id: f.id, date, heureDebut: action.heureDebut, heureFin };
+    });
+
+    const conflits = cibles
+      .map(c => ({ c, conflit: trouveChevauchement(autresSeances, { date: c.date, heureDebut: c.heureDebut, heureFin: c.heureFin }) }))
+      .filter((x): x is { c: typeof cibles[number]; conflit: Seance } => !!x.conflit);
+
+    if (conflits.length > 0) {
+      return { ok: false, conflits: conflits.map(({ c, conflit }) => ({ date: c.date, occupePar: conflit.participantId })) };
+    }
+
+    return {
+      ok: true,
+      operations: cibles.map(c => ({ type: 'update', id: c.id, updates: { date: c.date, heureDebut: c.heureDebut, heureFin: c.heureFin } })),
+    };
+  }
+
+  // action.type === 'editer'
+  const { updates } = action;
+  const cibles = selection.map(f => ({ id: f.id, date: dateDansMemeSemaine(f.date, action.dowCible) }));
 
   const conflits = cibles
     .map(c => ({ c, conflit: trouveChevauchement(autresSeances, { date: c.date, heureDebut: updates.heureDebut, heureFin: updates.heureFin }) }))
@@ -123,19 +175,32 @@ export function planEditerSerie(
     operations: cibles.map(c => ({
       type: 'update',
       id: c.id,
-      updates: { date: c.date, heureDebut: updates.heureDebut, heureFin: updates.heureFin, dureeMinutes: updates.dureeMinutes, statut: updates.statut },
+      updates: {
+        date: c.date, heureDebut: updates.heureDebut, heureFin: updates.heureFin,
+        dureeMinutes: updates.dureeMinutes, statut: updates.statut,
+        motifAnnulation: updates.motifAnnulation, motifAnnulationDetail: updates.motifAnnulationDetail,
+      },
     })),
   };
 }
 
-// ── Suppression ────────────────────────────────────────────────────────────────
+// ── Options de portée proposées dans la boîte de choix (ModalChoixSerie) ───────
+// Toutes les actions proposent les 3 options (unique / série / sélection),
+// SAUF l'annulation (action 'editer' avec statut cible 'annulee') qui retire
+// 'serie' : "annuler cette séance et toutes les suivantes" a causé
+// l'incident Pierre Poindessault (14 séances annulées d'un coup pour 2
+// voulues). planEditerSerie reste utilisable pour les autres statuts
+// (édition normale) — seul ce cas précis n'y est plus jamais appelé depuis
+// l'UI (voir AgendaV2Page.tsx, handleEnregistrerSeance).
+export type OptionPortee = 'unique' | 'serie' | 'selection';
 
-export function planSupprimerUnique(seance: Seance): OperationSeance {
-  return { type: 'delete', id: seance.id };
-}
+const TOUTES_OPTIONS_PORTEE: OptionPortee[] = ['unique', 'serie', 'selection'];
 
-export function planSupprimerSerie(futures: Seance[]): OperationSeance[] {
-  return futures.map(f => ({ type: 'delete', id: f.id }));
+export function optionsPorteePourAction(action: ActionSeance): OptionPortee[] {
+  if (action.type === 'editer' && action.updates.statut === 'annulee') {
+    return ['unique', 'selection'];
+  }
+  return TOUTES_OPTIONS_PORTEE;
 }
 
 // ── Exécution ──────────────────────────────────────────────────────────────────

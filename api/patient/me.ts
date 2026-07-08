@@ -32,7 +32,12 @@ export default withSentry(async function handler(req: any, res: any) {
   const [participantRes, bilansRes, seancesRes, programmesRes, docsRes, testsActifsRes, testsResultatsRes, exLibresActifsRes, exLibresValidationsRes] = await Promise.all([
     supabase.from('participants').select('*').eq('id', participantId).single(),
     supabase.from('bilans').select('*').eq('participant_id', participantId).order('date'),
-    supabase.from('seances').select('*').eq('participant_id', participantId).order('date'),
+    // Colonnes explicites (pas select('*')) : motif_annulation/
+    // motif_annulation_detail sont une donnée interne au praticien et ne
+    // doivent jamais atteindre la réponse envoyée au bénéficiaire.
+    supabase.from('seances')
+      .select('id, participant_id, contrat_id, date, heure_debut, heure_fin, duree_minutes, type, statut, notes, adresse, coordonnees, created_at, updated_at')
+      .eq('participant_id', participantId).order('date'),
     supabase.from('programmes').select('*').eq('participant_id', participantId),
     supabase.from('documents_patient')
       .select('id, titre, contenu, date_creation')

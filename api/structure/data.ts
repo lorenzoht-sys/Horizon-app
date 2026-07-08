@@ -44,7 +44,12 @@ export default withSentry(async function handler(req: any, res: any) {
 
   if (ids.length > 0) {
     const [seancesRes, facturesRes, documentsRes] = await Promise.all([
-      supabase.from('seances').select('*').in('participant_id', ids).order('date', { ascending: false }),
+      // Colonnes explicites (pas select('*')) : motif_annulation/
+      // motif_annulation_detail sont internes au praticien, jamais exposées
+      // au portail structure.
+      supabase.from('seances')
+        .select('id, participant_id, contrat_id, date, heure_debut, heure_fin, duree_minutes, type, statut, notes, adresse, coordonnees, created_at, updated_at')
+        .in('participant_id', ids).order('date', { ascending: false }),
       supabase.from('factures_suivi').select('*').eq('structure_id', structure.id).order('periode_annee', { ascending: false }).order('periode_mois', { ascending: false }),
       supabase.from('documents_partages').select('*').eq('structure_id', structure.id).order('partage_le', { ascending: false }),
     ]);

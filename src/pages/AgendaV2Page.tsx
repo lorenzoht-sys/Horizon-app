@@ -7,7 +7,7 @@ import { fr } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { toast } from 'sonner';
-import { X, Loader, Trash2, ChevronDown } from 'lucide-react';
+import { X, Loader, Trash2, ChevronDown, ListChecks, ArrowLeft } from 'lucide-react';
 import { useAgenda } from '../hooks/useAgenda';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
@@ -23,10 +23,10 @@ import {
 import {
   calculerFutures, estDeplacementNoop,
   planDeplacerUnique, planDeplacerSerie, planEditerUnique, planEditerSerie,
-  planSupprimerUnique, planSupprimerSerie, executerOperations,
-  type MiseAJourSeance,
+  planSupprimerUnique, planSupprimerSerie, planActionSurSelection, executerOperations,
+  optionsPorteePourAction, type MiseAJourSeance, type OptionPortee,
 } from '../lib/planificationManuelle';
-import type { Seance, StatutSeance, TypeSeance, Participant, Contrat, IndisponibilitePierre, OrganisationData } from '../types';
+import type { Seance, StatutSeance, TypeSeance, Participant, Contrat, IndisponibilitePierre, OrganisationData, RaisonAnnulation } from '../types';
 
 // ============================================================================
 // AGENDA UNIFIÉ — ÉTAPE 2 (création par glisser) + ÉTAPE 3 (déplacement /
@@ -124,6 +124,24 @@ const LABEL_TYPE: Record<TypeSeance, string> = {
 
 const LABEL_STATUT: Record<StatutSeance, string> = {
   planifiee: 'Planifiée', realisee: 'Réalisée', reportee: 'Reportée', annulee: 'Annulée',
+};
+
+// Raisons prédéfinies pour une annulation — donnée interne au praticien,
+// jamais exposée à l'espace bénéficiaire (voir api/patient/me.ts).
+const OPTIONS_RAISON_ANNULATION: RaisonAnnulation[] = [
+  'maladie', 'vacances', 'rdv_medical', 'indisponibilite_personnelle',
+  'transport', 'meteo', 'hospitalisation', 'autre',
+];
+
+const LABEL_RAISON_ANNULATION: Record<RaisonAnnulation, string> = {
+  maladie: 'Maladie',
+  vacances: 'Vacances / congés',
+  rdv_medical: 'Rendez-vous médical',
+  indisponibilite_personnelle: 'Indisponibilité personnelle',
+  transport: 'Problème de transport',
+  meteo: 'Météo / conditions extérieures',
+  hospitalisation: 'Hospitalisation',
+  autre: 'Autre',
 };
 
 // Reproduit exactement getCouleurEvenement de AgendaPage.tsx.
@@ -349,41 +367,158 @@ function ModalConfirmerCreation({ info, seances, participantMap, onConfirm, onCa
 interface ChoixSerie {
   titre: string;
   futures: Seance[];
+  // Id de la séance sur laquelle le praticien a cliqué à l'origine — précochée
+  // par défaut dans l'option "Sélectionner les séances concernées".
+  seanceRefId: string;
+  // Options affichées dans la boîte de choix — TOUTES_OPTIONS_PORTEE par
+  // défaut si non précisé (déplacer/éditer/supprimer inchangés).
+  optionsDisponibles?: OptionPortee[];
+  // Affiché en évidence au-dessus des boutons quand l'action de portée
+  // "série" a un impact jugé plus lourd qu'un simple déplacement (ex :
+  // annulation de plusieurs mois de séances d'un coup) — voir l'incident
+  // Pierre Poindessault (14 séances annulées le 07/07 par un seul clic sur
+  // "et les suivantes", scope sous-estimé faute d'avertissement explicite).
+  // Sans objet depuis que 'serie' est retiré pour l'annulation — conservé
+  // pour déplacer/éditer si un usage futur le justifie.
+  avertissementSerie?: string;
   onUnique: () => Promise<void>;
   onSerie: () => Promise<void>;
+  // Sous-ensemble choisi à la main (voir planActionSurSelection) — jamais
+  // appelé avec un tableau vide, le bouton de confirmation est désactivé tant
+  // qu'aucune case n'est cochée.
+  onSelection: (idsSelectionnes: string[]) => Promise<void>;
 }
 
-function ModalChoixSerie({ titre, futures, loading, onUnique, onSerie, onCancel }: {
+// Option intermédiaire entre "cette séance uniquement" et "toutes les
+// suivantes" : cocher précisément les occurrences concernées (ex : 2 dates de
+// vacances sur une série de 12). Repliée par défaut derrière un 3e bouton
+// pour ne pas alourdir le choix courant (déplacement simple, édition ponctuelle)
+// — seul un praticien qui en a besoin l'ouvre.
+function SelectionSeances({ futures, seanceRefId, loading, onConfirm, onRetour }: {
+  futures: Seance[];
+  seanceRefId: string;
+  loading: boolean;
+  onConfirm: (ids: string[]) => void;
+  onRetour: () => void;
+}) {
+  const [selectionnees, setSelectionnees] = useState<Set<string>>(new Set([seanceRefId]));
+
+  function toggle(id: string) {
+    setSelectionnees(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  const nb = selectionnees.size;
+  const datesTriees = futures.filter(f => selectionnees.has(f.id)).map(f => formatDate(f.date));
+
+  return (
+    <>
+      <div className="flex items-center gap-2 mb-1">
+        <button onClick={onRetour} disabled={loading} className="text-gray-400 hover:text-gray-600 p-0.5 -ml-0.5">
+          <ArrowLeft size={15} />
+        </button>
+        <h3 className="text-base font-bold text-dark">Sélectionner les séances concernées</h3>
+      </div>
+      <p className="text-xs text-gray-500 mb-3">Cochez précisément les occurrences à modifier.</p>
+
+      <div className="space-y-1 max-h-56 overflow-y-auto border border-gray-100 rounded-xl p-2 mb-3">
+        {futures.map(f => (
+          <label key={f.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer text-sm">
+            <input type="checkbox" checked={selectionnees.has(f.id)} onChange={() => toggle(f.id)}
+              className="w-3.5 h-3.5 accent-primary flex-shrink-0" />
+            <span className="text-dark">{formatDate(f.date)} — {f.heureDebut}–{f.heureFin}</span>
+          </label>
+        ))}
+      </div>
+
+      <div className={`rounded-xl px-3 py-2.5 mb-4 ${nb === 0 ? 'bg-gray-50' : 'bg-primary/5 border border-primary/20'}`}>
+        <p className={`text-xs font-semibold ${nb === 0 ? 'text-gray-400' : 'text-primary'}`}>
+          {nb === 0 ? 'Aucune séance sélectionnée' : `${nb} séance${nb > 1 ? 's' : ''} sélectionnée${nb > 1 ? 's' : ''}`}
+        </p>
+        {nb > 0 && <p className="text-xs text-gray-500 mt-0.5">{datesTriees.join(', ')}</p>}
+      </div>
+
+      <button onClick={() => onConfirm(Array.from(selectionnees))} disabled={loading || nb === 0}
+        className="w-full py-2.5 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+        {loading
+          ? <span className="inline-flex items-center gap-2 justify-center"><Loader size={13} className="animate-spin" />En cours…</span>
+          : `Confirmer pour ${nb || 0} séance${nb > 1 ? 's' : ''}`}
+      </button>
+    </>
+  );
+}
+
+function ModalChoixSerie({ titre, futures, seanceRefId, optionsDisponibles = ['unique', 'serie', 'selection'], avertissementSerie, loading, onUnique, onSerie, onSelection, onCancel }: {
   titre: string;
   futures: Seance[];
+  seanceRefId: string;
+  optionsDisponibles?: OptionPortee[];
+  avertissementSerie?: string;
   loading: boolean;
   onUnique: () => void;
   onSerie: () => void;
+  onSelection: (ids: string[]) => void;
   onCancel: () => void;
 }) {
+  const [mode, setMode] = useState<'choix' | 'selection'>('choix');
   const premiere = futures[0];
   const derniere = futures[futures.length - 1];
+  const afficheSerie = optionsDisponibles.includes('serie');
+  const afficheSelection = optionsDisponibles.includes('selection');
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1030 }}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <h3 className="text-base font-bold text-dark mb-1">{titre}</h3>
-        <p className="text-xs text-gray-500 mb-4">
-          Ce créneau se répète {futures.length} fois (du {formatDate(premiere.date)} au {formatDate(derniere.date)}). Quelle portée ?
-        </p>
-        <div className="space-y-2">
-          <button onClick={onUnique} disabled={loading}
-            className="w-full py-2.5 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-dark transition-colors disabled:opacity-50">
-            Cette séance uniquement ({formatDate(premiere.date)})
-          </button>
-          <button onClick={onSerie} disabled={loading}
-            className="w-full py-2.5 rounded-xl text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50">
-            Cette séance et les {futures.length - 1} suivantes
-          </button>
-          <button onClick={onCancel} disabled={loading}
-            className="w-full py-2 rounded-xl text-sm text-gray-400 hover:text-gray-600 transition-colors">
-            {loading ? <span className="inline-flex items-center gap-2"><Loader size={13} className="animate-spin" />En cours…</span> : 'Annuler'}
-          </button>
-        </div>
+        {mode === 'selection' ? (
+          <SelectionSeances
+            futures={futures}
+            seanceRefId={seanceRefId}
+            loading={loading}
+            onConfirm={onSelection}
+            onRetour={() => setMode('choix')}
+          />
+        ) : (
+          <>
+            <h3 className="text-base font-bold text-dark mb-1">{titre}</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Ce créneau se répète {futures.length} fois (du {formatDate(premiere.date)} au {formatDate(derniere.date)}). Quelle portée ?
+            </p>
+            {avertissementSerie && (
+              <div className="bg-red-light border border-red/20 rounded-xl px-3 py-2.5 mb-4">
+                <p className="text-xs font-semibold text-red">{avertissementSerie}</p>
+              </div>
+            )}
+            <div className="space-y-2">
+              <button onClick={onUnique} disabled={loading}
+                className="w-full py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-dark transition-colors disabled:opacity-50">
+                <span className="block">Cette séance uniquement</span>
+                <span className="block text-xs font-normal opacity-80 mt-0.5">{formatDate(premiere.date)}</span>
+              </button>
+              {afficheSerie && (
+                <button onClick={onSerie} disabled={loading}
+                  className={`w-full py-2 rounded-xl text-sm font-medium border transition-colors disabled:opacity-50 ${
+                    avertissementSerie ? 'border-red/30 text-red hover:bg-red-light' : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}>
+                  <span className="block">Cette séance et les {futures.length - 1} suivantes</span>
+                  <span className="block text-xs font-normal opacity-80 mt-0.5">jusqu'au {formatDate(derniere.date)}</span>
+                </button>
+              )}
+              {afficheSelection && (
+                <button onClick={() => setMode('selection')} disabled={loading}
+                  className="w-full py-2.5 rounded-xl text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5">
+                  <ListChecks size={14} />
+                  Sélectionner les séances concernées…
+                </button>
+              )}
+              <button onClick={onCancel} disabled={loading}
+                className="w-full py-2 rounded-xl text-sm text-gray-400 hover:text-gray-600 transition-colors">
+                {loading ? <span className="inline-flex items-center gap-2"><Loader size={13} className="animate-spin" />En cours…</span> : 'Annuler'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -407,6 +542,8 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
   const [heureDebut, setHeureDebut] = useState(seance.heureDebut);
   const [duree, setDuree] = useState(seance.dureeMinutes);
   const [statut, setStatut] = useState<StatutSeance>(seance.statut);
+  const [raisonAnnulation, setRaisonAnnulation] = useState<RaisonAnnulation | ''>(seance.motifAnnulation ?? '');
+  const [raisonAnnulationDetail, setRaisonAnnulationDetail] = useState(seance.motifAnnulationDetail ?? '');
   const [confirmSuppr, setConfirmSuppr] = useState(false);
 
   const heureFin = addMinutes(heureDebut, duree);
@@ -422,7 +559,12 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
 
   function handleEnregistrer() {
     if (conflit) return;
-    onSave({ date, heureDebut, heureFin, dureeMinutes: duree, statut });
+    // La raison n'a de sens que pour une annulation — jamais transmise pour
+    // un autre statut, pour ne pas laisser traîner une ancienne raison si la
+    // séance est réannulée plus tard sous un motif différent (ou aucun).
+    const motifAnnulation = statut === 'annulee' && raisonAnnulation ? raisonAnnulation : undefined;
+    const motifAnnulationDetail = motifAnnulation === 'autre' ? raisonAnnulationDetail.trim() || undefined : undefined;
+    onSave({ date, heureDebut, heureFin, dureeMinutes: duree, statut, motifAnnulation, motifAnnulationDetail });
     onClose();
   }
 
@@ -480,8 +622,8 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
 
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Statut</label>
-            <div className="grid grid-cols-2 gap-2">
-              {(['planifiee', 'realisee', 'reportee', 'annulee'] as StatutSeance[]).map(s => (
+            <div className="grid grid-cols-3 gap-2">
+              {(['planifiee', 'realisee', 'annulee'] as StatutSeance[]).map(s => (
                 <button key={s} onClick={() => setStatut(s)}
                   className={`py-1.5 px-3 rounded-lg text-xs font-medium border transition-colors text-left ${
                     statut === s ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary/40'
@@ -491,6 +633,29 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
               ))}
             </div>
           </div>
+
+          {statut === 'annulee' && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                Raison de l'annulation <span className="normal-case font-normal text-gray-400">(facultatif, usage interne)</span>
+              </label>
+              <select value={raisonAnnulation} onChange={e => setRaisonAnnulation(e.target.value as RaisonAnnulation | '')}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                <option value="">— Non précisée —</option>
+                {OPTIONS_RAISON_ANNULATION.map(r => <option key={r} value={r}>{LABEL_RAISON_ANNULATION[r]}</option>)}
+              </select>
+              {raisonAnnulation === 'autre' && (
+                <input type="text" value={raisonAnnulationDetail} onChange={e => setRaisonAnnulationDetail(e.target.value)}
+                  placeholder="Précisez la raison…" maxLength={200}
+                  className="w-full mt-2 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+              )}
+              {futures.length > 1 && (
+                <p className="text-[11px] text-gray-400 mt-1.5">
+                  Si vous sélectionnez plusieurs séances à l'enregistrement, cette même raison s'appliquera à toutes celles cochées.
+                </p>
+              )}
+            </div>
+          )}
 
           {conflit && (
             <div className="bg-red-light border border-red/20 rounded-xl px-4 py-3">
@@ -798,12 +963,20 @@ export default function AgendaV2Page() {
     setChoixSerie({
       titre: `Déplacer au ${jourLabel} ${heureDebut}`,
       futures,
+      seanceRefId: s.id,
+      optionsDisponibles: optionsPorteePourAction({ type: 'deplacer', dowCible, heureDebut }),
       onUnique: deplacerUnique,
       onSerie: async () => {
         const plan = planDeplacerSerie(seances, futures, dowCible, heureDebut);
         if (!plan.ok) { toastConflitSerie(plan.conflits); return; }
         const nb = await executerOperations(plan.operations, modifierSeance, supprimerSeance);
         toast.success(`${nb} séances déplacées au ${jourLabel} ${heureDebut}`);
+      },
+      onSelection: async (ids) => {
+        const plan = planActionSurSelection(seances, ids, { type: 'deplacer', dowCible, heureDebut });
+        if (!plan.ok) { toastConflitSerie(plan.conflits); return; }
+        const nb = await executerOperations(plan.operations, modifierSeance, supprimerSeance);
+        toast.success(`${nb} séance${nb > 1 ? 's' : ''} déplacée${nb > 1 ? 's' : ''} au ${jourLabel} ${heureDebut}`);
       },
     });
   }
@@ -827,12 +1000,24 @@ export default function AgendaV2Page() {
     setChoixSerie({
       titre: 'Modifier la séance',
       futures,
+      seanceRefId: seance.id,
+      // Annuler "et toutes les suivantes" a causé l'incident Pierre
+      // Poindessault (14 séances annulées d'un coup pour 2 voulues) :
+      // optionsPorteePourAction retire 'serie' pour ce cas précis (voir
+      // planificationManuelle.ts) — inchangé pour les autres statuts.
+      optionsDisponibles: optionsPorteePourAction({ type: 'editer', dowCible, updates }),
       onUnique: enregistrerUnique,
       onSerie: async () => {
         const plan = planEditerSerie(seances, futures, dowCible, updates);
         if (!plan.ok) { toastConflitSerie(plan.conflits); return; }
         const nb = await executerOperations(plan.operations, modifierSeance, supprimerSeance);
         toast.success(`${nb} séances modifiées`);
+      },
+      onSelection: async (ids) => {
+        const plan = planActionSurSelection(seances, ids, { type: 'editer', dowCible, updates });
+        if (!plan.ok) { toastConflitSerie(plan.conflits); return; }
+        const nb = await executerOperations(plan.operations, modifierSeance, supprimerSeance);
+        toast.success(`${nb} séance${nb > 1 ? 's' : ''} modifiée${nb > 1 ? 's' : ''}`);
       },
     });
   }
@@ -851,6 +1036,8 @@ export default function AgendaV2Page() {
     setChoixSerie({
       titre: 'Supprimer la séance',
       futures,
+      seanceRefId: seance.id,
+      optionsDisponibles: optionsPorteePourAction({ type: 'supprimer' }),
       onUnique: async () => {
         await executerOperations([planSupprimerUnique(seance)], modifierSeance, supprimerSeance);
         toast.success('Séance supprimée');
@@ -858,6 +1045,12 @@ export default function AgendaV2Page() {
       onSerie: async () => {
         const nb = await executerOperations(planSupprimerSerie(futures), modifierSeance, supprimerSeance);
         toast.success(`${nb} séances supprimées`);
+      },
+      onSelection: async (ids) => {
+        const plan = planActionSurSelection(seances, ids, { type: 'supprimer' });
+        if (!plan.ok) { toastConflitSerie(plan.conflits); return; }
+        const nb = await executerOperations(plan.operations, modifierSeance, supprimerSeance);
+        toast.success(`${nb} séance${nb > 1 ? 's' : ''} supprimée${nb > 1 ? 's' : ''}`);
       },
     });
   }
@@ -973,7 +1166,6 @@ export default function AgendaV2Page() {
               { couleur: '#1A5F9E', label: "Aujourd'hui" },
               { couleur: '#5B9BD5', label: 'Planifiée' },
               { couleur: '#3B6D11', label: 'Réalisée' },
-              { couleur: '#F59E0B', label: 'Reportée' },
               { couleur: '#EF4444', label: 'Annulée' },
               { couleur: '#8B5CF6', label: 'Bilan' },
             ].map(({ couleur, label }) => (
@@ -1081,6 +1273,9 @@ export default function AgendaV2Page() {
         <ModalChoixSerie
           titre={choixSerie.titre}
           futures={choixSerie.futures}
+          seanceRefId={choixSerie.seanceRefId}
+          optionsDisponibles={choixSerie.optionsDisponibles}
+          avertissementSerie={choixSerie.avertissementSerie}
           loading={choixSerieLoading}
           onUnique={async () => {
             setChoixSerieLoading(true);
@@ -1089,6 +1284,10 @@ export default function AgendaV2Page() {
           onSerie={async () => {
             setChoixSerieLoading(true);
             try { await choixSerie.onSerie(); } finally { setChoixSerieLoading(false); setChoixSerie(null); }
+          }}
+          onSelection={async (ids) => {
+            setChoixSerieLoading(true);
+            try { await choixSerie.onSelection(ids); } finally { setChoixSerieLoading(false); setChoixSerie(null); }
           }}
           onCancel={() => setChoixSerie(null)}
         />

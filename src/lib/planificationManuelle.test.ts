@@ -3,7 +3,7 @@ import type { Seance } from '../types';
 import {
   calculerFutures, estDeplacementNoop, estDeplacementExistant,
   planDeplacerUnique, planDeplacerSerie, planEditerUnique, planEditerSerie,
-  planSupprimerUnique, planSupprimerSerie, executerOperations,
+  planSupprimerUnique, planSupprimerSerie, planActionSurSelection, optionsPorteePourAction, executerOperations,
 } from './planificationManuelle';
 import { cleSerieRecurrente } from '../utils/horaires';
 
@@ -238,6 +238,157 @@ describe('Cas 8 — changer le statut : pas d\'effet de bord sur la récurrence'
     expect(modifierSeance).toHaveBeenCalledTimes(1);
     expect(modifierSeance).toHaveBeenCalledWith('s1', expect.objectContaining({ statut: 'realisee' }));
     expect(supprimerSeance).not.toHaveBeenCalled();
+  });
+});
+
+describe('Cas 8bis — annulation d\'une séance récurrente, "cette séance uniquement"', () => {
+  it('seule l\'occurrence choisie passe à \'annulee\', les autres restent \'planifiee\'', async () => {
+    const seances = [S0, S1, S2, S3];
+    const futures = calculerFutures(seances, S1);
+    expect(futures.map(f => f.id)).toEqual(['s1', 's2', 's3']); // récurrente : la boîte de choix s'ouvrirait
+
+    const updates = { date: S1.date, heureDebut: S1.heureDebut, heureFin: S1.heureFin, dureeMinutes: S1.dureeMinutes, statut: 'annulee' as const };
+    const op = planEditerUnique(S1, updates);
+
+    const { modifierSeance, supprimerSeance } = mocksModifSuppr();
+    await executerOperations([op], modifierSeance, supprimerSeance);
+
+    expect(modifierSeance).toHaveBeenCalledTimes(1);
+    expect(modifierSeance).toHaveBeenCalledWith('s1', expect.objectContaining({ statut: 'annulee' }));
+    // S2 et S3 ne sont jamais passées à modifierSeance : elles restent 'planifiee'
+    const idsAppeles = modifierSeance.mock.calls.map(c => c[0]);
+    expect(idsAppeles).not.toContain('s2');
+    expect(idsAppeles).not.toContain('s3');
+    expect(supprimerSeance).not.toHaveBeenCalled();
+  });
+
+  it('"et les suivantes" applique bien \'annulee\' à toute la série future, jamais au passé', async () => {
+    const seances = [S0, S1, S2, S3];
+    const futures = calculerFutures(seances, S1);
+    const dowCible = new Date(S1.date + 'T12:00').getDay(); // pas de changement de jour, juste le statut
+
+    const updates = { date: S1.date, heureDebut: S1.heureDebut, heureFin: S1.heureFin, dureeMinutes: S1.dureeMinutes, statut: 'annulee' as const };
+    const plan = planEditerSerie(seances, futures, dowCible, updates);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error('unreachable');
+
+    const { modifierSeance, supprimerSeance } = mocksModifSuppr();
+    const nb = await executerOperations(plan.operations, modifierSeance, supprimerSeance);
+    expect(nb).toBe(3);
+    for (const call of modifierSeance.mock.calls) {
+      expect((call[1] as Partial<Seance>).statut).toBe('annulee');
+    }
+    expect(modifierSeance.mock.calls.some(c => c[0] === 's0')).toBe(false); // S0 (passée) jamais touchée
+    expect(supprimerSeance).not.toHaveBeenCalled();
+  });
+});
+
+describe('planActionSurSelection — option "Sélectionner les séances concernées" (sélection non contiguë)', () => {
+  // S1/S2/S3 : 3 occurrences futures hebdomadaires. On sélectionne S1 et S3
+  // (1ère et 3ème), en sautant S2 délibérément — c'est exactement le scénario
+  // de l'incident Pierre Poindessault (vacances sur 2 dates précises, pas
+  // toute la série) que cette option doit permettre.
+  const seances = [S0, S1, S2, S3];
+
+  it('déplacer : seules S1 et S3 sont déplacées, S2 reste intacte', async () => {
+    const dowJeudi = new Date('2026-07-16T12:00').getDay();
+    const plan = planActionSurSelection(seances, ['s1', 's3'], { type: 'deplacer', dowCible: dowJeudi, heureDebut: '14:00' });
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error('unreachable');
+    expect(plan.operations).toHaveLength(2);
+    expect(plan.operations.map(op => op.id).sort()).toEqual(['s1', 's3']);
+
+    const { modifierSeance, supprimerSeance } = mocksModifSuppr();
+    await executerOperations(plan.operations, modifierSeance, supprimerSeance);
+    expect(modifierSeance).toHaveBeenCalledTimes(2);
+    const idsAppeles = modifierSeance.mock.calls.map(c => c[0]);
+    expect(idsAppeles).not.toContain('s2'); // sautée volontairement
+    expect(idsAppeles).not.toContain('s0'); // passée, jamais dans la sélection de toute façon
+  });
+
+  it('éditer (dont annuler) : seules S1 et S3 passent au nouveau statut/raison, S2 reste \'planifiee\'', async () => {
+    const dowCible = new Date(S1.date + 'T12:00').getDay(); // pas de changement de jour
+    const updates = {
+      date: S1.date, heureDebut: S1.heureDebut, heureFin: S1.heureFin, dureeMinutes: S1.dureeMinutes,
+      statut: 'annulee' as const, motifAnnulation: 'vacances' as const,
+    };
+    const plan = planActionSurSelection(seances, ['s1', 's3'], { type: 'editer', dowCible, updates });
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error('unreachable');
+    expect(plan.operations.map(op => op.id).sort()).toEqual(['s1', 's3']);
+
+    const { modifierSeance, supprimerSeance } = mocksModifSuppr();
+    await executerOperations(plan.operations, modifierSeance, supprimerSeance);
+    expect(modifierSeance).toHaveBeenCalledTimes(2);
+    for (const call of modifierSeance.mock.calls) {
+      const upd = call[1] as Partial<Seance>;
+      expect(upd.statut).toBe('annulee');
+      expect(upd.motifAnnulation).toBe('vacances'); // même raison sur toute la sélection cochée
+    }
+    const idsAppeles = modifierSeance.mock.calls.map(c => c[0]);
+    expect(idsAppeles).not.toContain('s2');
+  });
+
+  it('supprimer : seules S1 et S3 sont supprimées, S2 reste, aucune modification', async () => {
+    const plan = planActionSurSelection(seances, ['s1', 's3'], { type: 'supprimer' });
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error('unreachable');
+    expect(plan.operations).toEqual([
+      { type: 'delete', id: 's1' },
+      { type: 'delete', id: 's3' },
+    ]);
+
+    const { modifierSeance, supprimerSeance } = mocksModifSuppr();
+    await executerOperations(plan.operations, modifierSeance, supprimerSeance);
+    expect(supprimerSeance).toHaveBeenCalledTimes(2);
+    const idsSupprimes = supprimerSeance.mock.calls.map(c => c[0]).sort();
+    expect(idsSupprimes).toEqual(['s1', 's3']);
+    expect(modifierSeance).not.toHaveBeenCalled();
+  });
+
+  it('conflit sur une séance de la sélection : blocage total, 0 opération', () => {
+    const dowJeudi = new Date('2026-07-16T12:00').getDay();
+    // Bloque S3 (28/07 -> jeudi 30/07) avec un autre bénéficiaire.
+    const bloqueuse = fakeSeance({ id: 'bloqueuse', participantId: 'autre', contratId: 'autre-contrat', date: '2026-07-30', heureDebut: '14:00', heureFin: '14:45' });
+    const plan = planActionSurSelection([...seances, bloqueuse], ['s1', 's3'], { type: 'deplacer', dowCible: dowJeudi, heureDebut: '14:00' });
+    expect(plan.ok).toBe(false);
+    if (plan.ok) throw new Error('unreachable');
+    expect(plan.conflits).toEqual([{ date: '2026-07-30', occupePar: 'autre' }]);
+  });
+
+  it('toute opération produite reste update ou delete, jamais create', () => {
+    const planSuppr = planActionSurSelection(seances, ['s1', 's3'], { type: 'supprimer' });
+    const ops1 = planSuppr.ok ? planSuppr.operations : [];
+    const planDep = planActionSurSelection(seances, ['s1', 's3'], { type: 'deplacer', dowCible: 4, heureDebut: '09:00' });
+    const ops2 = planDep.ok ? planDep.operations : [];
+    for (const op of [...ops1, ...ops2]) {
+      expect(['update', 'delete']).toContain(op.type);
+    }
+  });
+});
+
+describe('optionsPorteePourAction — retire "et les suivantes" uniquement pour l\'annulation', () => {
+  const updatesBase = { date: S1.date, heureDebut: S1.heureDebut, heureFin: S1.heureFin, dureeMinutes: S1.dureeMinutes };
+
+  it('annuler (editer avec statut annulee) : seulement "unique" et "selection", 2 options', () => {
+    const options = optionsPorteePourAction({ type: 'editer', dowCible: 2, updates: { ...updatesBase, statut: 'annulee' } });
+    expect(options).toEqual(['unique', 'selection']);
+    expect(options).not.toContain('serie');
+  });
+
+  it('éditer avec un autre statut : les 3 options restent proposées', () => {
+    for (const statut of ['planifiee', 'realisee', 'reportee'] as const) {
+      const options = optionsPorteePourAction({ type: 'editer', dowCible: 2, updates: { ...updatesBase, statut } });
+      expect(options).toEqual(['unique', 'serie', 'selection']);
+    }
+  });
+
+  it('déplacer : toujours les 3 options', () => {
+    expect(optionsPorteePourAction({ type: 'deplacer', dowCible: 2, heureDebut: '10:00' })).toEqual(['unique', 'serie', 'selection']);
+  });
+
+  it('supprimer : toujours les 3 options', () => {
+    expect(optionsPorteePourAction({ type: 'supprimer' })).toEqual(['unique', 'serie', 'selection']);
   });
 });
 

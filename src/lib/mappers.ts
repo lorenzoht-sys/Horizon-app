@@ -379,6 +379,8 @@ export function dbToSeance(row: any): Seance {
     notes: row.notes ?? undefined,
     adresse: row.adresse ?? '',
     coordonnees: row.coordonnees ?? undefined,
+    motifAnnulation: row.motif_annulation ?? undefined,
+    motifAnnulationDetail: row.motif_annulation_detail ?? undefined,
   };
 }
 
@@ -396,6 +398,8 @@ export function seanceToDb(s: Omit<Seance, 'id'> & { id?: string }): Record<stri
     notes: s.notes ?? null,
     adresse: s.adresse ?? null,
     coordonnees: s.coordonnees ?? null,
+    motif_annulation: s.motifAnnulation ?? null,
+    motif_annulation_detail: s.motifAnnulationDetail ?? null,
   };
 }
 

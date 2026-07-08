@@ -404,6 +404,12 @@ export type CreneauPreference = 'matin' | 'apres-midi' | 'soiree';
 export type StatutSeance = 'planifiee' | 'realisee' | 'annulee' | 'reportee';
 export type TypeSeance = 'seance' | 'bilan' | 'bilan_initial';
 
+// Raison d'annulation (facultative) — donnée interne au praticien, jamais
+// exposée à l'espace bénéficiaire (voir api/patient/me.ts).
+export type RaisonAnnulation =
+  | 'maladie' | 'vacances' | 'rdv_medical' | 'indisponibilite_personnelle'
+  | 'transport' | 'meteo' | 'hospitalisation' | 'autre';
+
 export interface DisponibilitesPatient {
   joursDisponibles: JourSemaine[];
   creneauxPreference: CreneauPreference[];
@@ -471,6 +477,10 @@ export interface Seance {
   notes?: string;
   adresse: string;
   coordonnees?: { lat: number; lng: number };
+  /** Renseigné uniquement quand statut === 'annulee'. Interne au praticien. */
+  motifAnnulation?: RaisonAnnulation;
+  /** Texte libre, utilisé seulement quand motifAnnulation === 'autre'. */
+  motifAnnulationDetail?: string;
 }
 
 // ── JOURNAL DE SÉANCE ─────────────────────────────────────────────────────────
