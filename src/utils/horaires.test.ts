@@ -240,6 +240,26 @@ describe('cleSerieRecurrente / trouverSerieRecurrente', () => {
     expect(serie.map(s => s.id)).toEqual(['s1', 's2']);
   });
 
+  // Bug corrigé : désannuler une séance (S1 déjà en 'annulee', qu'on
+  // s'apprête à repasser en 'planifiee') ne doit jamais l'exclure de sa
+  // propre série, même si son statut actuel au moment du calcul est encore
+  // 'annulee' — seules les AUTRES occurrences annulées restent exclues.
+  it('n\'exclut jamais la référence elle-même de sa propre série, même si son statut est \'annulee\' (désannulation)', () => {
+    const referenceAnnulee = fakeSeance({ id: 's1', contratId: 'contrat-A', date: '2026-07-14', statut: 'annulee' });
+    // S2/S3 restent au statut par défaut ('planifiee') : 2 occurrences
+    // futures actives, le cas où le bug se manifestait (boîte de choix
+    // affichant/agissant sur une autre occurrence que celle cliquée).
+    const serie = trouverSerieRecurrente([referenceAnnulee, S2, S3], referenceAnnulee);
+    expect(serie.map(s => s.id)).toEqual(['s1', 's2', 's3']);
+  });
+
+  it('en revanche, une autre occurrence annulée que la référence reste exclue même dans ce scénario', () => {
+    const referenceAnnulee = fakeSeance({ id: 's1', contratId: 'contrat-A', date: '2026-07-14', statut: 'annulee' });
+    const autreAnnulee = fakeSeance({ id: 's2-annulee', contratId: 'contrat-A', date: '2026-07-21', statut: 'annulee' });
+    const serie = trouverSerieRecurrente([referenceAnnulee, autreAnnulee, S3], referenceAnnulee);
+    expect(serie.map(s => s.id)).toEqual(['s1', 's3']);
+  });
+
   it('deux contrats successifs au même créneau ne se mélangent jamais dans la même série', () => {
     const ancien = fakeSeance({ id: 's-ancien2', contratId: 'contrat-A', date: '2026-07-14' });
     const nouveau = fakeSeance({ id: 's-nouveau2', contratId: 'contrat-B', date: '2026-07-21' });

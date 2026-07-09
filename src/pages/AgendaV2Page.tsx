@@ -7,7 +7,7 @@ import { fr } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { toast } from 'sonner';
-import { X, Loader, Trash2, ChevronDown, ListChecks, ArrowLeft } from 'lucide-react';
+import { X, Loader, Trash2, ChevronDown, ListChecks, ArrowLeft, Undo2 } from 'lucide-react';
 import { useAgenda } from '../hooks/useAgenda';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
@@ -529,13 +529,14 @@ function ModalChoixSerie({ titre, futures, seanceRefId, optionsDisponibles = ['u
 //    (PlanningGrilleView.tsx), sans le volet disponibilités/organisation :
 //    non demandé ici, périmètre propre à cet écran-là. ──────────────────────
 
-function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, onDelete, onClose }: {
+function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, onDelete, onRestaurer, onClose }: {
   seance: Seance;
   nomBeneficiaire: string;
   seances: Seance[];
   contrat: Contrat | null;
   onSave: (updates: MiseAJourSeance) => void;
   onDelete: () => void;
+  onRestaurer: () => void;
   onClose: () => void;
 }) {
   const [date, setDate] = useState(seance.date);
@@ -573,6 +574,16 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
     onClose();
   }
 
+  // Raccourci "↩ Restaurer" — toujours en portée "cette séance uniquement",
+  // jamais de choix série : contourne structurellement le bug corrigé dans
+  // trouverSerieRecurrente (une référence annulée s'excluait elle-même de sa
+  // propre série), et évite au passage de faire deviner à l'utilisateur
+  // qu'il doit re-sélectionner "Planifiée" dans le sélecteur de statut.
+  function handleRestaurer() {
+    onRestaurer();
+    onClose();
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1010 }}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
@@ -586,6 +597,24 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
             <p className="text-xs text-gray-500 mb-0.5">Bénéficiaire</p>
             <p className="text-sm font-semibold text-dark">{nomBeneficiaire}</p>
           </div>
+
+          {seance.statut === 'annulee' && (
+            <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-amber-800">
+                  Séance annulée{seance.motifAnnulation ? ` — ${LABEL_RAISON_ANNULATION[seance.motifAnnulation]}` : ''}
+                </p>
+                {seance.motifAnnulationDetail && (
+                  <p className="text-xs text-amber-700 mt-0.5 truncate">{seance.motifAnnulationDetail}</p>
+                )}
+              </div>
+              <button onClick={handleRestaurer}
+                className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-3 py-2 transition-colors">
+                <Undo2 size={13} />
+                Restaurer
+              </button>
+            </div>
+          )}
 
           {futures.length > 1 && (
             <p className="text-xs text-blue-700 bg-blue-50 rounded-xl px-4 py-3">
@@ -1022,6 +1051,21 @@ export default function AgendaV2Page() {
     });
   }
 
+  // Raccourci "↩ Restaurer" (bouton dédié dans ModalEditSeance, séance déjà
+  // annulée) — toujours "cette séance uniquement", jamais de choix série :
+  // pas besoin de calculerFutures/choixSerie ici, donc structurellement
+  // insensible au bug corrigé dans trouverSerieRecurrente.
+  async function handleRestaurerSeance(seance: Seance) {
+    await executerOperations(
+      [planEditerUnique(seance, {
+        date: seance.date, heureDebut: seance.heureDebut, heureFin: seance.heureFin, dureeMinutes: seance.dureeMinutes,
+        statut: 'planifiee', motifAnnulation: undefined, motifAnnulationDetail: undefined,
+      })],
+      modifierSeance, supprimerSeance,
+    );
+    toast.success('Séance restaurée');
+  }
+
   // Supprime une séance — même logique de portée. « Toutes les suivantes »
   // ne touche jamais l'historique (date < celle de l'occurrence supprimée).
   async function handleSupprimerSeance(seance: Seance) {
@@ -1203,19 +1247,28 @@ export default function AgendaV2Page() {
               eventPropGetter={(event: CalEvent) => {
                 // Séances déjà existantes du bénéficiaire sélectionné :
                 // remplacent la couleur habituelle par statut par un vert
-                // (teal #0d9488) plein — choix assumé, repérer où est ce
-                // bénéficiaire prime sur le statut visuel ici ; le statut
-                // réel reste consultable au clic (modale d'édition). Plein
-                // (pas d'opacité réduite) pour rester bien distinct du fond
-                // de disponibilité (même teal, mais à 16% d'opacité sur les
-                // créneaux vides — voir slotPropGetter). Uniquement du
-                // style, aucun élément ajouté : même prudence que
-                // slotPropGetter, zéro risque pour le glisser-déposer.
+                // (teal #0d9488) — choix assumé, repérer où est ce
+                // bénéficiaire prime sur le statut visuel ici. Distinct du
+                // fond de disponibilité (même teal, mais à 16% d'opacité sur
+                // les créneaux vides — voir slotPropGetter) grâce à
+                // l'opacité pleine par défaut. Une séance annulée reste
+                // néanmoins visuellement distincte (opacité réduite, voir
+                // plus bas) même pour ce bénéficiaire — sinon une annulation
+                // devient indiscernable d'une séance planifiée tant que sa
+                // fiche reste sélectionnée (source de confusion constatée).
+                // Uniquement du style, aucun élément ajouté : même prudence
+                // que slotPropGetter, zéro risque pour le glisser-déposer.
                 const estDuBeneficiaireSelectionne = participantSelectionne && event.resource.participantId === participantSelectionne.id;
                 return {
                   style: {
                     backgroundColor: estDuBeneficiaireSelectionne ? '#0d9488' : getCouleurEvenement(event.resource),
-                    opacity: !estDuBeneficiaireSelectionne && event.resource.statut === 'annulee' ? 0.5 : 1,
+                    // L'opacité réduite d'une séance annulée s'applique
+                    // maintenant aussi au bénéficiaire sélectionné : avant ce
+                    // correctif, une séance annulée de ce bénéficiaire restait
+                    // teal plein, indiscernable d'une séance planifiée — ce
+                    // qui a fait croire à une annulation "qui ne prend pas"
+                    // alors que la donnée changeait bien en base.
+                    opacity: event.resource.statut === 'annulee' ? 0.5 : 1,
                     borderRadius: 6,
                     border: 'none',
                     color: 'white',
@@ -1254,6 +1307,7 @@ export default function AgendaV2Page() {
             contrat={contratEdite}
             onSave={updates => handleEnregistrerSeance(seanceEditee, updates)}
             onDelete={() => handleSupprimerSeance(seanceEditee)}
+            onRestaurer={() => handleRestaurerSeance(seanceEditee)}
             onClose={() => setSeanceEditee(null)}
           />
         );

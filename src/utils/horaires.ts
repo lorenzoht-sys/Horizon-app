@@ -176,11 +176,17 @@ export function cleSerieRecurrente(s: Seance): string {
 }
 
 // Renvoie tous les membres de la même série qu'une séance de référence (elle
-// incluse), triés par date croissante — hors séances annulées.
+// incluse), triés par date croissante — hors séances annulées, SAUF la
+// référence elle-même : si on désannule une séance (statut 'annulee' ->
+// 'planifiee'), elle doit rester dans sa propre série même si son statut
+// actuel est encore 'annulee' au moment du calcul, sous peine de s'exclure
+// elle-même du choix "cette séance uniquement" / "et les suivantes" (bug
+// constaté : la boîte de choix affichait une autre occurrence à sa place, et
+// "et les suivantes" ne touchait jamais la séance réellement cliquée).
 export function trouverSerieRecurrente(seances: Seance[], reference: Seance): Seance[] {
   const cle = cleSerieRecurrente(reference);
   return seances
-    .filter(s => s.statut !== 'annulee' && cleSerieRecurrente(s) === cle)
+    .filter(s => (s.id === reference.id || s.statut !== 'annulee') && cleSerieRecurrente(s) === cle)
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 

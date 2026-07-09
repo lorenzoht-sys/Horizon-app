@@ -283,6 +283,66 @@ describe('Cas 8bis — annulation d\'une séance récurrente, "cette séance uni
   });
 });
 
+describe('Bug corrigé — désannuler une séance dont la série a 2+ occurrences futures actives', () => {
+  // S1 est déjà 'annulee' (on s'apprête à cliquer "Planifiée" dessus). S2/S3
+  // restent 'planifiee' : avant le correctif de trouverSerieRecurrente, S1
+  // s'excluait elle-même de calculerFutures(seances, S1), ce qui faisait
+  // afficher/agir sur la mauvaise occurrence dans ModalChoixSerie.
+  it('calculerFutures inclut bien la référence annulée elle-même, aux côtés des occurrences actives', () => {
+    const s1Annulee: Seance = { ...S1, statut: 'annulee' };
+    const seances = [S0, s1Annulee, S2, S3];
+    const futures = calculerFutures(seances, s1Annulee);
+    expect(futures.map(f => f.id)).toEqual(['s1', 's2', 's3']);
+  });
+
+  it('"cette séance uniquement" restaure bien la référence en \'planifiee\', jamais une autre occurrence', async () => {
+    const s1Annulee: Seance = { ...S1, statut: 'annulee' };
+    const seances = [S0, s1Annulee, S2, S3];
+    const futures = calculerFutures(seances, s1Annulee);
+    expect(futures.length).toBeGreaterThan(1); // la boîte de choix s'ouvrirait bien
+
+    const updates = { date: s1Annulee.date, heureDebut: s1Annulee.heureDebut, heureFin: s1Annulee.heureFin, dureeMinutes: s1Annulee.dureeMinutes, statut: 'planifiee' as const };
+    const op = planEditerUnique(s1Annulee, updates);
+    const { modifierSeance, supprimerSeance } = mocksModifSuppr();
+    await executerOperations([op], modifierSeance, supprimerSeance);
+
+    expect(modifierSeance).toHaveBeenCalledTimes(1);
+    expect(modifierSeance).toHaveBeenCalledWith('s1', expect.objectContaining({ statut: 'planifiee' }));
+    expect(supprimerSeance).not.toHaveBeenCalled();
+  });
+});
+
+// Non-régression demandée après le correctif ci-dessus : le fix vise
+// exclusivement la désannulation (référence déjà 'annulee'). Il ne doit rien
+// changer au sens inverse, déjà fonctionnel avant — annuler une séance dont
+// le statut de départ est 'planifiee', dans une série avec 2+ occurrences
+// futures actives (donc la boîte de choix s'ouvre normalement).
+describe('Non-régression — annuler une séance planifiée (statut de départ ≠ annulee) avec 2+ occurrences futures actives', () => {
+  it('calculerFutures reste inchangée : S1 (planifiee) et ses 2 occurrences actives sont toutes incluses', () => {
+    const seances = [S0, S1, S2, S3]; // S1 est 'planifiee', pas encore annulee
+    const futures = calculerFutures(seances, S1);
+    expect(futures.map(f => f.id)).toEqual(['s1', 's2', 's3']);
+  });
+
+  it('"cette séance uniquement" passe bien S1 en \'annulee\' via un vrai appel modifierSeance, sans toucher S2/S3', async () => {
+    const seances = [S0, S1, S2, S3];
+    const futures = calculerFutures(seances, S1);
+    expect(futures.length).toBeGreaterThan(1); // la boîte de choix s'ouvrirait, comme avant le correctif
+
+    const updates = { date: S1.date, heureDebut: S1.heureDebut, heureFin: S1.heureFin, dureeMinutes: S1.dureeMinutes, statut: 'annulee' as const };
+    const op = planEditerUnique(S1, updates);
+    const { modifierSeance, supprimerSeance } = mocksModifSuppr();
+    await executerOperations([op], modifierSeance, supprimerSeance);
+
+    expect(modifierSeance).toHaveBeenCalledTimes(1);
+    expect(modifierSeance).toHaveBeenCalledWith('s1', expect.objectContaining({ statut: 'annulee' }));
+    const idsAppeles = modifierSeance.mock.calls.map(c => c[0]);
+    expect(idsAppeles).not.toContain('s2');
+    expect(idsAppeles).not.toContain('s3');
+    expect(supprimerSeance).not.toHaveBeenCalled();
+  });
+});
+
 describe('planActionSurSelection — option "Sélectionner les séances concernées" (sélection non contiguë)', () => {
   // S1/S2/S3 : 3 occurrences futures hebdomadaires. On sélectionne S1 et S3
   // (1ère et 3ème), en sautant S2 délibérément — c'est exactement le scénario
