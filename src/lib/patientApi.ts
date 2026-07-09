@@ -34,9 +34,14 @@ export interface SeanceAEnregistrer {
   exercices: { id: string; realise: boolean; commentaire?: string }[];
 }
 
+// Connexion patient par code d'accès et accès délégué par le praticien
+// (sans code) partagent le même endpoint fusionné /api/patient/session,
+// dispatché côté serveur selon la présence de "code" dans le body vs un
+// en-tête Authorization — voir api/patient/session.ts.
+
 export async function patientLogin(code: string): Promise<{ token: string; participantId: string } | { error: string }> {
   try {
-    const res = await fetch('/api/patient/login', {
+    const res = await fetch('/api/patient/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
@@ -57,7 +62,7 @@ export async function patientAccesPraticien(
   participantId: string,
 ): Promise<{ token: string; participantId: string } | { error: string }> {
   try {
-    const res = await fetch('/api/patient/praticien-acces', {
+    const res = await fetch('/api/patient/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader },
       body: JSON.stringify({ participantId }),

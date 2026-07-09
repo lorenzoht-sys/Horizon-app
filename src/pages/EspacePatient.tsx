@@ -2148,8 +2148,8 @@ export default function EspacePatient() {
   // autre patient scanne son propre QR code sur le même appareil).
   const codeUrl = searchParams.get('code');
   // Accès direct depuis la fiche patient côté praticien (bouton "Voir l'espace
-  // patient") : token déjà signé par /api/patient/praticien-acces, pas de
-  // code à saisir. sessionStorage (et non localStorage) garde la trace de
+  // patient") : token déjà signé par /api/patient/session (accès délégué,
+  // sans code à saisir). sessionStorage (et non localStorage) garde la trace de
   // cette origine pour le bandeau "Vous consultez l'espace de ..." même après
   // un rechargement de l'onglet, sans la faire fuiter vers d'autres appareils.
   const ptokenUrl = searchParams.get('ptoken');

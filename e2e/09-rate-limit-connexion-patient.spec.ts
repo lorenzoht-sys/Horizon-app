@@ -12,7 +12,7 @@ test.describe('Limitation des tentatives de connexion patient', () => {
     // exécutions de la suite : on boucle donc jusqu'à 6 fois et on accepte
     // un 429 dès qu'il survient.
     for (let i = 0; i < 6; i++) {
-      const res = await request.post('/api/patient/login', {
+      const res = await request.post('/api/patient/session', {
         data: { code: 'code-invalide-e2e' },
       });
 
