@@ -599,17 +599,17 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
           </div>
 
           {seance.statut === 'annulee' && (
-            <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <div className="flex items-center justify-between gap-3 bg-amber-light border border-amber/20 rounded-xl px-4 py-3">
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-amber-800">
+                <p className="text-xs font-semibold text-amber">
                   Séance annulée{seance.motifAnnulation ? ` — ${LABEL_RAISON_ANNULATION[seance.motifAnnulation]}` : ''}
                 </p>
                 {seance.motifAnnulationDetail && (
-                  <p className="text-xs text-amber-700 mt-0.5 truncate">{seance.motifAnnulationDetail}</p>
+                  <p className="text-xs text-amber mt-0.5 truncate">{seance.motifAnnulationDetail}</p>
                 )}
               </div>
               <button onClick={handleRestaurer}
-                className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-3 py-2 transition-colors">
+                className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold text-white bg-amber hover:opacity-90 rounded-lg px-3 py-2 transition-colors">
                 <Undo2 size={13} />
                 Restaurer
               </button>
