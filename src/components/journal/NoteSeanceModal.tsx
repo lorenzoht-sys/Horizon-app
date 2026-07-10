@@ -23,7 +23,7 @@ export const RESSENTI_CONFIG: Record<RessentiSeance, { emoji: string; label: str
 
 const RESSENTIS = (Object.keys(RESSENTI_CONFIG) as RessentiSeance[]).map(k => ({ value: k, ...RESSENTI_CONFIG[k] }));
 
-const ALERTES_CONFIG = [
+export const ALERTES_CONFIG = [
   { key: 'douleurSignalee'       as const, emoji: '⚠️', label: 'Douleur signalée' },
   { key: 'fatiguePlusQueHabitude'as const, emoji: '😓', label: "Fatigue plus que d'habitude" },
   { key: 'progressionNotable'    as const, emoji: '🎉', label: 'Progression notable' },

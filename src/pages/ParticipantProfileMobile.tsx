@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { differenceInDays } from 'date-fns';
 import {
   ArrowLeft, Pencil, Phone, Navigation, ClipboardList, Mic,
-  TrendingUp, FileText, NotebookPen, ChevronDown, ChevronUp, X, Trash2,
+  TrendingUp, FileText, NotebookPen, X, Trash2,
 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
@@ -16,15 +16,14 @@ import DicteePostSeance from '../components/DicteePostSeance';
 import ParticipantForm from '../components/participant/ParticipantForm';
 import ModalEspacePatient from '../components/participant/ModalEspacePatient';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
-import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
+import CarteJournalSeance, { type JournalEntry } from '../components/journal/CarteJournalSeance';
 import { exportDossierPraticien } from '../utils/exportDossierPDF';
 import BadgeSeancesRestantes from '../components/ui/BadgeSeancesRestantes';
 import { calculerStatutSeancesSemaine } from '../utils/horaires';
 import { TAG_CONFIG } from '../data/profiles';
 import { toast } from 'sonner';
-import type { Bilan, Participant, RessentiSeance } from '../types';
+import type { Bilan, Participant } from '../types';
 import { getContreIndications, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../lib/anamnese';
-import type { CompteRenduSeance } from '../types/seance';
 
 // ── Constants & helpers ───────────────────────────────────────────────────────
 
@@ -47,16 +46,6 @@ const MOBILE_TESTS: { label: string; unite: string; getVal: (b: Bilan) => number
   { label: 'TM6',        unite: ' m',    getVal: b => b.tm6.distanceMetres,     getColor: v => v >= 500 ? 'vert' : v >= 300 ? 'orange' : 'rouge' },
   { label: 'Mémoire',    unite: '/5',    getVal: b => b.memoire.scoreImmediat,  getColor: v => v >= 4 ? 'vert' : v >= 3 ? 'orange' : 'rouge' },
 ];
-
-const PROGRESSION_CONFIG: Record<string, { emoji: string; color: string }> = {
-  'en progrès': { emoji: '📈', color: '#22C55E' },
-  'stable':     { emoji: '➡️', color: '#6B7280' },
-  'régression': { emoji: '📉', color: '#EF4444' },
-};
-
-const HUMEUR_EMOJI: Record<string, string> = {
-  'très bien': '😊', 'bien': '🙂', 'moyen': '😐', 'fatigué': '😓',
-};
 
 function calcAge(dateNaissance: string): number {
   const today = new Date(), birth = new Date(dateNaissance);
@@ -207,10 +196,6 @@ export default function ParticipantProfileMobile() {
   }
 
   // Fused journal entries sorted by date desc
-  type JournalEntry =
-    | { type: 'note';   date: string; data: import('../types').NoteSeance }
-    | { type: 'dictee'; date: string; data: CompteRenduSeance };
-
   const journalEntries: JournalEntry[] = [
     ...notes.map(n  => ({ type: 'note'   as const, date: n.date,       data: n  })),
     ...compteRendus.map(cr => ({ type: 'dictee' as const, date: cr.dateSeance, data: cr })),
@@ -626,88 +611,14 @@ export default function ParticipantProfileMobile() {
           </div>
         ) : (
           <div className="space-y-2">
-            {journalEntries.map(entry => {
-              const expanded = expandedIds.has(entry.data.id);
-
-              if (entry.type === 'note') {
-                const n = entry.data;
-                const r = n.ressenti ? RESSENTI_CONFIG[n.ressenti as RessentiSeance] : null;
-                return (
-                  <div key={n.id} className="bg-white rounded-xl border border-gray-200/60 px-3 py-2.5">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[12px] font-semibold text-gray-700">{formatDateCourt(n.date)}</span>
-                      <div className="flex items-center gap-2">
-                        {r && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white"
-                            style={{ background: r.color }}>{r.label}</span>
-                        )}
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">✏️ Manuelle</span>
-                      </div>
-                    </div>
-                    {n.note && (
-                      <p className={`text-[13px] text-gray-600 leading-relaxed ${expanded ? '' : 'line-clamp-2'}`}>
-                        {n.note}
-                      </p>
-                    )}
-                    {n.note && n.note.length > 100 && (
-                      <button
-                        onClick={() => toggleExpanded(n.id)}
-                        className="mt-1.5 flex items-center gap-0.5 text-[12px] text-gray-400"
-                      >
-                        {expanded ? <><ChevronUp size={12} /> Réduire</> : <><ChevronDown size={12} /> Voir complet</>}
-                      </button>
-                    )}
-                  </div>
-                );
-              }
-
-              const cr = entry.data;
-              const prog = cr.progression ? PROGRESSION_CONFIG[cr.progression] : null;
-              const humeurEmoji = cr.humeurPatient ? HUMEUR_EMOJI[cr.humeurPatient] : null;
-              return (
-                <div key={cr.id} className="bg-white rounded-xl border border-gray-200/60 px-3 py-2.5">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[12px] font-semibold text-gray-700">
-                        {new Date(cr.dateSeance + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                      </span>
-                      {cr.dureeMinutes && <span className="text-[11px] text-gray-400">{cr.dureeMinutes} min</span>}
-                      {humeurEmoji && <span className="text-[14px]">{humeurEmoji}</span>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {prog && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                          style={{ background: `${prog.color}18`, color: prog.color }}>
-                          {prog.emoji}
-                        </span>
-                      )}
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">🎙️ Dictée</span>
-                    </div>
-                  </div>
-                  {cr.exercicesRealises.length > 0 && (
-                    <p className="text-[12px] text-gray-500 mb-1">
-                      🏋️ {cr.exercicesRealises.map(e => e.nom).filter(Boolean).join(' · ')}
-                    </p>
-                  )}
-                  {cr.observations && (
-                    <p className={`text-[13px] text-gray-600 leading-relaxed ${expanded ? '' : 'line-clamp-2'}`}>
-                      {cr.observations}
-                    </p>
-                  )}
-                  {cr.pointsAttention && (
-                    <p className="text-[12px] text-amber-600 mt-1">⚠️ {cr.pointsAttention}</p>
-                  )}
-                  {cr.observations && cr.observations.length > 100 && (
-                    <button
-                      onClick={() => toggleExpanded(cr.id)}
-                      className="mt-1.5 flex items-center gap-0.5 text-[12px] text-gray-400"
-                    >
-                      {expanded ? <><ChevronUp size={12} /> Réduire</> : <><ChevronDown size={12} /> Voir complet</>}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+            {journalEntries.map(entry => (
+              <CarteJournalSeance
+                key={entry.data.id}
+                entry={entry}
+                expanded={expandedIds.has(entry.data.id)}
+                onToggle={() => toggleExpanded(entry.data.id)}
+              />
+            ))}
           </div>
         )}
       </div>

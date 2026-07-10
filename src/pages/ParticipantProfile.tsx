@@ -9,7 +9,7 @@ import { differenceInDays } from 'date-fns';
 import {
   ArrowLeft, Pencil, FileText, TrendingUp, Share2,
   Download, Trash2, Dumbbell, NotebookPen, Calendar, MapPin,
-  RefreshCw, ClipboardList, Mic, ChevronDown, ChevronUp, Save, ExternalLink,
+  RefreshCw, ClipboardList, Mic, Save, ExternalLink,
 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
@@ -29,6 +29,7 @@ import BilanTimeline from '../components/bilan/BilanTimeline';
 import ContratsTab from '../components/participant/ContratsTab';
 import DicteePostSeance from '../components/DicteePostSeance';
 import ModalEspacePatient from '../components/participant/ModalEspacePatient';
+import CarteJournalSeance, { type JournalEntry } from '../components/journal/CarteJournalSeance';
 import { exportDossierPraticien } from '../utils/exportDossierPDF';
 import { calculerNote, NORMES_SCORING } from '../data/norms';
 import { computeTinettiScores, tinettiRisque } from '../data/tinetti';
@@ -110,16 +111,6 @@ const PROFILS_HANDICAP: { id: ProfilHandicap; label: string; emoji: string }[] =
   { id: 'parkinson',        label: 'Parkinson',            emoji: '🫸' },
   { id: 'sep',              label: 'Sclérose en plaques',  emoji: '🎗️' },
 ];
-
-const PROGRESSION_CONFIG: Record<string, { emoji: string; color: string }> = {
-  'en progrès': { emoji: '📈', color: '#22C55E' },
-  'stable':     { emoji: '➡️', color: '#6B7280' },
-  'régression': { emoji: '📉', color: '#EF4444' },
-};
-
-const HUMEUR_EMOJI: Record<string, string> = {
-  'très bien': '😊', 'bien': '🙂', 'moyen': '😐', 'fatigué': '😓',
-};
 
 function calcAge(dateNaissance: string): number {
   const today = new Date(), birth = new Date(dateNaissance);
@@ -499,8 +490,6 @@ function CarteProfilFonctionnel({ participant, bilans }: {
 
 // ── CarteJournalFusion ────────────────────────────────────────────────────────
 
-type JournalEntry = { type: 'dictee'; date: string; data: CompteRenduSeance };
-
 function CarteJournalFusion({ compteRendus, onDicter }: {
   compteRendus: CompteRenduSeance[];
   onDicter: () => void;
@@ -547,52 +536,14 @@ function CarteJournalFusion({ compteRendus, onDicter }: {
         </div>
       ) : (
         <div className="space-y-2">
-          {entries.slice(0, 5).map((entry) => {
-            const expanded = expandedIds.has(entry.data.id);
-            const cr = entry.data;
-            const prog = cr.progression ? PROGRESSION_CONFIG[cr.progression] : null;
-            const humeurEmoji = cr.humeurPatient ? HUMEUR_EMOJI[cr.humeurPatient] : null;
-            return (
-              <div key={cr.id} className="border border-gray-100 rounded-lg px-3 py-2.5 hover:bg-gray-50/50 transition-colors">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[12px] font-semibold text-gray-700 capitalize">
-                      {new Date(cr.dateSeance + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
-                    </span>
-                    {cr.dureeMinutes && <span className="text-[11px] text-gray-400">{cr.dureeMinutes} min</span>}
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">🎙️ Dictée</span>
-                    {prog && (
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: `${prog.color}18`, color: prog.color }}>
-                        {prog.emoji} {cr.progression}
-                      </span>
-                    )}
-                    {humeurEmoji && <span className="text-[13px]">{humeurEmoji}</span>}
-                  </div>
-                </div>
-                {cr.exercicesRealises.length > 0 && (
-                  <p className="text-[11px] text-gray-500 mb-1">
-                    🏋️ {cr.exercicesRealises.map(e => e.nom).filter(Boolean).join(' · ')}
-                  </p>
-                )}
-                {cr.observations && (
-                  <p className={`text-[12px] text-gray-600 leading-snug ${expanded ? '' : 'line-clamp-2'}`}>
-                    "{cr.observations}"
-                  </p>
-                )}
-                {cr.pointsAttention && (
-                  <p className="text-[11px] text-amber-600 mt-1">⚠️ {cr.pointsAttention}</p>
-                )}
-                {cr.observations && cr.observations.length > 120 && (
-                  <button
-                    onClick={() => toggle(cr.id)}
-                    className="mt-1 text-[11px] text-gray-400 hover:text-gray-600 flex items-center gap-0.5"
-                  >
-                    {expanded ? <><ChevronUp size={10} /> Réduire</> : <><ChevronDown size={10} /> Voir complet</>}
-                  </button>
-                )}
-              </div>
-            );
-          })}
+          {entries.slice(0, 5).map((entry) => (
+            <CarteJournalSeance
+              key={entry.data.id}
+              entry={entry}
+              expanded={expandedIds.has(entry.data.id)}
+              onToggle={() => toggle(entry.data.id)}
+            />
+          ))}
         </div>
       )}
     </div>
