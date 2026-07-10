@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Bot, Send, Mic, MicOff, Copy, ArrowLeft, RefreshCw, Search } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
+import { useStructures } from '../hooks/useStructures';
 import { getContreIndications, getTestsAutonomie, getTraitementsActifs, getTraitementsArretes } from '../lib/anamnese';
 import { supabase, getAuthHeader } from '../lib/supabase';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
@@ -10,7 +11,14 @@ import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { pdfMake, mdToPdfMake } from '../utils/markdownToPdf';
-import type { Participant, Bilan } from '../types';
+import { EXERCICES_BASE } from '../data/exercices';
+import {
+  formatContratContexte, formatProgrammeContexte, formatExerciceV1Ligne, formatExerciceV2Ligne,
+  formatStructureContexte, calculerPlanningReel, formatPlanningReelContexte,
+  formatDicteesContexte, formatNotesManuellesContexte,
+  type ProgrammeResume, type PlanningReelResume, type SeanceReelleBrute, type NoteManuelleResume, type DicteeResume,
+} from '../utils/assistantContexte';
+import type { Participant, Bilan, Contrat, RessentiSeance, StatutSeance, RaisonAnnulation, TypeStructure } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -32,13 +40,20 @@ interface AssistantLog {
 }
 
 interface PatientExtras {
-  compteRendus: { dateSeance: string; observations: string; progression: string | null }[];
+  compteRendus: DicteeResume[];
+  notesManuelles: NoteManuelleResume[];
+  /** Programme d'exercices actif, V1 (legacy) ou V2 (séances + planning) — les deux
+   *  systèmes partagent la même table `programmes` et le même flag `actif`. */
+  programme: ProgrammeResume | null;
+  /** Assiduité aux EXERCICES du programme (auto-déclarée côté patient) — distincte de planningReel. */
   adherence?: {
     taux30j: number | null;
     nbSeances30j: number;
     derniereSeance: string | null;
     commentairesRecents: string[];
   };
+  /** Présence aux SÉANCES PLANIFIÉES avec le praticien — distincte de adherence. */
+  planningReel?: PlanningReelResume;
   loading: boolean;
 }
 
@@ -203,11 +218,73 @@ function buildEvolution(ancien: Bilan, recent: Bilan): string {
   return lines.join('\n') || 'Données insuffisantes pour calculer l\'évolution';
 }
 
+/** Charge le programme actif d'un patient directement depuis Supabase (requête
+ *  scopée, pas de hook réactif) — un hook keyed sur le patient sélectionné
+ *  introduirait un risque de lire les données de l'ancien patient au moment
+ *  où runAction() construit le prompt juste après la sélection.
+ *  Gère les deux formats qui partagent la table `programmes` (colonne `type`
+ *  NULL = V1 legacy avec exercices catalogués ; `type` renseigné = V2 avec
+ *  séances + planning dans des tables séparées). */
+async function chargerProgrammeActif(patientId: string): Promise<ProgrammeResume | null> {
+  if (!supabase) return null;
+
+  const { data: progRows } = await supabase
+    .from('programmes')
+    .select('*')
+    .eq('participant_id', patientId)
+    .eq('actif', true)
+    .limit(1);
+  const row = progRows?.[0] as Record<string, unknown> | undefined;
+  if (!row) return null;
+
+  if (row.type) {
+    const { data: seanceRows } = await supabase.from('programme_seances').select('*').eq('programme_id', row.id).order('ordre');
+    const seances = (seanceRows ?? []) as { id: string }[];
+    const [exRes, planRes] = await Promise.all([
+      seances.length > 0
+        ? supabase.from('programme_exercices').select('*').in('seance_id', seances.map(s => s.id)).order('ordre')
+        : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+      supabase.from('programme_planning').select('*').eq('programme_id', row.id),
+    ]);
+    const exRows = (exRes.data ?? []) as Record<string, unknown>[];
+    const planRows = (planRes.data ?? []) as Record<string, unknown>[];
+
+    const lignes = seances.flatMap(s => {
+      const jours = planRows.filter(p => p.seance_id === s.id).map(p => p.jour as string);
+      return exRows
+        .filter(e => e.seance_id === s.id)
+        .map(e => formatExerciceV2Ligne(
+          { nom: (e.nom as string) ?? '', series: (e.series as number) ?? undefined, repetitions: (e.repetitions as number) ?? undefined, dureeSecondes: (e.duree_secondes as number) ?? undefined },
+          jours,
+        ));
+    });
+    return {
+      titre: (row.nom as string) || (row.titre as string) || 'Programme',
+      objectif: (row.objectif as string) || null,
+      messageMotivation: (row.message_motivation as string) || null,
+      lignesExercices: lignes,
+    };
+  }
+
+  const exercices = (row.exercices ?? []) as { exerciceId: string; niveau?: string; series?: number; repetitions?: number | null; dureeSecondes?: number | null; frequenceParSemaine?: number[] }[];
+  const lignes = exercices.map(ex => {
+    const nom = EXERCICES_BASE.find(e => e.id === ex.exerciceId)?.nom ?? ex.exerciceId;
+    return formatExerciceV1Ligne(nom, ex);
+  });
+  return {
+    titre: (row.titre as string) || 'Programme',
+    objectif: (row.objectif as string) || null,
+    messageMotivation: (row.message_motivation as string) || null,
+    lignesExercices: lignes,
+  };
+}
+
 /** Construit le prompt système enrichi avec TOUTES les données du patient. */
 function buildSystemPrompt(
   patient: Participant | null,
   extras: PatientExtras | null,
-  contratInfo?: { dureeMinutes: number; seancesParSemaine: number } | null
+  contrat?: Contrat | null,
+  structure?: { nom: string; type?: TypeStructure } | null,
 ): string {
   const base = `Tu es un assistant clinique expert en Activité Physique Adaptée (APA), spécialisé dans l'accompagnement des enseignants APA libéraux en France.
 Tu réponds UNIQUEMENT en français. Tu es concis, professionnel et pratique.
@@ -258,9 +335,10 @@ Tu cites les recommandations HAS ou SFP-APA quand pertinent.`;
     fssProfilLabel ? `- Fatigue perçue : ${fssProfilLabel} (FSS ${fatigue.score ?? '?'}/63)` : null,
   ].filter(Boolean).join('\n');
 
-  const crText = extras?.compteRendus.length
-    ? extras.compteRendus.slice(0, 5).map(cr => `· ${cr.dateSeance}${cr.progression ? ` [${cr.progression}]` : ''} : ${cr.observations}`).join('\n')
-    : null;
+  const dicteesText = formatDicteesContexte(extras?.compteRendus ?? []);
+  const notesManuellesText = formatNotesManuellesContexte(extras?.notesManuelles ?? []);
+  const planningReelText = formatPlanningReelContexte(extras?.planningReel ?? null);
+  const structureText = formatStructureContexte(structure ?? null);
 
   return `${base}
 
@@ -295,25 +373,46 @@ BILAN ANTÉRIEUR — ${fmt(sortedBilans[2].date)}
 ${buildBilanText(sortedBilans[2])}
 ` : ''}
 ═══════════════════════════════════════
+CONTRAT DE SUIVI
+═══════════════════════════════════════
+${formatContratContexte(contrat ?? null)}
+${contrat ? '⚠️ Respecter impérativement cette durée et cette fréquence dans TOUS les programmes générés.' : 'Adapter le programme à la situation réelle (pas de contrat renseigné).'}
+
+═══════════════════════════════════════
+PROGRAMME D'EXERCICES ACTIF
+═══════════════════════════════════════
+${formatProgrammeContexte(extras?.programme ?? null)}
+
+═══════════════════════════════════════
 SÉANCES DICTÉES RÉCENTES
 ═══════════════════════════════════════
-${crText ?? 'Aucune séance dictée'}
+${dicteesText}
+${notesManuellesText ? `
+═══════════════════════════════════════
+NOTES MANUELLES RÉCENTES (saisies rapides, distinctes des séances dictées)
+═══════════════════════════════════════
+${notesManuellesText}
+` : ''}
 ${extras?.adherence ? `
 ═══════════════════════════════════════
-ASSIDUITÉ PROGRAMMES (30 derniers jours)
+ASSIDUITÉ AUX EXERCICES DU PROGRAMME (30 derniers jours, auto-déclarée par le patient)
 ═══════════════════════════════════════
 Taux de réalisation des exercices : ${extras.adherence.taux30j !== null ? extras.adherence.taux30j + '%' : 'non calculé (aucun exercice enregistré)'}
 Séances enregistrées par le patient : ${extras.adherence.nbSeances30j}
 Dernière séance côté patient : ${extras.adherence.derniereSeance ? new Date(extras.adherence.derniereSeance + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : 'inconnue'}
 ${extras.adherence.commentairesRecents.length > 0 ? 'Commentaires récents du patient :\n' + extras.adherence.commentairesRecents.map(c => `· ${c}`).join('\n') : ''}` : ''}
-
+${planningReelText ? `
 ═══════════════════════════════════════
-ORGANISATION DES SÉANCES
+PRÉSENCE AUX SÉANCES PLANIFIÉES AVEC LE PRATICIEN (distincte de l'assiduité aux exercices ci-dessus)
 ═══════════════════════════════════════
-${contratInfo
-  ? `Durée de séance : ${contratInfo.dureeMinutes} minutes\nFréquence : ${contratInfo.seancesParSemaine} séance${contratInfo.seancesParSemaine > 1 ? 's' : ''} par semaine\n⚠️ Respecter impérativement cette durée et cette fréquence dans TOUS les programmes générés.`
-  : 'Durée et fréquence non renseignées — adapter le programme à la situation réelle.'}
-
+${planningReelText}
+` : ''}
+${structureText ? `
+═══════════════════════════════════════
+STRUCTURE DE RATTACHEMENT
+═══════════════════════════════════════
+${structureText}
+` : ''}
 ═══════════════════════════════════════
 RÈGLES ABSOLUES
 ═══════════════════════════════════════
@@ -322,11 +421,12 @@ RÈGLES ABSOLUES
 3. Comparer systématiquement avec les bilans précédents si disponibles
 4. Si anticoagulants → signaler le risque choc/chute dans CHAQUE proposition
 5. Ne jamais faire de diagnostic médical
-6. Respecter strictement la durée et la fréquence de séance du contrat actif`;
+6. Respecter strictement la durée et la fréquence de séance du contrat en cours — signaler explicitement si ce contrat n'est plus actif (terminé/suspendu)
+7. Ne pas confondre l'assiduité aux exercices du programme (auto-déclarée par le patient) et la présence aux séances planifiées avec le praticien — ce sont deux mesures distinctes`;
 }
 
-function buildActionPrompt(action: ActionType, patient: Participant, extras: PatientExtras | null, contratInfo?: { dureeMinutes: number; seancesParSemaine: number } | null): string {
-  const sys = buildSystemPrompt(patient, extras, contratInfo);
+function buildActionPrompt(action: ActionType, patient: Participant, extras: PatientExtras | null, contrat?: Contrat | null, structure?: { nom: string; type?: TypeStructure } | null): string {
+  const sys = buildSystemPrompt(patient, extras, contrat, structure);
   switch (action) {
     case 'contre_indications':
       return `${sys}\n\n---\nQUESTION:\nEffectue une analyse complète des contre-indications à l'effort pour ce patient.\nPour chaque contre-indication identifiée :\n1. Décris le risque spécifique en APA\n2. Donne les précautions à respecter\n3. Liste les types d'exercices à éviter absolument\n4. Propose des alternatives adaptées et sécurisées`;
@@ -552,7 +652,8 @@ function LeftColumn({
 
 export default function AssistantPage() {
   const { participants } = useParticipants();
-  const { contratActifDeParticipant } = useContrats();
+  const { contratsDeParticipant } = useContrats();
+  const { structures } = useStructures();
   const location = useLocation();
 
   const [phase, setPhase]               = useState<Phase>('home');
@@ -609,16 +710,45 @@ export default function AssistantPage() {
     } catch { /* non bloquant */ }
   }
 
-  /** Charge les séances dictées + assiduité depuis Supabase pour le prompt IA. */
-  async function loadPatientExtras(patientId: string) {
-    setPatientExtras({ compteRendus: [], loading: true });
-    const [crRes, spRes] = await Promise.allSettled([
-      supabase ? supabase.from('comptes_rendus_seances').select('date_seance, observations, progression').eq('participant_id', patientId).order('date_seance', { ascending: false }).limit(5) : Promise.resolve({ data: null }),
+  /** Charge les séances dictées, notes manuelles, présence aux séances planifiées et
+   *  assiduité aux exercices depuis Supabase pour le prompt IA. Renvoie la valeur
+   *  calculée (en plus de la poser en state) pour les appelants qui en ont besoin
+   *  immédiatement, sans dupliquer ces requêtes (cf. handlePatientSelected). */
+  async function loadPatientExtras(patientId: string): Promise<PatientExtras> {
+    setPatientExtras({ compteRendus: [], notesManuelles: [], programme: null, loading: true });
+
+    const fenetrePlanningJours = 90;
+    const seuilPlanning = new Date();
+    seuilPlanning.setDate(seuilPlanning.getDate() - fenetrePlanningJours);
+    const seuilPlanningISO = seuilPlanning.toISOString().slice(0, 10);
+
+    const [crRes, spRes, notesRes, seancesRes, programmeRes] = await Promise.allSettled([
+      supabase ? supabase.from('comptes_rendus_seances').select('date_seance, observations, progression, points_attention, douleurs_signalees').eq('participant_id', patientId).order('date_seance', { ascending: false }).limit(5) : Promise.resolve({ data: null }),
       supabase ? supabase.from('seances_patient').select('id, date_seance, commentaire_patient').eq('participant_id', patientId).order('date_seance', { ascending: false }).limit(30) : Promise.resolve({ data: null }),
+      supabase ? supabase.from('notes_seances').select('date, ressenti, note, alertes, douleur_eva').eq('participant_id', patientId).order('date', { ascending: false }).limit(5) : Promise.resolve({ data: null }),
+      supabase ? supabase.from('seances').select('date, statut, motif_annulation, motif_annulation_detail').eq('participant_id', patientId).eq('type', 'seance').gte('date', seuilPlanningISO) : Promise.resolve({ data: null }),
+      chargerProgrammeActif(patientId),
     ]);
-    const crs = crRes.status === 'fulfilled' && crRes.value.data
-      ? (crRes.value.data as { date_seance: string; observations: string; progression: string | null }[]).map(r => ({ dateSeance: r.date_seance, observations: r.observations, progression: r.progression }))
+    const programme = programmeRes.status === 'fulfilled' ? programmeRes.value : null;
+    const crs: DicteeResume[] = crRes.status === 'fulfilled' && crRes.value.data
+      ? (crRes.value.data as { date_seance: string; observations: string; progression: string | null; points_attention: string | null; douleurs_signalees: string | null }[]).map(r => ({
+          dateSeance: r.date_seance, observations: r.observations, progression: r.progression,
+          pointsAttention: r.points_attention, douleursSignalees: r.douleurs_signalees,
+        }))
       : [];
+
+    const notesManuelles: NoteManuelleResume[] = notesRes.status === 'fulfilled' && notesRes.value.data
+      ? (notesRes.value.data as { date: string; ressenti: RessentiSeance | null; note: string; alertes: NoteManuelleResume['alertes']; douleur_eva: number | null }[]).map(r => ({
+          date: r.date, ressenti: r.ressenti, note: r.note, alertes: r.alertes, douleurEVA: r.douleur_eva,
+        }))
+      : [];
+
+    const seancesReelles: SeanceReelleBrute[] = seancesRes.status === 'fulfilled' && seancesRes.value.data
+      ? (seancesRes.value.data as { date: string; statut: StatutSeance; motif_annulation: RaisonAnnulation | null; motif_annulation_detail: string | null }[]).map(r => ({
+          date: r.date, statut: r.statut, motifAnnulation: r.motif_annulation, motifAnnulationDetail: r.motif_annulation_detail,
+        }))
+      : [];
+    const planningReel = calculerPlanningReel(seancesReelles, new Date(), fenetrePlanningJours);
 
     let adherence: PatientExtras['adherence'] = undefined;
     const spData = spRes.status === 'fulfilled' ? (spRes.value.data as Record<string, unknown>[] | null) ?? [] : [];
@@ -646,7 +776,9 @@ export default function AssistantPage() {
       };
     }
 
-    setPatientExtras({ compteRendus: crs, adherence, loading: false });
+    const extras: PatientExtras = { compteRendus: crs, notesManuelles, programme, adherence, planningReel, loading: false };
+    setPatientExtras(extras);
+    return extras;
   }
 
   function selectPatient(p: Participant) {
@@ -702,50 +834,28 @@ export default function AssistantPage() {
       return;
     }
 
-    // Charger les extras avant de lancer l'action
-    let extras: PatientExtras = { compteRendus: [], loading: false };
-    if (supabase) {
-      const [cr, sp] = await Promise.allSettled([
-        supabase.from('comptes_rendus_seances').select('date_seance, observations, progression').eq('participant_id', patient.id).order('date_seance', { ascending: false }).limit(5),
-        supabase.from('seances_patient').select('id, date_seance, commentaire_patient').eq('participant_id', patient.id).order('date_seance', { ascending: false }).limit(30),
-      ]);
-      const crs = cr.status === 'fulfilled' && cr.value.data
-        ? (cr.value.data as { date_seance: string; observations: string; progression: string | null }[]).map(r => ({ dateSeance: r.date_seance, observations: r.observations, progression: r.progression }))
-        : [];
-      let adherence: PatientExtras['adherence'] = undefined;
-      const spData = sp.status === 'fulfilled' ? (sp.value.data as Record<string, unknown>[] | null) ?? [] : [];
-      if (spData.length > 0) {
-        const j30 = new Date(); j30.setDate(j30.getDate() - 30);
-        const sp30 = spData.filter(s => new Date(s.date_seance as string) >= j30);
-        let taux30j: number | null = null;
-        if (sp30.length > 0) {
-          const erRes = await supabase.from('exercices_realises').select('seance_patient_id, realise').in('seance_patient_id', sp30.map(s => s.id));
-          const erRows = (erRes.data ?? []) as { seance_patient_id: string; realise: boolean }[];
-          const total = erRows.length;
-          taux30j = total > 0 ? Math.round((erRows.filter(e => e.realise).length / total) * 100) : null;
-        }
-        adherence = {
-          taux30j, nbSeances30j: sp30.length,
-          derniereSeance: (spData[0]?.date_seance as string | null) ?? null,
-          commentairesRecents: spData.filter(s => s.commentaire_patient).slice(0, 3).map(s => `${s.date_seance as string} : "${s.commentaire_patient as string}"`),
-        };
-      }
-      extras = { compteRendus: crs, adherence, loading: false };
-      setPatientExtras(extras);
-    }
+    // Charger les extras avant de lancer l'action (même chemin que selectPatient,
+    // pour ne pas dupliquer ces requêtes avec une deuxième implémentation).
+    const extras = supabase ? await loadPatientExtras(patient.id) : { compteRendus: [], notesManuelles: [], programme: null, loading: false };
 
     await runAction(actionType, patient, extras);
   }
 
-  function getContratInfo(patient: Participant) {
-    const c = contratActifDeParticipant(patient.id);
-    if (!c) return null;
-    return { dureeMinutes: c.dureeMinutes, seancesParSemaine: c.nbSeancesSemaine };
+  /** Contrat le plus récent, quel que soit son statut — un contrat terminé/suspendu
+   *  doit rester visible (et signalé) plutôt que de disparaître silencieusement. */
+  function getContratInfo(patient: Participant): Contrat | null {
+    return contratsDeParticipant(patient.id)[0] ?? null;
+  }
+
+  function getStructureInfo(patient: Participant): { nom: string; type?: TypeStructure } | null {
+    if (!patient.structureId) return null;
+    const s = structures.find(st => st.id === patient.structureId);
+    return s ? { nom: s.nom, type: s.type } : null;
   }
 
   async function runAction(action: ActionType, patient: Participant, extras: PatientExtras) {
     setLoading(true);
-    const prompt = buildActionPrompt(action, patient, extras, getContratInfo(patient));
+    const prompt = buildActionPrompt(action, patient, extras, getContratInfo(patient), getStructureInfo(patient));
     // console.log('[AssistantPage] prompt:', prompt); // Décommenter pour débugger
     try {
       const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) }, body: JSON.stringify({ prompt }) });
@@ -773,8 +883,8 @@ export default function AssistantPage() {
     setLoading(true);
 
     if (actionType === 'programme' && selectedPatient) {
-      const extras = patientExtras ?? { compteRendus: [], loading: false };
-      const sys = buildSystemPrompt(selectedPatient, extras, getContratInfo(selectedPatient));
+      const extras = patientExtras ?? { compteRendus: [], notesManuelles: [], programme: null, loading: false };
+      const sys = buildSystemPrompt(selectedPatient, extras, getContratInfo(selectedPatient), getStructureInfo(selectedPatient));
       const prompt = `${sys}\n\n---\nQUESTION:\nGénère un programme d'exercices APA pour l'objectif suivant : "${trimmed}"\n\n## Objectif\n### Exercices recommandés\n- **Nom** — durée/répétitions\n  Précautions : ...\n### Points de vigilance\n### À éviter absolument`;
       try {
         const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) }, body: JSON.stringify({ prompt }) });
@@ -788,8 +898,8 @@ export default function AssistantPage() {
       return;
     }
 
-    const extras = patientExtras ?? { compteRendus: [], loading: false };
-    const sys = buildSystemPrompt(selectedPatient, extras, selectedPatient ? getContratInfo(selectedPatient) : null);
+    const extras = patientExtras ?? { compteRendus: [], notesManuelles: [], programme: null, loading: false };
+    const sys = buildSystemPrompt(selectedPatient, extras, selectedPatient ? getContratInfo(selectedPatient) : null, selectedPatient ? getStructureInfo(selectedPatient) : null);
     const history = messages.filter(m => m.role === 'user' || m.role === 'assistant').map(m => `${m.role === 'user' ? 'Q' : 'R'}: ${m.content}`).join('\n\n');
     const fullPrompt = history
       ? `${sys}\n\n---\nÉCHANGES PRÉCÉDENTS:\n${history}\n\n---\nQUESTION:\n${trimmed}`
@@ -804,7 +914,7 @@ export default function AssistantPage() {
     } catch (err) {
       setMessages(prev => [...prev, { id: newId(), role: 'assistant', content: `Erreur : ${err instanceof Error ? err.message : String(err)}` }]);
     } finally { setLoading(false); }
-  }, [loading, messages, selectedPatient, actionType, patientExtras, resetSpeech, contratActifDeParticipant]);
+  }, [loading, messages, selectedPatient, actionType, patientExtras, resetSpeech, contratsDeParticipant, structures]);
 
   async function saveLog(question: string, reponse: string, patientId: string | null, action: ActionType) {
     if (!supabase) return;
