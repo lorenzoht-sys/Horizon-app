@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { pdfMake, mdToPdfMake } from '../utils/markdownToPdf';
+import ModalRelecturePartage from '../components/assistant/ModalRelecturePartage';
 import { EXERCICES_BASE } from '../data/exercices';
 import {
   formatContratContexte, formatProgrammeContexte, formatExerciceV1Ligne, formatExerciceV2Ligne,
@@ -667,6 +668,11 @@ export default function AssistantPage() {
   const [logs, setLogs]                 = useState<AssistantLog[]>([]);
   const [logSearch, setLogSearch]       = useState('');
   const [expandedCard, setExpandedCard] = useState<ActionType | null>(null);
+  const [modalPartage, setModalPartage] = useState<{
+    destinataire: string;
+    texteInitial: string;
+    onConfirmer: (texteFinal: string) => Promise<void>;
+  } | null>(null);
 
   const praticienPrenom = loadPraticienPrenom();
   const messagesEndRef  = useRef<HTMLDivElement>(null);
@@ -1134,17 +1140,26 @@ export default function AssistantPage() {
                     </button>
                     {showPartagerBtn && (
                       <button
-                        onClick={async () => {
-                          if (!supabase || !selectedPatient) return;
-                          const date = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-                          const { error } = await supabase.from('documents_patient').insert({
-                            participant_id: selectedPatient.id,
-                            titre: `Compte-rendu du ${date}`,
-                            contenu: msg.content,
-                            type: 'compte_rendu_famille',
+                        onClick={() => {
+                          if (!selectedPatient) return;
+                          const patient = selectedPatient;
+                          setModalPartage({
+                            destinataire: `${patient.prenom} ${patient.nom} (bénéficiaire)`,
+                            texteInitial: msg.content,
+                            onConfirmer: async (texteFinal) => {
+                              if (!supabase) return;
+                              const date = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+                              const { error } = await supabase.from('documents_patient').insert({
+                                participant_id: patient.id,
+                                titre: `Compte-rendu du ${date}`,
+                                contenu: texteFinal,
+                                type: 'compte_rendu_famille',
+                              });
+                              if (!error) toast.success(`Document partagé avec ${patient.prenom} ✅`);
+                              else toast.error('Erreur lors du partage');
+                              setModalPartage(null);
+                            },
                           });
-                          if (!error) toast.success(`Document partagé avec ${selectedPatient.prenom} ✅`);
-                          else toast.error('Erreur lors du partage');
                         }}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: 'var(--color-ink)', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                         👁️ Partager avec le bénéficiaire
@@ -1152,16 +1167,27 @@ export default function AssistantPage() {
                     )}
                     {showPdfBar && selectedPatient?.structureId && (
                       <button
-                        onClick={async () => {
-                          if (!supabase || !selectedPatient?.structureId) return;
-                          const { error } = await supabase.from('documents_partages').insert({
-                            participant_id: selectedPatient.id,
-                            structure_id: selectedPatient.structureId,
-                            type_document: actionType,
-                            contenu: msg.content,
+                        onClick={() => {
+                          if (!selectedPatient?.structureId) return;
+                          const patient = selectedPatient;
+                          const structureId = patient.structureId!;
+                          const nomStructure = structures.find(s => s.id === structureId)?.nom ?? 'la structure';
+                          setModalPartage({
+                            destinataire: `${nomStructure} (structure)`,
+                            texteInitial: msg.content,
+                            onConfirmer: async (texteFinal) => {
+                              if (!supabase) return;
+                              const { error } = await supabase.from('documents_partages').insert({
+                                participant_id: patient.id,
+                                structure_id: structureId,
+                                type_document: actionType,
+                                contenu: texteFinal,
+                              });
+                              if (!error) toast.success('Document partagé avec la structure ✅');
+                              else toast.error('Erreur lors du partage');
+                              setModalPartage(null);
+                            },
                           });
-                          if (!error) toast.success('Document partagé avec la structure ✅');
-                          else toast.error('Erreur lors du partage');
                         }}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: 'white', border: '0.5px solid #E5E7EB', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: 'var(--color-ink)' }}>
                         🏢 Partager avec la structure
@@ -1211,6 +1237,15 @@ export default function AssistantPage() {
           </div>
         )}
       </div>
+
+      {modalPartage && (
+        <ModalRelecturePartage
+          destinataire={modalPartage.destinataire}
+          texteInitial={modalPartage.texteInitial}
+          onAnnuler={() => setModalPartage(null)}
+          onConfirmer={modalPartage.onConfirmer}
+        />
+      )}
     </div>
   );
 }
