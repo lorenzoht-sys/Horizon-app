@@ -11,6 +11,7 @@ import { TESTS_ETALONS, getTestEtalon } from '../data/testsEtalons';
 import { exportProgrammePDF } from '../utils/exportPDF';
 import { exportCarteSantePatient } from '../utils/exportDossierPDF';
 import { getSessionPatient, sauvegarderSessionPatient, purgerSessionPatient, getAccesPatient } from '../hooks/useAccesPatients';
+import MarkdownRendu from '../components/ui/MarkdownRendu';
 import { getTestsAutonomie } from '../lib/anamnese';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1944,6 +1945,7 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
 }) {
   const navigate = useNavigate();
   const [genPDF, setGenPDF] = useState(false);
+  const [documentsDeplies, setDocumentsDeplies] = useState<Set<string>>(new Set());
   const praticien = loadPraticien();
   const sortedBilans = [...bilans].sort((a, b) => b.date.localeCompare(a.date));
   const carteSanteAutorisee = getAccesPatient(participant.id).visibilite.carteSante;
@@ -2017,32 +2019,58 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
           <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', paddingLeft: 2 }}>
             Partagé par {praticien.nom.split(' ')[0]} ({documentsPatient.length})
           </div>
-          {documentsPatient.map(doc => (
-            <div key={doc.id} style={{
-              background: 'white', border: `1.5px solid rgba(43,191,191,0.3)`,
-              borderRadius: 18, padding: '18px 16px',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>
-                    📝 {doc.titre}
-                  </div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-                    {fmtCourt(doc.date_creation?.slice(0, 10) ?? '')} · {praticien.nom.split(' ')[0]}
-                  </div>
-                </div>
-                <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(43,191,191,0.1)', color: C.teal, padding: '3px 8px', borderRadius: 20 }}>
-                  Partagé
-                </span>
-              </div>
-              <div style={{
-                fontSize: 13, color: C.text, lineHeight: 1.7,
-                whiteSpace: 'pre-wrap', maxHeight: 200, overflow: 'hidden',
+          {documentsPatient.map(doc => {
+            const deplie = documentsDeplies.has(doc.id);
+            const long = doc.contenu.length > 320;
+            return (
+              <div key={doc.id} style={{
+                background: 'white', border: `1.5px solid rgba(43,191,191,0.3)`,
+                borderRadius: 18, padding: '18px 16px',
               }}>
-                {doc.contenu.slice(0, 400)}{doc.contenu.length > 400 ? '…' : ''}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>
+                      📝 {doc.titre}
+                    </div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                      {fmtCourt(doc.date_creation?.slice(0, 10) ?? '')} · {praticien.nom.split(' ')[0]}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(43,191,191,0.1)', color: C.teal, padding: '3px 8px', borderRadius: 20 }}>
+                    Partagé
+                  </span>
+                </div>
+                <div style={{
+                  fontSize: 13, color: C.text,
+                  maxHeight: !deplie && long ? 150 : undefined,
+                  overflow: 'hidden', position: 'relative',
+                }}>
+                  <MarkdownRendu>{doc.contenu}</MarkdownRendu>
+                  {!deplie && long && (
+                    <div style={{
+                      position: 'absolute', bottom: 0, left: 0, right: 0, height: 44,
+                      background: 'linear-gradient(transparent, white)',
+                    }} />
+                  )}
+                </div>
+                {long && (
+                  <button
+                    onClick={() => setDocumentsDeplies(prev => {
+                      const next = new Set(prev);
+                      next.has(doc.id) ? next.delete(doc.id) : next.add(doc.id);
+                      return next;
+                    })}
+                    style={{
+                      marginTop: 6, background: 'none', border: 'none', padding: 0,
+                      fontSize: 12, fontWeight: 700, color: C.teal, cursor: 'pointer',
+                    }}
+                  >
+                    {deplie ? 'Voir moins ▲' : 'Voir plus ▾'}
+                  </button>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </>
       )}
 

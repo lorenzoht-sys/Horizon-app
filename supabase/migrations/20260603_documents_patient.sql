@@ -15,11 +15,31 @@ CREATE TABLE IF NOT EXISTS documents_patient (
 CREATE INDEX IF NOT EXISTS idx_documents_patient_participant ON documents_patient(participant_id);
 CREATE INDEX IF NOT EXISTS idx_documents_patient_created ON documents_patient(created_at DESC);
 
--- RLS : le patient peut lire ses propres documents, Pierre peut tout faire
+-- Auto-remplit praticien_id depuis l'utilisateur connecté si absent — même
+-- fonction que comptes_rendus_seances, déjà en place (voir supabase/schema.sql,
+-- utilisée par participants/comptes_rendus_seances/assistant_logs/rappels).
+CREATE TRIGGER documents_patient_set_praticien
+  BEFORE INSERT ON documents_patient
+  FOR EACH ROW EXECUTE FUNCTION set_praticien_id_from_auth();
+
+-- RLS : seul le praticien propriétaire du participant peut lire/écrire/supprimer.
+-- Pas de policy de lecture publique/anonyme : la lecture côté bénéficiaire passe
+-- exclusivement par api/patient/me.ts, qui utilise la clé service_role — donc
+-- contourne RLS entièrement, après vérification du token patient côté serveur.
+-- Une policy anon ici ne serait donc jamais empruntée par un chemin légitime,
+-- seulement exploitable.
 ALTER TABLE documents_patient ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "Lecture publique par participant_id" ON documents_patient
-  FOR SELECT USING (true);
-CREATE POLICY IF NOT EXISTS "Ecriture authentifiee" ON documents_patient
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY IF NOT EXISTS "Suppression authentifiee" ON documents_patient
-  FOR DELETE USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Lecture publique par participant_id" ON documents_patient;
+DROP POLICY IF EXISTS "Ecriture authentifiee" ON documents_patient;
+DROP POLICY IF EXISTS "Suppression authentifiee" ON documents_patient;
+DROP POLICY IF EXISTS "praticien_gere_documents_patient" ON documents_patient;
+
+CREATE POLICY "praticien_gere_documents_patient" ON documents_patient
+  FOR ALL USING (
+    participant_id IN (SELECT id FROM participants WHERE praticien_id = auth.uid())
+  ) WITH CHECK (
+    participant_id IN (SELECT id FROM participants WHERE praticien_id = auth.uid())
+  );
+
+NOTIFY pgrst, 'reload schema';

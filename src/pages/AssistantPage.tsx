@@ -5,12 +5,12 @@ import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
 import { useStructures } from '../hooks/useStructures';
 import { getContreIndications, getTestsAutonomie, getTraitementsActifs, getTraitementsArretes } from '../lib/anamnese';
+import { partagerDocument } from '../lib/partageDocument';
 import { supabase, getAuthHeader } from '../lib/supabase';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { toast } from 'sonner';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { pdfMake, mdToPdfMake } from '../utils/markdownToPdf';
+import MarkdownRendu from '../components/ui/MarkdownRendu';
 import ModalRelecturePartage from '../components/assistant/ModalRelecturePartage';
 import { EXERCICES_BASE } from '../data/exercices';
 import {
@@ -74,27 +74,6 @@ const ACTION_LABELS: Record<ActionType, string> = {
   programme:            "suggérer un programme d'exercices",
   interpretation:       'interpréter les résultats de test',
   libre:                'poser une question',
-};
-
-const MD_COMPONENTS = {
-  h1: ({children}: any) => <h1 style={{fontSize:'18px', fontWeight:'600', color:'#111827', marginBottom:'12px', marginTop:'16px'}}>{children}</h1>,
-  h2: ({children}: any) => <h2 style={{fontSize:'15px', fontWeight:'600', color:'#111827', marginBottom:'8px', marginTop:'14px'}}>{children}</h2>,
-  h3: ({children}: any) => <h3 style={{fontSize:'14px', fontWeight:'500', color:'var(--color-teal)', marginBottom:'6px', marginTop:'12px'}}>{children}</h3>,
-  p: ({children}: any) => <p style={{fontSize:'14px', lineHeight:'1.7', color:'#374151', marginBottom:'8px'}}>{children}</p>,
-  strong: ({children}: any) => <strong style={{fontWeight:'600', color:'#111827'}}>{children}</strong>,
-  ul: ({children}: any) => <ul style={{paddingLeft:'18px', marginBottom:'8px'}}>{children}</ul>,
-  li: ({children}: any) => <li style={{fontSize:'14px', lineHeight:'1.7', color:'#374151', marginBottom:'4px'}}>{children}</li>,
-  hr: () => <hr style={{border:'none', borderTop:'0.5px solid #E5E7EB', margin:'12px 0'}} />,
-  table: ({children}: any) => (
-    <div style={{overflowX:'auto', marginBottom:'16px', marginTop:'8px'}}>
-      <table style={{width:'100%', borderCollapse:'collapse', fontSize:'13px', border:'0.5px solid #E5E7EB', borderRadius:'8px', overflow:'hidden'}}>{children}</table>
-    </div>
-  ),
-  thead: ({children}: any) => <thead style={{background:'#F9FAFB'}}>{children}</thead>,
-  tbody: ({children}: any) => <tbody>{children}</tbody>,
-  tr: ({children}: any) => <tr style={{borderBottom:'0.5px solid #E5E7EB'}}>{children}</tr>,
-  th: ({children}: any) => <th style={{padding:'8px 12px', fontWeight:'500', color:'#6B7280', textAlign:'left', fontSize:'12px', letterSpacing:'0.03em'}}>{children}</th>,
-  td: ({children}: any) => <td style={{padding:'8px 12px', color:'#374151', fontSize:'13px', verticalAlign:'top'}}>{children}</td>,
 };
 
 // ── PDF export ────────────────────────────────────────────────────────────────
@@ -1122,7 +1101,7 @@ export default function AssistantPage() {
                     }}>
                     {msg.role === 'user'
                       ? msg.content
-                      : <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{msg.content}</ReactMarkdown>
+                      : <MarkdownRendu>{msg.content}</MarkdownRendu>
                     }
                   </div>
                 </div>
@@ -1148,16 +1127,21 @@ export default function AssistantPage() {
                             texteInitial: msg.content,
                             onConfirmer: async (texteFinal) => {
                               if (!supabase) return;
+                              const client = supabase;
                               const date = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-                              const { error } = await supabase.from('documents_patient').insert({
-                                participant_id: patient.id,
-                                titre: `Compte-rendu du ${date}`,
-                                contenu: texteFinal,
-                                type: 'compte_rendu_famille',
-                              });
-                              if (!error) toast.success(`Document partagé avec ${patient.prenom} ✅`);
-                              else toast.error('Erreur lors du partage');
-                              setModalPartage(null);
+                              const resultat = await partagerDocument(
+                                () => client.from('documents_patient').insert({
+                                  participant_id: patient.id,
+                                  titre: `Compte-rendu du ${date}`,
+                                  contenu: texteFinal,
+                                  type: 'compte_rendu_famille',
+                                }),
+                                `Document partagé avec ${patient.prenom} ✅`,
+                              );
+                              // Ne ferme la modale qu'en cas de succès — sinon le texte relu/édité
+                              // serait perdu et il faudrait tout recommencer pour réessayer.
+                              if (resultat.succes) { toast.success(resultat.message); setModalPartage(null); }
+                              else toast.error(resultat.message);
                             },
                           });
                         }}
@@ -1177,15 +1161,18 @@ export default function AssistantPage() {
                             texteInitial: msg.content,
                             onConfirmer: async (texteFinal) => {
                               if (!supabase) return;
-                              const { error } = await supabase.from('documents_partages').insert({
-                                participant_id: patient.id,
-                                structure_id: structureId,
-                                type_document: actionType,
-                                contenu: texteFinal,
-                              });
-                              if (!error) toast.success('Document partagé avec la structure ✅');
-                              else toast.error('Erreur lors du partage');
-                              setModalPartage(null);
+                              const client = supabase;
+                              const resultat = await partagerDocument(
+                                () => client.from('documents_partages').insert({
+                                  participant_id: patient.id,
+                                  structure_id: structureId,
+                                  type_document: actionType,
+                                  contenu: texteFinal,
+                                }),
+                                'Document partagé avec la structure ✅',
+                              );
+                              if (resultat.succes) { toast.success(resultat.message); setModalPartage(null); }
+                              else toast.error(resultat.message);
                             },
                           });
                         }}
