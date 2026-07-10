@@ -29,6 +29,7 @@ export function useSpeechRecognition(): SpeechRecognitionHook {
   const recognitionRef    = useRef<any>(null);
   const wantsRecordingRef = useRef(false);
   const accumulatedRef    = useRef('');
+  const stopTimeoutRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Ref vers la fonction de setup pour éviter les closures périmées sur iOS
   const setupRecognitionRef = useRef<(r: any) => void>(null!);
@@ -70,9 +71,9 @@ export function useSpeechRecognition(): SpeechRecognitionHook {
     };
 
     recognition.onend = () => {
-      setInterimTranscript('');
       // Sur iOS : redémarrer automatiquement si l'utilisateur veut toujours dicter
       if (isIOSDevice && wantsRecordingRef.current) {
+        setInterimTranscript('');
         setTimeout(() => {
           const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
           if (!SR || !wantsRecordingRef.current) {
@@ -90,6 +91,17 @@ export function useSpeechRecognition(): SpeechRecognitionHook {
           }
         }, 150);
       } else {
+        // Si l'utilisateur n'a pas demandé l'arrêt (wantsRecordingRef toujours
+        // vrai), la session a été coupée par le système — écran verrouillé,
+        // onglet mis en arrière-plan... Android Chrome ne prévient pas
+        // autrement. On le signale plutôt que de couper en silence.
+        // On NE vide PAS interimTranscript ici : c'est le seul texte qui
+        // reste si le dernier segment n'a jamais été marqué "final" (voir
+        // resoudreTranscriptionFinale, utilisé par DicteePostSeance).
+        if (wantsRecordingRef.current) {
+          setError("L'enregistrement a été interrompu. Réessayez.");
+          wantsRecordingRef.current = false;
+        }
         setIsRecording(false);
       }
     };
@@ -120,10 +132,19 @@ export function useSpeechRecognition(): SpeechRecognitionHook {
 
   const stopRecording = useCallback(() => {
     wantsRecordingRef.current = false;
-    recognitionRef.current?.stop();
+    // Délai de grâce : laisse une chance au moteur de marquer comme "final"
+    // le dernier segment prononcé avant de couper — sans ça, la dernière
+    // phrase est parfois perdue si on arrête juste après avoir parlé.
+    stopTimeoutRef.current = setTimeout(() => {
+      recognitionRef.current?.stop();
+    }, 500);
   }, []);
 
   const reset = useCallback(() => {
+    if (stopTimeoutRef.current) {
+      clearTimeout(stopTimeoutRef.current);
+      stopTimeoutRef.current = null;
+    }
     wantsRecordingRef.current = false;
     recognitionRef.current?.stop();
     accumulatedRef.current = '';

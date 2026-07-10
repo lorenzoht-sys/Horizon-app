@@ -3,6 +3,7 @@ import { X, Mic, MicOff, RefreshCw, CheckCircle, Plus, Trash2, PenLine } from 'l
 import type { Participant } from '../types';
 import type { ExerciceRealise, CompteRenduSeanceInsert } from '../types/seance';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import { resoudreTranscriptionFinale } from '../lib/dicteeTranscription';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 
@@ -154,12 +155,31 @@ export default function DicteePostSeance({ participant, onClose, onSave }: Props
   useEffect(() => {
     if (!isRecording && analysePending) {
       setAnalysePending(false);
-      const text = finalTranscript.trim();
-      if (text) analyserTranscription(text);
-      else setEtat('idle');
+      const { texte } = resoudreTranscriptionFinale(finalTranscript, interimTranscript);
+      if (texte) {
+        analyserTranscription(texte);
+      } else {
+        toast.error("Aucune parole détectée. Réessayez en parlant, puis attendez un instant avant d'arrêter.");
+        setEtat('idle');
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRecording, analysePending]);
+
+  // Rendre visible toute erreur du hook (permission refusée, coupure système…)
+  // — la bannière inline peut être hors champ sur mobile, le toast ne l'est pas.
+  useEffect(() => {
+    if (speechError) toast.error(speechError);
+  }, [speechError]);
+
+  // Si le système a coupé l'enregistrement (écran verrouillé, focus perdu…)
+  // sans que l'utilisateur ait cliqué sur "Arrêter", l'écran restait figé
+  // sur "Enregistrement en cours" alors que le micro n'écoutait plus.
+  useEffect(() => {
+    if (!isRecording && etat === 'recording' && !analysePending && speechError) {
+      setEtat('idle');
+    }
+  }, [isRecording, etat, analysePending, speechError]);
 
   const analyserTranscription = useCallback(async (transcription: string) => {
     setEtat('processing');
@@ -357,6 +377,12 @@ export default function DicteePostSeance({ participant, onClose, onSave }: Props
               </div>
               <p className="text-xs text-gray-400 font-mono mb-5">{formatTimer(timer)}</p>
 
+              {speechError && (
+                <div className="mb-3 w-full bg-red-light border border-red-200 rounded-xl p-3">
+                  <p className="text-xs text-red-600 font-medium">{speechError}</p>
+                </div>
+              )}
+
               <div className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 min-h-[100px] max-h-[200px] overflow-y-auto">
                 {transcriptionAffichee ? (
                   <p className="text-sm text-dark leading-relaxed">
@@ -367,12 +393,6 @@ export default function DicteePostSeance({ participant, onClose, onSave }: Props
                   <p className="text-sm text-gray-400 italic">En attente de parole…</p>
                 )}
               </div>
-
-              {speechError && (
-                <div className="mt-3 w-full bg-red-light border border-red-200 rounded-xl p-3">
-                  <p className="text-xs text-red-600">{speechError}</p>
-                </div>
-              )}
             </div>
           )}
 
