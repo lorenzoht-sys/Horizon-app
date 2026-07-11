@@ -3,7 +3,7 @@
 // le composant React (pas de jsdom/RTL dans ce projet — voir vitest.config.ts).
 
 import type {
-  Contrat, StatutContrat, RessentiSeance, StatutSeance, RaisonAnnulation, TypeStructure,
+  Contrat, StatutContrat, RessentiSeance, StatutSeance, TypeStructure,
 } from '../types';
 
 function formatDateLongue(date: string): string {
@@ -102,8 +102,6 @@ export function formatStructureContexte(structure: { nom: string; type?: TypeStr
 export interface SeanceReelleBrute {
   date: string;
   statut: StatutSeance;
-  motifAnnulation?: RaisonAnnulation | null;
-  motifAnnulationDetail?: string | null;
 }
 
 export interface PlanningReelResume {
@@ -112,15 +110,14 @@ export interface PlanningReelResume {
   realisees: number;
   annulees: number;
   tauxPresence: number | null;
-  dernieresAnnulations: { date: string; motif: string }[];
 }
 
-const LABEL_RAISON_ANNULATION: Record<RaisonAnnulation, string> = {
-  maladie: 'maladie', vacances: 'vacances', rdv_medical: 'rendez-vous médical',
-  indisponibilite_personnelle: 'indisponibilité personnelle', transport: 'transport',
-  meteo: 'météo', hospitalisation: 'hospitalisation', autre: 'autre',
-};
-
+/** N'inclut volontairement PAS le motif d'annulation (motif_annulation /
+ *  motif_annulation_detail) : ce sont des données internes au praticien,
+ *  jamais exposées au bénéficiaire ni à la structure (cf. api/patient/me.ts,
+ *  api/structure/data.ts). Comme ce contexte alimente un prompt IA dont la
+ *  sortie peut être partagée directement avec l'un ou l'autre (compte-rendu
+ *  famille, document structure), le motif ne doit jamais y transiter. */
 export function calculerPlanningReel(
   seances: SeanceReelleBrute[],
   aujourdHui: Date = new Date(),
@@ -136,31 +133,19 @@ export function calculerPlanningReel(
   const annulees = fenetre.filter(s => s.statut === 'annulee');
   const passees = realisees.length + annulees.length;
 
-  const dernieresAnnulations = [...annulees]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 3)
-    .map(s => ({
-      date: s.date,
-      motif: s.motifAnnulation ? LABEL_RAISON_ANNULATION[s.motifAnnulation] : (s.motifAnnulationDetail || 'non précisé'),
-    }));
-
   return {
     fenetreJours,
     total: fenetre.length,
     realisees: realisees.length,
     annulees: annulees.length,
     tauxPresence: passees > 0 ? Math.round((realisees.length / passees) * 100) : null,
-    dernieresAnnulations,
   };
 }
 
 /** Section optionnelle : chaîne vide si aucune séance planifiée dans la fenêtre. */
 export function formatPlanningReelContexte(resume: PlanningReelResume | null): string {
   if (!resume || resume.total === 0) return '';
-  const motifs = resume.dernieresAnnulations.length > 0
-    ? ` (${resume.dernieresAnnulations.map(a => a.motif).join(', ')})`
-    : '';
-  const ligne1 = `Séances planifiées (${resume.fenetreJours} derniers jours) : ${resume.realisees} réalisée${resume.realisees > 1 ? 's' : ''} / ${resume.annulees} annulée${resume.annulees > 1 ? 's' : ''}${motifs} / ${resume.total} total`;
+  const ligne1 = `Séances planifiées (${resume.fenetreJours} derniers jours) : ${resume.realisees} réalisée${resume.realisees > 1 ? 's' : ''} / ${resume.annulees} annulée${resume.annulees > 1 ? 's' : ''} / ${resume.total} total`;
   const ligne2 = resume.tauxPresence !== null ? `Taux de présence aux séances planifiées : ${resume.tauxPresence}%` : null;
   return [ligne1, ligne2].filter(Boolean).join('\n');
 }
@@ -226,4 +211,24 @@ export function formatNotesManuellesContexte(notes: NoteManuelleResume[]): strin
     ].filter(Boolean).join(' — ');
     return `· ${n.date}${detail ? ` (${detail})` : ''} : ${n.note}`;
   }).join('\n');
+}
+
+// ── Historique conversationnel (mode "libre") ───────────────────────────────
+
+export interface MessageConversation {
+  role: 'user' | 'assistant' | 'patient_select';
+  content: string;
+}
+
+/** Formate les échanges précédents pour le prompt IA envoyé au modèle, tronqués
+ *  aux `maxEchanges` derniers échanges (question + réponse) — l'AFFICHAGE à
+ *  l'écran, lui, montre toujours la conversation complète ; seul ce qui est
+ *  envoyé au modèle est limité, pour éviter une croissance illimitée du prompt
+ *  (et donc du coût/latence) sur les conversations longues. Un utilisateur qui
+ *  fait référence à un échange plus ancien que la fenêtre ne fait pas planter
+ *  l'app : le modèle répond simplement sans ce contexte-là. */
+export function formatHistoriqueConversation(messages: MessageConversation[], maxEchanges = 10): string {
+  const tours = messages.filter(m => m.role === 'user' || m.role === 'assistant');
+  const tronque = tours.slice(-maxEchanges * 2);
+  return tronque.map(m => `${m.role === 'user' ? 'Q' : 'R'}: ${m.content}`).join('\n\n');
 }

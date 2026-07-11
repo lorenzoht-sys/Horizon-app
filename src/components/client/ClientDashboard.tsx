@@ -6,6 +6,7 @@ import ClientProgramme from './ClientProgramme';
 import { Activity, TrendingUp, Calendar, Award } from 'lucide-react';
 import { useProgramme } from '../../hooks/useProgramme';
 import { calculerNote, NORMES_SCORING } from '../../data/norms';
+import MarkdownRendu from '../ui/MarkdownRendu';
 
 interface Props { participant: Participant }
 
@@ -77,7 +78,7 @@ function OngletProgres({ participant, bilans }: { participant: Participant; bila
             <TrendingUp size={15} className="text-secondary" />
             <span className="font-semibold text-dark text-sm">Message de votre coach</span>
           </div>
-          <p className="text-dark text-sm leading-relaxed italic">"{actuel.messageClient}"</p>
+          <div className="text-dark text-sm leading-relaxed italic"><MarkdownRendu>{actuel.messageClient}</MarkdownRendu></div>
           <div className="flex items-center gap-1 mt-2 text-xs text-gray-400">
             <Calendar size={10} />
             {new Date(actuel.date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
@@ -209,7 +210,7 @@ function OngletHistorique({ bilans }: { bilans: Bilan[] }) {
 
               {b.messageClient && (
                 <div className="mt-3 pt-3 border-t border-gray-50 text-xs text-secondary italic">
-                  "{b.messageClient}"
+                  <MarkdownRendu>{b.messageClient}</MarkdownRendu>
                 </div>
               )}
             </div>

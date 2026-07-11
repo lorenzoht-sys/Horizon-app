@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Bot, Send, Mic, MicOff, Copy, ArrowLeft, RefreshCw, Search } from 'lucide-react';
+import { Bot, Send, Mic, MicOff, Copy, ArrowLeft, RefreshCw, Search, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
 import { useStructures } from '../hooks/useStructures';
@@ -16,10 +16,11 @@ import { EXERCICES_BASE } from '../data/exercices';
 import {
   formatContratContexte, formatProgrammeContexte, formatExerciceV1Ligne, formatExerciceV2Ligne,
   formatStructureContexte, calculerPlanningReel, formatPlanningReelContexte,
-  formatDicteesContexte, formatNotesManuellesContexte,
+  formatDicteesContexte, formatNotesManuellesContexte, formatHistoriqueConversation,
   type ProgrammeResume, type PlanningReelResume, type SeanceReelleBrute, type NoteManuelleResume, type DicteeResume,
 } from '../utils/assistantContexte';
-import type { Participant, Bilan, Contrat, RessentiSeance, StatutSeance, RaisonAnnulation, TypeStructure } from '../types';
+import { filtrerLogsHistorique, regrouperLogsParBeneficiaire } from '../utils/assistantHistorique';
+import type { Participant, Bilan, Contrat, RessentiSeance, StatutSeance, TypeStructure } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -30,6 +31,9 @@ interface Message {
   id: string;
   role: 'user' | 'assistant' | 'patient_select';
   content: string;
+  /** Message d'interface statique (accueil, demande de bénéficiaire/objectif) plutôt
+   *  que sortie du modèle — jamais une cible valide pour "🔄 Régénérer". */
+  synthetic?: boolean;
 }
 
 interface AssistantLog {
@@ -493,9 +497,45 @@ function ContextIndicator({ patient, extras }: { patient: Participant; extras: P
 
 // ── Colonne gauche (partagée home + chat) ─────────────────────────────────────
 
+/** Une ligne d'historique (question restaurable + suppression). Le conteneur est un
+ *  `div role="button"` (pas un `<button>`) car il contient lui-même un bouton de
+ *  suppression — un bouton dans un bouton serait invalide en HTML. */
+function LigneHistorique({
+  log, onRestoreLog, onDeleteLog,
+}: {
+  log: AssistantLog;
+  onRestoreLog: (l: AssistantLog) => void;
+  onDeleteLog: (id: string) => void;
+}) {
+  return (
+    <div
+      role="button" tabIndex={0}
+      onClick={() => onRestoreLog(log)}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRestoreLog(log); } }}
+      style={{ display: 'flex', alignItems: 'flex-start', gap: 4, width: '100%', textAlign: 'left', padding: '6px 4px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 5 }}
+      onMouseOver={e => (e.currentTarget.style.background = '#F0F9F9')}
+      onMouseOut={e => (e.currentTarget.style.background = 'none')}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: '#374151', lineHeight: 1.4 }}>· "{log.question.length > 44 ? log.question.slice(0, 44) + '…' : log.question}"</div>
+        <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>
+          {new Date(log.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} →
+        </div>
+      </div>
+      <button
+        onClick={e => { e.stopPropagation(); onDeleteLog(log.id); }}
+        title="Supprimer cette entrée"
+        style={{ padding: 3, background: 'none', border: 'none', cursor: 'pointer', color: '#D1D5DB', flexShrink: 0 }}
+        onMouseOver={e => (e.currentTarget.style.color = '#DC2626')}
+        onMouseOut={e => (e.currentTarget.style.color = '#D1D5DB')}>
+        <Trash2 size={11} />
+      </button>
+    </div>
+  );
+}
+
 function LeftColumn({
   logs, participants, selectedPatient, extras, logSearch, setLogSearch,
-  onRestoreLog, onSelectPatient, onRemovePatient, showBackButton, onBack,
+  onRestoreLog, onDeleteLog, onSelectPatient, onRemovePatient, showBackButton, onBack,
 }: {
   logs: AssistantLog[];
   participants: Participant[];
@@ -504,6 +544,7 @@ function LeftColumn({
   logSearch: string;
   setLogSearch: (s: string) => void;
   onRestoreLog: (l: AssistantLog) => void;
+  onDeleteLog: (id: string) => void;
   onSelectPatient: (p: Participant) => void;
   onRemovePatient: () => void;
   showBackButton: boolean;
@@ -511,10 +552,32 @@ function LeftColumn({
 }) {
   const [showPatientSearch, setShowPatientSearch] = useState(false);
   const [patientQ, setPatientQ] = useState('');
+  const [expandedGroupes, setExpandedGroupes] = useState<Set<string>>(() => new Set());
+  const [expandedFils, setExpandedFils] = useState<Set<string>>(() => new Set());
 
-  const filteredLogs = logSearch.trim()
-    ? logs.filter(l => l.question.toLowerCase().includes(logSearch.toLowerCase()))
-    : logs;
+  const nomPatient = (patientId: string | null): string => {
+    if (!patientId) return '';
+    const p = participants.find(x => x.id === patientId);
+    return p ? `${p.prenom} ${p.nom}` : '';
+  };
+
+  const groupes = regrouperLogsParBeneficiaire(filtrerLogsHistorique(logs, logSearch, nomPatient));
+  const groupeKey = (patientId: string | null) => patientId ?? '__sans_beneficiaire__';
+
+  function toggleGroupe(key: string) {
+    setExpandedGroupes(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+  function toggleFil(key: string) {
+    setExpandedFils(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
 
   const filteredPatients = patientQ.trim()
     ? participants.filter(p => `${p.prenom} ${p.nom}`.toLowerCase().includes(patientQ.toLowerCase())).slice(0, 8)
@@ -603,24 +666,52 @@ function LeftColumn({
         {logs.length > 5 && (
           <div style={{ position: 'relative', marginBottom: 7 }}>
             <Search size={11} style={{ position: 'absolute', left: 7, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }} />
-            <input type="text" value={logSearch} onChange={e => setLogSearch(e.target.value)} placeholder="Filtrer…"
+            <input type="text" value={logSearch} onChange={e => setLogSearch(e.target.value)} placeholder="Filtrer par question ou bénéficiaire…"
               style={{ width: '100%', padding: '5px 7px 5px 22px', border: '1px solid #E5E7EB', borderRadius: 6, fontSize: 11, outline: 'none', boxSizing: 'border-box', background: '#F9FAFB' }} />
           </div>
         )}
-        {filteredLogs.length === 0 ? (
+        {groupes.length === 0 ? (
           <div style={{ fontSize: 11, color: '#D1D5DB', textAlign: 'center', padding: '16px 0' }}>Aucune question récente</div>
-        ) : filteredLogs.map(log => {
-          const pName = log.patient_id ? participants.find(x => x.id === log.patient_id) : null;
+        ) : groupes.map(groupe => {
+          const key = groupeKey(groupe.patientId);
+          const nom = groupe.patientId ? (nomPatient(groupe.patientId) || 'Bénéficiaire') : 'Sans bénéficiaire';
+          const isOpen = expandedGroupes.has(key);
           return (
-            <button key={log.id} onClick={() => onRestoreLog(log)}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 4px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 5 }}
-              onMouseOver={e => (e.currentTarget.style.background = '#F0F9F9')}
-              onMouseOut={e => (e.currentTarget.style.background = 'none')}>
-              <div style={{ fontSize: 11, color: '#374151', lineHeight: 1.4 }}>· "{log.question.length > 44 ? log.question.slice(0, 44) + '…' : log.question}"</div>
-              <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>
-                {pName ? `${pName.prenom} ${pName.nom} · ` : ''}{new Date(log.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} →
+            <div key={key} style={{ marginBottom: 2 }}>
+              <div
+                role="button" tabIndex={0}
+                onClick={() => toggleGroupe(key)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleGroupe(key); } }}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 4px', cursor: 'pointer', borderRadius: 5, fontSize: 11.5, fontWeight: 600, color: '#374151' }}>
+                {isOpen ? <ChevronUp size={12} style={{ color: '#9CA3AF', flexShrink: 0 }} /> : <ChevronDown size={12} style={{ color: '#9CA3AF', flexShrink: 0 }} />}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nom} ({groupe.fils.length})</span>
               </div>
-            </button>
+              {isOpen && (
+                <div style={{ paddingLeft: 8 }}>
+                  {groupe.fils.map(fil => {
+                    const filKey = `${key}::${fil.question}`;
+                    const filOpen = expandedFils.has(filKey);
+                    const [dernier, ...anciennes] = fil.entries;
+                    return (
+                      <div key={filKey}>
+                        <LigneHistorique log={dernier} onRestoreLog={onRestoreLog} onDeleteLog={onDeleteLog} />
+                        {anciennes.length > 0 && (
+                          <>
+                            <button onClick={() => toggleFil(filKey)}
+                              style={{ display: 'block', margin: '0 0 4px 8px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--color-teal)' }}>
+                              {filOpen ? 'Masquer' : 'Voir'} {anciennes.length} version{anciennes.length > 1 ? 's' : ''} précédente{anciennes.length > 1 ? 's' : ''}
+                            </button>
+                            {filOpen && anciennes.map(a => (
+                              <LigneHistorique key={a.id} log={a} onRestoreLog={onRestoreLog} onDeleteLog={onDeleteLog} />
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
@@ -690,9 +781,21 @@ export default function AssistantPage() {
         .from('assistant_logs')
         .select('id, question, reponse, patient_id, created_at')
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(50);
       if (data) setLogs(data as AssistantLog[]);
     } catch { /* non bloquant */ }
+  }
+
+  async function handleDeleteLog(logId: string) {
+    if (!supabase) return;
+    if (!window.confirm('Supprimer cette question de l’historique ?')) return;
+    const precedent = logs;
+    setLogs(prev => prev.filter(l => l.id !== logId));
+    const { error } = await supabase.from('assistant_logs').delete().eq('id', logId);
+    if (error) {
+      setLogs(precedent);
+      toast.error('Erreur lors de la suppression');
+    }
   }
 
   /** Charge les séances dictées, notes manuelles, présence aux séances planifiées et
@@ -701,7 +804,20 @@ export default function AssistantPage() {
    *  immédiatement, sans dupliquer ces requêtes (cf. handlePatientSelected). */
   async function loadPatientExtras(patientId: string): Promise<PatientExtras> {
     setPatientExtras({ compteRendus: [], notesManuelles: [], programme: null, loading: true });
+    try {
+      return await loadPatientExtrasUnsafe(patientId);
+    } catch (err) {
+      // Dégradation gracieuse : une exception ici (réseau, etc.) ne doit ni bloquer
+      // indéfiniment l'indicateur "Chargement…", ni empêcher runAction() de répondre
+      // (le prompt se construit alors avec un contexte vide plutôt que de rien renvoyer).
+      console.error('[AssistantPage] Erreur chargement contexte patient:', err);
+      const extras: PatientExtras = { compteRendus: [], notesManuelles: [], programme: null, loading: false };
+      setPatientExtras(extras);
+      return extras;
+    }
+  }
 
+  async function loadPatientExtrasUnsafe(patientId: string): Promise<PatientExtras> {
     const fenetrePlanningJours = 90;
     const seuilPlanning = new Date();
     seuilPlanning.setDate(seuilPlanning.getDate() - fenetrePlanningJours);
@@ -711,7 +827,9 @@ export default function AssistantPage() {
       supabase ? supabase.from('comptes_rendus_seances').select('date_seance, observations, progression, points_attention, douleurs_signalees').eq('participant_id', patientId).order('date_seance', { ascending: false }).limit(5) : Promise.resolve({ data: null }),
       supabase ? supabase.from('seances_patient').select('id, date_seance, commentaire_patient').eq('participant_id', patientId).order('date_seance', { ascending: false }).limit(30) : Promise.resolve({ data: null }),
       supabase ? supabase.from('notes_seances').select('date, ressenti, note, alertes, douleur_eva').eq('participant_id', patientId).order('date', { ascending: false }).limit(5) : Promise.resolve({ data: null }),
-      supabase ? supabase.from('seances').select('date, statut, motif_annulation, motif_annulation_detail').eq('participant_id', patientId).eq('type', 'seance').gte('date', seuilPlanningISO) : Promise.resolve({ data: null }),
+      // Colonnes explicites : motif_annulation/motif_annulation_detail sont internes
+      // au praticien et ne doivent jamais transiter par le prompt IA (cf. assistantContexte.ts).
+      supabase ? supabase.from('seances').select('date, statut').eq('participant_id', patientId).eq('type', 'seance').gte('date', seuilPlanningISO) : Promise.resolve({ data: null }),
       chargerProgrammeActif(patientId),
     ]);
     const programme = programmeRes.status === 'fulfilled' ? programmeRes.value : null;
@@ -729,9 +847,7 @@ export default function AssistantPage() {
       : [];
 
     const seancesReelles: SeanceReelleBrute[] = seancesRes.status === 'fulfilled' && seancesRes.value.data
-      ? (seancesRes.value.data as { date: string; statut: StatutSeance; motif_annulation: RaisonAnnulation | null; motif_annulation_detail: string | null }[]).map(r => ({
-          date: r.date, statut: r.statut, motifAnnulation: r.motif_annulation, motifAnnulationDetail: r.motif_annulation_detail,
-        }))
+      ? (seancesRes.value.data as { date: string; statut: StatutSeance }[]).map(r => ({ date: r.date, statut: r.statut }))
       : [];
     const planningReel = calculerPlanningReel(seancesReelles, new Date(), fenetrePlanningJours);
 
@@ -783,7 +899,7 @@ export default function AssistantPage() {
     if (action === 'libre') {
       const p = prePatient ?? selectedPatient;
       const greeting: Message = {
-        id: newId(), role: 'assistant',
+        id: newId(), role: 'assistant', synthetic: true,
         content: p
           ? `Contexte de ${p.prenom} ${p.nom} chargé avec ${p.bilans.length} bilan(s). Posez votre question.`
           : 'Bonjour ! Je suis votre assistant clinique APA. Posez votre question, ou sélectionnez un bénéficiaire dans la colonne gauche.',
@@ -794,7 +910,7 @@ export default function AssistantPage() {
 
     const label = ACTION_LABELS[action];
     setMessages([
-      { id: newId(), role: 'assistant', content: `Pour quel bénéficiaire souhaitez-vous ${label} ?` },
+      { id: newId(), role: 'assistant', synthetic: true, content: `Pour quel bénéficiaire souhaitez-vous ${label} ?` },
       { id: newId(), role: 'patient_select', content: '' },
     ]);
     setAwaitingPatient(true);
@@ -813,7 +929,7 @@ export default function AssistantPage() {
 
     if (actionType === 'programme') {
       setMessages(prev => [...prev, {
-        id: newId(), role: 'assistant',
+        id: newId(), role: 'assistant', synthetic: true,
         content: `Parfait ! Pour quel objectif souhaitez-vous un programme pour ${patient.prenom} ?\n(ex : équilibre, force musculaire, endurance, douleurs…)`,
       }]);
       return;
@@ -838,17 +954,61 @@ export default function AssistantPage() {
     return s ? { nom: s.nom, type: s.type } : null;
   }
 
+  /** Point d'appel unique vers /api/claude : centralise la vérification de statut HTTP
+   *  et l'extraction du message d'erreur — un appelant qui oublierait `res.ok` afficherait
+   *  silencieusement une réponse vide en cas d'échec (rate limit, timeout, clé manquante…). */
+  async function callClaudeAPI(prompt: string): Promise<string> {
+    const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) }, body: JSON.stringify({ prompt }) });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error ?? `Erreur ${res.status}`);
+    return data?.text ?? '';
+  }
+
   async function runAction(action: ActionType, patient: Participant, extras: PatientExtras) {
     setLoading(true);
     const prompt = buildActionPrompt(action, patient, extras, getContratInfo(patient), getStructureInfo(patient));
     // console.log('[AssistantPage] prompt:', prompt); // Décommenter pour débugger
     try {
-      const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) }, body: JSON.stringify({ prompt }) });
-      if (!res.ok) throw new Error(`Erreur ${res.status}`);
-      const data = await res.json();
-      const text: string = data.text ?? '';
+      const text = await callClaudeAPI(prompt);
       setMessages(prev => [...prev, { id: newId(), role: 'assistant', content: text }]);
       await saveLog(ACTION_LABELS[action], text, patient.id, action);
+    } catch (err) {
+      setMessages(prev => [...prev, { id: newId(), role: 'assistant', content: `Erreur : ${err instanceof Error ? err.message : String(err)}` }]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function extrasParDefaut(): PatientExtras {
+    return patientExtras ?? { compteRendus: [], notesManuelles: [], programme: null, loading: false };
+  }
+
+  /** Cœur commun à l'envoi d'un message et à la régénération : construit le prompt
+   *  (avec ou sans objectif de programme), appelle l'API et journalise. `historique`
+   *  est passé explicitement (plutôt que de lire `messages`) pour que la régénération
+   *  puisse l'exclure la paire Q/R qu'elle est en train de refaire. */
+  async function genererReponse(questionText: string, historique: Message[]) {
+    setLoading(true);
+    try {
+      if (actionType === 'programme' && selectedPatient) {
+        const extras = extrasParDefaut();
+        const sys = buildSystemPrompt(selectedPatient, extras, getContratInfo(selectedPatient), getStructureInfo(selectedPatient));
+        const prompt = `${sys}\n\n---\nQUESTION:\nGénère un programme d'exercices APA pour l'objectif suivant : "${questionText}"\n\n## Objectif\n### Exercices recommandés\n- **Nom** — durée/répétitions\n  Précautions : ...\n### Points de vigilance\n### À éviter absolument`;
+        const responseText = await callClaudeAPI(prompt);
+        setMessages(prev => [...prev, { id: newId(), role: 'assistant', content: responseText }]);
+        await saveLog(questionText, responseText, selectedPatient.id, 'programme');
+        return;
+      }
+
+      const extras = extrasParDefaut();
+      const sys = buildSystemPrompt(selectedPatient, extras, selectedPatient ? getContratInfo(selectedPatient) : null, selectedPatient ? getStructureInfo(selectedPatient) : null);
+      const history = formatHistoriqueConversation(historique);
+      const fullPrompt = history
+        ? `${sys}\n\n---\nÉCHANGES PRÉCÉDENTS:\n${history}\n\n---\nQUESTION:\n${questionText}`
+        : `${sys}\n\n---\nQUESTION:\n${questionText}`;
+      const responseText = await callClaudeAPI(fullPrompt);
+      setMessages(prev => [...prev, { id: newId(), role: 'assistant', content: responseText }]);
+      await saveLog(questionText, responseText, selectedPatient?.id ?? null, actionType ?? 'libre');
     } catch (err) {
       setMessages(prev => [...prev, { id: newId(), role: 'assistant', content: `Erreur : ${err instanceof Error ? err.message : String(err)}` }]);
     } finally {
@@ -863,43 +1023,32 @@ export default function AssistantPage() {
     resetSpeech();
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-    const userMsg: Message = { id: newId(), role: 'user', content: trimmed };
-    setMessages(prev => [...prev, userMsg]);
-    setLoading(true);
+    const historiqueAvant = messages;
+    setMessages(prev => [...prev, { id: newId(), role: 'user', content: trimmed }]);
+    await genererReponse(trimmed, historiqueAvant);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, messages, selectedPatient, actionType, patientExtras, resetSpeech, contratsDeParticipant, structures]);
 
-    if (actionType === 'programme' && selectedPatient) {
-      const extras = patientExtras ?? { compteRendus: [], notesManuelles: [], programme: null, loading: false };
-      const sys = buildSystemPrompt(selectedPatient, extras, getContratInfo(selectedPatient), getStructureInfo(selectedPatient));
-      const prompt = `${sys}\n\n---\nQUESTION:\nGénère un programme d'exercices APA pour l'objectif suivant : "${trimmed}"\n\n## Objectif\n### Exercices recommandés\n- **Nom** — durée/répétitions\n  Précautions : ...\n### Points de vigilance\n### À éviter absolument`;
-      try {
-        const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) }, body: JSON.stringify({ prompt }) });
-        const data = await res.json();
-        const responseText: string = data.text ?? '';
-        setMessages(prev => [...prev, { id: newId(), role: 'assistant', content: responseText }]);
-        await saveLog(trimmed, responseText, selectedPatient.id, 'programme');
-      } catch (err) {
-        setMessages(prev => [...prev, { id: newId(), role: 'assistant', content: `Erreur : ${String(err)}` }]);
-      } finally { setLoading(false); }
+  /** Relance la dernière réponse de l'assistant avec le même contexte. Insère une
+   *  NOUVELLE entrée dans l'historique (jamais un update) pour garder une trace de
+   *  chaque tentative — comparables entre elles — mais avec le même intitulé de
+   *  question que l'original : LeftColumn regroupe alors les régénérations sous
+   *  l'entrée d'origine au lieu de les lister à plat (cf. assistantHistorique.ts). */
+  function regenerateLastResponse() {
+    if (loading) return;
+    const lastAssistantIdx = [...messages].map((_, i) => i).reverse().find(i => messages[i].role === 'assistant');
+    if (lastAssistantIdx == null || messages[lastAssistantIdx].synthetic) return;
+    let userIdx = lastAssistantIdx - 1;
+    while (userIdx >= 0 && messages[userIdx].role !== 'user') userIdx--;
+    if (userIdx < 0) return;
+    const questionText = messages[userIdx].content;
+
+    if (actionType && actionType !== 'libre' && actionType !== 'programme' && selectedPatient) {
+      void runAction(actionType, selectedPatient, extrasParDefaut());
       return;
     }
-
-    const extras = patientExtras ?? { compteRendus: [], notesManuelles: [], programme: null, loading: false };
-    const sys = buildSystemPrompt(selectedPatient, extras, selectedPatient ? getContratInfo(selectedPatient) : null, selectedPatient ? getStructureInfo(selectedPatient) : null);
-    const history = messages.filter(m => m.role === 'user' || m.role === 'assistant').map(m => `${m.role === 'user' ? 'Q' : 'R'}: ${m.content}`).join('\n\n');
-    const fullPrompt = history
-      ? `${sys}\n\n---\nÉCHANGES PRÉCÉDENTS:\n${history}\n\n---\nQUESTION:\n${trimmed}`
-      : `${sys}\n\n---\nQUESTION:\n${trimmed}`;
-    try {
-      const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) }, body: JSON.stringify({ prompt: fullPrompt }) });
-      if (!res.ok) throw new Error(`Erreur ${res.status}`);
-      const data = await res.json();
-      const responseText: string = data.text ?? '';
-      setMessages(prev => [...prev, { id: newId(), role: 'assistant', content: responseText }]);
-      await saveLog(trimmed, responseText, selectedPatient?.id ?? null, actionType ?? 'libre');
-    } catch (err) {
-      setMessages(prev => [...prev, { id: newId(), role: 'assistant', content: `Erreur : ${err instanceof Error ? err.message : String(err)}` }]);
-    } finally { setLoading(false); }
-  }, [loading, messages, selectedPatient, actionType, patientExtras, resetSpeech, contratsDeParticipant, structures]);
+    void genererReponse(questionText, messages.slice(0, userIdx));
+  }
 
   async function saveLog(question: string, reponse: string, patientId: string | null, action: ActionType) {
     if (!supabase) return;
@@ -948,7 +1097,7 @@ export default function AssistantPage() {
     <LeftColumn
       logs={logs} participants={participants} selectedPatient={selectedPatient}
       extras={patientExtras} logSearch={logSearch} setLogSearch={setLogSearch}
-      onRestoreLog={handleRestoreLog} onSelectPatient={selectPatient} onRemovePatient={deselectPatient}
+      onRestoreLog={handleRestoreLog} onDeleteLog={handleDeleteLog} onSelectPatient={selectPatient} onRemovePatient={deselectPatient}
       showBackButton={phase === 'chat'} onBack={resetToHome}
     />
   );
@@ -1063,6 +1212,12 @@ export default function AssistantPage() {
           </div>
           {messages.some(m => m.role === 'assistant') && !loading && (
             <div style={{ display: 'flex', gap: 8 }}>
+              {![...messages].reverse().find(m => m.role === 'assistant')?.synthetic && (
+                <button onClick={regenerateLastResponse}
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', background: 'none', border: '1px solid #E5E7EB', borderRadius: 6, cursor: 'pointer', fontSize: 12, color: '#6B7280' }}>
+                  <RefreshCw size={11} /> Régénérer
+                </button>
+              )}
               <button onClick={handleCopyLast}
                 style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', background: 'none', border: '1px solid #E5E7EB', borderRadius: 6, cursor: 'pointer', fontSize: 12, color: '#6B7280' }}>
                 <Copy size={11} /> Copier

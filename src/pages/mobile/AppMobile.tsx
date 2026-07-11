@@ -8,6 +8,7 @@ import BilanStepper from '../../components/bilan/BilanStepper';
 import ModalSelectionTests from '../../components/bilan/ModalSelectionTests';
 import DicteePostSeance from '../../components/DicteePostSeance';
 import ModalEspacePatient from '../../components/participant/ModalEspacePatient';
+import MarkdownRendu from '../../components/ui/MarkdownRendu';
 import type { Bilan } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, getAuthHeader } from '../../lib/supabase';
@@ -1123,7 +1124,7 @@ function DetailBilanMobile({ bilan, onBack }: { bilan: import('../../types').Bil
           <>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Analyse IA</div>
             <div style={{ background: '#E8F8F8', borderRadius: 12, border: `1px solid ${C.primary}30`, padding: '12px 14px', marginBottom: 10, fontSize: 14, color: C.text, lineHeight: 1.6 }}>
-              {bilan.interpretationIA.textePro}
+              <MarkdownRendu>{bilan.interpretationIA.textePro}</MarkdownRendu>
             </div>
             {bilan.interpretationIA.pointsForts.length > 0 && (
               <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '12px 14px', marginBottom: 10 }}>

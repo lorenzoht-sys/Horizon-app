@@ -7,6 +7,7 @@ import {
   calculerPlanningReel, formatPlanningReelContexte,
   formatDicteesContexte,
   formatNotesManuellesContexte,
+  formatHistoriqueConversation, type MessageConversation,
 } from './assistantContexte';
 
 function contrat(overrides: Partial<Contrat> = {}): Contrat {
@@ -118,12 +119,12 @@ describe('calculerPlanningReel / formatPlanningReelContexte', () => {
     expect(formatPlanningReelContexte(resume)).toBe('');
   });
 
-  it('calcule réalisées/annulées/taux de présence et les 3 dernières annulations', () => {
+  it('calcule réalisées/annulées/taux de présence, sans exposer le motif d\'annulation', () => {
     const seances = [
       { date: '2026-07-08', statut: 'realisee' as const },
       { date: '2026-07-01', statut: 'realisee' as const },
-      { date: '2026-06-24', statut: 'annulee' as const, motifAnnulation: 'maladie' as const },
-      { date: '2026-06-17', statut: 'annulee' as const, motifAnnulation: 'transport' as const },
+      { date: '2026-06-24', statut: 'annulee' as const },
+      { date: '2026-06-17', statut: 'annulee' as const },
       { date: '2026-07-15', statut: 'planifiee' as const }, // future, hors fenêtre passée
       { date: '2025-01-01', statut: 'realisee' as const },  // hors fenêtre 90j
     ];
@@ -131,11 +132,14 @@ describe('calculerPlanningReel / formatPlanningReelContexte', () => {
     expect(resume.realisees).toBe(2);
     expect(resume.annulees).toBe(2);
     expect(resume.tauxPresence).toBe(50);
-    expect(resume.dernieresAnnulations.map(a => a.motif)).toEqual(['maladie', 'transport']);
+    expect(resume).not.toHaveProperty('dernieresAnnulations');
 
     const texte = formatPlanningReelContexte(resume);
-    expect(texte).toContain('2 réalisées / 2 annulées (maladie, transport) / 4 total');
+    expect(texte).toContain('2 réalisées / 2 annulées / 4 total');
     expect(texte).toContain('Taux de présence aux séances planifiées : 50%');
+    // Le motif d'annulation est une donnée interne au praticien (cf. api/patient/me.ts,
+    // api/structure/data.ts) : elle ne doit jamais transiter par le prompt IA partageable.
+    expect(texte).not.toMatch(/maladie|transport|vacances|rdv|hospitalisation/i);
   });
 });
 
@@ -184,5 +188,58 @@ describe('formatNotesManuellesContexte', () => {
       alertes: { douleurSignalee: false, fatiguePlusQueHabitude: false, progressionNotable: false, pointARevoir: false },
     }]);
     expect(texte).not.toContain('alertes :');
+  });
+});
+
+describe('formatHistoriqueConversation', () => {
+  function echange(n: number): MessageConversation[] {
+    return [
+      { role: 'user', content: `question ${n}` },
+      { role: 'assistant', content: `réponse ${n}` },
+    ];
+  }
+
+  it('conversation courte (moins de 10 échanges) : tout est inclus', () => {
+    const messages = [...echange(1), ...echange(2)];
+    const texte = formatHistoriqueConversation(messages);
+    expect(texte).toContain('Q: question 1');
+    expect(texte).toContain('R: réponse 2');
+  });
+
+  it("conversation longue (15 échanges) : seuls les 10 derniers sont envoyés au modèle", () => {
+    const messages = Array.from({ length: 15 }, (_, i) => echange(i + 1)).flat();
+    const lignes = formatHistoriqueConversation(messages).split('\n\n');
+
+    // Les 5 plus anciens échanges (1 à 5) sont exclus du prompt...
+    for (let i = 1; i <= 5; i++) {
+      expect(lignes).not.toContain(`Q: question ${i}`);
+      expect(lignes).not.toContain(`R: réponse ${i}`);
+    }
+    // ...seuls les 10 derniers (6 à 15) sont présents.
+    for (let i = 6; i <= 15; i++) {
+      expect(lignes).toContain(`Q: question ${i}`);
+      expect(lignes).toContain(`R: réponse ${i}`);
+    }
+  });
+
+  it('ne plante pas si un échange référencé est hors fenêtre : le texte se construit simplement sans lui', () => {
+    const messages = Array.from({ length: 20 }, (_, i) => echange(i + 1)).flat();
+    expect(() => formatHistoriqueConversation(messages)).not.toThrow();
+    const lignes = formatHistoriqueConversation(messages).split('\n\n');
+    expect(lignes).not.toContain('Q: question 1');
+  });
+
+  it('les messages "patient_select" (interstitiels UI) ne comptent pas comme un échange', () => {
+    const messages: MessageConversation[] = [
+      { role: 'user', content: 'q1' },
+      { role: 'patient_select', content: '' },
+      { role: 'assistant', content: 'r1' },
+    ];
+    const texte = formatHistoriqueConversation(messages);
+    expect(texte).toBe('Q: q1\n\nR: r1');
+  });
+
+  it('liste vide : chaîne vide', () => {
+    expect(formatHistoriqueConversation([])).toBe('');
   });
 });
