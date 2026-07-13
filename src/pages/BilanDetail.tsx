@@ -7,8 +7,16 @@ import PageWrapper from '../components/layout/PageWrapper';
 import RadarChart from '../components/charts/RadarChart';
 import ComparisonTable from '../components/charts/ComparisonTable';
 import { calculerNotesAuto } from '../components/export/FicheBilanPDF';
-import { exportFicheBilanPDF } from '../utils/exportPDF';
-import { ArrowLeft, Calendar, MessageSquare, StickyNote, Target, AlertTriangle, FileText, TrendingUp } from 'lucide-react';
+import { exportFicheBilanPDF, exportFicheBilanBeneficiairePDF } from '../utils/exportPDF';
+import { ArrowLeft, Calendar, MessageSquare, StickyNote, Target, AlertTriangle, FileText, TrendingUp, Share2 } from 'lucide-react';
+type CleResultatPartageable = 'equilibre' | 'force' | 'handGrip' | 'mobilite' | 'endurance';
+const PARTAGE_ITEMS: { key: CleResultatPartageable; label: string }[] = [
+  { key: 'equilibre', label: 'Équilibre' },
+  { key: 'force', label: 'Force jambes' },
+  { key: 'handGrip', label: 'Force mains' },
+  { key: 'mobilite', label: 'Mobilité' },
+  { key: 'endurance', label: 'Endurance' },
+];
 
 function loadSettings() {
   try { return { prenom: '', nom: '', email: '', telephone: '', societe: '', logoPraticien: '', ...JSON.parse(localStorage.getItem('settings_praticien') || '{}') }; }
@@ -17,8 +25,9 @@ function loadSettings() {
 
 export default function BilanDetail() {
   const { id, bilanId } = useParams<{ id: string; bilanId: string }>();
-  const { participants } = useParticipants();
+  const { participants, updateBilan } = useParticipants();
   const [exporting, setExporting] = useState(false);
+  const [exportingBeneficiaire, setExportingBeneficiaire] = useState(false);
   const navigate = useNavigate();
 
   const participant = participants.find(p => p.id === id);
@@ -80,6 +89,53 @@ export default function BilanDetail() {
             <FileText size={15} />
             {exporting ? 'Génération…' : 'Fiche bilan PDF'}
           </button>
+          <button
+            onClick={async () => {
+              setExportingBeneficiaire(true);
+              try {
+                await exportFicheBilanBeneficiairePDF(
+                  { bilan, participant, notes: bilan.notesBilan ?? calculerNotesAuto(bilan), settings: loadSettings() },
+                  `FicheBilan_Beneficiaire_${participant.nom}_${participant.prenom}_${bilan.date}_MouvAPA.pdf`
+                );
+              } finally { setExportingBeneficiaire(false); }
+            }}
+            disabled={exportingBeneficiaire}
+            title="Uniquement les résultats cochés ci-dessous comme partagés, avec un vocabulaire adouci"
+            className="flex items-center gap-2 bg-secondary text-white px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60"
+          >
+            <Share2 size={15} />
+            {exportingBeneficiaire ? 'Génération…' : 'Fiche bilan bénéficiaire'}
+          </button>
+        </div>
+      </div>
+
+      {/* Partage avec le bénéficiaire — modifiable après coup */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
+        <div className="flex items-center gap-2 mb-1 text-secondary">
+          <Share2 size={16} />
+          <h3 className="font-semibold text-sm text-dark">Partager avec le bénéficiaire</h3>
+        </div>
+        <p className="text-xs text-gray-400 mb-3">
+          Décoché par défaut. Contrôle ce qui apparaît dans l'espace bénéficiaire et dans la
+          Fiche bilan bénéficiaire — n'affecte pas ce que vous voyez ici.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {PARTAGE_ITEMS
+            .filter(item => (bilan.notesBilan ?? calculerNotesAuto(bilan))[item.key] !== undefined)
+            .map(item => (
+              <label key={item.key}
+                className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 cursor-pointer">
+                <span className="text-sm font-medium text-gray-600">{item.label}</span>
+                <input
+                  type="checkbox"
+                  checked={bilan.visibleBeneficiaire?.[item.key] === true}
+                  onChange={e => updateBilan(participant.id, bilan.id, {
+                    visibleBeneficiaire: { ...bilan.visibleBeneficiaire, [item.key]: e.target.checked },
+                  })}
+                  className="w-4 h-4 accent-secondary"
+                />
+              </label>
+            ))}
         </div>
       </div>
 

@@ -1959,10 +1959,20 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
         value={anamnese.sedentariteReponses ?? EMPTY_SED}
         onChange={setSedData}
       />
+      <label className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700 select-none -mt-2">
+        <input type="checkbox" checked={anamnese.sedentariteVisibleBeneficiaire === true} className="w-4 h-4 accent-primary"
+          onChange={e => setAnamnese(a => ({ ...a, sedentariteVisibleBeneficiaire: e.target.checked }))} />
+        Partager le niveau d'activité avec le bénéficiaire
+      </label>
       <SectionFatigue
         value={anamnese.fatigueReponses ?? Array(9).fill(null)}
         onChange={setFSSData}
       />
+      <label className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700 select-none -mt-2">
+        <input type="checkbox" checked={anamnese.fatigueVisibleBeneficiaire === true} className="w-4 h-4 accent-primary"
+          onChange={e => setAnamnese(a => ({ ...a, fatigueVisibleBeneficiaire: e.target.checked }))} />
+        Partager le niveau de fatigue avec le bénéficiaire
+      </label>
       </>}
 
       {(showAll || step === 5) && <>

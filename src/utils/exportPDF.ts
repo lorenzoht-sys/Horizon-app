@@ -3,6 +3,7 @@ import { pdf } from '@react-pdf/renderer';
 import type { Bilan, Participant, NotesBilan, Programme, Exercice } from '../types';
 import type { PdfPraticienSettings } from '../components/export/PdfShared';
 import FicheBilanPDF from '../components/export/FicheBilanPDF';
+import FicheBilanBeneficiairePDF from '../components/export/FicheBilanBeneficiairePDF';
 import ProgrammePDF from '../components/export/ProgrammePDF';
 import QRCode from 'qrcode';
 
@@ -20,6 +21,24 @@ export async function exportFicheBilanPDF(
   fileName: string
 ): Promise<void> {
   const element = React.createElement(FicheBilanPDF, data);
+  const blob = await pdf(element as Parameters<typeof pdf>[0]).toBlob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/** Variante filtrée (visibleBeneficiaire) et reformulée de exportFicheBilanPDF,
+ *  destinée à être remise au bénéficiaire — voir FicheBilanBeneficiairePDF.tsx. */
+export async function exportFicheBilanBeneficiairePDF(
+  data: ExportFicheBilanData,
+  fileName: string
+): Promise<void> {
+  const element = React.createElement(FicheBilanBeneficiairePDF, data);
   const blob = await pdf(element as Parameters<typeof pdf>[0]).toBlob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

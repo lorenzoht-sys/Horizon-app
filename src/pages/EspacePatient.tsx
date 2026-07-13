@@ -10,9 +10,10 @@ import { loadExercices } from '../data/exercices';
 import { TESTS_ETALONS, getTestEtalon } from '../data/testsEtalons';
 import { exportProgrammePDF } from '../utils/exportPDF';
 import { exportCarteSantePatient } from '../utils/exportDossierPDF';
-import { getSessionPatient, sauvegarderSessionPatient, purgerSessionPatient, getAccesPatient } from '../hooks/useAccesPatients';
+import { getSessionPatient, sauvegarderSessionPatient, purgerSessionPatient } from '../hooks/useAccesPatients';
 import MarkdownRendu from '../components/ui/MarkdownRendu';
 import { getTestsAutonomie } from '../lib/anamnese';
+import { libelleSedentariteBeneficiaire, libelleFatigueBeneficiaire } from '../lib/formulationBienveillante';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -469,7 +470,7 @@ function EcranAccueil({
       )}
 
       {/* Message de Pierre */}
-      {messagePierre && (
+      {messagePierre && participant.visibiliteBeneficiaire?.messagePierre !== false && (
         <div style={{
           background: 'rgba(43,191,191,0.08)',
           border: '1px solid rgba(43,191,191,0.25)',
@@ -704,28 +705,28 @@ function EcranProgres({ participant, bilans }: { participant: Participant; bilan
           <div style={{ fontSize: 14, fontWeight: 700, color: C.dark, marginBottom: 10 }}>
             Votre profil de forme
           </div>
-          {sedProfil && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: 13, color: C.muted }}>Votre niveau d'activité</span>
-              <span style={{
-                fontSize: 13, fontWeight: 600,
-                color: sedProfil === 'inactif' ? '#E24B4A' : sedProfil === 'actif' ? '#BA7517' : '#0F6E56',
-              }}>
-                {sedProfil === 'inactif' ? 'Faible 🔴' : sedProfil === 'actif' ? 'Modéré 🟡' : 'Élevé 🟢'}
-              </span>
-            </div>
-          )}
-          {fssProfil && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 13, color: C.muted }}>Votre fatigue</span>
-              <span style={{
-                fontSize: 13, fontWeight: 600,
-                color: fssProfil === 'pas_de_fatigue' ? '#0F6E56' : '#A32D2D',
-              }}>
-                {fssProfil === 'pas_de_fatigue' ? 'Légère 🟢' : 'À surveiller 🔴'}
-              </span>
-            </div>
-          )}
+          {sedProfil && (() => {
+            const l = libelleSedentariteBeneficiaire(sedProfil);
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 13, color: C.muted }}>Votre niveau d'activité</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: l.color }}>
+                  {l.label} {l.emoji}
+                </span>
+              </div>
+            );
+          })()}
+          {fssProfil && (() => {
+            const l = libelleFatigueBeneficiaire(fssProfil);
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontSize: 13, color: C.muted }}>Votre fatigue</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: l.color }}>
+                  {l.label} {l.emoji}
+                </span>
+              </div>
+            );
+          })()}
           <p style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>
             Votre praticien adapte vos séances en conséquence.
           </p>
@@ -1948,7 +1949,7 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
   const [documentsDeplies, setDocumentsDeplies] = useState<Set<string>>(new Set());
   const praticien = loadPraticien();
   const sortedBilans = [...bilans].sort((a, b) => b.date.localeCompare(a.date));
-  const carteSanteAutorisee = getAccesPatient(participant.id).visibilite.carteSante;
+  const carteSanteAutorisee = participant.visibiliteBeneficiaire?.carteSante !== false;
   const hasContent = documentsPatient.length > 0 || sortedBilans.length > 0 || carteSanteAutorisee;
 
   async function handleExportCarteSante() {
@@ -2460,7 +2461,12 @@ export default function EspacePatient() {
         zIndex: 30,
         boxShadow: '0 -4px 16px rgba(13,43,43,0.08)',
       }}>
-        {TABS_CONFIG.map(t => (
+        {TABS_CONFIG.filter(t => {
+          const v = participant?.visibiliteBeneficiaire;
+          if (t.id === 'progres') return v?.progression !== false;
+          if (t.id === 'programme') return v?.programme !== false;
+          return true;
+        }).map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}

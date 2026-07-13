@@ -866,6 +866,7 @@ export default function ParticipantProfileMobile() {
         <ModalEspacePatient
           participant={participant}
           onClose={() => setShowEspacePatient(false)}
+          onUpdate={data => updateParticipant(participant.id, data)}
         />
       )}
 

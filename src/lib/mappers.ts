@@ -88,8 +88,19 @@ export function dbToParticipant(row: any): Participant {
     rgpd: row.rgpd ?? undefined,
     bilans: (row.bilans ?? []).map(dbToBilan),
     programmes: (row.programmes ?? []).map(dbToProgramme),
+    visibiliteBeneficiaire: { ...VISIBILITE_BENEFICIAIRE_DEFAULT, ...(row.visibilite_beneficiaire ?? {}) },
+    messageBeneficiaire: row.message_beneficiaire ?? undefined,
   };
 }
+
+// Défaut : tout visible — préserve le comportement réel actuel (le filtre
+// localStorage précédent n'était jamais appliqué côté bénéficiaire, voir
+// VisibiliteBeneficiaire dans types/index.ts). Distinct du défaut "tout caché"
+// de Bilan.visibleBeneficiaire, qui est un contrôle plus fin et volontairement
+// plus prudent.
+const VISIBILITE_BENEFICIAIRE_DEFAULT = {
+  progression: true, bilans: true, rdv: true, programme: true, messagePierre: true, carteSante: true,
+};
 
 // Participant TypeScript → Supabase insert/update object
 // Colonnes exactes de la table participants Supabase
@@ -136,6 +147,8 @@ export function participantToDb(p: Omit<Participant, 'bilans' | 'programmes'>): 
     droit_image: p.droitImage ?? null,
     rgpd: p.rgpd ?? null,
     code_acces: p.codeAcces ?? null,
+    visibilite_beneficiaire: p.visibiliteBeneficiaire ?? VISIBILITE_BENEFICIAIRE_DEFAULT,
+    message_beneficiaire: p.messageBeneficiaire ?? null,
   };
 }
 
@@ -197,6 +210,7 @@ export function dbToBilan(row: any): Bilan {
     bilanInitialData: row.bilan_initial_data ?? undefined,
     notesBilan: row.notes_bilan ?? undefined,
     interpretationIA: row.interpretation_ia ?? undefined,
+    visibleBeneficiaire: row.visible_beneficiaire ?? {},
   };
 }
 
@@ -263,6 +277,7 @@ export function bilanToDb(participantId: string, b: Omit<Bilan, 'id'> & { id?: s
     fatigue_profil: b.bilanInitialData?.formulaireFlat?.data?.fatigueProfil ?? null,
     sedentarite_reponses: b.bilanInitialData?.formulaireFlat?.data?.sedentariteReponses ?? null,
     fatigue_reponses: b.bilanInitialData?.formulaireFlat?.data?.fatigueReponses ?? null,
+    visible_beneficiaire: b.visibleBeneficiaire ?? {},
   };
 }
 

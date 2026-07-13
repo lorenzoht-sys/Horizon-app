@@ -7,6 +7,65 @@
 import { getServiceClient, verifyPatientToken, extractBearerToken, getClientIp, logAuditEvent } from '../_lib/patientAuth.js';
 import { withSentry } from '../_lib/sentry.js';
 
+// Contrôle de partage bénéficiaire — voir supabase/migrations/20260713_visibilite_beneficiaire.sql
+// et src/types/index.ts (VisibiliteBeneficiaire, Bilan.visibleBeneficiaire).
+// Appliqué ICI (avant l'envoi de la réponse), pas seulement côté React : un
+// champ retiré ici n'atteint jamais le navigateur du bénéficiaire, contrairement
+// à un filtre purement côté affichage.
+
+export const VISIBILITE_DEFAULT = {
+  progression: true, bilans: true, rdv: true, programme: true, messagePierre: true, carteSante: true,
+};
+
+// Colonnes DB d'un bilan à retirer quand le résultat correspondant n'est pas
+// explicitement partagé (bilans.visible_beneficiaire, défaut : tout caché).
+const COLONNES_PAR_RESULTAT: Record<string, string[]> = {
+  equilibre: ['equilibre_droite', 'equilibre_gauche'],
+  force: ['chair_stand_30'],
+  handGrip: ['hand_grip_droite', 'hand_grip_gauche'],
+  mobilite: ['tug_3m'],
+  endurance: [
+    'tm6_distance_metres', 'tm6_repetitions', 'tm6_fc_avant', 'tm6_fc_apres',
+    'tm6_fc_1min', 'tm6_fc_2min', 'tm6_spo2_avant', 'tm6_spo2_apres',
+    'tm6_spo2_1min', 'tm6_spo2_2min', 'tm6_borg_rpe',
+  ],
+};
+
+const COLONNES_SEDENTARITE = ['sedentarite_score', 'sedentarite_profil', 'sedentarite_reponses'];
+const COLONNES_FATIGUE = ['fatigue_score', 'fatigue_profil', 'fatigue_reponses'];
+
+/** Retire des clés d'un objet flat (formulaireFlat.data, à l'intérieur de
+ *  bilan_initial_data) — même liste de clés que getTestsAutonomie() lit en
+ *  repli côté frontend (src/lib/anamnese.ts), pour qu'un résultat caché ne
+ *  fuite pas par ce chemin alternatif. */
+function retirerClesFlat(flat: Record<string, unknown> | undefined, cles: string[]): void {
+  if (!flat) return;
+  for (const c of cles) delete flat[c];
+}
+
+/** Filtre un bilan (ligne DB brute) selon visible_beneficiaire (par résultat)
+ *  et les flags sédentarité/fatigue de l'anamnèse du participant. Mutation
+ *  en place — le bilan n'est jamais renvoyé tel quel, seulement sa version
+ *  filtrée. */
+export function filtrerBilan(bilan: any, sedentariteVisible: boolean, fatigueVisible: boolean): any {
+  const visible = bilan.visible_beneficiaire ?? {};
+  for (const [resultat, colonnes] of Object.entries(COLONNES_PAR_RESULTAT)) {
+    if (visible[resultat] !== true) {
+      for (const col of colonnes) bilan[col] = null;
+    }
+  }
+  const flat = bilan.bilan_initial_data?.formulaireFlat?.data;
+  if (!sedentariteVisible) {
+    for (const col of COLONNES_SEDENTARITE) bilan[col] = null;
+    retirerClesFlat(flat, ['sedentariteScore', 'sedentariteProfil', 'sedentariteReponses']);
+  }
+  if (!fatigueVisible) {
+    for (const col of COLONNES_FATIGUE) bilan[col] = null;
+    retirerClesFlat(flat, ['fatigueScore', 'fatigueProfil', 'fatigueReponses']);
+  }
+  return bilan;
+}
+
 export default withSentry(async function handler(req: any, res: any) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -66,7 +125,29 @@ export default withSentry(async function handler(req: any, res: any) {
 
   await logAuditEvent(supabase, 'patient_data_access', participantId, getClientIp(req), true);
 
-  const programmes = programmesRes.data ?? [];
+  const participant = participantRes.data;
+  const visibilite = { ...VISIBILITE_DEFAULT, ...(participant.visibilite_beneficiaire ?? {}) };
+  if (!visibilite.messagePierre) participant.message_beneficiaire = null;
+
+  const sedentariteVisible = participant.anamnese?.sedentariteVisibleBeneficiaire === true;
+  const fatigueVisible = participant.anamnese?.fatigueVisibleBeneficiaire === true;
+  if (!sedentariteVisible && participant.anamnese) {
+    delete participant.anamnese.sedentariteScore;
+    delete participant.anamnese.sedentariteProfil;
+    delete participant.anamnese.sedentariteReponses;
+  }
+  if (!fatigueVisible && participant.anamnese) {
+    delete participant.anamnese.fatigueScore;
+    delete participant.anamnese.fatigueProfil;
+    delete participant.anamnese.fatigueReponses;
+  }
+
+  const bilans = visibilite.bilans
+    ? (bilansRes.data ?? []).map((b: any) => filtrerBilan(b, sedentariteVisible, fatigueVisible))
+    : [];
+  const seances = visibilite.rdv ? (seancesRes.data ?? []) : [];
+
+  const programmes = visibilite.programme ? (programmesRes.data ?? []) : [];
   const v2ProgrammeIds = programmes.filter((p: any) => p.type != null).map((p: any) => p.id);
 
   let programmeSeances: any[] = [];
@@ -126,9 +207,9 @@ export default withSentry(async function handler(req: any, res: any) {
 
   return res.status(200).json({
     participantId,
-    participant: participantRes.data,
-    bilans: bilansRes.data ?? [],
-    seances: seancesRes.data ?? [],
+    participant,
+    bilans,
+    seances,
     programmes,
     programmeSeances,
     programmePlanning,

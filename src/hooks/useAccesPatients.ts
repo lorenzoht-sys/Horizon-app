@@ -1,32 +1,9 @@
-import type { AccesPatient } from '../types';
-
-const STORAGE_KEY = 'horizon_acces_patients';
-
-const VISIBILITE_DEFAULT: AccesPatient['visibilite'] = {
-  progression: true, bilans: true, rdv: true, programme: true, messagePierre: true, carteSante: true,
-};
-
-function load(): AccesPatient[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]'); }
-  catch { return []; }
-}
-
-function save(list: AccesPatient[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-}
-
-export function getAccesPatient(participantId: string): AccesPatient {
-  const found = load().find(a => a.participantId === participantId);
-  if (!found) return { participantId, visibilite: { ...VISIBILITE_DEFAULT } };
-  return { ...found, visibilite: { ...VISIBILITE_DEFAULT, ...found.visibilite } };
-}
-
-export function sauvegarderAccesPatient(acces: AccesPatient): void {
-  const list = load();
-  const idx = list.findIndex(a => a.participantId === acces.participantId);
-  if (idx >= 0) list[idx] = acces; else list.push(acces);
-  save(list);
-}
+// Le contrôle de partage bénéficiaire (VisibiliteBeneficiaire) vivait ici en
+// localStorage — retiré : c'était local à l'appareil qui l'écrivait (celui de
+// Pierre), donc jamais vu par le bénéficiaire sur son propre appareil, et
+// jamais appliqué côté serveur. Remplacé par une colonne Supabase
+// (participants.visibilite_beneficiaire), appliquée dans api/patient/me.ts —
+// voir src/lib/mappers.ts et src/components/participant/ModalEspacePatient.tsx.
 
 // ── Session patient (persistance pour PWA "ajouter à l'écran d'accueil") ──────
 // La PWA s'ouvre sans les paramètres d'URL (?code=...) : on garde la session
@@ -50,16 +27,4 @@ export function getSessionPatient(): SessionPatient | null {
 
 export function purgerSessionPatient(): void {
   try { localStorage.removeItem(SESSION_KEY); } catch {}
-}
-
-export function mettreAJourDernierAcces(participantId: string): void {
-  const list = load();
-  const idx = list.findIndex(a => a.participantId === participantId);
-  const now = new Date().toISOString();
-  if (idx >= 0) {
-    list[idx] = { ...list[idx], dernierAcces: now };
-  } else {
-    list.push({ participantId, visibilite: { ...VISIBILITE_DEFAULT }, dernierAcces: now });
-  }
-  save(list);
 }

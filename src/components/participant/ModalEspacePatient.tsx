@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
-import type { AccesPatient, Participant } from '../../types';
-import { getAccesPatient, sauvegarderAccesPatient } from '../../hooks/useAccesPatients';
+import type { Participant, VisibiliteBeneficiaire } from '../../types';
 import { getAppHost } from '../../lib/config';
+
+const VISIBILITE_DEFAULT: VisibiliteBeneficiaire = {
+  progression: true, bilans: true, rdv: true, programme: true, messagePierre: true, carteSante: true,
+};
 
 const VISIBILITE_ITEMS = [
   { key: 'progression'   as const, label: 'Graphiques de progression' },
@@ -17,25 +20,35 @@ const VISIBILITE_ITEMS = [
 interface Props {
   participant: Participant;
   onClose: () => void;
+  /** Persiste en base (Supabase) — remplace l'ancien stockage localStorage,
+   *  qui n'était jamais lu par le bénéficiaire sur son propre appareil. */
+  onUpdate: (data: Partial<Participant>) => Promise<void>;
 }
 
-export default function ModalEspacePatient({ participant, onClose }: Props) {
+export default function ModalEspacePatient({ participant, onClose, onUpdate }: Props) {
   const code = participant.codeAcces ?? '';
   const hasCode = code.length > 0;
   const patientUrl = `${window.location.origin}/patient/${participant.id}?code=${code}`;
-  const [local, setLocal] = useState<AccesPatient>(() => getAccesPatient(participant.id));
+  const [visibilite, setVisibilite] = useState<VisibiliteBeneficiaire>(
+    () => participant.visibiliteBeneficiaire ?? VISIBILITE_DEFAULT
+  );
+  const [messageBeneficiaire, setMessageBeneficiaire] = useState(participant.messageBeneficiaire ?? '');
   const [copiedLink, setCopiedLink] = useState(false);
 
-  function toggleVisibilite(key: keyof AccesPatient['visibilite'], val: boolean) {
-    const updated: AccesPatient = { ...local, visibilite: { ...local.visibilite, [key]: val } };
-    sauvegarderAccesPatient(updated);
-    setLocal(updated);
+  function toggleVisibilite(key: keyof VisibiliteBeneficiaire, val: boolean) {
+    const updated = { ...visibilite, [key]: val };
+    setVisibilite(updated);
+    onUpdate({ visibiliteBeneficiaire: updated }).catch(() => {
+      toast.error('Erreur lors de la sauvegarde, réessayez');
+      setVisibilite(visibilite);
+    });
   }
 
   function setMessage(texte: string) {
-    const updated: AccesPatient = { ...local, messagePierreTexte: texte };
-    sauvegarderAccesPatient(updated);
-    setLocal(updated);
+    setMessageBeneficiaire(texte);
+    onUpdate({ messageBeneficiaire: texte }).catch(() => {
+      toast.error('Erreur lors de la sauvegarde, réessayez');
+    });
   }
 
   function copier() {
@@ -222,7 +235,7 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
               <span>{item.label}</span>
               <input
                 type="checkbox"
-                checked={local.visibilite[item.key]}
+                checked={visibilite[item.key]}
                 onChange={e => toggleVisibilite(item.key, e.target.checked)}
                 style={{ accentColor: C.teal, width: 16, height: 16 }}
               />
@@ -231,7 +244,7 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
         </div>
 
         {/* Message de Pierre */}
-        {local.visibilite.messagePierre && (
+        {visibilite.messagePierre && (
           <div>
             <div style={{
               fontSize: 11, fontWeight: 700, color: 'var(--color-ink-2)',
@@ -240,7 +253,7 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
               Message pour {participant.prenom}
             </div>
             <textarea
-              value={local.messagePierreTexte ?? ''}
+              value={messageBeneficiaire}
               onChange={e => setMessage(e.target.value)}
               placeholder={`Bravo ${participant.prenom}, continuez comme ça !`}
               rows={3}
@@ -251,13 +264,6 @@ export default function ModalEspacePatient({ participant, onClose }: Props) {
                 fontFamily: 'inherit', lineHeight: 1.5, boxSizing: 'border-box',
               }}
             />
-          </div>
-        )}
-
-        {/* Dernier accès */}
-        {local.dernierAcces && (
-          <div style={{ fontSize: 11, color: C.muted, marginTop: 12 }}>
-            Dernier accès bénéficiaire : {new Date(local.dernierAcces).toLocaleDateString('fr-FR')}
           </div>
         )}
 

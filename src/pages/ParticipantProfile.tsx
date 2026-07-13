@@ -1909,6 +1909,7 @@ export default function ParticipantProfile() {
         <ModalEspacePatient
           participant={participant}
           onClose={() => setShowEspacePatient(false)}
+          onUpdate={data => updateParticipant(participant.id, data)}
         />
       )}
 

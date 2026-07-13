@@ -86,6 +86,11 @@ export interface Bilan {
   bilanInitialData?: BilanInitialData;
   notesBilan?: NotesBilan;
   interpretationIA?: InterpretationIA | null;
+  /** Résultats explicitement autorisés à être vus par le bénéficiaire —
+   *  clé absente ou `false` = caché (défaut : tout caché tant que le
+   *  praticien ne coche pas explicitement). Appliqué côté serveur dans
+   *  api/patient/me.ts, pas seulement côté affichage. */
+  visibleBeneficiaire?: Partial<Record<'equilibre' | 'force' | 'handGrip' | 'mobilite' | 'endurance', boolean>>;
 }
 
 export interface NotesBilan {
@@ -564,6 +569,12 @@ export interface Participant {
   iban?: string;
   bic?: string;
   droitImage?: boolean;
+  // Contrôle de partage avec le bénéficiaire — voir VisibiliteBeneficiaire.
+  // Optionnel au niveau du type (les payloads de création n'ont pas encore de
+  // ligne DB) : dbToParticipant() garantit toujours une valeur par défaut une
+  // fois relu depuis Supabase.
+  visibiliteBeneficiaire?: VisibiliteBeneficiaire;
+  messageBeneficiaire?: string;
 }
 
 // ── STRUCTURES ────────────────────────────────────────────────────────────────
@@ -790,22 +801,28 @@ export interface AnamneseData {
   fatigueProfil?: 'pas_de_fatigue' | 'fatigue_probable' | null;
   cognition?: CognitionData;
   organisation?: OrganisationData;
+  // Contrôle de partage — absent/false = caché par défaut, comme
+  // Bilan.visibleBeneficiaire (même principe, mais ces deux profils vivent
+  // sur l'anamnèse du participant, pas sur un bilan précis : getTestsAutonomie()
+  // les lit en priorité depuis participant.anamnese).
+  sedentariteVisibleBeneficiaire?: boolean;
+  fatigueVisibleBeneficiaire?: boolean;
 }
 
 // ── ESPACE PATIENT ────────────────────────────────────────────────────────────
 
-export interface AccesPatient {
-  participantId: string;
-  visibilite: {
-    progression: boolean;
-    bilans: boolean;
-    rdv: boolean;
-    programme: boolean;
-    messagePierre: boolean;
-    carteSante: boolean;
-  };
-  messagePierreTexte?: string;
-  dernierAcces?: string;
+/** Quelles sections de l'espace bénéficiaire sont visibles — stocké en base
+ *  (participants.visibilite_beneficiaire), appliqué côté serveur dans
+ *  api/patient/me.ts. Anciennement en localStorage (AccesPatient) : ce
+ *  stockage était local à l'appareil qui l'écrivait (celui de Pierre), donc
+ *  jamais vu par le bénéficiaire sur son propre appareil — corrigé ici. */
+export interface VisibiliteBeneficiaire {
+  progression: boolean;
+  bilans: boolean;
+  rdv: boolean;
+  programme: boolean;
+  messagePierre: boolean;
+  carteSante: boolean;
 }
 
 // ── PROGRAMME V2 (structure relationnelle) ────────────────────────────────────

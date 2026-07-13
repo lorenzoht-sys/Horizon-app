@@ -1812,6 +1812,7 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
         <ModalEspacePatient
           participant={p}
           onClose={() => setShowEspacePatient(false)}
+          onUpdate={data => updateParticipant(p.id, data)}
         />
       )}
     </div>

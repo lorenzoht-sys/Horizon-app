@@ -61,6 +61,19 @@ const NOTES_LABELS_TEST: Record<keyof NotesBilan, string> = {
   mobilite: 'Mobilité', souplesse: 'Souplesse', endurance: 'Endurance', memoire: 'Mémoire',
 };
 
+// Uniquement les résultats aujourd'hui affichés dans l'espace bénéficiaire
+// (EspacePatient.tsx) — souplesse/mémoire n'y apparaissent pas, pas de case à
+// cocher inutile pour un résultat qui ne serait affiché nulle part de toute
+// façon.
+type CleResultatPartageable = 'equilibre' | 'force' | 'handGrip' | 'mobilite' | 'endurance';
+const PARTAGE_ITEMS: { key: CleResultatPartageable; label: string }[] = [
+  { key: 'equilibre', label: 'Équilibre' },
+  { key: 'force', label: 'Force jambes' },
+  { key: 'handGrip', label: 'Force mains' },
+  { key: 'mobilite', label: 'Mobilité' },
+  { key: 'endurance', label: 'Endurance' },
+];
+
 function NoteBadge({ note }: { note: number }) {
   const color = NOTE_COLORS[note] ?? '#9CA3AF';
   return (
@@ -156,6 +169,37 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
       ) : (
         <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-400 text-center">
           Aucun test renseigné — revenez à l'étape précédente pour saisir les résultats.
+        </div>
+      )}
+
+      {/* ── Partage avec le bénéficiaire ── */}
+      {hasAnyNote && (
+        <div>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+            Partager avec le bénéficiaire
+          </p>
+          <p className="text-xs text-gray-400 mb-3">
+            Décoché par défaut — cochez uniquement les résultats que vous choisissez de rendre visibles
+            dans l'espace bénéficiaire. Vous continuez de voir toutes les valeurs ici, quel que soit ce choix.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {PARTAGE_ITEMS
+              .filter(item => notes[item.key] !== undefined)
+              .map(item => (
+                <label key={item.key}
+                  className="flex items-center justify-between bg-white border border-gray-100 rounded-xl px-4 py-3 cursor-pointer">
+                  <span className="text-sm font-medium text-gray-600">{item.label}</span>
+                  <input
+                    type="checkbox"
+                    checked={form.visibleBeneficiaire?.[item.key] === true}
+                    onChange={e => update({
+                      visibleBeneficiaire: { ...form.visibleBeneficiaire, [item.key]: e.target.checked },
+                    })}
+                    className="w-4 h-4 accent-primary"
+                  />
+                </label>
+              ))}
+          </div>
         </div>
       )}
 
