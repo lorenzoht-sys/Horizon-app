@@ -1,5 +1,6 @@
 import type { Bilan } from '../../../types';
 import { Sparkles } from 'lucide-react';
+import BoutonReformulation from '../../ui/BoutonReformulation';
 
 type BilanForm = Omit<Bilan, 'id'>;
 
@@ -73,6 +74,12 @@ export default function Step4_Notes({ form, update, onGenerateMessage }: Props) 
           placeholder="Message bienveillant et motivant pour le bénéficiaire..."
           className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/10 resize-none"
         />
+        <div className="mt-2">
+          <BoutonReformulation
+            texte={form.messageClient}
+            onReformule={nouveauTexte => update({ messageClient: nouveauTexte })}
+          />
+        </div>
         <p className="text-xs text-gray-400 mt-1">Ce message sera visible dans l'espace client du bénéficiaire.</p>
       </div>
     </div>

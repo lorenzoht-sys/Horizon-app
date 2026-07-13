@@ -11,6 +11,7 @@ import { useProgramme } from '../hooks/useProgramme';
 import { useProgrammeV2 } from '../hooks/useProgrammeV2';
 import { useActivitesHorsProgramme } from '../hooks/useActivitesHorsProgramme';
 import PageWrapper from '../components/layout/PageWrapper';
+import BoutonReformulation from '../components/ui/BoutonReformulation';
 import { toast } from 'sonner';
 import type { TypeProgramme, JourProgramme, ProgrammeV2, Participant, Bilan } from '../types';
 import { TYPE_PROGRAMME_LABELS as TPL, JOURS_PROGRAMME as JP, CATEGORIE_EXERCICE_LABELS as CEL } from '../types';
@@ -873,6 +874,12 @@ function Step1({ data, onChange }: {
           placeholder="ex: Un programme qui va vous mettre en confiance !"
           style={{ ...inputStyle, resize: 'none' }}
         />
+        <div style={{ marginTop: 8 }}>
+          <BoutonReformulation
+            texte={data.messageMotivation}
+            onReformule={nouveauTexte => onChange({ messageMotivation: nouveauTexte })}
+          />
+        </div>
       </div>
     </div>
   );

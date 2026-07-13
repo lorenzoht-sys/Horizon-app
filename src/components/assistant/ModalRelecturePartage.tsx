@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, Send } from 'lucide-react';
+import BoutonReformulation from '../ui/BoutonReformulation';
 
 interface Props {
   /** Nom lisible du destinataire, affiché tel quel (ex: "Camille Martin (bénéficiaire)"). */
@@ -47,6 +48,9 @@ export default function ModalRelecturePartage({ destinataire, texteInitial, onAn
             rows={16}
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm leading-relaxed focus:outline-none focus:border-primary transition-colors resize-y disabled:opacity-50"
           />
+          <div className="mt-2">
+            <BoutonReformulation texte={texte} onReformule={setTexte} disabled={envoi} />
+          </div>
         </div>
 
         <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100 bg-white rounded-b-3xl sm:rounded-b-2xl">

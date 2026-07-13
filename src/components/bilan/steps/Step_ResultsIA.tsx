@@ -4,6 +4,7 @@ import { NORMES_SCORING, calculerNote } from '../../../data/norms';
 import { genererInterpretation } from '../../../utils/genererInterpretation';
 import { Brain, Check, AlertTriangle } from 'lucide-react';
 import { useConnexion } from '../../../hooks/useConnexion';
+import BoutonReformulation from '../../ui/BoutonReformulation';
 
 type BilanForm = Omit<Bilan, 'id'>;
 
@@ -320,6 +321,15 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
               rows={3}
               className="w-full border border-secondary/40 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-secondary resize-none"
             />
+            <div className="mt-2">
+              <BoutonReformulation
+                texte={interpretation.messageClient}
+                onReformule={nouveauTexte => update({
+                  interpretationIA: { ...interpretation, messageClient: nouveauTexte },
+                  messageClient: nouveauTexte,
+                })}
+              />
+            </div>
             <p className="text-xs text-gray-400 mt-1">Ce message sera visible dans l'espace client du bénéficiaire.</p>
           </div>
         </div>
