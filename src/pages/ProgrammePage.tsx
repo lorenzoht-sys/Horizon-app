@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { ArrowLeft, Plus, Bot, Trash2, ChevronRight, ChevronLeft, X, Activity, Search } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
@@ -17,8 +17,11 @@ import type { TypeProgramme, JourProgramme, ProgrammeV2, Participant, Bilan } fr
 import { TYPE_PROGRAMME_LABELS as TPL, JOURS_PROGRAMME as JP, CATEGORIE_EXERCICE_LABELS as CEL } from '../types';
 import { loadExercices, saveCustomExercice } from '../data/exercices';
 import { TESTS_ETALONS } from '../data/testsEtalons';
-import { getAuthHeader } from '../lib/supabase';
 import type { Exercice } from '../types';
+import {
+  genererQuestionsClarification, genererProgrammeStructure, versPayloadCreateProgramme,
+  type ProgrammeIA,
+} from '../utils/genererProgrammeIA';
 
 // ── Types wizard ─────────────────────────────────────────────────────────────
 
@@ -221,34 +224,6 @@ const OBJECTIFS_IA: { value: string; label: string }[] = [
   { value: 'personnalise', label: 'Personnalisé' },
 ];
 
-interface ExerciceIA {
-  nom: string;
-  categorie: string;
-  description: string;
-  conseil_securite?: string;
-  niveau: number;
-  series?: number | null;
-  repetitions?: number | null;
-  duree_secondes?: number | null;
-}
-
-interface SeanceIA {
-  nom: string;
-  description?: string;
-  exercices: ExerciceIA[];
-}
-
-interface ProgrammeIA {
-  nom: string;
-  description?: string;
-  objectif: string;
-  message_motivation: string;
-  niveau_global: number;
-  seances: SeanceIA[];
-  planning: Record<string, string>;
-  conseils_generaux?: string;
-}
-
 const JOURS_IA: JourProgramme[] = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
 
 function calcAgeIA(dateNaissance: string): number {
@@ -256,98 +231,9 @@ function calcAgeIA(dateNaissance: string): number {
   return Math.floor((Date.now() - new Date(dateNaissance).getTime()) / (365.25 * 24 * 3600 * 1000));
 }
 
-function construirePromptIA(participant: Participant, config: ConfigIA, dernierBilan: Bilan | null, programmesExistants: ProgrammeV2[]): string {
-  const age = calcAgeIA(participant.dateNaissance);
-  const traitements = (participant.traitements ?? []).map(t => t.nom).filter(Boolean).join(', ');
-  const antecedents = [participant.antecedentsMedicaux, participant.antecedentsChirurgicaux].filter(Boolean).join(' · ');
-
-  const contextePatient = `PATIENT : ${participant.prenom} ${participant.nom}, ${age} ans
-PATHOLOGIE : ${participant.pathologie || 'non renseignée'}
-ANTÉCÉDENTS : ${antecedents || 'non renseignés'}
-TRAITEMENTS : ${traitements || 'non renseignés'}
-ALLERGIES : ${participant.allergies || 'aucune connue'}
-PROFIL : ${participant.profilHandicap || 'aucun profil de handicap renseigné'}
-${dernierBilan ? `DERNIERS SCORES (bilan du ${dernierBilan.date}) :
-- TUG (Timed Up and Go) : ${dernierBilan.tug3m ?? 'NR'} s
-- Chair Stand 30s : ${dernierBilan.chairStand30 ?? 'NR'} répétitions
-- Force de préhension (HandGrip droite) : ${dernierBilan.handGrip?.droite ?? 'NR'} kg
-- Équilibre (appui droit) : ${dernierBilan.equilibre?.droite ?? 'NR'} s
-- Ressenti à l'effort (Borg) : ${dernierBilan.tm6?.borgRPE ?? 'NR'}/20` : "Aucun bilan disponible — adapter le programme au profil et à la pathologie déclarés."}
-PROGRAMMES EXISTANTS : ${programmesExistants.map(p => p.nom).join(', ') || 'aucun'}`;
-
-  const niveauLabel = config.niveau === 1 ? 'Facile (débutant, fragile)'
-    : config.niveau === 2 ? 'Modéré (actif, effort soutenu)'
-    : 'Intense (entraîné, bon niveau fonctionnel)';
-
-  const objectifLabel = config.objectif === 'personnalise'
-    ? (config.objectifPersonnalise || "objectif personnalisé du patient")
-    : OBJECTIFS_IA.find(o => o.value === config.objectif)?.label ?? config.objectif;
-
-  const nbExercices = config.frequence === 2 ? '1 à 2' : config.frequence <= 3 ? '2 à 3' : '3 à 4';
-
-  return `Tu es un expert en Activité Physique Adaptée (APA) certifié.
-Génère un programme d'exercices personnalisé pour ce patient.
-
-${contextePatient}
-
-CONFIGURATION DEMANDÉE :
-- Objectif : ${objectifLabel}
-- Fréquence : ${config.frequence} séances par semaine
-- Durée par séance : ${config.duree} minutes
-- Niveau : ${niveauLabel}
-
-RÈGLES ABSOLUES :
-1. Respecter toutes les contre-indications, pathologies et allergies signalées, sans exception
-2. En cas de traitement anticoagulant ou de risque de chute → éviter tout exercice à risque de choc ou de chute
-3. Adapter le niveau de difficulté aux scores fonctionnels du dernier bilan, s'ils sont disponibles
-4. Ne pas reproduire à l'identique les programmes existants listés ci-dessus
-
-Réponds UNIQUEMENT avec un JSON valide, sans texte avant ou après, sans balises markdown, sans commentaires.
-
-Format JSON exact attendu :
-{
-  "nom": "string (nom court et descriptif, ex: Programme Équilibre ${participant.prenom})",
-  "description": "string (1-2 phrases décrivant le programme)",
-  "objectif": "string (objectif principal en 1 phrase)",
-  "message_motivation": "string (message positif et encourageant pour le patient, 1 phrase)",
-  "niveau_global": ${config.niveau},
-  "seances": [
-    {
-      "nom": "string (ex: Séance A, Séance Équilibre)",
-      "description": "string (description courte de la séance)",
-      "exercices": [
-        {
-          "nom": "string (nom exact de l'exercice)",
-          "categorie": "string (Équilibre|Force|Endurance|Souplesse|Coordination|Mémoire)",
-          "description": "string (instruction simple et claire pour le patient)",
-          "conseil_securite": "string (conseil de sécurité spécifique)",
-          "niveau": ${config.niveau},
-          "series": nombre_ou_null,
-          "repetitions": nombre_ou_null,
-          "duree_secondes": nombre_ou_null
-        }
-      ]
-    }
-  ],
-  "planning": {
-    "lundi": "string (nom de séance exact ou repos)",
-    "mardi": "string",
-    "mercredi": "string",
-    "jeudi": "string",
-    "vendredi": "string",
-    "samedi": "string",
-    "dimanche": "string"
-  },
-  "conseils_generaux": "string (2-3 conseils généraux pour ce programme)"
-}
-
-Génère ${nbExercices} exercices par séance.
-La durée totale des exercices d'une séance doit correspondre à environ ${config.duree} minutes.
-Distribue les séances sur ${config.frequence} jours non consécutifs si possible, et indique "repos" pour les autres jours.`;
-}
-
 function ConfigIAModal({
   participant, config, onChange, onGenerer, onClose, generating, error,
+  questions, chargementQuestions, reponses, onReponseChange,
 }: {
   participant: Participant;
   config: ConfigIA;
@@ -356,6 +242,13 @@ function ConfigIAModal({
   onClose: () => void;
   generating: boolean;
   error: string | null;
+  /** Questions ciblées sur des capacités absentes du profil — voir
+   *  genererQuestionsClarification(). Un échec au chargement n'empêche pas
+   *  de générer le programme (tableau vide, pas de blocage). */
+  questions: string[];
+  chargementQuestions: boolean;
+  reponses: string[];
+  onReponseChange: (index: number, valeur: string) => void;
 }) {
   const age = calcAgeIA(participant.dateNaissance);
 
@@ -437,6 +330,31 @@ function ConfigIAModal({
                     );
                   })}
                 </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid #E0EEEE', paddingTop: 14 }}>
+                <label style={labelStyle}>Quelques précisions sur {participant.prenom}</label>
+                {chargementQuestions ? (
+                  <p style={{ fontSize: 12, color: '#94A3B8' }}>Préparation des questions…</p>
+                ) : questions.length === 0 ? (
+                  <p style={{ fontSize: 12, color: '#94A3B8' }}>
+                    Aucune question complémentaire — le profil enregistré suffit.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {questions.map((q, i) => (
+                      <div key={i}>
+                        <div style={{ fontSize: 12, color: '#374151', marginBottom: 4 }}>{q}</div>
+                        <input
+                          value={reponses[i] ?? ''}
+                          onChange={e => onReponseChange(i, e.target.value)}
+                          placeholder="Votre réponse (facultatif)…"
+                          style={inputStyle}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div style={{ borderTop: '1px solid #E0EEEE', paddingTop: 14 }}>
@@ -1631,12 +1549,31 @@ const STEP_LABELS = ['Informations', 'Séances', 'Planning', 'Récapitulatif'];
 
 export default function ProgrammePage() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { participants } = useParticipants();
   const { programmes: progsV2, loading, seancesAutonomesStats, createProgramme, updateProgramme, toggleActif, deleteProgrammeV2 } = useProgrammeV2(id!);
   const { programmes: progsV1, programmeActif: progV1Actif } = useProgramme(id!);
   const activitesHorsProgramme = useActivitesHorsProgramme(id!);
 
   const participant = participants.find(p => p.id === id);
+
+  // Handoff depuis "Mon assistant" (AssistantPage.tsx) : programme déjà
+  // généré (mêmes fonctions partagées, voir genererProgrammeIA.ts), on
+  // rouvre directement l'écran de relecture existant plutôt que d'en
+  // construire un second. On efface l'état de navigation après lecture pour
+  // ne pas rouvrir la preview sur un retour arrière / rechargement.
+  const [showPreviewIA, setShowPreviewIA] = useState(false);
+  const [programmePreview, setProgrammePreview] = useState<ProgrammeIA | null>(null);
+  useEffect(() => {
+    const state = location.state as { programmeGenereIA?: ProgrammeIA } | null;
+    if (state?.programmeGenereIA) {
+      setProgrammePreview(state.programmeGenereIA);
+      setShowPreviewIA(true);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [showWizard, setShowWizard] = useState(false);
   const [step, setStep] = useState(1);
@@ -1648,18 +1585,44 @@ export default function ProgrammePage() {
   const [configIA, setConfigIA] = useState<ConfigIA>(EMPTY_CONFIG_IA);
   const [generatingIA, setGeneratingIA] = useState(false);
   const [errorIA, setErrorIA] = useState<string | null>(null);
-  const [programmePreview, setProgrammePreview] = useState<ProgrammeIA | null>(null);
-  const [showPreviewIA, setShowPreviewIA] = useState(false);
   const [savingIA, setSavingIA] = useState(false);
+
+  // Questions de clarification (genererQuestionsClarification) — un échec au
+  // chargement n'empêche pas de générer : questions reste un tableau vide.
+  const [questionsIA, setQuestionsIA] = useState<string[]>([]);
+  const [reponsesIA, setReponsesIA] = useState<string[]>([]);
+  const [chargementQuestionsIA, setChargementQuestionsIA] = useState(false);
 
   function updateConfigIA(patch: Partial<ConfigIA>) {
     setConfigIA(prev => ({ ...prev, ...patch }));
   }
 
-  function ouvrirConfigIA() {
+  function updateReponseIA(index: number, valeur: string) {
+    setReponsesIA(prev => {
+      const next = [...prev];
+      next[index] = valeur;
+      return next;
+    });
+  }
+
+  async function ouvrirConfigIA() {
     setConfigIA(EMPTY_CONFIG_IA);
     setErrorIA(null);
     setShowConfigIA(true);
+    setQuestionsIA([]);
+    setReponsesIA([]);
+    if (!participant) return;
+    setChargementQuestionsIA(true);
+    try {
+      const questions = await genererQuestionsClarification(participant);
+      setQuestionsIA(questions);
+      setReponsesIA(questions.map(() => ''));
+    } catch {
+      // Non bloquant — Pierre peut générer sans réponses de clarification.
+      setQuestionsIA([]);
+    } finally {
+      setChargementQuestionsIA(false);
+    }
   }
 
   function fermerConfigIA() {
@@ -1683,29 +1646,25 @@ export default function ProgrammePage() {
         ? [...bilans].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
         : null;
 
-      const prompt = construirePromptIA(participant, configIA, dernierBilan, progsV2);
+      const objectifLabel = configIA.objectif === 'personnalise'
+        ? (configIA.objectifPersonnalise || 'objectif personnalisé du patient')
+        : OBJECTIFS_IA.find(o => o.value === configIA.objectif)?.label ?? configIA.objectif;
 
-      const res = await fetch('/api/claude', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
-        body: JSON.stringify({ prompt }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error || "Erreur lors de l'appel à l'IA");
-      }
+      const reponsesTexte = questionsIA
+        .map((q, i) => (reponsesIA[i]?.trim() ? `- ${q}\n  Réponse : ${reponsesIA[i].trim()}` : null))
+        .filter(Boolean)
+        .join('\n');
 
-      const cleanText = String(data.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      let parsed: ProgrammeIA;
-      try {
-        parsed = JSON.parse(cleanText);
-      } catch {
-        throw new Error("L'IA a renvoyé une réponse invalide. Réessayez.");
-      }
+      const catalogue = loadExercices();
 
-      if (!parsed || !Array.isArray(parsed.seances) || parsed.seances.length === 0) {
-        throw new Error("Le programme généré est incomplet. Réessayez.");
-      }
+      const parsed = await genererProgrammeStructure(
+        participant,
+        { objectif: objectifLabel, frequence: configIA.frequence, duree: configIA.duree, niveau: configIA.niveau },
+        reponsesTexte,
+        catalogue,
+        dernierBilan,
+        progsV2,
+      );
 
       setProgrammePreview(parsed);
       setShowConfigIA(false);
@@ -1738,40 +1697,8 @@ export default function ProgrammePage() {
     if (!programmePreview) return;
     setSavingIA(true);
     try {
-      const seancesAvecId = programmePreview.seances.map(s => ({ ...s, tempId: uuidv4() }));
-
-      const planning: Partial<Record<JourProgramme, string | null>> = {};
-      for (const jour of JOURS_IA) {
-        const nomSeance = programmePreview.planning[jour];
-        if (!nomSeance || nomSeance.toLowerCase() === 'repos') {
-          planning[jour] = null;
-        } else {
-          const match = seancesAvecId.find(s => s.nom === nomSeance);
-          planning[jour] = match ? match.tempId : null;
-        }
-      }
-
-      const ok = await createProgramme({
-        nom: programmePreview.nom,
-        objectif: programmePreview.objectif,
-        messageMotivation: programmePreview.message_motivation,
-        type: 'domicile',
-        seances: seancesAvecId.map(s => ({
-          tempId: s.tempId,
-          nom: s.nom,
-          description: s.description,
-          exercices: s.exercices.map(ex => ({
-            nom: ex.nom,
-            categorie: ex.categorie,
-            description: ex.description,
-            conseilSecurite: ex.conseil_securite,
-            series: ex.series ?? undefined,
-            repetitions: ex.repetitions ?? undefined,
-            dureeSecondes: ex.duree_secondes ?? undefined,
-          })),
-        })),
-        planning,
-      });
+      const payload = versPayloadCreateProgramme(programmePreview, 'domicile', uuidv4);
+      const ok = await createProgramme(payload);
 
       if (ok) {
         toast.success('Programme généré et créé avec succès 🎉');
@@ -2079,6 +2006,10 @@ export default function ProgrammePage() {
           onClose={fermerConfigIA}
           generating={generatingIA}
           error={errorIA}
+          questions={questionsIA}
+          chargementQuestions={chargementQuestionsIA}
+          reponses={reponsesIA}
+          onReponseChange={updateReponseIA}
         />
       )}
 

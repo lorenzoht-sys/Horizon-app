@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Bot, Send, Mic, MicOff, Copy, ArrowLeft, RefreshCw, Search, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
@@ -12,7 +12,8 @@ import { toast } from 'sonner';
 import { pdfMake, mdToPdfMake } from '../utils/markdownToPdf';
 import MarkdownRendu from '../components/ui/MarkdownRendu';
 import ModalRelecturePartage from '../components/assistant/ModalRelecturePartage';
-import { EXERCICES_BASE } from '../data/exercices';
+import { EXERCICES_BASE, loadExercices } from '../data/exercices';
+import { genererQuestionsClarification, genererProgrammeStructure } from '../utils/genererProgrammeIA';
 import {
   formatContratContexte, formatProgrammeContexte, formatExerciceV1Ligne, formatExerciceV2Ligne,
   formatStructureContexte, calculerPlanningReel, formatPlanningReelContexte,
@@ -420,8 +421,9 @@ function buildActionPrompt(action: ActionType, patient: Participant, extras: Pat
       return `${sys}\n\n---\nQUESTION:\nRédige un compte-rendu destiné à la famille de ${patient.prenom} ${patient.nom}, en langage simple et accessible (sans jargon médical).\nFormat :\n## Bilan pour la famille — ${patient.prenom} ${patient.nom}\n**Date :** ${new Date().toLocaleDateString('fr-FR')}\n### Comment se porte ${patient.prenom} ?\n### Les progrès observés\n### Le programme en cours\n### Ce qu'il faut surveiller à la maison\n### Nos conseils pour accompagner ${patient.prenom} au quotidien\nRédige de façon chaleureuse, positive et concrète. Explique chaque résultat en termes simples (ex : "le test de marche montre que…" plutôt que des chiffres bruts).`;
     case 'interpretation':
       return `${sys}\n\n---\nQUESTION:\nAnalyse et interprète les derniers résultats de bilans de ce patient.\nPour chaque test disponible :\n- Compare aux normes pour l'âge (cite les références HAS / SFP-APA)\n- Indique si le résultat est satisfaisant, à surveiller, ou préoccupant\n- Explique les implications pratiques pour les séances APA\n- Identifie les priorités de travail\nConclude sur le profil fonctionnel global.`;
-    case 'programme':
-      return `${sys}\n\n---\nQUESTION:\nGénère un programme d'exercices APA complet et adapté pour ce patient.\n\n## Objectif principal\n### Exercices recommandés\n- **Nom** — durée/répétitions\n  Précautions spécifiques à ce patient : ...\n  Variante si douleur : ...\n### Points de vigilance pour ce patient\n### À éviter absolument\n### Progression suggérée sur 4 semaines`;
+    // 'programme' n'utilise plus ce prompt texte libre — voir
+    // genererProgrammeIA.ts (genererQuestionsClarification / genererProgrammeStructure),
+    // déclenché depuis handlePatientSelected() et handleGenererProgrammeStructure().
     default:
       return sys;
   }
@@ -726,6 +728,7 @@ export default function AssistantPage() {
   const { contratsDeParticipant } = useContrats();
   const { structures } = useStructures();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [phase, setPhase]               = useState<Phase>('home');
   const [actionType, setActionType]     = useState<ActionType | null>(null);
@@ -733,6 +736,11 @@ export default function AssistantPage() {
   const [patientExtras, setPatientExtras] = useState<PatientExtras | null>(null);
   const [messages, setMessages]         = useState<Message[]>([]);
   const [awaitingPatient, setAwaitingPatient] = useState(false);
+  // Action "programme" : questions de clarification posées → affiche le
+  // bouton "Générer le programme structuré". Le chat reste libre jusque-là
+  // (et après) — jamais de génération automatique sur une réponse.
+  const [programmeQuestionsPosees, setProgrammeQuestionsPosees] = useState(false);
+  const [genererProgrammeLoading, setGenererProgrammeLoading] = useState(false);
   const [input, setInput]               = useState('');
   const [loading, setLoading]           = useState(false);
   const [logs, setLogs]                 = useState<AssistantLog[]>([]);
@@ -895,6 +903,7 @@ export default function AssistantPage() {
   function handleStartAction(action: ActionType, prePatient?: Participant) {
     setPhase('chat');
     setActionType(action);
+    setProgrammeQuestionsPosees(false);
 
     if (action === 'libre') {
       const p = prePatient ?? selectedPatient;
@@ -928,10 +937,25 @@ export default function AssistantPage() {
     if (!actionType || actionType === 'libre') return;
 
     if (actionType === 'programme') {
-      setMessages(prev => [...prev, {
-        id: newId(), role: 'assistant', synthetic: true,
-        content: `Parfait ! Pour quel objectif souhaitez-vous un programme pour ${patient.prenom} ?\n(ex : équilibre, force musculaire, endurance, douleurs…)`,
-      }]);
+      setLoading(true);
+      try {
+        const questions = await genererQuestionsClarification(patient);
+        setProgrammeQuestionsPosees(true);
+        setMessages(prev => [...prev, {
+          id: newId(), role: 'assistant', synthetic: true,
+          content: `Pour construire le programme de ${patient.prenom}, quelques précisions :\n\n${questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}\n\nRépondez librement (une ou plusieurs questions, ou creusez un point en particulier), puis cliquez sur "Générer le programme structuré" quand vous êtes prêt.`,
+        }]);
+      } catch {
+        // Non bloquant — Pierre peut répondre librement puis générer sans
+        // questions ciblées si l'appel de clarification échoue.
+        setProgrammeQuestionsPosees(true);
+        setMessages(prev => [...prev, {
+          id: newId(), role: 'assistant', synthetic: true,
+          content: `Pour quel objectif souhaitez-vous un programme pour ${patient.prenom} ? (ex : équilibre, force musculaire, endurance, douleurs…)\n\nRépondez librement, puis cliquez sur "Générer le programme structuré" quand vous êtes prêt.`,
+        }]);
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
@@ -990,15 +1014,6 @@ export default function AssistantPage() {
   async function genererReponse(questionText: string, historique: Message[]) {
     setLoading(true);
     try {
-      if (actionType === 'programme' && selectedPatient) {
-        const extras = extrasParDefaut();
-        const sys = buildSystemPrompt(selectedPatient, extras, getContratInfo(selectedPatient), getStructureInfo(selectedPatient));
-        const prompt = `${sys}\n\n---\nQUESTION:\nGénère un programme d'exercices APA pour l'objectif suivant : "${questionText}"\n\n## Objectif\n### Exercices recommandés\n- **Nom** — durée/répétitions\n  Précautions : ...\n### Points de vigilance\n### À éviter absolument`;
-        const responseText = await callClaudeAPI(prompt);
-        setMessages(prev => [...prev, { id: newId(), role: 'assistant', content: responseText }]);
-        await saveLog(questionText, responseText, selectedPatient.id, 'programme');
-        return;
-      }
 
       const extras = extrasParDefaut();
       const sys = buildSystemPrompt(selectedPatient, extras, selectedPatient ? getContratInfo(selectedPatient) : null, selectedPatient ? getStructureInfo(selectedPatient) : null);
@@ -1089,8 +1104,49 @@ export default function AssistantPage() {
     e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
   }
 
+  /** Déclenchement EXPLICITE uniquement (clic du praticien) — jamais sur une
+   *  réponse du chat. Même mécanisme de génération que ProgrammePage.tsx
+   *  (genererProgrammeIA.ts) : à la réussite, on ouvre l'écran de relecture
+   *  déjà existant (PreviewIAModal) via navigation, plutôt que d'en construire
+   *  un second dans le chat. */
+  async function handleGenererProgrammeStructure() {
+    if (!selectedPatient) return;
+    setGenererProgrammeLoading(true);
+    try {
+      const contrat = getContratInfo(selectedPatient);
+      const catalogue = loadExercices();
+      const dernierBilan = [...selectedPatient.bilans].sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
+      const reponsesClarification = formatHistoriqueConversation(messages.filter(m => m.role === 'user' || m.role === 'assistant'));
+
+      const programme = await genererProgrammeStructure(
+        selectedPatient,
+        {
+          objectif: 'à déduire des échanges ci-dessous',
+          frequence: contrat?.nbSeancesSemaine ?? 3,
+          duree: contrat?.dureesSeances?.[0] ?? 45,
+          niveau: 2,
+        },
+        reponsesClarification,
+        catalogue,
+        dernierBilan,
+        [],
+      );
+
+      await saveLog('Génération de programme structuré', `Programme "${programme.nom}" généré (${programme.seances.length} séance(s))`, selectedPatient.id, 'programme');
+      navigate(`/participant/${selectedPatient.id}/programme`, { state: { programmeGenereIA: programme } });
+    } catch (err) {
+      setMessages(prev => [...prev, {
+        id: newId(), role: 'assistant',
+        content: `Impossible de générer le programme structuré : ${err instanceof Error ? err.message : String(err)}. Réessayez.`,
+      }]);
+    } finally {
+      setGenererProgrammeLoading(false);
+    }
+  }
+
   function resetToHome() {
     setPhase('home'); setActionType(null); setMessages([]); setAwaitingPatient(false); setInput(''); setExpandedCard(null);
+    setProgrammeQuestionsPosees(false);
   }
 
   const sharedLeftColumn = (
@@ -1350,6 +1406,29 @@ export default function AssistantPage() {
           )}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Génération du programme structuré — déclenchement explicite uniquement */}
+        {actionType === 'programme' && programmeQuestionsPosees && selectedPatient && !awaitingPatient && (
+          <div style={{ padding: '0 22px 12px', flexShrink: 0 }}>
+            <button
+              onClick={handleGenererProgrammeStructure}
+              disabled={loading || genererProgrammeLoading}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                width: '100%', padding: '11px 14px', borderRadius: 10, border: 'none',
+                background: (loading || genererProgrammeLoading) ? '#E5E7EB' : 'var(--color-ink)',
+                color: (loading || genererProgrammeLoading) ? '#9CA3AF' : 'white',
+                fontSize: 13, fontWeight: 700, cursor: (loading || genererProgrammeLoading) ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {genererProgrammeLoading ? (
+                <><RefreshCw size={14} className="animate-spin" /> Génération du programme…</>
+              ) : (
+                <>🏋️ Générer le programme structuré</>
+              )}
+            </button>
+          </div>
+        )}
 
         {/* Saisie */}
         {!awaitingPatient && (
