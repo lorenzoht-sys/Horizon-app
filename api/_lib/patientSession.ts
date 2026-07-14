@@ -77,22 +77,22 @@ export async function accesViaPraticien(
     return { status: 401, body: { error: 'Session invalide ou expirée' } };
   }
 
-  const { data: patient, error } = await supabase
-    .from('participants')
-    .select('id, praticien_id')
-    .eq('id', participantId)
-    .maybeSingle();
+  // userData.user.id : identité retournée par Supabase Auth après vérification
+  // du JWT ci-dessus — jamais une valeur lue depuis req.body/req.query. Seul
+  // user_id qui alimente l'appel RPC (voir 20260714_mode_organisation_acces_participant_pour.sql).
+  const { data: acces, error } = await supabase
+    .rpc('acces_participant_pour', { p_participant_id: participantId, p_user_id: userData.user.id });
 
   if (error) {
     return { status: 500, body: { error: 'Erreur serveur' } };
   }
 
-  if (!patient || patient.praticien_id !== userData.user.id) {
+  if (!acces) {
     await logAuditEvent(supabase, 'patient_access_via_praticien', participantId, ip, false);
     return { status: 403, body: { error: 'Ce patient ne fait pas partie de votre liste.' } };
   }
 
-  await logAuditEvent(supabase, 'patient_access_via_praticien', patient.id, ip, true);
-  const token = await signPatientToken(patient.id);
-  return { status: 200, body: { token, participantId: patient.id } };
+  await logAuditEvent(supabase, 'patient_access_via_praticien', participantId, ip, true);
+  const token = await signPatientToken(participantId);
+  return { status: 200, body: { token, participantId } };
 }

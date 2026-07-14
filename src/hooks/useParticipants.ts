@@ -117,7 +117,6 @@ export function useParticipants() {
       const { data, error } = await supabase
         .from('participants')
         .select('*, bilans(*), programmes(*)')
-        .eq('praticien_id', user.id)
         .order('created_at', { ascending: false });
       if (cancelled) return;
       if (error) { console.error('Erreur chargement participants:', error); setLoading(false); return; }

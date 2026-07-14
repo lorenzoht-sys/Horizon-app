@@ -56,11 +56,10 @@ export default withSentry(async function handler(req: any, res: any) {
     return res.status(404).json({ error: 'Participant introuvable' });
   }
 
-  if (!participant.praticien_id) {
-    console.error('[retour-seance] participant sans praticien_id:', participantId);
-    await logAuditEvent(supabase, 'patient_retour_submit', participantId, getClientIp(req), false);
-    return res.status(500).json({ error: 'Praticien introuvable pour ce participant' });
-  }
+  // praticien_id peut être NULL (référent parti, mode organisation — voir
+  // palier 2 de CONCEPTION_MODE_ORGANISATION.md) : retours_seance.praticien_id
+  // est nullable depuis la migration FK SET NULL, ce n'est plus une condition
+  // de rejet.
 
   const { error: insErr } = await supabase.from('retours_seance').insert({
     participant_id: participantId,
