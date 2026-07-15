@@ -741,6 +741,10 @@ export default function AssistantPage() {
   // (et après) — jamais de génération automatique sur une réponse.
   const [programmeQuestionsPosees, setProgrammeQuestionsPosees] = useState(false);
   const [genererProgrammeLoading, setGenererProgrammeLoading] = useState(false);
+  // Texte libre optionnel, en plus des échanges du chat (déjà transmis comme
+  // reponsesClarification) — même mécanisme que ProgrammePage.tsx, voir
+  // construirePrompt() dans genererProgrammeIA.ts.
+  const [precisionsLibresProgramme, setPrecisionsLibresProgramme] = useState('');
   const [input, setInput]               = useState('');
   const [loading, setLoading]           = useState(false);
   const [logs, setLogs]                 = useState<AssistantLog[]>([]);
@@ -904,6 +908,7 @@ export default function AssistantPage() {
     setPhase('chat');
     setActionType(action);
     setProgrammeQuestionsPosees(false);
+    setPrecisionsLibresProgramme('');
 
     if (action === 'libre') {
       const p = prePatient ?? selectedPatient;
@@ -1130,6 +1135,7 @@ export default function AssistantPage() {
         catalogue,
         dernierBilan,
         [],
+        precisionsLibresProgramme,
       );
 
       await saveLog('Génération de programme structuré', `Programme "${programme.nom}" généré (${programme.seances.length} séance(s))`, selectedPatient.id, 'programme');
@@ -1147,6 +1153,7 @@ export default function AssistantPage() {
   function resetToHome() {
     setPhase('home'); setActionType(null); setMessages([]); setAwaitingPatient(false); setInput(''); setExpandedCard(null);
     setProgrammeQuestionsPosees(false);
+    setPrecisionsLibresProgramme('');
   }
 
   const sharedLeftColumn = (
@@ -1410,6 +1417,16 @@ export default function AssistantPage() {
         {/* Génération du programme structuré — déclenchement explicite uniquement */}
         {actionType === 'programme' && programmeQuestionsPosees && selectedPatient && !awaitingPatient && (
           <div style={{ padding: '0 22px 12px', flexShrink: 0 }}>
+            <textarea
+              value={precisionsLibresProgramme}
+              onChange={e => setPrecisionsLibresProgramme(e.target.value)}
+              placeholder="Autres précisions pour ce programme (facultatif)…"
+              rows={2}
+              style={{
+                width: '100%', boxSizing: 'border-box' as const, marginBottom: 8, padding: '8px 10px',
+                borderRadius: 10, border: '1px solid #E0EEEE', fontSize: 13, fontFamily: 'inherit', resize: 'vertical',
+              }}
+            />
             <button
               onClick={handleGenererProgrammeStructure}
               disabled={loading || genererProgrammeLoading}

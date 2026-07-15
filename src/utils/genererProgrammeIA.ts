@@ -157,6 +157,7 @@ function construirePrompt(
   catalogue: Exercice[],
   dernierBilan: Bilan | null,
   programmesExistants: ProgrammeV2[],
+  precisionsLibres?: string,
 ): string {
   const contexte = buildContextePatient(patient, dernierBilan);
   const niveauLabel = config.niveau === 1 ? 'Facile (débutant, fragile)'
@@ -178,7 +179,7 @@ CONFIGURATION DEMANDÉE :
 
 RÉPONSES DU PRATICIEN AUX QUESTIONS DE CLARIFICATION :
 ${reponsesClarification || '(aucune réponse fournie)'}
-
+${precisionsLibres?.trim() ? `\nPRÉCISIONS SUPPLÉMENTAIRES DU PRATICIEN : ${precisionsLibres.trim()}\n` : ''}
 CATALOGUE D'EXERCICES DISPONIBLES (utilise en PRIORITÉ un "id" de ce catalogue via le champ "exerciceId" — ne propose un exercice hors catalogue que si aucun exercice du catalogue ne convient) :
 ${formatCatalogue(catalogue)}
 
@@ -297,8 +298,9 @@ export async function genererProgrammeStructure(
   catalogue: Exercice[],
   dernierBilan: Bilan | null,
   programmesExistants: ProgrammeV2[],
+  precisionsLibres?: string,
 ): Promise<ProgrammeIA> {
-  const prompt = construirePrompt(patient, config, reponsesClarification, catalogue, dernierBilan, programmesExistants);
+  const prompt = construirePrompt(patient, config, reponsesClarification, catalogue, dernierBilan, programmesExistants, precisionsLibres);
 
   const response = await fetch('/api/claude', {
     method: 'POST',

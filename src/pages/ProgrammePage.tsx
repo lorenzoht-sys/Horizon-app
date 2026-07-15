@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { ArrowLeft, Plus, Bot, Trash2, ChevronRight, ChevronLeft, X, Activity, Search } from 'lucide-react';
+import { ArrowLeft, Plus, Bot, Trash2, ChevronRight, ChevronLeft, X, Activity, Search, GripVertical } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
 import { useProgrammeV2 } from '../hooks/useProgrammeV2';
@@ -234,6 +234,7 @@ function calcAgeIA(dateNaissance: string): number {
 function ConfigIAModal({
   participant, config, onChange, onGenerer, onClose, generating, error,
   questions, chargementQuestions, reponses, onReponseChange,
+  precisionsLibres, onPrecisionsLibresChange,
 }: {
   participant: Participant;
   config: ConfigIA;
@@ -249,6 +250,11 @@ function ConfigIAModal({
   chargementQuestions: boolean;
   reponses: string[];
   onReponseChange: (index: number, valeur: string) => void;
+  /** Texte libre optionnel, en plus des questions ciblées ci-dessus — injecté
+   *  dans construirePrompt() (genererProgrammeIA.ts), clairement identifié
+   *  pour l'IA. */
+  precisionsLibres: string;
+  onPrecisionsLibresChange: (valeur: string) => void;
 }) {
   const age = calcAgeIA(participant.dateNaissance);
 
@@ -358,6 +364,17 @@ function ConfigIAModal({
               </div>
 
               <div style={{ borderTop: '1px solid #E0EEEE', paddingTop: 14 }}>
+                <label style={labelStyle}>Autres précisions pour ce programme</label>
+                <textarea
+                  value={precisionsLibres}
+                  onChange={e => onPrecisionsLibresChange(e.target.value)}
+                  placeholder="Tout détail utile que les questions ci-dessus n'auraient pas couvert (facultatif)…"
+                  rows={3}
+                  style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+                />
+              </div>
+
+              <div style={{ borderTop: '1px solid #E0EEEE', paddingTop: 14 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
                   Données transmises à l'IA
                 </div>
@@ -403,6 +420,27 @@ function PreviewIAModal({
   saving: boolean;
 }) {
   const nbSeancesSemaine = JOURS_IA.filter(j => programme.planning[j] && programme.planning[j] !== 'repos').length;
+
+  // Réorganisation des exercices par glisser-déposer — HTML5 natif (draggable
+  // + onDragStart/onDragOver/onDrop), pas de librairie : le drag-and-drop de
+  // /agenda-v2 (addon react-big-calendar) est spécifique au modèle calendrier
+  // (créneaux horaires/dates), non réutilisable pour une simple liste
+  // réordonnable. Volontairement limité à l'intérieur d'une même séance
+  // (dragInfo.seanceIndex !== si → drop ignoré) : pas de déplacement d'une
+  // séance à l'autre, comme demandé.
+  const [dragInfo, setDragInfo] = useState<{ seanceIndex: number; exerciceIndex: number } | null>(null);
+
+  function reordonnerExercices(seanceIndex: number, from: number, to: number) {
+    if (from === to) return;
+    const seances = programme.seances.map((s, i) => {
+      if (i !== seanceIndex) return s;
+      const exercices = [...s.exercices];
+      const [deplace] = exercices.splice(from, 1);
+      exercices.splice(to, 0, deplace);
+      return { ...s, exercices };
+    });
+    onChange({ ...programme, seances });
+  }
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', zIndex: 1150, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px 16px', overflowY: 'auto' }}>
@@ -475,11 +513,27 @@ function PreviewIAModal({
                 const qty = ex.series && ex.repetitions ? `${ex.series} × ${ex.repetitions} rép.`
                   : ex.series && ex.duree_secondes ? `${ex.series} × ${ex.duree_secondes}s`
                   : ex.duree_secondes ? `${Math.round(ex.duree_secondes / 60)} min` : '';
+                const enSurvol = dragInfo && dragInfo.seanceIndex === si && dragInfo.exerciceIndex !== ei;
                 return (
-                  <div key={ei} style={{
-                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
-                    borderBottom: ei < seance.exercices.length - 1 ? '1px solid #F1F5F9' : 'none',
-                  }}>
+                  <div
+                    key={ei}
+                    draggable
+                    onDragStart={() => setDragInfo({ seanceIndex: si, exerciceIndex: ei })}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={e => {
+                      e.preventDefault();
+                      if (dragInfo && dragInfo.seanceIndex === si) reordonnerExercices(si, dragInfo.exerciceIndex, ei);
+                      setDragInfo(null);
+                    }}
+                    onDragEnd={() => setDragInfo(null)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
+                      borderBottom: ei < seance.exercices.length - 1 ? '1px solid #F1F5F9' : 'none',
+                      background: enSurvol ? '#F0F9F9' : 'transparent',
+                      cursor: 'grab',
+                    }}
+                  >
+                    <GripVertical size={14} color="#CBD5E1" style={{ flexShrink: 0 }} />
                     <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: s.bg, color: s.color, flexShrink: 0 }}>{s.emoji}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#0D2B2B' }}>{ex.nom}</span>
@@ -1592,6 +1646,7 @@ export default function ProgrammePage() {
   const [questionsIA, setQuestionsIA] = useState<string[]>([]);
   const [reponsesIA, setReponsesIA] = useState<string[]>([]);
   const [chargementQuestionsIA, setChargementQuestionsIA] = useState(false);
+  const [precisionsLibresIA, setPrecisionsLibresIA] = useState('');
 
   function updateConfigIA(patch: Partial<ConfigIA>) {
     setConfigIA(prev => ({ ...prev, ...patch }));
@@ -1611,6 +1666,7 @@ export default function ProgrammePage() {
     setShowConfigIA(true);
     setQuestionsIA([]);
     setReponsesIA([]);
+    setPrecisionsLibresIA('');
     if (!participant) return;
     setChargementQuestionsIA(true);
     try {
@@ -1664,6 +1720,7 @@ export default function ProgrammePage() {
         catalogue,
         dernierBilan,
         progsV2,
+        precisionsLibresIA,
       );
 
       setProgrammePreview(parsed);
@@ -2010,6 +2067,8 @@ export default function ProgrammePage() {
           chargementQuestions={chargementQuestionsIA}
           reponses={reponsesIA}
           onReponseChange={updateReponseIA}
+          precisionsLibres={precisionsLibresIA}
+          onPrecisionsLibresChange={setPrecisionsLibresIA}
         />
       )}
 
