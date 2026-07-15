@@ -74,17 +74,25 @@ export async function recordLoginAttempt(supabase: SupabaseClient, ip: string): 
 
 export type AuditEventType =
   | 'patient_login' | 'patient_data_access' | 'patient_seance_submit' | 'patient_retour_submit'
-  | 'patient_test_etalon_submit' | 'patient_exercice_libre_submit' | 'patient_access_via_praticien';
+  | 'patient_test_etalon_submit' | 'patient_exercice_libre_submit' | 'patient_access_via_praticien'
+  // Action praticien (pas patient) — même table : pas de raison de dupliquer
+  // un mécanisme d'audit générique pour une différence d'origine de l'action.
+  | 'praticien_seances_supprimees_fin_contrat';
 
 // Journal d'audit des accès à l'espace patient (connexions et accès aux
-// données de santé), à des fins de conformité
-// (table supabase/migrations/20260613_audit_logs.sql).
+// données de santé) et de certaines actions praticien sensibles, à des fins
+// de conformité (table supabase/migrations/20260613_audit_logs.sql).
+// metadata (colonne ajoutée par 20260715_audit_logs_metadata.sql) : détails
+// structurés optionnels propres à l'événement (ex : contratId, nombre de
+// séances supprimées, plage de dates) — absent pour les événements patient
+// existants, qui n'en ont pas besoin.
 export async function logAuditEvent(
   supabase: SupabaseClient,
   eventType: AuditEventType,
   participantId: string | null,
   ip: string,
   success: boolean,
+  metadata?: Record<string, unknown>,
 ): Promise<void> {
-  await supabase.from('audit_logs').insert({ event_type: eventType, participant_id: participantId, ip, success });
+  await supabase.from('audit_logs').insert({ event_type: eventType, participant_id: participantId, ip, success, metadata: metadata ?? null });
 }

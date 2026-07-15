@@ -95,6 +95,15 @@ export function useContrats() {
     setContrats(prev => prev.map(c => c.id === id ? { ...c, statut } : c));
   }
 
+  async function modifierDateFin(id: string, dateFin: string): Promise<boolean> {
+    if (supabase) {
+      const { error } = await supabase.from('contrats').update({ date_fin: dateFin }).eq('id', id);
+      if (error) { console.error('Erreur modification date de fin contrat:', error); toast.error('Erreur : ' + error.message); return false; }
+    }
+    setContrats(prev => prev.map(c => c.id === id ? { ...c, dateFin } : c));
+    return true;
+  }
+
   async function toggleExclureTournee(id: string, exclureTournee: boolean) {
     if (supabase) {
       const { error } = await supabase.from('contrats').update({ exclure_tournee: exclureTournee }).eq('id', id);
@@ -144,6 +153,7 @@ export function useContrats() {
     contrats,
     creerContrat,
     modifierStatut,
+    modifierDateFin,
     toggleExclureTournee,
     supprimerContrat,
     incrementerSeancesRealisees,

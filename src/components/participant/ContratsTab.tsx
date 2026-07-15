@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { format, addDays } from 'date-fns';
 import { useContrats } from '../../hooks/useContrats';
 import { useAgenda } from '../../hooks/useAgenda';
 import { useParticipants } from '../../hooks/useParticipants';
-import { Plus, PauseCircle, XCircle, RefreshCw, FileText } from 'lucide-react';
+import { Plus, PauseCircle, XCircle, RefreshCw, FileText, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Contrat } from '../../types';
+import type { Contrat, Seance } from '../../types';
 import ModalGenerationContrat from './ModalGenerationContrat';
 import { getAuthHeader } from '../../lib/supabase';
 
@@ -15,6 +16,114 @@ const STATUT_BADGE: Record<string, { label: string; class: string }> = {
   suspendu: { label: 'Suspendu', class: 'bg-orange-100 text-orange-700' },
   a_venir:  { label: 'À venir',  class: 'bg-blue-100 text-blue-700' },
 };
+
+function formatDateCourt(date: string): string {
+  return new Date(date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// Modification de la date de fin d'un contrat — en deux temps : d'abord la
+// saisie de la nouvelle date, puis (si des séances planifiées existent
+// au-delà) un récapitulatif obligatoire avant toute suppression. Jamais
+// automatique ni silencieux : si aucune séance n'est impactée, la date est
+// appliquée directement sans étape supplémentaire (rien de destructif ne se
+// produit dans ce cas).
+//
+// Suppression réelle, pas annulation (changement demandé le 15/07) : ces
+// séances futures n'ont jamais eu lieu et n'auront jamais lieu — les garder
+// indéfiniment visibles en "Annulée" pollue l'agenda sans valeur d'historique,
+// contrairement à une annulation ponctuelle (maladie, etc.). Irréversible,
+// d'où le récapitulatif obligatoire ci-dessous et la trace côté serveur
+// (audit_logs, voir api/seances/supprimer-planifiees.ts).
+function ModalModifierDateFin({ contrat, seancesImpacteesPour, onConfirmer, onCancel }: {
+  contrat: Contrat;
+  seancesImpacteesPour: (nouvelleDateFin: string) => Seance[];
+  onConfirmer: (nouvelleDateFin: string, seancesASupprimer: Seance[]) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [dateFin, setDateFin] = useState(contrat.dateFin);
+  const [etape, setEtape] = useState<'saisie' | 'recap'>('saisie');
+  const [loading, setLoading] = useState(false);
+
+  const dateInvalide = !dateFin || dateFin < contrat.dateDebut;
+  const seancesASupprimer = seancesImpacteesPour(dateFin);
+
+  function handleValiderSaisie() {
+    if (dateInvalide) return;
+    if (seancesASupprimer.length === 0) {
+      handleConfirmer();
+      return;
+    }
+    setEtape('recap');
+  }
+
+  async function handleConfirmer() {
+    setLoading(true);
+    try {
+      await onConfirmer(dateFin, seancesASupprimer);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const datesTriees = [...seancesASupprimer].map(s => s.date).sort();
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1010 }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+        {etape === 'saisie' ? (
+          <>
+            <h3 className="font-semibold text-dark">Modifier la date de fin</h3>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Nouvelle date de fin</label>
+              <input
+                type="date"
+                value={dateFin}
+                min={contrat.dateDebut}
+                onChange={e => setDateFin(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary"
+              />
+              {dateInvalide && (
+                <p className="text-xs text-red mt-1">La date de fin doit être après le début du contrat ({formatDateCourt(contrat.dateDebut)}).</p>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={onCancel} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                Annuler
+              </button>
+              <button onClick={handleValiderSaisie} disabled={dateInvalide}
+                className="flex-1 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-dark transition-colors disabled:opacity-50">
+                Continuer
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h3 className="font-semibold text-dark">Confirmer la suppression</h3>
+            <div className="bg-red-light border border-red/20 rounded-xl px-4 py-3">
+              <p className="text-sm text-dark">
+                <span className="font-semibold">{seancesASupprimer.length} séance{seancesASupprimer.length > 1 ? 's' : ''}</span>
+                {' '}planifiée{seancesASupprimer.length > 1 ? 's' : ''} sera{seancesASupprimer.length > 1 ? 'ont' : ''}{' '}
+                <span className="font-semibold">définitivement supprimée{seancesASupprimer.length > 1 ? 's' : ''}</span>, du{' '}
+                <span className="font-medium">{formatDateCourt(datesTriees[0])}</span> au{' '}
+                <span className="font-medium">{formatDateCourt(datesTriees[datesTriees.length - 1])}</span>.
+              </p>
+              <p className="text-xs text-gray-500 mt-1.5">Action irréversible — ces séances ne seront plus visibles dans l'agenda ni dans l'historique.</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setEtape('saisie')} disabled={loading} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
+                Retour
+              </button>
+              <button onClick={handleConfirmer} disabled={loading}
+                className="flex-1 py-2 rounded-xl text-sm font-semibold bg-red text-white hover:opacity-90 transition-opacity disabled:opacity-50">
+                {loading ? 'Suppression…' : 'Confirmer la suppression'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function labelFrequence(contrat: Contrat): string {
   if (contrat.periodicite === 'deux_semaines') return '1 séance toutes les 2 semaines';
@@ -27,10 +136,11 @@ interface Props {
 }
 
 export default function ContratsTab({ participantId }: Props) {
-  const { contratsDeParticipant, modifierStatut, toggleExclureTournee, supprimerContrat } = useContrats();
-  const { seances } = useAgenda();
+  const { contratsDeParticipant, modifierStatut, modifierDateFin, toggleExclureTournee, supprimerContrat } = useContrats();
+  const { seances, retirerPlanifieesLocales } = useAgenda();
   const { participants } = useParticipants();
   const [modalPDF, setModalPDF] = useState<Contrat | null>(null);
+  const [modalDateFin, setModalDateFin] = useState<Contrat | null>(null);
   const [confirmSuppr, setConfirmSuppr] = useState<{ contratId: string; nbSeances: number } | null>(null);
   const [supprimant, setSupprimant] = useState(false);
 
@@ -66,6 +176,60 @@ export default function ContratsTab({ participantId }: Props) {
   function handleReactiver(contratId: string) {
     modifierStatut(contratId, 'actif');
     toast.success('Contrat réactivé');
+  }
+
+  // Séances futures de ce contrat qui tombent au-delà de la date proposée —
+  // scope volontairement restreint au contrat édité (contratId), pas à tout
+  // le bénéficiaire : un bénéficiaire peut avoir un historique de plusieurs
+  // contrats, et élargir au participantId risquerait de supprimer des séances
+  // d'un autre contrat sans rapport avec ce changement. Uniquement
+  // statut === 'planifiee' : une séance déjà réalisée n'est jamais concernée,
+  // même si sa date tombe après la nouvelle date de fin.
+  function seancesImpacteesPourContrat(contrat: Contrat, nouvelleDateFin: string): Seance[] {
+    return seances.filter(s =>
+      s.contratId === contrat.id && s.statut === 'planifiee' && s.date > nouvelleDateFin
+    );
+  }
+
+  // Suppression réelle (pas annulation, changement du 15/07) via l'endpoint
+  // déjà utilisé par handleSupprimerAvecSeances — même garde-fous côté
+  // serveur (ownership du contrat, statut='planifiee' uniquement). dateMin
+  // est le lendemain de la nouvelle date de fin : l'endpoint supprime tout ce
+  // qui est >= dateMin, il faut donc décaler d'un jour pour obtenir la
+  // sémantique "strictement après" attendue ici. raison: 'fin_de_contrat'
+  // déclenche la trace audit_logs côté serveur.
+  async function handleConfirmerDateFin(contrat: Contrat, nouvelleDateFin: string, seancesASupprimer: Seance[]) {
+    if (seancesASupprimer.length > 0) {
+      const dateMinSuppression = format(addDays(new Date(nouvelleDateFin + 'T12:00'), 1), 'yyyy-MM-dd');
+      try {
+        const authHeader = await getAuthHeader();
+        const r = await fetch('/api/seances/supprimer-planifiees', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeader },
+          body: JSON.stringify({
+            contratIds: [contrat.id],
+            dateMin: dateMinSuppression,
+            raison: 'fin_de_contrat',
+            participantId: contrat.participantId,
+          }),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(body.error ?? 'Erreur suppression séances');
+        retirerPlanifieesLocales([contrat.id], dateMinSuppression);
+        const ok = await modifierDateFin(contrat.id, nouvelleDateFin);
+        if (!ok) { setModalDateFin(null); return; }
+        toast.success(`Date de fin modifiée — ${body.supprimees ?? seancesASupprimer.length} séance${(body.supprimees ?? seancesASupprimer.length) > 1 ? 's' : ''} supprimée${(body.supprimees ?? seancesASupprimer.length) > 1 ? 's' : ''}`);
+        setModalDateFin(null);
+      } catch (err) {
+        console.error('[handleConfirmerDateFin]', err);
+        toast.error(err instanceof Error ? err.message : 'Erreur lors de la suppression des séances');
+      }
+      return;
+    }
+    const ok = await modifierDateFin(contrat.id, nouvelleDateFin);
+    if (!ok) { setModalDateFin(null); return; }
+    toast.success('Date de fin modifiée');
+    setModalDateFin(null);
   }
 
   function handleToggleExclureTournee(contratId: string, exclureTournee: boolean) {
@@ -180,10 +344,19 @@ export default function ContratsTab({ participantId }: Props) {
                     </span>
                   )}
                 </div>
-                <div className="text-sm font-semibold text-dark">
+                <div className="text-sm font-semibold text-dark flex items-center gap-1.5">
                   {new Date(contrat.dateDebut + 'T12:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
                   {' → '}
                   {new Date(contrat.dateFin + 'T12:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                  {(contrat.statut === 'actif' || contrat.statut === 'a_venir') && (
+                    <button
+                      onClick={() => setModalDateFin(contrat)}
+                      className="text-gray-300 hover:text-primary transition-colors"
+                      title="Modifier la date de fin"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  )}
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
                   {labelFrequence(contrat)}
@@ -291,6 +464,18 @@ export default function ContratsTab({ participantId }: Props) {
           contrat={modalPDF}
           participant={participant}
           onClose={() => setModalPDF(null)}
+        />
+      )}
+
+      {/* Modal modification date de fin — supprime réellement les séances
+          futures planifiées du contrat au-delà de la nouvelle date, avec
+          récapitulatif et confirmation obligatoires (voir ModalModifierDateFin). */}
+      {modalDateFin && (
+        <ModalModifierDateFin
+          contrat={modalDateFin}
+          seancesImpacteesPour={nouvelleDateFin => seancesImpacteesPourContrat(modalDateFin, nouvelleDateFin)}
+          onConfirmer={(nouvelleDateFin, seancesASupprimer) => handleConfirmerDateFin(modalDateFin, nouvelleDateFin, seancesASupprimer)}
+          onCancel={() => setModalDateFin(null)}
         />
       )}
 
