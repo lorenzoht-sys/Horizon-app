@@ -12,6 +12,7 @@ import { useAgenda } from '../hooks/useAgenda';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
 import { useIndispos } from '../hooks/useIndispos';
+import { useEvenementsAgenda } from '../hooks/useEvenementsAgenda';
 import { useZones } from '../hooks/useZones';
 import { getOrganisation } from '../lib/anamnese';
 import BadgeSeancesRestantes from '../components/ui/BadgeSeancesRestantes';
@@ -26,7 +27,7 @@ import {
   planSupprimerUnique, planSupprimerSerie, planActionSurSelection, executerOperations,
   optionsPorteePourAction, type MiseAJourSeance, type OptionPortee,
 } from '../lib/planificationManuelle';
-import type { Seance, StatutSeance, TypeSeance, Participant, Contrat, IndisponibilitePierre, OrganisationData, RaisonAnnulation } from '../types';
+import type { Seance, StatutSeance, TypeSeance, Participant, Contrat, IndisponibilitePierre, OrganisationData, RaisonAnnulation, EvenementAgenda, TypeEvenementAgenda } from '../types';
 
 // ============================================================================
 // AGENDA UNIFIÉ — ÉTAPE 2 (création par glisser) + ÉTAPE 3 (déplacement /
@@ -153,6 +154,20 @@ function getCouleurEvenement(seance: Seance): string {
   return seance.date === TODAY ? '#1A5F9E' : '#5B9BD5';
 }
 
+// Événements d'agenda (indisponibilité ponctuelle, réunion, premier contact
+// prospect) — couleurs volontairement grises/neutres, jamais dans la palette
+// des séances (bleu/violet/vert/rouge ci-dessus), pour qu'un coup d'œil
+// suffise à ne jamais les confondre avec une vraie séance patient.
+const OPTIONS_TYPE_EVENEMENT: TypeEvenementAgenda[] = [
+  'indisponibilite', 'reunion_professionnelle', 'premier_contact_prospect',
+];
+
+const LABEL_TYPE_EVENEMENT: Record<TypeEvenementAgenda, string> = {
+  indisponibilite: 'Indisponibilité',
+  reunion_professionnelle: 'Réunion professionnelle',
+  premier_contact_prospect: 'Premier contact (prospect)',
+};
+
 function heureToDate(date: string, heure: string): Date {
   const [h, m] = heure.split(':').map(Number);
   const d = new Date(date);
@@ -192,13 +207,14 @@ function windowsDispoPourJour(
   return org.creneauxParJour?.[cleJour] ?? [];
 }
 
-interface CalEvent {
-  id: string;
-  title: string;
-  start: Date;
-  end: Date;
-  resource: Seance;
-}
+// kind distingue une vraie séance patient d'un événement d'agenda (réunion,
+// indisponibilité ponctuelle, premier contact prospect) — les deux partagent
+// le même tableau `events` du calendrier, mais jamais le même style ni le
+// même comportement (un événement n'est ni glissable ni éditable comme une
+// séance, voir draggableAccessor et onSelectEvent plus bas).
+type CalEvent =
+  | { id: string; title: string; start: Date; end: Date; kind: 'seance'; resource: Seance }
+  | { id: string; title: string; start: Date; end: Date; kind: 'evenement'; resource: EvenementAgenda };
 
 // ── Confirmation de création (équivalent de ModalConfirmDrop, non exporté
 //    depuis PlanningGrilleView.tsx — nouvelle implémentation, même logique
@@ -737,6 +753,169 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
   );
 }
 
+// ── Événements d'agenda (indisponibilité ponctuelle, réunion, premier contact
+//    prospect) — formulaire de création et fiche de consultation/suppression.
+//    Volontairement plus simple qu'une séance : pas de bénéficiaire, pas de
+//    contrat, pas de chevauchement vérifié (un événement d'agenda n'occupe
+//    pas un créneau de tournée patient, il informe seulement). ─────────────
+
+function ModalNouvelEvenement({ onCreer, onCancel }: {
+  onCreer: (data: Omit<EvenementAgenda, 'id'>) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [type, setType] = useState<TypeEvenementAgenda>('reunion_professionnelle');
+  const [titre, setTitre] = useState('');
+  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [heureDebut, setHeureDebut] = useState('09:00');
+  const [heureFin, setHeureFin] = useState('10:00');
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const heureInvalide = heureFin <= heureDebut;
+
+  async function handleCreer() {
+    if (!titre.trim() || heureInvalide) return;
+    setLoading(true);
+    try {
+      await onCreer({ type, titre: titre.trim(), date, heureDebut, heureFin, notes: notes.trim() || undefined });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1010 }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
+          <h3 className="text-base font-bold text-dark">Ajouter un événement d'agenda</h3>
+          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 p-1"><X size={16} /></button>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Type</label>
+            <select value={type} onChange={e => setType(e.target.value as TypeEvenementAgenda)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary">
+              {OPTIONS_TYPE_EVENEMENT.map(t => <option key={t} value={t}>{LABEL_TYPE_EVENEMENT[t]}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Titre</label>
+            <input type="text" value={titre} onChange={e => setTitre(e.target.value)}
+              placeholder="Ex : Réunion équipe, Mme Dupont (prospect)…"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Date</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Début</label>
+              <input type="time" step={60} value={heureDebut} onChange={e => setHeureDebut(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Fin</label>
+              <input type="time" step={60} value={heureFin} onChange={e => setHeureFin(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+            </div>
+          </div>
+          {heureInvalide && <p className="text-xs text-red">L'heure de fin doit être après l'heure de début.</p>}
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Notes (optionnel)</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none" />
+          </div>
+        </div>
+
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+          <button onClick={onCancel} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+            Annuler
+          </button>
+          <button onClick={handleCreer} disabled={loading || !titre.trim() || heureInvalide}
+            className="flex-1 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-dark transition-colors disabled:opacity-50 flex items-center justify-center">
+            {loading ? <Loader size={14} className="animate-spin" /> : 'Créer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalEvenementAgenda({ evenement, onDelete, onClose }: {
+  evenement: EvenementAgenda;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const [confirmSuppr, setConfirmSuppr] = useState(false);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1010 }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
+          <h3 className="text-base font-bold text-dark">{LABEL_TYPE_EVENEMENT[evenement.type]}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1"><X size={16} /></button>
+        </div>
+
+        <div className="px-6 py-4 space-y-3">
+          <div className="bg-gray-50 rounded-xl px-4 py-3">
+            <p className="text-xs text-gray-500 mb-0.5">Titre</p>
+            <p className="text-sm font-semibold text-dark">{evenement.titre}</p>
+          </div>
+          <div className="bg-gray-50 rounded-xl px-4 py-3">
+            <p className="text-xs text-gray-500 mb-0.5">Quand</p>
+            <p className="text-sm font-semibold text-dark">
+              {formatDate(evenement.date)} — {evenement.heureDebut} à {evenement.heureFin}
+            </p>
+          </div>
+          {evenement.notes && (
+            <div className="bg-gray-50 rounded-xl px-4 py-3">
+              <p className="text-xs text-gray-500 mb-0.5">Notes</p>
+              <p className="text-sm text-dark whitespace-pre-wrap">{evenement.notes}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+          <button onClick={() => setConfirmSuppr(true)}
+            className="flex items-center justify-center border border-red/20 text-red rounded-xl px-3 hover:bg-red-light transition-colors">
+            <Trash2 size={15} />
+          </button>
+          <button onClick={onClose}
+            className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+            Fermer
+          </button>
+        </div>
+
+        {confirmSuppr && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1020 }}>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+              <p className="text-sm text-dark font-medium mb-1">Supprimer cet événement ?</p>
+              <p className="text-xs text-gray-500 mb-4">
+                {evenement.titre} — {formatDate(evenement.date)}. Action irréversible.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirmSuppr(false)} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
+                  Annuler
+                </button>
+                <button onClick={onDelete}
+                  className="flex-1 py-2 rounded-xl text-sm font-semibold bg-red text-white hover:opacity-90">
+                  Supprimer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Page principale ────────────────────────────────────────────────────────────
 
 export default function AgendaV2Page() {
@@ -744,6 +923,7 @@ export default function AgendaV2Page() {
   const { participants } = useParticipants();
   const { contrats, contratActifDeParticipant } = useContrats();
   const { indisposDuJour } = useIndispos();
+  const { evenements, creerEvenement, supprimerEvenement } = useEvenementsAgenda();
   // Zones géographiques définies par le praticien dans l'onglet Zones — la
   // zone d'un bénéficiaire est stockée sur la zone elle-même (participantIds),
   // pas sur le participant. zoneDePatient est la fonction déjà écrite dans ce
@@ -752,6 +932,8 @@ export default function AgendaV2Page() {
   const { zones, zoneDePatient } = useZones();
 
   const [seanceEditee, setSeanceEditee] = useState<Seance | null>(null);
+  const [evenementEdite, setEvenementEdite] = useState<EvenementAgenda | null>(null);
+  const [nouvelEvenementOuvert, setNouvelEvenementOuvert] = useState(false);
   const [search, setSearch] = useState('');
   const [beneficiaireGlisse, setBeneficiaireGlisse] = useState<Participant | null>(null);
   const [dropPendant, setDropPendant] = useState<DropPendant | null>(null);
@@ -809,16 +991,28 @@ export default function AgendaV2Page() {
       .sort((a, b) => a.nom.localeCompare(b.nom));
   }, [participants, search, zonesFiltreIds, zoneDePatient]);
 
-  const events: CalEvent[] = useMemo(() => seances.map(s => {
-    const p = participantMap.get(s.participantId);
-    return {
-      id: s.id,
-      title: p ? `${p.prenom} ${p.nom}` : LABEL_TYPE[s.type],
-      start: heureToDate(s.date, s.heureDebut),
-      end: heureToDate(s.date, s.heureFin),
-      resource: s,
-    };
-  }), [seances, participantMap]);
+  const events: CalEvent[] = useMemo(() => {
+    const eventsSeances: CalEvent[] = seances.map(s => {
+      const p = participantMap.get(s.participantId);
+      return {
+        id: s.id,
+        title: p ? `${p.prenom} ${p.nom}` : LABEL_TYPE[s.type],
+        start: heureToDate(s.date, s.heureDebut),
+        end: heureToDate(s.date, s.heureFin),
+        kind: 'seance',
+        resource: s,
+      };
+    });
+    const eventsAgenda: CalEvent[] = evenements.map(e => ({
+      id: e.id,
+      title: `${LABEL_TYPE_EVENEMENT[e.type]} — ${e.titre}`,
+      start: heureToDate(e.date, e.heureDebut),
+      end: heureToDate(e.date, e.heureFin),
+      kind: 'evenement',
+      resource: e,
+    }));
+    return [...eventsSeances, ...eventsAgenda];
+  }, [seances, evenements, participantMap]);
 
   function nomBeneficiaireDe(s: Seance): string {
     const p = participantMap.get(s.participantId);
@@ -859,6 +1053,7 @@ export default function AgendaV2Page() {
       title: beneficiaireGlisse ? `${beneficiaireGlisse.prenom} ${beneficiaireGlisse.nom}` : '…',
       start: debut,
       end: fin,
+      kind: 'seance',
       resource: seanceFantome,
     };
   }, [beneficiaireGlisse, contratActifDeParticipant]);
@@ -959,6 +1154,10 @@ export default function AgendaV2Page() {
   // déplacement de masse. executerOperations n'accepte pas de fonction de
   // création : un INSERT est structurellement impossible ici.
   async function handleEventDrop({ event, start }: EventInteractionArgs<CalEvent>) {
+    // Les événements d'agenda ne sont pas glissables (draggableAccessor plus
+    // bas) — ce garde-fou est une ceinture de sécurité, jamais censé se
+    // déclencher.
+    if (event.kind !== 'seance') return;
     const s = event.resource;
     const nouvelleDateObj = new Date(start);
     const nouvelleDate = format(nouvelleDateObj, 'yyyy-MM-dd');
@@ -1204,32 +1403,46 @@ export default function AgendaV2Page() {
 
         {/* Calendrier */}
         <div className="flex-1 min-w-0">
-          {/* Légende couleurs — identique à AgendaPage.tsx */}
-          <div className="flex flex-wrap gap-3 mb-3 text-xs text-gray-500">
-            {[
-              { couleur: '#1A5F9E', label: "Aujourd'hui" },
-              { couleur: '#5B9BD5', label: 'Planifiée' },
-              { couleur: '#3B6D11', label: 'Réalisée' },
-              { couleur: '#EF4444', label: 'Annulée' },
-              { couleur: '#8B5CF6', label: 'Bilan' },
-            ].map(({ couleur, label }) => (
-              <div key={label} className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: couleur }} />
-                {label}
+          <div className="flex items-center justify-between mb-3">
+            {/* Légende couleurs — identique à AgendaPage.tsx */}
+            <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+              {[
+                { couleur: '#1A5F9E', label: "Aujourd'hui" },
+                { couleur: '#5B9BD5', label: 'Planifiée' },
+                { couleur: '#3B6D11', label: 'Réalisée' },
+                { couleur: '#EF4444', label: 'Annulée' },
+                { couleur: '#8B5CF6', label: 'Bilan' },
+              ].map(({ couleur, label }) => (
+                <div key={label} className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: couleur }} />
+                  {label}
+                </div>
+              ))}
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: 'rgba(13, 148, 136, 0.16)', border: '1px solid rgba(13, 148, 136, 0.4)' }} />
+                Dispo bénéficiaire sélectionné
               </div>
-            ))}
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: 'rgba(13, 148, 136, 0.16)', border: '1px solid rgba(13, 148, 136, 0.4)' }} />
-              Dispo bénéficiaire sélectionné
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: 'repeating-linear-gradient(45deg,#fee2e2,#fee2e2 3px,#fef2f2 3px,#fef2f2 9px)' }} />
+                Indispo Pierre
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: '#0d9488' }} />
+                Séance du bénéficiaire sélectionné
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: 'repeating-linear-gradient(135deg,#9CA3AF,#9CA3AF 3px,#6B7280 3px,#6B7280 6px)', border: '1px dashed #374151' }} />
+                Événement d'agenda (ni une séance ni un vrai bénéficiaire)
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: 'repeating-linear-gradient(45deg,#fee2e2,#fee2e2 3px,#fef2f2 3px,#fef2f2 9px)' }} />
-              Indispo Pierre
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: '#0d9488' }} />
-              Séance du bénéficiaire sélectionné
-            </div>
+
+            <button
+              type="button"
+              onClick={() => setNouvelEvenementOuvert(true)}
+              className="flex-shrink-0 bg-dark text-white text-xs font-semibold rounded-xl px-3 py-2 hover:opacity-90 transition-opacity"
+            >
+              + Ajouter un événement
+            </button>
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm" style={{ height: 660 }}>
@@ -1245,6 +1458,22 @@ export default function AgendaV2Page() {
                 showMore: (n: number) => `+${n} de plus`,
               }}
               eventPropGetter={(event: CalEvent) => {
+                // Événements d'agenda : style volontairement distinct (gris,
+                // hachuré, bordure en tirets) et jamais dans la palette des
+                // séances (bleu/violet/vert/rouge) — pour ne jamais les
+                // confondre avec une vraie séance patient au premier coup
+                // d'œil, y compris quand l'agenda est chargé.
+                if (event.kind === 'evenement') {
+                  return {
+                    style: {
+                      background: 'repeating-linear-gradient(135deg,#9CA3AF,#9CA3AF 4px,#6B7280 4px,#6B7280 8px)',
+                      border: '1px dashed #374151',
+                      borderRadius: 6,
+                      color: 'white',
+                      fontSize: 12,
+                    },
+                  };
+                }
                 // Séances déjà existantes du bénéficiaire sélectionné :
                 // remplacent la couleur habituelle par statut par un vert
                 // (teal #0d9488) — choix assumé, repérer où est ce
@@ -1276,10 +1505,14 @@ export default function AgendaV2Page() {
                   },
                 };
               }}
-              onSelectEvent={(event: CalEvent) => setSeanceEditee(event.resource)}
+              onSelectEvent={(event: CalEvent) => {
+                if (event.kind === 'evenement') { setEvenementEdite(event.resource); return; }
+                setSeanceEditee(event.resource);
+              }}
               onDropFromOutside={onDropFromOutside}
               dragFromOutsideItem={dragFromOutsideItem}
               onEventDrop={handleEventDrop}
+              draggableAccessor={(event: CalEvent) => event.kind === 'seance'}
               resizable={false}
               slotPropGetter={slotPropGetter}
               step={15}
@@ -1312,6 +1545,29 @@ export default function AgendaV2Page() {
           />
         );
       })()}
+
+      {nouvelEvenementOuvert && (
+        <ModalNouvelEvenement
+          onCreer={async data => {
+            await creerEvenement(data);
+            toast.success('Événement ajouté à l\'agenda');
+            setNouvelEvenementOuvert(false);
+          }}
+          onCancel={() => setNouvelEvenementOuvert(false)}
+        />
+      )}
+
+      {evenementEdite && (
+        <ModalEvenementAgenda
+          evenement={evenementEdite}
+          onDelete={async () => {
+            await supprimerEvenement(evenementEdite.id);
+            toast.success('Événement supprimé');
+            setEvenementEdite(null);
+          }}
+          onClose={() => setEvenementEdite(null)}
+        />
+      )}
 
       {dropPendant && (
         <ModalConfirmerCreation

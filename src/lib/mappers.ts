@@ -1,4 +1,4 @@
-import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, TemplateStructure, DisponibilitesPatient, JourSemaine, CreneauPreference } from '../types';
+import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, TemplateStructure, DisponibilitesPatient, JourSemaine, CreneauPreference, EvenementAgenda } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
 
 // ── Conversion anamnese.organisation → DisponibilitesPatient ──────────────────
@@ -415,6 +415,30 @@ export function seanceToDb(s: Omit<Seance, 'id'> & { id?: string }): Record<stri
     coordonnees: s.coordonnees ?? null,
     motif_annulation: s.motifAnnulation ?? null,
     motif_annulation_detail: s.motifAnnulationDetail ?? null,
+  };
+}
+
+export function dbToEvenementAgenda(row: any): EvenementAgenda {
+  return {
+    id: row.id,
+    type: row.type,
+    titre: row.titre,
+    date: row.date,
+    heureDebut: row.heure_debut,
+    heureFin: row.heure_fin,
+    notes: row.notes ?? undefined,
+  };
+}
+
+export function evenementAgendaToDb(e: Omit<EvenementAgenda, 'id'> & { id?: string }): Record<string, unknown> {
+  return {
+    ...(e.id ? { id: e.id } : {}),
+    type: e.type,
+    titre: e.titre,
+    date: e.date,
+    heure_debut: e.heureDebut,
+    heure_fin: e.heureFin,
+    notes: e.notes ?? null,
   };
 }
 

@@ -488,6 +488,23 @@ export interface Seance {
   motifAnnulationDetail?: string;
 }
 
+// Événement d'agenda : distinct d'une séance patient. 'indisponibilite' ici
+// désigne un blocage ponctuel à une date précise (ex: rendez-vous médical),
+// différent de IndisponibilitePierre qui est récurrent hebdomadaire et sans
+// date. 'premier_contact_prospect' = bénéficiaire potentiel sans coordonnées
+// complètes (pas encore un Participant).
+export type TypeEvenementAgenda = 'indisponibilite' | 'reunion_professionnelle' | 'premier_contact_prospect';
+
+export interface EvenementAgenda {
+  id: string;
+  type: TypeEvenementAgenda;
+  titre: string;
+  date: string;
+  heureDebut: string;
+  heureFin: string;
+  notes?: string;
+}
+
 // ── JOURNAL DE SÉANCE ─────────────────────────────────────────────────────────
 
 export type RessentiSeance = 'excellent' | 'bien' | 'moyen' | 'difficile' | 'arret';
