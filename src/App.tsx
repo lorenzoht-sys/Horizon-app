@@ -31,7 +31,7 @@ const TourneePage        = lazy(() => import('./pages/TourneePage'));
 // AgendaV2Page.tsx pour le périmètre exact de cette étape.
 const AgendaV2Page       = lazy(() => import('./pages/AgendaV2Page'));
 const ZonesPage          = lazy(() => import('./pages/ZonesPage'));
-const ExercicesPage      = lazy(() => import('./pages/ExercicesPage'));
+const BibliothequePage   = lazy(() => import('./pages/BibliothequePage'));
 const StatsPage          = lazy(() => import('./pages/StatsPage'));
 const StructureDetail    = lazy(() => import('./pages/StructureDetail'));
 const PortailStructure   = lazy(() => import('./pages/PortailStructure'));
@@ -91,7 +91,7 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
             <Route path="/participant/:id/contrat/nouveau" element={<PageTransition><Suspense fallback={<MapFallback />}><ContratNouveauPage /></Suspense></PageTransition>} />
             <Route path="/participant/:id/comparaison" element={<PageTransition><Suspense fallback={<MapFallback />}><ComparaisonPage /></Suspense></PageTransition>} />
             <Route path="/assistant" element={<PageTransition><Suspense fallback={<MapFallback />}><AssistantPage /></Suspense></PageTransition>} />
-            <Route path="/exercices" element={<PageTransition><Suspense fallback={<MapFallback />}><ExercicesPage /></Suspense></PageTransition>} />
+            <Route path="/bibliotheque" element={<PageTransition><Suspense fallback={<MapFallback />}><BibliothequePage /></Suspense></PageTransition>} />
             <Route path="/stats" element={<PageTransition><Suspense fallback={<MapFallback />}><StatsPage /></Suspense></PageTransition>} />
             <Route path="/structures/:id" element={<PageTransition><Suspense fallback={<MapFallback />}><StructureDetail /></Suspense></PageTransition>} />
             <Route path="/settings" element={<PageTransition><SettingsPage /></PageTransition>} />

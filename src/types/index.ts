@@ -294,6 +294,16 @@ export interface Exercice {
     "2": NiveauConfig;
     "3": NiveauConfig;
   };
+  /** Présents uniquement sur les exercices personnalisés chargés depuis
+   *  exercices_personnalises (Supabase) — absents sur EXERCICES_BASE. */
+  dossierId?: string;
+  ordre?: number;
+}
+
+export interface DossierExercice {
+  id: string;
+  nom: string;
+  ordre: number;
 }
 
 export interface ExerciceProgramme {
@@ -903,6 +913,51 @@ export interface ProgrammeV2 {
   seances: ProgrammeSeanceV2[];
   planning: ProgrammePlanningV2[];
   /** Objectif de séances AUTONOMES (réalisées par le patient seul) fixé par le praticien. Distinct du champ texte `objectif` et des séances ENCADRÉES (contrats). */
+  objectifSeancesAutonomes?: number;
+}
+
+// ── PROGRAMMES MODÈLES (contenu personnel du praticien, sans bénéficiaire) ────
+// Structure miroir de ProgrammeSeanceV2/ProgrammeExerciceV2/ProgrammePlanningV2,
+// sans participantId. Voir supabase/migrations/20260717_programmes_modeles.sql.
+
+export interface ModeleExercice {
+  id: string;
+  seanceId: string;
+  nom: string;
+  categorie?: string;
+  description?: string;
+  conseilSecurite?: string;
+  series?: number;
+  repetitions?: number;
+  dureeSecondes?: number;
+  ordre: number;
+}
+
+export interface ModeleSeance {
+  id: string;
+  modeleId: string;
+  nom: string;
+  description?: string;
+  ordre: number;
+  exercices: ModeleExercice[];
+}
+
+export interface ModelePlanning {
+  id: string;
+  modeleId: string;
+  seanceId: string;
+  jour: JourProgramme;
+}
+
+export interface ProgrammeModele {
+  id: string;
+  nom: string;
+  objectif?: string;
+  messageMotivation?: string;
+  type: TypeProgramme;
+  createdAt: string;
+  seances: ModeleSeance[];
+  planning: ModelePlanning[];
   objectifSeancesAutonomes?: number;
 }
 

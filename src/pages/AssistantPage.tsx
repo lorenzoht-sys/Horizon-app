@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { pdfMake, mdToPdfMake } from '../utils/markdownToPdf';
 import MarkdownRendu from '../components/ui/MarkdownRendu';
 import ModalRelecturePartage from '../components/assistant/ModalRelecturePartage';
-import { EXERCICES_BASE, loadExercices } from '../data/exercices';
+import { EXERCICES_BASE, loadExercicesPraticien } from '../data/exercices';
 import { genererQuestionsClarification, genererProgrammeStructure } from '../utils/genererProgrammeIA';
 import {
   formatContratContexte, formatProgrammeContexte, formatExerciceV1Ligne, formatExerciceV2Ligne,
@@ -1119,7 +1119,7 @@ export default function AssistantPage() {
     setGenererProgrammeLoading(true);
     try {
       const contrat = getContratInfo(selectedPatient);
-      const catalogue = loadExercices();
+      const catalogue = await loadExercicesPraticien();
       const dernierBilan = [...selectedPatient.bilans].sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
       const reponsesClarification = formatHistoriqueConversation(messages.filter(m => m.role === 'user' || m.role === 'assistant'));
 
