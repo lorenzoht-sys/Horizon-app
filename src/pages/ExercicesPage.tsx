@@ -23,7 +23,7 @@ function ExercicePersonnaliseChip({ exercice, onDragStart, onDragEnd, onDropOnMe
   return (
     <div
       draggable
-      onDragStart={onDragStart}
+      onDragStart={e => { e.stopPropagation(); onDragStart(); }}
       onDragEnd={onDragEnd}
       onDragOver={e => e.preventDefault()}
       onDrop={e => { e.preventDefault(); e.stopPropagation(); onDropOnMe(); }}
