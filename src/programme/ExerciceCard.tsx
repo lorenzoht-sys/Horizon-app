@@ -46,9 +46,16 @@ interface Props {
   compact?: boolean;
   profilHandicap?: ProfilHandicap;
   incompatible?: boolean;
+  /** Glisser-déposer vers un dossier (bibliothèque d'exercices) — désactivé
+   *  par défaut, opt-in pour ne pas affecter les autres usages du composant. */
+  draggable?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
 }
 
-export default function ExerciceCard({ exercice, onAdd, compact, profilHandicap, incompatible }: Props) {
+export default function ExerciceCard({
+  exercice, onAdd, compact, profilHandicap, incompatible, draggable, onDragStart, onDragEnd,
+}: Props) {
   const [showVideo, setShowVideo] = useState(false);
   const cat = CAT[exercice.categorie];
 
@@ -61,14 +68,20 @@ export default function ExerciceCard({ exercice, onAdd, compact, profilHandicap,
 
   if (incompatible) {
     return (
-      <div style={{
-        background: '#F9FAFB',
-        border: '1px solid #E5E7EB',
-        borderRadius: 12,
-        padding: '12px 16px',
-        marginBottom: 8,
-        opacity: 0.55,
-      }}>
+      <div
+        draggable={draggable}
+        onDragStart={draggable ? e => { e.stopPropagation(); onDragStart?.(); } : undefined}
+        onDragEnd={draggable ? onDragEnd : undefined}
+        style={{
+          background: '#F9FAFB',
+          border: '1px solid #E5E7EB',
+          borderRadius: 12,
+          padding: '12px 16px',
+          marginBottom: 8,
+          opacity: 0.55,
+          cursor: draggable ? 'grab' : 'default',
+        }}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: '#6B7280' }}>{exercice.nom}</span>
           <span style={{
@@ -87,14 +100,19 @@ export default function ExerciceCard({ exercice, onAdd, compact, profilHandicap,
 
   return (
     <>
-      <div style={{
-        background: '#ffffff',
-        border: `1px solid ${estSpecifique ? 'var(--color-teal)' : '#E8F4FD'}`,
-        borderRadius: 12,
-        padding: '12px 16px',
-        marginBottom: 8,
-        cursor: 'default',
-      }}>
+      <div
+        draggable={draggable}
+        onDragStart={draggable ? e => { e.stopPropagation(); onDragStart?.(); } : undefined}
+        onDragEnd={draggable ? onDragEnd : undefined}
+        style={{
+          background: '#ffffff',
+          border: `1px solid ${estSpecifique ? 'var(--color-teal)' : '#E8F4FD'}`,
+          borderRadius: 12,
+          padding: '12px 16px',
+          marginBottom: 8,
+          cursor: draggable ? 'grab' : 'default',
+        }}
+      >
 
         {/* Miniature vidéo (non-compact) */}
         {!compact && exercice.videoYoutubeId && (

@@ -294,15 +294,28 @@ export interface Exercice {
     "2": NiveauConfig;
     "3": NiveauConfig;
   };
-  /** Présents uniquement sur les exercices personnalisés chargés depuis
-   *  exercices_personnalises (Supabase) — absents sur EXERCICES_BASE. */
-  dossierId?: string;
-  ordre?: number;
 }
 
 export interface DossierExercice {
   id: string;
   nom: string;
+  ordre: number;
+}
+
+// ── Rattachement exercice ↔ dossier (base ou personnalisé) ─────────────────
+// Table dossier_exercice_membres (20260718_dossier_exercice_membres.sql) —
+// remplace exercices_personnalises.dossier_id/ordre (colonnes laissées en
+// base mais plus lues/écrites côté code). exerciceRef est l'id EXERCICES_BASE
+// (ex. 'eq-unipodal') ou l'uuid exercices_personnalises.id selon typeExercice.
+// Un même exercice peut appartenir à plusieurs dossiers (multi-dossier assumé).
+
+export type TypeExerciceRef = 'base' | 'personnalise';
+
+export interface DossierExerciceMembre {
+  id: string;
+  dossierId: string;
+  exerciceRef: string;
+  typeExercice: TypeExerciceRef;
   ordre: number;
 }
 

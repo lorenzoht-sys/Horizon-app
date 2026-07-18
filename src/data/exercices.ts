@@ -1,4 +1,4 @@
-import type { CategorieExercice, Exercice, DossierExercice } from '../types';
+import type { CategorieExercice, Exercice, DossierExercice, DossierExerciceMembre, TypeExerciceRef } from '../types';
 import { supabase } from '../lib/supabase';
 
 export const EXERCICES_BASE: Exercice[] = [
@@ -1446,8 +1446,6 @@ function rowToExercicePersonnalise(row: Record<string, unknown>): Exercice {
     niveauMobilite: (row.niveau_mobilite as Exercice['niveauMobilite']) ?? undefined,
     reference: (row.reference as string | null) ?? undefined,
     niveau_config: (row.niveau_config as Exercice['niveau_config']) ?? undefined,
-    dossierId: (row.dossier_id as string | null) ?? undefined,
-    ordre: row.ordre as number,
   };
 }
 
@@ -1519,7 +1517,6 @@ export async function saveExercicePersonnalise(ex: Omit<Exercice, 'id'>): Promis
         niveau_mobilite: ex.niveauMobilite ?? null,
         reference: ex.reference ?? null,
         niveau_config: ex.niveau_config ?? null,
-        dossier_id: ex.dossierId ?? null,
       })
       .select()
       .single();
@@ -1591,7 +1588,6 @@ export async function migrerExercicesLocalStorageVersSupabase(): Promise<{ count
       niveau_mobilite: ex.niveauMobilite ?? null,
       reference: ex.reference ?? null,
       niveau_config: ex.niveau_config ?? null,
-      dossier_id: ex.dossierId ?? null,
     }));
 
     const { error } = await supabase
@@ -1661,17 +1657,6 @@ export async function creerDossierExercice(nom: string, ordre: number): Promise<
   }
 }
 
-/** Déplace un exercice personnalisé vers un dossier (ou hors dossier si null). */
-export async function deplacerExercicePersonnalise(exerciceId: string, dossierId: string | null): Promise<boolean> {
-  if (!supabase) return false;
-  const { error } = await supabase
-    .from('exercices_personnalises')
-    .update({ dossier_id: dossierId })
-    .eq('id', exerciceId);
-  if (error) { console.error('Erreur déplacement exercice:', error); return false; }
-  return true;
-}
-
 /** Met à jour le champ ordre de plusieurs dossiers en une fois (tri manuel). */
 export async function reordonnerDossiersExercices(ordres: { id: string; ordre: number }[]): Promise<boolean> {
   if (!supabase) return false;
@@ -1687,17 +1672,78 @@ export async function reordonnerDossiersExercices(ordres: { id: string; ordre: n
   }
 }
 
-/** Met à jour le champ ordre de plusieurs exercices personnalisés (tri manuel, au sein d'un dossier). */
-export async function reordonnerExercicesPersonnalises(ordres: { id: string; ordre: number }[]): Promise<boolean> {
-  if (!supabase) return false;
+// ── Rattachement exercice ↔ dossier (base ou personnalisé) ─────────────────
+// Table dossier_exercice_membres (20260718_dossier_exercice_membres.sql).
+// Remplace deplacerExercicePersonnalise/reordonnerExercicesPersonnalises
+// (exercices_personnalises.dossier_id/ordre) — colonnes laissées en base
+// mais volontairement plus lues ni écrites ici. Multi-dossier assumé : un
+// exercice peut appartenir à plusieurs dossiers, ajouter n'en retire jamais
+// d'un autre.
+
+function rowToDossierExerciceMembre(row: Record<string, unknown>): DossierExerciceMembre {
+  return {
+    id: row.id as string,
+    dossierId: row.dossier_id as string,
+    exerciceRef: row.exercice_ref as string,
+    typeExercice: row.type_exercice as TypeExerciceRef,
+    ordre: (row.ordre as number) ?? 0,
+  };
+}
+
+/** Charge tous les rattachements exercice↔dossier du praticien courant. */
+export async function loadMembresDossiers(): Promise<DossierExerciceMembre[]> {
+  if (!supabase) return [];
   try {
-    for (const { id, ordre } of ordres) {
-      const { error } = await supabase.from('exercices_personnalises').update({ ordre }).eq('id', id);
-      if (error) throw error;
-    }
-    return true;
+    const { data, error } = await supabase
+      .from('dossier_exercice_membres')
+      .select('*')
+      .order('ordre');
+    if (error) throw error;
+    return (data ?? []).map(rowToDossierExerciceMembre);
   } catch (err) {
-    console.error('Erreur tri des exercices:', err);
-    return false;
+    console.error('Erreur chargement rattachements dossiers:', err);
+    return [];
   }
+}
+
+/** Ajoute un exercice (base ou personnalisé) à un dossier. Idempotent : ne
+ *  crée pas de doublon si déjà présent (contrainte UNIQUE côté base). */
+export async function ajouterExerciceADossier(
+  dossierId: string, exerciceRef: string, typeExercice: TypeExerciceRef, ordre = 0,
+): Promise<DossierExerciceMembre | null> {
+  if (!supabase) return null;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from('dossier_exercice_membres')
+      .upsert(
+        { praticien_id: user.id, dossier_id: dossierId, exercice_ref: exerciceRef, type_exercice: typeExercice, ordre },
+        { onConflict: 'praticien_id,dossier_id,type_exercice,exercice_ref', ignoreDuplicates: false },
+      )
+      .select()
+      .single();
+
+    if (error || !data) { console.error('Erreur ajout exercice au dossier:', error); return null; }
+    return rowToDossierExerciceMembre(data as Record<string, unknown>);
+  } catch (err) {
+    console.error('Erreur ajout exercice au dossier:', err);
+    return null;
+  }
+}
+
+/** Retire un exercice d'un dossier précis (les autres dossiers ne sont pas affectés). */
+export async function retirerExerciceDeDossier(
+  dossierId: string, exerciceRef: string, typeExercice: TypeExerciceRef,
+): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase
+    .from('dossier_exercice_membres')
+    .delete()
+    .eq('dossier_id', dossierId)
+    .eq('exercice_ref', exerciceRef)
+    .eq('type_exercice', typeExercice);
+  if (error) { console.error('Erreur retrait exercice du dossier:', error); return false; }
+  return true;
 }
