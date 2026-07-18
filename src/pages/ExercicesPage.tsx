@@ -1,12 +1,98 @@
-import { useState, useMemo } from 'react';
-import { loadExercices, saveCustomExercice } from '../data/exercices';
+import { useState, useMemo, useEffect } from 'react';
+import {
+  loadExercicesPraticien, saveExercicePersonnalise,
+  getExercicesLocaux, migrationExercicesDejaFaite, migrerExercicesLocalStorageVersSupabase,
+  loadDossiersExercices, creerDossierExercice, deplacerExercicePersonnalise,
+  reordonnerDossiersExercices, reordonnerExercicesPersonnalises,
+} from '../data/exercices';
 import PageWrapper from '../components/layout/PageWrapper';
 import ExerciceCard from '../programme/ExerciceCard';
-import type { CategorieExercice, Exercice, ProfilHandicap, ProfilPathologie } from '../types';
-import { Plus, X } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
+import type { CategorieExercice, Exercice, ProfilHandicap, ProfilPathologie, DossierExercice } from '../types';
+import { Plus, X, Package, Folder, FolderPlus, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { extractYoutubeId } from '../utils/extractYoutubeId';
+
+// ── Sous-composants dossiers (glisser-déposer HTML5 natif, sans dépendance) ──
+
+function ExercicePersonnaliseChip({ exercice, onDragStart, onDragEnd, onDropOnMe }: {
+  exercice: Exercice;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDropOnMe: () => void;
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={e => e.preventDefault()}
+      onDrop={e => { e.preventDefault(); e.stopPropagation(); onDropOnMe(); }}
+      title="Glisser pour déplacer ou réordonner"
+      className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-700 cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors"
+    >
+      <GripVertical size={12} className="text-gray-300" />
+      {exercice.nom}
+    </div>
+  );
+}
+
+function DossierSection({
+  dossier, exercices, draggedDossierId,
+  onDragStartDossier, onDragEndDossier, onDropDossier, onDropVide,
+  onDragStartExercice, onDragEndExercice, onDropExercice,
+}: {
+  dossier: DossierExercice;
+  exercices: Exercice[];
+  draggedDossierId: string | null;
+  onDragStartDossier: () => void;
+  onDragEndDossier: () => void;
+  onDropDossier: () => void;
+  onDropVide: () => void;
+  onDragStartExercice: (id: string) => void;
+  onDragEndExercice: () => void;
+  onDropExercice: (ex: Exercice) => void;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+  return (
+    <div
+      draggable
+      onDragStart={e => { e.stopPropagation(); onDragStartDossier(); }}
+      onDragEnd={onDragEndDossier}
+      onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={e => {
+        e.preventDefault();
+        setDragOver(false);
+        if (draggedDossierId) onDropDossier(); else onDropVide();
+      }}
+      className={`border rounded-xl p-3 transition-colors cursor-grab active:cursor-grabbing ${
+        dragOver ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white'
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <GripVertical size={14} className="text-gray-300" />
+        <Folder size={14} className="text-primary" />
+        <span className="text-sm font-semibold text-dark">{dossier.nom}</span>
+        <span className="text-xs text-gray-400">({exercices.length})</span>
+      </div>
+      {exercices.length === 0 ? (
+        <p className="text-xs text-gray-400 pl-6">Glissez un exercice personnalisé ici</p>
+      ) : (
+        <div className="flex flex-wrap gap-2 pl-1">
+          {exercices.map(ex => (
+            <ExercicePersonnaliseChip
+              key={ex.id}
+              exercice={ex}
+              onDragStart={() => onDragStartExercice(ex.id)}
+              onDragEnd={onDragEndExercice}
+              onDropOnMe={() => onDropExercice(ex)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const CATEGORIES: { value: CategorieExercice | 'all'; label: string }[] = [
   { value: 'all', label: 'Tous' },
@@ -51,7 +137,8 @@ const EMPTY_EX: Omit<Exercice, 'id'> = {
 };
 
 export default function ExercicesPage() {
-  const [exercices, setExercices] = useState(() => loadExercices());
+  const [exercices, setExercices] = useState<Exercice[]>([]);
+  const [loading, setLoading] = useState(true);
   const [catFilter, setCatFilter] = useState<CategorieExercice | 'all'>('all');
   const [profilFilter, setProfilFilter] = useState<ProfilHandicap | ProfilPathologie | null>(null);
   const [positionFilter, setPositionFilter] = useState('tous');
@@ -59,6 +146,109 @@ export default function ExercicesPage() {
   const [form, setForm] = useState<Omit<Exercice, 'id'>>(EMPTY_EX);
   const [videoUrl, setVideoUrl] = useState('');
   const videoId = extractYoutubeId(videoUrl);
+
+  // Bandeau de migration localStorage → Supabase : le nombre d'exercices
+  // locaux est figé au montage (pas besoin de le recalculer en direct), le
+  // rejet ("Plus tard") n'est que pour la session en cours — pas de flag
+  // posé, le bandeau réapparaîtra au prochain chargement de la page.
+  const [exercicesLocaux] = useState(() => getExercicesLocaux());
+  const [bandeauRejete, setBandeauRejete] = useState(false);
+  const [migrationFaite, setMigrationFaite] = useState(() => migrationExercicesDejaFaite());
+  const [migrating, setMigrating] = useState(false);
+  const showBandeauMigration = exercicesLocaux.length > 0 && !migrationFaite && !bandeauRejete;
+
+  // Dossiers d'exercices personnalisés
+  const [dossiers, setDossiers] = useState<DossierExercice[]>([]);
+  const [showCreateDossier, setShowCreateDossier] = useState(false);
+  const [nouveauDossierNom, setNouveauDossierNom] = useState('');
+  const [draggedExerciceId, setDraggedExerciceId] = useState<string | null>(null);
+  const [draggedDossierId, setDraggedDossierId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadExercicesPraticien().then(list => {
+      if (!cancelled) { setExercices(list); setLoading(false); }
+    });
+    loadDossiersExercices().then(list => {
+      if (!cancelled) setDossiers(list);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  async function handleCreerDossier() {
+    if (!nouveauDossierNom.trim()) { toast.error('Nom requis'); return; }
+    const created = await creerDossierExercice(nouveauDossierNom.trim(), dossiers.length);
+    if (!created) { toast.error('Erreur lors de la création du dossier'); return; }
+    setDossiers(prev => [...prev, created]);
+    setNouveauDossierNom('');
+    setShowCreateDossier(false);
+    toast.success('Dossier créé !');
+  }
+
+  async function handleDeplacerExercice(exerciceId: string, dossierId: string | null) {
+    const ok = await deplacerExercicePersonnalise(exerciceId, dossierId);
+    if (!ok) { toast.error('Erreur lors du déplacement'); return; }
+    setExercices(prev => prev.map(ex => ex.id === exerciceId ? { ...ex, dossierId: dossierId ?? undefined } : ex));
+  }
+
+  async function handleReordonnerExercicesDossier(dossierId: string | null, sourceId: string, targetId: string) {
+    const items = exercices
+      .filter(ex => ex.custom && (ex.dossierId ?? null) === dossierId)
+      .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
+    const sourceIdx = items.findIndex(e => e.id === sourceId);
+    const targetIdx = items.findIndex(e => e.id === targetId);
+    if (sourceIdx === -1 || targetIdx === -1 || sourceIdx === targetIdx) return;
+    const reordered = [...items];
+    const [moved] = reordered.splice(sourceIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    const withOrdre = reordered.map((e, i) => ({ id: e.id, ordre: i }));
+    setExercices(prev => prev.map(ex => {
+      const found = withOrdre.find(w => w.id === ex.id);
+      return found ? { ...ex, ordre: found.ordre } : ex;
+    }));
+    const ok = await reordonnerExercicesPersonnalises(withOrdre);
+    if (!ok) toast.error('Erreur lors du tri des exercices');
+  }
+
+  function handleDropSurExercice(targetEx: Exercice, targetDossierId: string | null) {
+    if (!draggedExerciceId || draggedExerciceId === targetEx.id) return;
+    const draggedEx = exercices.find(e => e.id === draggedExerciceId);
+    if (!draggedEx) return;
+    if ((draggedEx.dossierId ?? null) === targetDossierId) {
+      void handleReordonnerExercicesDossier(targetDossierId, draggedExerciceId, targetEx.id);
+    } else {
+      void handleDeplacerExercice(draggedExerciceId, targetDossierId);
+    }
+  }
+
+  async function handleReordonnerDossiers(sourceId: string, targetId: string) {
+    const sourceIdx = dossiers.findIndex(d => d.id === sourceId);
+    const targetIdx = dossiers.findIndex(d => d.id === targetId);
+    if (sourceIdx === -1 || targetIdx === -1 || sourceIdx === targetIdx) return;
+    const reordered = [...dossiers];
+    const [moved] = reordered.splice(sourceIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    const withOrdre = reordered.map((d, i) => ({ ...d, ordre: i }));
+    setDossiers(withOrdre);
+    const ok = await reordonnerDossiersExercices(withOrdre.map(d => ({ id: d.id, ordre: d.ordre })));
+    if (!ok) toast.error('Erreur lors du tri des dossiers');
+  }
+
+  async function handleImporterExercicesLocaux() {
+    setMigrating(true);
+    try {
+      const result = await migrerExercicesLocalStorageVersSupabase();
+      if (!result) {
+        toast.error("Erreur lors de l'import — réessayez dans un instant");
+        return;
+      }
+      setMigrationFaite(true);
+      toast.success(`${result.count} exercice${result.count > 1 ? 's' : ''} importé${result.count > 1 ? 's' : ''} dans votre bibliothèque en ligne !`);
+      setExercices(await loadExercicesPraticien());
+    } finally {
+      setMigrating(false);
+    }
+  }
 
   const { compatible, incompatibles } = useMemo(() => {
     const parCategorie = exercices.filter(ex =>
@@ -110,11 +300,11 @@ export default function ExercicesPage() {
     }
   }
 
-  function handleAdd() {
+  async function handleAdd() {
     if (!form.nom.trim()) { toast.error('Nom requis'); return; }
-    const newEx: Exercice = { ...form, id: uuidv4(), custom: true, videoYoutubeId: videoId ?? undefined };
-    saveCustomExercice(newEx);
-    setExercices(loadExercices());
+    const created = await saveExercicePersonnalise({ ...form, videoYoutubeId: videoId ?? undefined });
+    if (!created) { toast.error("Erreur lors de l'ajout de l'exercice"); return; }
+    setExercices(await loadExercicesPraticien());
     setForm(EMPTY_EX);
     setVideoUrl('');
     setShowForm(false);
@@ -137,6 +327,122 @@ export default function ExercicesPage() {
           <Plus size={15} />
           Ajouter un exercice
         </button>
+      </div>
+
+      {/* Bandeau migration localStorage → Supabase */}
+      {showBandeauMigration && (
+        <div className="flex items-center gap-3 rounded-xl px-4 py-3 mb-4 bg-amber-50 border border-amber-200">
+          <Package size={20} className="text-amber-600 flex-shrink-0" />
+          <div className="flex-1 text-sm text-amber-800">
+            📦 Vous avez {exercicesLocaux.length} exercice{exercicesLocaux.length > 1 ? 's' : ''} personnalisé{exercicesLocaux.length > 1 ? 's' : ''} enregistré{exercicesLocaux.length > 1 ? 's' : ''} localement sur cet appareil. Les importer vers votre bibliothèque en ligne pour les retrouver partout ?
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={handleImporterExercicesLocaux}
+              disabled={migrating}
+              className="bg-amber-600 text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
+            >
+              {migrating ? 'Import…' : `Importer mes ${exercicesLocaux.length} exercice${exercicesLocaux.length > 1 ? 's' : ''}`}
+            </button>
+            <button
+              onClick={() => setBandeauRejete(true)}
+              disabled={migrating}
+              className="text-xs text-amber-700 hover:text-amber-900 px-2 py-2 disabled:opacity-50"
+            >
+              Plus tard ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dossiers d'exercices personnalisés */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xs font-bold text-dark uppercase tracking-wide flex items-center gap-2">
+            <Folder size={14} /> Mes dossiers
+          </h2>
+          <button
+            onClick={() => setShowCreateDossier(true)}
+            className="text-xs font-semibold text-primary flex items-center gap-1 hover:text-dark transition-colors"
+          >
+            <FolderPlus size={14} /> Créer un dossier
+          </button>
+        </div>
+
+        {showCreateDossier && (
+          <div className="flex items-center gap-2 mb-3">
+            <input
+              autoFocus
+              value={nouveauDossierNom}
+              onChange={e => setNouveauDossierNom(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreerDossier()}
+              placeholder="Nom du dossier"
+              className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-primary"
+            />
+            <button onClick={handleCreerDossier} className="bg-primary text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-dark transition-colors">
+              Créer
+            </button>
+            <button
+              onClick={() => { setShowCreateDossier(false); setNouveauDossierNom(''); }}
+              className="text-gray-400 text-xs px-2 hover:text-gray-600"
+            >
+              Annuler
+            </button>
+          </div>
+        )}
+
+        {dossiers.length === 0 && !showCreateDossier ? (
+          <p className="text-xs text-gray-400">Aucun dossier — créez-en un pour organiser vos exercices personnalisés.</p>
+        ) : (
+          <div className="space-y-3">
+            {dossiers.map(dossier => (
+              <DossierSection
+                key={dossier.id}
+                dossier={dossier}
+                exercices={exercices
+                  .filter(ex => ex.custom && ex.dossierId === dossier.id)
+                  .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0))}
+                draggedDossierId={draggedDossierId}
+                onDragStartDossier={() => setDraggedDossierId(dossier.id)}
+                onDragEndDossier={() => setDraggedDossierId(null)}
+                onDropDossier={() => {
+                  if (draggedDossierId && draggedDossierId !== dossier.id) void handleReordonnerDossiers(draggedDossierId, dossier.id);
+                }}
+                onDropVide={() => {
+                  if (draggedExerciceId) void handleDeplacerExercice(draggedExerciceId, dossier.id);
+                }}
+                onDragStartExercice={id => setDraggedExerciceId(id)}
+                onDragEndExercice={() => setDraggedExerciceId(null)}
+                onDropExercice={ex => handleDropSurExercice(ex, dossier.id)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Exercices personnalisés sans dossier — cible de drop pour "en sortir" */}
+        {exercices.some(ex => ex.custom && !ex.dossierId) && (
+          <div
+            className="mt-3 border border-dashed border-gray-200 rounded-xl p-3"
+            onDragOver={e => { if (draggedExerciceId) e.preventDefault(); }}
+            onDrop={() => { if (draggedExerciceId) void handleDeplacerExercice(draggedExerciceId, null); }}
+          >
+            <div className="text-xs font-semibold text-gray-400 uppercase mb-2">Sans dossier</div>
+            <div className="flex flex-wrap gap-2">
+              {exercices
+                .filter(ex => ex.custom && !ex.dossierId)
+                .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0))
+                .map(ex => (
+                  <ExercicePersonnaliseChip
+                    key={ex.id}
+                    exercice={ex}
+                    onDragStart={() => setDraggedExerciceId(ex.id)}
+                    onDragEnd={() => setDraggedExerciceId(null)}
+                    onDropOnMe={() => handleDropSurExercice(ex, null)}
+                  />
+                ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Filtres profil handicap */}
@@ -246,6 +552,9 @@ export default function ExercicesPage() {
       </p>
 
       {/* Grille exercices compatibles */}
+      {loading ? (
+        <div className="text-center py-12 text-gray-400 text-sm">Chargement…</div>
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {compatible.map(ex => (
           <ExerciceCard
@@ -259,6 +568,7 @@ export default function ExercicesPage() {
           />
         ))}
       </div>
+      )}
 
       {/* Section exercices non recommandés */}
       {incompatibles.length > 0 && (

@@ -9,7 +9,7 @@ import { differenceInDays } from 'date-fns';
 import {
   ArrowLeft, Pencil, FileText, TrendingUp, Share2,
   Download, Trash2, Dumbbell, NotebookPen, Calendar, MapPin,
-  RefreshCw, ClipboardList, Mic, Save, ExternalLink,
+  RefreshCw, ClipboardList, Mic, Save, ExternalLink, LayoutTemplate,
 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
@@ -29,6 +29,7 @@ import BilanTimeline from '../components/bilan/BilanTimeline';
 import ContratsTab from '../components/participant/ContratsTab';
 import DicteePostSeance from '../components/DicteePostSeance';
 import ModalEspacePatient from '../components/participant/ModalEspacePatient';
+import AppliquerModeleModal from '../components/programme/AppliquerModeleModal';
 import CarteJournalSeance, { type JournalEntry } from '../components/journal/CarteJournalSeance';
 import { exportDossierPraticien } from '../utils/exportDossierPDF';
 import { calculerNote, NORMES_SCORING } from '../data/norms';
@@ -969,6 +970,7 @@ export default function ParticipantProfile() {
   const [showProfilPicker, setShowProfilPicker] = useState(false);
   const [showEspacePatient, setShowEspacePatient] = useState(false);
   const [ouvertureEspacePatient, setOuvertureEspacePatient] = useState(false);
+  const [showModeleModal, setShowModeleModal] = useState(false);
   const [activeTab, setActiveTab]           = useState<TabId>('bilans');
   const [seancesStats, setSeancesStats]     = useState<SeancePatientStat[]>([]);
   const [retours, setRetours]               = useState<RetourSeance[]>([]);
@@ -1497,7 +1499,7 @@ export default function ParticipantProfile() {
       </div>
 
       {/* ── PROGRAMME EN COURS ─────────────────────────────────── */}
-      {programmeActif && (
+      {programmeActif ? (
         <div className="bg-white rounded-xl border border-gray-200/50 shadow-sm mb-4 p-5">
           <div className="flex items-center justify-between mb-3">
             <div>
@@ -1554,6 +1556,25 @@ export default function ParticipantProfile() {
           {programmeActif.objectif && (
             <div className="mt-2 text-[12px] text-gray-500 italic">🎯 {programmeActif.objectif}</div>
           )}
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200/50 shadow-sm mb-4 p-5">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-1">Programme</div>
+          <div className="text-[13px] text-gray-500 mb-3">Aucun programme en cours pour ce bénéficiaire.</div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleAction('programme')}
+              className="flex items-center gap-1.5 bg-primary text-white text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-dark transition-colors"
+            >
+              <Dumbbell size={13} /> Créer un programme
+            </button>
+            <button
+              onClick={() => setShowModeleModal(true)}
+              className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <LayoutTemplate size={13} /> Utiliser un modèle
+            </button>
+          </div>
         </div>
       )}
 
@@ -1918,6 +1939,17 @@ export default function ParticipantProfile() {
           participant={participant}
           onClose={() => setShowDictee(false)}
           onSave={async (data) => { await ajouterCompteRendu(data); }}
+        />
+      )}
+
+      {showModeleModal && (
+        <AppliquerModeleModal
+          participantId={id!}
+          onClose={() => setShowModeleModal(false)}
+          onApplied={() => {
+            setShowModeleModal(false);
+            navigate(`/participant/${id}/programme`);
+          }}
         />
       )}
 
