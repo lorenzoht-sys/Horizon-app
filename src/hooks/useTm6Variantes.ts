@@ -30,14 +30,15 @@ export function useTm6Variantes() {
     nom: string,
     typeMesure: Tm6Variante['typeMesure'],
     distanceRef?: number | null,
-  ) {
+  ): Promise<Tm6Variante | undefined> {
     if (!supabase) return;
-    await supabase.from('tm6_variantes').insert({
+    const { data } = await supabase.from('tm6_variantes').insert({
       nom,
       type_mesure: typeMesure,
       distance_ref: distanceRef ?? null,
-    });
+    }).select().single();
     await fetch();
+    return data ? rowToVariante(data) : undefined;
   }
 
   async function supprimer(id: string) {
