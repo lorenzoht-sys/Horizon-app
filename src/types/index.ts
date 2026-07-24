@@ -743,6 +743,16 @@ export interface AutonomieData {
   aideADomicileHeures?: number | null;
   aideMarche?: string | null;
   gir?: GIRData | null;
+  contactsSante?: ContactSante[];
+}
+
+/** Professionnel de santé à contacter (médecin traitant, kiné...) — pour
+ *  faciliter l'envoi de comptes-rendus, pas un dossier médical structuré. */
+export interface ContactSante {
+  profession: string;
+  nom: string;
+  telephone?: string;
+  email?: string;
 }
 
 // ── HABITUDES DE VIE ──────────────────────────────────────────────────────────
@@ -772,6 +782,7 @@ export interface ActivitePhysiqueData {
   niveauActivite?: string | null;
   activitesActuelles?: string[];
   activitesPrecedentes?: ActivitePrecedente[];
+  materielDisponible?: string[];
 }
 
 // ── COGNITION & HUMEUR ────────────────────────────────────────────────────────

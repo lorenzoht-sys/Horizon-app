@@ -111,9 +111,14 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
   const addable = ENDO_TESTS.filter(k => !active.includes(k) && k !== 'memoire' && k !== 'tm6');
   const hasAny = active.length > 0;
 
+  // Type de test : variante choisie prioritaire, sinon mode standard / sur place
+  const varianteActive = tm6.varianteId ? variantes.find(v => v.id === tm6.varianteId) ?? null : null;
+  const mesureType: 'distance' | 'pas' | 'tours' = varianteActive
+    ? varianteActive.typeMesure
+    : (tm6.mode ?? 'standard') === 'marche_sur_place' ? 'pas' : 'distance';
+
   // Badges
-  const modeStandard = (tm6.mode ?? 'standard') === 'standard';
-  const badgeTm6: BadgeInfo | null = modeStandard && tm6.distanceMetres != null
+  const badgeTm6: BadgeInfo | null = mesureType === 'distance' && tm6.distanceMetres != null
     ? tm6.distanceMetres >= 400 ? { couleur: 'vert', label: 'Endurance normale' }
     : tm6.distanceMetres >= 300 ? { couleur: 'orange', label: 'Endurance réduite' }
     : { couleur: 'rouge', label: 'Endurance faible' }
@@ -149,46 +154,28 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
             title="TM6 — Test de marche 6 minutes"
             subtitle="Distance parcourue en 6 minutes — endurance cardiorespiratoire"
             badge={badgeTm6}>
-            <DeltaIndicator delta={d.tm6Distance} unit={(tm6.mode ?? 'standard') === 'marche_sur_place' ? 'pas' : 'm'} />
+            <DeltaIndicator delta={d.tm6Distance} unit={mesureType === 'distance' ? 'm' : mesureType} />
           </CardHeader>
 
-          {/* Sélecteur mode */}
+          {/* Type de test */}
           <div className="mb-4">
-            <p className="text-xs text-gray-500 mb-2">Mode du test</p>
-            <div className="flex gap-2">
-              {([
-                ['standard',         '🚶 Marche 6 minutes'],
-                ['marche_sur_place', '🚶 Marche sur place (6 min)'],
-              ] as const).map(([val, label]) => (
-                <button key={val} type="button"
-                  aria-pressed={(tm6.mode ?? 'standard') === val}
-                  onClick={() => setTm6({ mode: val })}
-                  className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-medium border transition-colors text-left focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-                    (tm6.mode ?? 'standard') === val
-                      ? 'bg-primary text-white border-primary'
-                      : 'border-gray-200 text-gray-600 hover:border-primary/50 hover:bg-gray-50'
-                  }`}>
-                  {label}
-                </button>
+            <label htmlFor="tm6-type-test" className="block text-xs text-gray-500 mb-2">Type de test</label>
+            <select id="tm6-type-test"
+              value={tm6.varianteId ?? ((tm6.mode ?? 'standard') === 'marche_sur_place' ? 'sur_place' : 'standard')}
+              onChange={e => {
+                const val = e.target.value;
+                if (val === 'standard') setTm6({ mode: 'standard', varianteId: null });
+                else if (val === 'sur_place') setTm6({ mode: 'marche_sur_place', varianteId: null });
+                else setTm6({ mode: 'standard', varianteId: val });
+              }}
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
+              <option value="standard">🚶 Marche 6 minutes (standard)</option>
+              <option value="sur_place">🚶 Marche sur place</option>
+              {variantes.map(v => (
+                <option key={v.id} value={v.id}>{v.nom}</option>
               ))}
-            </div>
+            </select>
           </div>
-
-          {/* Variante */}
-          {variantes.length > 0 && (
-            <div className="mb-4">
-              <label htmlFor="tm6-variante" className="block text-xs text-gray-500 mb-2">Variante du test</label>
-              <select id="tm6-variante"
-                value={tm6.varianteId ?? ''}
-                onChange={e => setTm6({ varianteId: e.target.value || null })}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
-                <option value="">Standard (marche 6 min)</option>
-                {variantes.map(v => (
-                  <option key={v.id} value={v.id}>{v.nom}</option>
-                ))}
-              </select>
-            </div>
-          )}
 
           {/* Durée */}
           <div className="mb-4">
@@ -241,11 +228,14 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
               })} />
           </div>
 
-          {/* Distance ou Pas */}
+          {/* Mesure du résultat, selon le type de test choisi */}
           <div className="mb-4">
-            {(tm6.mode ?? 'standard') === 'marche_sur_place' ? (
-              <Num id="tm6-pas" label="Nombre de pas" value={tm6.repetitions ?? null} unit="pas" min={0} max={2000}
+            {mesureType === 'pas' ? (
+              <Num id="tm6-pas" label="Nombre de pas" value={tm6.repetitions ?? tm6.nbPas ?? null} unit="pas" min={0} max={2000}
                 onChange={v => setTm6({ repetitions: v })} />
+            ) : mesureType === 'tours' ? (
+              <Num id="tm6-tours" label="Nombre de tours" value={tm6.nbTours ?? null} unit="tours" min={0} max={5000}
+                onChange={v => setTm6({ nbTours: v })} />
             ) : (
               <Num id="tm6-distance" label="Distance parcourue" value={tm6.distanceMetres} unit="m" min={0} max={1000}
                 onChange={v => setTm6({ distanceMetres: v })} />
@@ -313,14 +303,6 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
                 );
               })}
             </div>
-          </div>
-
-          {/* Comptage variantes */}
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <Num id="tm6-nb-pas" label="Nombre de pas (stepper)" value={tm6.nbPas ?? null} unit="pas" min={0} max={10000}
-              onChange={v => setTm6({ nbPas: v })} />
-            <Num id="tm6-nb-tours" label="Nombre de tours (pédalier)" value={tm6.nbTours ?? null} unit="tours" min={0} max={5000}
-              onChange={v => setTm6({ nbTours: v })} />
           </div>
 
           {/* Grille AVANT / APRÈS */}
