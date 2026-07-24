@@ -6,7 +6,7 @@
 // bilan_initial_data.formulaireFlat.data (lu par getTestsAutonomie() côté
 // frontend quand participant.anamnese est vide).
 import { describe, it, expect } from 'vitest';
-import { filtrerBilan } from './me.js';
+import { filtrerBilan } from '../me.js';
 
 function bilanBrut(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
