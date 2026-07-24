@@ -186,7 +186,7 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
     ? [...new Set(['memoire' as TestKey, ...testsActifs.filter(k => ENDO_TESTS.includes(k)), ...extras])]
     : ENDO_TESTS;
 
-  const addable = ENDO_TESTS.filter(k => !active.includes(k) && k !== 'memoire' && k !== 'tm6');
+  const addable = ENDO_TESTS.filter(k => !active.includes(k) && k !== 'memoire');
   const hasAny = active.length > 0;
 
   // Type de test : variante choisie prioritaire, sinon mode standard / sur place
