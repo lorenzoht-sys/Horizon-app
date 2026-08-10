@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { Bilan, TestKey, ProfilHandicap } from '../../../types';
+import { toast } from 'sonner';
+import type { Bilan, TestKey, ProfilHandicap, Tm6Variante } from '../../../types';
 import { useTm6Variantes } from '../../../hooks/useTm6Variantes';
 
 const BORG_RPE_LEVELS = [
@@ -63,6 +64,82 @@ function CardHeader({ title, subtitle, badge, children }: {
   );
 }
 
+// ── Modale de création d'une variante TM6 ───────────────────────────────────
+
+const TYPE_MESURE_LABELS: Record<Tm6Variante['typeMesure'], string> = {
+  distance: 'Distance (mètres)',
+  pas: 'Nombre de pas',
+  tours: 'Nombre de tours',
+};
+
+interface ModalNouvelleVarianteProps {
+  onCreated: (id: string) => void;
+  onClose: () => void;
+}
+
+function ModalNouvelleVariante({ onCreated, onClose }: ModalNouvelleVarianteProps) {
+  const { creer } = useTm6Variantes();
+  const [form, setForm] = useState<{ nom: string; typeMesure: Tm6Variante['typeMesure']; distanceRef: string }>({
+    nom: '', typeMesure: 'distance', distanceRef: '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    if (!form.nom.trim()) { toast.error('Nom requis'); return; }
+    setSaving(true);
+    const created = await creer(form.nom.trim(), form.typeMesure, form.distanceRef ? Number(form.distanceRef) : null);
+    setSaving(false);
+    toast.success('Variante ajoutée');
+    onCreated(created?.id ?? '');
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+        <h3 className="font-heading font-bold text-dark text-lg">Nouvelle variante TM6</h3>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Nom</label>
+          <input type="text" value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))}
+            placeholder="ex : Stepper Tunturi, Pédalier couché, Couloir 30m"
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary" />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Mesure</label>
+          <select value={form.typeMesure} onChange={e => setForm(f => ({ ...f, typeMesure: e.target.value as Tm6Variante['typeMesure'] }))}
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary">
+            {(Object.entries(TYPE_MESURE_LABELS) as [Tm6Variante['typeMesure'], string][]).map(([val, label]) => (
+              <option key={val} value={val}>{label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Distance référence (m) — optionnel</label>
+          <input type="number" min={0} value={form.distanceRef} onChange={e => setForm(f => ({ ...f, distanceRef: e.target.value }))}
+            placeholder="ex : 400"
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary" />
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 bg-primary text-white rounded-xl py-2.5 font-semibold text-sm hover:bg-dark transition-colors disabled:opacity-60"
+          >
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+          <button onClick={onClose}
+            className="px-5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors text-sm">
+            Annuler
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type BilanForm = Omit<Bilan, 'id'>;
 
 interface Props {
@@ -97,6 +174,7 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
   const d = useBilanDelta(form as Bilan, previous);
   const [extras, setExtras] = useState<TestKey[]>([]);
   const { variantes } = useTm6Variantes();
+  const [showModalVariante, setShowModalVariante] = useState(false);
   const tm6 = form.tm6;
   const setTm6 = (patch: Partial<typeof tm6>) => update({ tm6: { ...tm6, ...patch } });
   const dureeModeEff: 'fixe' | 'libre' = tm6.dureeMode ?? 'fixe';
@@ -108,7 +186,7 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
     ? [...new Set(['memoire' as TestKey, ...testsActifs.filter(k => ENDO_TESTS.includes(k)), ...extras])]
     : ENDO_TESTS;
 
-  const addable = ENDO_TESTS.filter(k => !active.includes(k) && k !== 'memoire' && k !== 'tm6');
+  const addable = ENDO_TESTS.filter(k => !active.includes(k) && k !== 'memoire');
   const hasAny = active.length > 0;
 
   // Type de test : variante choisie prioritaire, sinon mode standard / sur place
@@ -168,14 +246,28 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
                 else if (val === 'sur_place') setTm6({ mode: 'marche_sur_place', varianteId: null });
                 else setTm6({ mode: 'standard', varianteId: val });
               }}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20">
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 mb-2">
               <option value="standard">🚶 Marche 6 minutes (standard)</option>
               <option value="sur_place">🚶 Marche sur place</option>
               {variantes.map(v => (
                 <option key={v.id} value={v.id}>{v.nom}</option>
               ))}
             </select>
+            <button type="button" onClick={() => setShowModalVariante(true)}
+              className="text-xs text-primary hover:underline focus:outline-none">
+              ➕ Créer une nouvelle variante
+            </button>
           </div>
+
+          {showModalVariante && (
+            <ModalNouvelleVariante
+              onCreated={id => {
+                if (id) setTm6({ varianteId: id });
+                setShowModalVariante(false);
+              }}
+              onClose={() => setShowModalVariante(false)}
+            />
+          )}
 
           {/* Durée */}
           <div className="mb-4">

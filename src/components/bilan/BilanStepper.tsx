@@ -79,6 +79,11 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
   const LAST  = STEPS.length - 1;
   const previous = participant.bilans.at(-1) ?? null;
 
+  // Un tableau vide (testsActifs jamais choisis, ex: modale "Ignorée") doit
+  // être traité comme "aucun choix fait", pas comme "aucun test actif" —
+  // sinon Step2/Step3 n'affichent quasiment plus rien (voir diagnostic TM6).
+  const testsActifsEff = participant.testsActifs?.length ? participant.testsActifs : ALL_TESTS;
+
   // ── États de sauvegarde ───────────────────────────────────────────────────
   type SaveStatus = 'idle' | 'saving' | 'saved_local' | 'saved_cloud' | 'error';
   const [saveStatus, setSaveStatus] = useState<SaveStatus>(brouillon ? 'saved_cloud' : 'idle');
@@ -232,9 +237,9 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
       );
       case 1: return (
         <div className="space-y-8">
-          <Step2_Physical form={form} update={update} previous={previous} testsActifs={participant.testsActifs ?? ALL_TESTS} profilHandicap={participant.profilHandicap} />
+          <Step2_Physical form={form} update={update} previous={previous} testsActifs={testsActifsEff} profilHandicap={participant.profilHandicap} />
           <div className="border-t border-gray-100 pt-6">
-            <Step3_EnduranceMemory form={form} update={update} previous={previous} testsActifs={participant.testsActifs ?? ALL_TESTS} profilHandicap={participant.profilHandicap} />
+            <Step3_EnduranceMemory form={form} update={update} previous={previous} testsActifs={testsActifsEff} profilHandicap={participant.profilHandicap} />
           </div>
         </div>
       );
@@ -246,8 +251,8 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
   function renderTrimestrielStep() {
     switch (step) {
       case 0: return <Step1_Identity form={form} update={update} nextTrimestre={nextTrimestre} />;
-      case 1: return <Step2_Physical form={form} update={update} previous={previous} testsActifs={participant.testsActifs} profilHandicap={participant.profilHandicap} />;
-      case 2: return <Step3_EnduranceMemory form={form} update={update} previous={previous} testsActifs={participant.testsActifs} profilHandicap={participant.profilHandicap} />;
+      case 1: return <Step2_Physical form={form} update={update} previous={previous} testsActifs={testsActifsEff} profilHandicap={participant.profilHandicap} />;
+      case 2: return <Step3_EnduranceMemory form={form} update={update} previous={previous} testsActifs={testsActifsEff} profilHandicap={participant.profilHandicap} />;
       case 3: return <Step_ResultsIA form={form} update={update} participant={participant} previous={previous} />;
       case 4: return <Step4_Notes form={form} update={update} onGenerateMessage={autoGenerateMessage} />;
     }

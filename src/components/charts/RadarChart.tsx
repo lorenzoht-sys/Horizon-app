@@ -66,8 +66,10 @@ function bilanAxisValue(key: TestKey, bilan: Bilan, normalize: ReturnType<typeof
 export default function RadarChart({ initial, current, testsActifs }: Props) {
   const normalize = useNormalize();
 
-  // N'afficher que les axes des tests actifs (ou tous si non précisé)
-  const axes = (testsActifs ?? ALL_TESTS).filter(k => TEST_RADAR_LABELS[k]);
+  // N'afficher que les axes des tests actifs (ou tous si non précisé, ou si
+  // testsActifs est un tableau vide — voir diagnostic TM6 : [] ne veut pas
+  // dire "aucun test actif" mais "aucun choix jamais fait")
+  const axes = (testsActifs?.length ? testsActifs : ALL_TESTS).filter(k => TEST_RADAR_LABELS[k]);
 
   const data = axes.map(key => ({
     subject: TEST_RADAR_LABELS[key]!,
