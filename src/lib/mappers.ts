@@ -427,6 +427,11 @@ export function dbToEvenementAgenda(row: any): EvenementAgenda {
     heureDebut: row.heure_debut,
     heureFin: row.heure_fin,
     notes: row.notes ?? undefined,
+    nom: row.nom ?? undefined,
+    prenom: row.prenom ?? undefined,
+    adresse: row.adresse ?? undefined,
+    telephone: row.telephone ?? undefined,
+    couleur: row.couleur ?? '#6B7280',
   };
 }
 
@@ -439,6 +444,11 @@ export function evenementAgendaToDb(e: Omit<EvenementAgenda, 'id'> & { id?: stri
     heure_debut: e.heureDebut,
     heure_fin: e.heureFin,
     notes: e.notes ?? null,
+    nom: e.nom ?? null,
+    prenom: e.prenom ?? null,
+    adresse: e.adresse ?? null,
+    telephone: e.telephone ?? null,
+    couleur: e.couleur,
   };
 }
 

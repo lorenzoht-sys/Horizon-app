@@ -516,7 +516,14 @@ export interface Seance {
 // différent de IndisponibilitePierre qui est récurrent hebdomadaire et sans
 // date. 'premier_contact_prospect' = bénéficiaire potentiel sans coordonnées
 // complètes (pas encore un Participant).
-export type TypeEvenementAgenda = 'indisponibilite' | 'reunion_professionnelle' | 'premier_contact_prospect';
+// Les 3 premières valeurs sont historiques (migration 20260715) — conservées
+// pour ne pas invalider les lignes déjà créées, mais plus proposées dans le
+// formulaire de création (voir OPTIONS_TYPE_EVENEMENT, AgendaV2Page.tsx), qui
+// n'offre désormais que les 5 catégories suivantes, ajoutées par la migration
+// 20260810 en même temps que nom/prenom/adresse/telephone/couleur.
+export type TypeEvenementAgenda =
+  | 'indisponibilite' | 'reunion_professionnelle' | 'premier_contact_prospect'
+  | 'bilan' | 'reunion' | 'prospect' | 'lieu_particulier' | 'autre';
 
 export interface EvenementAgenda {
   id: string;
@@ -526,6 +533,15 @@ export interface EvenementAgenda {
   heureDebut: string;
   heureFin: string;
   notes?: string;
+  // Identité de contact — tous optionnels, saisis librement (pas de lien
+  // avec un Participant existant, contrairement à une séance).
+  nom?: string;
+  prenom?: string;
+  adresse?: string;
+  telephone?: string;
+  // Couleur d'affichage choisie librement par Pierre (format '#rrggbb'),
+  // pas imposée par le type — défaut '#6B7280' côté base (colonne NOT NULL).
+  couleur: string;
 }
 
 // ── JOURNAL DE SÉANCE ─────────────────────────────────────────────────────────

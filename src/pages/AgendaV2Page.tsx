@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
 import * as DragAndDropAddon from 'react-big-calendar/lib/addons/dragAndDrop';
 import type { DragFromOutsideItemArgs, EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop';
-import { format, parse, startOfWeek, getDay } from 'date-fns';
+import { format, parse, startOfWeek, getDay, addDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { toast } from 'sonner';
-import { X, Loader, Trash2, ChevronDown, ListChecks, ArrowLeft, Undo2 } from 'lucide-react';
+import { X, Loader, Trash2, ChevronDown, ListChecks, ArrowLeft, Undo2, Check, NotebookPen, MapPin } from 'lucide-react';
 import { useAgenda } from '../hooks/useAgenda';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
@@ -17,6 +17,7 @@ import { useZones } from '../hooks/useZones';
 import { getOrganisation } from '../lib/anamnese';
 import BadgeSeancesRestantes from '../components/ui/BadgeSeancesRestantes';
 import PageWrapper from '../components/layout/PageWrapper';
+import NoteSeanceModal from '../components/journal/NoteSeanceModal';
 import {
   genererDatesSeances, datesManquantes, trouveChevauchements, trouveChevauchement,
   calculerStatutSeancesSemaine, addMinutes,
@@ -154,19 +155,33 @@ function getCouleurEvenement(seance: Seance): string {
   return seance.date === TODAY ? '#1A5F9E' : '#5B9BD5';
 }
 
-// Événements d'agenda (indisponibilité ponctuelle, réunion, premier contact
-// prospect) — couleurs volontairement grises/neutres, jamais dans la palette
-// des séances (bleu/violet/vert/rouge ci-dessus), pour qu'un coup d'œil
-// suffise à ne jamais les confondre avec une vraie séance patient.
+// Événements d'agenda (bilan, réunion, prospect, lieu particulier, autre) —
+// couleur choisie librement par Pierre (voir ModalNouvelEvenement), jamais
+// confondue avec une vraie séance patient grâce à la bordure en tirets
+// distinctive (voir eventPropGetter plus bas), quelle que soit la couleur.
+// indisponibilite/reunion_professionnelle/premier_contact_prospect sont les
+// 3 catégories historiques (migration 20260715) : encore valides en base
+// pour les événements déjà créés, mais plus proposées à la création — voir
+// LABEL_TYPE_EVENEMENT ci-dessous qui couvre les 8 valeurs pour l'affichage.
 const OPTIONS_TYPE_EVENEMENT: TypeEvenementAgenda[] = [
-  'indisponibilite', 'reunion_professionnelle', 'premier_contact_prospect',
+  'bilan', 'reunion', 'prospect', 'lieu_particulier', 'autre',
 ];
 
 const LABEL_TYPE_EVENEMENT: Record<TypeEvenementAgenda, string> = {
   indisponibilite: 'Indisponibilité',
   reunion_professionnelle: 'Réunion professionnelle',
   premier_contact_prospect: 'Premier contact (prospect)',
+  bilan: 'Bilan',
+  reunion: 'Réunion',
+  prospect: 'Prospect',
+  lieu_particulier: 'Lieu particulier',
+  autre: 'Autre',
 };
+
+// Couleur par défaut du sélecteur libre — identique au défaut colonne DB
+// ('#6B7280'), pour qu'un événement créé sans y toucher garde le même rendu
+// que ceux créés avant l'ajout du sélecteur.
+const COULEUR_EVENEMENT_PAR_DEFAUT = '#6B7280';
 
 function heureToDate(date: string, heure: string): Date {
   const [h, m] = heure.split(':').map(Number);
@@ -545,7 +560,7 @@ function ModalChoixSerie({ titre, futures, seanceRefId, optionsDisponibles = ['u
 //    (PlanningGrilleView.tsx), sans le volet disponibilités/organisation :
 //    non demandé ici, périmètre propre à cet écran-là. ──────────────────────
 
-function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, onDelete, onRestaurer, onClose }: {
+function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, onDelete, onRestaurer, onReporter, onNoteSeance, onClose }: {
   seance: Seance;
   nomBeneficiaire: string;
   seances: Seance[];
@@ -553,6 +568,12 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
   onSave: (updates: MiseAJourSeance) => void;
   onDelete: () => void;
   onRestaurer: () => void;
+  // Toujours "cette occurrence seule", jamais de choix série (voir
+  // handleReporterSeance côté page principale) — reproduit exactement le
+  // comportement de ModalReporter (AgendaPage.tsx), qui n'a jamais eu de
+  // notion de série.
+  onReporter: (nouvelleDate: string) => Promise<void>;
+  onNoteSeance: () => void;
   onClose: () => void;
 }) {
   const [date, setDate] = useState(seance.date);
@@ -562,6 +583,13 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
   const [raisonAnnulation, setRaisonAnnulation] = useState<RaisonAnnulation | ''>(seance.motifAnnulation ?? '');
   const [raisonAnnulationDetail, setRaisonAnnulationDetail] = useState(seance.motifAnnulationDetail ?? '');
   const [confirmSuppr, setConfirmSuppr] = useState(false);
+  // "Reportée" ne passe pas par handleEnregistrer (qui ne fait que modifier
+  // les champs de LA séance existante) : reporter crée une nouvelle séance à
+  // la nouvelle date et marque celle-ci "reportee", sans y toucher sinon —
+  // d'où un sous-écran dédié plutôt qu'une simple valeur du sélecteur Statut.
+  const [etapeReport, setEtapeReport] = useState(false);
+  const [dateReport, setDateReport] = useState(() => format(addDays(new Date(seance.date), 7), 'yyyy-MM-dd'));
+  const [loadingReport, setLoadingReport] = useState(false);
 
   const heureFin = addMinutes(heureDebut, duree);
 
@@ -590,6 +618,16 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
     onClose();
   }
 
+  async function handleConfirmerReport() {
+    setLoadingReport(true);
+    try {
+      await onReporter(dateReport);
+      onClose();
+    } finally {
+      setLoadingReport(false);
+    }
+  }
+
   // Raccourci "↩ Restaurer" — toujours en portée "cette séance uniquement",
   // jamais de choix série : contourne structurellement le bug corrigé dans
   // trouverSerieRecurrente (une référence annulée s'excluait elle-même de sa
@@ -604,10 +642,27 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1010 }}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
-          <h3 className="text-base font-bold text-dark">Modifier la séance</h3>
+          <h3 className="text-base font-bold text-dark">{etapeReport ? 'Reporter la séance' : 'Modifier la séance'}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1"><X size={16} /></button>
         </div>
 
+        {etapeReport ? (
+          <div className="px-6 py-4 space-y-4">
+            <div className="bg-gray-50 rounded-xl px-4 py-3">
+              <p className="text-xs text-gray-500 mb-0.5">Bénéficiaire</p>
+              <p className="text-sm font-semibold text-dark">{nomBeneficiaire}</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Nouvelle date</label>
+              <input type="date" value={dateReport} onChange={e => setDateReport(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary" />
+              <p className="text-xs text-gray-400 mt-1">Suggestion : semaine suivante au même créneau ({seance.heureDebut})</p>
+            </div>
+            <p className="text-xs text-blue-700 bg-blue-50 rounded-xl px-4 py-3">
+              {formatDate(seance.date)} {seance.heureDebut}–{seance.heureFin} sera marquée « Reportée ». Une nouvelle séance planifiée sera créée le {formatDate(dateReport)} au même horaire, avec une note indiquant l'origine du report.
+            </p>
+          </div>
+        ) : (
         <div className="px-6 py-4 space-y-4">
           <div className="bg-gray-50 rounded-xl px-4 py-3">
             <p className="text-xs text-gray-500 mb-0.5">Bénéficiaire</p>
@@ -667,7 +722,7 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
 
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Statut</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {(['planifiee', 'realisee', 'annulee'] as StatutSeance[]).map(s => (
                 <button key={s} onClick={() => setStatut(s)}
                   className={`py-1.5 px-3 rounded-lg text-xs font-medium border transition-colors text-left ${
@@ -676,6 +731,14 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
                   {LABEL_STATUT[s]}
                 </button>
               ))}
+              {/* "Reportée" ouvre le sous-écran dédié (etapeReport) au lieu de
+                  simplement changer `statut` — reporter crée une nouvelle
+                  séance, ce n'est pas un simple changement de champ appliqué
+                  par handleEnregistrer. */}
+              <button onClick={() => setEtapeReport(true)}
+                className="py-1.5 px-3 rounded-lg text-xs font-medium border transition-colors text-left bg-white text-gray-600 border-gray-200 hover:border-primary/40">
+                {LABEL_STATUT.reportee}
+              </button>
             </div>
           </div>
 
@@ -711,23 +774,44 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
             </div>
           )}
         </div>
+        )}
 
-        <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
-          <button onClick={() => setConfirmSuppr(true)}
-            className="flex items-center justify-center border border-red/20 text-red rounded-xl px-3 hover:bg-red-light transition-colors">
-            <Trash2 size={15} />
-          </button>
-          <button onClick={onClose}
-            className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-            Annuler
-          </button>
-          <button onClick={handleEnregistrer} disabled={!!conflit}
-            className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${
-              conflit ? 'bg-red text-white cursor-not-allowed' : 'bg-primary text-white hover:bg-dark'
-            }`}>
-            {conflit ? 'Créneau occupé' : 'Enregistrer'}
-          </button>
-        </div>
+        {etapeReport ? (
+          <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+            <button onClick={() => setEtapeReport(false)} disabled={loadingReport}
+              className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
+              Retour
+            </button>
+            <button onClick={handleConfirmerReport} disabled={loadingReport}
+              className="flex-1 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-dark transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+              {loadingReport
+                ? <><Loader size={14} className="animate-spin" />En cours…</>
+                : <><Check size={14} />Confirmer le report</>}
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-3 px-6 py-4 border-t border-gray-100 flex-wrap">
+            <button onClick={() => setConfirmSuppr(true)}
+              className="flex items-center justify-center border border-red/20 text-red rounded-xl px-3 hover:bg-red-light transition-colors">
+              <Trash2 size={15} />
+            </button>
+            <button onClick={onNoteSeance}
+              className="flex items-center justify-center gap-1.5 border border-secondary/30 text-secondary bg-secondary/10 rounded-xl px-3 hover:bg-secondary/20 transition-colors text-xs font-medium">
+              <NotebookPen size={13} />
+              Note
+            </button>
+            <button onClick={onClose}
+              className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+              Annuler
+            </button>
+            <button onClick={handleEnregistrer} disabled={!!conflit}
+              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${
+                conflit ? 'bg-red text-white cursor-not-allowed' : 'bg-primary text-white hover:bg-dark'
+              }`}>
+              {conflit ? 'Créneau occupé' : 'Enregistrer'}
+            </button>
+          </div>
+        )}
       </div>
 
       {confirmSuppr && (
@@ -763,8 +847,13 @@ function ModalNouvelEvenement({ onCreer, onCancel }: {
   onCreer: (data: Omit<EvenementAgenda, 'id'>) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [type, setType] = useState<TypeEvenementAgenda>('reunion_professionnelle');
+  const [type, setType] = useState<TypeEvenementAgenda>('reunion');
   const [titre, setTitre] = useState('');
+  const [nom, setNom] = useState('');
+  const [prenom, setPrenom] = useState('');
+  const [adresse, setAdresse] = useState('');
+  const [telephone, setTelephone] = useState('');
+  const [couleur, setCouleur] = useState(COULEUR_EVENEMENT_PAR_DEFAUT);
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [heureDebut, setHeureDebut] = useState('09:00');
   const [heureFin, setHeureFin] = useState('10:00');
@@ -777,7 +866,15 @@ function ModalNouvelEvenement({ onCreer, onCancel }: {
     if (!titre.trim() || heureInvalide) return;
     setLoading(true);
     try {
-      await onCreer({ type, titre: titre.trim(), date, heureDebut, heureFin, notes: notes.trim() || undefined });
+      await onCreer({
+        type, titre: titre.trim(), date, heureDebut, heureFin,
+        notes: notes.trim() || undefined,
+        nom: nom.trim() || undefined,
+        prenom: prenom.trim() || undefined,
+        adresse: adresse.trim() || undefined,
+        telephone: telephone.trim() || undefined,
+        couleur,
+      });
     } finally {
       setLoading(false);
     }
@@ -805,6 +902,41 @@ function ModalNouvelEvenement({ onCreer, onCancel }: {
             <input type="text" value={titre} onChange={e => setTitre(e.target.value)}
               placeholder="Ex : Réunion équipe, Mme Dupont (prospect)…"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Nom (optionnel)</label>
+              <input type="text" value={nom} onChange={e => setNom(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Prénom (optionnel)</label>
+              <input type="text" value={prenom} onChange={e => setPrenom(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Adresse (optionnel)</label>
+            <input type="text" value={adresse} onChange={e => setAdresse(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 items-end">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Téléphone (optionnel)</label>
+              <input type="tel" value={telephone} onChange={e => setTelephone(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Couleur</label>
+              <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-1.5">
+                <input type="color" value={couleur} onChange={e => setCouleur(e.target.value)}
+                  className="w-8 h-8 rounded-md border-0 cursor-pointer bg-transparent" />
+                <span className="text-xs text-gray-500 uppercase">{couleur}</span>
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
@@ -863,9 +995,12 @@ function ModalEvenementAgenda({ evenement, onDelete, onClose }: {
         </div>
 
         <div className="px-6 py-4 space-y-3">
-          <div className="bg-gray-50 rounded-xl px-4 py-3">
-            <p className="text-xs text-gray-500 mb-0.5">Titre</p>
-            <p className="text-sm font-semibold text-dark">{evenement.titre}</p>
+          <div className="bg-gray-50 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500 mb-0.5">Titre</p>
+              <p className="text-sm font-semibold text-dark truncate">{evenement.titre}</p>
+            </div>
+            <span className="w-5 h-5 rounded-full border border-black/10 flex-shrink-0" style={{ backgroundColor: evenement.couleur }} title={evenement.couleur} />
           </div>
           <div className="bg-gray-50 rounded-xl px-4 py-3">
             <p className="text-xs text-gray-500 mb-0.5">Quand</p>
@@ -873,6 +1008,24 @@ function ModalEvenementAgenda({ evenement, onDelete, onClose }: {
               {formatDate(evenement.date)} — {evenement.heureDebut} à {evenement.heureFin}
             </p>
           </div>
+          {(evenement.nom || evenement.prenom) && (
+            <div className="bg-gray-50 rounded-xl px-4 py-3">
+              <p className="text-xs text-gray-500 mb-0.5">Contact</p>
+              <p className="text-sm font-semibold text-dark">{[evenement.prenom, evenement.nom].filter(Boolean).join(' ')}</p>
+            </div>
+          )}
+          {evenement.adresse && (
+            <div className="bg-gray-50 rounded-xl px-4 py-3">
+              <p className="text-xs text-gray-500 mb-0.5">Adresse</p>
+              <p className="text-sm text-dark">{evenement.adresse}</p>
+            </div>
+          )}
+          {evenement.telephone && (
+            <div className="bg-gray-50 rounded-xl px-4 py-3">
+              <p className="text-xs text-gray-500 mb-0.5">Téléphone</p>
+              <p className="text-sm text-dark">{evenement.telephone}</p>
+            </div>
+          )}
           {evenement.notes && (
             <div className="bg-gray-50 rounded-xl px-4 py-3">
               <p className="text-xs text-gray-500 mb-0.5">Notes</p>
@@ -916,10 +1069,138 @@ function ModalEvenementAgenda({ evenement, onDelete, onClose }: {
   );
 }
 
+// ── Création manuelle d'une séance (port de ModalCreerSeance, AgendaPage.tsx)
+//    — n'importe quel bénéficiaire, avec ou sans contrat actif. Contrairement
+//    au glisser-déposer (onDropFromOutside, réservé aux bénéficiaires sous
+//    contrat actif pour générer une série récurrente), ce chemin crée une
+//    séance ponctuelle unique — c'est le seul moyen de planifier un bilan
+//    initial pour un prospect qui n'a pas encore de contrat. ─────────────────
+
+function ModalCreerSeanceManuelle({ participants, detecterConflits, onCreer, onClose, initial }: {
+  participants: Participant[];
+  detecterConflits: (date: string, heureDebut: string, heureFin: string) => Seance[];
+  onCreer: (data: Omit<Seance, 'id'>) => Promise<void>;
+  onClose: () => void;
+  initial?: { date?: string; heureDebut?: string };
+}) {
+  const [form, setForm] = useState({
+    participantId: '',
+    type: 'seance' as TypeSeance,
+    date: initial?.date ?? format(new Date(), 'yyyy-MM-dd'),
+    heureDebut: initial?.heureDebut ?? '09:00',
+    dureeMinutes: 45,
+    notes: '',
+  });
+  const [loading, setLoading] = useState(false);
+
+  const participant = participants.find(p => p.id === form.participantId);
+  const heureFin = addMinutes(form.heureDebut, form.dureeMinutes);
+  const conflits = detecterConflits(form.date, form.heureDebut, heureFin);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.participantId) { toast.error('Choisissez un bénéficiaire'); return; }
+    if (conflits.length > 0) { toast.error('Conflit horaire avec une autre séance'); return; }
+    setLoading(true);
+    try {
+      await onCreer({
+        participantId: form.participantId,
+        type: form.type,
+        date: form.date,
+        heureDebut: form.heureDebut,
+        heureFin,
+        dureeMinutes: form.dureeMinutes,
+        statut: 'planifiee',
+        notes: form.notes,
+        adresse: [participant?.adresseRue, participant?.adresseCodePostal, participant?.adresseVille].filter(Boolean).join(', '),
+        coordonnees: participant?.coordonnees ? { lat: participant.coordonnees.lat, lng: participant.coordonnees.lng } : undefined,
+      });
+      toast.success('Séance créée');
+      onClose();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1010 }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
+          <h3 className="text-base font-bold text-dark">Nouvelle séance</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1"><X size={16} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Bénéficiaire *</label>
+            <select value={form.participantId} onChange={e => setForm(f => ({ ...f, participantId: e.target.value }))}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary">
+              <option value="">Choisir un bénéficiaire… (avec ou sans contrat)</option>
+              {participants.map(p => <option key={p.id} value={p.id}>{p.prenom} {p.nom}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Type</label>
+            <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as TypeSeance }))}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary">
+              <option value="seance">Séance</option>
+              <option value="bilan">Bilan</option>
+              <option value="bilan_initial">Bilan initial</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Date *</label>
+              <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Heure *</label>
+              <input type="time" step={60} value={form.heureDebut} onChange={e => setForm(f => ({ ...f, heureDebut: e.target.value }))}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Durée : {form.dureeMinutes} min → fin à {heureFin}</label>
+            <input type="number" min={15} max={180} step={5} value={form.dureeMinutes}
+              onChange={e => setForm(f => ({ ...f, dureeMinutes: Number(e.target.value) }))}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+          </div>
+          {participant && (
+            <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 rounded-xl px-3 py-2">
+              <MapPin size={12} />
+              {[participant.adresseRue, participant.adresseCodePostal, participant.adresseVille].filter(Boolean).join(', ') || 'Adresse non renseignée'}
+            </div>
+          )}
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Notes</label>
+            <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              rows={2} placeholder="Observations rapides…"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none" />
+          </div>
+          {conflits.length > 0 && (
+            <div className="bg-red-light border border-red/20 rounded-xl px-4 py-3">
+              <p className="text-xs font-semibold text-red">Conflit horaire avec une autre séance ({conflits[0].heureDebut}–{conflits[0].heureFin}).</p>
+            </div>
+          )}
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="px-5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors text-sm">
+              Annuler
+            </button>
+            <button type="submit" disabled={loading || conflits.length > 0}
+              className="flex-1 bg-primary text-white rounded-xl py-2.5 font-semibold text-sm hover:bg-dark transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+              {loading ? <><Loader size={14} className="animate-spin" />En cours…</> : 'Créer la séance'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Page principale ────────────────────────────────────────────────────────────
 
 export default function AgendaV2Page() {
-  const { seances, bulkCreerSeances, modifierSeance, supprimerSeance } = useAgenda();
+  const { seances, bulkCreerSeances, modifierSeance, supprimerSeance, creerSeance, detecterConflits } = useAgenda();
   const { participants } = useParticipants();
   const { contrats, contratActifDeParticipant } = useContrats();
   const { indisposDuJour } = useIndispos();
@@ -934,6 +1215,14 @@ export default function AgendaV2Page() {
   const [seanceEditee, setSeanceEditee] = useState<Seance | null>(null);
   const [evenementEdite, setEvenementEdite] = useState<EvenementAgenda | null>(null);
   const [nouvelEvenementOuvert, setNouvelEvenementOuvert] = useState(false);
+  // Création manuelle (bouton "Nouvelle séance") — indépendante du glisser-
+  // déposer contrat/récurrent : n'importe quel bénéficiaire, avec ou sans
+  // contrat actif (bilan initial d'un prospect, séance ponctuelle...).
+  const [nouvelleSeanceOuverte, setNouvelleSeanceOuverte] = useState(false);
+  const [slotInitialSeance, setSlotInitialSeance] = useState<{ date?: string; heureDebut?: string } | undefined>();
+  // Note de séance (journal) — ouverte depuis ModalEditSeance, remplace la
+  // modale d'édition (voir onNoteSeance).
+  const [noteSeanceOuverte, setNoteSeanceOuverte] = useState<Seance | null>(null);
   const [search, setSearch] = useState('');
   const [beneficiaireGlisse, setBeneficiaireGlisse] = useState<Participant | null>(null);
   const [dropPendant, setDropPendant] = useState<DropPendant | null>(null);
@@ -1298,6 +1587,32 @@ export default function AgendaV2Page() {
     });
   }
 
+  // Reporter une séance — toujours "cette occurrence seule", jamais de choix
+  // série (voir le commentaire sur ModalEditSeance.onReporter). Reproduit
+  // exactement confirmerReport (AgendaPage.tsx, ancien /agenda) : la séance
+  // d'origine passe en statut "reportee" sans changer de date/heure (garde
+  // une trace historique fidèle), et une nouvelle séance "planifiee" est
+  // créée à la date choisie, avec une note explicite sur son origine.
+  async function handleReporterSeance(seance: Seance, nouvelleDate: string) {
+    const ok = await modifierSeance(seance.id, { statut: 'reportee' });
+    if (!ok) return;
+    const participant = participantMap.get(seance.participantId);
+    await creerSeance({
+      participantId: seance.participantId,
+      contratId: seance.contratId,
+      type: seance.type,
+      date: nouvelleDate,
+      heureDebut: seance.heureDebut,
+      heureFin: seance.heureFin,
+      dureeMinutes: seance.dureeMinutes,
+      statut: 'planifiee',
+      notes: `Reportée depuis le ${formatDate(seance.date)}`,
+      adresse: seance.adresse,
+      coordonnees: seance.coordonnees ?? (participant?.coordonnees ? { lat: participant.coordonnees.lat, lng: participant.coordonnees.lng } : undefined),
+    });
+    toast.success(`Séance reportée au ${formatDate(nouvelleDate)}`);
+  }
+
   return (
     <PageWrapper>
       <div className="mb-4">
@@ -1431,18 +1746,27 @@ export default function AgendaV2Page() {
                 Séance du bénéficiaire sélectionné
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: 'repeating-linear-gradient(135deg,#9CA3AF,#9CA3AF 3px,#6B7280 3px,#6B7280 6px)', border: '1px dashed #374151' }} />
-                Événement d'agenda (ni une séance ni un vrai bénéficiaire)
+                <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: '#6B7280', border: '1px dashed rgba(0,0,0,0.45)' }} />
+                Événement d'agenda — couleur libre, bordure en tirets (ni une séance ni un vrai bénéficiaire)
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setNouvelEvenementOuvert(true)}
-              className="flex-shrink-0 bg-dark text-white text-xs font-semibold rounded-xl px-3 py-2 hover:opacity-90 transition-opacity"
-            >
-              + Ajouter un événement
-            </button>
+            <div className="flex-shrink-0 flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setSlotInitialSeance(undefined); setNouvelleSeanceOuverte(true); }}
+                className="bg-primary text-white text-xs font-semibold rounded-xl px-3 py-2 hover:bg-dark transition-colors"
+              >
+                + Nouvelle séance
+              </button>
+              <button
+                type="button"
+                onClick={() => setNouvelEvenementOuvert(true)}
+                className="bg-dark text-white text-xs font-semibold rounded-xl px-3 py-2 hover:opacity-90 transition-opacity"
+              >
+                + Ajouter un événement
+              </button>
+            </div>
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm" style={{ height: 660 }}>
@@ -1458,16 +1782,16 @@ export default function AgendaV2Page() {
                 showMore: (n: number) => `+${n} de plus`,
               }}
               eventPropGetter={(event: CalEvent) => {
-                // Événements d'agenda : style volontairement distinct (gris,
-                // hachuré, bordure en tirets) et jamais dans la palette des
-                // séances (bleu/violet/vert/rouge) — pour ne jamais les
-                // confondre avec une vraie séance patient au premier coup
-                // d'œil, y compris quand l'agenda est chargé.
+                // Événements d'agenda : couleur choisie librement par Pierre
+                // (evenement.couleur), mais bordure en tirets systématique —
+                // quelle que soit la couleur retenue, ce trait distinctif
+                // suffit à ne jamais confondre le bloc avec une vraie séance
+                // patient (bordure pleine) au premier coup d'œil.
                 if (event.kind === 'evenement') {
                   return {
                     style: {
-                      background: 'repeating-linear-gradient(135deg,#9CA3AF,#9CA3AF 4px,#6B7280 4px,#6B7280 8px)',
-                      border: '1px dashed #374151',
+                      backgroundColor: event.resource.couleur,
+                      border: '1px dashed rgba(0,0,0,0.45)',
                       borderRadius: 6,
                       color: 'white',
                       fontSize: 12,
@@ -1514,6 +1838,16 @@ export default function AgendaV2Page() {
               onEventDrop={handleEventDrop}
               draggableAccessor={(event: CalEvent) => event.kind === 'seance'}
               resizable={false}
+              // Clic (ou clic-glisser) sur un créneau vide → création manuelle
+              // (bouton "Nouvelle séance"), avec date/heure pré-remplies —
+              // équivalent de handleSelectSlot dans l'ancien /agenda. Chemin
+              // indépendant du glisser-déposer externe (onDropFromOutside),
+              // qui reste réservé aux bénéficiaires sous contrat actif.
+              selectable
+              onSelectSlot={(slotInfo: { start: Date }) => {
+                setSlotInitialSeance({ date: format(slotInfo.start, 'yyyy-MM-dd'), heureDebut: format(slotInfo.start, 'HH:mm') });
+                setNouvelleSeanceOuverte(true);
+              }}
               slotPropGetter={slotPropGetter}
               step={15}
               timeslots={4}
@@ -1541,10 +1875,35 @@ export default function AgendaV2Page() {
             onSave={updates => handleEnregistrerSeance(seanceEditee, updates)}
             onDelete={() => handleSupprimerSeance(seanceEditee)}
             onRestaurer={() => handleRestaurerSeance(seanceEditee)}
+            onReporter={nouvelleDate => handleReporterSeance(seanceEditee, nouvelleDate)}
+            onNoteSeance={() => { setNoteSeanceOuverte(seanceEditee); setSeanceEditee(null); }}
             onClose={() => setSeanceEditee(null)}
           />
         );
       })()}
+
+      {noteSeanceOuverte && (() => {
+        const p = participantMap.get(noteSeanceOuverte.participantId);
+        return (
+          <NoteSeanceModal
+            participantId={noteSeanceOuverte.participantId}
+            participantNom={p ? `${p.prenom} ${p.nom}` : ''}
+            seance={{ id: noteSeanceOuverte.id, date: noteSeanceOuverte.date, heureDebut: noteSeanceOuverte.heureDebut }}
+            onClose={() => setNoteSeanceOuverte(null)}
+            onMarquerRealisee={() => modifierSeance(noteSeanceOuverte.id, { statut: 'realisee' })}
+          />
+        );
+      })()}
+
+      {nouvelleSeanceOuverte && (
+        <ModalCreerSeanceManuelle
+          participants={participants}
+          detecterConflits={detecterConflits}
+          initial={slotInitialSeance}
+          onCreer={async data => { await creerSeance(data); }}
+          onClose={() => setNouvelleSeanceOuverte(false)}
+        />
+      )}
 
       {nouvelEvenementOuvert && (
         <ModalNouvelEvenement
