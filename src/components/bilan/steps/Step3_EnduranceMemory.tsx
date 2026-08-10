@@ -26,6 +26,7 @@ import { TEST_LABELS } from '../../../data/profiles';
 import { Plus } from 'lucide-react';
 import DuboisMISWidget from '../DuboisMISWidget';
 import Tm6ChronoWidget from '../Tm6ChronoWidget';
+import Tm6VariantesModal from '../Tm6VariantesModal';
 import { TM6_DUREES_FIXES } from '../../../data/norms';
 
 // ── Badge résultat unifié ─────────────────────────────────────────────────────
@@ -96,7 +97,8 @@ const ENDO_TESTS: TestKey[] = ['tm6', 'memoire', 'moca'];
 export default function Step3_EnduranceMemory({ form, update, previous, testsActifs }: Props) {
   const d = useBilanDelta(form as Bilan, previous);
   const [extras, setExtras] = useState<TestKey[]>([]);
-  const { variantes } = useTm6Variantes();
+  const [showVarianteModal, setShowVarianteModal] = useState(false);
+  const { variantes, loading: loadingVariantes, creer: creerVariante, supprimer: supprimerVariante } = useTm6Variantes();
   const tm6 = form.tm6;
   const setTm6 = (patch: Partial<typeof tm6>) => update({ tm6: { ...tm6, ...patch } });
   const dureeModeEff: 'fixe' | 'libre' = tm6.dureeMode ?? 'fixe';
@@ -175,7 +177,25 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
                 <option key={v.id} value={v.id}>{v.nom}</option>
               ))}
             </select>
+            <button type="button" onClick={() => setShowVarianteModal(true)}
+              className="mt-2 text-xs text-primary font-medium hover:underline focus:outline-none">
+              ➕ Créer une nouvelle variante
+            </button>
           </div>
+
+          {showVarianteModal && (
+            <Tm6VariantesModal
+              variantes={variantes}
+              loading={loadingVariantes}
+              creer={creerVariante}
+              supprimer={supprimerVariante}
+              onClose={() => setShowVarianteModal(false)}
+              onCreated={variante => {
+                setTm6({ mode: 'standard', varianteId: variante.id });
+                setShowVarianteModal(false);
+              }}
+            />
+          )}
 
           {/* Durée */}
           <div className="mb-4">
