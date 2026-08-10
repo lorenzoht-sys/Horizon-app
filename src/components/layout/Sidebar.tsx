@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Home, Calendar, Route, Layers, Settings,
-  LogOut, Map, BarChart2, Bot, FlaskConical, Library,
+  LogOut, Map, BarChart2, Bot, Library,
 } from 'lucide-react';
 import { IndicateurConnexion, BoutonInstallerApp } from '../pwa/PWAComponents';
 import { supabase } from '../../lib/supabase';
@@ -22,8 +22,7 @@ interface PraticienInfo {
 
 const NAV_ITEMS = [
   { path: '/',          icon: Home,      label: 'Tableau de bord', end: true  },
-  { path: '/agenda',    icon: Calendar,  label: 'Agenda',          end: false },
-  { path: '/agenda-v2', icon: FlaskConical, label: 'Agenda (bêta)', end: false },
+  { path: '/agenda-v2', icon: Calendar,  label: 'Agenda',          end: false },
   { path: '/tournee',   icon: Route,     label: 'Tournée',         end: false },
   { path: '/bibliotheque', icon: Library, label: 'Bibliothèque',    end: false },
   { path: '/assistant',  icon: Bot,       label: 'Mon assistant',   end: false },

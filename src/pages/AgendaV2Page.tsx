@@ -34,10 +34,10 @@ import type { Seance, StatutSeance, TypeSeance, Participant, Contrat, Indisponib
 // AGENDA UNIFIÉ — ÉTAPE 2 (création par glisser) + ÉTAPE 3 (déplacement /
 // édition / suppression des séances existantes)
 // ============================================================================
-// Route /agenda-v2, accessible depuis le menu (Sidebar) sous "Agenda (bêta)"
-// — en parallèle de l'agenda habituel, pas en remplacement (étape 6 :
-// bascule finale et retrait des anciens écrans, après période d'usage réel).
-// PlanningGrilleView / AgendaPage / TourneePage ne sont PAS modifiés.
+// Route /agenda-v2, accessible depuis le menu (Sidebar) sous "Agenda" —
+// AgendaPage.tsx (l'ancien /agenda) a été retiré, cet écran est désormais le
+// seul agenda. PlanningGrilleView.tsx et l'onglet "Agenda bénéficiaire" de
+// TourneePage.tsx restent en place tels quels (hors périmètre de ce retrait).
 //
 // Étape 2 — réutilise telle quelle la logique métier existante :
 // genererDatesSeances, datesManquantes, trouveChevauchements, bulkCreerSeances
@@ -587,7 +587,11 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
   // les champs de LA séance existante) : reporter crée une nouvelle séance à
   // la nouvelle date et marque celle-ci "reportee", sans y toucher sinon —
   // d'où un sous-écran dédié plutôt qu'une simple valeur du sélecteur Statut.
-  const [etapeReport, setEtapeReport] = useState(false);
+  // Bouton d'accès retiré de la section Statut (demande explicite) : le
+  // sous-écran et handleReporterSeance restent en place intacts, seule
+  // l'entrée UI est coupée — d'où pas de setter ici, `etapeReport` reste
+  // toujours false tant qu'aucun bouton ne le déclenche.
+  const [etapeReport] = useState(false);
   const [dateReport, setDateReport] = useState(() => format(addDays(new Date(seance.date), 7), 'yyyy-MM-dd'));
   const [loadingReport, setLoadingReport] = useState(false);
 
@@ -722,7 +726,7 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
 
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Statut</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {(['planifiee', 'realisee', 'annulee'] as StatutSeance[]).map(s => (
                 <button key={s} onClick={() => setStatut(s)}
                   className={`py-1.5 px-3 rounded-lg text-xs font-medium border transition-colors text-left ${
@@ -731,14 +735,6 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
                   {LABEL_STATUT[s]}
                 </button>
               ))}
-              {/* "Reportée" ouvre le sous-écran dédié (etapeReport) au lieu de
-                  simplement changer `statut` — reporter crée une nouvelle
-                  séance, ce n'est pas un simple changement de champ appliqué
-                  par handleEnregistrer. */}
-              <button onClick={() => setEtapeReport(true)}
-                className="py-1.5 px-3 rounded-lg text-xs font-medium border transition-colors text-left bg-white text-gray-600 border-gray-200 hover:border-primary/40">
-                {LABEL_STATUT.reportee}
-              </button>
             </div>
           </div>
 
@@ -777,8 +773,11 @@ function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, on
         )}
 
         {etapeReport ? (
+          // Bloc actuellement inatteignable (etapeReport est figé à false,
+          // voir plus haut) — laissé en place avec le reste du sous-écran de
+          // report, pour ne pas supprimer handleReporterSeance en profondeur.
           <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
-            <button onClick={() => setEtapeReport(false)} disabled={loadingReport}
+            <button onClick={onClose} disabled={loadingReport}
               className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
               Retour
             </button>
@@ -1616,14 +1615,10 @@ export default function AgendaV2Page() {
   return (
     <PageWrapper>
       <div className="mb-4">
-        <h1 className="font-heading font-bold text-2xl text-dark">Agenda (bêta)</h1>
+        <h1 className="font-heading font-bold text-2xl text-dark">Agenda</h1>
         <p className="text-xs text-gray-400 mt-0.5">
           Création par glisser-déposer, déplacement, édition et suppression des séances, disponibilités/indisponibilités en fond, filtre par zone. Vraies dates, vraies données.
         </p>
-      </div>
-
-      <div className="mb-4 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 text-xs text-dark">
-        🧪 Version bêta du nouvel agenda, en test en parallèle de l'agenda habituel (onglet <strong>Agenda</strong>) — les deux affichent les mêmes séances réelles, aucune n'est prioritaire. Glisser-déposer testé à la souris (bureau) — le geste tactile équivalent (glisser depuis la liste) est en attente, sera traité séparément.
       </div>
 
       <div className="flex gap-4">

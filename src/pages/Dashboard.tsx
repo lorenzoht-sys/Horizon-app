@@ -604,7 +604,7 @@ export default function Dashboard() {
                   <CalendarDays size={18} className="text-primary" />
                   <h2 className="font-heading font-semibold text-dark">Prochaines séances</h2>
                 </div>
-                <Link to="/agenda" className="text-xs text-primary hover:text-dark flex items-center gap-1 transition-colors">
+                <Link to="/agenda-v2" className="text-xs text-primary hover:text-dark flex items-center gap-1 transition-colors">
                   Voir l'agenda <ChevronRight size={14} />
                 </Link>
               </div>

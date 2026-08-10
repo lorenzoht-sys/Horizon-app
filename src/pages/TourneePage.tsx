@@ -219,7 +219,7 @@ export default function TourneePage() {
               onChange={e => setDate(e.target.value)}
               className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary" />
           )}
-          <Link to="/agenda" className="text-xs text-primary hover:underline">Voir l'agenda →</Link>
+          <Link to="/agenda-v2" className="text-xs text-primary hover:underline">Voir l'agenda →</Link>
         </div>
       </div>
 

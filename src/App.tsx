@@ -24,11 +24,7 @@ import ClientView from './pages/ClientView';
 const AssistantPage      = lazy(() => import('./pages/AssistantPage'));
 const EditBilan          = lazy(() => import('./pages/EditBilan'));
 const MapPage            = lazy(() => import('./pages/MapPage'));
-const AgendaPage         = lazy(() => import('./pages/AgendaPage'));
 const TourneePage        = lazy(() => import('./pages/TourneePage'));
-// Agenda unifié daté — étape 1 (lecture seule), volontairement absent du
-// menu (Sidebar) tant qu'il n'est pas prêt. Voir commentaire en tête de
-// AgendaV2Page.tsx pour le périmètre exact de cette étape.
 const AgendaV2Page       = lazy(() => import('./pages/AgendaV2Page'));
 const ZonesPage          = lazy(() => import('./pages/ZonesPage'));
 const BibliothequePage   = lazy(() => import('./pages/BibliothequePage'));
@@ -96,9 +92,7 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
             <Route path="/structures/:id" element={<PageTransition><Suspense fallback={<MapFallback />}><StructureDetail /></Suspense></PageTransition>} />
             <Route path="/settings" element={<PageTransition><SettingsPage /></PageTransition>} />
             <Route path="/zones" element={<PageTransition><Suspense fallback={<MapFallback />}><ZonesPage /></Suspense></PageTransition>} />
-            <Route path="/agenda" element={<PageTransition><Suspense fallback={<MapFallback />}><AgendaPage /></Suspense></PageTransition>} />
             <Route path="/tournee" element={<PageTransition><Suspense fallback={<MapFallback />}><TourneePage /></Suspense></PageTransition>} />
-            {/* Agenda unifié daté — étape 1, pas encore dans le menu Sidebar */}
             <Route path="/agenda-v2" element={<PageTransition><Suspense fallback={<MapFallback />}><AgendaV2Page /></Suspense></PageTransition>} />
             <Route path="/map" element={<PageTransition><Suspense fallback={<MapFallback />}><MapPage /></Suspense></PageTransition>} />
           </Routes>
