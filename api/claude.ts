@@ -6,6 +6,7 @@
 import { getServiceClient, extractBearerToken } from './_lib/patientAuth.js';
 import { withSentry } from './_lib/sentry.js';
 import { PROMPT_MAX_LENGTH } from './_lib/guard.js';
+import { checkClaudeRateLimit, recordClaudeRequest } from './_lib/rateLimit.js';
 
 export default withSentry(async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -25,6 +26,15 @@ export default withSentry(async function handler(req: any, res: any) {
   const { data: userData, error: userErr } = await supabase.auth.getUser(token);
   if (userErr || !userData?.user) {
     return res.status(401).json({ error: 'Session invalide ou expirée' });
+  }
+  const praticienId = userData.user.id;
+
+  // Rate limiting (docs/RAPPORT_SECURITE.md) : évite qu'un compte compromis
+  // (ou un bug côté front qui boucle) épuise le crédit ANTHROPIC_API_KEY
+  // partagé par tous les praticiens — voir api/_lib/rateLimit.ts.
+  const withinLimit = await checkClaudeRateLimit(supabase, praticienId);
+  if (!withinLimit) {
+    return res.status(429).json({ error: 'Trop de requêtes IA récentes, réessayez dans un instant' });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -84,6 +94,11 @@ export default withSentry(async function handler(req: any, res: any) {
       const errText = await claudeRes.text();
       return res.status(500).json({ error: `Erreur Claude API: ${errText}` });
     }
+
+    // Comptabilisé seulement après une réponse Claude réussie : un appel qui
+    // échoue (ex. erreur Anthropic) ne doit pas consommer le quota du
+    // praticien pour une panne qui n'est pas de son fait.
+    await recordClaudeRequest(supabase, praticienId);
 
     const data = await claudeRes.json();
     const rawText: string = data.content?.[0]?.text ?? '';

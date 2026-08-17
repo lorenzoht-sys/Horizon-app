@@ -2207,7 +2207,16 @@ export default function EspacePatient() {
     if (!id) { setAccessDenied(true); setLoading(false); return; }
 
     async function resoudreToken(): Promise<string | null> {
+      // Purge défensive AVANT d'établir une nouvelle session sur cet
+      // appareil (branches ptokenUrl/codeUrl seulement — pas la branche
+      // "réutiliser la session existante" juste en dessous) : garantit
+      // qu'aucun résidu d'un patient précédent sur un appareil partagé ne
+      // survit à cette nouvelle connexion, même si ce patient précédent ne
+      // s'est jamais explicitement déconnecté (bug historique "session PWA
+      // partagée entre patients sur le même appareil", voir
+      // docs/RAPPORT_SECURITE.md).
       if (ptokenUrl && id) {
+        purgerSessionPatient();
         sessionStorage.setItem(`horizon_patient_via_praticien_${id}`, '1');
         sauvegarderSessionPatient({ patientId: id, token: ptokenUrl });
         return ptokenUrl;
@@ -2215,6 +2224,7 @@ export default function EspacePatient() {
       if (codeUrl) {
         const result = await patientLogin(codeUrl);
         if ('error' in result || result.participantId !== id) return null;
+        purgerSessionPatient();
         sauvegarderSessionPatient({ patientId: result.participantId, token: result.token });
         return result.token;
       }

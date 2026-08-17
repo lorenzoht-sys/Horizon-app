@@ -25,6 +25,45 @@ export function getSessionPatient(): SessionPatient | null {
   catch { return null; }
 }
 
+// Purge complète et défensive de tout ce qui pourrait rattacher cet
+// appareil à un patient précédent — pas seulement la clé de session.
+// Point d'entrée UNIQUE pour deux usages : (1) déconnexion explicite,
+// (2) juste avant d'établir une NOUVELLE session sur ce device (voir
+// EspacePatient.tsx, resoudreToken()), pour qu'un patient B qui se connecte
+// après un patient A sur un appareil partagé (PWA, poste commun en
+// structure...) ne récupère aucun résidu du patient précédent, même si A
+// n'a jamais cliqué "déconnexion". Chaque étape est indépendante (un échec
+// sur l'une ne doit pas empêcher les autres) : aucune donnée patient n'est
+// mise en cache aujourd'hui (aucune règle runtimeCaching ne couvre /api/*,
+// voir vite.config.ts, et aucune IndexedDB n'est utilisée pour l'espace
+// patient) — cette purge couvre ces mécanismes par défense en profondeur,
+// pour qu'une future fonctionnalité de cache offline ne réintroduise pas
+// silencieusement ce risque.
 export function purgerSessionPatient(): void {
   try { localStorage.removeItem(SESSION_KEY); } catch {}
+
+  try {
+    const clesViaPraticien: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const cle = sessionStorage.key(i);
+      if (cle?.startsWith('horizon_patient_via_praticien_')) clesViaPraticien.push(cle);
+    }
+    for (const cle of clesViaPraticien) sessionStorage.removeItem(cle);
+  } catch {}
+
+  try {
+    if ('caches' in window) {
+      void caches.keys().then((noms) => Promise.all(noms.map((nom) => caches.delete(nom))));
+    }
+  } catch {}
+
+  try {
+    if (indexedDB?.databases) {
+      void indexedDB.databases().then((bases) => {
+        for (const base of bases) {
+          if (base.name) indexedDB.deleteDatabase(base.name);
+        }
+      });
+    }
+  } catch {}
 }
