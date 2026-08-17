@@ -21,6 +21,17 @@
 // Ou avec une chaîne de connexion complète (prioritaire) :
 //   $env:DATABASE_URL = "postgresql://user:pass@host:port/postgres"
 //   npx tsx scripts/dump-schema.ts
+//
+// Pour comparer deux bases (ex. prod vs staging, audit sécurité Phase 1),
+// fixe un nom de sortie différent à chaque run avec DUMP_OUTPUT_LABEL :
+//   $env:DATABASE_URL = "<connexion prod>"
+//   $env:DUMP_OUTPUT_LABEL = "prod"
+//   npx tsx scripts/dump-schema.ts
+//   $env:DATABASE_URL = "<connexion staging>"
+//   $env:DUMP_OUTPUT_LABEL = "staging"
+//   npx tsx scripts/dump-schema.ts
+// → écrit supabase/_prod_schema_dump.sql et supabase/_staging_schema_dump.sql
+//   (les deux sont dans .gitignore, motif supabase/_*_schema_dump.sql).
 
 import { Client } from 'pg';
 import { readFileSync, writeFileSync } from 'fs';
@@ -28,7 +39,8 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const OUTPUT_PATH = path.resolve(__dirname, '../supabase/_staging_schema_dump.sql');
+const DUMP_LABEL = process.env.DUMP_OUTPUT_LABEL || 'staging';
+const OUTPUT_PATH = path.resolve(__dirname, `../supabase/_${DUMP_LABEL}_schema_dump.sql`);
 
 function q(ident: string): string {
   return `"${ident.replace(/"/g, '""')}"`;
@@ -378,7 +390,7 @@ async function main() {
     const header =
       `-- ============================================================\n` +
       `-- Schéma "public" — généré par scripts/dump-schema.ts\n` +
-      `-- Source : production, le ${new Date().toISOString()}\n` +
+      `-- Source déclarée : ${DUMP_LABEL} (DUMP_OUTPUT_LABEL), le ${new Date().toISOString()}\n` +
       `-- À coller dans le SQL Editor d'un projet Supabase VIDE\n` +
       `-- (voir GUIDE_STAGING.md, étape 2.1)\n` +
       `-- ============================================================\n`;
