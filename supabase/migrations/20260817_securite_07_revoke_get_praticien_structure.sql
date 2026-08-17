@@ -1,0 +1,50 @@
+-- ============================================================================
+-- 20260817_securite_07_revoke_get_praticien_structure.sql
+-- ============================================================================
+--
+-- Ferme : [F-11] du rapport docs/RAPPORT_SECURITE.md.
+--
+-- Preuve : `supabase/migrations/20260607_praticien_portail_structure.sql:23`
+-- — `grant execute on function get_praticien_structure(text) to anon;`,
+-- jamais révoqué (contrairement à `structure_token_valide()`, dont le
+-- GRANT anon est explicitement révoqué par
+-- `20260613_rls_anon_lockdown.sql:57`). Confirmé en prod : la fonction
+-- existe (requête live 2026-08-17, pg_proc).
+--
+-- Recherche d'appelants effectuée AVANT ce correctif (comme exigé par
+-- Lorenzo) : `grep -rn "get_praticien_structure" src/ api/` → AUCUN
+-- résultat dans ni l'un ni l'autre dossier. `api/structure/data.ts:34`
+-- récupère les infos du praticien directement via
+-- `supabase.from('praticiens').select(...)` (service_role), pas via cette
+-- fonction RPC. Le portail (`src/pages/PortailStructure.tsx`) ne consomme
+-- que `/api/structure/data`. Conclusion : fonction orpheline, ce REVOKE ne
+-- casse aucun chemin applicatif actuel.
+--
+-- Impact : la fonction est exposée automatiquement par Supabase via son
+-- API REST à quiconque connaît la clé `anon` publique (embarquée dans le
+-- bundle front-end), en contournant totalement `api/structure/data.ts` et
+-- tout rate limiting applicatif. Elle ne retourne pas de donnée de santé,
+-- mais constitue un oracle "ce token structure existe / n'existe pas",
+-- combinable avec F-04 (token sans expiration) pour un brute force sans
+-- limite de débit — Élevée (contournement d'authentification, pas une
+-- simple fuite de métadonnées).
+--
+-- Correctif : révoque l'exécution pour `anon`. La fonction elle-même n'est
+-- pas supprimée (DROP) dans ce lot — un nettoyage plus profond (suppression
+-- complète) pourra être envisagé séparément une fois ce REVOKE validé sur
+-- staging.
+--
+-- ⚠️ NON TESTÉ AUTOMATIQUEMENT contre une vraie base dans cette session.
+-- Test dédié : tests/security/rls.spec.ts (`[F-11] anon peut exécuter
+-- get_praticien_structure sans erreur de permission`), conçu pour échouer
+-- avant ce correctif et passer après (attend une erreur Postgres 42501).
+-- À faire tourner sur staging avant tout passage en production.
+--
+-- ── ROLLBACK ────────────────────────────────────────────────────────────
+--   GRANT EXECUTE ON FUNCTION public.get_praticien_structure(text) TO anon;
+--
+-- ============================================================================
+
+REVOKE EXECUTE ON FUNCTION public.get_praticien_structure(text) FROM anon;
+
+NOTIFY pgrst, 'reload schema';
