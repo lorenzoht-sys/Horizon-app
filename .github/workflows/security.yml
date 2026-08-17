@@ -1,0 +1,58 @@
+name: Sécurité
+
+on:
+  push:
+    branches: [main, consolidation]
+  pull_request:
+
+jobs:
+  # Vérifications statiques + tests de sécurité : gitleaks (secrets dans
+  # l'historique), npm audit, typecheck des routes api/*, build + recherche
+  # de secrets dans le bundle client, puis le harnais RLS (tests/security/).
+  # Ce dernier est auto-skip (voir tests/security/rls.spec.ts) tant que les
+  # secrets STAGING_* ne sont pas configurés dans ce dépôt : le job reste
+  # vert, ce n'est pas un échec.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # historique complet, nécessaire à gitleaks
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm audit --audit-level=high --production
+      - run: npm run typecheck:api
+      - run: npm run build
+
+      - name: Aucun secret serveur dans le bundle client
+        run: |
+          if grep -rEq "service_role|sk-ant-|BEGIN [A-Z ]*PRIVATE KEY" dist/; then
+            echo "::error::Secret détecté dans dist/ (bundle envoyé au navigateur)"
+            exit 1
+          fi
+
+      - name: Harnais de sécurité (RLS multi-tenant) — skip si staging non configuré
+        run: npx vitest run tests/security
+        env:
+          SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
+          SUPABASE_TEST_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
+          SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
+          PATIENT_SESSION_SECRET: ${{ secrets.PATIENT_SESSION_SECRET }}
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          # Réutilise les mêmes secrets/variables de dépôt que le job e2e de
+          # ci.yml (staging.praticien@example.com et les codes de démo de
+          # scripts/seed-staging.sql) plutôt que d'en dupliquer sous un autre nom.
+          E2E_PRATICIEN_EMAIL: ${{ vars.E2E_PRATICIEN_EMAIL }}
+          E2E_PRATICIEN_PASSWORD: ${{ secrets.E2E_PRATICIEN_PASSWORD }}
+          E2E_PATIENT_CODE: ${{ vars.E2E_PATIENT_CODE }}
+          E2E_PATIENT_CODE_2: ${{ vars.E2E_PATIENT_CODE_2 }}
+          E2E_STRUCTURE_TOKEN: ${{ vars.E2E_STRUCTURE_TOKEN }}

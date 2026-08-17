@@ -35,6 +35,12 @@ export function initSentry(): void {
     tracesSampleRate: 0,
     beforeSend(event) {
       if (event.request?.url) event.request.url = redactUrl(event.request.url);
+      // Défense en profondeur, cohérent avec api/_lib/sentry.ts : rien
+      // n'appelle Sentry.setUser() dans ce projet et sendDefaultPii est déjà
+      // à false, donc ces champs devraient déjà être vides — on le garantit
+      // explicitement au cas où un futur appel les peuplerait par erreur.
+      delete event.user;
+      if (event.request) delete event.request.cookies;
       return event;
     },
     beforeBreadcrumb(breadcrumb) {
