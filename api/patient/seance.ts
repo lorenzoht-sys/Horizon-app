@@ -43,6 +43,35 @@ export default withSentry(async function handler(req: any, res: any) {
     return res.status(500).json({ error: String(err) });
   }
 
+  // Anti-IDOR : cette route utilise service_role (contourne RLS), donc rien
+  // n'empêche en base qu'un patient authentifié envoie le programmeId/
+  // seanceId d'un AUTRE participant. Vérification explicite avant insert
+  // (docs/RAPPORT_SECURITE.md, cartographie §4) : programmeId doit
+  // appartenir au participant du JWT, et seanceId doit appartenir à ce
+  // programme (seances_patient.seance_id référence programme_seances,
+  // programme_seances.programme_id référence programmes).
+  const { data: programme, error: programmeErr } = await supabase
+    .from('programmes')
+    .select('id')
+    .eq('id', programmeId)
+    .eq('participant_id', participantId)
+    .maybeSingle();
+  if (programmeErr || !programme) {
+    await logAuditEvent(supabase, 'patient_seance_submit', participantId, getClientIp(req), false);
+    return res.status(404).json({ error: 'Programme introuvable' });
+  }
+
+  const { data: programmeSeance, error: programmeSeanceErr } = await supabase
+    .from('programme_seances')
+    .select('id')
+    .eq('id', seanceId)
+    .eq('programme_id', programmeId)
+    .maybeSingle();
+  if (programmeSeanceErr || !programmeSeance) {
+    await logAuditEvent(supabase, 'patient_seance_submit', participantId, getClientIp(req), false);
+    return res.status(404).json({ error: 'Séance introuvable' });
+  }
+
   const { data: sp, error: spErr } = await supabase
     .from('seances_patient')
     .insert({

@@ -32,7 +32,17 @@ export default withSentry(async function handler(req: any, res: any) {
 
   const [praticienRes, participantsRes] = await Promise.all([
     supabase.from('praticiens').select('prenom, nom, titre, email, telephone').eq('id', structure.praticienId).single(),
-    supabase.from('participants').select('*, bilans(*), programmes(*)').eq('structure_id', structure.id),
+    // Colonnes explicites (docs/RAPPORT_SECURITE.md F-03) : l'ancien
+    // select('*', bilans(*), programmes(*)) exposait au portail structure
+    // (token public, tiers externe à la relation praticien-patient) des
+    // colonnes jamais affichées par PortailStructure.tsx — code_acces,
+    // iban/bic, antécédents médicaux, notes cliniques du praticien
+    // (notes_professionnelles, points_vigilance, message_client...). Liste
+    // alignée sur ce que PortailStructure.tsx / scoresParDomaine() lisent
+    // réellement.
+    supabase.from('participants')
+      .select('id, prenom, nom, date_naissance, date_creation, bilans(id, participant_id, date, equilibre_droite, equilibre_gauche, chair_stand_30, hand_grip_droite, hand_grip_gauche, tug_3m, tm6_distance_metres), programmes(id, participant_id, date_creation, titre, objectif, actif)')
+      .eq('structure_id', structure.id),
   ]);
 
   const participants = participantsRes.data ?? [];
