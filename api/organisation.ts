@@ -53,7 +53,8 @@ async function handleDemande(req: any, res: any, body: any) {
   try {
     supabase = getServiceClient();
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    console.error('[api/organisation] getServiceClient:', err);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 
   const ip = getClientIp(req);

@@ -381,6 +381,13 @@ export default function StructureDetail() {
                 </button>
               </div>
               <div className="text-xs text-gray-400">⚠️ Accès lecture seule</div>
+              {structure.expiresAt && (
+                <div className={`text-xs mt-1 ${new Date(structure.expiresAt).getTime() <= Date.now() ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
+                  {new Date(structure.expiresAt).getTime() <= Date.now()
+                    ? '⛔ Lien expiré — régénérez-le pour rétablir l\'accès'
+                    : `Expire le ${new Date(structure.expiresAt).toLocaleDateString('fr-FR')}`}
+                </div>
+              )}
             </div>
           </div>
 

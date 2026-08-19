@@ -129,7 +129,7 @@ nécessaires en permanence, indépendamment l'une de l'autre.
 - **Impact concret** : `Math.random()` n'est pas cryptographiquement sûr ; sa sortie peut être prédite en observant plusieurs valeurs générées (le générateur interne du moteur JS n'est pas conçu pour résister à ça). Un attaquant capable d'observer/déduire l'état du générateur pourrait prédire ou restreindre fortement l'espace des codes d'accès patient valides, contournant le rate limiting qui suppose un espace de 2·10⁹+ combinaisons réellement aléatoires.
 - **Exploitabilité** : Anonyme
 - **Correctif proposé** : remplacer par `crypto.randomBytes` (Node, côté génération serveur si c'est fait côté API) ou `crypto.getRandomValues` (si généré côté navigateur — à vérifier où `codeAcces.ts` est réellement appelé, praticien ou serveur). Garder la même longueur/alphabet pour ne pas casser les codes déjà distribués aux patients existants (rotation progressive, pas un big-bang).
-- **Statut** : **Non corrigé.** Constat de code confirmé (`Math.random()` toujours en place). Facteur atténuant confirmé par lecture directe du code (pas juste la migration) : le rate limiting existe bel et bien et est branché (`api/_lib/patientAuth.ts` : `checkRateLimit`/`recordLoginAttempt`, 5 tentatives/15 min/IP, table `patient_login_attempts`) — donc l'exploitabilité pratique de la prédictibilité de `Math.random()` est réduite, mais le problème de fond (générateur non cryptographique pour un secret d'authentification) reste entier. Hors scope du pack de correctifs appliqué le 2026-08-17 (aucun fichier touché pour ce finding) — reste à faire.
+- **Statut** : **Corrigé (code écrit et testé unitairement le 2026-08-19, non déployé).** `src/utils/codeAcces.ts` remplace `Math.random()` par `crypto.getRandomValues` (Web Crypto API — même appel en navigateur et en script Node via `tsx`, qui l'expose aussi en global depuis Node 19, pas besoin de brancher sur `node:crypto` séparément). Format/alphabet/longueur inchangés : les codes déjà distribués restent valides, aucune rotation nécessaire. Test unitaire ajouté (`src/utils/codeAcces.test.ts`, vert : longueur/alphabet + 500 générations sans collision). Le rate limiting (`api/_lib/patientAuth.ts`) reste une deuxième ligne de défense, comme déjà noté. Reste : jamais testé contre un vrai déploiement (aucune régression attendue — signature de fonction inchangée — mais non vérifié en conditions réelles).
 
 ### [F-03] Portail structure : sur-exposition de colonnes sensibles (`select('*')`)
 - **Gravité** : Critique / Élevée (à confirmer selon les colonnes réellement présentes en prod)
@@ -143,11 +143,11 @@ nécessaires en permanence, indépendamment l'une de l'autre.
 ### [F-04] Token structure sans expiration ni rotation
 - **Gravité** : Élevée
 - **Surface** : Auth
-- **Preuve** : `supabase/migrations/20260604_structures.sql` — colonne `structures.token_acces`, aucune colonne `expires_at`, aucune logique de rotation dans `api/structure/data.ts` / `api/_lib/structureAuth.ts`.
-- **Impact concret** : un lien de structure qui fuit une fois (capture d'écran, transfert de compte du côté de la structure partenaire, ancien salarié de la structure) reste valide indéfiniment — aucun moyen de le révoquer sans désactiver toute la structure (`actif = false`).
+- **Preuve** : `supabase/migrations/20260604_structures.sql` — colonne `structures.token_acces`, aucune colonne `expires_at`. **Correction 2026-08-19** : l'affirmation initiale "aucune logique de rotation" était fausse — `src/hooks/useStructures.ts:regenererToken` (CSPRNG `crypto.getRandomValues`, 32 octets) existait déjà, avec un bouton dédié dans `StructureDetail.tsx` ("Régénérer le token"). L'audit initial n'avait regardé que `api/structure/data.ts`/`api/_lib/structureAuth.ts`, pas le hook côté praticien. Seule l'expiration manquait réellement.
+- **Impact concret** : un lien de structure qui fuit une fois (capture d'écran, transfert de compte du côté de la structure partenaire, ancien salarié de la structure) reste valide indéfiniment tant que le praticien ne pense pas à le régénérer manuellement — aucune expiration automatique.
 - **Exploitabilité** : Structure (détenteur d'un lien qui a fuité)
-- **Correctif proposé** : ajouter `expires_at` + endpoint/action de rotation manuelle par le praticien (regénérer le token), journaliser chaque usage (`structure_access_logs` existe déjà — bien, mais ne permet pas la révocation, seulement la traçabilité a posteriori).
-- **Statut** : **Non corrigé.** Nécessite une migration (colonne `expires_at`) + UI praticien pour la rotation — pas dans le périmètre du pack appliqué le 2026-08-17. Reste à faire.
+- **Correctif proposé** : ajouter `expires_at`. La rotation manuelle existait déjà — pas besoin de la (re)créer.
+- **Statut** : **Corrigé (code écrit et typecheck vert le 2026-08-19, non déployé).** `supabase/migrations/20260819_structure_token_expiration.sql` ajoute `structures.expires_at` (nullable — tokens existants non expirés rétroactivement, cohérent avec l'approche F-02). `src/hooks/useStructures.ts` fixe `expires_at` à +1 an à la création et à chaque régénération. `api/_lib/structureAuth.ts:validateStructureToken` rejette désormais un token expiré (`expires_at` dans le passé), en plus de `actif`. UI : `StructureDetail.tsx` affiche la date d'expiration (ou un badge "Lien expiré" invitant à régénérer). Non appliqué nulle part (staging ne reproduit pas l'état de prod, voir `docs/ETAT_AUDIT.md`) — non testé en conditions réelles.
 
 ### [F-05] Policies fantômes `anon_read_*` — protégées par une seule couche de défense (le `REVOKE` global)
 - **Gravité** : **Critique** (reclassé — voir note de méthode ci-dessous)
@@ -263,7 +263,52 @@ policy retirée. Ça ne couvre pas :
 - **Preuve** : le commentaire qui justifie le seuil (`api/_lib/rateLimit.ts:9-13`) dit *"pas un chat conversationnel à haute fréquence"* — faux : `AssistantPage.tsx` est un chat multi-tours (`genererReponse`, historique, régénération, `callClaudeAPI` appelé à chaque message). Une seule génération de programme pour **un** patient coûte déjà 2 appels (`genererQuestionsClarification` + `genererProgrammeStructure`, `src/utils/genererProgrammeIA.ts:124` et `:305` — les boucles `for` des lignes 272/365 sont du traitement local, pas des appels réseau).
 - **Impact concret** : sur une session d'une heure où Pierre enchaîne 6 à 8 patients (interprétation + génération de programme + quelques échanges de chat chacun), 24 à 40 appels sont plausibles — au-dessus ou tout contre la limite de 30/h, pour un usage légitime, pas un abus. Point positif à noter : le compteur n'incrémente que sur une réponse Claude réussie (`api/claude.ts:98-101`), une panne Anthropic ne consomme donc pas le quota. Mais le message d'erreur (`api/claude.ts:37`, "réessayez dans un instant") ne donne aucun délai réel (pas de `Retry-After`), donc un praticien bloqué ne sait pas combien de temps attendre.
 - **Correctif proposé** : soit relever le seuil (ex. 60-80/h) pour absorber une session multi-patients chargée, soit distinguer un coût par type d'appel (génération structurée Sonnet vs. question de chat Haiku), soit renvoyer un délai d'attente exploitable par l'UI. Pas tranché — nécessite une discussion produit, pas juste un chiffre.
-- **Statut** : Ouvert, non corrigé. Migration `securite_08` déjà appliquée (créée `claude_rate_limit`) — le seuil applicatif (`CLAUDE_RATE_LIMIT_MAX` dans `api/_lib/rateLimit.ts`) reste à ajuster séparément, pas de migration à rejouer pour ça (c'est une constante côté code, pas en base).
+- **Statut** : **Corrigé (2026-08-19).** `CLAUDE_RATE_LIMIT_MAX` relevé de 30 à 60 dans `api/_lib/rateLimit.ts` — reste borné (un compte compromis ne peut pas boucler indéfiniment) tout en absorbant une session multi-patients légitime. Choix simple (relever le seuil) plutôt que différencier le coût par type d'appel ou ajouter un `Retry-After` — les deux autres options restent valables pour un futur ajustement si 60/h s'avère encore trop juste en usage réel, mais nécessitent plus de changement pour un gain incertain sans donnée d'usage réelle. Pas de migration à rejouer (constante côté code, pas en base) — actif dès le déploiement du code.
+
+## Durcissement `api/*` — passe des 12 routes (2026-08-19)
+
+Revue systématique des 12 routes serverless (`api/**/*.ts`, hors `_lib/` et
+`*.test.ts`) contre : auth vérifiée, anti-IDOR, validation d'entrée,
+`405` sur méthode inattendue, pas de `select('*')` évitable, pas d'erreur
+bavarde. Détail par critère :
+
+- **Auth / IDOR** : les 12 routes étaient déjà correctes — `participant_id`/
+  `praticien_id` proviennent systématiquement du JWT vérifié (jamais du
+  body), jamais réinventé par ce passage (voir l'en-tête de
+  `api/_lib/guard.ts`, écrit lors d'un lot précédent, sur le risque de
+  dupliquer une logique d'auth déjà correcte sans environnement pour
+  vérifier l'absence de régression). `api/patient/seance.ts` et
+  `api/seances/supprimer-planifiees.ts` ont une vérification anti-IDOR
+  explicite documentée en commentaire (programme/séance/contrat doivent
+  appartenir à l'appelant avant toute écriture).
+- **405** : présent sur les 12 routes, vérifié individuellement.
+- **Erreurs bavardes** : **corrigé** — 11 occurrences sur 10 fichiers de
+  `res.status(500).json({ error: String(err) })` (essentiellement l'échec
+  de `getServiceClient()`, config manquante) renvoyaient le message
+  d'erreur JS brut au client, sans logging serveur. Remplacé partout par
+  un message générique côté client + `console.error` côté serveur (visible
+  dans les logs Vercel, pas dans la réponse HTTP).
+- **`select('*')`** : `api/structure/data.ts` restreint désormais
+  `factures_suivi` aux colonnes affichées par `PortailStructure.tsx`
+  (retire `praticien_id`/`statut`/`date_echeance`/`date_envoi`/`notes` —
+  usage interne au praticien). `documents_partages` reste en `select('*')`
+  **volontairement** : toutes ses colonnes (`type_document`, `contenu`,
+  `date_document`, `partage_le`) sont le contenu même du document partagé,
+  aucune colonne interne. `api/patient/me.ts` garde `select('*')` sur
+  `programmes`/`programme_seances`/`programme_planning`/`programme_exercices`
+  — vérifié (`supabase/schema.sql`) : aucune colonne interne au praticien
+  sur `programmes`, et ce sont les données du patient lui-même (pas un
+  tiers), risque jugé négligeable face au coût de réécriture sans
+  environnement pour vérifier l'absence de régression.
+- **Validation Zod** : **non fait, décision assumée.** Les 12 routes ont
+  déjà une validation manuelle par champ (type, plage, whitelist — ex.
+  `api/patient/retour-seance.ts` borne `borgRpe`/`bienEtre`,
+  `api/patient/seance.ts` whitelist `STATUTS_VALIDES`). Migrer vers des
+  schémas Zod aurait changé la forme exacte des réponses d'erreur
+  (messages/codes) sur des routes déjà consommées par `src/lib/patientApi.ts`
+  et consorts, sans environnement de staging fiable pour vérifier l'absence
+  de régression front — même raisonnement que `api/_lib/guard.ts` sur
+  l'auth. Zod resterait une amélioration valable, mais pas à l'aveugle.
 
 ---
 

@@ -22,7 +22,8 @@ export default withSentry(async function handler(req: any, res: any) {
   try {
     supabase = getServiceClient();
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    console.error('[api/structure/data] getServiceClient:', err);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 
   const structure = await validateStructureToken(supabase, token);
@@ -60,7 +61,17 @@ export default withSentry(async function handler(req: any, res: any) {
       supabase.from('seances')
         .select('id, participant_id, contrat_id, date, heure_debut, heure_fin, duree_minutes, type, statut, notes, adresse, coordonnees, created_at, updated_at')
         .in('participant_id', ids).order('date', { ascending: false }),
-      supabase.from('factures_suivi').select('*').eq('structure_id', structure.id).order('periode_annee', { ascending: false }).order('periode_mois', { ascending: false }),
+      // Colonnes explicites : praticien_id/statut/date_echeance/date_envoi/
+      // notes sont un usage interne au praticien (facturation), jamais
+      // affichés par PortailStructure.tsx (vérifié : seuls periode_mois/
+      // periode_annee/montant_total/nb_seances y sont lus).
+      supabase.from('factures_suivi')
+        .select('id, participant_id, periode_mois, periode_annee, nb_seances, montant_total')
+        .eq('structure_id', structure.id).order('periode_annee', { ascending: false }).order('periode_mois', { ascending: false }),
+      // documents_partages : select('*') laissé tel quel volontairement —
+      // toutes ses colonnes (type_document, contenu, date_document,
+      // partage_le) sont le contenu même du document partagé, destiné à la
+      // structure ; aucune colonne interne au praticien sur cette table.
       supabase.from('documents_partages').select('*').eq('structure_id', structure.id).order('partage_le', { ascending: false }),
     ]);
     seances = seancesRes.data ?? [];

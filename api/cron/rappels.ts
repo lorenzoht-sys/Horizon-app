@@ -60,7 +60,8 @@ export default withSentry(async function handler(req: any, res: any) {
   try {
     supabase = getServiceClient();
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    console.error('[api/cron/rappels] getServiceClient:', err);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 
   try {

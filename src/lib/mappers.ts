@@ -552,6 +552,7 @@ export function dbToStructure(row: any): Structure {
     contactEmail: row.contact_email,
     contactTelephone: row.contact_telephone ?? undefined,
     tokenAcces: row.token_acces,
+    expiresAt: row.expires_at ?? null,
     tarifSeance: Number(row.tarif_seance ?? 45),
     frequenceFacturation: row.frequence_facturation ?? 'mensuelle',
     actif: row.actif ?? true,

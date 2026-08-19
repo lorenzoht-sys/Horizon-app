@@ -20,7 +20,8 @@ export default withSentry(async function handler(req: any, res: any) {
   try {
     supabase = getServiceClient();
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    console.error('[api/claude] getServiceClient:', err);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 
   const { data: userData, error: userErr } = await supabase.auth.getUser(token);
@@ -106,6 +107,7 @@ export default withSentry(async function handler(req: any, res: any) {
 
     return res.status(200).json({ text: cleanText });
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    console.error('[api/claude] échec appel Claude:', err);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 });

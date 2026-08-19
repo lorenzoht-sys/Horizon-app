@@ -40,7 +40,8 @@ export default withSentry(async function handler(req: any, res: any) {
   try {
     supabase = getServiceClient();
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    console.error('[api/patient/seance] getServiceClient:', err);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 
   // Anti-IDOR : cette route utilise service_role (contourne RLS), donc rien

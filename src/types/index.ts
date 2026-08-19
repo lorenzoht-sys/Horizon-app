@@ -648,6 +648,7 @@ export interface Structure {
   contactEmail: string;
   contactTelephone?: string;
   tokenAcces: string;
+  expiresAt?: string | null;
   tarifSeance: number;
   frequenceFacturation: FrequenceFacturation;
   actif: boolean;

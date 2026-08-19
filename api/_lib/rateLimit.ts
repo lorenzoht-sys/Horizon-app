@@ -6,12 +6,17 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-// 30 requêtes / heure / praticien : usage normal = quelques comptes-rendus
-// générés à la demande par jour (assistant IA, interprétation de bilan),
-// pas un chat conversationnel à haute fréquence. Assez large pour ne pas
-// gêner une session de travail chargée, assez bas pour limiter le coût
-// d'un compte compromis qui boucle sur la route.
-const CLAUDE_RATE_LIMIT_MAX = 30;
+// 60 requêtes / heure / praticien. [F-12, docs/RAPPORT_SECURITE.md,
+// 2026-08-19] Révisé depuis 30 : AssistantPage.tsx est un chat multi-tours
+// (pas "pas un chat conversationnel à haute fréquence" comme le disait ce
+// commentaire avant révision), et une seule génération de programme coûte
+// déjà 2 appels (genererQuestionsClarification + genererProgrammeStructure,
+// src/utils/genererProgrammeIA.ts). Une session chargée sur 6-8 patients
+// (interprétation + programme + quelques échanges de chat chacun) peut
+// atteindre 24-40 appels — 30 était trop juste pour un usage légitime. 60
+// reste borné (un compte compromis ne peut pas boucler indéfiniment) tout
+// en absorbant une session multi-patients normale.
+const CLAUDE_RATE_LIMIT_MAX = 60;
 const CLAUDE_RATE_LIMIT_WINDOW_MINUTES = 60;
 
 export async function checkClaudeRateLimit(supabase: SupabaseClient, praticienId: string): Promise<boolean> {
