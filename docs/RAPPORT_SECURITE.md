@@ -91,7 +91,7 @@ nécessaires en permanence, indépendamment l'une de l'autre.
 - **Impact concret** : `Math.random()` n'est pas cryptographiquement sûr ; sa sortie peut être prédite en observant plusieurs valeurs générées (le générateur interne du moteur JS n'est pas conçu pour résister à ça). Un attaquant capable d'observer/déduire l'état du générateur pourrait prédire ou restreindre fortement l'espace des codes d'accès patient valides, contournant le rate limiting qui suppose un espace de 2·10⁹+ combinaisons réellement aléatoires.
 - **Exploitabilité** : Anonyme
 - **Correctif proposé** : remplacer par `crypto.randomBytes` (Node, côté génération serveur si c'est fait côté API) ou `crypto.getRandomValues` (si généré côté navigateur — à vérifier où `codeAcces.ts` est réellement appelé, praticien ou serveur). Garder la même longueur/alphabet pour ne pas casser les codes déjà distribués aux patients existants (rotation progressive, pas un big-bang).
-- **Statut** : Non vérifié (constat de code confirmé ; impact réel dépend de si le rate limiting de `patient_login_attempts` — voir Phase 3 — est bien actif en production, cf. F-01)
+- **Statut** : **Non corrigé.** Constat de code confirmé (`Math.random()` toujours en place). Facteur atténuant confirmé par lecture directe du code (pas juste la migration) : le rate limiting existe bel et bien et est branché (`api/_lib/patientAuth.ts` : `checkRateLimit`/`recordLoginAttempt`, 5 tentatives/15 min/IP, table `patient_login_attempts`) — donc l'exploitabilité pratique de la prédictibilité de `Math.random()` est réduite, mais le problème de fond (générateur non cryptographique pour un secret d'authentification) reste entier. Hors scope du pack de correctifs appliqué le 2026-08-17 (aucun fichier touché pour ce finding) — reste à faire.
 
 ### [F-03] Portail structure : sur-exposition de colonnes sensibles (`select('*')`)
 - **Gravité** : Critique / Élevée (à confirmer selon les colonnes réellement présentes en prod)
@@ -100,7 +100,7 @@ nécessaires en permanence, indépendamment l'une de l'autre.
 - **Impact concret** : selon les colonnes réellement présentes sur `participants` en production (à confirmer — la cartographie liste notamment `code_acces`, potentiellement des champs bancaires et le champ `rgpd`/anamnèse), un token de structure valide pourrait recevoir en réponse HTTP des données que le portail structure n'a jamais besoin d'afficher : code d'accès patient d'un autre système, IBAN/BIC, antécédents médicaux complets — alors que le rôle "structure" n'a besoin que d'un sous-ensemble limité (nom, séances, facturation).
 - **Exploitabilité** : Structure (détenteur d'un token valide, donc pas anonyme — mais un tiers externe à la relation praticien-patient)
 - **Correctif proposé** : remplacer `select('*', ...)` par une liste explicite de colonnes correspondant strictement à ce que l'UI du portail structure affiche (`id, prenom, nom, ...`), sur le modèle de `api/patient/me.ts`.
-- **Statut** : Non vérifié — nécessite de lister les colonnes réelles de `participants` en staging/prod pour évaluer précisément quelles données fuient.
+- **Statut** : **Corrigé (code écrit, non testé sur staging).** `api/structure/data.ts` remplace `select('*', bilans(*), programmes(*))` par une liste explicite de colonnes, vérifiée contre `PortailStructure.tsx` (retire `code_acces`, IBAN/BIC, `rgpd`/antécédents, notes cliniques praticien). `npm run typecheck:api` vert. Non testé contre une vraie requête HTTP sur staging.
 
 ### [F-04] Token structure sans expiration ni rotation
 - **Gravité** : Élevée
@@ -109,7 +109,7 @@ nécessaires en permanence, indépendamment l'une de l'autre.
 - **Impact concret** : un lien de structure qui fuit une fois (capture d'écran, transfert de compte du côté de la structure partenaire, ancien salarié de la structure) reste valide indéfiniment — aucun moyen de le révoquer sans désactiver toute la structure (`actif = false`).
 - **Exploitabilité** : Structure (détenteur d'un lien qui a fuité)
 - **Correctif proposé** : ajouter `expires_at` + endpoint/action de rotation manuelle par le praticien (regénérer le token), journaliser chaque usage (`structure_access_logs` existe déjà — bien, mais ne permet pas la révocation, seulement la traçabilité a posteriori).
-- **Statut** : Différé (nécessite une migration + UI praticien pour la rotation — prévu en Phase 3, hors correctifs RLS purs de la Phase 1)
+- **Statut** : **Non corrigé.** Nécessite une migration (colonne `expires_at`) + UI praticien pour la rotation — pas dans le périmètre du pack appliqué le 2026-08-17. Reste à faire.
 
 ### [F-05] Policies fantômes `anon_read_*` — protégées par une seule couche de défense (le `REVOKE` global)
 - **Gravité** : **Critique** (reclassé — voir note de méthode ci-dessous)
@@ -118,7 +118,7 @@ nécessaires en permanence, indépendamment l'une de l'autre.
 - **Impact concret** : aujourd'hui, la seule chose qui empêche n'importe qui sur Internet de lire ces 3 tables (données de programmes patient) est le `REVOKE ALL ... FROM anon` global de `20260613_rls_anon_lockdown.sql`. **Une seule couche de défense = traité comme actif**, pas comme un risque théorique : si cette couche unique tombe (migration future qui réémet un `GRANT` sans le savoir, restauration partielle de schéma, erreur de script), l'accès anonyme complet à des données de santé est réactivé instantanément, sans qu'aucune nouvelle policy ne soit créée. C'est exactement le scénario qui s'est produit une fois dans l'historique de ce projet (cf. la faille `documents_patient`/`seances_patient USING(true)`, F-01) — rien ne garantit que ça ne se reproduise pas sur ces 3 tables précises.
 - **Exploitabilité** : Anonyme, conditionnelle à la persistance du `REVOKE` global — **et c'est précisément pour ça que c'est Critique, pas Moyenne** : la gravité d'un finding RLS se juge sur ce qui est *possible dans le schéma*, pas sur la couche de défense qui, aujourd'hui, l'empêche.
 - **Correctif proposé** : migration corrective qui fait `DROP POLICY IF EXISTS` sur les 3 policies fantômes, pour que le schéma ne contienne plus aucune trace de `TO anon USING (true)`, même inerte. **⚠️ Cette migration ne doit JAMAIS toucher au `REVOKE ALL ... FROM anon` de `20260613_rls_anon_lockdown.sql` — ce verrou reste la deuxième ligne de défense après le DROP, il ne se substitue pas à elle et ne doit pas être "simplifié" ou retiré dans un futur lot de nettoyage sous prétexte qu'il fait doublon avec des policies propres. Défense en profondeur : les deux couches restent nécessaires.**
-- **Statut** : Non vérifié par un test qui échoue aujourd'hui (voir §"Preuve" — harnais en cours de mise à jour) — correctif prêt à écrire.
+- **Statut** : **Corrigé (code écrit, non testé sur staging).** `supabase/migrations/20260817_securite_02_ghost_policies_programmes.sql` — `DROP POLICY` sur les 3 policies fantômes, sans toucher au `REVOKE` global. Un test dédié existe dans `tests/security/rls.spec.ts` (`[F-05]`, introspection `pg_policies`) mais n'a jamais tourné (pas d'accès staging dans cette session) — à exécuter avant/après cette migration pour confirmer.
 
 ### [F-06] `audit_logs` : garantie append-only non verrouillée au niveau base pour `service_role`
 - **Gravité** : Moyenne
@@ -127,7 +127,7 @@ nécessaires en permanence, indépendamment l'une de l'autre.
 - **Impact concret** : si une route API compromise ou un bug applicatif utilisant `service_role` modifiait ou supprimait des lignes d'`audit_logs`, rien au niveau base ne s'y opposerait — la garantie "append-only" repose entièrement sur la discipline du code, pas sur un verrou technique. Pour un journal d'audit RGPD (traçabilité des accès aux données de santé), c'est une garantie insuffisante.
 - **Exploitabilité** : Accès physique/compromission (nécessite d'obtenir la clé `service_role`, pas un scénario "anonyme depuis Internet")
 - **Correctif proposé** : trigger `BEFORE UPDATE OR DELETE ON audit_logs` qui lève une exception systématiquement (`RAISE EXCEPTION 'audit_logs est append-only'`), sans exception pour aucun rôle — la seule façon de "supprimer" serait une purge RGPD documentée et explicite (DDL manuel, pas une requête applicative).
-- **Statut** : Non vérifié / à corriger en Phase 1 suite
+- **Statut** : **Corrigé (code écrit, non testé sur staging).** `supabase/migrations/20260817_securite_03_audit_logs_immuable.sql` — trigger `BEFORE UPDATE OR DELETE ON audit_logs` qui lève systématiquement une exception, sans exception pour aucun rôle (y compris `service_role`, seul rôle que RLS ne bloque jamais). Test dédié dans `tests/security/rls.spec.ts` (`[F-06]`), conçu pour échouer avant ce correctif et passer après — jamais exécuté (pas d'accès staging dans cette session).
 
 ### [F-07] `evenements_agenda` : policy UPDATE sans clause `WITH CHECK` explicite
 - **Gravité** : Faible (hygiène — pas une vulnérabilité confirmée)
@@ -136,7 +136,7 @@ nécessaires en permanence, indépendamment l'une de l'autre.
 - **Impact concret** : **PostgreSQL applique par défaut la clause `USING` comme `WITH CHECK` implicite pour une policy `UPDATE` qui n'en définit pas** (comportement documenté de Postgres, pas une faille de ce projet) — donc en pratique, un praticien ne peut ni cibler ni produire une ligne `praticien_id != auth.uid()`. Listé ici par souci de complétude (correspond au point de vigilance explicitement demandé par le prompt d'audit), mais **ce n'est pas un vecteur d'exploitation réel** avec la sémantique Postgres actuelle.
 - **Exploitabilité** : Aucune (comportement par défaut sûr)
 - **Correctif proposé** : ajouter `WITH CHECK (praticien_id = auth.uid())` explicitement, uniquement pour la lisibilité/l'auditabilité du code (éviter qu'un futur lecteur suppose — à tort — qu'il y a un trou), pas pour combler une faille réelle.
-- **Statut** : Différé (hygiène, non urgent)
+- **Statut** : **Corrigé (code écrit, non testé sur staging).** `supabase/migrations/20260817_securite_04_evenements_agenda_with_check.sql` ajoute `WITH CHECK (praticien_id = auth.uid())` explicitement — rappel : aucun comportement réel ne change (Postgres appliquait déjà `USING` comme `WITH CHECK` implicite), c'est un correctif de lisibilité, pas la fermeture d'un exploit. Test `[F-07]` dans `tests/security/rls.spec.ts` (marqué "hygiène, pas un exploit") jamais exécuté.
 
 ### [F-08] `set_praticien_id_from_auth()` : `SECURITY DEFINER` sans `search_path` figé
 - **Gravité** : Faible
@@ -145,7 +145,7 @@ nécessaires en permanence, indépendamment l'une de l'autre.
 - **Impact concret** : vecteur d'élévation de privilège classique en théorie (un objet homonyme dans un schéma placé avant `public` dans le `search_path` de la session pourrait être exécuté à la place de l'attendu) ; impact réel probablement faible ici car la fonction ne fait qu'un `NEW.praticien_id = auth.uid()`, mais reste un point d'hygiène à corriger par cohérence avec le reste du projet.
 - **Exploitabilité** : nécessite déjà un accès élevé à la base pour créer un objet homonyme — scénario peu réaliste dans ce contexte, mais correction triviale.
 - **Correctif proposé** : `ALTER FUNCTION set_praticien_id_from_auth() SET search_path = public;`
-- **Statut** : Différé (correction triviale, à inclure dans le prochain lot de migrations correctives)
+- **Statut** : **Corrigé (code écrit, non testé sur staging).** `supabase/migrations/20260817_securite_05_search_path_set_praticien_id.sql` — `ALTER FUNCTION set_praticien_id_from_auth() SET search_path = public`, sans redéfinir le corps de la fonction (pas de risque de divergence avec la définition existante en prod). Test `[F-08]` dans `tests/security/rls.spec.ts` jamais exécuté.
 
 ### [F-09] `tm6_variantes` : table sans RLS activée
 - **Gravité** : Info
@@ -154,7 +154,7 @@ nécessaires en permanence, indépendamment l'une de l'autre.
 - **Impact concret** : aucun — table de référence (catalogue de variantes de test fonctionnel), aucune colonne de donnée patient/praticien.
 - **Exploitabilité** : —
 - **Correctif proposé** : activer RLS par hygiène/cohérence globale (toute table `public` devrait avoir RLS activée, même si la policy résultante est "lecture pour tous les authentifiés"), sans urgence.
-- **Statut** : Différé
+- **Statut** : **Corrigé (code écrit, non testé sur staging).** `supabase/migrations/20260817_securite_01_tm6_variantes_rls.sql` (même fichier que le correctif F-01, F-09 traité en premier dans ce fichier car il doit s'appliquer avant que les policies resserrées par F-01 aient un effet) — `ALTER TABLE tm6_variantes ENABLE ROW LEVEL SECURITY`. Test `[F-09]` dans `tests/security/rls.spec.ts` jamais exécuté.
 
 ### [F-10] `documents_partages`, `get_praticien_structure()`, `bilans_brouillons` existent réellement en prod — contrairement à ce qu'affirmait la documentation du projet
 - **Gravité** : **Critique** pour le volet policy fantôme sur `documents_partages` (même raisonnement que F-05 — protection à une seule couche, traitée comme active) ; **Moyenne** pour le volet documentation trompeuse (risque de processus, distinct de l'exploitabilité)
@@ -170,7 +170,7 @@ nécessaires en permanence, indépendamment l'une de l'autre.
 - **Impact concret** : `documents_partages` a bien RLS activée avec, dans l'état actuel du fichier de migration `20260607_documents_partages.sql`, une seule policy correctement scopée (`praticien_gere_partages`, via `participant_id → participants.praticien_id`). **Mais** l'historique des migrations montre qu'une policy `structure_anon_read_documents_partages` a été recréée par `20260608_fix_structure_anon_rls.sql` (bloc conditionnel) **après** la création de la table, et que `20260613_rls_anon_lockdown.sql` ne la mentionne jamais explicitement dans ses `DROP POLICY` (contrairement à `participants`/`bilans`/`seances`/`programmes`/`factures_suivi`, listés un par un en Section 2) — seul le `REVOKE ALL ... FROM anon` global (Section 3) neutralise cette policy aujourd'hui. **C'est exactement le même schéma que F-05 (policy fantôme)**, sur une table dont l'existence même était mise en doute par la documentation. Voir aussi F-11 pour `get_praticien_structure()`.
 - **Exploitabilité** : Anonyme (conditionnelle à un futur `GRANT` malencontreux sur `documents_partages`, comme F-05).
 - **Correctif proposé** : (1) `DROP POLICY IF EXISTS "structure_anon_read_documents_partages" ON documents_partages;` dans la même migration corrective que F-05 — **⚠️ ne pas toucher au `REVOKE ALL ... FROM anon` global à cette occasion, même raisonnement que F-05.** (2) Corriger `supabase/migrations/README.md` pour refléter l'état réel confirmé en prod — une documentation de migration qui ment sur l'état de la base est un risque en soi (elle a été prise au mot dans la Phase 0 de cet audit, et aurait pu faire classer `documents_partages` comme "sans objet" à tort).
-- **Statut** : Non vérifié par un test qui échoue aujourd'hui (existence confirmée par requête live, mais la policy fantôme elle-même n'est pas encore couverte par le harnais) — correctif à appliquer avec F-05.
+- **Statut** : **Corrigé (code écrit, non testé sur staging)** pour le volet policy fantôme — `supabase/migrations/20260817_securite_06_ghost_policy_documents_partages.sql` : `DROP POLICY IF EXISTS "structure_anon_read_documents_partages"`, dans un bloc conditionnel qui ne s'exécute que si la table existe (même garde que `20260608_fix_structure_anon_rls.sql`), sans toucher au `REVOKE` global. Test `[F-10]` dans `tests/security/rls.spec.ts` jamais exécuté. Volet documentation trompeuse également corrigé : voir `supabase/migrations/README.md` (mise à jour du même jour, diff distinct de ce commit).
 
 ### [F-11] `get_praticien_structure()` reste appelable directement par le rôle `anon` via l'API REST Supabase, en contournant la route serverless
 - **Gravité** : **Élevée** (reclassé de Moyenne — voir justification ci-dessous)
@@ -180,7 +180,7 @@ nécessaires en permanence, indépendamment l'une de l'autre.
 - **Impact concret** : Supabase expose automatiquement toute fonction `SECURITY DEFINER` accordée à `anon` via son API REST (`POST /rest/v1/rpc/get_praticien_structure`), avec uniquement la clé `anon` publique (embarquée dans le bundle front-end). **Le risque réel n'est pas la donnée retournée (nom/email/téléphone du praticien, pas une donnée de santé) — c'est que la fonction constitue un oracle binaire "ce token existe / n'existe pas"**, utilisable pour tester des `token_acces` en masse : ce chemin passe par l'API REST générique de PostgREST, **entièrement en dehors** de tout rate limiting qui pourrait exister côté `api/structure/data.ts`. Combiné à F-04 (token structure sans expiration ni rotation), un token capturé une fois — ou un espace de tokens insuffisamment grand — devient testable indéfiniment et sans limite de débit applicative. C'est un contournement d'authentification (élévation : de "aucun accès" à "oracle de validité d'un secret d'auth"), pas juste une fuite de métadonnées — d'où le passage en Élevée.
 - **Exploitabilité** : Anonyme.
 - **Correctif proposé** : `REVOKE EXECUTE ON FUNCTION get_praticien_structure(text) FROM anon;` — confirmé sans risque de régression (voir recherche d'appelants ci-dessus). Envisager ensuite un `DROP FUNCTION` complet dans un lot de nettoyage ultérieur, une fois le REVOKE validé sur staging.
-- **Statut** : Non vérifié par un test qui échoue aujourd'hui — correctif prêt, sans dépendance connue à casser.
+- **Statut** : **Corrigé (code écrit, non testé sur staging).** `supabase/migrations/20260817_securite_07_revoke_get_praticien_structure.sql` — `REVOKE EXECUTE ON FUNCTION get_praticien_structure(text) FROM anon`. Recherche d'appelants faite avant le correctif (comme exigé) : aucun résultat dans `src/` ni `api/` — fonction orpheline, ce REVOKE ne casse aucun chemin applicatif connu. Test `[F-11]` dans `tests/security/rls.spec.ts` jamais exécuté.
 
 ---
 
@@ -224,7 +224,13 @@ start` (Docker) s'il veut ce lint en plus de l'analyse de ce rapport.
 
 ## Prochaine étape
 
-🛑 **CHECKPOINT 1** — findings RLS + limites du harnais de test, avant
-toute migration corrective (Phase 1 suite : écriture des migrations pour
-F-05/F-06/F-07/F-08/F-09, en attente de validation de Lorenzo sur F-01 en
-priorité).
+🛑 **CHECKPOINT 2 (2026-08-19)** — les 11 findings (F-01 à F-11) ont
+désormais un correctif écrit et commité (migrations `20260817_securite_01`
+à `08`, plus le pack `2bd4b44`/`747c6c8`/`2995e68`). **Aucun n'a été testé
+sur staging** — le harnais `tests/security/rls.spec.ts` reste entièrement
+`describe.skip` faute de `SUPABASE_TEST_URL`/`SUPABASE_TEST_SERVICE_ROLE_KEY`
+dans cette session. Rien de tout ça n'a été exécuté contre une base réelle,
+staging ou prod. Prochaine étape réelle : Lorenzo fournit les identifiants
+de staging, faire tourner `npm run test -- tests/security/rls.spec.ts` avec
+un résultat vert, **avant** tout passage en production. Pas de Phase 2 tant
+que ce n'est pas fait.

@@ -86,11 +86,22 @@ d'application sont dans `GUIDE_STAGING.md` (Étape 2.2).
 Ce fichier référençait `documents_patient`, `documents_partages` et la
 fonction `get_praticien_structure()` : ces objets ont des migrations dans ce
 dossier (`20260603_documents_patient.sql`, `20260607_documents_partages.sql`,
-`20260607_praticien_portail_structure.sql`) mais **n'existent pas réellement
-en production** (jamais appliquées). Le fichier a été corrigé pour retirer
-ces références (sections renumérotées 1 à 4) afin de pouvoir être rejoué
-proprement sur staging et sur toute future réinstallation, sans adaptation
-manuelle.
+`20260607_praticien_portail_structure.sql`) et l'affirmation ci-dessous
+(conservée pour l'historique) disait qu'ils n'existaient pas réellement en
+production. Le fichier a été corrigé pour retirer ces références (sections
+renumérotées 1 à 4) afin de pouvoir être rejoué proprement sur staging et sur
+toute future réinstallation, sans adaptation manuelle.
+
+**⚠️ Correction 2026-08-17 (audit sécurité, branche `audit-securite-global`)**
+: l'affirmation ci-dessus est **fausse**. Vérifié par requête live sur la
+base de production (`information_schema.tables`, `pg_proc`) : `documents_partages`,
+`bilans_brouillons` et `get_praticien_structure()` **existent bel et bien en
+production** — créés hors de tout fichier de migration versionné (constat
+identique pour les policies de `tm6_variantes`, voir
+`docs/RAPPORT_SECURITE.md` F-10/F-01). **Ne pas se fier à ce dossier seul
+pour connaître l'état réel de la base** — en cas de doute, vérifier par une
+requête live (voir `docs/RAPPORT_SECURITE.md`, section "Limite connue", pour
+la procédure de diff prod/staging/migrations, pas encore exécutée à ce jour).
 
 ## ⚠️ Limite connue : ce dossier ne suffit PAS à recréer la base depuis zéro
 
