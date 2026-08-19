@@ -73,6 +73,35 @@ export default withSentry(async function handler(req: any, res: any) {
     return res.status(404).json({ error: 'Séance introuvable' });
   }
 
+  // Anti-IDOR [F-14, docs/RAPPORT_SECURITE.md] : exercices[].id vient du
+  // body — la seule contrainte en base est exercices_realises.exercice_id
+  // → programme_exercices(id), qui prouve que l'id EXISTE quelque part,
+  // jamais qu'il appartient à CE programme. Un id d'un autre participant
+  // circule légitimement dans les réponses de l'espace patient (visible
+  // côté navigateur) et reste valide après un changement de programme —
+  // pas un id à deviner, un id qu'on peut connaître. Vérifié en un seul
+  // aller-retour (pas un .eq() par exercice, pour ne pas recréer l'oracle
+  // d'existence un par un que ce correctif ferme) : tous les ids fournis
+  // doivent appartenir à programme_exercices.seance_id = seanceId, déjà
+  // vérifié ci-dessus comme appartenant au participant.
+  const exerciceIdsRecus = (Array.isArray(exercices) ? exercices : [])
+    .filter((ex: any) => ex && typeof ex.id === 'string')
+    .map((ex: any) => ex.id as string);
+
+  if (exerciceIdsRecus.length > 0) {
+    const { data: exercicesValides, error: exercicesValidesErr } = await supabase
+      .from('programme_exercices')
+      .select('id')
+      .eq('seance_id', seanceId)
+      .in('id', exerciceIdsRecus);
+    const idsValides = new Set((exercicesValides ?? []).map((e: { id: string }) => e.id));
+    const tousValides = exercicesValidesErr === null && exerciceIdsRecus.every(id => idsValides.has(id));
+    if (!tousValides) {
+      await logAuditEvent(supabase, 'patient_seance_submit', participantId, getClientIp(req), false);
+      return res.status(404).json({ error: 'Exercice introuvable' });
+    }
+  }
+
   const { data: sp, error: spErr } = await supabase
     .from('seances_patient')
     .insert({

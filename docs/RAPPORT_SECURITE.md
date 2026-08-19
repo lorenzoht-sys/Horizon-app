@@ -273,7 +273,46 @@ policy retirée. Ça ne couvre pas :
 - **Exploitabilité** : Patient (authentifié via code d'accès valide — n'importe quel patient de l'app, pas un attaquant sophistiqué).
 - **Pourquoi l'audit du 2026-08-19 (LOT B) l'a manqué la première fois** : l'affirmation "IDOR déjà correct sur les 12 routes" a été vérifiée sur l'identifiant **principal** de chaque route (`participant_id`/`praticien_id`, toujours dérivé du JWT — ça, c'était réellement vrai partout) mais pas systématiquement sur chaque identifiant **secondaire** accepté du body. `seanceId` a été implicitement classé "donnée opaque" par ressemblance avec d'autres champs sans référence externe (`borgRpe`, `bienEtre`) au lieu d'être reconnu comme une clé étrangère vers une ligne pouvant appartenir à un tiers — la même erreur de catégorisation qui, faite correctement sur `api/patient/seance.ts` (commentaire dédié dès l'écriture), n'a pas été reproduite ici par analogie. Trouvé seulement quand `docs/AUDIT_ROUTES_API.md` a forcé une colonne "anti-IDOR" explicite route par route, avec preuve fichier:ligne exigée plutôt qu'une affirmation globale.
 - **Correctif appliqué (2026-08-19)** : ajout d'une vérification d'appartenance avant insert, exactement sur le modèle de `api/patient/seance.ts:54-63` — `seances_patient` filtré par `id = seanceId` ET `participant_id = participantId`, `.maybeSingle()`, `404 { error: 'Séance introuvable' }` si absent (même forme de réponse que `seance.ts`, pas un 403 — cohérence avec le principe "ne pas confirmer l'existence d'une ressource d'un tiers").
-- **Statut** : **Corrigé (code écrit le 2026-08-19), non testé** (pas d'environnement staging fiable pour un test end-to-end — voir `docs/ETAT_AUDIT.md`). Typecheck à revalider.
+- **Statut** : **Corrigé (code écrit le 2026-08-19, `npm run typecheck:api` vert), non testé** en conditions réelles (pas d'environnement staging fiable pour un test end-to-end — voir `docs/ETAT_AUDIT.md`).
+
+### [F-14] IDOR sur `api/patient/seance.ts` — `exercices[].id` inséré sans vérifier son appartenance au programme du participant
+- **Gravité** : Critique — même famille que F-13, écriture possible sur une association rattachée au programme d'un autre participant.
+- **Surface** : API
+- **Preuve** : `api/patient/seance.ts` (avant correctif) — `exercices[].id` (tableau du body) inséré comme `exercice_id` dans `exercices_realises` sans vérification, la seule contrainte étant la clé étrangère `exercices_realises.exercice_id → programme_exercices(id)` (`20260620_consolidation_seances_patient.sql:265`). Une FK prouve que l'id **existe**, jamais qu'il **appartient** à ce programme — trouvé en auditant systématiquement les identifiants secondaires des 12 routes (`docs/AUDIT_ROUTES_API.md`), après F-13.
+- **Impact concret** : un `programme_exercices.id` n'est pas un secret à deviner — il **circule légitimement dans les réponses de l'espace patient** (`api/patient/me.ts` le renvoie dans `programmeExercices`), donc visible côté navigateur pour quiconque a accès aux outils de dev, et **reste valide après un changement de programme** (pas de rotation). Un patient authentifié pouvait donc associer, à sa propre séance réalisée, un exercice appartenant au programme d'un autre participant — pollution d'intégrité du suivi (le praticien verrait un exercice incohérent avec le programme réel du patient). Avant correctif, la route avait aussi un effet de bord d'oracle d'existence (voir `docs/AUDIT_ROUTES_API.md`), fermé par le même correctif (vérification groupée, plus d'insert-puis-erreur par exercice).
+- **Exploitabilité** : Patient authentifié — et contrairement à un id à deviner à l'aveugle, ici l'id peut être **connu** (vu dans une réponse API précédente), pas seulement deviné.
+- **Correctif appliqué (2026-08-19)** : `api/patient/seance.ts` — avant tout insert, vérification groupée (un seul aller-retour, pas un `.eq()` par exercice) que tous les `exercices[].id` fournis existent dans `programme_exercices` avec `seance_id = seanceId` (déjà vérifié appartenir au participant). Échec → `404 { error: 'Exercice introuvable' }`, même forme que F-13/`Séance introuvable` — pas de 403, pas de confirmation d'existence d'une ressource d'un tiers.
+- **Statut** : **Corrigé (code écrit le 2026-08-19, `npm run typecheck:api` vert), non testé** en conditions réelles.
+
+## Note de méthode — identifiants secondaires (F-13, F-14)
+
+**F-13 et F-14 viennent de la même cause.** Les deux fois, l'identifiant
+**principal** de la route (`participant_id`, dérivé du JWT) était
+correctement vérifié — c'est ce qui a fait conclure, à tort, que la route
+était sûre. Le trou était sur un identifiant **secondaire** reçu du body,
+traité par analogie comme une donnée de contenu opaque au lieu d'être
+reconnu comme une clé étrangère vers une ligne pouvant appartenir à un
+tiers.
+
+**Règle, pour quiconque touche à une route `api/*` plus tard** :
+
+> Tout identifiant reçu du client (body, query, header — pas l'identité
+> elle-même) qui référence une ligne en base doit avoir un contrôle
+> d'appartenance explicite avant lecture/écriture : une requête qui filtre
+> à la fois par cet identifiant ET par l'identité vérifiée (JWT), pas
+> juste par l'identifiant seul. Une contrainte de clé étrangère ne suffit
+> jamais à elle seule : **une FK prouve qu'une ligne existe, jamais
+> qu'elle appartient à l'appelant.** En cas d'échec du contrôle, répondre
+> `404` (ressource introuvable), jamais `403` (qui confirme l'existence
+> d'une ressource appartenant à un tiers) ni un comportement qui distingue
+> "id inexistant" de "id existant mais pas à vous" par un canal observable
+> (code HTTP différent, message différent, timing) — c'est l'oracle
+> d'existence qui a aggravé F-14 avant correctif.
+
+Voir `docs/AUDIT_ROUTES_API.md` pour la méthode d'audit qui a produit ces
+deux findings (liste exhaustive des identifiants par route, pas une
+affirmation globale) et `CHECKLIST_RELEASE.md` pour la case à cocher qui
+en découle.
 
 ## Durcissement `api/*` — passe des 12 routes (2026-08-19)
 

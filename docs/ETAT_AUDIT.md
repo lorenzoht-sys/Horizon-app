@@ -36,13 +36,16 @@ simples PowerShell — voir historique de session), lancer
   `docs/RAPPORT_SECURITE.md`). `seanceId` est désormais vérifié contre
   `participant_id` avant insert, non testé en conditions réelles (pas de
   staging fiable).
-- **`api/patient/seance.ts`, `exercices[].id`** — nouveau trou trouvé en
-  auditant les identifiants secondaires (voir `docs/AUDIT_ROUTES_API.md`,
-  "Constat (deuxième passage)") : `exercice_id` inséré dans
-  `exercices_realises` sans vérifier son appartenance au programme du
-  participant (la FK ne garantit que l'existence, pas la propriété). Pas
-  corrigé, pas encore de finding ouvert dans `docs/RAPPORT_SECURITE.md` —
-  décision à prendre.
+- **`api/patient/seance.ts`, `exercices[].id`** — **corrigé le 2026-08-19**
+  (F-14, `docs/RAPPORT_SECURITE.md`). Trouvé en auditant les identifiants
+  secondaires des 12 routes ; `exercice_id` est désormais vérifié en bloc
+  contre `programme_exercices.seance_id` avant insert, `404` sinon. Non
+  testé en conditions réelles (pas de staging fiable).
+- **Règle de méthode issue de F-13/F-14** — ajoutée dans
+  `docs/RAPPORT_SECURITE.md` (section "Note de méthode — identifiants
+  secondaires") et `CHECKLIST_RELEASE.md` (section 3) : tout identifiant
+  secondaire reçu du client doit avoir un contrôle d'appartenance
+  explicite, une FK ne suffit jamais seule, l'échec renvoie 404.
 - **`xlsx` (npm audit)** — **décision prise (2026-08-19) : dette acceptée
   en l'état**, usage 100% client sur les données propres du praticien —
   voir `docs/AUDIT_DEPENDANCE_XLSX.md` pour les conditions de révision.
