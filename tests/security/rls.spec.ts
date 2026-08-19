@@ -150,6 +150,7 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
   let patientTokenB: string;
 
   let publicTables: string[] = [];
+  let publicTablesError: string | null = null;
 
   beforeAll(async () => {
     await requireStagingEnv();
@@ -219,18 +220,30 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
     // une table ajoutée demain sans entrée EXCLUDED_TABLES/TABLE_OVERRIDES et
     // sans colonne praticien_id/participant_id fera échouer le test
     // "UNKNOWN OWNERSHIP" plus bas.
-    const { data: tables, error: tablesErr } = await admin
-      .from('information_schema.tables' as never)
-      .select('table_name')
-      .eq('table_schema', 'public')
-      .eq('table_type', 'BASE TABLE');
-    if (tablesErr) {
-      throw new Error(
-        `Impossible de lister information_schema.tables (${tablesErr.message}). ` +
-        "Le rôle service_role de staging doit avoir accès au schéma information_schema (accès par défaut sauf restriction réseau/PostgREST particulière)."
-      );
+    // ⚠️ 2026-08-19 : information_schema n'est PAS exposé par PostgREST par
+    // défaut (contrairement à ce que disait le commentaire précédent) — cette
+    // requête échoue systématiquement sur un projet Supabase standard. Ne
+    // bloque plus tout le beforeAll pour ça : seul le test "couverture
+    // complète" (le seul consommateur de publicTables) en pâtit, et il le
+    // signale par un échec explicite plutôt qu'un faux vert silencieux (voir
+    // plus bas, publicTablesError).
+    try {
+      const { data: tables, error: tablesErr } = await admin
+        .schema('information_schema')
+        .from('tables')
+        .select('table_name')
+        .eq('table_schema', 'public')
+        .eq('table_type', 'BASE TABLE');
+      if (tablesErr) throw new Error(tablesErr.message);
+      publicTables = (tables as unknown as { table_name: string }[]).map((t) => t.table_name);
+    } catch (e) {
+      publicTablesError =
+        `Impossible de lister information_schema.tables via PostgREST (${(e as Error).message}). ` +
+        'information_schema n\'est pas exposé par défaut par PostgREST (schémas exposés = public/graphql_public, ' +
+        'voir supabase/config.toml) — nécessiterait STAGING_DATABASE_URL (connexion Postgres directe) pour être ' +
+        'corrigé proprement, pas encore fait.';
+      console.warn(`[couverture complète] ${publicTablesError}`);
     }
-    publicTables = (tables as unknown as { table_name: string }[]).map((t) => t.table_name);
   }, 60_000);
 
   afterAll(async () => {
@@ -462,6 +475,9 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
   });
 
   it('couverture complète : toute table public non testée ci-dessus est explicitement listée (EXCLUDED_TABLES ou TABLE_OVERRIDES)', async () => {
+    if (publicTablesError) {
+      throw new Error(`Impossible de vérifier la couverture des tables : ${publicTablesError}`);
+    }
     const testedDirect = [
       'praticiens', 'participants', 'bilans', 'contrats', 'seances', 'notes_seances',
       'programmes', 'zones_geographiques', 'indisponibilites', 'assistant_logs',

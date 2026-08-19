@@ -2,6 +2,20 @@
 -- 20260817_securite_01_tm6_variantes_rls.sql
 -- ============================================================================
 --
+-- 🛑 NE PAS APPLIQUER EN L'ÉTAT (2026-08-19) — RÉGRESSION CONFIRMÉE.
+-- Ce correctif retire toute policy d'écriture `authenticated` sur
+-- tm6_variantes (INSERT/UPDATE/DELETE réservés à service_role). Mais
+-- src/hooks/useTm6Variantes.ts fait ses insert()/delete() directement via
+-- le client Supabase authentifié côté navigateur, sans route backend
+-- service_role — code vivant (BilanStepper → Step3_EnduranceMemory →
+-- bouton "Créer une nouvelle variante", routes /participant/:id/bilan/new
+-- et /bilan/:bilanId/edit). Appliquer cette migration casse cette
+-- fonctionnalité en silence (permission denied, aucune erreur visible en
+-- UI). Voir docs/RAPPORT_SECURITE.md, finding [RÉG-01] et statut F-01, pour
+-- le détail complet. Ce fichier doit être réécrit (route service_role
+-- dédiée, ou policy authenticated restreinte plutôt qu'un verrouillage
+-- total) avant d'être rejoué sur staging ou prod.
+--
 -- Ferme : [F-01] (volet tm6_variantes) et [F-09] du rapport
 -- docs/RAPPORT_SECURITE.md — traités dans le même fichier car F-09
 -- (ENABLE ROW LEVEL SECURITY) doit être appliqué avant que les policies
