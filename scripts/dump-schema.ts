@@ -338,10 +338,21 @@ async function dumpRlsAndPolicies(client: Client, tables: string[]): Promise<str
 const GRANT_ORDER = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'];
 
 async function dumpGrants(client: Client): Promise<string[]> {
+  // ⚠️ 2026-08-19 : n'utilise PAS information_schema.role_table_grants — cette
+  // vue ne montre que les lignes où le rôle courant de la connexion (postgres,
+  // ici) est le grantor, le grantee, ou membre du grantee. Elle a caché les
+  // grants réels de `authenticated`/`service_role` sur tm6_variantes en prod
+  // lors de l'audit sécurité (voir docs/RAPPORT_SECURITE.md, F-01) — un GRANT
+  // ALL bien réel, invisible via cette vue, visible seulement via l'ACL brute
+  // (aclexplode). Donc : toujours lire pg_class.relacl directement, jamais
+  // information_schema pour cet usage.
   const { rows } = await client.query<{ table_name: string; grantee: string; privilege_type: string }>(`
-    SELECT table_name, grantee, privilege_type
-    FROM information_schema.role_table_grants
-    WHERE table_schema = 'public' AND grantee IN ('anon', 'authenticated', 'service_role')
+    SELECT c.relname AS table_name, acl.grantee::regrole::text AS grantee, acl.privilege_type
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    CROSS JOIN LATERAL aclexplode(c.relacl) AS acl
+    WHERE n.nspname = 'public' AND c.relkind = 'r'
+      AND acl.grantee::regrole::text IN ('anon', 'authenticated', 'service_role')
     ORDER BY table_name, grantee
   `);
   if (rows.length === 0) return [];
