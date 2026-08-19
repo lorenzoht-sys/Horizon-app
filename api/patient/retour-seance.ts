@@ -62,6 +62,25 @@ export default withSentry(async function handler(req: any, res: any) {
   // est nullable depuis la migration FK SET NULL, ce n'est plus une condition
   // de rejet.
 
+  // Anti-IDOR [F-13, docs/RAPPORT_SECURITE.md] : seanceId vient du body — sans
+  // ce contrôle, rien n'empêche un patient authentifié de soumettre le
+  // seanceId d'un AUTRE participant (service_role contourne RLS). Même
+  // schéma que api/patient/seance.ts:54-63 (programmeId/seanceId) :
+  // retours_seance.seance_id référence seances_patient(id) — vérifier que
+  // cette ligne appartient bien au participant du JWT avant insert.
+  if (seanceId) {
+    const { data: seancePatient, error: seancePatientErr } = await supabase
+      .from('seances_patient')
+      .select('id')
+      .eq('id', seanceId)
+      .eq('participant_id', participantId)
+      .maybeSingle();
+    if (seancePatientErr || !seancePatient) {
+      await logAuditEvent(supabase, 'patient_retour_submit', participantId, getClientIp(req), false);
+      return res.status(404).json({ error: 'Séance introuvable' });
+    }
+  }
+
   const { error: insErr } = await supabase.from('retours_seance').insert({
     participant_id: participantId,
     praticien_id: participant.praticien_id,

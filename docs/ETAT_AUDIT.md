@@ -32,10 +32,17 @@ simples PowerShell — voir historique de session), lancer
   `src/lib/patientApi.ts` et consorts — pas de staging fiable pour vérifier
   l'absence de régression front avant de le faire. Ce n'est pas une
   décision de ne pas faire Zod, c'est un blocage d'environnement.
-- **`api/patient/retour-seance.ts`** — `seanceId` du body inséré sans
-  vérifier son appartenance au patient authentifié (voir
-  `docs/AUDIT_ROUTES_API.md`, constat en bas de fichier). Pas encore de
-  finding ouvert dans `docs/RAPPORT_SECURITE.md`.
-- **`xlsx` (npm audit)** — vulnérabilité sans correctif publié par le
-  mainteneur npm ; décision d'usage/remplacement à prendre par Lorenzo,
-  voir `docs/AUDIT_DEPENDANCE_XLSX.md`.
+- **`api/patient/retour-seance.ts`** — **corrigé le 2026-08-19** (F-13,
+  `docs/RAPPORT_SECURITE.md`). `seanceId` est désormais vérifié contre
+  `participant_id` avant insert, non testé en conditions réelles (pas de
+  staging fiable).
+- **`api/patient/seance.ts`, `exercices[].id`** — nouveau trou trouvé en
+  auditant les identifiants secondaires (voir `docs/AUDIT_ROUTES_API.md`,
+  "Constat (deuxième passage)") : `exercice_id` inséré dans
+  `exercices_realises` sans vérifier son appartenance au programme du
+  participant (la FK ne garantit que l'existence, pas la propriété). Pas
+  corrigé, pas encore de finding ouvert dans `docs/RAPPORT_SECURITE.md` —
+  décision à prendre.
+- **`xlsx` (npm audit)** — **décision prise (2026-08-19) : dette acceptée
+  en l'état**, usage 100% client sur les données propres du praticien —
+  voir `docs/AUDIT_DEPENDANCE_XLSX.md` pour les conditions de révision.

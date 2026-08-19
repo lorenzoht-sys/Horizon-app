@@ -71,3 +71,20 @@ connaissez la provenance") réduit l'exposition sans toucher au code, mais
 ne corrige pas la vulnérabilité elle-même.
 
 Aucune des trois n'est appliquée — décision à prendre par Lorenzo.
+
+## Décision (2026-08-19)
+
+**Dette acceptée, en l'état, pour l'instant.** Motif explicite de Lorenzo :
+usage 100% client, sur les données propres du praticien authentifié (pas
+un upload structure, pas un traitement serveur) — la portée du risque
+documentée plus haut ne justifie pas une migration maintenant.
+
+**À revoir si l'usage change** — notamment si un de ces cas apparaît :
+- le parsing `.xlsx`/`.xls`/`.csv` migre côté serveur (`api/*`) ;
+- un import devient accessible à un rôle non authentifié ou à un tiers
+  externe (structure, patient) ;
+- le fichier importé provient d'un flux automatisé/externe plutôt que d'un
+  choix manuel du praticien sur sa propre machine.
+
+Aucune de ces conditions n'est vraie aujourd'hui. Revoir ce fichier avant
+tout changement du flux d'import Excel.
