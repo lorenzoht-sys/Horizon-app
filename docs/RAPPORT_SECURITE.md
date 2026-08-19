@@ -99,6 +99,15 @@ nécessaires en permanence, indépendamment l'une de l'autre.
   ```
   Si le résultat montre `TRUNCATE` pour `authenticated` sur d'autres tables contenant de la donnée patient, ce serait un finding à part entière, plus grave que sur un simple catalogue de référence — à traiter dès que cette requête est lancée, pas supposé.
 
+  **⚠️ Complément 2026-08-19 (suite) — le test `[F-01]` du harnais est passé au vert sur staging après le `GRANT ALL` ci-dessus, mais ce vert est invalide — dérive d'environnement, pas une preuve.** Introspection directe (pas déduction) sur `tm6_variantes` :
+  ```
+  Staging : relrowsecurity = true, relforcerowsecurity = false, pg_policies → 0 ligne (aucune policy)
+  Prod    : relrowsecurity = true, relforcerowsecurity = false, pg_policies → 4 lignes USING(true)/WITH CHECK(true) (voir F-01 ci-dessus)
+  ```
+  RLS activée + zéro policy bloque *tout le monde* sauf les rôles qui contournent RLS (`service_role`, le propriétaire) — c'est ce qui a produit le `200 OK, 0 ligne affectée, aucune erreur` observé quand praticien B a tenté d'écrire. Ce n'est pas le comportement du correctif RÉG-01 (jamais appliqué sur staging, confirmé), et ce n'est pas non plus l'état vulnérable de prod (policies permissives `USING(true)`, pas absentes). **Staging a RLS activée mais n'a jamais eu les 4 policies que prod a** — cohérent avec ce que F-01 documentait déjà : ces policies ont été créées à la main dans Supabase Studio sur prod, hors de toute migration versionnée, donc rejouer `20260701_tm6_variantes.sql` seul sur staging ne les recrée pas. **Conclusion : le test F-01 vert du 2026-08-19 sur staging ne prouve ni la présence de la faille, ni l'efficacité d'un correctif — à ignorer comme preuve, à garder comme illustration du problème plus large ci-dessous.**
+
+  **Décision projet** (2026-08-19) : ce quatrième blocage d'affilée sur une seule table (table manquante → permission denied → bug harnais → dérive de policies) déplace la priorité vers un diff de schéma complet prod ↔ staging (toutes tables, RLS, policies, GRANTs, fonctions, vues, triggers) avant de reprendre le harnais table par table — voir `docs/DIFF_SCHEMA_PROD_STAGING.md` (à produire).
+
 ### [RÉG-01] Régression : le correctif F-01/F-09 casse la création/suppression de variantes TM6 en prod
 - **Origine** : découverte le 2026-08-19 en tentant de faire tourner `tests/security/rls.spec.ts -t "F-01"` sur staging — le test de seed lui-même (`admin.insert(...)` via `service_role`) a d'abord révélé que `tm6_variantes` n'existait même pas sur staging (migration `20260701_tm6_variantes.sql` jamais rejouée) ; une fois la table recréée, une vérification de l'usage réel du code (demandée avant de continuer, pas déduite) a montré que le correctif F-01/F-09 casse une fonctionnalité vivante.
 - **Preuve du chemin complet (code vivant, pas mort)** :
