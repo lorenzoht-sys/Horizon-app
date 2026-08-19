@@ -23,3 +23,19 @@ Résoudre la connexion Postgres directe vers prod (chaîne encodée, guillemets
 simples PowerShell — voir historique de session), lancer
 `scripts/dump-schema.ts` des deux côtés, produire
 `docs/DIFF_SCHEMA_PROD_STAGING.md` — avant de rouvrir le harnais.
+
+## Reste à faire (reporté, pas arbitré)
+- **Validation Zod des entrées API** — reste à faire, bloqué par l'absence
+  d'environnement de test. Les 12 routes ont une validation manuelle par
+  champ (voir `docs/AUDIT_ROUTES_API.md`), mais migrer vers des schémas
+  Zod changerait la forme exacte des réponses d'erreur consommées par
+  `src/lib/patientApi.ts` et consorts — pas de staging fiable pour vérifier
+  l'absence de régression front avant de le faire. Ce n'est pas une
+  décision de ne pas faire Zod, c'est un blocage d'environnement.
+- **`api/patient/retour-seance.ts`** — `seanceId` du body inséré sans
+  vérifier son appartenance au patient authentifié (voir
+  `docs/AUDIT_ROUTES_API.md`, constat en bas de fichier). Pas encore de
+  finding ouvert dans `docs/RAPPORT_SECURITE.md`.
+- **`xlsx` (npm audit)** — vulnérabilité sans correctif publié par le
+  mainteneur npm ; décision d'usage/remplacement à prendre par Lorenzo,
+  voir `docs/AUDIT_DEPENDANCE_XLSX.md`.
