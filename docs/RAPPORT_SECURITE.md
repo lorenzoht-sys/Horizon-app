@@ -196,6 +196,51 @@ nécessaires en permanence, indépendamment l'une de l'autre.
 
 ---
 
+## Vérification anti-régression des correctifs déjà écrits (2026-08-19)
+
+Déclenchée par la découverte de [RÉG-01] (le correctif F-01/F-09 casse
+`useTm6Variantes.ts`) : même vérification (grep de l'objet touché dans
+`src/`/`api/`, lecture du chemin d'appel jusqu'à une route montée) appliquée
+aux 7 autres migrations `20260817_securite_*` déjà écrites.
+
+| Migration | Finding | Objet touché | Usage client trouvé | Verdict |
+|---|---|---|---|---|
+| `securite_02` | F-05 | policies `anon` fantômes sur `programme_seances/planning/exercices` | `useProgrammeV2.ts`, `AssistantPage.tsx` — praticien authentifié uniquement ; `EspacePatient.tsx`/`PageAccesPatient.tsx` n'y touchent pas ; aucun appel dans `api/` | Pas de régression trouvée (voir limite ci-dessous) |
+| `securite_03` | F-06 | trigger append-only sur `audit_logs` | seul usage écrit = `api/_lib/patientAuth.ts:97`, un `INSERT` service_role. Aucun UPDATE/DELETE nulle part dans `src/`/`api/` | Pas de régression — le trigger ne bloque que UPDATE/DELETE |
+| `securite_04` | F-07 | `WITH CHECK` explicite sur `evenements_agenda` | n/a | Sûr par construction (Postgres appliquait déjà la même règle implicitement) |
+| `securite_05` | F-08 | `search_path` sur `set_praticien_id_from_auth()` | n/a | Sûr — ne change ni corps ni comportement de la fonction |
+| `securite_06` | F-10 | policy `anon` fantôme sur `documents_partages` | écrit par `AssistantPage.tsx:1384` (praticien authentifié, autre policy) ; lu uniquement par `api/structure/data.ts:64` (service_role) | Pas de régression trouvée (voir limite ci-dessous) |
+| `securite_07` | F-11 | `REVOKE EXECUTE` sur `get_praticien_structure` | reconfirmé : 0 appelant dans `src/`/`api/` | Pas de régression |
+| `securite_08` | (Phase 2, hors F-01..F-11) | seuil `claude_rate_limit` (30 req/h/praticien) | voir sous-finding dédié ci-dessous | Seuil à revoir, pas une régression de disponibilité d'accès |
+
+**⚠️ Limite de cette vérification, à ne pas perdre de vue** (relevée à
+raison — cette méthode a un angle mort) : "zéro usage trouvé par grep dans
+`src/`" prouve seulement que **l'app React elle-même** ne dépend pas de la
+policy retirée. Ça ne couvre pas :
+- un accès direct à l'API PostgREST avec la clé `anon` **en dehors de
+  l'app** (curl, script tiers, page statique non versionnée ici) — c'est
+  d'ailleurs exactement le vecteur d'exploitation que F-05/F-10 documentent
+  eux-mêmes, donc l'absence de dépendance interne ne dit rien sur
+  l'existence d'un dépendant externe légitime ;
+- un lien partagé public qui vivrait hors de ce dépôt (ex. une page
+  générée dynamiquement et distribuée par un autre canal) ;
+- le mode hors-ligne PWA — vérifié séparément (`vite.config.ts`,
+  `VitePWA`/`workbox`) : le service worker ne fait du `runtimeCaching` que
+  sur les polices Google Fonts, aucune requête Supabase/PostgREST n'est
+  interceptée ou rejouée hors-ligne, donc ce vecteur précis est écarté pour
+  `securite_02`/`securite_06` — mais cette vérification devrait être
+  refaite à chaque nouvelle migration touchant une policy `anon`, pas
+  supposée acquise.
+
+**[F-12] Seuil de rate limiting Claude (30 req/h/praticien) mal calibré par rapport à l'usage réel**
+- **Gravité** : Faible (disponibilité, pas une faille de sécurité — le mécanisme lui-même est correct)
+- **Preuve** : le commentaire qui justifie le seuil (`api/_lib/rateLimit.ts:9-13`) dit *"pas un chat conversationnel à haute fréquence"* — faux : `AssistantPage.tsx` est un chat multi-tours (`genererReponse`, historique, régénération, `callClaudeAPI` appelé à chaque message). Une seule génération de programme pour **un** patient coûte déjà 2 appels (`genererQuestionsClarification` + `genererProgrammeStructure`, `src/utils/genererProgrammeIA.ts:124` et `:305` — les boucles `for` des lignes 272/365 sont du traitement local, pas des appels réseau).
+- **Impact concret** : sur une session d'une heure où Pierre enchaîne 6 à 8 patients (interprétation + génération de programme + quelques échanges de chat chacun), 24 à 40 appels sont plausibles — au-dessus ou tout contre la limite de 30/h, pour un usage légitime, pas un abus. Point positif à noter : le compteur n'incrémente que sur une réponse Claude réussie (`api/claude.ts:98-101`), une panne Anthropic ne consomme donc pas le quota. Mais le message d'erreur (`api/claude.ts:37`, "réessayez dans un instant") ne donne aucun délai réel (pas de `Retry-After`), donc un praticien bloqué ne sait pas combien de temps attendre.
+- **Correctif proposé** : soit relever le seuil (ex. 60-80/h) pour absorber une session multi-patients chargée, soit distinguer un coût par type d'appel (génération structurée Sonnet vs. question de chat Haiku), soit renvoyer un délai d'attente exploitable par l'UI. Pas tranché — nécessite une discussion produit, pas juste un chiffre.
+- **Statut** : Ouvert, non corrigé. Migration `securite_08` déjà appliquée (créée `claude_rate_limit`) — le seuil applicatif (`CLAUDE_RATE_LIMIT_MAX` dans `api/_lib/rateLimit.ts`) reste à ajuster séparément, pas de migration à rejouer pour ça (c'est une constante côté code, pas en base).
+
+---
+
 ## Note de méthode — mode organisation
 
 Le mode « organisation » (migrations `20260714_*`/`20260715_*`) élargit
