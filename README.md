@@ -51,11 +51,16 @@ pas (mais l'app praticien fonctionne via le client Supabase `anon`).
 
 ```
 src/            Application praticien (React) — pages, composants, hooks Supabase
-api/            Fonctions serverless Vercel ("1 fichier = 1 route")
-  _lib/         Helpers partagés (auth patient/structure, Sentry)
-  patient/      Routes de l'espace patient (login, me, seance)
+api/            Fonctions serverless Vercel ("1 fichier = 1 route", 12 au total)
+  _lib/         Helpers partagés (auth patient/structure, rate limit, guard, Sentry)
+  patient/      Routes de l'espace patient (session, me, seance, activite,
+                retour-seance, push-subscribe)
   structure/    Route du portail structure (data)
+  seances/      Suppression en masse des séances planifiées (fin de contrat)
+  cron/         Endpoint déclenché par le job pg_cron (rappels patients)
+  planning/     Flux iCalendar (webcal) du planning praticien
   claude.ts     Proxy sécurisé vers l'API Claude (assistant IA)
+  organisation.ts  Demande de création d'organisation (mode multi-praticiens)
 supabase/
   migrations/   Historique versionné du schéma (règle d'or : voir migrations/README.md)
   functions/    Edge Functions Supabase (analyser-seance, interpreter-bilan)
@@ -104,8 +109,16 @@ Avant de merger sur `main`, voir **`CHECKLIST_RELEASE.md`**.
 Cette application traite des données de santé. Plusieurs documents
 encadrent ça :
 
+- **`docs/RAPPORT_SECURITE.md`** — audit sécurité en cours (branche
+  `audit-securite-global`) : findings RLS/API, statuts réels (corrigé en
+  code / testé / appliqué sont trois choses différentes, jamais confondues
+  dans ce rapport). **`docs/ETAT_AUDIT.md`** résume le blocage actuel et la
+  règle en vigueur : aucun merge vers `main`, aucune migration de ce lot
+  appliquée en prod tant que l'audit n'est pas clos. **`docs/MES_ACTIONS.md`**
+  liste ce qui reste à faire manuellement (accès base, décisions produit).
 - **`RAPPORT_SECURISATION.md`** — sécurisation des accès (auth serveur pour
-  l'espace patient et le portail structure, RLS, rate limiting).
+  l'espace patient et le portail structure, RLS, rate limiting), antérieur
+  à l'audit ci-dessus.
 - **`AUDIT.md`** — état des lieux détaillé du code (Tâche 1, consolidation).
 - **`supabase/migrations/`** — historique versionné du schéma (règle d'or :
   toute évolution passe par un fichier de migration, jamais une modification

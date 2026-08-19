@@ -5,6 +5,11 @@
 code : elle vérifie que les vérifications automatiques et les étapes
 manuelles connues ont bien été faites.
 
+⚠️ **Audit sécurité en cours** (branche `audit-securite-global`,
+`docs/RAPPORT_SECURITE.md`) : tant que `docs/ETAT_AUDIT.md` n'est pas
+clos, aucun merge de cette branche vers `main`, quel que soit l'état de
+cette checklist par ailleurs.
+
 ## 1. Vérifications automatiques (locales ou via CI)
 
 - [ ] `npx tsc --noEmit` (front `src/`) — aucune erreur.
