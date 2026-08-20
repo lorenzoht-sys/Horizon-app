@@ -61,6 +61,8 @@ export function dbToParticipant(row: any): Participant {
     adresseRue: row.adresse_rue ?? undefined,
     adresseCodePostal: row.adresse_code_postal ?? undefined,
     adresseVille: row.adresse_ville ?? undefined,
+    codePortail: row.code_portail ?? undefined,
+    personneContact: row.personne_contact ?? undefined,
     coordonnees: row.coordonnees_lat != null ? {
       lat: row.coordonnees_lat,
       lng: row.coordonnees_lng,
@@ -129,6 +131,8 @@ export function participantToDb(p: Omit<Participant, 'bilans' | 'programmes'>): 
     adresse_rue: p.adresseRue ?? null,
     adresse_code_postal: p.adresseCodePostal ?? null,
     adresse_ville: p.adresseVille ?? null,
+    code_portail: p.codePortail ?? null,
+    personne_contact: p.personneContact ?? null,
     coordonnees_lat: p.coordonnees?.lat ?? null,
     coordonnees_lng: p.coordonnees?.lng ?? null,
     mode_deplacement: p.modeDeplacementHabituel ?? null,

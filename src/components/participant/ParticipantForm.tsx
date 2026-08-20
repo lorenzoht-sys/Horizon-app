@@ -1207,6 +1207,8 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
     adresseRue:        seed.adresseRue        ?? '',
     adresseCodePostal: seed.adresseCodePostal ?? '',
     adresseVille:      seed.adresseVille      ?? '',
+    codePortail:       seed.codePortail       ?? '',
+    personneContact:   seed.personneContact   ?? '',
     taille:               seed.taille?.toString() ?? '',
     poids:                seed.poids?.toString()  ?? '',
     nomNaissance:         seed.nomNaissance         ?? '',
@@ -1452,6 +1454,20 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
           <input name="adresseVille" value={form.adresseVille} onChange={handleChange}
             placeholder="Paris"
             className="col-span-2 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary" />
+        </div>
+      </div>
+
+      {/* ── INFORMATIONS COMPLÉMENTAIRES (accès domicile) ── */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className={CLS_LABEL}>Code portail / digicode <span className="text-gray-400 font-normal">(optionnel)</span></label>
+          <input name="codePortail" value={form.codePortail} onChange={handleChange}
+            placeholder="A1234" className={CLS_INPUT} />
+        </div>
+        <div>
+          <label className={CLS_LABEL}>Personne à contacter <span className="text-gray-400 font-normal">(optionnel)</span></label>
+          <input name="personneContact" value={form.personneContact} onChange={handleChange}
+            placeholder="Marie Dupont — 06 12 34 56 78" className={CLS_INPUT} />
         </div>
       </div>
       </>}

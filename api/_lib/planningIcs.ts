@@ -8,7 +8,10 @@
 // Confidentialité : le flux ne doit jamais exposer notes, motif_annulation,
 // motif_annulation_detail (données internes au praticien, voir
 // supabase/migrations/20260708_motif_annulation_seances.sql) ni le nom
-// complet du bénéficiaire (seulement "Prénom I.").
+// complet du bénéficiaire (seulement "Prénom I."). Le DESCRIPTION du VEVENT
+// ne contient que code_portail / personne_contact (voir
+// supabase/migrations/20260820_add_infos_complementaires_participants.sql),
+// jamais ces autres champs.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import ical from 'ical-generator';
@@ -45,6 +48,8 @@ export interface SeancePourIcs {
   adresse: string | null;
   participantPrenom: string;
   participantNom: string;
+  codePortail: string | null;
+  personneContact: string | null;
 }
 
 // Charge les séances futures (fenêtre glissante de 6 mois) d'un praticien,
@@ -56,7 +61,7 @@ export async function chargerSeancesPourIcs(supabase: SupabaseClient, praticienI
 
   const { data, error } = await supabase
     .from('seances')
-    .select('id, date, heure_debut, heure_fin, type, adresse, statut, participants(prenom, nom)')
+    .select('id, date, heure_debut, heure_fin, type, adresse, statut, participants(prenom, nom, code_portail, personne_contact)')
     .eq('praticien_id', praticienId)
     .neq('statut', 'annulee')
     .gte('date', aujourdhui)
@@ -72,7 +77,14 @@ export async function chargerSeancesPourIcs(supabase: SupabaseClient, praticienI
     heure_fin: string;
     type: SeancePourIcs['type'];
     adresse: string | null;
-    participants: { prenom: string; nom: string } | { prenom: string; nom: string }[] | null;
+    participants: RowParticipantIcs | RowParticipantIcs[] | null;
+  }
+
+  interface RowParticipantIcs {
+    prenom: string;
+    nom: string;
+    code_portail: string | null;
+    personne_contact: string | null;
   }
 
   return (data as RowSeanceIcs[]).map((row): SeancePourIcs => {
@@ -86,6 +98,8 @@ export async function chargerSeancesPourIcs(supabase: SupabaseClient, praticienI
       adresse: row.adresse || null,
       participantPrenom: participant?.prenom ?? '',
       participantNom: participant?.nom ?? '',
+      codePortail: participant?.code_portail || null,
+      personneContact: participant?.personne_contact || null,
     };
   });
 }
@@ -100,12 +114,17 @@ export function genererCalendrierPlanning(seances: SeancePourIcs[]): string {
     const initiale = seance.participantNom ? `${seance.participantNom.charAt(0).toUpperCase()}.` : '';
     const summary = `${seance.participantPrenom} ${initiale}`.trim();
 
+    const lignesDescription: string[] = [];
+    if (seance.codePortail) lignesDescription.push(`Code portail : ${seance.codePortail}`);
+    if (seance.personneContact) lignesDescription.push(`Personne à contacter : ${seance.personneContact}`);
+
     calendar.createEvent({
       id: seance.id,
       start: dateHeureParisVersUTC(seance.date, seance.heureDebut),
       end: dateHeureParisVersUTC(seance.date, seance.heureFin),
       summary,
       location: seance.adresse || undefined,
+      description: lignesDescription.length > 0 ? lignesDescription.join('\n') : undefined,
     });
   }
 
