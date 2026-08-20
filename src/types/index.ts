@@ -599,6 +599,9 @@ export interface Participant {
   adresseRue?: string;
   adresseCodePostal?: string;
   adresseVille?: string;
+  // Informations complémentaires (accès domicile)
+  codePortail?: string;          // digicode / code portail — distinct de codeAcces (connexion /patient)
+  personneContact?: string;      // "Personne à contacter" — texte libre, nom + téléphone
   // Géolocalisation
   coordonnees?: Coordonnees;
   geocodeFailed?: boolean;       // true si le dernier géocodage a échoué

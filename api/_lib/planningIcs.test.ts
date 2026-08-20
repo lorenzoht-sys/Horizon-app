@@ -13,6 +13,8 @@ function seance(overrides: Partial<SeancePourIcs> = {}): SeancePourIcs {
     adresse: '12 rue des Lilas, 75011 Paris',
     participantPrenom: 'Marie',
     participantNom: 'Dupont',
+    codePortail: null,
+    personneContact: null,
     ...overrides,
   };
 }
@@ -83,5 +85,17 @@ describe('genererCalendrierPlanning', () => {
   it('ne génère aucun VEVENT si la liste de séances est vide (annulées déjà filtrées en amont)', () => {
     const events = parseEvents(genererCalendrierPlanning([]));
     expect(events).toHaveLength(0);
+  });
+
+  it('inclut le code portail et la personne à contacter en DESCRIPTION quand renseignés', () => {
+    const s = seance({ codePortail: 'A1234', personneContact: 'Marie Dupont — 06 12 34 56 78' });
+    const events = parseEvents(genererCalendrierPlanning([s]));
+    expect(events[0].description).toBe('Code portail : A1234\nPersonne à contacter : Marie Dupont — 06 12 34 56 78');
+  });
+
+  it('omet DESCRIPTION quand ni code portail ni personne à contacter ne sont renseignés', () => {
+    const s = seance({ codePortail: null, personneContact: null });
+    const events = parseEvents(genererCalendrierPlanning([s]));
+    expect(events[0].description).toBeFalsy();
   });
 });
