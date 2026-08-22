@@ -7,7 +7,7 @@ import { defineConfig } from 'vitest/config';
 // préférences, anti-doublon, assignation des jours).
 export default defineConfig({
   test: {
-    include: ['api/**/*.test.ts', 'src/lib/**/*.test.ts', 'src/utils/**/*.test.ts'],
+    include: ['api/**/*.test.ts', 'src/lib/**/*.test.ts', 'src/utils/**/*.test.ts', 'tests/security/*.spec.ts'],
     environment: 'node',
   },
 });

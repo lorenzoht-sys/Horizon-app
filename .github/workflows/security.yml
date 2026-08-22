@@ -1,0 +1,80 @@
+name: Sécurité
+
+on:
+  push:
+    branches: [main, consolidation]
+  pull_request:
+
+jobs:
+  # Vérifications statiques + tests de sécurité : gitleaks (secrets dans
+  # l'historique), npm audit, typecheck des routes api/*, build + recherche
+  # de secrets dans le bundle client, puis le harnais RLS (tests/security/).
+  # Ce dernier est auto-skip par vitest (voir tests/security/rls.spec.ts) tant
+  # que les secrets STAGING_* ne sont pas configurés dans ce dépôt — mais un
+  # skip fait ÉCHOUER ce job (voir l'étape ci-dessous) : un run vert n'est
+  # valable que si le harnais a réellement tourné, jamais parce qu'il a été
+  # silencieusement ignoré.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # historique complet, nécessaire à gitleaks
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm audit --audit-level=high --production
+      - run: npm run typecheck:api
+      - run: npm run build
+
+      - name: Aucun secret serveur dans le bundle client
+        run: |
+          if grep -rEq "service_role|sk-ant-|BEGIN [A-Z ]*PRIVATE KEY" dist/; then
+            echo "::error::Secret détecté dans dist/ (bundle envoyé au navigateur)"
+            exit 1
+          fi
+
+      - name: Harnais de sécurité (RLS multi-tenant) — un skip est un échec, jamais un vert silencieux
+        run: |
+          npx vitest run tests/security --reporter=json --outputFile=vitest-security-result.json || true
+          node -e "
+            const r = require('./vitest-security-result.json');
+            const total = r.numTotalTests || 0;
+            const failed = r.numFailedTests || 0;
+            const skipped = r.numPendingTests || 0;
+            if (total === 0) {
+              console.error('::error::Aucun test trouvé dans tests/security/ — vérifie include dans vitest.config.ts.');
+              process.exit(1);
+            }
+            if (failed > 0) {
+              console.error('::error::' + failed + '/' + total + ' test(s) en ÉCHEC dans tests/security/.');
+              process.exit(1);
+            }
+            if (skipped > 0) {
+              console.error('::error::' + skipped + '/' + total + ' test(s) SKIP dans tests/security/ (secrets STAGING_* manquants ou invalides ?) — voir tests/security/rls.spec.ts. Un skip ne peut jamais être vert ici.');
+              process.exit(1);
+            }
+            console.log(total + ' test(s) exécuté(s) avec succès dans tests/security/ — harnais RLS réellement vérifié.');
+          "
+        env:
+          SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
+          SUPABASE_TEST_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
+          SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
+          PATIENT_SESSION_SECRET: ${{ secrets.PATIENT_SESSION_SECRET }}
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          # Réutilise les mêmes secrets/variables de dépôt que le job e2e de
+          # ci.yml (staging.praticien@example.com et les codes de démo de
+          # scripts/seed-staging.sql) plutôt que d'en dupliquer sous un autre nom.
+          E2E_PRATICIEN_EMAIL: ${{ vars.E2E_PRATICIEN_EMAIL }}
+          E2E_PRATICIEN_PASSWORD: ${{ secrets.E2E_PRATICIEN_PASSWORD }}
+          E2E_PATIENT_CODE: ${{ vars.E2E_PATIENT_CODE }}
+          E2E_PATIENT_CODE_2: ${{ vars.E2E_PATIENT_CODE_2 }}
+          E2E_STRUCTURE_TOKEN: ${{ vars.E2E_STRUCTURE_TOKEN }}
