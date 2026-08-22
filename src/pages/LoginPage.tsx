@@ -23,14 +23,6 @@ export default function LoginPage({ onLogin }: Props) {
     if (!email || !password) { setError('Veuillez remplir tous les champs'); return; }
     setLoading(true);
 
-    if (!supabase && email === 'pierre@mouvapa.com' && password === 'mouvapa2025') {
-      localStorage.setItem('isLoggedIn', 'true');
-      onLogin();
-      navigate('/');
-      setLoading(false);
-      return;
-    }
-
     if (supabase) {
       const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (!authError) {
