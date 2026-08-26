@@ -62,25 +62,9 @@ jobs:
             exit 1
           fi
 
-      - name: DEBUG TEMPORAIRE — longueur des secrets uniquement, jamais leur contenu (à retirer)
-        run: |
-          echo "SUPABASE_TEST_URL: ${#SUPABASE_TEST_URL} caractères"
-          echo "SUPABASE_TEST_ANON_KEY: ${#SUPABASE_TEST_ANON_KEY} caractères"
-          echo "SUPABASE_TEST_SERVICE_ROLE_KEY: ${#SUPABASE_TEST_SERVICE_ROLE_KEY} caractères"
-          echo "PATIENT_SESSION_SECRET: ${#PATIENT_SESSION_SECRET} caractères"
-          echo "STAGING_DATABASE_URL: ${#STAGING_DATABASE_URL} caractères"
-          echo "E2E_PRATICIEN_PASSWORD: ${#E2E_PRATICIEN_PASSWORD} caractères"
-        env:
-          SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
-          SUPABASE_TEST_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
-          SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
-          PATIENT_SESSION_SECRET: ${{ secrets.PATIENT_SESSION_SECRET }}
-          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
-          E2E_PRATICIEN_PASSWORD: ${{ secrets.E2E_PRATICIEN_PASSWORD }}
-
       - name: Harnais de sécurité (RLS multi-tenant) — un skip est un échec, jamais un vert silencieux
         run: |
-          npx vitest run tests/security --reporter=json --outputFile=vitest-security-result.json || true
+          npx vitest run tests/security --reporter=default --reporter=json --outputFile=vitest-security-result.json || true
           node -e "
             const r = require('./vitest-security-result.json');
             const total = r.numTotalTests || 0;
