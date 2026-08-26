@@ -113,6 +113,20 @@ const TABLE_OVERRIDES: Record<string, { via: string; note: string }> = {
   dossier_exercice_membres: { via: 'dossiers_exercices!inner(praticien_id)', note: 'jointure vers dossiers_exercices' },
 };
 
+// Tables du test générique "Praticien A ↔ Praticien B" (ci-dessous) dont la
+// colonne d'appartenance n'est PAS praticien_id. Cas unique connu :
+// `praticiens` n'a pas de colonne praticien_id — une ligne de ce catalogue
+// EST le praticien, son identité est portée par `id` (= auth.uid()), pas
+// par une référence à un autre praticien. Sans cette entrée, le filtre
+// générique `.eq('praticien_id', ...)` porterait sur une colonne
+// inexistante : la requête échouerait avec une erreur de colonne (42703),
+// jamais un rejet RLS — un faux positif qui ne teste RIEN de l'isolation
+// réelle de cette table (constaté le 2026-08-26, voir le commentaire du
+// test paramétré plus bas pour le détail complet).
+const OWNER_COLUMN_OVERRIDES: Record<string, string> = {
+  praticiens: 'id',
+};
+
 async function requireStagingEnv() {
   if (!HAS_STAGING_ENV) {
     throw new Error(
@@ -272,21 +286,45 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
         'exercices_personnalises', 'programmes_modeles', 'evenements_agenda',
       ] as const
     )('praticien B ne peut ni lire ni écrire une ligne de %s appartenant à praticien A', async (table) => {
-      // Lecture croisée.
+      // Colonne de filtrage : praticien_id par défaut, sauf override (voir
+      // OWNER_COLUMN_OVERRIDES ci-dessus — cas de `praticiens`, qui n'a pas
+      // de colonne praticien_id).
+      const ownerColumn = OWNER_COLUMN_OVERRIDES[table] ?? 'praticien_id';
+
+      // Lecture croisée. Une policy SELECT correcte ne renvoie PAS d'erreur
+      // pour une ligne simplement invisible : Postgres/PostgREST la filtre
+      // silencieusement (HTTP 200, error: null, tableau vide) — ce n'est un
+      // comportement anormal ni un signe de policy manquante. Exiger une
+      // erreur ici (comme le faisait l'assertion précédente) fait échouer
+      // à tort des tables où la RLS fonctionne très bien : vérifié
+      // empiriquement le 2026-08-26 sur participants/bilans/contrats via un
+      // script de diagnostic ad hoc (praticien B éphémère, service_role,
+      // hors dépôt) — HTTP 200 / error: null / 0 ligne dans les 3 cas,
+      // aucune fuite. Avant l'ajout d'OWNER_COLUMN_OVERRIDES, `praticiens`
+      // produisait une erreur ici, mais pour une raison sans rapport avec
+      // sa policy : filtrer `.eq('praticien_id', ...)` sur une table sans
+      // cette colonne échoue sur une colonne inexistante (42703), pas sur
+      // un rejet RLS — cette table n'était donc jamais réellement testée
+      // (faux positif). Comparaison RLS/GRANT praticiens vs participants
+      // menée le 2026-08-26 : policies et GRANT structurellement identiques
+      // dans les deux cas (PERMISSIVE, USING owner = auth.uid(), mêmes
+      // GRANT), aucune différence qui expliquerait un comportement RLS
+      // distinct — seule la colonne de filtrage différait. On accepte donc
+      // les deux issues comme un succès (erreur explicite OU tableau vide) ;
+      // seule la présence réelle de lignes de praticien A dans readData est
+      // un échec.
       const { data: readData, error: readErr } = await clientB
         .from(table)
         .select('*')
-        .eq('praticien_id', praticienAId);
-      expect(readErr?.code ?? null, `lecture de ${table} par praticien B n'a pas renvoyé d'erreur RLS`).not.toBeNull();
-      if (!readErr) {
-        expect(readData ?? [], `praticien B a lu ${(readData ?? []).length} ligne(s) de praticien A dans ${table}`).toHaveLength(0);
-      }
+        .eq(ownerColumn, praticienAId);
+      void readErr;
+      expect(readData ?? [], `praticien B a lu ${(readData ?? []).length} ligne(s) de praticien A dans ${table}`).toHaveLength(0);
 
       // Écriture croisée (tentative de update en se faisant passer pour praticien A).
       const { error: writeErr, count } = await clientB
         .from(table)
         .update({ updated_at: new Date().toISOString() })
-        .eq('praticien_id', praticienAId)
+        .eq(ownerColumn, praticienAId)
         .select('*', { count: 'exact', head: true });
       const rowsAffected = count ?? 0;
       expect(rowsAffected, `praticien B a pu modifier ${rowsAffected} ligne(s) de praticien A dans ${table}`).toBe(0);
