@@ -83,6 +83,14 @@ jobs:
               process.exit(1);
             }
             if (failed > 0) {
+              for (const file of r.testResults || []) {
+                for (const a of file.assertionResults || []) {
+                  if (a.status === 'failed') {
+                    console.error('::error::ÉCHEC : ' + a.fullName);
+                    for (const m of a.failureMessages || []) console.error(m.split('\n')[0]);
+                  }
+                }
+              }
               console.error('::error::' + failed + '/' + total + ' test(s) en ÉCHEC dans tests/security/.');
               process.exit(1);
             }
