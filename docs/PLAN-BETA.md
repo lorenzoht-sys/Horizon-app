@@ -19,6 +19,28 @@ ces points, le retirer d'ici dans la même PR (comme le lot 4 l'a fait pour
 |---|---|---|
 | `couverture complète : toute table public non testée ci-dessus est explicitement listée (EXCLUDED_TABLES ou TABLE_OVERRIDES)` | Tente de lister `information_schema.tables` via le client PostgREST (`SUPABASE_TEST_SERVICE_ROLE_KEY`), qui n'expose que les schémas `public`/`graphql_public` (voir `supabase/config.toml`) — `information_schema` n'y est jamais accessible, quel que soit le rôle. | Faire passer ce test sur la connexion Postgres directe (`STAGING_DATABASE_URL`), comme le bloc "Findings structurels" (F-05/F-07/F-08/F-09/F-10) plus bas dans le même fichier — reporté, décision explicite du 2026-08-26 de garder `STAGING_DATABASE_URL` en connexion directe plutôt que pooler, ce qui bloque déjà ce bloc en CI (`ENETUNREACH`, IPv6) et bloquerait pareillement ce test s'il migrait dessus tel quel. |
 
+## Chantiers de sécurité identifiés mais non appliqués
+
+Trouvés en préparant le lot 6 de l'étape 1 (rate limit `api/claude.ts`,
+F-12) : `audit-securite-global` mélange ce correctif à 3 autres dans le même
+commit (`d6be50f`, fichier `api/claude.ts`), jamais revus ni planifiés.
+Ils ont l'air utiles mais n'ont pas été extraits — seul le rate limit l'a
+été (voir `20260817_securite_08_rate_limit_claude.sql`). À traiter comme un
+lot séparé, avec sa propre revue :
+
+- **Plafond de taille de prompt** (`PROMPT_MAX_LENGTH`, `api/_lib/guard.js`
+  sur `audit-securite-global`) — réduit l'abus de coût par des prompts
+  démesurés. Absent de `main`.
+- **Garde-fou anti prompt-injection** — message système dans `api/claude.ts`
+  instruisant le modèle à ne jamais traiter le contenu utilisateur (notes
+  cliniques, dictées patient) comme une instruction. Défense en profondeur,
+  pas une garantie absolue vu que 8 appelants différents côté `src/`
+  envoient des formats hétérogènes dans `prompt`.
+- **Sanitisation des messages d'erreur** — remplace `String(err)` (peut
+  exposer des détails internes au client) par un message générique
+  `'Erreur serveur'` + `console.error` côté serveur, sur les deux `catch`
+  de `api/claude.ts`.
+
 ## Procédure de purge RGPD sur `audit_logs`
 
 Depuis `20260817_securite_03_audit_logs_immuable.sql`, la table `public.audit_logs`

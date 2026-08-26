@@ -5,6 +5,7 @@
 
 import { getServiceClient, extractBearerToken } from './_lib/patientAuth.js';
 import { withSentry } from './_lib/sentry.js';
+import { checkClaudeRateLimit, recordClaudeRequest } from './_lib/rateLimit.js';
 
 export default withSentry(async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -24,6 +25,20 @@ export default withSentry(async function handler(req: any, res: any) {
   const { data: userData, error: userErr } = await supabase.auth.getUser(token);
   if (userErr || !userData?.user) {
     return res.status(401).json({ error: 'Session invalide ou expirée' });
+  }
+  const praticienId = userData.user.id;
+
+  // Rate limiting (docs/RAPPORT_SECURITE.md) : évite qu'un compte compromis
+  // (ou un bug côté front qui boucle) épuise le crédit ANTHROPIC_API_KEY
+  // partagé par tous les praticiens — voir api/_lib/rateLimit.ts.
+  const withinLimit = await checkClaudeRateLimit(supabase, praticienId);
+  if (!withinLimit) {
+    // Log volontaire (pas juste un 429 silencieux) : seule façon de savoir
+    // après coup si ce seuil se déclenche sur un usage réel, pour l'ajuster
+    // sur des données plutôt que sur l'estimation documentée dans
+    // api/_lib/rateLimit.ts.
+    console.warn(`[api/claude] rate limit atteint pour praticien ${praticienId}`);
+    return res.status(429).json({ error: 'Trop de requêtes IA récentes, réessayez dans un instant' });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -67,6 +82,11 @@ export default withSentry(async function handler(req: any, res: any) {
     const data = await claudeRes.json();
     const rawText: string = data.content?.[0]?.text ?? '';
     const cleanText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+    // Comptabilisé seulement après une réponse Claude réussie : un appel qui
+    // échoue (ex. erreur Anthropic) ne doit pas consommer le quota du
+    // praticien pour une panne qui n'est pas de son fait.
+    await recordClaudeRequest(supabase, praticienId);
 
     return res.status(200).json({ text: cleanText });
   } catch (err) {
