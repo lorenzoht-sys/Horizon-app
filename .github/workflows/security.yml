@@ -64,7 +64,7 @@ jobs:
 
       - name: Harnais de sécurité (RLS multi-tenant) — un skip est un échec, jamais un vert silencieux
         run: |
-          npx vitest run tests/security --reporter=default --reporter=json --outputFile=vitest-security-result.json || true
+          npx vitest run tests/security --reporter=json --outputFile=vitest-security-result.json || true
           node -e "
             const r = require('./vitest-security-result.json');
             const total = r.numTotalTests || 0;

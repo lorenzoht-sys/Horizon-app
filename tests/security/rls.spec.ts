@@ -81,15 +81,6 @@ const STRUCTURE_TOKEN = process.env.E2E_STRUCTURE_TOKEN ?? 'staging-token-demo-0
 
 const HAS_STAGING_ENV = Boolean(URL && ANON_KEY && SERVICE_KEY && PATIENT_SECRET && PRATICIEN_A_PASSWORD);
 
-// DEBUG TEMPORAIRE — booléens uniquement, jamais aucune valeur — à retirer.
-console.error('[DEBUG] HAS_STAGING_ENV =', HAS_STAGING_ENV, {
-  URL: Boolean(URL),
-  ANON_KEY: Boolean(ANON_KEY),
-  SERVICE_KEY: Boolean(SERVICE_KEY),
-  PATIENT_SECRET: Boolean(PATIENT_SECRET),
-  PRATICIEN_A_PASSWORD: Boolean(PRATICIEN_A_PASSWORD),
-});
-
 // Tables sciemment exclues du test générique (raison documentée par ligne).
 // Toute table `public` qui n'est ni ici ni dans TABLE_OVERRIDES tombe dans
 // le test "UNKNOWN OWNERSHIP" ci-dessous et fait échouer la CI.
@@ -563,8 +554,6 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
 // d'environnement mal nommée ne puisse jamais faire tourner ces requêtes
 // contre la production.
 const STAGING_DB_URL = process.env.STAGING_DATABASE_URL;
-// DEBUG TEMPORAIRE — booléen uniquement — à retirer.
-console.error('[DEBUG] Boolean(STAGING_DB_URL) =', Boolean(STAGING_DB_URL));
 
 describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postgres directe)', () => {
   let pg: PgClient;
