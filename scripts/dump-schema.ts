@@ -34,7 +34,11 @@ function q(ident: string): string {
   return `"${ident.replace(/"/g, '""')}"`;
 }
 
-function buildConnectionConfig() {
+type ConnectionConfig =
+  | { connectionString: string; ssl: { rejectUnauthorized: boolean } }
+  | { host: string; port: number; database: string; user: string; password: string; ssl: { rejectUnauthorized: boolean } };
+
+function buildConnectionConfig(): ConnectionConfig {
   if (process.env.DATABASE_URL) {
     return { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } };
   }
@@ -72,6 +76,46 @@ function buildConnectionConfig() {
     password,
     ssl: { rejectUnauthorized: false },
   };
+}
+
+// Réf. de projet Supabase connues → libellé lisible dans l'en-tête du dump.
+const PROJECT_LABELS: Record<string, string> = {
+  nnfkchhtjrferxnwlcxp: 'staging',
+  rjgzeuywwknubpwigozq: 'production',
+};
+
+function connectionHost(config: ConnectionConfig): string {
+  if ('connectionString' in config) {
+    try {
+      return new URL(config.connectionString).hostname;
+    } catch {
+      return config.connectionString;
+    }
+  }
+  return config.host;
+}
+
+// Cherche la réf. de projet à deux endroits possibles selon le mode de connexion :
+// - DATABASE_URL direct : dans le host (ex. db.<ref>.supabase.co)
+// - pooler-url (chemin documenté par défaut) : dans le user (postgres.<ref>@...)
+function connectionRefCandidates(config: ConnectionConfig): string[] {
+  if ('connectionString' in config) {
+    try {
+      const url = new URL(config.connectionString);
+      return [url.hostname, decodeURIComponent(url.username)];
+    } catch {
+      return [config.connectionString];
+    }
+  }
+  return [config.host, config.user];
+}
+
+function sourceLabel(config: ConnectionConfig): string {
+  const candidates = connectionRefCandidates(config);
+  for (const [ref, label] of Object.entries(PROJECT_LABELS)) {
+    if (candidates.some(c => c.includes(ref))) return label;
+  }
+  return connectionHost(config);
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -355,7 +399,8 @@ async function dumpGrants(client: Client): Promise<string[]> {
 // ────────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const client = new Client(buildConnectionConfig());
+  const config = buildConnectionConfig();
+  const client = new Client(config);
   await client.connect();
   // Garde-fou : toute requête d'écriture échouera dans cette session.
   await client.query('SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY');
@@ -378,7 +423,7 @@ async function main() {
     const header =
       `-- ============================================================\n` +
       `-- Schéma "public" — généré par scripts/dump-schema.ts\n` +
-      `-- Source : production, le ${new Date().toISOString()}\n` +
+      `-- Source : ${sourceLabel(config)}, le ${new Date().toISOString()}\n` +
       `-- À coller dans le SQL Editor d'un projet Supabase VIDE\n` +
       `-- (voir GUIDE_STAGING.md, étape 2.1)\n` +
       `-- ============================================================\n`;
