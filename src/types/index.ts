@@ -651,6 +651,7 @@ export interface Structure {
   contactEmail: string;
   contactTelephone?: string;
   tokenAcces: string;
+  expiresAt?: string | null;   // null = token émis avant [F-04], sans expiration
   tarifSeance: number;
   frequenceFacturation: FrequenceFacturation;
   actif: boolean;

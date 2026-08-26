@@ -43,6 +43,17 @@ export function useStructures() {
     return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
+  // [F-04, docs/RAPPORT_SECURITE.md] Durée de validité d'un lien de
+  // structure : 1 an à partir de la (re)génération. Un token existant
+  // (expires_at NULL, créé avant cette colonne) n'expire pas
+  // rétroactivement — seuls les tokens émis/régénérés à partir de
+  // maintenant portent une expiration.
+  function dansUnAn(): string {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 1);
+    return d.toISOString();
+  }
+
   async function creerStructure(data: {
     nom: string;
     type?: Structure['type'];
@@ -62,6 +73,7 @@ export function useStructures() {
       id: uuidv4(),
       praticien_id: praticienId,
       token_acces: genToken(),  // généré côté client, pas de dépendance pgcrypto
+      expires_at: dansUnAn(),
     };
     const { data: inserted, error } = await supabase
       .from('structures')
@@ -97,9 +109,10 @@ export function useStructures() {
     const array = new Uint8Array(32);
     crypto.getRandomValues(array);
     const token = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
-    const { error } = await supabase.from('structures').update({ token_acces: token }).eq('id', id);
+    const expiresAt = dansUnAn();
+    const { error } = await supabase.from('structures').update({ token_acces: token, expires_at: expiresAt }).eq('id', id);
     if (!error) {
-      setStructures(prev => prev.map(s => s.id === id ? { ...s, tokenAcces: token } : s));
+      setStructures(prev => prev.map(s => s.id === id ? { ...s, tokenAcces: token, expiresAt } : s));
       return token;
     }
     return null;
