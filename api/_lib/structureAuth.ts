@@ -20,15 +20,25 @@ export function getStructureToken(req: { headers: Record<string, string | string
 }
 
 // Valide le token contre structures.token_acces. Une structure inactive
-// (actif = false) est traitée comme un token invalide.
+// (actif = false) ou un token expiré (expires_at dans le passé — voir
+// [F-04], docs/RAPPORT_SECURITE.md) est traité comme un token invalide.
+//
+// expires_at NULL = token émis avant l'ajout de cette colonne : PAS
+// d'expiration rétroactive. C'est une garantie, pas un effet de bord —
+// couper sans préavis l'accès d'un EHPAD déjà en service serait pire que
+// le risque que l'expiration corrige. Voir
+// 20260819_structure_token_expiration.sql.
 export async function validateStructureToken(supabase: SupabaseClient, token: string): Promise<StructureInfo | null> {
   const { data, error } = await supabase
     .from('structures')
-    .select('id, nom, actif, tarif_seance, praticien_id')
+    .select('id, nom, actif, tarif_seance, praticien_id, expires_at')
     .eq('token_acces', token)
     .single();
 
   if (error || !data || !data.actif) return null;
+  // `data.expires_at &&` court-circuite sur NULL (falsy) : un token sans
+  // expiration reste valide indéfiniment, comme avant cette colonne.
+  if (data.expires_at && new Date(data.expires_at).getTime() <= Date.now()) return null;
 
   return {
     id: data.id,

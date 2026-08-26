@@ -41,6 +41,23 @@ lot séparé, avec sa propre revue :
   `'Erreur serveur'` + `console.error` côté serveur, sur les deux `catch`
   de `api/claude.ts`.
 
+### Code mort de l'ancienne architecture « client anon direct »
+
+`MIGRATION_ANON.md` décrit le passage d'un accès Supabase anon direct
+(portail structure) vers les routes serveur `GET /api/structure/*`
+(service_role). Plusieurs vestiges de l'ancienne architecture n'ont jamais
+été supprimés. Aucun n'a d'appelant — vérifié par `grep` sur `src/`, `api/`,
+`scripts/`, `tests/`, `e2e/` :
+
+- `src/hooks/useStructures.ts:verifierTokenStructure()` — validation de token
+  côté client, sans auth. Zéro appelant. À noter : elle ne vérifie pas
+  `expires_at` (le lot 7 ne l'a pas modifiée, faute d'appelant à protéger) —
+  si elle était un jour réutilisée telle quelle, elle contournerait
+  l'expiration ajoutée par [F-04]. À supprimer plutôt qu'à corriger.
+- `get_praticien_structure(text)` et `structure_token_valide(uuid)` —
+  fonctions Postgres, traitées par
+  `20260826_revoke_public_execute_functions.sql` (REVOKE + DROP).
+
 ## Procédure de purge RGPD sur `audit_logs`
 
 Depuis `20260817_securite_03_audit_logs_immuable.sql`, la table `public.audit_logs`
