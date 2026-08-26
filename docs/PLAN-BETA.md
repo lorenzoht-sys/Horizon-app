@@ -1,5 +1,24 @@
 # Plan bêta — points à traiter avant ouverture
 
+## Échecs connus et acceptés du harnais `tests/security/rls.spec.ts`
+
+Le job `audit` de `.github/workflows/security.yml` fait échouer la CI sur tout
+skip ou tout échec du harnais — volontairement, pour ne jamais laisser un vert
+silencieux masquer un test qui ne tourne pas vraiment (voir le commentaire en
+tête de ce workflow). Cette liste est l'exception explicite à cette règle :
+les échecs ci-dessous sont connus, expliqués, et acceptés jusqu'à ce que leur
+cause soit traitée. **Toute CI rouge sur ce harnais doit d'abord être comparée
+à cette liste avant d'être traitée comme un blocage** — si le test en échec
+n'y figure pas, c'est une vraie régression, pas un faux positif connu.
+
+Tenir cette liste à jour à chaque lot de l'étape 1 : si un lot corrige l'un de
+ces points, le retirer d'ici dans la même PR (comme le lot 4 l'a fait pour
+`[F-06]`, retiré de cette liste le 2026-08-26).
+
+| Test | Raison | Ce qui débloquerait |
+|---|---|---|
+| `couverture complète : toute table public non testée ci-dessus est explicitement listée (EXCLUDED_TABLES ou TABLE_OVERRIDES)` | Tente de lister `information_schema.tables` via le client PostgREST (`SUPABASE_TEST_SERVICE_ROLE_KEY`), qui n'expose que les schémas `public`/`graphql_public` (voir `supabase/config.toml`) — `information_schema` n'y est jamais accessible, quel que soit le rôle. | Faire passer ce test sur la connexion Postgres directe (`STAGING_DATABASE_URL`), comme le bloc "Findings structurels" (F-05/F-07/F-08/F-09/F-10) plus bas dans le même fichier — reporté, décision explicite du 2026-08-26 de garder `STAGING_DATABASE_URL` en connexion directe plutôt que pooler, ce qui bloque déjà ce bloc en CI (`ENETUNREACH`, IPv6) et bloquerait pareillement ce test s'il migrait dessus tel quel. |
+
 ## Procédure de purge RGPD sur `audit_logs`
 
 Depuis `20260817_securite_03_audit_logs_immuable.sql`, la table `public.audit_logs`
