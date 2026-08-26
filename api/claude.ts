@@ -4,7 +4,7 @@
 // n'utilise la clé ANTHROPIC_API_KEY (configurée dans Vercel) à nos frais.
 
 import { getServiceClient, extractBearerToken } from './_lib/patientAuth.js';
-import { withSentry } from './_lib/sentry.js';
+import { withSentry, captureMessage } from './_lib/sentry.js';
 import { checkClaudeRateLimit, recordClaudeRequest } from './_lib/rateLimit.js';
 
 export default withSentry(async function handler(req: any, res: any) {
@@ -37,7 +37,20 @@ export default withSentry(async function handler(req: any, res: any) {
     // après coup si ce seuil se déclenche sur un usage réel, pour l'ajuster
     // sur des données plutôt que sur l'estimation documentée dans
     // api/_lib/rateLimit.ts.
+    //
+    // Doublé dans Sentry : les logs Vercel ont une rétention courte (quelques
+    // jours selon le plan), insuffisante pour juger d'un seuil sur plusieurs
+    // semaines d'usage — ce qui est précisément l'objectif ici.
+    //
+    // Le praticien_id (UUID d'un compte professionnel, jamais un patient) est
+    // transmis en tag : sans lui, impossible de distinguer un seul compte
+    // emballé — le cas qu'on veut détecter — d'un plafond trop bas qui gêne
+    // tout le monde. Aucune donnée de santé ni de patient n'est jointe.
     console.warn(`[api/claude] rate limit atteint pour praticien ${praticienId}`);
+    await captureMessage('[api/claude] rate limit atteint', {
+      level: 'warning',
+      tags: { praticien_id: praticienId },
+    });
     return res.status(429).json({ error: 'Trop de requêtes IA récentes, réessayez dans un instant' });
   }
 

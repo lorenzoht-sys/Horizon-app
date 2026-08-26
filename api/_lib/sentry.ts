@@ -38,6 +38,31 @@ function initSentry(): void {
   });
 }
 
+// Journalise un événement métier (pas une exception) dans Sentry, avec
+// flush explicite : en serverless, la fonction peut se terminer avant que
+// Sentry ait envoyé l'événement en arrière-plan — sans ce flush, l'appel
+// serait silencieusement perdu la plupart du temps.
+//
+// No-op si SENTRY_DSN n'est pas configuré (staging, local), comme
+// withSentry(). N'échoue jamais : une panne de journalisation ne doit pas
+// faire échouer la requête qu'elle observe.
+export async function captureMessage(
+  message: string,
+  options?: { level?: 'info' | 'warning' | 'error'; tags?: Record<string, string> }
+): Promise<void> {
+  try {
+    initSentry();
+    if (!process.env.SENTRY_DSN) return;
+    Sentry.captureMessage(message, {
+      level: options?.level ?? 'warning',
+      tags: options?.tags,
+    });
+    await Sentry.flush(2000);
+  } catch (err) {
+    console.error('[sentry] captureMessage a échoué:', err);
+  }
+}
+
 type Handler = (req: any, res: any) => unknown | Promise<unknown>;
 
 // Capture toute exception non gérée par un handler /api/*, la journalise
