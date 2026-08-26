@@ -499,25 +499,33 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
     });
   });
 
-  // [F-11] get_praticien_structure(text) a un GRANT EXECUTE ... TO anon
-  // jamais révoqué (contrairement à structure_token_valide()). Un tiers
-  // anonyme peut donc appeler cette fonction directement via l'API REST
-  // PostgREST, sans passer par api/structure/data.ts et donc sans bénéficier
-  // d'un éventuel rate limiting applicatif — un oracle "ce token existe /
-  // n'existe pas", hors de tout contrôle de débit. Ce test passera
-  // seulement une fois le REVOKE EXECUTE appliqué (voir F-11) : aujourd'hui,
-  // la fonction s'exécute sans erreur de permission (elle retourne juste
-  // 0 ligne, le token étant inventé), ce qui est exactement le problème
-  // documenté — pas une erreur métier, une absence d'erreur de permission.
-  describe('[F-11] get_praticien_structure : appelable par anon sans passer par la route API', () => {
-    it("anon peut exécuter get_praticien_structure sans erreur de permission (échoue tant que le GRANT EXECUTE n'est pas révoqué)", async () => {
+  // [F-11] get_praticien_structure(text) avait un GRANT EXECUTE ... TO anon
+  // jamais révoqué. Un tiers anonyme pouvait appeler cette fonction
+  // directement via l'API REST PostgREST, sans passer par
+  // api/structure/data.ts et donc sans bénéficier d'un éventuel rate
+  // limiting applicatif — un oracle "ce token existe / n'existe pas", hors
+  // de tout contrôle de débit.
+  //
+  // Fermé par 20260826_revoke_public_execute_functions.sql, qui SUPPRIME la
+  // fonction (code mort depuis MIGRATION_ANON.md) plutôt que de se contenter
+  // d'un REVOKE — un REVOKE seul peut être défait par une future migration
+  // qui recrée la fonction sans reconsidérer ses grants, ce qui s'était
+  // précisément produit.
+  describe('[F-11] get_praticien_structure : inaccessible à anon', () => {
+    it("anon ne peut pas exécuter get_praticien_structure", async () => {
       const { error } = await anonClient.rpc('get_praticien_structure', {
         p_token: 'rls-spec-token-inexistant-000',
       });
+      // Deux états sont acceptables, tous deux sûrs — on teste la propriété
+      // de sécurité, pas le mécanisme qui la produit :
+      //   - la fonction n'existe plus (état actuel, après le DROP) ;
+      //   - elle existe mais anon n'a plus EXECUTE (42501).
+      // Le seul échec réel est une exécution SANS aucune erreur : c'est
+      // exactement le trou d'origine.
       expect(
-        error?.code ?? null,
-        "[F-11] anon a pu exécuter get_praticien_structure sans erreur 'insufficient_privilege' (42501) — le GRANT EXECUTE TO anon n'a pas été révoqué"
-      ).toBe('42501');
+        error,
+        "[F-11] anon a pu exécuter get_praticien_structure sans aucune erreur — la fonction est de nouveau exposée"
+      ).not.toBeNull();
     });
   });
 
