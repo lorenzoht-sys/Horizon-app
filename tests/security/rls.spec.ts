@@ -415,9 +415,10 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
   // s'applique jamais à ce rôle, donc la garantie "append-only" ci-dessus
   // (testée avec clientA, rôle authenticated) ne protège pas contre
   // service_role lui-même. Seul endroit de ce fichier où une ligne
-  // audit_logs est supprimée délibérément : c'est une ligne de test créée
-  // et détruite par ce test, jamais une vraie ligne d'audit.
-  it("[F-06] service_role N'EST PAS bloqué en UPDATE/DELETE sur audit_logs (échoue tant qu'aucun trigger n'existe)", async () => {
+  // audit_logs est insérée délibérément pour le test (voir note de
+  // nettoyage ci-dessous — elle ne peut plus être supprimée après le
+  // correctif, et reste donc en base).
+  it("[F-06] service_role est bloqué en UPDATE/DELETE sur audit_logs (trigger append-only, voir 20260817_securite_03_audit_logs_immuable.sql)", async () => {
     const { data: inserted, error: insertErr } = await admin
       .from('audit_logs')
       .insert({ event_type: 'rls_spec_test', ip: '0.0.0.0', success: true })
@@ -427,19 +428,27 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
       throw new Error(`[F-06] Impossible d'insérer une ligne de test dans audit_logs : ${insertErr?.message}`);
     }
     try {
-      // Après correctif (trigger BEFORE UPDATE OR DELETE, voir F-06 dans
-      // docs/RAPPORT_SECURITE.md), cet UPDATE doit échouer avec une erreur.
-      // Aujourd'hui, aucun trigger n'existe : l'update réussit sans erreur,
-      // donc cette assertion échoue — c'est exactement la preuve attendue.
+      // Le trigger BEFORE UPDATE OR DELETE (F-06) ne fait aucune exception
+      // pour service_role : cet UPDATE doit échouer avec une erreur.
       const { error: updateErr } = await admin
         .from('audit_logs')
         .update({ ip: '127.0.0.1' })
         .eq('id', inserted.id);
       expect(
         updateErr,
-        "[F-06] service_role a pu modifier audit_logs sans erreur — aucun trigger append-only n'existe encore"
+        "[F-06] service_role a pu modifier audit_logs sans erreur — le trigger append-only ne bloque pas ce rôle"
       ).not.toBeNull();
     } finally {
+      // Ce DELETE de nettoyage est lui aussi bloqué par le même trigger —
+      // c'est le comportement attendu (le trigger ne fait pas d'exception
+      // pour la ligne créée par ce test). supabase-js ne lève pas
+      // d'exception ici (pas de throwOnError() configuré sur ce client) :
+      // l'erreur est silencieusement retournée dans le champ `error` et
+      // ignorée volontairement — on choisit d'accepter la ligne de test
+      // résiduelle (event_type: 'rls_spec_test', jamais une vraie donnée
+      // d'audit) plutôt que de désactiver le trigger depuis le test, ce qui
+      // nécessiterait des privilèges DDL hors de portée du client REST
+      // utilisé ici.
       await admin.from('audit_logs').delete().eq('id', inserted.id);
     }
   });
