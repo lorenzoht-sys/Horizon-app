@@ -27,7 +27,15 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22, pas 20 : le harnais RLS (ci-dessous) appelle
+          # @supabase/supabase-js createClient(), qui initialise son client
+          # Realtime et exige un WebSocket natif — absent avant Node 22, ce
+          # qui fait échouer createClient() dès l'appel (constaté le
+          # 2026-08-26, "Node.js 20 detected without native WebSocket
+          # support"). ci.yml reste en Node 20 : son job e2e n'instancie
+          # jamais de client Supabase côté Node (aucun import
+          # @supabase/supabase-js dans e2e/*.ts), donc pas concerné.
+          node-version: 22
           cache: npm
 
       - run: npm ci
