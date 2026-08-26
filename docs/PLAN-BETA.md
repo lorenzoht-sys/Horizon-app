@@ -1,5 +1,58 @@
 # Plan bêta — points à traiter avant ouverture
 
+## RÈGLE — migration en production AVANT le merge sur `main`
+
+**Toute migration dont dépend du code applicatif doit être appliquée en
+production AVANT que le code qui l'utilise soit mergé sur `main`.**
+
+`main` déclenche un déploiement production automatique (Vercel). Les
+migrations, elles, ne s'appliquent jamais toutes seules : ni la CI ni le
+déploiement ne les exécutent. Merger du code qui référence une colonne, une
+table ou une fonction absente de la base de production le met **en ligne
+immédiatement, cassé**.
+
+Ordre correct, sans exception :
+
+1. Appliquer la migration en **production** (SQL Editor), et vérifier par
+   requête qu'elle a bien pris.
+2. Appliquer la migration en **staging**, vérifier via le harnais.
+3. Merger le code sur `main`.
+
+Ordre inverse = panne en production entre le merge et l'application de la
+migration.
+
+### Ce qui a rendu cette règle nécessaire (2026-08-26)
+
+Le lot 7 (`20260819_structure_token_expiration.sql`) a été appliqué sur
+staging, vérifié par le harnais, puis mergé. Le merge a déployé en
+production `api/_lib/structureAuth.ts`, qui sélectionne `expires_at` — une
+colonne alors absente de la base de production. PostgREST a renvoyé une
+erreur, `validateStructureToken()` a renvoyé `null`, et **le portail
+structure a répondu « Accès non autorisé » à tous les EHPAD**, jusqu'à
+l'ajout manuel de la colonne.
+
+Toutes les vérifications étaient au vert, harnais compris : elles portaient
+sur staging, où la migration était appliquée. Aucune ne pouvait détecter
+l'écart avec la production.
+
+### Comment vérifier avant de merger
+
+Requête à lancer dans le SQL Editor de production pour contrôler la présence
+des objets attendus (à étendre à chaque nouvelle migration) :
+
+```sql
+SELECT 'claude_rate_limit (table)' AS objet,
+       EXISTS (SELECT 1 FROM information_schema.tables
+               WHERE table_schema='public' AND table_name='claude_rate_limit') AS present
+UNION ALL SELECT 'structures.expires_at (colonne)',
+       EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_schema='public' AND table_name='structures' AND column_name='expires_at');
+```
+
+Tant qu'aucun garde-fou automatique n'existe (rien dans la CI ne compare le
+schéma de production aux migrations du dépôt), cette vérification est
+manuelle et fait partie de la revue de toute PR touchant `supabase/migrations/`.
+
 ## Échecs connus et acceptés du harnais `tests/security/rls.spec.ts`
 
 Le job `audit` de `.github/workflows/security.yml` fait échouer la CI sur tout
