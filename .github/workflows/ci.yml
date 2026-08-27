@@ -73,9 +73,14 @@ jobs:
       # un message explicite au lieu de laisser tous les tests expirer.
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
       # Uniquement pour remettre à zéro les séances du jour avant le run
-      # (voir l'étape dédiée plus bas). Le script porte le même garde-fou
-      # anti-production que les autres scripts de staging.
-      STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      # (voir l'étape dédiée plus bas). PostgREST + service_role, et non
+      # STAGING_DATABASE_URL : la connexion Postgres directe n'est joignable
+      # qu'en IPv6, que les runners GitHub n'ont pas (ENETUNREACH — même
+      # limitation que le bloc « Findings structurels » du harnais, voir
+      # docs/PLAN-BETA.md). Le script porte le même garde-fou anti-production
+      # que les autres scripts de staging.
+      SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
+      SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -150,7 +155,7 @@ jobs:
       # parfaitement légitime. Sans cette remise à zéro, le test ne peut
       # passer qu'une fois par jour et par environnement.
       - name: Remettre à zéro les séances du jour sur staging
-        if: env.STAGING_DATABASE_URL != ''
+        if: env.SUPABASE_TEST_URL != ''
         run: npx tsx scripts/staging-reset-seances-du-jour.ts --apply
 
       - run: npx playwright install --with-deps chromium

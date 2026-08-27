@@ -13,7 +13,7 @@
 // (api/patient/seance.ts). Le test passait une fois, puis échouait à chaque
 // exécution ultérieure du même jour — constaté le 2026-08-27, où il est
 // passé au vert puis retombé au rouge sans qu'une seule ligne de code ait
-// changé entre les deux.
+// changé entre les deux runs.
 //
 // Ce n'est pas un bug applicatif : refuser une double validation est le
 // comportement voulu. C'est le test qui n'était pas rejouable. Ce script
@@ -22,10 +22,17 @@
 //
 // Les séances d'historique du seed (datées d'hier) ne sont jamais touchées.
 //
+// ── Pourquoi l'API REST et non une connexion Postgres directe ────────────
+// `STAGING_DATABASE_URL` est une connexion directe, joignable en IPv6
+// uniquement : les runners GitHub n'ont pas d'IPv6 et échouent en
+// `ENETUNREACH` (limitation déjà documentée dans docs/PLAN-BETA.md, qui
+// bloque aussi le bloc « Findings structurels » du harnais). On passe donc
+// par PostgREST avec la clé service_role — mêmes secrets que le harnais,
+// en HTTPS, donc joignable depuis la CI.
+//
 // Usage :
 //   npx tsx scripts/staging-reset-seances-du-jour.ts --apply
 
-import { Client } from 'pg';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -61,23 +68,21 @@ function loadEnvFile(filePath: string): Record<string, string> {
   return out;
 }
 
-// Garde-fou identique aux autres scripts de staging.
-function assertStagingTarget(connectionString: string): void {
+// Même principe de garde-fou que les autres scripts de staging, appliqué
+// ici à l'URL du projet Supabase : refus explicite de la production, et
+// refus par défaut si la cible n'est pas reconnue comme staging.
+function assertStagingTarget(url: string): void {
   let host: string;
-  let user: string;
   try {
-    const url = new URL(connectionString);
-    host = url.hostname;
-    user = decodeURIComponent(url.username);
+    host = new URL(url).hostname;
   } catch {
-    throw new Error("STAGING_DATABASE_URL n'est pas une URL de connexion valide.");
+    throw new Error("SUPABASE_TEST_URL n'est pas une URL valide.");
   }
-  const candidates = [host, user];
-  if (candidates.some(c => c.includes(PRODUCTION_REF))) {
-    throw new Error('Garde-fou : cette connexion pointe vers la référence de projet PRODUCTION. Abandon.');
+  if (host.includes(PRODUCTION_REF)) {
+    throw new Error('Garde-fou : cette URL pointe vers le projet de PRODUCTION. Abandon.');
   }
-  if (!candidates.some(c => c.includes(STAGING_REF))) {
-    throw new Error('Garde-fou : impossible de confirmer que cette connexion pointe vers staging (réf. de projet non reconnue). Abandon.');
+  if (!host.includes(STAGING_REF)) {
+    throw new Error('Garde-fou : impossible de confirmer que cette URL pointe vers staging (réf. de projet non reconnue). Abandon.');
   }
 }
 
@@ -92,22 +97,35 @@ async function main() {
     if (!(key in process.env)) process.env[key] = value;
   }
 
-  const connectionString = process.env.STAGING_DATABASE_URL;
-  if (!connectionString) {
-    throw new Error(`STAGING_DATABASE_URL introuvable (ni dans ${envPath}, ni dans l'environnement).`);
+  const url = process.env.SUPABASE_TEST_URL;
+  const serviceKey = process.env.SUPABASE_TEST_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) {
+    throw new Error(`SUPABASE_TEST_URL / SUPABASE_TEST_SERVICE_ROLE_KEY introuvables (ni dans ${envPath}, ni dans l'environnement).`);
   }
-  assertStagingTarget(connectionString);
+  assertStagingTarget(url);
 
-  const client = new Client({ connectionString, ssl: { rejectUnauthorized: false } });
-  await client.connect();
-  try {
-    const { rowCount } = await client.query(
-      `DELETE FROM public.seances_patient WHERE date_seance = CURRENT_DATE`
-    );
-    console.log(`Séances du jour supprimées : ${rowCount ?? 0}`);
-  } finally {
-    await client.end();
+  // Date locale du runner, au format attendu par une colonne `date`.
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+
+  const reponse = await fetch(
+    `${url}/rest/v1/seances_patient?date_seance=eq.${aujourdhui}`,
+    {
+      method: 'DELETE',
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        Prefer: 'return=representation',
+      },
+    }
+  );
+
+  if (!reponse.ok) {
+    const corps = await reponse.text().catch(() => '');
+    throw new Error(`Suppression refusée (HTTP ${reponse.status}) : ${corps.slice(0, 300)}`);
   }
+
+  const supprimees = (await reponse.json().catch(() => [])) as unknown[];
+  console.log(`Séances du ${aujourdhui} supprimées : ${supprimees.length}`);
 }
 
 main().catch(err => {
