@@ -940,6 +940,32 @@ describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postg
     expect(policies[0]?.qual, '[RÔLES] la lecture n\'est pas restreinte à sa propre ligne').toBe('(user_id = auth.uid())');
   });
 
+  // Les privilèges de table sont une couche INDÉPENDANTE des policies : une
+  // policy filtre ce qu'un rôle déjà autorisé peut voir, elle n'autorise
+  // rien. Cette migration a d'abord été écrite sans GRANT — policies
+  // correctes, table pourtant injoignable (« permission denied », 42501).
+  // L'inverse est bien plus grave : un GRANT d'écriture rouvrirait
+  // l'escalade même en gardant zéro policy d'écriture.
+  it('[RÔLES] authenticated peut lire user_roles mais ne peut rien y écrire, anon n\'y a aucun accès', async () => {
+    const { rows } = await pg.query<{
+      auth_select: boolean; auth_insert: boolean; auth_update: boolean;
+      auth_delete: boolean; anon_select: boolean;
+    }>(
+      `SELECT has_table_privilege('authenticated','public.user_roles','SELECT') AS auth_select,
+              has_table_privilege('authenticated','public.user_roles','INSERT') AS auth_insert,
+              has_table_privilege('authenticated','public.user_roles','UPDATE') AS auth_update,
+              has_table_privilege('authenticated','public.user_roles','DELETE') AS auth_delete,
+              has_table_privilege('anon','public.user_roles','SELECT')          AS anon_select`
+    );
+    const p = rows[0];
+    expect(p?.auth_select, '[RÔLES] authenticated ne peut pas lire user_roles : les policies ne seront jamais évaluées').toBe(true);
+    expect(
+      [p?.auth_insert, p?.auth_update, p?.auth_delete],
+      "[RÔLES] authenticated a un privilège d'écriture sur user_roles — l'escalade est rouverte au niveau des GRANT"
+    ).toEqual([false, false, false]);
+    expect(p?.anon_select, '[RÔLES] anon peut lire user_roles').toBe(false);
+  });
+
   // Audit inverse, demandé même si aucun admin n'existe encore : l'étape 3
   // est purement additive, donc AUCUNE policy existante ne doit accorder
   // quoi que ce soit sur la base du rôle. Ce test échouera le jour où

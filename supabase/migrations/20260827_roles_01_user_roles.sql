@@ -105,6 +105,21 @@ CREATE POLICY "user_roles_lecture_propre_ligne"
   TO authenticated
   USING (user_id = auth.uid());
 
+-- ── Privilèges de table : la couche que RLS ne remplace pas ─────────────
+-- Une policy FILTRE ce qu'un rôle déjà autorisé peut voir ; elle n'AUTORISE
+-- rien par elle-même. Sans GRANT, PostgREST répond « permission denied for
+-- table user_roles » (42501) et les policies ne sont jamais évaluées.
+-- Constaté le 2026-08-27 : cette migration a d'abord été écrite sans ces
+-- GRANT, et les tests de lecture ont échoué alors que la policy était bonne.
+--
+-- `authenticated` ne reçoit que SELECT : l'écriture lui est donc fermée aux
+-- DEUX niveaux (aucun privilège, et aucune policy). Il faudrait défaire les
+-- deux pour rouvrir l'escalade.
+-- `anon` ne reçoit rien : le portail patient n'a aucune raison de connaître
+-- les rôles applicatifs.
+GRANT SELECT ON public.user_roles TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_roles TO service_role;
+
 -- ── Écriture : AUCUNE POLICY, délibérément ──────────────────────────────
 -- Ce n'est pas un oubli. `authenticated` et `anon` n'ont pas `rolbypassrls`
 -- (vérifié) : sans policy INSERT/UPDATE/DELETE, aucune écriture ne leur est
@@ -178,6 +193,19 @@ BEGIN
    WHERE r.user_id IS NULL;
   IF n_sans_role > 0 THEN
     RAISE EXCEPTION 'Echec verification : % compte(s) sans role apres backfill', n_sans_role;
+  END IF;
+
+  -- Les privilèges de table, que RLS ne remplace pas.
+  IF NOT has_table_privilege('authenticated', 'public.user_roles', 'SELECT') THEN
+    RAISE EXCEPTION 'Echec verification : authenticated ne peut pas lire user_roles (GRANT manquant, les policies ne seront jamais evaluees)';
+  END IF;
+  IF has_table_privilege('authenticated', 'public.user_roles', 'UPDATE')
+     OR has_table_privilege('authenticated', 'public.user_roles', 'INSERT')
+     OR has_table_privilege('authenticated', 'public.user_roles', 'DELETE') THEN
+    RAISE EXCEPTION 'Echec verification : authenticated a un privilege d''ecriture sur user_roles';
+  END IF;
+  IF has_table_privilege('anon', 'public.user_roles', 'SELECT') THEN
+    RAISE EXCEPTION 'Echec verification : anon peut lire user_roles';
   END IF;
 END $$;
 
