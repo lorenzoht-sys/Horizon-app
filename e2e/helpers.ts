@@ -44,8 +44,11 @@ export function skipUnlessPraticien() {
 // changer aussi, et l'échec dit alors quelque chose de vrai sur l'interface.
 export async function loginPraticien(page: Page): Promise<void> {
   await page.goto('/login');
-  await page.getByLabel('Email professionnel').fill(env.praticienEmail);
-  await page.getByLabel('Mot de passe').fill(env.praticienPassword);
+  // `exact: true` sur le mot de passe : sans lui, le libellé capture aussi le
+  // bouton œil « Afficher le mot de passe » (correspondance partielle sur
+  // aria-label) et Playwright refuse l'ambiguïté en mode strict.
+  await page.getByLabel('Email professionnel', { exact: true }).fill(env.praticienEmail);
+  await page.getByLabel('Mot de passe', { exact: true }).fill(env.praticienPassword);
   await page.getByRole('button', { name: 'Se connecter' }).click();
   await page.waitForURL('/');
 }
