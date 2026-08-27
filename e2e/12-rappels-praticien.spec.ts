@@ -35,7 +35,11 @@ test.describe('Rappels automatiques - réglages praticien', () => {
 
     // Personnalise les réglages pour ce patient (ou les ré-enregistre s'il
     // existait déjà une surcharge).
-    await page.getByRole('button', { name: /Personnaliser pour ce patient|Enregistrer/ }).click();
+    // Le libellé dépend de l'état : « Personnaliser pour ce bénéficiaire »
+    // quand le patient hérite des réglages globaux, « Enregistrer » quand il
+    // a déjà une surcharge (ParticipantProfile.tsx:934). « patient » y est
+    // devenu « bénéficiaire » sans que ce test suive.
+    await page.getByRole('button', { name: /Personnaliser pour ce bénéficiaire|^Enregistrer$/ }).click();
     await expect(page.getByText('Préférences de rappels enregistrées')).toBeVisible();
 
     // Nettoyage : on revient aux réglages globaux pour ne pas laisser de

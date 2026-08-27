@@ -23,6 +23,8 @@ test.describe('Création d\'un programme', () => {
     // Étape 4/4 — Récapitulatif.
     await page.getByRole('button', { name: '✅ Sauvegarder et partager' }).click();
 
-    await expect(page.getByText('Programme créé et partagé avec le patient !')).toBeVisible();
+    // « patient » est devenu « bénéficiaire » dans l'interface
+    // (ProgrammePage.tsx:999) sans que ce test suive.
+    await expect(page.getByText('Programme créé et partagé avec le bénéficiaire !')).toBeVisible();
   });
 });

@@ -12,8 +12,11 @@ test.describe('Création d\'un participant', () => {
     const prenom = 'Test';
     const nom = `E2E${Date.now()}`;
 
-    await page.getByPlaceholder('Jean').fill(prenom);
-    await page.getByPlaceholder('Dupont').fill(nom);
+    // `exact: true` : sans lui, 'Jean' correspond aussi au placeholder
+    // 'jean@email.com' du champ email (correspondance partielle, insensible
+    // à la casse) et Playwright refuse l'ambiguïté en mode strict.
+    await page.getByPlaceholder('Jean', { exact: true }).fill(prenom);
+    await page.getByPlaceholder('Dupont', { exact: true }).fill(nom);
 
     // Stepper en 5 étapes — aucun champ n'est requis avant l'étape finale.
     for (let i = 0; i < 4; i++) {
