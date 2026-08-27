@@ -115,6 +115,11 @@ const EXCLUDED_TABLES: Record<string, string> = {
   // et première table détectée par le test de couverture le jour où il a
   // enfin pu s'exécuter.
   claude_rate_limit: 'service_role only, RLS forcée sans aucune policy, alimentée par api/_lib/rateLimit.ts',
+  // Le cloisonnement de cette table n'est pas « praticien A vs praticien B
+  // sur une colonne praticien_id » : c'est « chacun voit sa propre ligne, et
+  // personne n'écrit ». Testée par le describe [RÔLES] dédié, plus trois
+  // contrôles structurels dans « Findings structurels ».
+  user_roles: 'rôle applicatif : lecture de sa propre ligne, aucune écriture — couverte par le describe [RÔLES] dédié',
   // Table d'audit : testée en écriture-seule par service_role, couverte par
   // une assertion dédiée (voir "audit_logs est append-only" plus bas) plutôt
   // que par le test croisé générique lecture/écriture.
@@ -608,6 +613,84 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
     });
   });
 
+  // ── [RÔLES] user_roles (étape 3) ──────────────────────────────────────
+  //
+  // Le point de toute cette table : un praticien peut mettre à jour sa
+  // propre ligne `praticiens` pour éditer son profil. Si le rôle vivait là,
+  // il se promouvrait admin en une requête. `user_roles` n'a AUCUNE policy
+  // d'écriture — le test qui compte ici est celui qui le prouve.
+  describe('[RÔLES] user_roles : un praticien ne peut pas modifier son rôle', () => {
+    it('un praticien lit sa propre ligne', async () => {
+      const { data, error } = await clientA
+        .from('user_roles')
+        .select('user_id, app_role')
+        .eq('user_id', praticienAId);
+      expect(error, `[RÔLES] lecture de sa propre ligne refusée : ${error?.message}`).toBeNull();
+      expect(data ?? [], '[RÔLES] un praticien ne voit pas sa propre ligne user_roles').toHaveLength(1);
+      expect((data ?? [])[0]?.app_role).toBe('praticien');
+    });
+
+    it("un praticien ne peut pas lire la ligne d'un autre praticien", async () => {
+      // Praticien B est créé à la volée par ce fichier, donc APRÈS le
+      // backfill de la migration : il n'a pas de ligne. On la crée via
+      // service_role, sinon le test passerait faute de ligne à lire —
+      // un vert qui ne prouverait rien.
+      await admin.from('user_roles').insert({ user_id: praticienBId, app_role: 'praticien' });
+      try {
+        const { data } = await clientA
+          .from('user_roles')
+          .select('user_id')
+          .eq('user_id', praticienBId);
+        expect(
+          data ?? [],
+          "[RÔLES] praticien A voit la ligne user_roles de praticien B"
+        ).toHaveLength(0);
+      } finally {
+        await admin.from('user_roles').delete().eq('user_id', praticienBId);
+      }
+    });
+
+    // ── LE test de cette étape ────────────────────────────────────────
+    it("un praticien ne peut pas se promouvoir admin (escalade de privilège)", async () => {
+      const { count } = await clientA
+        .from('user_roles')
+        .update({ app_role: 'admin' })
+        .eq('user_id', praticienAId)
+        .select('*', { count: 'exact', head: true });
+      expect(
+        count ?? 0,
+        `[RÔLES] praticien A a modifié ${count ?? 0} ligne(s) de user_roles — escalade de privilège ouverte`
+      ).toBe(0);
+
+      // L'absence de lignes modifiées ne suffit pas : on relit l'état réel
+      // avec service_role, seul témoin non filtré par RLS.
+      const { data } = await admin
+        .from('user_roles')
+        .select('app_role')
+        .eq('user_id', praticienAId)
+        .single();
+      expect(
+        data?.app_role,
+        '[RÔLES] le rôle de praticien A a changé — il a réussi à se promouvoir'
+      ).toBe('praticien');
+    });
+
+    it('un praticien ne peut pas insérer de ligne dans user_roles', async () => {
+      // Praticien B n'a pas de ligne (créé après le backfill) : une erreur
+      // ici vient donc bien de RLS, pas d'un conflit de clé primaire.
+      const { error } = await clientA
+        .from('user_roles')
+        .insert({ user_id: praticienBId, app_role: 'admin' });
+      expect(
+        error,
+        '[RÔLES] praticien A a pu insérer une ligne dans user_roles'
+      ).not.toBeNull();
+
+      const { data } = await admin.from('user_roles').select('user_id').eq('user_id', praticienBId);
+      expect(data ?? [], '[RÔLES] une ligne a bien été créée malgré RLS').toHaveLength(0);
+    });
+  });
+
   // [F-11] get_praticien_structure(text) avait un GRANT EXECUTE ... TO anon
   // jamais révoqué. Un tiers anonyme pouvait appeler cette fonction
   // directement via l'API REST PostgREST, sans passer par
@@ -694,7 +777,19 @@ describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postg
     }
     pg = new PgClient({ connectionString: STAGING_DB_URL, ssl: { rejectUnauthorized: false } });
     await pg.connect();
-    await pg.query('SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY');
+    // Volontairement AUCUN réglage de session ici.
+    //
+    // Ce bloc faisait `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`,
+    // correct tant que STAGING_DATABASE_URL était une connexion directe. Sur
+    // le pooler en mode transaction (depuis le 2026-08-27), un réglage de
+    // session RESTE sur le backend partagé après déconnexion et contamine
+    // tous les clients suivants : une migration a échoué le même jour en
+    // « cannot execute CREATE TABLE in a read-only transaction », à cause de
+    // ce harnais.
+    //
+    // La garantie de lecture seule vient désormais du contenu de ce bloc —
+    // il ne fait que des SELECT — et non d'un réglage global qui déborde sur
+    // les processus voisins.
   });
 
   afterAll(async () => {
@@ -821,6 +916,66 @@ describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postg
     expect(
       rows[0]?.a_truncate,
       '[F-01] authenticated peut TRUNCATE tm6_variantes : RLS ne filtre jamais TRUNCATE, seul un REVOKE le ferme'
+    ).toBe(false);
+  });
+
+  // ── [RÔLES] contrôles structurels de l'étape 3 ────────────────────────
+
+  it('[RÔLES] user_roles a RLS activée et AUCUNE policy d\'écriture', async () => {
+    const { rows: rls } = await pg.query<{ relrowsecurity: boolean }>(
+      `SELECT relrowsecurity FROM pg_class WHERE oid = 'public.user_roles'::regclass`
+    );
+    expect(rls[0]?.relrowsecurity, '[RÔLES] RLS non activée sur user_roles').toBe(true);
+
+    const { rows: policies } = await pg.query<{ cmd: string; qual: string | null; roles: string }>(
+      `SELECT cmd, qual, roles::text AS roles FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = 'user_roles'`
+    );
+    const ecritures = policies.filter(p => p.cmd !== 'SELECT');
+    expect(
+      ecritures.map(p => p.cmd),
+      "[RÔLES] user_roles a une policy d'écriture : l'escalade de privilège que cette table ferme est rouverte"
+    ).toEqual([]);
+    expect(policies, '[RÔLES] user_roles devrait avoir exactement une policy (SELECT)').toHaveLength(1);
+    expect(policies[0]?.qual, '[RÔLES] la lecture n\'est pas restreinte à sa propre ligne').toBe('(user_id = auth.uid())');
+  });
+
+  // Audit inverse, demandé même si aucun admin n'existe encore : l'étape 3
+  // est purement additive, donc AUCUNE policy existante ne doit accorder
+  // quoi que ce soit sur la base du rôle. Ce test échouera le jour où
+  // l'étape 5 branchera les rôles — c'est voulu : ce sera le moment de le
+  // remplacer par des assertions sur ce que l'admin a le droit de voir.
+  it("[RÔLES] aucune policy existante n'accorde d'accès élargi à un admin", async () => {
+    const { rows } = await pg.query<{ tablename: string; policyname: string }>(
+      `SELECT tablename, policyname FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename <> 'user_roles'
+          AND (COALESCE(qual, '') || COALESCE(with_check, '')) ~* '(user_roles|app_role)'`
+    );
+    expect(
+      rows.map(r => `${r.tablename}.${r.policyname}`),
+      "[RÔLES] des policies s'appuient déjà sur le rôle alors que l'étape 3 devait être purement additive"
+    ).toEqual([]);
+  });
+
+  it('[RÔLES] app_role_courant() a un search_path figé et n\'est pas exécutable par PUBLIC', async () => {
+    const { rows } = await pg.query<{ config: string[] | null; public_exec: boolean; secdef: boolean }>(
+      `SELECT p.proconfig AS config,
+              p.prosecdef AS secdef,
+              EXISTS (SELECT 1 FROM aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) a
+                       WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE') AS public_exec
+         FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public' AND p.proname = 'app_role_courant'`
+    );
+    expect(rows, '[RÔLES] app_role_courant() introuvable').toHaveLength(1);
+    expect(rows[0]?.secdef, '[RÔLES] app_role_courant() n\'est pas SECURITY DEFINER — elle déclenchera les policies de user_roles').toBe(true);
+    expect(
+      (rows[0]?.config ?? []).some(c => c.startsWith('search_path=')),
+      '[RÔLES] app_role_courant() n\'a pas de search_path figé — c\'est [F-08], réintroduit'
+    ).toBe(true);
+    expect(
+      rows[0]?.public_exec,
+      '[RÔLES] app_role_courant() est exécutable par PUBLIC — c\'est la faille de la PR #8, réintroduite'
     ).toBe(false);
   });
 });

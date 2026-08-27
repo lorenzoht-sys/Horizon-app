@@ -83,9 +83,22 @@ async function main() {
   const client = new Client({ connectionString, ssl: { rejectUnauthorized: false } });
   await client.connect();
   try {
-    await client.query('SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY');
+    // Lecture seule portée par la TRANSACTION, pas par la SESSION.
+    //
+    // `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY` était correct
+    // tant que STAGING_DATABASE_URL était une connexion directe : la session
+    // mourait avec le process. Depuis la bascule sur le pooler en mode
+    // transaction (2026-08-27), le réglage RESTE sur le backend partagé après
+    // déconnexion et contamine tous les clients suivants — constaté le même
+    // jour : une migration a échoué en « cannot execute CREATE TABLE in a
+    // read-only transaction » à cause d'un simple `staging-query.ts` lancé
+    // quelques minutes plus tôt.
+    //
+    // `BEGIN READ ONLY` donne la même garantie sans rien laisser derrière.
+    await client.query('BEGIN READ ONLY');
     const { rows } = await client.query(sql);
     console.log(JSON.stringify(rows, null, 2));
+    await client.query('ROLLBACK');
   } finally {
     await client.end();
   }

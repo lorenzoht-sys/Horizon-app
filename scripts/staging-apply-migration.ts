@@ -91,6 +91,16 @@ async function main() {
   await client.connect();
 
   try {
+    // Exige explicitement une session en écriture avant de commencer.
+    //
+    // Le pooler en mode transaction (depuis le 2026-08-27) partage ses
+    // backends : un `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`
+    // posé par un autre script y survit à la déconnexion et fait échouer
+    // toute écriture ultérieure, sans rapport apparent avec sa cause. Les
+    // scripts en lecture ont été corrigés pour ne plus rien laisser derrière
+    // eux, mais un backend contaminé plus tôt peut encore traîner : un
+    // script qui écrit doit poser lui-même la condition dont il dépend.
+    await client.query('SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE');
     await client.query('BEGIN');
     try {
       for (const file of files) {
