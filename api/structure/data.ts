@@ -32,7 +32,31 @@ export default withSentry(async function handler(req: any, res: any) {
 
   const [praticienRes, participantsRes] = await Promise.all([
     supabase.from('praticiens').select('prenom, nom, titre, email, telephone').eq('id', structure.praticienId).single(),
-    supabase.from('participants').select('*, bilans(*), programmes(*)').eq('structure_id', structure.id),
+    // Colonnes explicites (pas select('*')) — même principe que pour
+    // `seances` plus bas, appliqué ici à ce qui compte le plus.
+    //
+    // `select('*')` renvoyait `code_acces` au portail structure. Ce n'est pas
+    // une donnée mais un JUSTIFICATIF D'IDENTITÉ : le code ouvre l'espace
+    // personnel du bénéficiaire, en ÉCRITURE (valider une séance, soumettre
+    // un ressenti), alors que ce portail est en lecture seule. Et il
+    // n'expire pas, contrairement au token structure (`expires_at`, [F-04]) :
+    // révoquer le lien d'un EHPAD ne révoquait donc pas les accès déjà
+    // récupérés. Un lien qui a circulé une fois valait accès permanent à
+    // l'espace de chaque bénéficiaire de la structure.
+    //
+    // Étaient aussi exposés sans usage : `iban`/`bic` (coordonnées bancaires),
+    // et tout le dossier médical (`anamnese`, `antecedents_medicaux`,
+    // `allergies`, `traitements`, `medecin_traitant`, `pathologie`).
+    // Vérifié le 2026-08-27 : `src/pages/PortailStructure.tsx` n'en lit
+    // AUCUN — il n'affiche que prénom/nom/date de naissance/date de création,
+    // et les bilans/programmes imbriqués. Le suivi que ce portail rend n'a
+    // pas besoin du dossier médical.
+    //
+    // Toute colonne ajoutée ici doit l'être délibérément : ce que voit une
+    // structure est ce que voit quiconque détient son lien.
+    supabase.from('participants')
+      .select('id, prenom, nom, date_naissance, date_creation, structure_id, bilans(*), programmes(*)')
+      .eq('structure_id', structure.id),
   ]);
 
   const participants = participantsRes.data ?? [];

@@ -245,6 +245,55 @@ test qui passerait par cette connexion :
 À basculer sur le mode session (5432) au prochain passage dans le dashboard
 Supabase — décision de Lorenzo, sans urgence.
 
+### Les `code_acces` sont tirés avec `Math.random()`
+
+`src/utils/codeAcces.ts` tire 8 caractères dans un alphabet de 31 symboles
+avec `Math.random()`. L'espace est large — 31⁸ ≈ 8,5 × 10¹¹, soit une
+chance sur ~3,5 × 10¹⁰ de tomber sur l'un des 24 codes de production par
+tirage aveugle — mais **`Math.random()` n'est pas cryptographique**. C'est
+un xorshift128+ dans V8 : qui observe assez de sorties du même contexte
+peut reconstituer l'état interne et prédire les suivantes.
+
+Ce que ça veut dire concrètement : un code d'accès **est** un justificatif
+d'authentification (il ouvre le dossier de santé du bénéficiaire, en
+écriture). Il devrait être tiré comme tel. Le correctif tient en une ligne —
+`crypto.getRandomValues()` à la place de `Math.random()`, même alphabet,
+même longueur, aucun changement visible.
+
+Nuance sur l'exploitabilité, pour ne pas surestimer : la génération a lieu
+dans le navigateur du praticien, au moment où il crée une fiche. Un
+attaquant devrait donc observer des codes issus de la même session de
+navigation pour prédire les suivants — ce qui suppose déjà un accès à ces
+codes. Faiblesse réelle, pas trou béant.
+
+À noter : `scripts/regenerer-codes-acces-structure.ts` utilise déjà
+`crypto.randomInt()`. Les codes régénérés sont donc plus solides que ceux
+créés par l'application au quotidien — incohérence à résorber en traitant
+ce point.
+
+### Le rate limit patient est par IP seulement, et l'IP est déclarative
+
+`api/_lib/patientAuth.ts` : 5 tentatives / 15 min, comptées **par IP**
+(`patient_login_attempts`). Ni par code, ni globalement. Deux limites :
+
+1. **Aucun plafond global.** Un attaquant disposant de N adresses obtient
+   5N tentatives par quart d'heure. Avec un botnet de 10 000 IP, on atteint
+   l'ordre de grandeur d'un succès par an sur les 24 codes actuels — pas un
+   risque immédiat, mais une propriété qui se dégrade à mesure que le nombre
+   de bénéficiaires augmente, puisque la cible grossit.
+2. **L'IP est prise dans `x-forwarded-for`**, premier élément
+   (`getClientIp`, ligne 52). Si la plateforme laisse passer un en-tête
+   fourni par le client, le compteur se contourne en changeant une chaîne
+   de caractères — et le rate limit ne protège plus rien. **Non vérifié** :
+   ça se teste en une requête contre le Preview, avec un
+   `x-forwarded-for` arbitraire, en regardant quelle valeur atterrit dans
+   `patient_login_attempts.ip`. À faire avant de conclure quoi que ce soit.
+
+Pistes, si le point 2 se confirme : compter aussi par code d'accès
+(indépendamment de l'IP), et prendre l'IP depuis un en-tête que la
+plateforme garantit plutôt que depuis le premier élément d'un en-tête que
+n'importe qui peut écrire.
+
 ### `npm run lint` échoue sur le harnais
 
 `tests/security/rls.spec.ts:79` — `PATIENT_B_CODE` est assigné et jamais
