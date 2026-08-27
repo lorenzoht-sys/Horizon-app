@@ -72,6 +72,10 @@ jobs:
       # Sans ce secret, la sonde de e2e/global-setup.ts arrête la suite avec
       # un message explicite au lieu de laisser tous les tests expirer.
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      # Uniquement pour remettre à zéro les séances du jour avant le run
+      # (voir l'étape dédiée plus bas). Le script porte le même garde-fou
+      # anti-production que les autres scripts de staging.
+      STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -139,5 +143,15 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # Rend la suite rejouable. `07-seance-coche-exercice` enregistre la
+      # séance du jour du patient de démo ; un index unique interdit ensuite
+      # de la revalider, si bien que le run suivant échouait sur un 409
+      # parfaitement légitime. Sans cette remise à zéro, le test ne peut
+      # passer qu'une fois par jour et par environnement.
+      - name: Remettre à zéro les séances du jour sur staging
+        if: env.STAGING_DATABASE_URL != ''
+        run: npx tsx scripts/staging-reset-seances-du-jour.ts --apply
+
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

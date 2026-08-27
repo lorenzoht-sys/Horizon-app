@@ -12,7 +12,9 @@ test.describe('Export PDF d\'un bilan', () => {
     // par son libellé : la page porte plusieurs éléments contenant « Voir »
     // (« Voir complet → », « Voir l'espace bénéficiaire »), et le lien du
     // bilan est le seul qui pointe vers /bilan/.
-    const lienBilan = page.locator('a[href*="/bilan/"]').first();
+    // `:not([href$="new"])` exclut le lien « nouveau bilan »
+    // (/participant/<id>/bilan/new), qui partage le même préfixe d'URL.
+    const lienBilan = page.locator('a[href*="/bilan/"]:not([href$="new"])').first();
     await expect(lienBilan).toBeVisible();
     await lienBilan.click();
 
