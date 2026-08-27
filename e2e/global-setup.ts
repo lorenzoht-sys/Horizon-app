@@ -37,7 +37,12 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
 
   let reponse: Response;
   try {
-    reponse = await fetch(base, { headers, redirect: 'manual' });
+    // `redirect: 'follow'` est indispensable, pas un détail : quand le bypass
+    // est accepté, `x-vercel-set-bypass-cookie` fait répondre Vercel par un
+    // 307 vers la même URL, le temps de poser le cookie. Une sonde qui ne
+    // suit pas les redirections prend ce 307 pour une erreur et arrête la
+    // suite alors que tout va bien (constaté le 2026-08-27).
+    reponse = await fetch(base, { headers, redirect: 'follow' });
   } catch (err) {
     throw new Error(
       `[e2e] Cible injoignable : ${base}\n` +
@@ -47,13 +52,21 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   }
 
   const corps = await reponse.text().catch(() => '');
-  const location = reponse.headers.get('location') ?? '';
-  const cookies = reponse.headers.get('set-cookie') ?? '';
+
+  // Une cible protégée finit sur le domaine d'authentification de Vercel,
+  // pas sur celui du déploiement. Les redirections internes à l'application
+  // (ex. `/` vers `/login`) restent sur le même hôte et ne comptent pas.
+  let horsDomaine = false;
+  try {
+    horsDomaine = new URL(reponse.url || base).host !== new URL(base).host;
+  } catch {
+    horsDomaine = false;
+  }
 
   const protege =
     reponse.status === 401 ||
-    (reponse.status >= 300 && reponse.status < 400 && /vercel\.com/i.test(location)) ||
-    MARQUEURS_SSO.some(m => corps.includes(m) || cookies.includes(m));
+    horsDomaine ||
+    MARQUEURS_SSO.some(m => corps.includes(m));
 
   if (protege) {
     throw new Error(
@@ -61,7 +74,9 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
         `[e2e] CIBLE PROTÉGÉE — les tests n'ont pas été lancés.`,
         ``,
         `  ${base}`,
-        `  répond HTTP ${reponse.status} vers l'authentification Vercel.`,
+        `  aboutit à l'authentification Vercel (HTTP ${reponse.status}${
+          horsDomaine ? `, redirigé vers ${new URL(reponse.url).host}` : ''
+        }).`,
         ``,
         bypass
           ? `VERCEL_AUTOMATION_BYPASS_SECRET est défini mais n'est pas accepté :`
