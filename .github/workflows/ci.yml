@@ -154,9 +154,9 @@ jobs:
       # de la revalider, si bien que le run suivant échouait sur un 409
       # parfaitement légitime. Sans cette remise à zéro, le test ne peut
       # passer qu'une fois par jour et par environnement.
-      - name: Remettre à zéro les séances du jour sur staging
+      - name: Remettre le jeu de démo de staging dans un état connu
         if: env.SUPABASE_TEST_URL != ''
-        run: npx tsx scripts/staging-reset-seances-du-jour.ts --apply
+        run: npx tsx scripts/staging-reset-etat-e2e.ts --apply
 
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
