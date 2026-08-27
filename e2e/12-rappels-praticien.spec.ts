@@ -46,6 +46,6 @@ test.describe('Rappels automatiques - réglages praticien', () => {
     // surcharge sur le patient de démo.
     const revenirBtn = page.getByRole('button', { name: 'Revenir aux réglages globaux' });
     await revenirBtn.click();
-    await expect(page.getByText('Réglages globaux rétablis pour ce patient')).toBeVisible();
+    await expect(page.getByText('Réglages globaux rétablis pour ce bénéficiaire')).toBeVisible();
   });
 });
