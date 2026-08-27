@@ -36,10 +36,16 @@ export function skipUnlessPraticien() {
   );
 }
 
+// Ciblage par label, pas par placeholder : le placeholder de ce formulaire a
+// déjà changé une fois sans que la suite suive (`pierre@mouvapa.com` est
+// devenu `vous@structure.fr`), ce qui a fait échouer 8 tests avec un
+// `locator.fill: Test timeout` — un symptôme qui ne désigne pas sa cause.
+// Un label est du texte visible par l'utilisateur : s'il change, le test doit
+// changer aussi, et l'échec dit alors quelque chose de vrai sur l'interface.
 export async function loginPraticien(page: Page): Promise<void> {
   await page.goto('/login');
-  await page.getByPlaceholder('pierre@mouvapa.com').fill(env.praticienEmail);
-  await page.getByPlaceholder('••••••••').fill(env.praticienPassword);
+  await page.getByLabel('Email professionnel').fill(env.praticienEmail);
+  await page.getByLabel('Mot de passe').fill(env.praticienPassword);
   await page.getByRole('button', { name: 'Se connecter' }).click();
   await page.waitForURL('/');
 }

@@ -738,4 +738,65 @@ describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postg
     );
     expect(rows[0]?.relrowsecurity, '[F-09] tm6_variantes : RLS non activée').toBe(true);
   });
+
+  // [F-01] GARDE ANTI-VERT-SILENCIEUX.
+  //
+  // Le test [F-01] plus haut (praticien B ne peut ni modifier ni supprimer
+  // la ligne d'un autre) passe au vert dans DEUX situations opposées :
+  //   - les policies d'écriture sont correctement scopées au propriétaire
+  //     — ce qu'on veut vérifier ;
+  //   - la table n'a AUCUNE policy, RLS étant activée : tout est refusé,
+  //     y compris ce qui devrait passer.
+  //
+  // C'est le second cas qui existait sur staging jusqu'au 2026-08-27 : le
+  // test était vert alors qu'il ne testait rien, et que la production, elle,
+  // était en USING(true). Un test qui ne peut pas distinguer « protégé » de
+  // « entièrement verrouillé » ne prouve rien.
+  //
+  // Ce contrôle-ci lit la définition des policies plutôt que leur effet : il
+  // échoue si elles disparaissent, si une écriture repasse en USING(true),
+  // ou si la lecture partagée est refermée par erreur.
+  it('[F-01] tm6_variantes a bien 4 policies, écritures scopées au propriétaire (garde contre un F-01 vert sans policy)', async () => {
+    const { rows } = await pg.query<{
+      policyname: string; cmd: string; qual: string | null; with_check: string | null;
+    }>(
+      `SELECT policyname, cmd, qual, with_check
+         FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = 'tm6_variantes'
+        ORDER BY policyname`
+    );
+
+    expect(
+      rows.length,
+      `[F-01] tm6_variantes : ${rows.length} policy(ies) au lieu de 4. ` +
+        `Zéro policy + RLS activée = tout refusé : le test [F-01] passerait au vert sans rien vérifier.`
+    ).toBe(4);
+
+    const parCmd = new Map(rows.map(r => [r.cmd, r]));
+    const PROPRIETAIRE = '(praticien_id = auth.uid())';
+
+    // Lecture : volontairement ouverte à tout praticien connecté (catalogue
+    // de référence partagé, aucune donnée de santé).
+    expect(parCmd.get('SELECT')?.qual, '[F-01] la lecture du catalogue ne devrait pas être cloisonnée').toBe('true');
+
+    // Écritures : jamais USING(true)/WITH CHECK(true).
+    expect(parCmd.get('INSERT')?.with_check, '[F-01] INSERT non scopé au propriétaire').toBe(PROPRIETAIRE);
+    expect(parCmd.get('UPDATE')?.qual, '[F-01] UPDATE non scopé au propriétaire').toBe(PROPRIETAIRE);
+    expect(parCmd.get('UPDATE')?.with_check, '[F-01] UPDATE sans WITH CHECK scopé').toBe(PROPRIETAIRE);
+    expect(parCmd.get('DELETE')?.qual, '[F-01] DELETE non scopé au propriétaire').toBe(PROPRIETAIRE);
+  });
+
+  // TRUNCATE n'est JAMAIS filtré par RLS, quelle que soit la qualité des
+  // policies ci-dessus : seul un REVOKE ferme ce chemin. Un GRANT ALL
+  // rétabli par une future migration rouvrirait la faille sans qu'aucune
+  // policy ne change.
+  it('[F-01] authenticated n\'a plus TRUNCATE sur tm6_variantes', async () => {
+    const { rows } = await pg.query<{ a_truncate: boolean }>(
+      `SELECT has_table_privilege('authenticated', 'public.tm6_variantes', 'TRUNCATE') AS a_truncate`
+    );
+    expect(
+      rows[0]?.a_truncate,
+      '[F-01] authenticated peut TRUNCATE tm6_variantes : RLS ne filtre jamais TRUNCATE, seul un REVOKE le ferme'
+    ).toBe(false);
+  });
 });
