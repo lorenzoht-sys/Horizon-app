@@ -85,8 +85,14 @@ const HAS_STAGING_ENV = Boolean(URL && ANON_KEY && SERVICE_KEY && PATIENT_SECRET
 // Toute table `public` qui n'est ni ici ni dans TABLE_OVERRIDES tombe dans
 // le test "UNKNOWN OWNERSHIP" ci-dessous et fait échouer la CI.
 const EXCLUDED_TABLES: Record<string, string> = {
-  // Pas de donnée de santé, catalogue de référence partagé par design.
-  tm6_variantes: 'catalogue de référence, aucune donnée patient, RLS non applicable',
+  // Pas de donnée de santé, catalogue de référence partagé par design :
+  // lecture ouverte à tout praticien connecté, donc le test générique de
+  // cloisonnement en LECTURE ne s'y applique pas. L'écriture, elle, EST
+  // cloisonnée depuis le lot 8 (praticien_id + policies scopées) et est
+  // couverte par le describe [F-01] dédié plus bas — pas par le test
+  // générique. La mention « RLS non applicable » qui figurait ici était
+  // fausse depuis le lot 8 : corrigée le 2026-08-27.
+  tm6_variantes: 'catalogue partagé : lecture ouverte par design, écriture cloisonnée et couverte par le describe [F-01] dédié',
   // Accessible uniquement en service_role (RLS bloque tout le reste par
   // défaut, zéro policy) — pas de session anon/authenticated possible à tester.
   patient_login_attempts: 'service_role only, aucune policy, testé indirectement via rate-limit.spec.ts',
@@ -495,6 +501,85 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
         // Nettoyage via service_role, indépendamment de ce que praticien B a
         // réussi ou non à faire ci-dessus.
         await admin.from('tm6_variantes').delete().eq('id', seed.id);
+      }
+    });
+
+    // [RÉG-01] Non-régression du chemin qui a DÉJÀ été cassé une fois. La
+    // première version du lot 8 réservait toute écriture à `service_role`,
+    // ce qui cassait `useTm6Variantes.creer()` — insert direct depuis le
+    // client authentifié, aucune route backend service_role pour prendre le
+    // relais. Ce test reproduit exactement l'appel du hook
+    // (src/hooks/useTm6Variantes.ts:33) : mêmes colonnes, et `praticien_id`
+    // JAMAIS fourni par le client.
+    //
+    // Il doit passer AVANT comme APRÈS le lot 8 — ce n'est pas un test de
+    // la faille, c'est le garde-fou qui empêche de la refermer en cassant
+    // la fonctionnalité, ce qui est précisément ce qui s'est produit.
+    it('[RÉG-01] un praticien peut créer une variante depuis le client authentifié (chemin useTm6Variantes.creer())', async () => {
+      const nom = `RLS-Spec creer ${Date.now()}`;
+      const { data, error } = await clientA
+        .from('tm6_variantes')
+        .insert({ nom, type_mesure: 'distance', distance_ref: null })
+        .select()
+        .single();
+      try {
+        expect(
+          error,
+          `[RÉG-01] useTm6Variantes.creer() est cassé pour un praticien authentifié : ${error?.message ?? '(aucun message)'}`
+        ).toBeNull();
+        expect(data?.nom, '[RÉG-01] la variante créée n\'est pas relue par son auteur').toBe(nom);
+      } finally {
+        await admin.from('tm6_variantes').delete().eq('nom', nom);
+      }
+    });
+
+    // Conçu pour ÉCHOUER avant le lot 8 (la colonne praticien_id n'existe
+    // pas) et passer après : c'est, avec le test croisé ci-dessus, l'un des
+    // deux indicateurs rouge/vert du lot.
+    it('[F-01] une variante créée par un praticien lui est attribuée (praticien_id rempli par le trigger)', async () => {
+      const nom = `RLS-Spec proprio ${Date.now()}`;
+      const { data, error } = await clientA
+        .from('tm6_variantes')
+        .insert({ nom, type_mesure: 'distance' })
+        .select()
+        .single();
+      try {
+        expect(error, `[F-01] insertion impossible : ${error?.message ?? '(aucun message)'}`).toBeNull();
+        expect(
+          (data as Record<string, unknown> | null)?.praticien_id,
+          '[F-01] la variante créée n\'appartient à personne : colonne praticien_id absente, ou trigger trg_tm6_variantes_praticien_id non installé'
+        ).toBe(praticienAId);
+      } finally {
+        await admin.from('tm6_variantes').delete().eq('nom', nom);
+      }
+    });
+
+    // ⚠️ Ce test passe AVANT le lot 8 pour une mauvaise raison (la colonne
+    // praticien_id n'existe pas encore, donc PostgREST rejette l'insert au
+    // lieu de la policy). Ce n'est donc PAS un indicateur rouge/vert — il
+    // ne vaut qu'une fois la colonne en place, où il vérifie réellement que
+    // le WITH CHECK empêche un praticien de s'attribuer une ligne au nom
+    // d'un autre. Écrit noir sur blanc pour qu'un futur lecteur ne le
+    // compte pas comme une preuve qu'il n'est pas.
+    it('[F-01] un praticien ne peut pas créer une variante au nom d\'un autre', async () => {
+      const nom = `RLS-Spec usurpation ${Date.now()}`;
+      try {
+        await clientA
+          .from('tm6_variantes')
+          .insert({ nom, type_mesure: 'distance', praticien_id: praticienBId })
+          .select()
+          .single();
+
+        const { data: apres } = await admin
+          .from('tm6_variantes')
+          .select('praticien_id')
+          .eq('nom', nom);
+        expect(
+          apres ?? [],
+          '[F-01] praticien A a pu créer une variante attribuée à praticien B (WITH CHECK absent ou permissif)'
+        ).toHaveLength(0);
+      } finally {
+        await admin.from('tm6_variantes').delete().eq('nom', nom);
       }
     });
   });
