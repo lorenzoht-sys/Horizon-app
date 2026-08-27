@@ -31,8 +31,14 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
   const headers: Record<string, string> = {};
   if (bypass) {
+    // Volontairement SANS `x-vercel-set-bypass-cookie` ici, contrairement à
+    // playwright.config.ts. Cet en-tête fait répondre Vercel par un 307 vers
+    // la même URL pour poser un cookie — utile au navigateur, qui le
+    // conserve, mais pas à `fetch` de Node, qui ne garde aucun cookie entre
+    // redirections : il suit le 307, se fait rediriger de nouveau, et boucle
+    // jusqu'à la limite de redirections (`fetch failed`, constaté le
+    // 2026-08-27). L'en-tête de bypass seul suffit à une requête unique.
     headers['x-vercel-protection-bypass'] = bypass;
-    headers['x-vercel-set-bypass-cookie'] = 'true';
   }
 
   let reponse: Response;
@@ -44,9 +50,10 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     // suite alors que tout va bien (constaté le 2026-08-27).
     reponse = await fetch(base, { headers, redirect: 'follow' });
   } catch (err) {
+    const cause = err instanceof Error && err.cause ? ` (${String(err.cause)})` : '';
     throw new Error(
       `[e2e] Cible injoignable : ${base}\n` +
-        `${err instanceof Error ? err.message : String(err)}\n` +
+        `${err instanceof Error ? err.message : String(err)}${cause}\n` +
         `Le déploiement existe-t-il encore ?`
     );
   }
