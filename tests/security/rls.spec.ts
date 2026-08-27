@@ -800,3 +800,11 @@ describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postg
     ).toBe(false);
   });
 });
+
+// ⚠️ TEMPORAIRE — vérification du garde-fou anti-skip de security.yml.
+// À SUPPRIMER dans le commit suivant.
+describe('TEMPORAIRE verification du garde-fou anti-skip', () => {
+  it.skip('ce test est ignore volontairement : le job doit echouer en le nommant', () => {
+    expect(true).toBe(true);
+  });
+});
