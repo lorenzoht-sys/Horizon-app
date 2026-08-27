@@ -135,6 +135,17 @@ async function applySeed(client: Client): Promise<void> {
   const sqlPath = path.resolve(__dirname, '../scripts/seed-staging.sql');
   const sql = readFileSync(sqlPath, 'utf-8');
 
+  // Exige explicitement une session en écriture.
+  //
+  // Depuis la bascule de STAGING_DATABASE_URL sur le pooler en mode
+  // transaction (2026-08-27), les backends sont partagés : un
+  // `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY` posé par un
+  // script de lecture y survit à la déconnexion et fait échouer toute
+  // écriture ultérieure, sans rapport apparent avec sa cause. Constaté ici :
+  // « cannot execute DELETE in a read-only transaction », après un simple
+  // `staging-query.ts`. Un script qui écrit doit poser lui-même la condition
+  // dont il dépend.
+  await client.query('SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE');
   await client.query('BEGIN');
   try {
     await client.query(sql);

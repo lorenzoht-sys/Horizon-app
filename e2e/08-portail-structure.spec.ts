@@ -43,6 +43,23 @@ test.describe('Portail structure', () => {
     for (const p of body.participants) {
       expect(Object.keys(p).sort()).toEqual(autorisees);
     }
+
+    // Même exigence un cran plus bas, sur les bilans imbriqués : ils
+    // portaient `notes_professionnelles`, `points_vigilance`, `notes_bilan`
+    // et `interpretation_ia` — les notes internes du praticien. Les sept
+    // colonnes ci-dessous sont exactement celles que le portail affiche.
+    const bilanAutorisees = [
+      'chair_stand_30', 'date', 'equilibre_droite', 'hand_grip_droite',
+      'id', 'tm6_distance_metres', 'tug_3m',
+    ];
+    const bilans = body.participants.flatMap((p: { bilans?: unknown[] }) => p.bilans ?? []);
+    expect(
+      bilans.length,
+      'aucun bilan chez les bénéficiaires de la structure de démo — cette partie du test ne prouverait rien'
+    ).toBeGreaterThan(0);
+    for (const b of bilans) {
+      expect(Object.keys(b as object).sort()).toEqual(bilanAutorisees);
+    }
   });
 
   test('un token invalide affiche un message d\'accès non autorisé', async ({ page }) => {

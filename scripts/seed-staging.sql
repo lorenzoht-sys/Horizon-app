@@ -152,6 +152,20 @@ BEGIN
   DELETE FROM exercices_personnalises WHERE praticien_id = ANY(ARRAY[v_praticien_a_id, v_praticien_d2_id]);
   DELETE FROM dossiers_exercices WHERE praticien_id = ANY(ARRAY[v_praticien_a_id, v_praticien_d2_id]);
 
+  -- AVANT programme_exercices : `exercices_realises.exercice_id` le référence
+  -- SANS cascade (seul `seance_patient_id` cascade, et seances_patient n'est
+  -- purgée que plus bas). Tant que l'espace patient n'était jamais utilisé
+  -- sur staging, la table restait vide et l'ordre ne se voyait pas. Depuis
+  -- que le test e2e `07-seance-coche-exercice` valide une séance à chaque
+  -- run, elle ne l'est plus, et le reseed échouait en
+  -- « violates foreign key constraint exercices_realises_exercice_id_fkey »
+  -- (constaté le 2026-08-27).
+  DELETE FROM exercices_realises WHERE seance_patient_id IN (
+    SELECT sp.id FROM seances_patient sp
+    JOIN participants pa ON pa.id = sp.participant_id
+    WHERE pa.praticien_id = ANY(ARRAY[v_praticien_a_id, v_praticien_d2_id])
+  );
+
   DELETE FROM programme_exercices WHERE seance_id IN (
     SELECT ps.id FROM programme_seances ps
     JOIN programmes p ON p.id = ps.programme_id
@@ -295,6 +309,28 @@ BEGIN
     350, 76, 98,
     8, 6,
     'Bilan trimestriel de démonstration (staging) — amélioration générale.'
+  );
+
+  -- ── Bilan de Julien, le bénéficiaire rattaché à la structure ──────────
+  -- Sans lui, le portail structure n'affiche aucun bilan et le test e2e qui
+  -- vérifie les colonnes exposées par ce portail ne peut rien vérifier :
+  -- il passerait au vert sur une liste vide. Un EHPAD dont aucun
+  -- bénéficiaire n'a de bilan n'est de toute façon pas un cas réaliste.
+  --
+  -- `notes_professionnelles` est renseignée DÉLIBÉRÉMENT : c'est une note
+  -- interne du praticien, et le test e2e doit pouvoir prouver qu'elle ne
+  -- franchit PAS la frontière du portail structure.
+  INSERT INTO bilans (
+    participant_id, praticien_id, date, type, trimestre,
+    equilibre_droite, equilibre_gauche, chair_stand_30,
+    hand_grip_droite, hand_grip_gauche, tug_3m,
+    tm6_distance_metres, notes_professionnelles, points_vigilance
+  ) VALUES (
+    v_julien_id, v_praticien_id, CURRENT_DATE - INTERVAL '1 month', 'initial', 0,
+    6.4, 5.9, 9,
+    18.0, 17.2, 12.4,
+    320, 'Note interne : ne doit jamais sortir vers le portail structure.',
+    'Vigilance interne : ne doit jamais sortir vers le portail structure.'
   );
 
   -- ── Bilan brouillon de Julien (couvre bilans_brouillons) ──────────────
