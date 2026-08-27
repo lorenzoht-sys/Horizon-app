@@ -105,3 +105,39 @@ script exécuté et archivé) :
 DROP TRIGGER IF EXISTS trg_audit_logs_immuable ON public.audit_logs;
 DROP FUNCTION IF EXISTS public.audit_logs_immuable();
 ```
+
+## Chantiers annexes — outillage et hygiène
+
+Relevés le 2026-08-27 en préparant le lot 8. Aucun n'est bloquant, aucun
+n'est traité : listés ici pour ne pas être redécouverts à chaque session.
+
+### `staging-reset-praticien-a-password.ts` écrit dans un dossier orphelin
+
+`scripts/staging-reset-praticien-a-password.ts:31` définit un `OUT_DIR`
+**codé en dur** vers le scratchpad d'une session de travail terminée. Le
+script y écrit le mot de passe qu'il vient de générer — donc toute
+exécution future dépose la seule copie de ce secret dans un dossier
+temporaire qui n'a plus de rapport avec la session en cours, et que
+personne ne pense à aller lire.
+
+Correctif attendu : passer le chemin de sortie en argument
+(`--out <fichier>`), et refuser de tourner si l'argument est absent, plutôt
+que de retomber silencieusement sur un chemin mort.
+
+Contexte : c'est ce qui a rendu le harnais inexécutable en local le
+2026-08-27. `E2E_PRATICIEN_PASSWORD` dans `.env.test.local` contient une
+valeur périmée ; celle qui fonctionne n'existe que dans le shell de
+l'opérateur (`$env:E2E_PRATICIEN_PASSWORD`), posée à la main avant chaque
+run, exactement comme le décrit `scripts/staging-push-github-secrets.ts`.
+Tant que ce fonctionnement reste le bon (décision du 2026-08-27 : ne pas
+réinitialiser le mot de passe pour ne pas désynchroniser le secret GitHub
+utilisé par la CI), il doit être **documenté** plutôt que redécouvert :
+lancer le harnais en local suppose de poser cette variable soi-même.
+
+### `npm run lint` échoue sur le harnais
+
+`tests/security/rls.spec.ts:79` — `PATIENT_B_CODE` est assigné et jamais
+utilisé (`@typescript-eslint/no-unused-vars`). Antérieur au lot 8, présent
+à l'identique sur `main`. Soit la constante a un usage prévu qui n'a jamais
+été écrit, soit c'est un vestige : à trancher en la supprimant ou en
+l'utilisant, pas en désactivant la règle.
