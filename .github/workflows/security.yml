@@ -80,8 +80,6 @@ jobs:
         # Sorti du YAML pour qu'il soit exécutable — et donc vérifiable —
         # hors de la CI : `node scripts/verifier-resultat-harnais.mjs <json>`.
         run: |
-          echo "TEMPORAIRE — diagnostic de visibilite des variables (aucune valeur affichee)"
-          node -e "for (const k of ['SUPABASE_TEST_URL','STAGING_DATABASE_URL','PATIENT_SESSION_SECRET','E2E_PRATICIEN_PASSWORD']) console.log('  ' + k + ' : ' + (process.env[k] ? 'defini (' + process.env[k].length + ' car.)' : 'ABSENT'))"
           npx vitest run tests/security --reporter=json --outputFile=vitest-security-result.json || true
           node scripts/verifier-resultat-harnais.mjs vitest-security-result.json
         env:

@@ -18,12 +18,16 @@
 // vérifié — et c'est exactement ce qui l'a laissé cassé. D'où ce script :
 // il s'exécute sur n'importe quel rapport, donc il est testable.
 //
-// ── Ordre des contrôles, et pourquoi celui-là ────────────────────────────
-// 1. Aucun test  → le harnais n'a pas tourné du tout.
-// 2. SKIP        → AVANT les échecs. Un skip est plus grave qu'un échec :
-//                  un test qui échoue a au moins tourné et dit quelque chose.
-//                  Un test ignoré ne dit rien, et se présente comme du vert.
-// 3. ÉCHEC       → en dernier.
+// ── Aucune sortie anticipée ──────────────────────────────────────────────
+// Le défaut d'origine venait d'un `process.exit(1)` placé avant un autre
+// contrôle. Inverser les deux blocs aurait déplacé le problème sans le
+// supprimer : le second serait resté inatteignable dès que le premier se
+// déclenche. Ce script ne sort donc JAMAIS au milieu — il collecte tout,
+// affiche tout, et décide à la fin.
+//
+// Les SKIP sont affichés en premier parce qu'ils sont plus graves qu'un
+// échec : un test qui échoue a au moins tourné et dit quelque chose ; un
+// test ignoré ne dit rien et se présente comme du vert.
 //
 // Usage :
 //   node scripts/verifier-resultat-harnais.mjs <rapport.json>
@@ -65,27 +69,35 @@ if (total === 0) {
   process.exit(1);
 }
 
-// ── 2. SKIP ───────────────────────────────────────────────────────────────
+let probleme = false;
+
+// ── SKIP ──────────────────────────────────────────────────────────────────
+// Un test ignoré n'a pas tourné : il ne prouve rien, mais ne colore rien en
+// rouge non plus. C'est le cas le plus dangereux. Note : vitest range aussi
+// ici les tests d'une suite dont le `beforeAll` a échoué — ils n'ont jamais
+// été exécutés, et doivent être traités comme tels.
 if (ignores > 0) {
   for (const a of noms(['pending', 'skipped', 'todo'])) {
     console.error(`::error::SKIP : ${a.fullName}`);
   }
   console.error(
     `::error::${ignores}/${total} test(s) SKIP dans tests/security/ ` +
-      `(secrets STAGING_* manquants ou invalides ?) — voir tests/security/rls.spec.ts. ` +
-      `Un skip ne peut jamais être vert ici.`
+      `(secrets STAGING_* manquants ou invalides, ou hook de préparation en échec) — ` +
+      `voir tests/security/rls.spec.ts. Un skip ne peut jamais être vert ici.`
   );
-  process.exit(1);
+  probleme = true;
 }
 
-// ── 3. ÉCHEC ──────────────────────────────────────────────────────────────
+// ── ÉCHEC ─────────────────────────────────────────────────────────────────
 if (echecs > 0) {
   for (const a of noms(['failed'])) {
     console.error(`::error::ÉCHEC : ${a.fullName}`);
     for (const m of a.failureMessages || []) console.error(m.split('\n')[0]);
   }
   console.error(`::error::${echecs}/${total} test(s) en ÉCHEC dans tests/security/.`);
-  process.exit(1);
+  probleme = true;
 }
+
+if (probleme) process.exit(1);
 
 console.log(`${total} test(s) exécuté(s) avec succès dans tests/security/ — harnais RLS réellement vérifié.`);

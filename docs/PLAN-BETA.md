@@ -68,6 +68,25 @@ Tenir cette liste à jour à chaque lot de l'étape 1 : si un lot corrige l'un d
 ces points, le retirer d'ici dans la même PR (comme le lot 4 l'a fait pour
 `[F-06]`, retiré de cette liste le 2026-08-26).
 
+**Mise à jour du 2026-08-27 — sept tests SKIP, jamais signalés jusqu'ici.**
+Le contrôle des skips de `security.yml` était placé après celui des échecs,
+qui sort en `exit(1)` : il était **inatteignable**, puisqu'un test échoue en
+permanence (celui du tableau ci-dessous). Corrigé — le contrôle vit
+désormais dans `scripts/verifier-resultat-harnais.mjs`, qui ne sort plus au
+milieu et rapporte tout.
+
+Ce qu'il a immédiatement révélé : **le bloc « Findings structurels » entier
+ne s'exécute pas en CI** (F-05, F-07, F-08, F-09, F-10, plus les deux
+contrôles `[F-01]` ajoutés avec le lot 8). Son `beforeAll` ouvre une
+connexion Postgres directe, qui échoue en `ENETUNREACH` sur les runners
+GitHub — l'hôte n'est joignable qu'en IPv6. Vitest range alors ses tests
+parmi les non exécutés. Ces sept findings sont donc **non prouvés en CI**,
+quoi qu'en ait dit la couleur du job jusqu'ici.
+
+Ce qui débloquerait : basculer le secret `STAGING_DATABASE_URL` sur le
+**Session pooler (IPv4)** de Supabase. Décision reportée par Lorenzo, elle
+débloquerait du même coup le test de couverture du tableau ci-dessous.
+
 | Test | Raison | Ce qui débloquerait |
 |---|---|---|
 | `couverture complète : toute table public non testée ci-dessus est explicitement listée (EXCLUDED_TABLES ou TABLE_OVERRIDES)` | Tente de lister `information_schema.tables` via le client PostgREST (`SUPABASE_TEST_SERVICE_ROLE_KEY`), qui n'expose que les schémas `public`/`graphql_public` (voir `supabase/config.toml`) — `information_schema` n'y est jamais accessible, quel que soit le rôle. | Faire passer ce test sur la connexion Postgres directe (`STAGING_DATABASE_URL`), comme le bloc "Findings structurels" (F-05/F-07/F-08/F-09/F-10) plus bas dans le même fichier — reporté, décision explicite du 2026-08-26 de garder `STAGING_DATABASE_URL` en connexion directe plutôt que pooler, ce qui bloque déjà ce bloc en CI (`ENETUNREACH`, IPv6) et bloquerait pareillement ce test s'il migrait dessus tel quel. |
