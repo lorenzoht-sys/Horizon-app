@@ -68,28 +68,38 @@ Tenir cette liste à jour à chaque lot de l'étape 1 : si un lot corrige l'un d
 ces points, le retirer d'ici dans la même PR (comme le lot 4 l'a fait pour
 `[F-06]`, retiré de cette liste le 2026-08-26).
 
-**Mise à jour du 2026-08-27 — sept tests SKIP, jamais signalés jusqu'ici.**
-Le contrôle des skips de `security.yml` était placé après celui des échecs,
-qui sort en `exit(1)` : il était **inatteignable**, puisqu'un test échoue en
-permanence (celui du tableau ci-dessous). Corrigé — le contrôle vit
-désormais dans `scripts/verifier-resultat-harnais.mjs`, qui ne sort plus au
-milieu et rapporte tout.
+### Cette liste est vide depuis le 2026-08-27
 
-Ce qu'il a immédiatement révélé : **le bloc « Findings structurels » entier
-ne s'exécute pas en CI** (F-05, F-07, F-08, F-09, F-10, plus les deux
-contrôles `[F-01]` ajoutés avec le lot 8). Son `beforeAll` ouvre une
-connexion Postgres directe, qui échoue en `ENETUNREACH` sur les runners
-GitHub — l'hôte n'est joignable qu'en IPv6. Vitest range alors ses tests
-parmi les non exécutés. Ces sept findings sont donc **non prouvés en CI**,
-quoi qu'en ait dit la couleur du job jusqu'ici.
+**Aucun échec ni skip n'est accepté aujourd'hui.** Toute CI rouge sur ce
+harnais est donc une vraie régression, à traiter comme telle — il n'y a plus
+de faux positif connu derrière lequel s'abriter.
 
-Ce qui débloquerait : basculer le secret `STAGING_DATABASE_URL` sur le
-**Session pooler (IPv4)** de Supabase. Décision reportée par Lorenzo, elle
-débloquerait du même coup le test de couverture du tableau ci-dessous.
+Comment on y est arrivé, en trois temps le 2026-08-27 :
 
-| Test | Raison | Ce qui débloquerait |
-|---|---|---|
-| `couverture complète : toute table public non testée ci-dessus est explicitement listée (EXCLUDED_TABLES ou TABLE_OVERRIDES)` | Tente de lister `information_schema.tables` via le client PostgREST (`SUPABASE_TEST_SERVICE_ROLE_KEY`), qui n'expose que les schémas `public`/`graphql_public` (voir `supabase/config.toml`) — `information_schema` n'y est jamais accessible, quel que soit le rôle. | Faire passer ce test sur la connexion Postgres directe (`STAGING_DATABASE_URL`), comme le bloc "Findings structurels" (F-05/F-07/F-08/F-09/F-10) plus bas dans le même fichier — reporté, décision explicite du 2026-08-26 de garder `STAGING_DATABASE_URL` en connexion directe plutôt que pooler, ce qui bloque déjà ce bloc en CI (`ENETUNREACH`, IPv6) et bloquerait pareillement ce test s'il migrait dessus tel quel. |
+1. **Le contrôle des skips n'avait jamais pu s'exécuter.** Il était placé
+   après celui des échecs, qui sort en `exit(1)` — et un test échouait en
+   permanence. L'étape promettait « un skip est un échec, jamais un vert
+   silencieux » et ne pouvait pas tenir cette promesse. La logique vit
+   désormais dans `scripts/verifier-resultat-harnais.mjs`, qui ne sort plus
+   au milieu : il collecte tout, affiche tout, décide à la fin.
+
+2. **Ce qu'il a révélé dans la minute : sept tests ne s'exécutaient pas.**
+   Tout le bloc « Findings structurels » (F-05, F-07, F-08, F-09, F-10, plus
+   les deux contrôles `[F-01]` du lot 8). Son `beforeAll` ouvrait une
+   connexion Postgres directe, qui échouait en `ENETUNREACH` sur les runners
+   GitHub — l'hôte n'était joignable qu'en IPv6. Vitest rangeait alors ses
+   tests parmi les non exécutés, sans que rien ne le signale. Ces cinq
+   findings de sécurité étaient **affirmés, pas prouvés**.
+
+3. **Basculer `STAGING_DATABASE_URL` sur le pooler (IPv4) les a débloqués**,
+   et a du même coup rendu possible la migration du test de couverture vers
+   la connexion directe (`information_schema` n'est pas exposé par
+   PostgREST). Le harnais est passé de 44 tests dont 7 fantômes et 1 échec
+   permanent, à 45 tests réellement exécutés.
+
+Tenir cette liste à jour : si un échec devient temporairement acceptable, il
+s'inscrit ici avec sa cause et ce qui le débloquerait — et il en repart dans
+la PR qui le corrige (comme le lot 4 l'a fait pour `[F-06]` le 2026-08-26).
 
 ## Chantiers de sécurité identifiés mais non appliqués
 
@@ -211,6 +221,29 @@ Tant que ce fonctionnement reste le bon (décision du 2026-08-27 : ne pas
 réinitialiser le mot de passe pour ne pas désynchroniser le secret GitHub
 utilisé par la CI), il doit être **documenté** plutôt que redécouvert :
 lancer le harnais en local suppose de poser cette variable soi-même.
+
+### `STAGING_DATABASE_URL` est sur le pooler en mode *transaction*, pas *session*
+
+Depuis le 2026-08-27, la chaîne pointe sur
+`aws-0-eu-west-3.pooler.supabase.com:**6543**`. Le port 6543 est le pooler en
+mode **transaction** ; le mode **session** est sur le **5432**.
+
+Ça fonctionne aujourd'hui, et c'est ce qui a débloqué les sept tests
+structurels en CI. Deux conséquences à connaître avant d'écrire un nouveau
+test qui passerait par cette connexion :
+
+- **Aucun état de session ne persiste d'une requête à l'autre.** Le
+  `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY` du `beforeAll` de
+  `tests/security/rls.spec.ts` est accepté mais sans effet durable : le
+  harnais ne tourne pas réellement en lecture seule, il s'y tient par
+  discipline (il ne fait que des `SELECT`). Sans conséquence tant que
+  personne n'y ajoute une écriture par mégarde.
+- **Les fonctionnalités liées à la session sont indisponibles** : verrous
+  consultatifs, `LISTEN`/`NOTIFY`, `SET` persistant, curseurs `WITH HOLD`.
+  Un test qui en aurait besoin devra passer par le 5432.
+
+À basculer sur le mode session (5432) au prochain passage dans le dashboard
+Supabase — décision de Lorenzo, sans urgence.
 
 ### `npm run lint` échoue sur le harnais
 

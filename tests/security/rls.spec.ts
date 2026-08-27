@@ -79,6 +79,17 @@ const PATIENT_A_CODE = process.env.E2E_PATIENT_CODE ?? 'CAME2E26';
 const PATIENT_B_CODE = process.env.E2E_PATIENT_CODE_2 ?? 'JUNE2E27';
 const STRUCTURE_TOKEN = process.env.E2E_STRUCTURE_TOKEN ?? 'staging-token-demo-0001';
 
+// Connexion Postgres DIRECTE au projet de staging. Volontairement nommée
+// différemment de DATABASE_URL (que scripts/dump-schema.ts utilise pour la
+// PRODUCTION) : une variable mal nommée ne doit jamais pouvoir faire tourner
+// ces requêtes contre la prod.
+//
+// Deux consommateurs : le test « couverture complète » (qui liste
+// information_schema.tables, inaccessible via PostgREST) et le bloc
+// « Findings structurels » en bas de fichier. Déclarée ici, avec les autres
+// variables d'environnement, plutôt qu'au milieu du fichier.
+const STAGING_DB_URL = process.env.STAGING_DATABASE_URL;
+
 const HAS_STAGING_ENV = Boolean(URL && ANON_KEY && SERVICE_KEY && PATIENT_SECRET && PRATICIEN_A_PASSWORD);
 
 // Tables sciemment exclues du test générique (raison documentée par ligne).
@@ -97,6 +108,13 @@ const EXCLUDED_TABLES: Record<string, string> = {
   // défaut, zéro policy) — pas de session anon/authenticated possible à tester.
   patient_login_attempts: 'service_role only, aucune policy, testé indirectement via rate-limit.spec.ts',
   organisation_demande_attempts: 'service_role only, aucune policy, testé indirectement via rate-limit.spec.ts',
+  // Même patron que patient_login_attempts : RLS activée ET forcée, zéro
+  // policy, accès exclusivement par service_role depuis api/_lib/rateLimit.ts.
+  // Aucune session anon/authenticated ne peut donc l'atteindre — rien à
+  // tester en cloisonnement. Créée par le lot 6 (20260817_securite_08_rate_limit_claude.sql),
+  // et première table détectée par le test de couverture le jour où il a
+  // enfin pu s'exécuter.
+  claude_rate_limit: 'service_role only, RLS forcée sans aucune policy, alimentée par api/_lib/rateLimit.ts',
   // Table d'audit : testée en écriture-seule par service_role, couverte par
   // une assertion dédiée (voir "audit_logs est append-only" plus bas) plutôt
   // que par le test croisé générique lecture/écriture.
@@ -240,29 +258,35 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
     // une table ajoutée demain sans entrée EXCLUDED_TABLES/TABLE_OVERRIDES et
     // sans colonne praticien_id/participant_id fera échouer le test
     // "UNKNOWN OWNERSHIP" plus bas.
-    // ⚠️ 2026-08-19 : information_schema n'est PAS exposé par PostgREST par
-    // défaut (contrairement à ce que disait le commentaire précédent) — cette
-    // requête échoue systématiquement sur un projet Supabase standard. Ne
-    // bloque plus tout le beforeAll pour ça : seul le test "couverture
-    // complète" (le seul consommateur de publicTables) en pâtit, et il le
-    // signale par un échec explicite plutôt qu'un faux vert silencieux (voir
-    // plus bas, publicTablesError).
-    try {
-      const { data: tables, error: tablesErr } = await admin
-        .schema('information_schema')
-        .from('tables')
-        .select('table_name')
-        .eq('table_schema', 'public')
-        .eq('table_type', 'BASE TABLE');
-      if (tablesErr) throw new Error(tablesErr.message);
-      publicTables = (tables as unknown as { table_name: string }[]).map((t) => t.table_name);
-    } catch (e) {
+    // ⚠️ Historique, pour qu'on ne retente pas PostgREST ici : information_schema
+    // n'est PAS exposé par PostgREST (schémas exposés = public/graphql_public,
+    // voir supabase/config.toml). La requête échouait donc systématiquement, et
+    // ce test a longtemps été le seul échec « connu et accepté » du harnais
+    // (docs/PLAN-BETA.md). Il passe désormais par la connexion Postgres
+    // directe, comme le bloc « Findings structurels » en bas de fichier —
+    // possible depuis que STAGING_DATABASE_URL pointe sur le pooler
+    // (joignable en IPv4, donc depuis les runners GitHub) le 2026-08-27.
+    if (!STAGING_DB_URL) {
       publicTablesError =
-        `Impossible de lister information_schema.tables via PostgREST (${(e as Error).message}). ` +
-        'information_schema n\'est pas exposé par défaut par PostgREST (schémas exposés = public/graphql_public, ' +
-        'voir supabase/config.toml) — nécessiterait STAGING_DATABASE_URL (connexion Postgres directe) pour être ' +
-        'corrigé proprement, pas encore fait.';
+        'STAGING_DATABASE_URL manquante — la couverture des tables ne peut pas être vérifiée. ' +
+        'Chaîne de connexion Postgres du projet STAGING (jamais la prod), voir e2e/README.md.';
       console.warn(`[couverture complète] ${publicTablesError}`);
+    } else {
+      const pgTables = new PgClient({ connectionString: STAGING_DB_URL, ssl: { rejectUnauthorized: false } });
+      try {
+        await pgTables.connect();
+        const { rows } = await pgTables.query<{ table_name: string }>(
+          `SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+            ORDER BY table_name`
+        );
+        publicTables = rows.map(r => r.table_name);
+      } catch (e) {
+        publicTablesError = `Connexion Postgres directe impossible (${(e as Error).message}).`;
+        console.warn(`[couverture complète] ${publicTablesError}`);
+      } finally {
+        await pgTables.end().catch(() => {});
+      }
     }
   }, 60_000);
 
@@ -654,8 +678,8 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
 // différemment (STAGING_DATABASE_URL, jamais DATABASE_URL) de
 // scripts/dump-schema.ts (qui, lui, cible la PROD) — pour qu'une variable
 // d'environnement mal nommée ne puisse jamais faire tourner ces requêtes
-// contre la production.
-const STAGING_DB_URL = process.env.STAGING_DATABASE_URL;
+// contre la production. La constante est déclarée en tête de fichier, avec
+// les autres variables d'environnement.
 
 describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postgres directe)', () => {
   let pg: PgClient;
