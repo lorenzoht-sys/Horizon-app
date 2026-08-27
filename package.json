@@ -11,7 +11,8 @@
     "typecheck:api": "tsc -p api/tsconfig.json --noEmit",
     "typecheck:e2e": "tsc -p e2e/tsconfig.json --noEmit",
     "test:e2e": "playwright test",
-    "test:unit": "vitest run"
+    "test:unit": "vitest run",
+    "test:security": "node scripts/run-harnais-local.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",

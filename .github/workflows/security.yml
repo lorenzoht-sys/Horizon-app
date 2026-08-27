@@ -71,35 +71,17 @@ jobs:
           fi
 
       - name: Harnais de sécurité (RLS multi-tenant) — un skip est un échec, jamais un vert silencieux
+        # La logique de contrôle vit dans scripts/verifier-resultat-harnais.mjs
+        # et non plus en ligne ici. Elle contenait un défaut invisible : le
+        # contrôle des SKIP était placé après celui des échecs, qui sort en
+        # exit(1) — et un test échoue en permanence (couverture
+        # information_schema, échec connu et accepté). Le contrôle des skips
+        # n'a donc JAMAIS pu s'exécuter, malgré le nom de cette étape.
+        # Sorti du YAML pour qu'il soit exécutable — et donc vérifiable —
+        # hors de la CI : `node scripts/verifier-resultat-harnais.mjs <json>`.
         run: |
           npx vitest run tests/security --reporter=json --outputFile=vitest-security-result.json || true
-          node -e "
-            const r = require('./vitest-security-result.json');
-            const total = r.numTotalTests || 0;
-            const failed = r.numFailedTests || 0;
-            const skipped = r.numPendingTests || 0;
-            if (total === 0) {
-              console.error('::error::Aucun test trouvé dans tests/security/ — vérifie include dans vitest.config.ts.');
-              process.exit(1);
-            }
-            if (failed > 0) {
-              for (const file of r.testResults || []) {
-                for (const a of file.assertionResults || []) {
-                  if (a.status === 'failed') {
-                    console.error('::error::ÉCHEC : ' + a.fullName);
-                    for (const m of a.failureMessages || []) console.error(m.split('\n')[0]);
-                  }
-                }
-              }
-              console.error('::error::' + failed + '/' + total + ' test(s) en ÉCHEC dans tests/security/.');
-              process.exit(1);
-            }
-            if (skipped > 0) {
-              console.error('::error::' + skipped + '/' + total + ' test(s) SKIP dans tests/security/ (secrets STAGING_* manquants ou invalides ?) — voir tests/security/rls.spec.ts. Un skip ne peut jamais être vert ici.');
-              process.exit(1);
-            }
-            console.log(total + ' test(s) exécuté(s) avec succès dans tests/security/ — harnais RLS réellement vérifié.');
-          "
+          node scripts/verifier-resultat-harnais.mjs vitest-security-result.json
         env:
           SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
           SUPABASE_TEST_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
