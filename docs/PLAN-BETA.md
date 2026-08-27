@@ -164,7 +164,7 @@ DROP FUNCTION IF EXISTS public.audit_logs_immuable();
 Relevés le 2026-08-27 en préparant le lot 8. Aucun n'est bloquant, aucun
 n'est traité : listés ici pour ne pas être redécouverts à chaque session.
 
-### `staging-reset-praticien-a-password.ts` écrit dans un dossier orphelin
+### Deux scripts écrivent dans un dossier orphelin
 
 `scripts/staging-reset-praticien-a-password.ts:31` définit un `OUT_DIR`
 **codé en dur** vers le scratchpad d'une session de travail terminée. Le
@@ -173,7 +173,13 @@ exécution future dépose la seule copie de ce secret dans un dossier
 temporaire qui n'a plus de rapport avec la session en cours, et que
 personne ne pense à aller lire.
 
-Correctif attendu : passer le chemin de sortie en argument
+`scripts/staging-backup.ts` a exactement le même défaut, constaté le
+2026-08-27 : la sauvegarde prise avant un reseed est partie dans ce même
+dossier d'une session terminée. Moins grave (ce n'est pas un secret, et le
+script affiche le chemin), mais une sauvegarde qu'on ne retrouve pas ne
+protège de rien.
+
+Correctif attendu pour les deux : passer le chemin de sortie en argument
 (`--out <fichier>`), et refuser de tourner si l'argument est absent, plutôt
 que de retomber silencieusement sur un chemin mort.
 

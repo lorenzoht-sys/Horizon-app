@@ -88,10 +88,11 @@ export default function LoginPage({ onLogin }: Props) {
 
             {/* Email */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 16 }}>
-              <label style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>
+              <label htmlFor="login-email" style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>
                 Email professionnel
               </label>
               <input
+                id="login-email"
                 className="login-input"
                 type="email"
                 placeholder="vous@structure.fr"
@@ -104,7 +105,7 @@ export default function LoginPage({ onLogin }: Props) {
             {/* Mot de passe */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 24 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>
+                <label htmlFor="login-password" style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>
                   Mot de passe
                 </label>
                 <Link to="/forgot-password" style={{ fontSize: 13, color: '#0d9488', fontWeight: 600, textDecoration: 'none' }}>
@@ -113,6 +114,7 @@ export default function LoginPage({ onLogin }: Props) {
               </div>
               <div style={{ position: 'relative' }}>
                 <input
+                  id="login-password"
                   className="login-input"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"

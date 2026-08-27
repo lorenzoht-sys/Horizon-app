@@ -9,7 +9,7 @@ jobs:
   # Vérifications statiques : toujours exécutées, ne dépendent d'aucun
   # environnement de staging. Volontairement SANS `npm run lint` (erreurs
   # de lint pré-existantes, hors périmètre de la consolidation — voir
-  # AUDIT.md).
+  # AUDIT.md et docs/PLAN-BETA.md).
   build:
     runs-on: ubuntu-latest
     steps:
@@ -25,16 +25,41 @@ jobs:
       - run: npm run typecheck:api
       - run: npm run typecheck:e2e
 
-  # Suite E2E Playwright : nécessite un déploiement de Preview Vercel branché
-  # sur le projet Supabase de staging (voir GUIDE_STAGING.md et
-  # e2e/README.md). Ignorée si la variable de dépôt E2E_BASE_URL n'est pas
-  # configurée, pour que la CI reste verte avant la mise en place du staging.
+  # Suite E2E Playwright — cible un déploiement Vercel de Preview branché sur
+  # le projet Supabase de STAGING (voir GUIDE_STAGING.md et e2e/README.md).
+  #
+  # ── Comment la cible est choisie, et pourquoi ────────────────────────────
+  # Ce job ciblait auparavant une URL figée (`vars.E2E_BASE_URL`), pointant
+  # sur le Preview de la branche `staging`. Deux défauts, tous deux constatés
+  # le 2026-08-27 :
+  #   1. La branche `staging` avait 46 commits de retard sur `main` : la CI
+  #      validait du code vieux de cinq jours en croyant valider le commit
+  #      courant.
+  #   2. Le déploiement est derrière l'authentification Vercel, que la CI ne
+  #      franchissait pas — d'où une douzaine de tests rouges depuis des
+  #      jours, pour une cause située hors du code testé.
+  #
+  # Désormais la cible est RÉSOLUE À CHAQUE RUN, à partir du commit testé :
+  #   - sur une pull request : le Preview de la PR elle-même (environnement
+  #     Vercel « Preview », donc Supabase de staging) ;
+  #   - sur un push sur `main` : `main` part en PRODUCTION, sur la base
+  #     Supabase de PRODUCTION — jamais une cible de test acceptable. On
+  #     resynchronise donc la branche `staging` sur le commit poussé et on
+  #     teste SON Preview.
+  #
+  # `vars.E2E_BASE_URL` ne sert plus d'URL : uniquement d'interrupteur
+  # (job ignoré tant qu'elle est vide), pour préserver le comportement
+  # documenté dans e2e/README.md.
   e2e:
     needs: build
     runs-on: ubuntu-latest
-    if: vars.E2E_BASE_URL != ''
+    if: >-
+      vars.E2E_BASE_URL != '' &&
+      (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
+    permissions:
+      contents: write # resynchronise la branche `staging` sur les push sur main
+      deployments: read # lit l'URL du déploiement Vercel du commit testé
     env:
-      E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
       E2E_PRATICIEN_EMAIL: ${{ vars.E2E_PRATICIEN_EMAIL }}
       E2E_PRATICIEN_PASSWORD: ${{ secrets.E2E_PRATICIEN_PASSWORD }}
       E2E_PATIENT_CODE: ${{ vars.E2E_PATIENT_CODE }}
@@ -44,8 +69,78 @@ jobs:
       E2E_PATIENT_PRENOM_2: ${{ vars.E2E_PATIENT_PRENOM_2 }}
       E2E_PATIENT_NOM_2: ${{ vars.E2E_PATIENT_NOM_2 }}
       E2E_STRUCTURE_TOKEN: ${{ vars.E2E_STRUCTURE_TOKEN }}
+      # Sans ce secret, la sonde de e2e/global-setup.ts arrête la suite avec
+      # un message explicite au lieu de laisser tous les tests expirer.
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      # Uniquement pour remettre à zéro les séances du jour avant le run
+      # (voir l'étape dédiée plus bas). PostgREST + service_role, et non
+      # STAGING_DATABASE_URL : la connexion Postgres directe n'est joignable
+      # qu'en IPv6, que les runners GitHub n'ont pas (ENETUNREACH — même
+      # limitation que le bloc « Findings structurels » du harnais, voir
+      # docs/PLAN-BETA.md). Le script porte le même garde-fou anti-production
+      # que les autres scripts de staging.
+      SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
+      SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cibler le Preview de la pull request
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "SHA_CIBLE=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_ENV"
+          echo "NOM_CIBLE=PR #${{ github.event.pull_request.number }}" >> "$GITHUB_ENV"
+
+      - name: Resynchroniser la branche staging sur le commit poussé
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          # Force : `staging` porte un commit de déclenchement qui n'est pas
+          # sur main, donc pas d'avance rapide possible. Ce commit n'a aucune
+          # valeur (il ne servait qu'à créer le premier Preview).
+          git push --force origin "${{ github.sha }}:refs/heads/staging"
+          echo "SHA_CIBLE=${{ github.sha }}" >> "$GITHUB_ENV"
+          echo "NOM_CIBLE=branche staging" >> "$GITHUB_ENV"
+
+      - name: Attendre le déploiement Vercel de Preview et résoudre son URL
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          echo "Commit testé : $SHA_CIBLE ($NOM_CIBLE)"
+
+          # Vercel enregistre un GitHub Deployment par build. On attend celui
+          # dont l'environnement est un Preview (jamais Production : ce serait
+          # la base Supabase de production) et dont un statut est `success`.
+          for tentative in $(seq 1 60); do
+            ids=$(gh api "repos/$GITHUB_REPOSITORY/deployments?sha=$SHA_CIBLE&per_page=100" \
+                    --jq '.[].id' 2>/dev/null || true)
+            for id in $ids; do
+              nom_env=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id" \
+                          --jq '.environment' 2>/dev/null || true)
+              case "$(echo "$nom_env" | tr '[:upper:]' '[:lower:]')" in
+                *preview*)
+                  url=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=100" \
+                          --jq '[.[] | select(.state=="success") | .environment_url]
+                                | map(select(. != null and . != "")) | first // empty' 2>/dev/null || true)
+                  if [ -n "$url" ]; then
+                    echo "Déploiement de Preview prêt : $url"
+                    echo "E2E_BASE_URL=$url" >> "$GITHUB_ENV"
+                    exit 0
+                  fi
+                  ;;
+              esac
+            done
+            echo "  (tentative $tentative/60) aucun Preview prêt, nouvelle vérification dans 15 s"
+            sleep 15
+          done
+
+          echo "::error::Aucun déploiement Vercel de Preview prêt pour $SHA_CIBLE après 15 minutes."
+          echo "Déploiements vus pour ce commit :"
+          gh api "repos/$GITHUB_REPOSITORY/deployments?sha=$SHA_CIBLE&per_page=100" \
+            --jq '.[] | "  id=\(.id) environnement=\(.environment)"' || echo "  (aucun)"
+          exit 1
 
       - uses: actions/setup-node@v4
         with:
@@ -53,5 +148,15 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # Rend la suite rejouable. `07-seance-coche-exercice` enregistre la
+      # séance du jour du patient de démo ; un index unique interdit ensuite
+      # de la revalider, si bien que le run suivant échouait sur un 409
+      # parfaitement légitime. Sans cette remise à zéro, le test ne peut
+      # passer qu'une fois par jour et par environnement.
+      - name: Remettre à zéro les séances du jour sur staging
+        if: env.SUPABASE_TEST_URL != ''
+        run: npx tsx scripts/staging-reset-seances-du-jour.ts --apply
+
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

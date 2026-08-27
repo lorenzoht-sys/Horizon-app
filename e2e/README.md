@@ -17,7 +17,8 @@ la mise en place du staging.
 
 | Variable | Obligatoire | Valeur par défaut | Description |
 |---|---|---|---|
-| `E2E_BASE_URL` | oui (sinon tout est skip) | — | URL du déploiement à tester (ex : URL d'un Preview Vercel) |
+| `E2E_BASE_URL` | oui (sinon tout est skip) | — | URL du déploiement à tester (ex : URL d'un Preview Vercel). **En CI, cette variable n'est plus une URL figée** : le workflow la résout à chaque run (voir plus bas) |
+| `VERCEL_AUTOMATION_BYPASS_SECRET` | oui contre un Preview Vercel | — | Secret « Protection Bypass for Automation » du projet Vercel. Sans lui, la protection de déploiement renvoie toute requête vers le SSO et **aucun test ne peut atteindre l'application** |
 | `E2E_PRATICIEN_EMAIL` | pour les tests praticien (1, 2, 3, 4, 5, 10) | — | Email du compte praticien de staging (`staging.praticien@example.com`) |
 | `E2E_PRATICIEN_PASSWORD` | pour les tests praticien | — | Mot de passe de ce compte |
 | `E2E_PATIENT_CODE` | non | `CAME2E26` | Code d'accès (code_acces) du patient de démo "Camille" (a des bilans + programme) |
@@ -80,6 +81,36 @@ repartir d'une base propre.
   `AUDIT.md`).
 - Job `e2e` (exécuté seulement si la variable de dépôt `E2E_BASE_URL` est
   configurée dans **Settings > Secrets and variables > Actions**) : lance
-  cette suite contre le Preview de staging. `E2E_PRATICIEN_PASSWORD` doit
-  être ajouté comme **secret** (pas une variable), les autres `E2E_*` comme
-  **variables**.
+  cette suite contre un Preview Vercel. `E2E_PRATICIEN_PASSWORD` et
+  `VERCEL_AUTOMATION_BYPASS_SECRET` doivent être ajoutés comme **secrets**
+  (pas des variables), les autres `E2E_*` comme **variables**.
+
+### Comment la cible est choisie en CI
+
+`E2E_BASE_URL` ne sert plus que d'**interrupteur** : tant qu'elle est vide,
+le job est ignoré. L'URL réellement testée est résolue à chaque run à partir
+du commit testé :
+
+- **sur une pull request** → le Preview de la PR elle-même ;
+- **sur un push sur `main`** → `main` part en *Production*, donc sur la base
+  Supabase de **production** : jamais une cible de test acceptable. Le
+  workflow resynchronise la branche `staging` sur le commit poussé et teste
+  **son** Preview (environnement Vercel *Preview* = Supabase de staging).
+
+Le workflow attend que le déploiement Vercel correspondant soit `success`
+(15 min max) avant de lancer Playwright, via l'API GitHub Deployments.
+
+### Deux pièges déjà rencontrés
+
+1. **Protection de déploiement.** Le projet a
+   `ssoProtection: all_except_custom_domains` : tout Preview est derrière
+   l'authentification Vercel. Sans `VERCEL_AUTOMATION_BYPASS_SECRET`, chaque
+   requête est redirigée (302) vers le SSO. Symptôme observé le 2026-08-27 :
+   une douzaine de `locator.fill: Test timeout` et de `getByText`
+   introuvables — douze symptômes pour une cause unique, extérieure au code
+   testé. `e2e/global-setup.ts` sonde désormais la cible avant le premier
+   test et arrête la suite avec un message explicite.
+2. **Cible périmée.** L'ancienne `E2E_BASE_URL` pointait sur le Preview d'une
+   branche `staging` figée, qui avait fini 46 commits derrière `main` : la CI
+   validait du code vieux de cinq jours. D'où la résolution par commit
+   décrite ci-dessus.

@@ -14,6 +14,25 @@
 -- script UNIQUEMENT via ce runner, jamais en collant directement dans un
 -- SQL Editor dont tu n'es pas certain à 100% qu'il s'agit du projet staging.
 --
+-- ── Ce que ce script NE touche PAS : tm6_variantes ──────────────────────
+-- Ce catalogue n'est ni purgé ni réinséré ici. Un reseed laisse donc
+-- intactes ses policies, sa colonne `praticien_id` et ses lignes — dont
+-- celles créées par scripts/staging-restaurer-etat-prod-tm6.ts.
+--
+-- Seuls les rattachements `bilans.tm6_variante_id` disparaissent, puisque
+-- les bilans sont repurgés. Ils ne servaient qu'à valider le backfill du
+-- lot 8, une fois : il n'y a AUCUNE raison de rejouer ce script de fixture
+-- après un reseed — il recrée volontairement l'état VULNÉRABLE de la
+-- production (policies USING(true)), et il faudrait alors réappliquer
+-- 20260817_securite_01_tm6_variantes_rls.sql derrière pour ne pas laisser
+-- staging ouvert.
+--
+-- La protection contre un `[F-01]` vert sans rien vérifier ne repose pas
+-- sur ces données : elle est structurelle, dans tests/security/rls.spec.ts
+-- (« tm6_variantes a bien 4 policies, écritures scopées au propriétaire »),
+-- qui échoue si les policies disparaissent — cas où le test [F-01] par
+-- effet passerait au vert en refusant tout.
+--
 -- Aucun nom, code, adresse ou donnée de santé ci-dessous ne correspond à un
 -- patient réel : tout est inventé pour les tests (harnais RLS
 -- tests/security/rls.spec.ts, Playwright e2e/, QA manuelle).
@@ -294,12 +313,21 @@ BEGIN
     24, 6, 45
   );
 
-  -- ── Programme V1 (table programmes — utilisée par useProgramme) ───────
+  -- ── Programme (table programmes) ──────────────────────────────────────
+  -- `type` N'EST PAS DÉCORATIF : api/patient/me.ts:151 ne considère un
+  -- programme comme V2 que si `type IS NOT NULL`
+  -- (`programmes.filter(p => p.type != null)`). Sans lui, les séances et le
+  -- planning insérés juste en dessous ne remontent jamais à l'espace
+  -- patient : `programmesV2` arrive vide, la section « Vos programmes »
+  -- (EspacePatient.tsx:427, rendue sous `progsV2Actifs.length > 0`) n'existe
+  -- pas, et il n'y a aucune séance du jour à démarrer.
+  -- C'est ce qui faisait échouer les tests e2e 06 et 07 le 2026-08-27.
   INSERT INTO programmes (
-    id, participant_id, praticien_id, date_debut, titre, objectif,
+    id, participant_id, praticien_id, date_debut, type, nom, titre, objectif,
     message_motivation, exercices, actif
   ) VALUES (
     v_programme_id, v_camille_id, v_praticien_id, CURRENT_DATE,
+    'domicile', 'Programme de démonstration',
     'Programme de démonstration', 'Renforcement musculaire et équilibre',
     'Continuez, vous progressez bien !', '[]'::jsonb, true
   );
@@ -325,9 +353,18 @@ BEGIN
     (v_seance2_id, 'Levers de chaise', 'renforcement', 'Se lever et se rasseoir sans les mains', 'Chaise stable, dossier contre un mur', 3, 10, NULL, 1),
     (v_seance2_id, 'Flexions de bras (haltères légers)', 'renforcement', 'Flexion/extension du coude avec charge légère', 'Charge adaptée, mouvement lent', 3, 12, NULL, 2);
 
-  -- ── Séance "en cours" pour Camille (test check-off exercice) ──────────
+  -- ── Séance déjà réalisée par Camille (historique) ─────────────────────
+  -- DATÉE D'HIER, PAS D'AUJOURD'HUI, et c'est délibéré : il existe un index
+  -- unique `seances_patient_no_double_validation_idx` sur
+  -- (participant_id, seance_id, date_seance). Avec CURRENT_DATE, cette ligne
+  -- occupait déjà la place de la séance du jour, et le test e2e 07 — qui
+  -- réalise précisément cette séance-là — recevait un 23505, donc un 409
+  -- « Vous avez déjà validé cette séance aujourd'hui » (api/patient/seance.ts).
+  -- L'application avait raison de refuser ; c'était le jeu de données qui
+  -- piétinait le test. Hier laisse la journée libre tout en gardant un
+  -- historique visible dans l'espace patient.
   INSERT INTO seances_patient (id, participant_id, programme_id, seance_id, date_seance, statut, duree_minutes)
-  VALUES (gen_random_uuid(), v_camille_id, v_programme_id, v_seance1_id, CURRENT_DATE, 'en_cours', NULL);
+  VALUES (gen_random_uuid(), v_camille_id, v_programme_id, v_seance1_id, CURRENT_DATE - 1, 'terminee', 25);
 
   -- ── Séances d'agenda (praticien) pour Camille ─────────────────────────
   INSERT INTO seances (id, participant_id, praticien_id, contrat_id, date, heure_debut, heure_fin, duree_minutes, type, statut)
@@ -513,11 +550,14 @@ BEGIN
     20, 4, 45
   );
 
+  -- `type` obligatoire pour que le programme soit vu comme V2 — voir le
+  -- commentaire du programme de Camille plus haut.
   INSERT INTO programmes (
-    id, participant_id, praticien_id, date_debut, titre, objectif,
+    id, participant_id, praticien_id, date_debut, type, nom, titre, objectif,
     message_motivation, exercices, actif
   ) VALUES (
     v_programme_id, v_nadia_id, v_praticien_id, CURRENT_DATE,
+    'domicile', 'Programme de démonstration — Démo Deux',
     'Programme de démonstration — Démo Deux', 'Prévention des chutes',
     'Bon travail, continuez ainsi !', '[]'::jsonb, true
   );
@@ -532,8 +572,10 @@ BEGIN
   INSERT INTO programme_exercices (seance_id, nom, categorie, description, conseil_securite, series, repetitions, duree_secondes, ordre)
   VALUES (v_seance1_id, 'Équilibre unipodal', 'equilibre', 'Tenir en équilibre sur une jambe', 'Se tenir près d''un support', 3, NULL, 30, 1);
 
+  -- Hier également — même raison que pour Camille (index unique sur
+  -- participant_id/seance_id/date_seance, voir plus haut).
   INSERT INTO seances_patient (id, participant_id, programme_id, seance_id, date_seance, statut, duree_minutes)
-  VALUES (gen_random_uuid(), v_nadia_id, v_programme_id, v_seance1_id, CURRENT_DATE, 'en_cours', NULL);
+  VALUES (gen_random_uuid(), v_nadia_id, v_programme_id, v_seance1_id, CURRENT_DATE - 1, 'terminee', 25);
 
   INSERT INTO seances (id, participant_id, praticien_id, contrat_id, date, heure_debut, heure_fin, duree_minutes, type, statut)
   VALUES (gen_random_uuid(), v_nadia_id, v_praticien_id, v_contrat_id, CURRENT_DATE, '11:00', '11:45', 45, 'seance', 'planifiee');
