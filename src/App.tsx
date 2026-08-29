@@ -11,7 +11,6 @@ import Sidebar from './components/layout/Sidebar';
 import Dashboard from './pages/Dashboard';
 import ParticipantProfile from './pages/ParticipantProfile';
 import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import SettingsPage from './pages/SettingsPage';
 import OnboardingPage from './pages/OnboardingPage';
@@ -250,9 +249,15 @@ export default function App() {
         <Route path="/login" element={
           isLoggedIn ? <Navigate to="/" replace /> : <LoginPage onLogin={handleLogin} />
         } />
-        <Route path="/register" element={
-          isLoggedIn ? <Navigate to="/" replace /> : <RegisterPage />
-        } />
+        {/* Inscription autonome RETIRÉE le 2026-08-29 (étape 4).
+            Cette route était publique : n'importe qui pouvait se créer un
+            compte praticien, ce qui vidait de son sens le contrôle des
+            comptes par un admin. Un compte inconnu avait d'ailleurs été
+            trouvé en production.
+            RegisterPage.tsx est CONSERVÉE volontairement : elle sera
+            réutilisée comme page « définir mon mot de passe » au bout du
+            lien d'invitation (option 2, voir docs/PLAN-BETA.md). Ne pas la
+            supprimer, et ne pas remettre cette route en l'état. */}
         <Route path="/forgot-password" element={
           isLoggedIn ? <Navigate to="/" replace /> : <ForgotPasswordPage />
         } />
