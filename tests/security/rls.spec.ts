@@ -1140,3 +1140,121 @@ describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postg
   });
 
 });
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// [RÔLES] Étape 4 — un compte admin ne lit aucune donnée clinique
+// ═══════════════════════════════════════════════════════════════════════
+//
+// Le rôle admin sert à gérer des COMPTES (création, désactivation, liste),
+// jamais à consulter des données de santé. Ce describe le prouve par le
+// comportement, pas par relecture des policies.
+//
+// Describe autonome, volontairement : il ne dépend d'aucun compte de seed
+// (E2E_PRATICIEN_PASSWORD), donc il tourne même quand le jeu de données de
+// staging a dérivé. Compte créé puis détruit dans le describe, préfixe
+// `rls-spec-` comme les autres comptes jetables de ce fichier.
+//
+// DEUX GARDES ANTI-TEST-VIDE, sans lesquels ce describe passerait au vert
+// en ne prouvant rien (règle de méthode, docs/PLAN-BETA.md) :
+//   1. le compte de test est-il RÉELLEMENT admin ? Un compte ordinaire ne
+//      verrait rien non plus — le test serait vrai pour la mauvaise raison.
+//   2. les tables contiennent-elles des lignes à protéger ? Sur une base
+//      vide, « l'admin ne voit rien » est une tautologie.
+
+const TABLES_CLINIQUES = [
+  'bilans',
+  'comptes_rendus_seances',
+  'notes_seances',
+  'documents_patient',
+] as const;
+
+describe.skipIf(!URL || !ANON_KEY || !SERVICE_KEY)('[RÔLES] un compte admin ne lit aucune donnée clinique', () => {
+  let admin: SupabaseClient;
+  let sessionAdmin: SupabaseClient;
+  let adminUserId: string | null = null;
+  const adminEmail = `rls-spec-admin-${Date.now()}@example.invalid`;
+  const adminPassword = `Rls-Spec-Admin-${Math.random().toString(36).slice(2)}!Aa1`;
+
+  beforeAll(async () => {
+    admin = createClient(URL as string, SERVICE_KEY as string, { auth: { persistSession: false } });
+
+    const { data: cree, error: creeErr } = await admin.auth.admin.createUser({
+      email: adminEmail,
+      password: adminPassword,
+      email_confirm: true,
+    });
+    if (creeErr || !cree.user) {
+      throw new Error(`Création du compte admin de test impossible : ${creeErr?.message}`);
+    }
+    adminUserId = cree.user.id;
+
+    // Un admin réaliste : une ligne `praticiens`, et AUCUN participant —
+    // il ne possède donc légitimement aucune donnée.
+    await admin.from('praticiens').insert({
+      id: adminUserId, prenom: 'RLS-Spec', nom: 'Admin', email: adminEmail,
+    });
+
+    // ⚠️ Rien ne crée automatiquement la ligne `user_roles` d'un compte né
+    // APRÈS la migration d'étape 3 : son backfill était ponctuel. Il faut
+    // l'écrire explicitement (service_role). C'est un point à traiter en
+    // étape 4 — sans quoi tout nouveau praticien n'a aucun rôle.
+    const { error: roleErr } = await admin
+      .from('user_roles')
+      .insert({ user_id: adminUserId, app_role: 'admin' });
+    if (roleErr) {
+      throw new Error(`Attribution du rôle admin impossible : ${roleErr.message}`);
+    }
+
+    sessionAdmin = createClient(URL as string, ANON_KEY as string, { auth: { persistSession: false } });
+    const { error: signInErr } = await sessionAdmin.auth.signInWithPassword({
+      email: adminEmail, password: adminPassword,
+    });
+    if (signInErr) {
+      throw new Error(`Connexion du compte admin de test impossible : ${signInErr.message}`);
+    }
+  });
+
+  afterAll(async () => {
+    // auth.users -> praticiens -> user_roles sont en ON DELETE CASCADE :
+    // supprimer le compte suffit à tout nettoyer.
+    if (adminUserId) await admin.auth.admin.deleteUser(adminUserId);
+  });
+
+  it('garde anti-test-vide : le compte de test est bien reconnu comme admin', async () => {
+    const { data, error } = await sessionAdmin.rpc('app_role_courant');
+    expect(error?.message ?? null, 'app_role_courant() a échoué pour le compte de test').toBeNull();
+    expect(
+      data,
+      "le compte de test n'est PAS admin : les assertions de ce describe seraient vraies pour la mauvaise raison"
+    ).toBe('admin');
+  });
+
+  it.each(TABLES_CLINIQUES)('garde anti-test-vide : %s contient des lignes à protéger', async (table) => {
+    const { count, error } = await admin.from(table).select('*', { count: 'exact', head: true });
+    expect(error?.message ?? null, `lecture service_role de ${table}`).toBeNull();
+    expect(
+      count ?? 0,
+      `${table} est vide sur staging : « un admin n'y lit rien » ne prouverait rien. Reseed nécessaire.`
+    ).toBeGreaterThan(0);
+  });
+
+  it.each(TABLES_CLINIQUES)('un compte admin ne lit aucune ligne de %s', async (table) => {
+    const { data, error } = await sessionAdmin.from(table).select('*');
+
+    // Deux issues acceptables, toutes deux étanches : la RLS filtre tout
+    // (0 ligne), ou le privilège manque (42501). Toute autre erreur est
+    // suspecte et doit remonter telle quelle.
+    if (error) {
+      expect(
+        error.code,
+        `${table} : erreur inattendue ${error.code} — ${error.message}`
+      ).toBe('42501');
+      return;
+    }
+    expect(
+      data ?? [],
+      `[RÔLES] un compte admin lit ${data?.length ?? 0} ligne(s) de ${table} — accès aux données de santé`
+    ).toHaveLength(0);
+  });
+});
