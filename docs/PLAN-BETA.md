@@ -348,7 +348,19 @@ connexion Postgres directe ou une fonction `SECURITY INVOKER` mal écrite.
 L'argument décisif reste donc la défense en profondeur et le mode d'échec, pas
 une faille exploitable aujourd'hui.
 
-## BUG DE PRODUCTION — la réinitialisation de mot de passe ne fonctionne pas (2026-08-29)
+## BUG DE PRODUCTION — la réinitialisation de mot de passe ne fonctionnait pas (2026-08-29)
+
+> **Résolu le 2026-08-29**, après TROIS défauts distincts empilés :
+> 1. aucun SMTP personnalisé — corrigé en branchant **Brevo** ;
+> 2. le **suivi des clics** de Brevo détruisait le fragment portant le jeton
+>    (voir la règle dédiée plus bas) — désactivé sur les transactionnels ;
+> 3. la page de définition du mot de passe **n'avait jamais été écrite** —
+>    `/reset-password` n'existait pas dans le routeur, alors que
+>    `ForgotPasswordPage` y renvoyait depuis toujours.
+>
+> Chacun masquait le suivant : corriger le SMTP révélait le tracking, et
+> corriger le tracking révélait la page manquante. Le récit ci-dessous est
+> conservé tel qu'il a été écrit — il documente le premier défaut.
 
 **Ce n'est pas un risque futur, c'est une panne actuelle.** Confirmé le
 2026-08-29 : aucun SMTP personnalisé n'est configuré sur le projet Supabase de
@@ -479,6 +491,68 @@ ORDER BY 1;
    ferait échouer bruyamment toute suppression de praticien portant un dossier,
    au lieu de l'orpheliner en silence. C'est le bon mode d'échec, mais ça change
    le comportement de la base — pas pendant l'ouverture.
+
+## RÈGLE — jamais de suivi des clics sur les emails d'authentification
+
+**Le suivi des clics d'un routeur d'emails (Brevo, Mailchimp, SendGrid…)
+détruit tout lien d'authentification Supabase. Ce n'est pas un réglage à
+ajuster : c'est une incompatibilité de principe.**
+
+### Pourquoi c'est structurel, et pas un bug à contourner
+
+Supabase renvoie le jeton dans le **fragment** de l'URL :
+
+```
+https://app.horizon-suivi.fr/reset-password#access_token=…&type=recovery
+```
+
+Tout ce qui suit le `#` n'est **jamais transmis au serveur** — c'est le
+fonctionnement du Web, pas une particularité de Supabase. Le fragment n'existe
+que dans le navigateur.
+
+Le suivi des clics réécrit le lien vers un domaine de traçage
+(`r.mail.horizon-suivi.fr/tr/cl/…`) qui enregistre le clic puis renvoie une
+redirection HTTP vers la destination. Ce serveur n'a jamais vu le fragment :
+il ne peut donc pas le réémettre. **Le jeton disparaît entre le clic et
+l'arrivée.**
+
+Aucune configuration ne répare ça. Ni la liste des Redirect URLs, ni le
+template. La seule issue est de désactiver le suivi des clics sur les emails
+transactionnels.
+
+### Pourquoi ça a coûté cher à diagnostiquer (2026-08-29)
+
+La panne est silencieuse de bout en bout :
+
+- Brevo signale l'email **délivré**, et le clic **enregistré** ;
+- le navigateur arrive bien sur le bon domaine ;
+- l'application affiche la page de connexion, sans erreur ;
+- aucune trace nulle part.
+
+Trois hypothèses avaient été formulées — page manquante, Redirect URLs, lien
+expiré — et **aucune n'était la bonne**. C'est l'URL d'atterrissage réelle,
+relevée dans la barre d'adresse, qui a tranché : elle pointait sur le domaine
+de traçage.
+
+**Leçon de méthode : devant un flux de redirection qui échoue, relever l'URL
+réellement atteinte avant de raisonner sur la configuration.** Les hypothèses
+se testent en une seconde avec la donnée, et se discutent une heure sans elle.
+
+### Portée
+
+Vaut pour **tous** les emails d'authentification, pas seulement la
+réinitialisation : invitation (`admin.inviter`), lien magique, confirmation
+d'adresse. Tous portent leur jeton dans le fragment.
+
+À revérifier à chaque changement de routeur d'emails, et après toute
+modification des réglages d'un routeur existant — le suivi des clics est
+souvent activé par défaut, et par compte plutôt que par email.
+
+### Test de non-régression
+
+Cliquer sur un lien de réinitialisation et vérifier que l'URL atteinte
+contient bien `#access_token=…`. Si elle passe par un domaine tiers, le suivi
+est réactivé.
 
 ## RÈGLE — un « Success » du SQL Editor ne prouve PAS qu'une migration est appliquée
 
