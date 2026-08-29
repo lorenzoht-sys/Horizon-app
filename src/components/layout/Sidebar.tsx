@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Home, Calendar, Route, Layers, Settings,
-  LogOut, Map, BarChart2, Bot, Library,
+  LogOut, Map, BarChart2, Bot, Library, ShieldCheck,
 } from 'lucide-react';
 import { IndicateurConnexion, BoutonInstallerApp } from '../pwa/PWAComponents';
 import { supabase } from '../../lib/supabase';
 import LegalFooterLinks from '../legal/LegalFooterLinks';
+import { useAppRole } from '../../hooks/useAppRole';
 
 interface Props {
   onLogout: () => void;
@@ -33,6 +34,7 @@ const NAV_ITEMS = [
 
 export default function Sidebar({ onLogout }: Props) {
   const [praticien, setPraticien] = useState<PraticienInfo | null>(null);
+  const { estAdmin } = useAppRole();
 
   async function fetchPraticien() {
     if (!supabase) return;
@@ -104,6 +106,25 @@ export default function Sidebar({ onLogout }: Props) {
             </NavLink>
           </div>
         ))}
+
+        {/* Administration — visible uniquement pour un admin.
+            Confort d'affichage, PAS une protection : le serveur refuse en
+            403 toute action admin.* d'un non-admin, et la page elle-même
+            n'affiche rien à qui n'est pas admin. Masquer l'entrée évite
+            juste un menu qui mènerait à un mur. */}
+        {estAdmin && (
+          <div style={{ marginBottom: 2 }}>
+            <NavLink
+              to="/admin/comptes"
+              className={({ isActive }) =>
+                `sidebar-nav-item no-underline${isActive ? ' sidebar-nav-active' : ''}`
+              }
+            >
+              <ShieldCheck size={16} className="flex-shrink-0" />
+              Administration
+            </NavLink>
+          </div>
+        )}
 
         {/* Paramètres avec indicateur de complétion */}
         <div style={{ marginBottom: 2 }}>

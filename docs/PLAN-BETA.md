@@ -348,6 +348,229 @@ connexion Postgres directe ou une fonction `SECURITY INVOKER` mal écrite.
 L'argument décisif reste donc la défense en profondeur et le mode d'échec, pas
 une faille exploitable aujourd'hui.
 
+## BUG DE PRODUCTION — la réinitialisation de mot de passe ne fonctionne pas (2026-08-29)
+
+**Ce n'est pas un risque futur, c'est une panne actuelle.** Confirmé le
+2026-08-29 : aucun SMTP personnalisé n'est configuré sur le projet Supabase de
+production (le formulaire est vide, et le dashboard propose d'augmenter la
+limite à 30/h *après* activation d'un SMTP personnalisé).
+
+Le service d'email intégré de Supabase n'est pas prévu pour la production :
+plafond de quelques envois par heure, et livraison restreinte aux adresses des
+membres de l'organisation Supabase.
+
+Conséquence concrète : **si un praticien oublie son mot de passe, il ne reçoit
+rien.** `src/pages/ForgotPasswordPage.tsx` appelle `resetPasswordForEmail()`,
+l'application affiche un message de succès, et l'email n'arrive jamais. Panne
+silencieuse côté utilisateur, invisible côté exploitant. Les tests passés ont
+pu réussir : l'adresse utilisée était celle du propriétaire du projet, donc
+membre de l'organisation.
+
+### Pourquoi ça bloque aussi l'étape 4
+
+L'onboarding par invitation retenu pour l'étape 4 (`inviteUserByEmail`) passe
+par le même mailer. Sans SMTP réel, une invitation envoyée à un vrai praticien
+échouerait exactement de la même façon — silencieusement.
+
+**Brancher un SMTP est donc un prérequis de l'étape 4, et un correctif de bug
+à part entière, indépendamment de l'étape 4.** Aucune ligne de l'invitation
+n'a été écrite tant que ce point n'est pas réglé.
+
+### Vérifier après correction
+
+Lancer une réinitialisation depuis une adresse **non liée** au compte Supabase
+(adresse jetable, ou celle d'un tiers). Si le mail arrive, le SMTP est en
+place. C'est le seul test qui prouve quelque chose — tester avec sa propre
+adresse réussirait même en configuration par défaut.
+
+## LES TESTS UNITAIRES NE TOURNAIENT PAS EN CI — réglé le 2026-08-29
+
+`npm run test:unit` (`vitest run`, qui couvre `api/**/*.test.ts`,
+`src/lib/**/*.test.ts`, `src/utils/**/*.test.ts`) **n'est appelé par aucun
+workflow**. La CI exécute `build`, `typecheck:api`, `typecheck:e2e`,
+`test:e2e`, et `vitest run tests/security` — jamais le reste.
+
+Conséquence constatée le 2026-08-29 : **3 tests de
+`api/_lib/patientSession.test.ts` sont en échec** (`accesViaPraticien`,
+`TypeError: supabase.rpc is not a function`) et personne ne l'a vu. Ils
+échouent aussi sur un arbre propre : ce n'est pas une régression récente.
+
+C'est le même vert silencieux que le workflow `security.yml` combat
+explicitement pour le harnais RLS, mais sur l'autre moitié des tests.
+
+### Réglé le 2026-08-29, dans cet ordre
+
+Les 3 tests ont été corrigés **avant** l'ajout de l'étape, pour que la CI ne
+passe jamais par un état rouge et que la liste des échecs acceptés reste vide.
+
+**Ce n'était pas un simple stub oublié.** Le faux client Supabase du test
+décrivait l'ANCIENNE implémentation d'`accesViaPraticien`, où la propriété se
+vérifiait en lisant `participants.praticien_id`. La fonction passe depuis par
+`acces_participant_pour()`, qui accorde l'accès au propriétaire **ou** à un
+membre actif de l'organisation active du participant. Les tests affirmaient
+donc une sémantique que le code n'avait plus : même réparés d'un stub, ils
+n'auraient rien protégé. Ils ont été réécrits sur le comportement réel, et
+deux tests ajoutés — dont un qui vérifie que l'identité de l'appelant vient
+bien du JWT vérifié et jamais d'une valeur d'entrée, ce qu'aucun ne faisait.
+
+**L'étape ajoutée est `npm run test:unit:ci`, pas `test:unit`.** Le second
+inclut aussi `tests/security/`, qui a son propre job `audit` avec les secrets
+de staging. Sans ces secrets dans le job `build`, le harnais s'auto-skiperait :
+64 tests comptés verts sans rien vérifier. L'exclusion rend la frontière
+explicite — chaque job ne fait tourner que ce qu'il peut réellement prouver.
+
+État : `build` exécute désormais `build`, `typecheck:api`, `typecheck:e2e` et
+`test:unit:ci` (17 fichiers, 260 tests, **zéro skip**).
+
+## SUPPRIMER UN COMPTE PRATICIEN — ce que ça fait vraiment (2026-08-29)
+
+**La règle « jamais de suppression de compte » est juste. Le raisonnement qui
+la justifiait était faux, et la réalité est pire que ce qu'il décrivait.**
+
+On croyait : « les FK sont en `ON DELETE CASCADE`, supprimer un praticien
+détruirait le dossier patient ». Audit des 21 FK pointant vers `auth.users` :
+
+| Effet réel | Tables |
+|---|---|
+| **CASCADE** — la ligne est supprimée | `praticiens`, `user_roles`, `indisponibilites`, `evenements_agenda`, `zones_geographiques`, `rappel_preferences`, `programmes_modeles`, `dossier_exercice_membres`, `organisation_membres` |
+| **SET NULL** — la ligne SURVIT, orpheline | `participants`, `bilans`, `comptes_rendus_seances`, `notes_seances`, `contrats`, `programmes`, `seances`, `retours_seance`, `exercices_libres_activations`, `tests_etalons_activations`, `organisation_invitations` |
+
+Le dossier patient n'est **pas** en CASCADE. Il est en SET NULL.
+
+### Pourquoi c'est pire qu'une suppression
+
+Toutes les policies de ces tables filtrent sur `praticien_id = auth.uid()`, ou
+passent par `acces_participant()` qui retombe sur `participants.praticien_id`.
+Avec `praticien_id` à NULL, **aucune de ces conditions ne peut plus être vraie
+pour qui que ce soit**. Les lignes existent, aucun compte authentifié ne peut
+plus jamais les lire. Seul `service_role` y accède encore.
+
+Une suppression se voit : la donnée a disparu, on le constate. Un orphelinage
+ne se voit pas : la base répond « 0 ligne », exactement comme si le praticien
+n'avait jamais rien saisi. Pour une obligation de conservation du dossier
+patient, c'est le pire des deux — la donnée est légalement conservée et
+pratiquement perdue, sans le moindre signal.
+
+### Conséquences
+
+1. **L'interface admin n'expose aucun chemin de suppression.** Pas « masqué »,
+   pas « protégé par confirmation » : inexistant. La désactivation se fait par
+   bannissement du compte auth (`banned_until`), qui est réversible et ne
+   touche à aucune donnée.
+2. **Toute suppression déjà faite doit être recherchée.** Un compte supprimé
+   par le passé a pu laisser des orphelins invisibles. Requête de contrôle à
+   lancer en production :
+
+```sql
+SELECT 'participants'           AS t, count(*) FROM public.participants           WHERE praticien_id IS NULL
+UNION ALL SELECT 'bilans',                count(*) FROM public.bilans                  WHERE praticien_id IS NULL
+UNION ALL SELECT 'comptes_rendus_seances', count(*) FROM public.comptes_rendus_seances WHERE praticien_id IS NULL
+UNION ALL SELECT 'notes_seances',          count(*) FROM public.notes_seances           WHERE praticien_id IS NULL
+UNION ALL SELECT 'contrats',               count(*) FROM public.contrats                WHERE praticien_id IS NULL
+UNION ALL SELECT 'programmes',             count(*) FROM public.programmes              WHERE praticien_id IS NULL
+UNION ALL SELECT 'seances',                count(*) FROM public.seances                 WHERE praticien_id IS NULL
+ORDER BY 1;
+```
+
+   Tout compte non nul désigne des lignes que plus personne ne peut lire. Elles
+   sont récupérables (réassignation du `praticien_id` par `service_role`), mais
+   encore faut-il savoir qu'elles existent.
+3. **À reconsidérer plus tard, hors bêta :** `ON DELETE RESTRICT` sur ces FK
+   ferait échouer bruyamment toute suppression de praticien portant un dossier,
+   au lieu de l'orpheliner en silence. C'est le bon mode d'échec, mais ça change
+   le comportement de la base — pas pendant l'ouverture.
+
+## RÈGLE — un « Success » du SQL Editor ne prouve PAS qu'une migration est appliquée
+
+**Seule une vérification séparée, lancée après coup, prouve qu'une migration a
+pris. Le message de succès de l'éditeur ne prouve rien.**
+
+### Ce qui a rendu cette règle nécessaire (2026-08-29)
+
+`20260829_roles_02_trigger_role_par_defaut.sql` a été appliquée en production.
+Le SQL Editor a affiché **« Success »**. La vérification en 6 contrôles,
+lancée juste après, a trouvé :
+
+- trigger `trg_auth_users_role_par_defaut` **absent**
+- fonction `attribuer_role_par_defaut()` **absente**
+- contre-épreuve **NON CONFORME** — le rôle n'était pas attribué
+
+La migration a été réappliquée, et la seconde fois a été la bonne (6/6 OK,
+contre-épreuve CONFORME).
+
+Sans cette vérification, du code applicatif supposant que tout compte possède
+un rôle aurait été mergé sur une base où le trigger n'existait pas. La panne
+serait apparue en production, sur des comptes créés après le merge, sans
+rapport apparent avec la migration.
+
+### Ce que ça implique concrètement
+
+La séquence n'est pas « appliquer, lire le message vert, passer à la suite ».
+Elle est :
+
+1. **Appliquer** la migration.
+2. **Vérifier** par une requête séparée que les objets attendus existent, avec
+   les bons privilèges — sans jamais se fier au retour de l'éditeur.
+3. **Contre-éprouver** : provoquer le comportement attendu et constater qu'il
+   se produit (et qu'il ne se produit PAS quand la migration est absente).
+
+Les étapes 2 et 3 sont distinctes exprès. La vérification lit un état, la
+contre-épreuve exerce un comportement — une migration peut créer tous les
+objets et ne pas produire l'effet voulu. C'est la contre-épreuve qui a rendu
+l'échec lisible ici, en une ligne : `NON CONFORME`.
+
+L'auto-vérification embarquée dans la migration (le bloc `DO` qui lève une
+exception) ne remplace pas ces deux étapes : si la migration n'a pas été
+exécutée du tout, son auto-vérification ne l'a pas été non plus.
+
+## RÈGLE — jamais de `$$` nu dans du SQL collé dans le SQL Editor
+
+**Toujours un délimiteur nommé : `$verif$`, `$fn$`, `$trg$`. Jamais `$$`.**
+
+### Pourquoi
+
+Constaté le 2026-08-29 : le SQL Editor de Supabase **injecte parfois du texte
+dans le script collé** — en l'occurrence un `ALTER TABLE ... ENABLE ROW LEVEL
+SECURITY` inséré au milieu d'un bloc `DO $$ ... $$`.
+
+Avec un délimiteur nu, l'insertion **casse la chaîne de dollar-quoting** : le
+`$$` d'ouverture se referme au mauvais endroit, et le reste du script est
+réinterprété comme du SQL ordinaire. Selon l'endroit de la coupure, le script
+peut échouer bruyamment… ou n'exécuter qu'une partie de lui-même en signalant
+un succès. C'est le mécanisme le plus plausible derrière le « Success » sans
+effet décrit à la section précédente.
+
+Un délimiteur nommé rend l'accident beaucoup moins probable (`$verif$` ne
+risque pas de coïncider avec un fragment injecté) et, s'il survient quand
+même, l'erreur est franche au lieu d'être silencieuse.
+
+```sql
+-- FRAGILE
+DO $$ BEGIN ... END $$;
+
+-- ROBUSTE
+DO $verif$ BEGIN ... END $verif$;
+```
+
+Vaut pour les blocs `DO`, les corps de fonction (`AS $fn$ ... $fn$`) et toute
+chaîne dollar-quotée.
+
+### Dette existante
+
+**10 migrations du dépôt utilisent encore `DO $$` nu**, dont
+`20260827_roles_01_user_roles.sql` et
+`20260829_roles_02_trigger_role_par_defaut.sql`.
+
+Elles ne sont **pas** réécrites rétroactivement : leur contenu a été appliqué
+en production et l'empreinte MD5 de ces deux fichiers a servi de contrôle
+d'intégrité avant application. Les modifier ferait diverger le fichier de ce
+qui a réellement été exécuté, et coûterait la traçabilité qu'on vient de
+gagner.
+
+Le risque résiduel est le rejeu : ces migrations sont idempotentes et donc
+rejouables, et un rejeu passerait par le SQL Editor. À durcir avant tout
+rejeu, ou lors d'une reprise de ces fichiers pour une autre raison.
+
 ## RÈGLE — migration en production AVANT le merge sur `main`
 
 **Toute migration dont dépend du code applicatif doit être appliquée en
@@ -412,6 +635,10 @@ l'ACL exacte, pas seulement que la table existe.
 Tant qu'aucun garde-fou automatique n'existe (rien dans la CI ne compare le
 schéma de production aux migrations du dépôt), cette vérification est
 manuelle et fait partie de la revue de toute PR touchant `supabase/migrations/`.
+
+Et elle se fait **après** l'application, jamais à la place : voir « un
+« Success » du SQL Editor ne prouve PAS qu'une migration est appliquée »
+ci-dessus. Une migration peut afficher un succès sans avoir rien créé.
 
 ## Échecs connus et acceptés du harnais `tests/security/rls.spec.ts`
 

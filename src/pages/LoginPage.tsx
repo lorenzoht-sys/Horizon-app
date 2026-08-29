@@ -174,13 +174,10 @@ export default function LoginPage({ onLogin }: Props) {
 
           </form>
 
-          {/* Lien inscription */}
-          <p style={{ textAlign: 'center', fontSize: 13.5, color: '#94a3b8', marginTop: 16 }}>
-            Pas encore de compte ?{' '}
-            <Link to="/register" style={{ color: '#0d9488', fontWeight: 700, textDecoration: 'none' }}>
-              Créer un compte
-            </Link>
-          </p>
+          {/* Lien inscription retiré le 2026-08-29 avec la route /register
+              (étape 4) : les comptes praticiens sont créés sur invitation
+              d'un admin, plus par auto-inscription. Laisser le lien aurait
+              mené à une page blanche. */}
 
           {/* Séparateur + badges sécurité */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 24, marginBottom: 16 }}>

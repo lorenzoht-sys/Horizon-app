@@ -25,6 +25,21 @@ jobs:
       - run: npm run typecheck:api
       - run: npm run typecheck:e2e
 
+      # Tests unitaires (api/, src/lib/, src/utils/). Ajoutés le 2026-08-29 :
+      # ils n'étaient exécutés par AUCUN workflow, et 3 tests de
+      # api/_lib/patientSession.test.ts échouaient depuis des semaines sans
+      # que personne le voie — le faux client Supabase décrivait une
+      # implémentation remplacée depuis. Corrigés dans la même PR, sinon
+      # cette étape aurait rendu la CI rouge dès son ajout.
+      #
+      # `test:unit:ci` et non `test:unit` : ce dernier inclut aussi
+      # tests/security/, qui a son propre job `audit` (security.yml) avec les
+      # secrets de staging. Sans ces secrets ici, le harnais s'auto-skiperait
+      # — 64 tests passant pour verts sans rien vérifier, exactement le vert
+      # silencieux que ce projet combat. L'exclusion rend la frontière
+      # explicite : ce job ne fait tourner que ce qu'il peut vraiment vérifier.
+      - run: npm run test:unit:ci
+
   # Suite E2E Playwright — cible un déploiement Vercel de Preview branché sur
   # le projet Supabase de STAGING (voir GUIDE_STAGING.md et e2e/README.md).
   #
