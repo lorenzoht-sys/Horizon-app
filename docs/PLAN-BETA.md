@@ -480,6 +480,97 @@ ORDER BY 1;
    au lieu de l'orpheliner en silence. C'est le bon mode d'échec, mais ça change
    le comportement de la base — pas pendant l'ouverture.
 
+## RÈGLE — un « Success » du SQL Editor ne prouve PAS qu'une migration est appliquée
+
+**Seule une vérification séparée, lancée après coup, prouve qu'une migration a
+pris. Le message de succès de l'éditeur ne prouve rien.**
+
+### Ce qui a rendu cette règle nécessaire (2026-08-29)
+
+`20260829_roles_02_trigger_role_par_defaut.sql` a été appliquée en production.
+Le SQL Editor a affiché **« Success »**. La vérification en 6 contrôles,
+lancée juste après, a trouvé :
+
+- trigger `trg_auth_users_role_par_defaut` **absent**
+- fonction `attribuer_role_par_defaut()` **absente**
+- contre-épreuve **NON CONFORME** — le rôle n'était pas attribué
+
+La migration a été réappliquée, et la seconde fois a été la bonne (6/6 OK,
+contre-épreuve CONFORME).
+
+Sans cette vérification, du code applicatif supposant que tout compte possède
+un rôle aurait été mergé sur une base où le trigger n'existait pas. La panne
+serait apparue en production, sur des comptes créés après le merge, sans
+rapport apparent avec la migration.
+
+### Ce que ça implique concrètement
+
+La séquence n'est pas « appliquer, lire le message vert, passer à la suite ».
+Elle est :
+
+1. **Appliquer** la migration.
+2. **Vérifier** par une requête séparée que les objets attendus existent, avec
+   les bons privilèges — sans jamais se fier au retour de l'éditeur.
+3. **Contre-éprouver** : provoquer le comportement attendu et constater qu'il
+   se produit (et qu'il ne se produit PAS quand la migration est absente).
+
+Les étapes 2 et 3 sont distinctes exprès. La vérification lit un état, la
+contre-épreuve exerce un comportement — une migration peut créer tous les
+objets et ne pas produire l'effet voulu. C'est la contre-épreuve qui a rendu
+l'échec lisible ici, en une ligne : `NON CONFORME`.
+
+L'auto-vérification embarquée dans la migration (le bloc `DO` qui lève une
+exception) ne remplace pas ces deux étapes : si la migration n'a pas été
+exécutée du tout, son auto-vérification ne l'a pas été non plus.
+
+## RÈGLE — jamais de `$$` nu dans du SQL collé dans le SQL Editor
+
+**Toujours un délimiteur nommé : `$verif$`, `$fn$`, `$trg$`. Jamais `$$`.**
+
+### Pourquoi
+
+Constaté le 2026-08-29 : le SQL Editor de Supabase **injecte parfois du texte
+dans le script collé** — en l'occurrence un `ALTER TABLE ... ENABLE ROW LEVEL
+SECURITY` inséré au milieu d'un bloc `DO $$ ... $$`.
+
+Avec un délimiteur nu, l'insertion **casse la chaîne de dollar-quoting** : le
+`$$` d'ouverture se referme au mauvais endroit, et le reste du script est
+réinterprété comme du SQL ordinaire. Selon l'endroit de la coupure, le script
+peut échouer bruyamment… ou n'exécuter qu'une partie de lui-même en signalant
+un succès. C'est le mécanisme le plus plausible derrière le « Success » sans
+effet décrit à la section précédente.
+
+Un délimiteur nommé rend l'accident beaucoup moins probable (`$verif$` ne
+risque pas de coïncider avec un fragment injecté) et, s'il survient quand
+même, l'erreur est franche au lieu d'être silencieuse.
+
+```sql
+-- FRAGILE
+DO $$ BEGIN ... END $$;
+
+-- ROBUSTE
+DO $verif$ BEGIN ... END $verif$;
+```
+
+Vaut pour les blocs `DO`, les corps de fonction (`AS $fn$ ... $fn$`) et toute
+chaîne dollar-quotée.
+
+### Dette existante
+
+**10 migrations du dépôt utilisent encore `DO $$` nu**, dont
+`20260827_roles_01_user_roles.sql` et
+`20260829_roles_02_trigger_role_par_defaut.sql`.
+
+Elles ne sont **pas** réécrites rétroactivement : leur contenu a été appliqué
+en production et l'empreinte MD5 de ces deux fichiers a servi de contrôle
+d'intégrité avant application. Les modifier ferait diverger le fichier de ce
+qui a réellement été exécuté, et coûterait la traçabilité qu'on vient de
+gagner.
+
+Le risque résiduel est le rejeu : ces migrations sont idempotentes et donc
+rejouables, et un rejeu passerait par le SQL Editor. À durcir avant tout
+rejeu, ou lors d'une reprise de ces fichiers pour une autre raison.
+
 ## RÈGLE — migration en production AVANT le merge sur `main`
 
 **Toute migration dont dépend du code applicatif doit être appliquée en
@@ -544,6 +635,10 @@ l'ACL exacte, pas seulement que la table existe.
 Tant qu'aucun garde-fou automatique n'existe (rien dans la CI ne compare le
 schéma de production aux migrations du dépôt), cette vérification est
 manuelle et fait partie de la revue de toute PR touchant `supabase/migrations/`.
+
+Et elle se fait **après** l'application, jamais à la place : voir « un
+« Success » du SQL Editor ne prouve PAS qu'une migration est appliquée »
+ci-dessus. Une migration peut afficher un succès sans avoir rien créé.
 
 ## Échecs connus et acceptés du harnais `tests/security/rls.spec.ts`
 
