@@ -1211,13 +1211,19 @@ describe.skipIf(!URL || !ANON_KEY || !SERVICE_KEY)('[RÔLES] un compte admin ne 
       id: adminUserId, prenom: 'RLS-Spec', nom: 'Admin', email: adminEmail,
     });
 
-    // ⚠️ Rien ne crée automatiquement la ligne `user_roles` d'un compte né
-    // APRÈS la migration d'étape 3 : son backfill était ponctuel. Il faut
-    // l'écrire explicitement (service_role). C'est un point à traiter en
-    // étape 4 — sans quoi tout nouveau praticien n'a aucun rôle.
+    // `upsert` et non `insert`, et ce n'est pas une précaution gratuite :
+    // depuis 20260829_roles_02_trigger_role_par_defaut.sql, un trigger sur
+    // auth.users crée déjà la ligne `user_roles` du compte, avec le rôle
+    // 'praticien'. Un `insert` échoue donc sur
+    // « duplicate key value violates unique constraint user_roles_pkey ».
+    // Constaté en appliquant cette migration sur staging le 2026-08-29.
+    //
+    // L'upsert garde ce test valable dans les deux mondes — avant et après
+    // le trigger — et exprime ce qu'on veut vraiment : que ce compte soit
+    // admin, quel que soit l'état de départ.
     const { error: roleErr } = await admin
       .from('user_roles')
-      .insert({ user_id: adminUserId, app_role: 'admin' });
+      .upsert({ user_id: adminUserId, app_role: 'admin' }, { onConflict: 'user_id' });
     if (roleErr) {
       throw new Error(`Attribution du rôle admin impossible : ${roleErr.message}`);
     }
