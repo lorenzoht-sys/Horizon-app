@@ -77,7 +77,18 @@ export type AuditEventType =
   | 'patient_test_etalon_submit' | 'patient_exercice_libre_submit' | 'patient_access_via_praticien'
   // Action praticien (pas patient) — même table : pas de raison de dupliquer
   // un mécanisme d'audit générique pour une différence d'origine de l'action.
-  | 'praticien_seances_supprimees_fin_contrat';
+  | 'praticien_seances_supprimees_fin_contrat'
+  // Actions administrateur (étape 4 des rôles). Elles portent toujours
+  // `participant_id = null` : elles ne concernent aucun patient, elles
+  // concernent un COMPTE. Conséquence voulue et utile — les deux policies de
+  // lecture de `audit_logs` exigent `participant_id IS NOT NULL`, donc ces
+  // lignes sont invisibles à tout compte authentifié et ne sont lisibles que
+  // par `service_role`. Un admin ne peut donc pas relire, ni a fortiori
+  // effacer, la trace de ses propres actions (la table est en plus
+  // append-only, cf. 20260817_securite_03_audit_logs_immuable.sql).
+  | 'admin_comptes_consultes'
+  | 'admin_praticien_desactive'
+  | 'admin_praticien_reactive';
 
 // Journal d'audit des accès à l'espace patient (connexions et accès aux
 // données de santé) et de certaines actions praticien sensibles, à des fins

@@ -39,6 +39,7 @@ const ParticipantFormPage = lazy(() => import('./pages/ParticipantFormPage'));
 const PolitiqueConfidentialite = lazy(() => import('./pages/PolitiqueConfidentialite'));
 const MentionsLegales     = lazy(() => import('./pages/MentionsLegales'));
 const CGU                = lazy(() => import('./pages/CGU'));
+const AdminComptesPage   = lazy(() => import('./pages/AdminComptesPage'));
 
 function DesktopContent({ onLogout }: { onLogout: () => void }) {
   const location = useLocation();
@@ -90,6 +91,12 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
             <Route path="/stats" element={<PageTransition><Suspense fallback={<MapFallback />}><StatsPage /></Suspense></PageTransition>} />
             <Route path="/structures/:id" element={<PageTransition><Suspense fallback={<MapFallback />}><StructureDetail /></Suspense></PageTransition>} />
             <Route path="/settings" element={<PageTransition><SettingsPage /></PageTransition>} />
+            {/* Administration des comptes (étape 4 des rôles). La route est
+                déclarée pour tous : c'est la PAGE qui affiche « réservée aux
+                administrateurs » à un non-admin, et surtout le SERVEUR qui
+                refuse toute action admin.* en 403. Router côté client n'est
+                pas une protection — n'en faire dépendre aucune. */}
+            <Route path="/admin/comptes" element={<PageTransition><Suspense fallback={<MapFallback />}><AdminComptesPage /></Suspense></PageTransition>} />
             <Route path="/zones" element={<PageTransition><Suspense fallback={<MapFallback />}><ZonesPage /></Suspense></PageTransition>} />
             <Route path="/tournee" element={<PageTransition><Suspense fallback={<MapFallback />}><TourneePage /></Suspense></PageTransition>} />
             <Route path="/agenda-v2" element={<PageTransition><Suspense fallback={<MapFallback />}><AgendaV2Page /></Suspense></PageTransition>} />
