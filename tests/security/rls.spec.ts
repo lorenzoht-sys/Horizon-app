@@ -156,6 +156,66 @@ const OWNER_COLUMN_OVERRIDES: Record<string, string> = {
   praticiens: 'id',
 };
 
+// Dette de privilèges héritée de la règle `ALTER DEFAULT PRIVILEGES` de
+// PRODUCTION (voir docs/PLAN-BETA.md). Ces tables sont nées en prod avec
+// tous les privilèges accordés à `authenticated` ; les migrations de parité
+// des 21 et 22 août (20260821/20260822_grant_parity_staging*.sql) ont
+// recopié cet état sur staging, TRUNCATE compris.
+//
+// Aucune de ces lignes n'a été voulue par quiconque : c'est l'accident
+// d'origine, matérialisé. La liste doit se VIDER, pas s'allonger — elle est
+// le décompte du chantier « REVOKE de la règle par défaut » planifié dans
+// docs/PLAN-BETA.md. Toute entrée retirée en base doit l'être ici dans la
+// même PR : le test [F-13] échoue sinon, volontairement.
+const DETTE_PRIVILEGES_AUTHENTICATED: Record<string, string> = {
+  assistant_logs: 'REFERENCES,TRIGGER,TRUNCATE',
+  audit_logs: 'REFERENCES,TRIGGER,TRUNCATE',
+  bilans: 'REFERENCES,TRIGGER,TRUNCATE',
+  bilans_brouillons: 'REFERENCES,TRIGGER,TRUNCATE',
+  comptes_rendus_seances: 'REFERENCES,TRIGGER,TRUNCATE',
+  contrats: 'REFERENCES,TRIGGER,TRUNCATE',
+  documents_partages: 'REFERENCES,TRIGGER,TRUNCATE',
+  documents_patient: 'REFERENCES,TRIGGER,TRUNCATE',
+  dossier_exercice_membres: 'REFERENCES,TRIGGER,TRUNCATE',
+  dossiers_exercices: 'REFERENCES,TRIGGER,TRUNCATE',
+  evenements_agenda: 'REFERENCES,TRIGGER,TRUNCATE',
+  exercices_libres_activations: 'REFERENCES,TRIGGER,TRUNCATE',
+  exercices_libres_validations: 'REFERENCES,TRIGGER,TRUNCATE',
+  exercices_personnalises: 'REFERENCES,TRIGGER,TRUNCATE',
+  exercices_realises: 'REFERENCES,TRIGGER,TRUNCATE',
+  factures_suivi: 'REFERENCES,TRIGGER,TRUNCATE',
+  indisponibilites: 'REFERENCES,TRIGGER,TRUNCATE',
+  notes_seances: 'REFERENCES,TRIGGER,TRUNCATE',
+  organisation_demande_attempts: 'REFERENCES,TRIGGER,TRUNCATE',
+  organisation_invitations: 'REFERENCES,TRIGGER,TRUNCATE',
+  organisation_membres: 'REFERENCES,TRIGGER,TRUNCATE',
+  organisations: 'REFERENCES,TRIGGER,TRUNCATE',
+  participants: 'REFERENCES,TRIGGER,TRUNCATE',
+  patient_login_attempts: 'REFERENCES,TRIGGER,TRUNCATE',
+  praticiens: 'REFERENCES,TRIGGER,TRUNCATE',
+  programme_exercices: 'REFERENCES,TRIGGER,TRUNCATE',
+  programme_modele_exercices: 'REFERENCES,TRIGGER,TRUNCATE',
+  programme_modele_planning: 'REFERENCES,TRIGGER,TRUNCATE',
+  programme_modele_seances: 'REFERENCES,TRIGGER,TRUNCATE',
+  programme_planning: 'REFERENCES,TRIGGER,TRUNCATE',
+  programme_seances: 'REFERENCES,TRIGGER,TRUNCATE',
+  programmes: 'REFERENCES,TRIGGER,TRUNCATE',
+  programmes_modeles: 'REFERENCES,TRIGGER,TRUNCATE',
+  push_subscriptions: 'REFERENCES,TRIGGER,TRUNCATE',
+  rappel_preferences: 'REFERENCES,TRIGGER,TRUNCATE',
+  rappels_envoyes: 'REFERENCES,TRIGGER,TRUNCATE',
+  retours_seance: 'REFERENCES,TRIGGER,TRUNCATE',
+  seances: 'REFERENCES,TRIGGER,TRUNCATE',
+  seances_patient: 'REFERENCES,TRIGGER,TRUNCATE',
+  structure_access_logs: 'REFERENCES,TRIGGER,TRUNCATE',
+  structures: 'REFERENCES,TRIGGER,TRUNCATE',
+  templates_structure: 'REFERENCES,TRIGGER,TRUNCATE',
+  tests_etalons_activations: 'REFERENCES,TRIGGER,TRUNCATE',
+  tests_etalons_resultats: 'REFERENCES,TRIGGER,TRUNCATE',
+  tm6_variantes: 'MAINTAIN,REFERENCES,TRIGGER',
+  zones_geographiques: 'REFERENCES,TRIGGER,TRUNCATE',
+};
+
 async function requireStagingEnv() {
   if (!HAS_STAGING_ENV) {
     throw new Error(
@@ -1004,4 +1064,79 @@ describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postg
       '[RÔLES] app_role_courant() est exécutable par PUBLIC — c\'est la faille de la PR #8, réintroduite'
     ).toBe(false);
   });
+
+  // ────────────────────────────────────────────────────────────────────
+  // [F-12] / [F-13] — garde-fou privilèges, ajouté le 2026-08-29 après
+  // l'échec de 20260827_roles_01_user_roles.sql en production.
+  //
+  // CE QUE CES DEUX TESTS PROUVENT, ET CE QU'ILS NE PROUVENT PAS.
+  // Ils tournent sur STAGING, qui n'a AUCUNE règle `ALTER DEFAULT
+  // PRIVILEGES` sur le schéma `public`, là où la production en a une qui
+  // accorde tout à `authenticated` sur chaque table créée (voir
+  // docs/PLAN-BETA.md, « ÉCART STRUCTUREL »).
+  //
+  //   - [F-12] (RLS activée) vaut pour les deux bases : le schéma est le
+  //     même, la RLS se réplique par les migrations.
+  //   - [F-13] (privilèges) ne vaut QUE pour staging. Une table créée par
+  //     une future migration naîtra nue ici et grande ouverte en prod : ce
+  //     test ne peut pas le voir. Il attrape autre chose, qui compte aussi
+  //     — une migration qui accorde explicitement TRUNCATE, REFERENCES ou
+  //     TRIGGER à `authenticated`, comme l'ont fait les migrations de
+  //     parité des 21 et 22 août — et il tient le décompte de la dette.
+  //
+  // Ne pas lire [F-13] au vert comme « la production est saine ».
+  // ────────────────────────────────────────────────────────────────────
+
+  it('[F-12] toutes les tables de public ont la RLS activée', async () => {
+    const { rows } = await pg.query<{ relname: string }>(
+      `SELECT c.relname
+         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity
+        ORDER BY c.relname`
+    );
+    expect(
+      rows,
+      `[F-12] table(s) de public sans RLS — ouverte(s) à tout compte connecté, ` +
+      `sans aucun filtre : ${rows.map(r => r.relname).join(', ')}`
+    ).toHaveLength(0);
+  });
+
+  it('[F-13] authenticated ne détient sur public que du DML, hors dette héritée connue', async () => {
+    const { rows } = await pg.query<{ t: string; exces: string }>(
+      `SELECT c.relname AS t,
+              string_agg(a.privilege_type, ',' ORDER BY a.privilege_type) AS exces
+         FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) a
+        WHERE n.nspname = 'public'
+          AND c.relkind = 'r'
+          AND a.grantee = 'authenticated'::regrole
+          AND a.privilege_type NOT IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE')
+        GROUP BY c.relname`
+    );
+    const constate = new Map(rows.map(r => [r.t, r.exces]));
+
+    // Sens 1 — aucune table hors dette ne doit détenir de privilège hors DML.
+    const nouvelles = [...constate.entries()]
+      .filter(([t]) => !(t in DETTE_PRIVILEGES_AUTHENTICATED))
+      .map(([t, p]) => `${t} (${p})`);
+    expect(
+      nouvelles,
+      `[F-13] privilège hors DML accordé à authenticated sur une table absente de la ` +
+      `dette connue : ${nouvelles.join(', ')}. TRUNCATE en particulier n'est JAMAIS ` +
+      `filtré par la RLS.`
+    ).toHaveLength(0);
+
+    // Sens 2 — la dette ne doit pas pourrir : une entrée dont le privilège a
+    // changé ou disparu doit être retirée de la liste dans la même PR.
+    const perimees = Object.entries(DETTE_PRIVILEGES_AUTHENTICATED)
+      .filter(([t, attendu]) => constate.get(t) !== attendu)
+      .map(([t, attendu]) => `${t} (attendu ${attendu}, constaté ${constate.get(t) ?? 'aucun'})`);
+    expect(
+      perimees,
+      `[F-13] entrée(s) périmée(s) dans DETTE_PRIVILEGES_AUTHENTICATED, à retirer : ` +
+      `${perimees.join(', ')}`
+    ).toHaveLength(0);
+  });
+
 });
