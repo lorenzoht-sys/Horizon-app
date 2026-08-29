@@ -348,6 +348,72 @@ connexion Postgres directe ou une fonction `SECURITY INVOKER` mal écrite.
 L'argument décisif reste donc la défense en profondeur et le mode d'échec, pas
 une faille exploitable aujourd'hui.
 
+## BUG DE PRODUCTION — la réinitialisation de mot de passe ne fonctionne pas (2026-08-29)
+
+**Ce n'est pas un risque futur, c'est une panne actuelle.** Confirmé le
+2026-08-29 : aucun SMTP personnalisé n'est configuré sur le projet Supabase de
+production (le formulaire est vide, et le dashboard propose d'augmenter la
+limite à 30/h *après* activation d'un SMTP personnalisé).
+
+Le service d'email intégré de Supabase n'est pas prévu pour la production :
+plafond de quelques envois par heure, et livraison restreinte aux adresses des
+membres de l'organisation Supabase.
+
+Conséquence concrète : **si un praticien oublie son mot de passe, il ne reçoit
+rien.** `src/pages/ForgotPasswordPage.tsx` appelle `resetPasswordForEmail()`,
+l'application affiche un message de succès, et l'email n'arrive jamais. Panne
+silencieuse côté utilisateur, invisible côté exploitant. Les tests passés ont
+pu réussir : l'adresse utilisée était celle du propriétaire du projet, donc
+membre de l'organisation.
+
+### Pourquoi ça bloque aussi l'étape 4
+
+L'onboarding par invitation retenu pour l'étape 4 (`inviteUserByEmail`) passe
+par le même mailer. Sans SMTP réel, une invitation envoyée à un vrai praticien
+échouerait exactement de la même façon — silencieusement.
+
+**Brancher un SMTP est donc un prérequis de l'étape 4, et un correctif de bug
+à part entière, indépendamment de l'étape 4.** Aucune ligne de l'invitation
+n'a été écrite tant que ce point n'est pas réglé.
+
+### Vérifier après correction
+
+Lancer une réinitialisation depuis une adresse **non liée** au compte Supabase
+(adresse jetable, ou celle d'un tiers). Si le mail arrive, le SMTP est en
+place. C'est le seul test qui prouve quelque chose — tester avec sa propre
+adresse réussirait même en configuration par défaut.
+
+## LES TESTS UNITAIRES NE TOURNENT PAS EN CI (2026-08-29)
+
+`npm run test:unit` (`vitest run`, qui couvre `api/**/*.test.ts`,
+`src/lib/**/*.test.ts`, `src/utils/**/*.test.ts`) **n'est appelé par aucun
+workflow**. La CI exécute `build`, `typecheck:api`, `typecheck:e2e`,
+`test:e2e`, et `vitest run tests/security` — jamais le reste.
+
+Conséquence constatée le 2026-08-29 : **3 tests de
+`api/_lib/patientSession.test.ts` sont en échec** (`accesViaPraticien`,
+`TypeError: supabase.rpc is not a function`) et personne ne l'a vu. Ils
+échouent aussi sur un arbre propre : ce n'est pas une régression récente.
+
+C'est le même vert silencieux que le workflow `security.yml` combat
+explicitement pour le harnais RLS, mais sur l'autre moitié des tests.
+
+### Décision à prendre
+
+Ajouter `npm run test:unit` à la CI **rendra le pipeline rouge immédiatement**,
+sur ces 3 échecs préexistants. Deux ordres possibles :
+
+1. Corriger les 3 tests d'abord, ajouter l'étape ensuite — la CI ne passe
+   jamais par un état rouge.
+2. Ajouter l'étape et inscrire les 3 échecs dans la liste des échecs connus
+   ci-dessous, avec une échéance.
+
+L'option 1 est préférable : la liste des échecs acceptés est vide depuis le
+2026-08-27, et la réouvrir coûte plus cher que de corriger trois tests.
+
+**En attendant, tout test unitaire ajouté au projet ne s'exécute qu'en local**
+— y compris `api/_organisation-admin.test.ts`, ajouté avec l'étape 4.
+
 ## SUPPRIMER UN COMPTE PRATICIEN — ce que ça fait vraiment (2026-08-29)
 
 **La règle « jamais de suppression de compte » est juste. Le raisonnement qui
