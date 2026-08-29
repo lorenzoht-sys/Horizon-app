@@ -1,5 +1,353 @@
 # Plan bêta — points à traiter avant ouverture
 
+## RÈGLE DE MÉTHODE — un contrôle compare un ensemble exact
+
+**Un contrôle qui énumère des cas en oublie un. Comparer un ensemble exact,
+jamais tester des cas un par un.**
+
+Cette règle n'est pas théorique : elle a été écrite le 2026-08-29 après
+**trois** occurrences du même défaut dans la même journée.
+
+| # | Contrôle | Ce qu'il énumérait | Ce qu'il a manqué |
+|---|---|---|---|
+| 1 | Privilèges de table de `authenticated` sur `user_roles` | `INSERT`, `UPDATE`, `DELETE` | **`TRUNCATE`** — que la RLS n'intercepte jamais, et qui suffit à vider la table |
+| 2 | Bénéficiaires d'`EXECUTE` sur `app_role_courant()` | `PUBLIC` seul | **`anon`**, dont la production porte un grant *nominatif* qu'un `REVOKE FROM PUBLIC` ne retire pas |
+| 3 | Contrôle des skips du harnais en CI | — | Il était placé après le contrôle des échecs, qui sort en `exit(1)` : **il n'a jamais pu s'exécuter** |
+
+Les cas 1 et 2 sont le même défaut : une liste de choses interdites, forcément
+incomplète. Le cas 3 en est le voisin — un contrôle dont personne n'avait
+vérifié qu'il pouvait s'exécuter, ni échouer.
+
+### Comment appliquer la règle
+
+**Pour des privilèges** — lire l'ACL et la comparer à l'ensemble attendu, au
+lieu d'appeler `has_table_privilege()` sur une liste. Bénéfice second : ça
+évite de nommer `MAINTAIN`, qui n'existe pas avant PostgreSQL 17.
+
+```sql
+SELECT string_agg(a.privilege_type, ', ' ORDER BY a.privilege_type)
+  INTO privs
+  FROM pg_class c
+  CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) a
+ WHERE c.oid = 'public.<table>'::regclass
+   AND a.grantee = '<role>'::regrole;
+IF privs IS DISTINCT FROM '<ensemble attendu>' THEN
+  RAISE EXCEPTION 'privileges de <role> = [%], attendu [<ensemble attendu>]', COALESCE(privs, 'aucun');
+END IF;
+```
+
+Même forme pour les fonctions, en comparant l'ensemble des **bénéficiaires**
+d'`EXECUTE` (propriétaire exclu, `grantee = 0` rendu comme `PUBLIC`).
+
+**Pour un inventaire** — comparer dans les **deux sens** : rien d'inattendu en
+base, et rien de périmé dans la liste de référence. C'est ce que fait [F-13]
+avec `DETTE_PRIVILEGES_AUTHENTICATED` : sans le second sens, la liste pourrit
+en silence et le test reste vert sur une réalité qui a changé.
+
+### Corollaire — prouver que le contrôle peut échouer
+
+Un contrôle au vert ne prouve rien tant qu'on ne l'a pas vu rougir. **Casser
+délibérément la condition et vérifier le message**, avant de faire confiance
+au vert.
+
+C'est ce qui a révélé le cas 2 : l'auto-vérification de la migration
+`user_roles` passait au vert avec `anon=EXECUTE`. Lire le code ne l'avait pas
+montré ; retirer la ligne `REVOKE ... FROM anon` et rejouer, si.
+
+`scripts/staging-dry-run.ts --file` sert exactement à ça : rejouer un état
+défectueux reconstitué dans une transaction toujours annulée.
+
+## ÉCART STRUCTUREL staging / production — privilèges par défaut (2026-08-29)
+
+**Aucune vérification de privilèges (GRANT, `has_table_privilege`, ACL) faite
+sur staging ne prouve quoi que ce soit sur la production.** Les deux bases ne
+partent pas du même état.
+
+Production porte des règles `ALTER DEFAULT PRIVILEGES` sur le schéma
+`public`, que staging n'a pas du tout. Relevé complet du 2026-08-29 :
+
+| `pg_default_acl` sur `public` | production | staging |
+|---|---|---|
+| tables/vues, règle `postgres` | `postgres`, `authenticated`, `service_role` — tous en `arwdDxtm`. **`anon` absent** | *aucune ligne* |
+| séquences, règle `postgres` | `anon` absent | *aucune ligne* |
+| fonctions, règle `postgres` | `postgres`, **`anon`**, `authenticated`, `service_role` — tous en `X` (EXECUTE) | *aucune ligne* |
+| tables, séquences, fonctions, règle `supabase_admin` | présentes, **`anon` inclus partout** | *aucune ligne* |
+
+Deux lectures distinctes selon le type d'objet :
+
+- **Tables** : `anon` a bien été retiré de la règle `postgres` par
+  `20260613_rls_anon_lockdown.sql`. Restent `authenticated` et
+  `service_role` — c'est l'objet du chantier planifié plus bas.
+- **Fonctions** : `anon` est **toujours là**. `rls_anon_lockdown` a traité
+  TABLES et SEQUENCES, jamais FUNCTIONS. Toute nouvelle fonction créée dans
+  `public` naît donc `EXECUTE`-able par `anon`, par un grant **nominatif**
+  qu'un `REVOKE EXECUTE ... FROM PUBLIC` ne retire pas. C'est la cause
+  profonde de la faille de la PR #8 : `get_praticien_structure` et
+  `structure_token_valide` ne sont pas devenues ouvertes, elles sont **nées
+  ouvertes**.
+
+Conséquence directe : en production, **toute table créée par `postgres` dans
+`public` naît avec l'intégralité des privilèges déjà accordée à
+`authenticated`** — SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES,
+TRIGGER, MAINTAIN. Sur staging, elle naît nue. Le même fichier SQL produit
+donc deux états de sécurité différents selon la base.
+
+### Point voisin, clos le 2026-08-29 : `CREATE` sur le schéma `public`
+
+En **production**, `public_a_create`, `anon_a_create` et
+`authenticated_a_create` sont tous à `false` : la prod a bien le
+comportement PostgreSQL 15+, qui a retiré `CREATE` à `PUBLIC`. **Rien à
+faire.**
+
+Sur **staging**, les trois sont à `true` (`nspacl = {postgres=UC/postgres,=UC/postgres}`).
+C'est un écart de plus, mais dans le sens inoffensif : staging est plus
+permissif que la prod, donc aucune vérification de prod n'est faussée par
+lui. Consigné pour mémoire, non bloquant.
+
+### Ce qui l'a révélé
+
+`20260827_roles_01_user_roles.sql` a échoué en production sur sa propre
+auto-vérification (« authenticated a un privilege d'ecriture ») — transaction
+annulée, table non créée. La même migration était passée au vert sur staging,
+où `user_roles` porte exactement `authenticated = SELECT`. Le `GRANT SELECT` de
+la migration ne restreignait rien en production : il réaffirmait un privilège
+déjà détenu, sans retirer les autres.
+
+Reproduction vérifiée le 2026-08-29 via `scripts/staging-dry-run.ts`, en
+rejouant la règle de production dans une transaction annulée : la migration
+d'origine échoue avec le message exact de production, la version corrigée
+(REVOKE avant GRANT) passe et donne `authenticated = SELECT` dans les deux
+environnements.
+
+### Pourquoi le chantier GRANT des 21 et 22 août est passé à côté
+
+`20260821_grant_parity_staging.sql` et `20260822_grant_parity_staging_v2.sql`
+attribuaient les 20 tables en écart au « rejeu des migrations qui ne pose que
+le GRANT minimal ». La vraie cause était celle-ci, et l'hypothèse avait été
+écartée à tort. Le signe qui aurait dû alerter : `20260715_evenements_agenda.sql`
+ne contient **aucun** `GRANT`, et pourtant la table avait tous les privilèges en
+production et aucun sur staging.
+
+La comparaison des dumps (`supabase/_production_schema_dump.sql` vs
+`_staging_schema_dump.sql`) ne pouvait pas le voir : **ces dumps ne contiennent
+aucune ligne `ALTER DEFAULT PRIVILEGES`**. Une comparaison de schémas ne couvre
+pas les privilèges par défaut ; il faut interroger `pg_default_acl` directement.
+
+### Règle à appliquer tant que l'écart subsiste
+
+Toute migration qui **crée une table dans `public`** doit poser explicitement
+ses privilèges, REVOKE d'abord, GRANT ensuite :
+
+```sql
+REVOKE ALL ON TABLE public.<table> FROM PUBLIC;
+REVOKE ALL ON TABLE public.<table> FROM anon;
+REVOKE ALL ON TABLE public.<table> FROM authenticated;
+REVOKE ALL ON TABLE public.<table> FROM service_role;
+
+GRANT <ce qui est réellement nécessaire> ON TABLE public.<table> TO <rôle>;
+```
+
+L'ordre REVOKE-puis-GRANT rend l'état final identique dans les deux bases,
+que la règle par défaut soit présente ou non. Un `GRANT` seul ne suffit pas.
+
+Et une auto-vérification qui contrôle des privilèges doit lire **l'ACL
+exacte** (`aclexplode` sur `pg_class.relacl`), jamais une liste de
+`has_table_privilege()` : une liste doit énumérer les privilèges interdits et
+en oublie — la première version de `user_roles` testait INSERT/UPDATE/DELETE
+et laissait passer TRUNCATE, que RLS n'intercepte jamais.
+
+### État de l'exposition aujourd'hui
+
+Les 48 tables de `public` ont toutes RLS activée, et il n'existe aucune vue ni
+vue matérialisée dans ce schéma (vérifié le 2026-08-29). Il n'y a donc pas de
+table actuellement ouverte en écriture à `authenticated` sans filtre. Le risque
+porte sur les **tables futures** : une table créée sans RLS, ou avec une RLS
+incomplète, est entièrement ouverte à tout compte connecté sans qu'aucun
+`GRANT` n'ait été écrit nulle part. TRUNCATE, en particulier, ignore les
+policies : une table protégée par RLS reste vidable en totalité par `authenticated`.
+
+### Garde-fou en place depuis le 2026-08-29
+
+`tests/security/rls.spec.ts` porte deux tests supplémentaires :
+
+- **[F-12]** toute table de `public` a la RLS activée. Vaut pour les deux
+  bases : le schéma est le même.
+- **[F-13]** `authenticated` ne détient sur `public` que du DML, hors dette
+  listée dans `DETTE_PRIVILEGES_AUTHENTICATED` (46 tables au 2026-08-29). Ce
+  test ne vaut **que pour staging** — une table créée par une future migration
+  naîtra nue sur staging et grande ouverte en production, il ne peut pas le
+  voir. Ne pas le lire au vert comme « la production est saine ».
+
+La liste `DETTE_PRIVILEGES_AUTHENTICATED` doit se **vider**, jamais
+s'allonger : c'est le décompte du chantier ci-dessous. [F-13] échoue aussi si
+une entrée y devient périmée, pour que la dette ne pourrisse pas en silence.
+
+## CHANTIER PLANIFIÉ — retirer la règle de privilèges par défaut
+
+**Décidé sur le principe le 2026-08-29. À faire APRÈS le chantier des rôles,
+AVANT l'ouverture bêta.** Pas avant : cette opération change le mode d'échec
+de toutes les migrations à venir, elle demande une fenêtre calme.
+
+### Ce qu'il faut faire, exactement
+
+Le chantier a **deux volets**, découverts à deux moments différents. Les
+traiter dans la même migration.
+
+**Volet 1 — tables et séquences, pour `authenticated`.**
+
+```sql
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES    FROM authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM authenticated;
+```
+
+**Volet 2 — fonctions, pour `anon`. C'est le trou laissé par
+`20260613_rls_anon_lockdown.sql` en juin :** cette migration a traité TABLES
+et SEQUENCES, jamais FUNCTIONS. Confirmé en production le 2026-08-29.
+
+```sql
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM anon;
+```
+
+À traiter avec au moins autant de sérieux que le volet 1 : c'est la cause
+profonde de la faille de la PR #8. Sans lui, chaque nouvelle fonction de
+`public` naît exécutable par `anon`, et il faut y penser à la main à chaque
+fois — exactement ce qui a échoué en juin.
+
+⚠️ **Un `REVOKE EXECUTE ... FROM PUBLIC` ne suffit pas** et ne remplace pas
+ce volet : le grant à `anon` est **nominatif**. Vérifié par simulation le
+2026-08-29 — une migration à laquelle il ne manquait que le
+`REVOKE ... FROM anon` passait au vert avec `anon=EXECUTE`.
+
+**Tant que le volet 2 n'est pas fait**, toute migration créant une fonction
+dans `public` doit poser les deux REVOKE, dans cet ordre :
+
+```sql
+REVOKE EXECUTE ON FUNCTION public.<fn>() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.<fn>() FROM anon;
+GRANT  EXECUTE ON FUNCTION public.<fn>() TO <rôles qui en ont besoin>;
+```
+
+⚠️ **Jamais sur `service_role`.** Les routes `api/` s'appuient dessus ; le lui
+retirer casserait la production immédiatement. Ni sur `postgres`, propriétaire.
+
+### Limite dure : la règle `supabase_admin` est intouchable
+
+Il existe pour chaque type d'objet une **seconde** règle, portée par
+`supabase_admin`, qui inclut `anon` partout. Elle ne peut pas être modifiée
+depuis le SQL Editor : `postgres` n'est pas superutilisateur
+(`rolsuper = false`, vérifié le 2026-08-29) et n'est pas membre de
+`supabase_admin`. La tentative renvoie
+`permission denied to change default privileges`.
+
+Ce n'est pas bloquant — voir « la règle `supabase_admin` est-elle active ? »
+ci-dessous : elle ne s'applique à aucun objet applicatif. Mais il faut le
+savoir avant d'écrire la migration, sinon elle échouera.
+
+### La règle `supabase_admin` est-elle active en pratique ?
+
+**Non, pour tout ce qui nous concerne.** `ALTER DEFAULT PRIVILEGES` est scopé
+`FOR ROLE` : une règle ne s'applique qu'aux objets créés **par ce rôle**.
+Inventaire complet du schéma `public` (staging, 2026-08-29) :
+
+| type d'objet | nombre | propriétaire |
+|---|---|---|
+| tables | 48 | `postgres` |
+| séquences | 5 | `postgres` |
+| index | 89 | `postgres` |
+| fonctions | 10 | `postgres` |
+
+**Aucun objet de `public` n'appartient à `supabase_admin`.** Le SQL Editor,
+les migrations et le Studio créent tous en tant que `postgres` : c'est la
+règle `postgres` qui s'applique, et c'est bien elle qu'il faut corriger.
+
+Seule nuance repérée : l'extension `pg_net` est enregistrée avec
+`extnamespace = public` et appartient à `supabase_admin`, mais ses objets
+vivent en réalité dans le schéma `net`, pas dans `public`. Elle ne déclenche
+donc pas la règle sur `public`. Voir toutefois le point ouvert ci-dessous.
+
+Puis, dans la même migration, nettoyer la dette déjà matérialisée sur les
+tables existantes — le `ALTER DEFAULT PRIVILEGES` seul n'a **aucun effet
+rétroactif** :
+
+```sql
+REVOKE TRUNCATE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public FROM authenticated;
+```
+
+Et vider `DETTE_PRIVILEGES_AUTHENTICATED` dans `tests/security/rls.spec.ts`
+**dans la même PR** — sinon [F-13] échoue sur des entrées périmées, ce qui est
+le comportement voulu.
+
+### Pourquoi c'est le bon arbitrage
+
+Garder la règle, c'est risquer une panne **silencieuse** : une table
+discrètement ouverte en écriture à tout compte connecté, sans qu'aucun `GRANT`
+n'ait été écrit nulle part, donc sans rien à repérer en revue de PR. La
+retirer, c'est risquer une panne **bruyante** : `42501 permission denied`,
+visible à la première requête. Pour un projet à un seul développeur avant une
+bêta, le mode d'échec bruyant vaut nettement mieux.
+
+Le précédent existe déjà dans le dépôt : `20260613_rls_anon_lockdown.sql`
+(section 3) a fait exactement cela pour `anon` le 13 juin, et rien n'a cassé.
+C'est pourquoi `anon` n'apparaît pas dans la ligne `pg_default_acl` de
+production, alors que la configuration Supabase par défaut l'y place.
+
+Bénéfice second : la production rejoint l'état de staging, ce qui **supprime
+l'écart structurel** décrit plus haut au lieu de le contourner migration après
+migration.
+
+### Ce que ça cassera, et qu'il faut accepter
+
+1. **Toute future migration créant une table sans `GRANT` explicite.** Le style
+   `20260715_evenements_agenda.sql` (zéro `GRANT`) donnera une table
+   inaccessible : PostgREST répondra `42501`, et les policies ne seront même
+   jamais évaluées. C'est précisément le gabarit REVOKE-puis-GRANT ci-dessus
+   qui l'évite.
+2. **Toute table créée via le Studio Supabase.** Elle naîtra nue.
+   `20260620_seances_autonomes.sql` documente déjà un incident de cette
+   famille.
+
+Aucune table existante ne sera affectée par le `ALTER DEFAULT PRIVILEGES`
+lui-même : il n'agit qu'à la création. Seul le `REVOKE ... ON ALL TABLES`
+touche l'existant, et il ne retire que TRUNCATE / REFERENCES / TRIGGER, qu'aucun
+code applicatif n'utilise.
+
+### Point ouvert, à instruire séparément : `pg_net` et le schéma `net`
+
+Repéré en passant le 2026-08-29, **hors périmètre bêta**, consigné pour ne
+pas le perdre.
+
+Sur staging : `anon` a `USAGE` sur le schéma `net` **et** `EXECUTE` sur
+`net.http_post`. Les fonctions de `pg_net` n'ont aucune ACL explicite, donc
+l'ACL par défaut de PostgreSQL s'applique : `EXECUTE` à `PUBLIC`. Une
+primitive de requête HTTP sortante accessible à un rôle non authentifié,
+c'est un SSRF potentiel.
+
+**Ce n'est pas établi comme atteignable.** PostgREST n'expose que les schémas
+de sa configuration (`public`, `graphql_public` par défaut chez Supabase) ;
+`net` n'en fait normalement pas partie, et un appel REST vers une fonction
+d'un schéma non exposé renvoie 404. Je n'ai **pas pu le confirmer depuis la
+base** : cette configuration ne vit pas dans Postgres (rien dans
+`pg_db_role_setting`), elle est portée par la plateforme.
+
+C'est la configuration Supabase standard, présente dans tout projet. À
+instruire pour ce qu'elle est — une vérification de la liste des schémas
+exposés, et un contrôle qu'aucune fonction `SECURITY INVOKER` de `public`
+n'appelle `net.*` — pas comme une urgence.
+
+### Nuance mesurée le 2026-08-29, à ne pas surestimer
+
+Sur une table à RLS activée sans policy d'écriture, `UPDATE` et `DELETE`
+échouent « à vide » (0 ligne, sans erreur) même quand le privilège est
+présent : la RLS filtre les lignes. Le privilège excédentaire ne donne donc
+**pas** d'accès aux données tant que la RLS est correcte.
+
+Le vrai trou est **TRUNCATE**, que la RLS n'intercepte jamais : vérifié par
+contre-épreuve, il réussit sur une table protégée par RLS. Son exploitation
+reste toutefois limitée — PostgREST n'expose pas `TRUNCATE`, il faudrait une
+connexion Postgres directe ou une fonction `SECURITY INVOKER` mal écrite.
+L'argument décisif reste donc la défense en profondeur et le mode d'échec, pas
+une faille exploitable aujourd'hui.
+
 ## RÈGLE — migration en production AVANT le merge sur `main`
 
 **Toute migration dont dépend du code applicatif doit être appliquée en
@@ -46,8 +394,20 @@ SELECT 'claude_rate_limit (table)' AS objet,
                WHERE table_schema='public' AND table_name='claude_rate_limit') AS present
 UNION ALL SELECT 'structures.expires_at (colonne)',
        EXISTS (SELECT 1 FROM information_schema.columns
-               WHERE table_schema='public' AND table_name='structures' AND column_name='expires_at');
+               WHERE table_schema='public' AND table_name='structures' AND column_name='expires_at')
+UNION ALL SELECT 'user_roles (table)',
+       EXISTS (SELECT 1 FROM information_schema.tables
+               WHERE table_schema='public' AND table_name='user_roles')
+UNION ALL SELECT 'app_role_courant() (fonction)',
+       EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+               WHERE n.nspname='public' AND p.proname='app_role_courant');
 ```
+
+⚠️ Cette requête ne contrôle que la **présence** des objets, pas leurs
+privilèges. Pour `user_roles`, la présence ne suffit pas : voir la
+vérification complète à 9 contrôles et la contre-épreuve, qui sont dans
+l'auto-vérification de `20260827_roles_01_user_roles.sql` — elles vérifient
+l'ACL exacte, pas seulement que la table existe.
 
 Tant qu'aucun garde-fou automatique n'existe (rien dans la CI ne compare le
 schéma de production aux migrations du dépôt), cette vérification est

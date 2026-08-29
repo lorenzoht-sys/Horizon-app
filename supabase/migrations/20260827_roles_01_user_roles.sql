@@ -56,10 +56,49 @@
 -- ── search_path figé et REVOKE explicite ─────────────────────────────────
 -- `SET search_path = public` sur la fonction : c'est [F-08], corrigé sur
 -- tout le projet le 2026-08-27, on ne le réintroduit pas.
--- `REVOKE EXECUTE ... FROM PUBLIC` : PostgreSQL accorde EXECUTE à PUBLIC
--- automatiquement à la création de toute fonction. C'est la faille trouvée
--- le 2026-08-26 (PR #8), qui traînait depuis juin — un REVOKE sur `anon`
--- seul ne retire rien tant que PUBLIC garde le privilège.
+-- Les DEUX `REVOKE EXECUTE` plus bas sont nécessaires, aucun ne couvre
+-- l'autre. Il a fallu deux incidents pour l'établir :
+--
+--   1. PostgreSQL accorde EXECUTE à PUBLIC à la création de toute fonction.
+--      Un REVOKE sur `anon` seul ne retire rien tant que PUBLIC garde le
+--      privilège — faille de la PR #8, trouvée le 2026-08-26.
+--
+--   2. La PRODUCTION accorde EN PLUS EXECUTE à `anon` NOMMÉMENT, via un
+--      `ALTER DEFAULT PRIVILEGES ... ON FUNCTIONS` (relevé le 2026-08-29 ;
+--      `20260613_rls_anon_lockdown.sql` a traité TABLES et SEQUENCES, jamais
+--      FUNCTIONS). Un grant nominatif ne tombe PAS avec un REVOKE FROM
+--      PUBLIC : symétrique exact du point 1.
+--
+-- C'est aussi l'explication profonde de la PR #8 : `get_praticien_structure`
+-- et `structure_token_valide` ne sont pas devenues exécutables par `anon`,
+-- elles sont NÉES ainsi. Le chantier de fond est dans docs/PLAN-BETA.md.
+--
+-- ── ALTER DEFAULT PRIVILEGES : pourquoi les REVOKE ci-dessous ──────────
+-- La production porte une règle de privilèges par défaut sur le schéma
+-- `public`, absente de staging (constaté le 2026-08-29) :
+--
+--   pg_default_acl → postgres | public | r |
+--     {postgres=arwdDxtm/postgres, authenticated=arwdDxtm/postgres,
+--      service_role=arwdDxtm/postgres}
+--
+-- Conséquence : en production, TOUTE table créée par `postgres` dans
+-- `public` naît avec l'intégralité des privilèges déjà accordée à
+-- `authenticated` — SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES,
+-- TRIGGER, MAINTAIN. Un `GRANT SELECT` ne restreint alors rien : il
+-- réaffirme un privilège déjà détenu, et tous les autres subsistent.
+--
+-- C'est ce qui a fait échouer la première version de cette migration en
+-- production le 2026-08-29, sur sa propre auto-vérification
+-- (« authenticated a un privilege d'ecriture »). Le garde-fou a joué son
+-- rôle : transaction annulée, table non créée. C'est aussi,
+-- rétrospectivement, l'explication des écarts de GRANT staging/production
+-- rattrapés les 21 et 22 août (20260821/20260822_grant_parity_staging) —
+-- hypothèse alors écartée à tort.
+--
+-- D'où le REVOKE explicite avant tout GRANT. Il ne corrige QUE cette table :
+-- la règle par défaut reste en place et continue de s'appliquer à chaque
+-- nouvelle table du schéma. La question de la retirer est ouverte, voir
+-- docs/PLAN-BETA.md.
 --
 -- ── Vérification ─────────────────────────────────────────────────────────
 -- tests/security/rls.spec.ts, describe « [RÔLES] user_roles », écrit AVANT
@@ -117,8 +156,22 @@ CREATE POLICY "user_roles_lecture_propre_ligne"
 -- deux pour rouvrir l'escalade.
 -- `anon` ne reçoit rien : le portail patient n'a aucune raison de connaître
 -- les rôles applicatifs.
-GRANT SELECT ON public.user_roles TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_roles TO service_role;
+--
+-- ⚠️ Le REVOKE ci-dessous n'est PAS décoratif — voir la section
+-- « ALTER DEFAULT PRIVILEGES » en tête de fichier. En production, la table
+-- naît avec arwdDxtm déjà accordé à `authenticated` : sans REVOKE préalable,
+-- le GRANT SELECT n'enlève rien et `authenticated` conserve INSERT, UPDATE,
+-- DELETE et TRUNCATE. On repart donc d'une ardoise vide, puis on accorde.
+-- L'ordre REVOKE-puis-GRANT rend l'état final indépendant de la présence ou
+-- non de la règle par défaut : cette migration donne le même résultat en
+-- production et sur staging, qui ne l'a pas.
+REVOKE ALL ON TABLE public.user_roles FROM PUBLIC;
+REVOKE ALL ON TABLE public.user_roles FROM anon;
+REVOKE ALL ON TABLE public.user_roles FROM authenticated;
+REVOKE ALL ON TABLE public.user_roles FROM service_role;
+
+GRANT SELECT ON TABLE public.user_roles TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.user_roles TO service_role;
 
 -- ── Écriture : AUCUNE POLICY, délibérément ──────────────────────────────
 -- Ce n'est pas un oubli. `authenticated` et `anon` n'ont pas `rolbypassrls`
@@ -164,6 +217,10 @@ DO $$
 DECLARE
   n_policies_ecriture int;
   n_sans_role         int;
+  privs_authenticated text;
+  privs_anon          text;
+  privs_public        text;
+  execute_fonction    text;
 BEGIN
   SELECT count(*) INTO n_policies_ecriture
     FROM pg_policies
@@ -178,14 +235,32 @@ BEGIN
     RAISE EXCEPTION 'Echec verification : RLS non activee sur user_roles';
   END IF;
 
-  IF EXISTS (
-    SELECT 1 FROM aclexplode(COALESCE(
-      (SELECT proacl FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-        WHERE n.nspname = 'public' AND p.proname = 'app_role_courant'),
-      acldefault('f', 10)
-    )) a WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE'
-  ) THEN
-    RAISE EXCEPTION 'Echec verification : app_role_courant() est encore executable par PUBLIC';
+  -- ── Qui peut EXECUTER app_role_courant() ─────────────────────────
+  -- Ce controle ne testait au depart que PUBLIC. Insuffisant : la production
+  -- porte AUSSI un `ALTER DEFAULT PRIVILEGES ... GRANT EXECUTE ON FUNCTIONS`
+  -- qui accorde EXECUTE a `anon` NOMMEMENT (constate le 2026-08-29, sur les
+  -- deux regles, postgres et supabase_admin). Un grant nominatif ne tombe
+  -- pas avec un REVOKE FROM PUBLIC : verifie par simulation le 2026-08-29,
+  -- la migration passait au vert avec anon=EXECUTE. C'est la meme mecanique
+  -- que la faille de la PR #8, dans l'autre sens.
+  --
+  -- On compare donc l'ENSEMBLE EXACT des beneficiaires, proprietaire exclu,
+  -- plutot que de tester des cas un par un.
+  SELECT string_agg(g, ', ' ORDER BY g) INTO execute_fonction
+    FROM (
+      SELECT CASE WHEN a.grantee = 0 THEN 'PUBLIC'
+                  ELSE a.grantee::regrole::text END AS g
+        FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+        CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) a
+       WHERE n.nspname = 'public'
+         AND p.proname = 'app_role_courant'
+         AND a.privilege_type = 'EXECUTE'
+         AND a.grantee <> p.proowner
+    ) x;
+  IF execute_fonction IS DISTINCT FROM 'authenticated, service_role' THEN
+    RAISE EXCEPTION 'Echec verification : app_role_courant() est executable par [%], attendu [authenticated, service_role]',
+      COALESCE(execute_fonction, 'personne');
   END IF;
 
   SELECT count(*) INTO n_sans_role
@@ -195,17 +270,62 @@ BEGIN
     RAISE EXCEPTION 'Echec verification : % compte(s) sans role apres backfill', n_sans_role;
   END IF;
 
-  -- Les privilèges de table, que RLS ne remplace pas.
-  IF NOT has_table_privilege('authenticated', 'public.user_roles', 'SELECT') THEN
-    RAISE EXCEPTION 'Echec verification : authenticated ne peut pas lire user_roles (GRANT manquant, les policies ne seront jamais evaluees)';
+  -- ── Les privilèges de table, que RLS ne remplace pas ──────────────
+  -- On vérifie l'ACL EXACTE, et non une liste de has_table_privilege().
+  -- Une liste doit énumérer les privilèges interdits, et en oublie : la
+  -- version précédente ne testait qu'INSERT/UPDATE/DELETE et laissait donc
+  -- passer TRUNCATE — qui suffit à vider la table des rôles, et que RLS
+  -- n'intercepte jamais (TRUNCATE ignore les policies). Nommer MAINTAIN
+  -- (PG17) casserait par ailleurs la migration sur PG16. L'ACL, elle, se
+  -- lit sans dépendre ni de la version ni d'une liste à tenir à jour.
+  SELECT string_agg(a.privilege_type, ', ' ORDER BY a.privilege_type)
+    INTO privs_authenticated
+    FROM pg_class c
+    CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) a
+   WHERE c.oid = 'public.user_roles'::regclass
+     AND a.grantee = 'authenticated'::regrole;
+  IF privs_authenticated IS DISTINCT FROM 'SELECT' THEN
+    RAISE EXCEPTION 'Echec verification : privileges de authenticated sur user_roles = [%], attendu [SELECT] — un REVOKE manque (voir ALTER DEFAULT PRIVILEGES en tete de fichier)',
+      COALESCE(privs_authenticated, 'aucun');
   END IF;
-  IF has_table_privilege('authenticated', 'public.user_roles', 'UPDATE')
-     OR has_table_privilege('authenticated', 'public.user_roles', 'INSERT')
-     OR has_table_privilege('authenticated', 'public.user_roles', 'DELETE') THEN
-    RAISE EXCEPTION 'Echec verification : authenticated a un privilege d''ecriture sur user_roles';
+
+  SELECT string_agg(a.privilege_type, ', ' ORDER BY a.privilege_type)
+    INTO privs_anon
+    FROM pg_class c
+    CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) a
+   WHERE c.oid = 'public.user_roles'::regclass
+     AND a.grantee = 'anon'::regrole;
+  IF privs_anon IS NOT NULL THEN
+    RAISE EXCEPTION 'Echec verification : anon detient [%] sur user_roles, attendu aucun privilege', privs_anon;
   END IF;
-  IF has_table_privilege('anon', 'public.user_roles', 'SELECT') THEN
-    RAISE EXCEPTION 'Echec verification : anon peut lire user_roles';
+
+  -- grantee = 0 dans une ACL, c'est PUBLIC : tout rôle présent ou futur.
+  SELECT string_agg(a.privilege_type, ', ' ORDER BY a.privilege_type)
+    INTO privs_public
+    FROM pg_class c
+    CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) a
+   WHERE c.oid = 'public.user_roles'::regclass
+     AND a.grantee = 0;
+  IF privs_public IS NOT NULL THEN
+    RAISE EXCEPTION 'Echec verification : PUBLIC detient [%] sur user_roles, attendu aucun privilege', privs_public;
+  END IF;
+
+  -- ── Signalement : la règle par défaut est-elle encore en place ? ─────
+  -- Volontairement un WARNING et non une EXCEPTION : cette migration doit
+  -- pouvoir s'appliquer sans attendre l'arbitrage sur la règle elle-même.
+  -- Le message rappelle que le REVOKE ci-dessus protège CETTE table, et
+  -- elle seule.
+  IF EXISTS (
+    SELECT 1
+      FROM pg_default_acl d
+      JOIN pg_namespace n ON n.oid = d.defaclnamespace
+      CROSS JOIN LATERAL aclexplode(d.defaclacl) a
+     WHERE n.nspname = 'public'
+       AND d.defaclobjtype = 'r'
+       AND a.grantee = 'authenticated'::regrole
+       AND a.privilege_type <> 'SELECT'
+  ) THEN
+    RAISE WARNING 'ALTER DEFAULT PRIVILEGES actif sur public : toute NOUVELLE table y naitra ouverte en ecriture a authenticated. user_roles est protegee par REVOKE, les autres tables ne le sont que par leur RLS. Voir docs/PLAN-BETA.md.';
   END IF;
 END $$;
 
