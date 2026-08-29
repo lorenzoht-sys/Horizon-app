@@ -8,6 +8,15 @@
 //
 // Usage :
 //   npx tsx scripts/staging-query.ts "SELECT ..."
+//   npx tsx scripts/staging-query.ts --file <chemin.sql>
+//
+// PRÉFÉRER --file dès que le SQL tient sur plusieurs lignes. Sous Windows,
+// les sauts de ligne d'un argument de ligne de commande sont aplatis avant
+// d'arriver ici : une requête multi-ligne commençant par un commentaire
+// `--` se retrouve entièrement commentée et renvoie `[]`, SANS erreur. Un
+// `[]` qu'on lit spontanément comme « aucune violation trouvée ». Constaté
+// le 2026-08-29 en validant la requête de contrôle de `user_roles`. Le
+// garde-fou ci-dessous transforme désormais ce piège en erreur bruyante.
 
 import { Client } from 'pg';
 import { readFileSync } from 'fs';
@@ -65,8 +74,30 @@ function assertStagingTarget(connectionString: string): void {
 }
 
 async function main() {
-  const sql = process.argv[2];
-  if (!sql) throw new Error('Usage: staging-query.ts "SELECT ..."');
+  const args = process.argv.slice(2);
+  let sql: string | undefined;
+
+  const fileIdx = args.indexOf('--file');
+  if (fileIdx !== -1) {
+    const filePath = args[fileIdx + 1];
+    if (!filePath) throw new Error('--file attend un chemin de fichier.');
+    sql = readFileSync(path.resolve(filePath), 'utf-8');
+  } else {
+    sql = args[0];
+
+    // Le piège décrit en tête de fichier : un SQL inline qui contient un
+    // commentaire `--` mais plus aucun saut de ligne a été aplati par le
+    // shell, et tout ce qui suit le `--` est mort. On refuse plutôt que de
+    // renvoyer un `[]` trompeur.
+    if (sql && /(^|\s)--/.test(sql) && !/[\r\n]/.test(sql)) {
+      throw new Error(
+        'SQL inline contenant un commentaire `--` sur une seule ligne : les sauts de ligne ont ' +
+        'probablement été aplatis par le shell, et le reste de la requête est commenté. ' +
+        'Le résultat aurait été `[]` sans erreur. Utilise --file <chemin.sql>.'
+      );
+    }
+  }
+  if (!sql) throw new Error('Usage: staging-query.ts "SELECT ..." | --file <chemin.sql>');
 
   const envPath = path.resolve(__dirname, '../.env.test.local');
   const parsed = loadEnvFile(envPath);
@@ -83,9 +114,22 @@ async function main() {
   const client = new Client({ connectionString, ssl: { rejectUnauthorized: false } });
   await client.connect();
   try {
-    await client.query('SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY');
+    // Lecture seule portée par la TRANSACTION, pas par la SESSION.
+    //
+    // `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY` était correct
+    // tant que STAGING_DATABASE_URL était une connexion directe : la session
+    // mourait avec le process. Depuis la bascule sur le pooler en mode
+    // transaction (2026-08-27), le réglage RESTE sur le backend partagé après
+    // déconnexion et contamine tous les clients suivants — constaté le même
+    // jour : une migration a échoué en « cannot execute CREATE TABLE in a
+    // read-only transaction » à cause d'un simple `staging-query.ts` lancé
+    // quelques minutes plus tôt.
+    //
+    // `BEGIN READ ONLY` donne la même garantie sans rien laisser derrière.
+    await client.query('BEGIN READ ONLY');
     const { rows } = await client.query(sql);
     console.log(JSON.stringify(rows, null, 2));
+    await client.query('ROLLBACK');
   } finally {
     await client.end();
   }

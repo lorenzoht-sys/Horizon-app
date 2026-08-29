@@ -115,6 +115,11 @@ const EXCLUDED_TABLES: Record<string, string> = {
   // et première table détectée par le test de couverture le jour où il a
   // enfin pu s'exécuter.
   claude_rate_limit: 'service_role only, RLS forcée sans aucune policy, alimentée par api/_lib/rateLimit.ts',
+  // Le cloisonnement de cette table n'est pas « praticien A vs praticien B
+  // sur une colonne praticien_id » : c'est « chacun voit sa propre ligne, et
+  // personne n'écrit ». Testée par le describe [RÔLES] dédié, plus trois
+  // contrôles structurels dans « Findings structurels ».
+  user_roles: 'rôle applicatif : lecture de sa propre ligne, aucune écriture — couverte par le describe [RÔLES] dédié',
   // Table d'audit : testée en écriture-seule par service_role, couverte par
   // une assertion dédiée (voir "audit_logs est append-only" plus bas) plutôt
   // que par le test croisé générique lecture/écriture.
@@ -149,6 +154,66 @@ const TABLE_OVERRIDES: Record<string, { via: string; note: string }> = {
 // test paramétré plus bas pour le détail complet).
 const OWNER_COLUMN_OVERRIDES: Record<string, string> = {
   praticiens: 'id',
+};
+
+// Dette de privilèges héritée de la règle `ALTER DEFAULT PRIVILEGES` de
+// PRODUCTION (voir docs/PLAN-BETA.md). Ces tables sont nées en prod avec
+// tous les privilèges accordés à `authenticated` ; les migrations de parité
+// des 21 et 22 août (20260821/20260822_grant_parity_staging*.sql) ont
+// recopié cet état sur staging, TRUNCATE compris.
+//
+// Aucune de ces lignes n'a été voulue par quiconque : c'est l'accident
+// d'origine, matérialisé. La liste doit se VIDER, pas s'allonger — elle est
+// le décompte du chantier « REVOKE de la règle par défaut » planifié dans
+// docs/PLAN-BETA.md. Toute entrée retirée en base doit l'être ici dans la
+// même PR : le test [F-13] échoue sinon, volontairement.
+const DETTE_PRIVILEGES_AUTHENTICATED: Record<string, string> = {
+  assistant_logs: 'REFERENCES,TRIGGER,TRUNCATE',
+  audit_logs: 'REFERENCES,TRIGGER,TRUNCATE',
+  bilans: 'REFERENCES,TRIGGER,TRUNCATE',
+  bilans_brouillons: 'REFERENCES,TRIGGER,TRUNCATE',
+  comptes_rendus_seances: 'REFERENCES,TRIGGER,TRUNCATE',
+  contrats: 'REFERENCES,TRIGGER,TRUNCATE',
+  documents_partages: 'REFERENCES,TRIGGER,TRUNCATE',
+  documents_patient: 'REFERENCES,TRIGGER,TRUNCATE',
+  dossier_exercice_membres: 'REFERENCES,TRIGGER,TRUNCATE',
+  dossiers_exercices: 'REFERENCES,TRIGGER,TRUNCATE',
+  evenements_agenda: 'REFERENCES,TRIGGER,TRUNCATE',
+  exercices_libres_activations: 'REFERENCES,TRIGGER,TRUNCATE',
+  exercices_libres_validations: 'REFERENCES,TRIGGER,TRUNCATE',
+  exercices_personnalises: 'REFERENCES,TRIGGER,TRUNCATE',
+  exercices_realises: 'REFERENCES,TRIGGER,TRUNCATE',
+  factures_suivi: 'REFERENCES,TRIGGER,TRUNCATE',
+  indisponibilites: 'REFERENCES,TRIGGER,TRUNCATE',
+  notes_seances: 'REFERENCES,TRIGGER,TRUNCATE',
+  organisation_demande_attempts: 'REFERENCES,TRIGGER,TRUNCATE',
+  organisation_invitations: 'REFERENCES,TRIGGER,TRUNCATE',
+  organisation_membres: 'REFERENCES,TRIGGER,TRUNCATE',
+  organisations: 'REFERENCES,TRIGGER,TRUNCATE',
+  participants: 'REFERENCES,TRIGGER,TRUNCATE',
+  patient_login_attempts: 'REFERENCES,TRIGGER,TRUNCATE',
+  praticiens: 'REFERENCES,TRIGGER,TRUNCATE',
+  programme_exercices: 'REFERENCES,TRIGGER,TRUNCATE',
+  programme_modele_exercices: 'REFERENCES,TRIGGER,TRUNCATE',
+  programme_modele_planning: 'REFERENCES,TRIGGER,TRUNCATE',
+  programme_modele_seances: 'REFERENCES,TRIGGER,TRUNCATE',
+  programme_planning: 'REFERENCES,TRIGGER,TRUNCATE',
+  programme_seances: 'REFERENCES,TRIGGER,TRUNCATE',
+  programmes: 'REFERENCES,TRIGGER,TRUNCATE',
+  programmes_modeles: 'REFERENCES,TRIGGER,TRUNCATE',
+  push_subscriptions: 'REFERENCES,TRIGGER,TRUNCATE',
+  rappel_preferences: 'REFERENCES,TRIGGER,TRUNCATE',
+  rappels_envoyes: 'REFERENCES,TRIGGER,TRUNCATE',
+  retours_seance: 'REFERENCES,TRIGGER,TRUNCATE',
+  seances: 'REFERENCES,TRIGGER,TRUNCATE',
+  seances_patient: 'REFERENCES,TRIGGER,TRUNCATE',
+  structure_access_logs: 'REFERENCES,TRIGGER,TRUNCATE',
+  structures: 'REFERENCES,TRIGGER,TRUNCATE',
+  templates_structure: 'REFERENCES,TRIGGER,TRUNCATE',
+  tests_etalons_activations: 'REFERENCES,TRIGGER,TRUNCATE',
+  tests_etalons_resultats: 'REFERENCES,TRIGGER,TRUNCATE',
+  tm6_variantes: 'MAINTAIN,REFERENCES,TRIGGER',
+  zones_geographiques: 'REFERENCES,TRIGGER,TRUNCATE',
 };
 
 async function requireStagingEnv() {
@@ -608,6 +673,84 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
     });
   });
 
+  // ── [RÔLES] user_roles (étape 3) ──────────────────────────────────────
+  //
+  // Le point de toute cette table : un praticien peut mettre à jour sa
+  // propre ligne `praticiens` pour éditer son profil. Si le rôle vivait là,
+  // il se promouvrait admin en une requête. `user_roles` n'a AUCUNE policy
+  // d'écriture — le test qui compte ici est celui qui le prouve.
+  describe('[RÔLES] user_roles : un praticien ne peut pas modifier son rôle', () => {
+    it('un praticien lit sa propre ligne', async () => {
+      const { data, error } = await clientA
+        .from('user_roles')
+        .select('user_id, app_role')
+        .eq('user_id', praticienAId);
+      expect(error, `[RÔLES] lecture de sa propre ligne refusée : ${error?.message}`).toBeNull();
+      expect(data ?? [], '[RÔLES] un praticien ne voit pas sa propre ligne user_roles').toHaveLength(1);
+      expect((data ?? [])[0]?.app_role).toBe('praticien');
+    });
+
+    it("un praticien ne peut pas lire la ligne d'un autre praticien", async () => {
+      // Praticien B est créé à la volée par ce fichier, donc APRÈS le
+      // backfill de la migration : il n'a pas de ligne. On la crée via
+      // service_role, sinon le test passerait faute de ligne à lire —
+      // un vert qui ne prouverait rien.
+      await admin.from('user_roles').insert({ user_id: praticienBId, app_role: 'praticien' });
+      try {
+        const { data } = await clientA
+          .from('user_roles')
+          .select('user_id')
+          .eq('user_id', praticienBId);
+        expect(
+          data ?? [],
+          "[RÔLES] praticien A voit la ligne user_roles de praticien B"
+        ).toHaveLength(0);
+      } finally {
+        await admin.from('user_roles').delete().eq('user_id', praticienBId);
+      }
+    });
+
+    // ── LE test de cette étape ────────────────────────────────────────
+    it("un praticien ne peut pas se promouvoir admin (escalade de privilège)", async () => {
+      const { count } = await clientA
+        .from('user_roles')
+        .update({ app_role: 'admin' })
+        .eq('user_id', praticienAId)
+        .select('*', { count: 'exact', head: true });
+      expect(
+        count ?? 0,
+        `[RÔLES] praticien A a modifié ${count ?? 0} ligne(s) de user_roles — escalade de privilège ouverte`
+      ).toBe(0);
+
+      // L'absence de lignes modifiées ne suffit pas : on relit l'état réel
+      // avec service_role, seul témoin non filtré par RLS.
+      const { data } = await admin
+        .from('user_roles')
+        .select('app_role')
+        .eq('user_id', praticienAId)
+        .single();
+      expect(
+        data?.app_role,
+        '[RÔLES] le rôle de praticien A a changé — il a réussi à se promouvoir'
+      ).toBe('praticien');
+    });
+
+    it('un praticien ne peut pas insérer de ligne dans user_roles', async () => {
+      // Praticien B n'a pas de ligne (créé après le backfill) : une erreur
+      // ici vient donc bien de RLS, pas d'un conflit de clé primaire.
+      const { error } = await clientA
+        .from('user_roles')
+        .insert({ user_id: praticienBId, app_role: 'admin' });
+      expect(
+        error,
+        '[RÔLES] praticien A a pu insérer une ligne dans user_roles'
+      ).not.toBeNull();
+
+      const { data } = await admin.from('user_roles').select('user_id').eq('user_id', praticienBId);
+      expect(data ?? [], '[RÔLES] une ligne a bien été créée malgré RLS').toHaveLength(0);
+    });
+  });
+
   // [F-11] get_praticien_structure(text) avait un GRANT EXECUTE ... TO anon
   // jamais révoqué. Un tiers anonyme pouvait appeler cette fonction
   // directement via l'API REST PostgREST, sans passer par
@@ -694,7 +837,19 @@ describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postg
     }
     pg = new PgClient({ connectionString: STAGING_DB_URL, ssl: { rejectUnauthorized: false } });
     await pg.connect();
-    await pg.query('SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY');
+    // Volontairement AUCUN réglage de session ici.
+    //
+    // Ce bloc faisait `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`,
+    // correct tant que STAGING_DATABASE_URL était une connexion directe. Sur
+    // le pooler en mode transaction (depuis le 2026-08-27), un réglage de
+    // session RESTE sur le backend partagé après déconnexion et contamine
+    // tous les clients suivants : une migration a échoué le même jour en
+    // « cannot execute CREATE TABLE in a read-only transaction », à cause de
+    // ce harnais.
+    //
+    // La garantie de lecture seule vient désormais du contenu de ce bloc —
+    // il ne fait que des SELECT — et non d'un réglage global qui déborde sur
+    // les processus voisins.
   });
 
   afterAll(async () => {
@@ -822,5 +977,284 @@ describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postg
       rows[0]?.a_truncate,
       '[F-01] authenticated peut TRUNCATE tm6_variantes : RLS ne filtre jamais TRUNCATE, seul un REVOKE le ferme'
     ).toBe(false);
+  });
+
+  // ── [RÔLES] contrôles structurels de l'étape 3 ────────────────────────
+
+  it('[RÔLES] user_roles a RLS activée et AUCUNE policy d\'écriture', async () => {
+    const { rows: rls } = await pg.query<{ relrowsecurity: boolean }>(
+      `SELECT relrowsecurity FROM pg_class WHERE oid = 'public.user_roles'::regclass`
+    );
+    expect(rls[0]?.relrowsecurity, '[RÔLES] RLS non activée sur user_roles').toBe(true);
+
+    const { rows: policies } = await pg.query<{ cmd: string; qual: string | null; roles: string }>(
+      `SELECT cmd, qual, roles::text AS roles FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = 'user_roles'`
+    );
+    const ecritures = policies.filter(p => p.cmd !== 'SELECT');
+    expect(
+      ecritures.map(p => p.cmd),
+      "[RÔLES] user_roles a une policy d'écriture : l'escalade de privilège que cette table ferme est rouverte"
+    ).toEqual([]);
+    expect(policies, '[RÔLES] user_roles devrait avoir exactement une policy (SELECT)').toHaveLength(1);
+    expect(policies[0]?.qual, '[RÔLES] la lecture n\'est pas restreinte à sa propre ligne').toBe('(user_id = auth.uid())');
+  });
+
+  // Les privilèges de table sont une couche INDÉPENDANTE des policies : une
+  // policy filtre ce qu'un rôle déjà autorisé peut voir, elle n'autorise
+  // rien. Cette migration a d'abord été écrite sans GRANT — policies
+  // correctes, table pourtant injoignable (« permission denied », 42501).
+  // L'inverse est bien plus grave : un GRANT d'écriture rouvrirait
+  // l'escalade même en gardant zéro policy d'écriture.
+  it('[RÔLES] authenticated peut lire user_roles mais ne peut rien y écrire, anon n\'y a aucun accès', async () => {
+    const { rows } = await pg.query<{
+      auth_select: boolean; auth_insert: boolean; auth_update: boolean;
+      auth_delete: boolean; anon_select: boolean;
+    }>(
+      `SELECT has_table_privilege('authenticated','public.user_roles','SELECT') AS auth_select,
+              has_table_privilege('authenticated','public.user_roles','INSERT') AS auth_insert,
+              has_table_privilege('authenticated','public.user_roles','UPDATE') AS auth_update,
+              has_table_privilege('authenticated','public.user_roles','DELETE') AS auth_delete,
+              has_table_privilege('anon','public.user_roles','SELECT')          AS anon_select`
+    );
+    const p = rows[0];
+    expect(p?.auth_select, '[RÔLES] authenticated ne peut pas lire user_roles : les policies ne seront jamais évaluées').toBe(true);
+    expect(
+      [p?.auth_insert, p?.auth_update, p?.auth_delete],
+      "[RÔLES] authenticated a un privilège d'écriture sur user_roles — l'escalade est rouverte au niveau des GRANT"
+    ).toEqual([false, false, false]);
+    expect(p?.anon_select, '[RÔLES] anon peut lire user_roles').toBe(false);
+  });
+
+  // Audit inverse, demandé même si aucun admin n'existe encore : l'étape 3
+  // est purement additive, donc AUCUNE policy existante ne doit accorder
+  // quoi que ce soit sur la base du rôle. Ce test échouera le jour où
+  // l'étape 5 branchera les rôles — c'est voulu : ce sera le moment de le
+  // remplacer par des assertions sur ce que l'admin a le droit de voir.
+  it("[RÔLES] aucune policy existante n'accorde d'accès élargi à un admin", async () => {
+    const { rows } = await pg.query<{ tablename: string; policyname: string }>(
+      `SELECT tablename, policyname FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename <> 'user_roles'
+          AND (COALESCE(qual, '') || COALESCE(with_check, '')) ~* '(user_roles|app_role)'`
+    );
+    expect(
+      rows.map(r => `${r.tablename}.${r.policyname}`),
+      "[RÔLES] des policies s'appuient déjà sur le rôle alors que l'étape 3 devait être purement additive"
+    ).toEqual([]);
+  });
+
+  it('[RÔLES] app_role_courant() a un search_path figé et n\'est pas exécutable par PUBLIC', async () => {
+    const { rows } = await pg.query<{ config: string[] | null; public_exec: boolean; secdef: boolean }>(
+      `SELECT p.proconfig AS config,
+              p.prosecdef AS secdef,
+              EXISTS (SELECT 1 FROM aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) a
+                       WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE') AS public_exec
+         FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public' AND p.proname = 'app_role_courant'`
+    );
+    expect(rows, '[RÔLES] app_role_courant() introuvable').toHaveLength(1);
+    expect(rows[0]?.secdef, '[RÔLES] app_role_courant() n\'est pas SECURITY DEFINER — elle déclenchera les policies de user_roles').toBe(true);
+    expect(
+      (rows[0]?.config ?? []).some(c => c.startsWith('search_path=')),
+      '[RÔLES] app_role_courant() n\'a pas de search_path figé — c\'est [F-08], réintroduit'
+    ).toBe(true);
+    expect(
+      rows[0]?.public_exec,
+      '[RÔLES] app_role_courant() est exécutable par PUBLIC — c\'est la faille de la PR #8, réintroduite'
+    ).toBe(false);
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // [F-12] / [F-13] — garde-fou privilèges, ajouté le 2026-08-29 après
+  // l'échec de 20260827_roles_01_user_roles.sql en production.
+  //
+  // CE QUE CES DEUX TESTS PROUVENT, ET CE QU'ILS NE PROUVENT PAS.
+  // Ils tournent sur STAGING, qui n'a AUCUNE règle `ALTER DEFAULT
+  // PRIVILEGES` sur le schéma `public`, là où la production en a une qui
+  // accorde tout à `authenticated` sur chaque table créée (voir
+  // docs/PLAN-BETA.md, « ÉCART STRUCTUREL »).
+  //
+  //   - [F-12] (RLS activée) vaut pour les deux bases : le schéma est le
+  //     même, la RLS se réplique par les migrations.
+  //   - [F-13] (privilèges) ne vaut QUE pour staging. Une table créée par
+  //     une future migration naîtra nue ici et grande ouverte en prod : ce
+  //     test ne peut pas le voir. Il attrape autre chose, qui compte aussi
+  //     — une migration qui accorde explicitement TRUNCATE, REFERENCES ou
+  //     TRIGGER à `authenticated`, comme l'ont fait les migrations de
+  //     parité des 21 et 22 août — et il tient le décompte de la dette.
+  //
+  // Ne pas lire [F-13] au vert comme « la production est saine ».
+  // ────────────────────────────────────────────────────────────────────
+
+  it('[F-12] toutes les tables de public ont la RLS activée', async () => {
+    const { rows } = await pg.query<{ relname: string }>(
+      `SELECT c.relname
+         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity
+        ORDER BY c.relname`
+    );
+    expect(
+      rows,
+      `[F-12] table(s) de public sans RLS — ouverte(s) à tout compte connecté, ` +
+      `sans aucun filtre : ${rows.map(r => r.relname).join(', ')}`
+    ).toHaveLength(0);
+  });
+
+  it('[F-13] authenticated ne détient sur public que du DML, hors dette héritée connue', async () => {
+    const { rows } = await pg.query<{ t: string; exces: string }>(
+      `SELECT c.relname AS t,
+              string_agg(a.privilege_type, ',' ORDER BY a.privilege_type) AS exces
+         FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) a
+        WHERE n.nspname = 'public'
+          AND c.relkind = 'r'
+          AND a.grantee = 'authenticated'::regrole
+          AND a.privilege_type NOT IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE')
+        GROUP BY c.relname`
+    );
+    const constate = new Map(rows.map(r => [r.t, r.exces]));
+
+    // Sens 1 — aucune table hors dette ne doit détenir de privilège hors DML.
+    const nouvelles = [...constate.entries()]
+      .filter(([t]) => !(t in DETTE_PRIVILEGES_AUTHENTICATED))
+      .map(([t, p]) => `${t} (${p})`);
+    expect(
+      nouvelles,
+      `[F-13] privilège hors DML accordé à authenticated sur une table absente de la ` +
+      `dette connue : ${nouvelles.join(', ')}. TRUNCATE en particulier n'est JAMAIS ` +
+      `filtré par la RLS.`
+    ).toHaveLength(0);
+
+    // Sens 2 — la dette ne doit pas pourrir : une entrée dont le privilège a
+    // changé ou disparu doit être retirée de la liste dans la même PR.
+    const perimees = Object.entries(DETTE_PRIVILEGES_AUTHENTICATED)
+      .filter(([t, attendu]) => constate.get(t) !== attendu)
+      .map(([t, attendu]) => `${t} (attendu ${attendu}, constaté ${constate.get(t) ?? 'aucun'})`);
+    expect(
+      perimees,
+      `[F-13] entrée(s) périmée(s) dans DETTE_PRIVILEGES_AUTHENTICATED, à retirer : ` +
+      `${perimees.join(', ')}`
+    ).toHaveLength(0);
+  });
+
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// [RÔLES] Étape 4 — un compte admin ne lit aucune donnée clinique
+// ═══════════════════════════════════════════════════════════════════════
+//
+// Le rôle admin sert à gérer des COMPTES (création, désactivation, liste),
+// jamais à consulter des données de santé. Ce describe le prouve par le
+// comportement, pas par relecture des policies.
+//
+// Describe autonome, volontairement : il ne dépend d'aucun compte de seed
+// (E2E_PRATICIEN_PASSWORD), donc il tourne même quand le jeu de données de
+// staging a dérivé. Compte créé puis détruit dans le describe, préfixe
+// `rls-spec-` comme les autres comptes jetables de ce fichier.
+//
+// DEUX GARDES ANTI-TEST-VIDE, sans lesquels ce describe passerait au vert
+// en ne prouvant rien (règle de méthode, docs/PLAN-BETA.md) :
+//   1. le compte de test est-il RÉELLEMENT admin ? Un compte ordinaire ne
+//      verrait rien non plus — le test serait vrai pour la mauvaise raison.
+//   2. les tables contiennent-elles des lignes à protéger ? Sur une base
+//      vide, « l'admin ne voit rien » est une tautologie.
+
+const TABLES_CLINIQUES = [
+  'bilans',
+  'comptes_rendus_seances',
+  'notes_seances',
+  'documents_patient',
+] as const;
+
+describe.skipIf(!URL || !ANON_KEY || !SERVICE_KEY)('[RÔLES] un compte admin ne lit aucune donnée clinique', () => {
+  let admin: SupabaseClient;
+  let sessionAdmin: SupabaseClient;
+  let adminUserId: string | null = null;
+  const adminEmail = `rls-spec-admin-${Date.now()}@example.invalid`;
+  const adminPassword = `Rls-Spec-Admin-${Math.random().toString(36).slice(2)}!Aa1`;
+
+  beforeAll(async () => {
+    admin = createClient(URL as string, SERVICE_KEY as string, { auth: { persistSession: false } });
+
+    const { data: cree, error: creeErr } = await admin.auth.admin.createUser({
+      email: adminEmail,
+      password: adminPassword,
+      email_confirm: true,
+    });
+    if (creeErr || !cree.user) {
+      throw new Error(`Création du compte admin de test impossible : ${creeErr?.message}`);
+    }
+    adminUserId = cree.user.id;
+
+    // Un admin réaliste : une ligne `praticiens`, et AUCUN participant —
+    // il ne possède donc légitimement aucune donnée.
+    await admin.from('praticiens').insert({
+      id: adminUserId, prenom: 'RLS-Spec', nom: 'Admin', email: adminEmail,
+    });
+
+    // ⚠️ Rien ne crée automatiquement la ligne `user_roles` d'un compte né
+    // APRÈS la migration d'étape 3 : son backfill était ponctuel. Il faut
+    // l'écrire explicitement (service_role). C'est un point à traiter en
+    // étape 4 — sans quoi tout nouveau praticien n'a aucun rôle.
+    const { error: roleErr } = await admin
+      .from('user_roles')
+      .insert({ user_id: adminUserId, app_role: 'admin' });
+    if (roleErr) {
+      throw new Error(`Attribution du rôle admin impossible : ${roleErr.message}`);
+    }
+
+    sessionAdmin = createClient(URL as string, ANON_KEY as string, { auth: { persistSession: false } });
+    const { error: signInErr } = await sessionAdmin.auth.signInWithPassword({
+      email: adminEmail, password: adminPassword,
+    });
+    if (signInErr) {
+      throw new Error(`Connexion du compte admin de test impossible : ${signInErr.message}`);
+    }
+  });
+
+  afterAll(async () => {
+    // auth.users -> praticiens -> user_roles sont en ON DELETE CASCADE :
+    // supprimer le compte suffit à tout nettoyer.
+    if (adminUserId) await admin.auth.admin.deleteUser(adminUserId);
+  });
+
+  it('garde anti-test-vide : le compte de test est bien reconnu comme admin', async () => {
+    const { data, error } = await sessionAdmin.rpc('app_role_courant');
+    expect(error?.message ?? null, 'app_role_courant() a échoué pour le compte de test').toBeNull();
+    expect(
+      data,
+      "le compte de test n'est PAS admin : les assertions de ce describe seraient vraies pour la mauvaise raison"
+    ).toBe('admin');
+  });
+
+  it.each(TABLES_CLINIQUES)('garde anti-test-vide : %s contient des lignes à protéger', async (table) => {
+    const { count, error } = await admin.from(table).select('*', { count: 'exact', head: true });
+    expect(error?.message ?? null, `lecture service_role de ${table}`).toBeNull();
+    expect(
+      count ?? 0,
+      `${table} est vide sur staging : « un admin n'y lit rien » ne prouverait rien. Reseed nécessaire.`
+    ).toBeGreaterThan(0);
+  });
+
+  it.each(TABLES_CLINIQUES)('un compte admin ne lit aucune ligne de %s', async (table) => {
+    const { data, error } = await sessionAdmin.from(table).select('*');
+
+    // Deux issues acceptables, toutes deux étanches : la RLS filtre tout
+    // (0 ligne), ou le privilège manque (42501). Toute autre erreur est
+    // suspecte et doit remonter telle quelle.
+    if (error) {
+      expect(
+        error.code,
+        `${table} : erreur inattendue ${error.code} — ${error.message}`
+      ).toBe('42501');
+      return;
+    }
+    expect(
+      data ?? [],
+      `[RÔLES] un compte admin lit ${data?.length ?? 0} ligne(s) de ${table} — accès aux données de santé`
+    ).toHaveLength(0);
   });
 });
