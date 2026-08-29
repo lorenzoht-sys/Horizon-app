@@ -461,6 +461,57 @@ Tenir cette liste à jour : si un échec devient temporairement acceptable, il
 s'inscrit ici avec sa cause et ce qui le débloquerait — et il en repart dans
 la PR qui le corrige (comme le lot 4 l'a fait pour `[F-06]` le 2026-08-26).
 
+## RÈGLE — une suite de tests qui écrit dans une base partagée nettoie AVANT, pas après
+
+**Toute suite de tests qui écrit dans une base partagée doit remettre l'état
+de départ avant de commencer, et ne jamais compter sur son propre nettoyage
+de fin.**
+
+Ce n'est pas un correctif ponctuel, c'est une règle de conception. Un
+nettoyage de fin ne s'exécute pas quand le test échoue — or c'est
+exactement le moment où il laisse le plus de traces. La suite se retrouve
+alors à échouer sur l'état laissé par son propre échec précédent, et plus
+aucun run ne peut s'en sortir seul.
+
+### Trois occurrences le même jour (2026-08-27)
+
+Les trois ont le même squelette : le test écrit, échoue, et l'écriture
+survit.
+
+1. **`07-seance-coche-exercice`** enregistre la séance du jour du patient de
+   démo. Un index unique
+   (`seances_patient_no_double_validation_idx`) interdit de la revalider :
+   le run suivant recevait un 409 parfaitement légitime. Le test ne pouvait
+   passer qu'**une fois par jour et par environnement**. Il est passé au
+   vert puis retombé au rouge sans qu'une ligne de code ne change.
+
+2. **`03-creation-bilan`** parcourt un formulaire qui enregistre un
+   brouillon au fil des étapes (localStorage **et** Supabase, pour la
+   reprise multi-appareils). Un échec en cours de route laisse le brouillon ;
+   au run suivant, le modal « reprendre le brouillon ? » bloque les clics, le
+   test échoue au même endroit et réenregistre un brouillon. **Panne
+   auto-entretenue** : trois runs consécutifs, et la purge des bilans
+   accumulés n'y changeait rien — ce qui a d'abord fait suspecter, à tort,
+   l'accumulation.
+
+3. **Accumulation silencieuse.** `03` ajoute un bilan trimestriel à chaque
+   passage réussi (13 bilans, `trimestre` jusqu'à 13), `02` ajoute un
+   participant à chaque passage. Aucun des deux ne fait échouer quoi que ce
+   soit tout de suite — l'état du jeu de démo dérive simplement, run après
+   run, jusqu'à ce qu'un test s'y casse pour une raison qui n'a plus l'air
+   d'avoir de rapport.
+
+### Ce qu'on en fait
+
+`scripts/staging-reset-etat-e2e.ts`, appelé par le job `e2e` **avant**
+Playwright, remet le jeu de démo dans son état de départ. Toute écriture
+nouvelle introduite par un test doit y être ajoutée dans la même PR.
+
+Le corollaire vaut aussi pour les tests eux-mêmes : un test qui a besoin
+d'une donnée doit vérifier qu'elle est là (`expect(...).toBeGreaterThan(0)`)
+plutôt que de boucler sur une liste éventuellement vide — sinon il passe au
+vert sans rien vérifier, ce qui est pire qu'un échec.
+
 ## Chantiers de sécurité identifiés mais non appliqués
 
 Trouvés en préparant le lot 6 de l'étape 1 (rate limit `api/claude.ts`,

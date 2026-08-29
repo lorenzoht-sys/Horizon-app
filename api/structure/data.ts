@@ -54,8 +54,32 @@ export default withSentry(async function handler(req: any, res: any) {
     //
     // Toute colonne ajoutée ici doit l'être délibérément : ce que voit une
     // structure est ce que voit quiconque détient son lien.
+    // Les bilans sont restreints pour la même raison, un cran plus loin :
+    // `bilans(*)` embarquait `notes_professionnelles`, `points_vigilance`,
+    // `notes_bilan` et `interpretation_ia` — les notes INTERNES du praticien,
+    // écrites pour lui, pas pour la structure. Même famille que
+    // `motif_annulation` exclu plus bas, en plus sensible : ce sont des
+    // observations cliniques libres sur une personne.
+    //
+    // Les sept colonnes retenues sont exactement celles que rend le portail
+    // (audit champ par champ de src/pages/PortailStructure.tsx, 2026-08-27) :
+    // la date et l'identifiant pour la frise, et les cinq mesures qui
+    // alimentent les sous-scores force/endurance/mobilité et l'indicateur de
+    // progression. Tout le reste du bilan — souplesse, mémoire, sédentarité,
+    // fatigue, douleur, Tinetti, Berg, MoCA, ADL/IADL, le détail TM6 — n'est
+    // affiché nulle part et ne sort donc plus.
+    //
+    // À noter, et c'est le choix de l'application, pas le mien : seul le côté
+    // DROIT de l'équilibre et de la force de préhension est utilisé
+    // (PortailStructure.tsx:60-62). Le côté gauche n'est donc pas exposé. Si
+    // le portail vient à l'afficher, il faudra l'ajouter ici ET dans la liste
+    // autorisée du test e2e — c'est précisément ce que ce test impose.
     supabase.from('participants')
-      .select('id, prenom, nom, date_naissance, date_creation, structure_id, bilans(*), programmes(*)')
+      .select(
+        'id, prenom, nom, date_naissance, date_creation, structure_id, ' +
+        'bilans(id, date, equilibre_droite, chair_stand_30, hand_grip_droite, tug_3m, tm6_distance_metres), ' +
+        'programmes(*)'
+      )
       .eq('structure_id', structure.id),
   ]);
 
