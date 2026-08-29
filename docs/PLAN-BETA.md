@@ -383,7 +383,7 @@ Lancer une réinitialisation depuis une adresse **non liée** au compte Supabase
 place. C'est le seul test qui prouve quelque chose — tester avec sa propre
 adresse réussirait même en configuration par défaut.
 
-## LES TESTS UNITAIRES NE TOURNENT PAS EN CI (2026-08-29)
+## LES TESTS UNITAIRES NE TOURNAIENT PAS EN CI — réglé le 2026-08-29
 
 `npm run test:unit` (`vitest run`, qui couvre `api/**/*.test.ts`,
 `src/lib/**/*.test.ts`, `src/utils/**/*.test.ts`) **n'est appelé par aucun
@@ -398,21 +398,29 @@ Conséquence constatée le 2026-08-29 : **3 tests de
 C'est le même vert silencieux que le workflow `security.yml` combat
 explicitement pour le harnais RLS, mais sur l'autre moitié des tests.
 
-### Décision à prendre
+### Réglé le 2026-08-29, dans cet ordre
 
-Ajouter `npm run test:unit` à la CI **rendra le pipeline rouge immédiatement**,
-sur ces 3 échecs préexistants. Deux ordres possibles :
+Les 3 tests ont été corrigés **avant** l'ajout de l'étape, pour que la CI ne
+passe jamais par un état rouge et que la liste des échecs acceptés reste vide.
 
-1. Corriger les 3 tests d'abord, ajouter l'étape ensuite — la CI ne passe
-   jamais par un état rouge.
-2. Ajouter l'étape et inscrire les 3 échecs dans la liste des échecs connus
-   ci-dessous, avec une échéance.
+**Ce n'était pas un simple stub oublié.** Le faux client Supabase du test
+décrivait l'ANCIENNE implémentation d'`accesViaPraticien`, où la propriété se
+vérifiait en lisant `participants.praticien_id`. La fonction passe depuis par
+`acces_participant_pour()`, qui accorde l'accès au propriétaire **ou** à un
+membre actif de l'organisation active du participant. Les tests affirmaient
+donc une sémantique que le code n'avait plus : même réparés d'un stub, ils
+n'auraient rien protégé. Ils ont été réécrits sur le comportement réel, et
+deux tests ajoutés — dont un qui vérifie que l'identité de l'appelant vient
+bien du JWT vérifié et jamais d'une valeur d'entrée, ce qu'aucun ne faisait.
 
-L'option 1 est préférable : la liste des échecs acceptés est vide depuis le
-2026-08-27, et la réouvrir coûte plus cher que de corriger trois tests.
+**L'étape ajoutée est `npm run test:unit:ci`, pas `test:unit`.** Le second
+inclut aussi `tests/security/`, qui a son propre job `audit` avec les secrets
+de staging. Sans ces secrets dans le job `build`, le harnais s'auto-skiperait :
+64 tests comptés verts sans rien vérifier. L'exclusion rend la frontière
+explicite — chaque job ne fait tourner que ce qu'il peut réellement prouver.
 
-**En attendant, tout test unitaire ajouté au projet ne s'exécute qu'en local**
-— y compris `api/_organisation-admin.test.ts`, ajouté avec l'étape 4.
+État : `build` exécute désormais `build`, `typecheck:api`, `typecheck:e2e` et
+`test:unit:ci` (17 fichiers, 260 tests, **zéro skip**).
 
 ## SUPPRIMER UN COMPTE PRATICIEN — ce que ça fait vraiment (2026-08-29)
 
