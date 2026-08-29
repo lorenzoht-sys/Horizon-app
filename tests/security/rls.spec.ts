@@ -1179,6 +1179,22 @@ describe.skipIf(!URL || !ANON_KEY || !SERVICE_KEY)('[RÔLES] un compte admin ne 
   beforeAll(async () => {
     admin = createClient(URL as string, SERVICE_KEY as string, { auth: { persistSession: false } });
 
+    // ── Nettoyage PRÉALABLE, pas de fin ───────────────────────────
+    // Règle « une suite qui écrit dans une base partagée nettoie AVANT »
+    // (docs/PLAN-BETA.md). L'`afterAll` plus bas est un confort, pas une
+    // garantie : il ne s'exécute pas si le process est tué, et c'est
+    // précisément quand ça se passe mal que la trace reste.
+    //
+    // L'enjeu n'est pas cosmétique : un compte `rls-spec-admin-` survivant
+    // porte `app_role = 'admin'`, et ferait échouer le contrôle « aucun
+    // compte admin » de la vérification de l'étape 4.
+    const { data: existants } = await admin.auth.admin.listUsers({ perPage: 1000 });
+    for (const u of existants?.users ?? []) {
+      if (u.email?.startsWith('rls-spec-admin-')) {
+        await admin.auth.admin.deleteUser(u.id);
+      }
+    }
+
     const { data: cree, error: creeErr } = await admin.auth.admin.createUser({
       email: adminEmail,
       password: adminPassword,
@@ -1216,8 +1232,9 @@ describe.skipIf(!URL || !ANON_KEY || !SERVICE_KEY)('[RÔLES] un compte admin ne 
   });
 
   afterAll(async () => {
+    // Confort, pas garantie — le vrai nettoyage est celui du `beforeAll`.
     // auth.users -> praticiens -> user_roles sont en ON DELETE CASCADE :
-    // supprimer le compte suffit à tout nettoyer.
+    // supprimer le compte suffit à tout retirer.
     if (adminUserId) await admin.auth.admin.deleteUser(adminUserId);
   });
 

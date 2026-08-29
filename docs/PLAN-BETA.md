@@ -348,6 +348,64 @@ connexion Postgres directe ou une fonction `SECURITY INVOKER` mal écrite.
 L'argument décisif reste donc la défense en profondeur et le mode d'échec, pas
 une faille exploitable aujourd'hui.
 
+## SUPPRIMER UN COMPTE PRATICIEN — ce que ça fait vraiment (2026-08-29)
+
+**La règle « jamais de suppression de compte » est juste. Le raisonnement qui
+la justifiait était faux, et la réalité est pire que ce qu'il décrivait.**
+
+On croyait : « les FK sont en `ON DELETE CASCADE`, supprimer un praticien
+détruirait le dossier patient ». Audit des 21 FK pointant vers `auth.users` :
+
+| Effet réel | Tables |
+|---|---|
+| **CASCADE** — la ligne est supprimée | `praticiens`, `user_roles`, `indisponibilites`, `evenements_agenda`, `zones_geographiques`, `rappel_preferences`, `programmes_modeles`, `dossier_exercice_membres`, `organisation_membres` |
+| **SET NULL** — la ligne SURVIT, orpheline | `participants`, `bilans`, `comptes_rendus_seances`, `notes_seances`, `contrats`, `programmes`, `seances`, `retours_seance`, `exercices_libres_activations`, `tests_etalons_activations`, `organisation_invitations` |
+
+Le dossier patient n'est **pas** en CASCADE. Il est en SET NULL.
+
+### Pourquoi c'est pire qu'une suppression
+
+Toutes les policies de ces tables filtrent sur `praticien_id = auth.uid()`, ou
+passent par `acces_participant()` qui retombe sur `participants.praticien_id`.
+Avec `praticien_id` à NULL, **aucune de ces conditions ne peut plus être vraie
+pour qui que ce soit**. Les lignes existent, aucun compte authentifié ne peut
+plus jamais les lire. Seul `service_role` y accède encore.
+
+Une suppression se voit : la donnée a disparu, on le constate. Un orphelinage
+ne se voit pas : la base répond « 0 ligne », exactement comme si le praticien
+n'avait jamais rien saisi. Pour une obligation de conservation du dossier
+patient, c'est le pire des deux — la donnée est légalement conservée et
+pratiquement perdue, sans le moindre signal.
+
+### Conséquences
+
+1. **L'interface admin n'expose aucun chemin de suppression.** Pas « masqué »,
+   pas « protégé par confirmation » : inexistant. La désactivation se fait par
+   bannissement du compte auth (`banned_until`), qui est réversible et ne
+   touche à aucune donnée.
+2. **Toute suppression déjà faite doit être recherchée.** Un compte supprimé
+   par le passé a pu laisser des orphelins invisibles. Requête de contrôle à
+   lancer en production :
+
+```sql
+SELECT 'participants'           AS t, count(*) FROM public.participants           WHERE praticien_id IS NULL
+UNION ALL SELECT 'bilans',                count(*) FROM public.bilans                  WHERE praticien_id IS NULL
+UNION ALL SELECT 'comptes_rendus_seances', count(*) FROM public.comptes_rendus_seances WHERE praticien_id IS NULL
+UNION ALL SELECT 'notes_seances',          count(*) FROM public.notes_seances           WHERE praticien_id IS NULL
+UNION ALL SELECT 'contrats',               count(*) FROM public.contrats                WHERE praticien_id IS NULL
+UNION ALL SELECT 'programmes',             count(*) FROM public.programmes              WHERE praticien_id IS NULL
+UNION ALL SELECT 'seances',                count(*) FROM public.seances                 WHERE praticien_id IS NULL
+ORDER BY 1;
+```
+
+   Tout compte non nul désigne des lignes que plus personne ne peut lire. Elles
+   sont récupérables (réassignation du `praticien_id` par `service_role`), mais
+   encore faut-il savoir qu'elles existent.
+3. **À reconsidérer plus tard, hors bêta :** `ON DELETE RESTRICT` sur ces FK
+   ferait échouer bruyamment toute suppression de praticien portant un dossier,
+   au lieu de l'orpheliner en silence. C'est le bon mode d'échec, mais ça change
+   le comportement de la base — pas pendant l'ouverture.
+
 ## RÈGLE — migration en production AVANT le merge sur `main`
 
 **Toute migration dont dépend du code applicatif doit être appliquée en
