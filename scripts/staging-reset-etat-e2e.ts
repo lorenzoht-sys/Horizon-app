@@ -104,28 +104,50 @@ async function main() {
   }
   assertStagingTarget(url);
 
-  // Date locale du runner, au format attendu par une colonne `date`.
-  const aujourdhui = new Date().toISOString().slice(0, 10);
+  const entetes = {
+    apikey: serviceKey,
+    Authorization: `Bearer ${serviceKey}`,
+    Prefer: 'return=representation',
+  };
 
-  const reponse = await fetch(
-    `${url}/rest/v1/seances_patient?date_seance=eq.${aujourdhui}`,
-    {
-      method: 'DELETE',
-      headers: {
-        apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`,
-        Prefer: 'return=representation',
-      },
+  async function supprimer(chemin: string, libelle: string): Promise<void> {
+    const reponse = await fetch(`${url}/rest/v1/${chemin}`, { method: 'DELETE', headers: entetes });
+    if (!reponse.ok) {
+      const corps = await reponse.text().catch(() => '');
+      throw new Error(`${libelle} — suppression refusée (HTTP ${reponse.status}) : ${corps.slice(0, 300)}`);
     }
-  );
-
-  if (!reponse.ok) {
-    const corps = await reponse.text().catch(() => '');
-    throw new Error(`Suppression refusée (HTTP ${reponse.status}) : ${corps.slice(0, 300)}`);
+    const supprimees = (await reponse.json().catch(() => [])) as unknown[];
+    console.log(`${libelle} : ${supprimees.length}`);
   }
 
-  const supprimees = (await reponse.json().catch(() => [])) as unknown[];
-  console.log(`Séances du ${aujourdhui} supprimées : ${supprimees.length}`);
+  // ── 1. Séances du jour ────────────────────────────────────────────────
+  // Date locale du runner, au format attendu par une colonne `date`.
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+  await supprimer(`seances_patient?date_seance=eq.${aujourdhui}`, `Séances du ${aujourdhui} supprimées`);
+
+  // ── 2. Brouillons de bilan ────────────────────────────────────────────
+  // `03-creation-bilan` parcourt le formulaire de bilan, qui enregistre un
+  // brouillon au fil des étapes (localStorage ET Supabase, pour la reprise
+  // multi-appareils). Si le test échoue en cours de route, le brouillon
+  // reste : au run suivant, `NewBilan` affiche le modal « reprendre le
+  // brouillon ? », qui bloque les clics sur « Suivant → ». Le test échoue au
+  // même endroit et réenregistre un brouillon — la panne s'auto-entretient
+  // et aucun run ultérieur ne peut s'en sortir seul.
+  //
+  // Constaté le 2026-08-27 : un brouillon de 13:04 a fait échouer trois runs
+  // consécutifs, y compris après avoir purgé les bilans accumulés — ce qui
+  // avait d'abord fait suspecter, à tort, l'accumulation.
+  //
+  // Un brouillon est par nature éphémère : en supprimer sur staging avant un
+  // run ne détruit aucune donnée de référence.
+  await supprimer('bilans_brouillons?id=not.is.null', 'Brouillons de bilan supprimés');
+
+  // ── 3. Bilans créés par les runs précédents ───────────────────────────
+  // `03-creation-bilan` ajoute un bilan trimestriel à chaque passage réussi.
+  // Le seed n'en pose qu'un (initial) : tout trimestriel présent vient d'un
+  // run antérieur. Les laisser s'accumuler fait dériver l'état du patient de
+  // démo run après run — 13 bilans le 2026-08-27, `trimestre` jusqu'à 13.
+  await supprimer('bilans?type=eq.trimestriel', 'Bilans trimestriels supprimés');
 }
 
 main().catch(err => {
