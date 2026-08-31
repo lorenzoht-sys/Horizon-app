@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { chargerSettingsPraticien } from '../lib/settingsPraticien';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -18,10 +19,6 @@ const PARTAGE_ITEMS: { key: CleResultatPartageable; label: string }[] = [
   { key: 'endurance', label: 'Endurance' },
 ];
 
-function loadSettings() {
-  try { return { prenom: '', nom: '', email: '', telephone: '', societe: '', logoPraticien: '', ...JSON.parse(localStorage.getItem('settings_praticien') || '{}') }; }
-  catch { return { prenom: '', nom: '', email: '', telephone: '', societe: '', logoPraticien: '' }; }
-}
 
 export default function BilanDetail() {
   const { id, bilanId } = useParams<{ id: string; bilanId: string }>();
@@ -78,7 +75,7 @@ export default function BilanDetail() {
               setExporting(true);
               try {
                 await exportFicheBilanPDF(
-                  { bilan, participant, notes: bilan.notesBilan ?? calculerNotesAuto(bilan), settings: loadSettings() },
+                  { bilan, participant, notes: bilan.notesBilan ?? calculerNotesAuto(bilan), settings: chargerSettingsPraticien() },
                   `FicheBilan_${participant.nom}_${participant.prenom}_${bilan.date}.pdf`
                 );
               } finally { setExporting(false); }
@@ -94,7 +91,7 @@ export default function BilanDetail() {
               setExportingBeneficiaire(true);
               try {
                 await exportFicheBilanBeneficiairePDF(
-                  { bilan, participant, notes: bilan.notesBilan ?? calculerNotesAuto(bilan), settings: loadSettings() },
+                  { bilan, participant, notes: bilan.notesBilan ?? calculerNotesAuto(bilan), settings: chargerSettingsPraticien() },
                   `FicheBilan_Beneficiaire_${participant.nom}_${participant.prenom}_${bilan.date}.pdf`
                 );
               } finally { setExportingBeneficiaire(false); }

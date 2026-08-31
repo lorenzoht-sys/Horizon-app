@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { chargerSettingsPraticien } from '../../lib/settingsPraticien';
 import { Link } from 'react-router-dom';
 import { X, Download, Loader } from 'lucide-react';
 import { toast } from 'sonner';
@@ -22,11 +23,6 @@ function formatFrequence(nbSeancesSemaine: number, heureDebut: string): string {
   return `${freq} à ${heureDebut.replace(':', 'h')}`;
 }
 
-function loadSettings() {
-  try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); }
-  catch { return {}; }
-}
-
 interface Props {
   contrat: Contrat;
   participant: Participant;
@@ -34,7 +30,7 @@ interface Props {
 }
 
 export default function ModalGenerationContrat({ contrat, participant, onClose }: Props) {
-  const settings = useMemo(loadSettings, []);
+  const settings = useMemo(() => chargerSettingsPraticien(), []);
   const [loading, setLoading] = useState(false);
 
   const adressePraticien = [settings.adresseRue, settings.adresseCodePostal, settings.adresseVille]
@@ -66,15 +62,28 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
   // compte issu de l'onboarding, qui ne collectait pas le nom de famille.
   const prenomPraticien = (settings.prenom ?? '').trim();
   const nomFamillePraticien = (settings.nom ?? '').trim();
-  const identiteComplete = Boolean(prenomPraticien && nomFamillePraticien);
+  const siretPraticien = (settings.siret ?? '').trim();
   const nomPraticien = `${nomFamillePraticien} ${prenomPraticien}`.trim();
+
+  // Ce qui rend le contrat INVALIDE, donc ce qui bloque. Le SIRET en fait
+  // partie : il est legalement attendu sur un contrat de prestation, et le
+  // laisser vide produit un document qui n'a pas la valeur qu'on lui prete.
+  // La contrainte vit ICI et pas dans le formulaire des reglages, qui sert a
+  // dix autres choses et bloquerait un salarie de structure — lequel n'a pas
+  // de SIRET personnel, et n'emet pas de contrat de prestation non plus.
+  const bloquants = [
+    !prenomPraticien && 'votre prénom',
+    !nomFamillePraticien && 'votre nom',
+    !siretPraticien && 'votre numéro SIRET',
+  ].filter(Boolean) as string[];
+  const identiteComplete = bloquants.length === 0;
 
   // Ceux-la n'empechent pas de generer, mais un contrat sans SIRET ni adresse
   // est incomplet : on les montre plutot que de les laisser sortir vides.
+  // Incomplet, mais pas invalide : on le montre sans bloquer.
   const champsManquants = [
     !adressePraticien && 'adresse',
-    !settings.siret && 'SIRET',
-    !settings.telephone && 'telephone',
+    !settings.telephone && 'téléphone',
     !settings.email && 'email',
   ].filter(Boolean) as string[];
 
@@ -110,7 +119,7 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
 
   async function handleGenerer() {
     if (!identiteComplete) {
-      toast.error('Renseignez votre prénom et votre nom dans les réglages avant de générer un contrat.');
+      toast.error(`Complétez vos réglages avant de générer un contrat : ${bloquants.join(', ')}.`);
       return;
     }
     setLoading(true);
@@ -161,12 +170,8 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
                   Contrat impossible à générer
                 </div>
                 <div className="text-xs text-red-800 leading-relaxed">
-                  {!prenomPraticien && !nomFamillePraticien
-                    ? 'Votre prénom et votre nom ne sont pas renseignés.'
-                    : !nomFamillePraticien
-                      ? "Votre nom de famille n'est pas renseigné."
-                      : "Votre prénom n'est pas renseigné."}{' '}
-                  Un contrat de prestation doit nommer le prestataire.{' '}
+                  Il manque {bloquants.join(', ')} dans vos réglages. Un contrat de
+                  prestation doit nommer son prestataire et porter son SIRET.{' '}
                   <Link to="/settings" onClick={onClose} className="underline font-semibold">
                     Compléter mes informations
                   </Link>

@@ -38,6 +38,13 @@ export default function OnboardingPage({ onComplete }: Props) {
   const [titre,   setTitre]   = useState('');
   const [societe, setSociete] = useState('');
   const [siret,   setSiret]   = useState('');
+  // Echappatoire salarie. Le mode `intervenant` de
+  // CONCEPTION_MODE_ORGANISATION.md decrit un salarie APA d'une structure :
+  // il n'a pas de SIRET personnel, et n'emet pas de contrat de prestation.
+  // Non persiste — aucune colonne pour ca, et rien n'en depend ailleurs :
+  // cette case ne fait que lever l'exigence ICI. La regle reelle est
+  // appliquee la ou elle compte, a la generation du contrat.
+  const [salarie, setSalarie] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
 
@@ -75,6 +82,10 @@ export default function OnboardingPage({ onComplete }: Props) {
     }
     if (!titre.trim()) {
       setError('Veuillez sélectionner votre type de professionnel.');
+      return;
+    }
+    if (!salarie && !siret.replace(/s/g, '')) {
+      setError("Renseignez votre numéro SIRET : il figure obligatoirement sur les contrats de prestation. Si vous êtes salarié·e d'une structure, cochez la case ci-dessous.");
       return;
     }
 
@@ -251,7 +262,9 @@ export default function OnboardingPage({ onComplete }: Props) {
 
             {/* SIRET */}
             <div style={{ marginBottom: 22 }}>
-              <label style={labelStyle}>Numéro SIRET</label>
+              <label style={labelStyle}>
+                Numéro SIRET {!salarie && <span style={{ color: '#DC2626' }}>*</span>}
+              </label>
               <input
                 type="text"
                 placeholder="123 456 789 00012"
@@ -260,8 +273,17 @@ export default function OnboardingPage({ onComplete }: Props) {
                 style={inputStyle}
               />
               <div style={{ fontSize: 11, color: '#B8C8DC', marginTop: 4 }}>
-                14 chiffres — utilisé sur vos factures · Peut être complété dans les Paramètres
+                14 chiffres — il figure sur les contrats de prestation que vous émettrez.
               </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 12.5, color: '#4A6080', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={salarie}
+                  onChange={e => setSalarie(e.target.checked)}
+                  style={{ width: 15, height: 15, cursor: 'pointer' }}
+                />
+                Je suis salarié·e d'une structure (pas de SIRET personnel)
+              </label>
             </div>
 
             {error && (

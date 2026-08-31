@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { chargerSettingsPraticien } from '../lib/settingsPraticien';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Bot, Send, Mic, MicOff, Copy, ArrowLeft, RefreshCw, Search, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
@@ -145,8 +146,7 @@ function calcAge(d: string): number {
 }
 
 function loadPraticienPrenom(): string {
-  try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}').prenom || ''; }
-  catch { return ''; }
+  return chargerSettingsPraticien().prenom;
 }
 
 function fmt(d: string): string {

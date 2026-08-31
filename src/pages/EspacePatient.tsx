@@ -78,6 +78,14 @@ interface ExerciceLibreValidationRecord {
   fait: boolean;
 }
 
+// Lecture BRUTE du cache, delibérement — contrairement au reste de
+// l'application, qui passe par chargerSettingsPraticien().
+//
+// Cette page s'affiche sur l'appareil du BENEFICIAIRE, ou le cache
+// `settings_praticien` n'existe pas et n'a aucune raison d'exister. Les
+// valeurs par defaut du module partage (un titre professionnel, notamment)
+// affirmeraient ici quelque chose qu'on ne sait pas : mieux vaut le repli
+// explicite « votre enseignant APA » que l'identite supposee d'un praticien.
 function loadPraticien() {
   try {
     const s = JSON.parse(localStorage.getItem('settings_praticien') ?? '{}');

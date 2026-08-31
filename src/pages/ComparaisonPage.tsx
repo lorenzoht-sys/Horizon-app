@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { chargerSettingsPraticien, type SettingsPraticien } from '../lib/settingsPraticien';
 import { useParams, Link } from 'react-router-dom';
 import { differenceInDays, differenceInMonths } from 'date-fns';
 import {
@@ -355,7 +356,7 @@ export default function ComparaisonPage() {
   const dernier = bilans[bilans.length - 1];
   const nbMois = differenceInMonths(new Date(dernier.date), new Date(initial.date));
 
-  const settings = (() => { try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); } catch { return {}; } })();
+  const settings = chargerSettingsPraticien();
 
   async function handleExportPDF() {
     setExportingPDF(true);
@@ -431,7 +432,7 @@ export default function ComparaisonPage() {
 function PrintableRapportEvolution({ participant, bilans, settings }: {
   participant: Participant;
   bilans: Bilan[];
-  settings: Record<string, string>;
+  settings: SettingsPraticien;
 }) {
   const initial = bilans[0];
   const dernier = bilans[bilans.length - 1];
