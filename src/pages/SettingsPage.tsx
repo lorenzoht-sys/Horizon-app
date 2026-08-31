@@ -6,6 +6,12 @@ import PageWrapper from '../components/layout/PageWrapper';
 import type { Indisponibilite, JourSemaine, Participant } from '../types';
 import { SectionApplication } from '../components/pwa/PWAComponents';
 import { supabase } from '../lib/supabase';
+import {
+  type SettingsPraticien,
+  DEFAULTS_SETTINGS as DEFAULTS,
+  rowToSettings,
+  ecrireCacheSettingsPraticien,
+} from '../lib/settingsPraticien';
 import { getAppHost } from '../lib/config';
 import { dbToParticipant, participantToDb, bilanToDb, programmeToDb } from '../lib/mappers';
 import { useRappelPreferences, type RappelPreferences } from '../hooks/useRappelPreferences';
@@ -376,53 +382,6 @@ function SectionDonnees() {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface SettingsPraticien {
-  prenom: string;
-  nom: string;
-  titre: string;
-  email: string;
-  telephone: string;
-  adresseRue: string;
-  adresseCodePostal: string;
-  adresseVille: string;
-  siret: string;
-  numeroSAP: string;
-  numeroTVA: string;
-  villeSignature: string;
-  societe: string;
-  logoPraticien: string;
-  tarifHoraire: string;
-  fraisKmDefaut: string;
-}
-
-const DEFAULTS: SettingsPraticien = {
-  prenom: '', nom: '', titre: 'Enseignant en Activité Physique Adaptée',
-  email: '', telephone: '', adresseRue: '', adresseCodePostal: '',
-  adresseVille: '', siret: '', numeroSAP: '', numeroTVA: '',
-  villeSignature: '', societe: '', logoPraticien: '',
-  tarifHoraire: '45', fraisKmDefaut: '0.50',
-};
-
-function rowToSettings(row: Record<string, unknown>): SettingsPraticien {
-  return {
-    prenom:            String(row.prenom            ?? ''),
-    nom:               String(row.nom               ?? ''),
-    titre:             String(row.titre             ?? DEFAULTS.titre),
-    email:             String(row.email             ?? ''),
-    telephone:         String(row.telephone         ?? ''),
-    adresseRue:        String(row.adresse_rue       ?? ''),
-    adresseCodePostal: String(row.adresse_code_postal ?? ''),
-    adresseVille:      String(row.adresse_ville     ?? ''),
-    siret:             String(row.siret             ?? ''),
-    numeroSAP:         String(row.numero_sap        ?? ''),
-    numeroTVA:         String(row.numero_tva        ?? ''),
-    villeSignature:    String(row.ville_signature   ?? ''),
-    societe:           String(row.societe           ?? ''),
-    logoPraticien:     String(row.logo_praticien    ?? ''),
-    tarifHoraire:      String(row.tarif_horaire     ?? '45'),
-    fraisKmDefaut:     String(row.frais_km_defaut   ?? '0.50'),
-  };
-}
 
 // ── Composants UI ──────────────────────────────────────────────────────────────
 
@@ -750,8 +709,7 @@ export default function SettingsPage() {
     }
 
     // Cache local pour les composants PDF qui lisent encore settings_praticien
-    localStorage.setItem('settings_praticien', JSON.stringify(toSave));
-    window.dispatchEvent(new Event('settings_praticien_updated'));
+    ecrireCacheSettingsPraticien(toSave);
     toast.success('Paramètres enregistrés');
   }
 
@@ -840,12 +798,23 @@ export default function SettingsPage() {
           <section>
             <SectionTitle title="Mes informations légales" />
             <div className="space-y-4">
-              <Field label="Numéro SIRET" required error={errors.siret}>
+              {/* PAS `required` : la validation ne l'a jamais impose, et
+                  l'asterisque mentait. Un salarie de structure n'a pas de
+                  SIRET personnel et doit pouvoir enregistrer ses reglages.
+                  La contrainte vit la ou elle mord : la generation de contrat
+                  est bloquee sans SIRET (ModalGenerationContrat). */}
+              <Field label="Numéro SIRET" error={errors.siret}>
                 <input value={form.siret} onChange={e => set('siret', e.target.value)}
                   placeholder="XXX XXX XXX XXXXX" className={inputClass(errors.siret)} />
-                <p className="text-xs text-gray-400 mt-1">14 chiffres (espaces autorisés)</p>
+                {form.siret.trim()
+                  ? <p className="text-xs text-gray-400 mt-1">14 chiffres (espaces autorisés)</p>
+                  : <p className="text-xs text-amber-600 mt-1">
+                      Sans SIRET, vous ne pourrez pas générer de contrat de prestation.
+                    </p>}
               </Field>
-              <Field label="Numéro de déclaration SAP" required error={errors.numeroSAP}>
+              {/* Meme correction : `required` n'etait pas non plus dans la
+                  liste de validation. */}
+              <Field label="Numéro de déclaration SAP" error={errors.numeroSAP}>
                 <input value={form.numeroSAP} onChange={e => set('numeroSAP', e.target.value)}
                   placeholder="SAP XXXXXXXXX" className={inputClass(errors.numeroSAP)} />
               </Field>

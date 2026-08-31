@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { chargerSettingsPraticien } from '../lib/settingsPraticien';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { differenceInDays } from 'date-fns';
 import {
@@ -74,10 +75,6 @@ function formatDateShort(date: string): string {
   });
 }
 
-function loadSettings() {
-  try { return { prenom: '', nom: '', titre: '', email: '', telephone: '', societe: '', logoPraticien: '', ...JSON.parse(localStorage.getItem('settings_praticien') || '{}') }; }
-  catch { return { prenom: '', nom: '', titre: '', email: '', telephone: '', societe: '', logoPraticien: '' }; }
-}
 
 // ── InfoRow (onglet Infos) ────────────────────────────────────────────────────
 
@@ -117,7 +114,7 @@ export default function ParticipantProfileMobile() {
   const { seances } = useAgenda();
   const { notesParPatient } = useJournalSeance();
   const navigate = useNavigate();
-  const settings = loadSettings();
+  const settings = chargerSettingsPraticien();
 
   const [activeTab, setActiveTab]           = useState<MobileTab>('infos');
   const [showEdit, setShowEdit]             = useState(false);

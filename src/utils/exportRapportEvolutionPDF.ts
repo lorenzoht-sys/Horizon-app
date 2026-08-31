@@ -5,7 +5,8 @@ import type { Bilan, Participant } from '../types';
 export async function exportRapportEvolutionPDF(
   _participant: Participant,
   _bilans: Bilan[],
-  _settings: Record<string, string>,
+  // Non utilise : le rendu prend ses donnees du DOM (template cache).
+  _settings: unknown,
   fileName: string
 ): Promise<void> {
   const el = document.getElementById('rapport-evolution-printable');
