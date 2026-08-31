@@ -12,6 +12,10 @@
 //     Rejoindre une organisation via un code d'invitation, authentifié.
 //     PAS ENCORE IMPLÉMENTÉ — prochaine pièce du palier 5 (voir
 //     organisation_invitations, 20260714_mode_organisation_invitations.sql).
+//   - { action: 'admin.*', ... }  (Authorization: Bearer <JWT> d'un admin)
+//     Administration des comptes praticiens : lister, inviter, desactiver,
+//     reactiver. Regroupees ici pour la meme raison que le reste — la limite
+//     de 12 fonctions serverless. Voir la section « actions admin.* ».
 
 import { getServiceClient, getClientIp, logAuditEvent } from './_lib/patientAuth.js';
 import { exigerAdmin } from './_lib/adminAuth.js';
@@ -99,6 +103,8 @@ async function handleAdmin(req: any, res: any, body: any) {
       return handleAdminStatut(res, supabase, auth, ip, body, true);
     case 'admin.reactiver':
       return handleAdminStatut(res, supabase, auth, ip, body, false);
+    case 'admin.inviter':
+      return handleAdminInviter(req, res, supabase, auth, ip, body);
     default:
       return res.status(400).json({ error: `Action admin inconnue : ${body.action}` });
   }
@@ -242,6 +248,97 @@ async function handleAdminStatut(
   );
 
   return res.status(200).json({ ok: true, actif: !desactiver });
+}
+
+// admin.inviter — cree un compte praticien et lui envoie un lien pour
+// definir son mot de passe.
+//
+// ── C'est le MEME mecanisme que la recuperation, volontairement ────────
+// `inviteUserByEmail` insere dans auth.users — donc le trigger
+// trg_auth_users_role_par_defaut donne 'praticien', et ce chemin ne peut
+// PAS produire un admin (valeur en dur dans la fonction, voir
+// 20260829_roles_02_trigger_role_par_defaut.sql).
+//
+// Le lien envoye porte `type=invite` et ouvre une session valide alors que
+// l'invite n'a jamais prouve qu'il connaissait un mot de passe. C'est
+// exactement la situation que ResetPasswordPage et le verrou d'App.tsx
+// traitent deja : d'ou `redirectTo` vers /reset-password, et rien de
+// nouveau a ecrire cote front.
+//
+// ── Pas de suppression en cas d'erreur d'envoi ────────────────────────
+// Si le compte est cree mais que l'email echoue, on NE supprime pas le
+// compte : supprimer un compte auth est precisement ce que ce fichier
+// s'interdit (voir « AUCUNE SUPPRESSION » plus haut). L'admin voit
+// l'echec, et le compte apparait dans la liste avec emailConfirme a faux —
+// visible, rattrapable par une seconde invitation.
+async function handleAdminInviter(
+  req: any, res: any, supabase: any, auth: any, ip: string, body: any,
+) {
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  if (!email || !EMAIL_REGEX.test(email)) {
+    return res.status(400).json({ error: 'Adresse email invalide.' });
+  }
+
+  const origine = resoudreOrigineApp(req);
+  if (!origine) {
+    return res.status(500).json({ error: "Impossible de determiner l'adresse de l'application." });
+  }
+
+  const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
+    redirectTo: `${origine}/reset-password`,
+  });
+
+  if (error) {
+    console.error('[admin.inviter] inviteUserByEmail:', error.message);
+    await logAuditEvent(supabase, 'admin_praticien_invite', null, ip, false, {
+      acteur: auth.userId, acteurEmail: auth.email, cibleEmail: email, erreur: error.message,
+    });
+
+    // Deux cas mis a part : ce sont les seuls ou l'admin peut AGIR. Le
+    // reste reste opaque cote client, et detaille dans les logs.
+    const dejaInscrit = /already (been )?registered|already exists|email_exists|User already/i.test(error.message);
+    if (dejaInscrit) {
+      return res.status(409).json({ error: 'Un compte existe deja pour cette adresse.' });
+    }
+    const tropDeMails = /rate limit|too many requests|over_email_send/i.test(error.message);
+    if (tropDeMails) {
+      return res.status(429).json({
+        error: "Trop d'invitations envoyees recemment. Reessayez dans quelques minutes.",
+      });
+    }
+    return res.status(500).json({ error: "L'invitation n'a pas pu etre envoyee." });
+  }
+
+  await logAuditEvent(supabase, 'admin_praticien_invite', null, ip, true, {
+    acteur: auth.userId, acteurEmail: auth.email,
+    cible: data?.user?.id ?? null, cibleEmail: email,
+  });
+
+  return res.status(200).json({ ok: true, email });
+}
+
+// Origine publique de l'application, pour construire le lien d'invitation.
+//
+// APP_URL si elle est configuree ; sinon l'origine de la requete. Le second
+// chemin fait confiance a un en-tete, mais la frontiere reelle n'est pas ici :
+// Supabase REFUSE de rediriger vers une URL absente de sa liste
+// d'autorisation (Authentication -> URL Configuration). C'est cette liste qui
+// borne le risque — et une raison de plus d'y retirer le motif generique
+// `*.vercel.app` en production, qui laisserait un lien d'invitation atterrir
+// sur n'importe quel deploiement Vercel.
+export function resoudreOrigineApp(req: {
+  headers: Record<string, string | string[] | undefined>;
+}): string | null {
+  const configuree = process.env.APP_URL?.trim();
+  if (configuree) return configuree.replace(/\/+$/, '');
+
+  const premier = (v: string | string[] | undefined) =>
+    (Array.isArray(v) ? v[0] : v)?.split(',')[0]?.trim() || null;
+
+  const hote = premier(req.headers['x-forwarded-host']) ?? premier(req.headers.host);
+  if (!hote) return null;
+  const proto = premier(req.headers['x-forwarded-proto']) ?? 'https';
+  return `${proto}://${hote}`;
 }
 
 // ── action: 'demande' ───────────────────────────────────────────────────────

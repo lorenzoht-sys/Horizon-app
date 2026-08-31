@@ -19,8 +19,8 @@
 // vérifié par le describe « [RÔLES] un compte admin ne lit aucune donnée
 // clinique » de tests/security/rls.spec.ts.
 
-import { useCallback, useEffect, useState } from 'react';
-import { ShieldCheck, ShieldOff, RefreshCw, AlertTriangle } from 'lucide-react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { ShieldCheck, ShieldOff, RefreshCw, AlertTriangle, UserPlus, CheckCircle2 } from 'lucide-react';
 import { getAuthHeader } from '../lib/supabase';
 import { useAppRole } from '../hooks/useAppRole';
 
@@ -62,6 +62,9 @@ export default function AdminComptesPage() {
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState<string | null>(null);
+  const [emailInvite, setEmailInvite] = useState('');
+  const [invitationEnCours, setInvitationEnCours] = useState(false);
+  const [succesInvitation, setSuccesInvitation] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
     setChargement(true);
@@ -81,6 +84,38 @@ export default function AdminComptesPage() {
     if (!chargementRole && estAdmin) void charger();
     else if (!chargementRole) setChargement(false);
   }, [chargementRole, estAdmin, charger]);
+
+  // Invitation d'un praticien.
+  //
+  // Le serveur cree le compte et envoie un lien `type=invite` pointant sur
+  // /reset-password. Rien de plus a faire ici : cette page est deja ecrite,
+  // et le verrou d'App.tsx empeche l'invite d'entrer dans l'application
+  // avant d'avoir choisi un mot de passe.
+  async function inviter(e: FormEvent) {
+    e.preventDefault();
+    // Garde dure : un second envoi creerait une seconde invitation, et
+    // Supabase compte les emails par heure.
+    if (invitationEnCours) return;
+
+    const email = emailInvite.trim();
+    if (!email) return;
+
+    setInvitationEnCours(true);
+    setErreur(null);
+    setSuccesInvitation(null);
+    try {
+      await appelerAdmin({ action: 'admin.inviter', email });
+      setSuccesInvitation(`Invitation envoyée à ${email}.`);
+      setEmailInvite('');
+      // Le compte invite apparait aussitot dans la liste, avec son email
+      // non confirme : l'admin voit que l'invitation est en attente.
+      await charger();
+    } catch (err) {
+      setErreur(err instanceof Error ? err.message : String(err));
+    } finally {
+      setInvitationEnCours(false);
+    }
+  }
 
   async function basculerStatut(compte: Compte) {
     const desactiver = compte.actif;
@@ -162,6 +197,70 @@ export default function AdminComptesPage() {
           La liste atteint la limite de 1000 comptes et est donc tronquée.
         </div>
       )}
+
+      {succesInvitation && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', marginBottom: 16,
+          background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, color: '#15803d', fontSize: 13.5,
+        }}>
+          <CheckCircle2 size={16} /> {succesInvitation}
+        </div>
+      )}
+
+      {/* Invitation. Le praticien recoit un lien qui le mene directement au
+          choix de son mot de passe : il n'y a pas d'inscription autonome,
+          retiree le 2026-08-29 parce qu'elle laissait n'importe qui creer un
+          compte praticien. */}
+      <form
+        onSubmit={inviter}
+        style={{
+          display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap',
+          padding: '16px 18px', marginBottom: 24,
+          background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10,
+        }}
+      >
+        <div style={{ flex: '1 1 280px', minWidth: 220 }}>
+          <label
+            htmlFor="email-invitation"
+            style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6 }}
+          >
+            Inviter un praticien
+          </label>
+          <input
+            id="email-invitation"
+            type="email"
+            value={emailInvite}
+            onChange={e => setEmailInvite(e.target.value)}
+            disabled={invitationEnCours}
+            placeholder="adresse@exemple.fr"
+            style={{
+              width: '100%', padding: '9px 12px', fontSize: 13.5,
+              border: '1px solid #cbd5e1', borderRadius: 8,
+              background: 'white', color: '#0f172a', boxSizing: 'border-box',
+            }}
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={invitationEnCours || !emailInvite.trim()}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 7,
+            padding: '9px 16px', fontSize: 13.5, fontWeight: 600,
+            color: 'white', background: '#0d9488',
+            border: 'none', borderRadius: 8,
+            cursor: invitationEnCours || !emailInvite.trim() ? 'default' : 'pointer',
+            opacity: invitationEnCours || !emailInvite.trim() ? 0.55 : 1,
+          }}
+        >
+          <UserPlus size={15} />
+          {invitationEnCours ? 'Envoi…' : "Envoyer l'invitation"}
+        </button>
+        <p style={{ flexBasis: '100%', margin: 0, fontSize: 12.5, color: '#64748b' }}>
+          Le compte est créé avec le rôle praticien. L'invité reçoit un lien pour
+          choisir son mot de passe ; tant qu'il ne l'a pas fait, son email reste
+          non confirmé dans la liste ci-dessous.
+        </p>
+      </form>
 
       {chargement ? (
         <div style={{ color: '#64748b' }}>Chargement des comptes…</div>

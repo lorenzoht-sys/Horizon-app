@@ -88,7 +88,8 @@ export type AuditEventType =
   // append-only, cf. 20260817_securite_03_audit_logs_immuable.sql).
   | 'admin_comptes_consultes'
   | 'admin_praticien_desactive'
-  | 'admin_praticien_reactive';
+  | 'admin_praticien_reactive'
+  | 'admin_praticien_invite';
 
 // Journal d'audit des accès à l'espace patient (connexions et accès aux
 // données de santé) et de certaines actions praticien sensibles, à des fins
