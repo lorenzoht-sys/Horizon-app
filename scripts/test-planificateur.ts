@@ -28,7 +28,7 @@ import type {
   Participant,
   Contrat,
   Seance,
-  IndisponibilitePierre,
+  Indisponibilite,
   JourSemaine,
 } from '../src/types/index.ts';
 import {
@@ -144,7 +144,7 @@ const seancesExistantes: Seance[] = [];
 // + vendredi totalement bloqué (8h-20h) pour tester que jourTotalementBloque
 //   empêche l'assignation : p1 (lun/mer/ven) et p4 (lun/ven) doivent trouver
 //   leurs séances sans jamais atterrir sur un vendredi.
-const indispos: IndisponibilitePierre[] = [
+const indispos: Indisponibilite[] = [
   ...(['lun', 'mar', 'mer', 'jeu', 'ven'] as JourSemaine[]).map((jour, i) => ({
     id: `indispo-${i}`,
     jour,
@@ -484,7 +484,7 @@ verifier(`Pas de crash en Mode B (mêmes données, 4 semaines)`, crashModeB === 
     return hh * 60 + mm;
   }
 
-  function jourBloque(jourKey: string, indisposAll: IndisponibilitePierre[], heureDebut: string): boolean {
+  function jourBloque(jourKey: string, indisposAll: Indisponibilite[], heureDebut: string): boolean {
     const joursInds = indisposAll.filter(i => i.jour === jourKey);
     if (joursInds.length === 0) return false;
     const debut = heureMinutes(heureDebut);

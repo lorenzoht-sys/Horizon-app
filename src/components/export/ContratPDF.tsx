@@ -2,7 +2,11 @@ import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import { PdfHeader, PdfFooter } from './PdfShared';
 
 export interface ContratPDFData {
-  pierre: {
+  /** Identite du prestataire, prise dans les reglages du praticien connecte.
+   *  JAMAIS de valeur par defaut ici : un contrat engage la personne qu'il
+   *  nomme, et un repli sur une identite en dur ferait signer au patient un
+   *  document au nom d'un confrere. */
+  praticien: {
     nom: string;
     adresse: string;
     siret: string;
@@ -134,10 +138,10 @@ const B = ({ children }: { children: string }) => (
 export default function ContratPDF({ data }: { data: ContratPDFData }) {
   const dots = '.......................................';
   const pdfSettings = {
-    prenom: data.pierre.nom,
+    prenom: data.praticien.nom,
     nom: '',
-    email: data.pierre.email,
-    telephone: data.pierre.telephone,
+    email: data.praticien.email,
+    telephone: data.praticien.telephone,
     societe: data.societe,
     logoPraticien: data.logoPraticien,
   };
@@ -156,11 +160,11 @@ export default function ContratPDF({ data }: { data: ContratPDFData }) {
             <View style={{ flex: 1 }}>
               <Text style={S.sectionTitle}>Prestataire :</Text>
               <View style={S.box}>
-                <Text><B>Nom, prénom : </B>{data.pierre.nom}</Text>
-                <Text><B>Adresse : </B>{data.pierre.adresse}</Text>
-                <Text><B>SIRET : </B>{data.pierre.siret}</Text>
-                <Text><B>Téléphone : </B>{data.pierre.telephone}</Text>
-                <Text><B>Email : </B>{data.pierre.email}</Text>
+                <Text><B>Nom, prénom : </B>{data.praticien.nom}</Text>
+                <Text><B>Adresse : </B>{data.praticien.adresse}</Text>
+                <Text><B>SIRET : </B>{data.praticien.siret}</Text>
+                <Text><B>Téléphone : </B>{data.praticien.telephone}</Text>
+                <Text><B>Email : </B>{data.praticien.email}</Text>
               </View>
             </View>
             <View style={{ flex: 1, marginLeft: 16 }}>

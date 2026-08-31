@@ -153,7 +153,7 @@ export default function ClientProgramme({ programme, participantPrenom, onToggle
                     </p>
                   )}
 
-                  {/* CITATION PIERRE */}
+                  {/* Note personnalisee laissee par le praticien */}
                   {ep.notePersonnalisee && (
                     <p style={{ fontSize: 13, color: '#0F6E56', fontStyle: 'italic', margin: '0 0 10px' }}>
                       "{ep.notePersonnalisee}"
@@ -225,7 +225,7 @@ export default function ClientProgramme({ programme, participantPrenom, onToggle
         )}
       </div>
 
-      {/* Bouton envoyer à Pierre */}
+      {/* Bouton envoyer au praticien */}
       {exercicesDuJour.length > 0 && (
         <button
           onClick={() => { setSent(true); setTimeout(() => setSent(false), 3000); }}
@@ -234,13 +234,9 @@ export default function ClientProgramme({ programme, participantPrenom, onToggle
           style={{ minHeight: 56 }}
         >
           <Send size={18} />
-          {sent ? '✅ Bilan envoyé à Pierre !' : '✉ Envoyer mon bilan à Pierre'}
+          {sent ? '✅ Bilan envoyé à votre praticien !' : '✉ Envoyer mon bilan à mon praticien'}
         </button>
       )}
-
-      <p className="text-center text-xs text-gray-400 mt-4">
-        Suivi réalisé par Pierre Clavier — Mouv'APA
-      </p>
 
       {/* Modal vidéo plein écran */}
       {videoModal && (

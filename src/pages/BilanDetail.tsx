@@ -79,7 +79,7 @@ export default function BilanDetail() {
               try {
                 await exportFicheBilanPDF(
                   { bilan, participant, notes: bilan.notesBilan ?? calculerNotesAuto(bilan), settings: loadSettings() },
-                  `FicheBilan_${participant.nom}_${participant.prenom}_${bilan.date}_MouvAPA.pdf`
+                  `FicheBilan_${participant.nom}_${participant.prenom}_${bilan.date}.pdf`
                 );
               } finally { setExporting(false); }
             }}
@@ -95,7 +95,7 @@ export default function BilanDetail() {
               try {
                 await exportFicheBilanBeneficiairePDF(
                   { bilan, participant, notes: bilan.notesBilan ?? calculerNotesAuto(bilan), settings: loadSettings() },
-                  `FicheBilan_Beneficiaire_${participant.nom}_${participant.prenom}_${bilan.date}_MouvAPA.pdf`
+                  `FicheBilan_Beneficiaire_${participant.nom}_${participant.prenom}_${bilan.date}.pdf`
                 );
               } finally { setExportingBeneficiaire(false); }
             }}

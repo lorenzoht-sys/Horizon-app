@@ -1,9 +1,9 @@
-import type { IndisponibilitePierre } from '../types';
+import type { Indisponibilite } from '../types';
 
 // Indisponibilités de démonstration pour Pierre
 // Elles sont chargées automatiquement si aucune indispo n'existe dans localStorage
 
-export const DEMO_INDISPOS_PIERRE: IndisponibilitePierre[] = [
+export const DEMO_INDISPOS: Indisponibilite[] = [
   // ── Déjeuner quotidien (lun → ven) ──────────────────────────────
   {
     id: 'indispo-dejeuner-lun',

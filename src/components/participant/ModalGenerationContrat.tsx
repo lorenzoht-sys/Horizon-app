@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { X, Download, Loader } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Contrat, Participant } from '../../types';
@@ -36,7 +37,7 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
   const settings = useMemo(loadSettings, []);
   const [loading, setLoading] = useState(false);
 
-  const adressePierre = [settings.adresseRue, settings.adresseCodePostal, settings.adresseVille]
+  const adressePraticien = [settings.adresseRue, settings.adresseCodePostal, settings.adresseVille]
     .filter(Boolean).join(', ');
   const adressePatient = [participant.adresseRue, participant.adresseCodePostal, participant.adresseVille]
     .filter(Boolean).join(', ');
@@ -51,10 +52,27 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
     dateSignature: formatDateFR(new Date().toISOString().split('T')[0]),
   });
 
+  // ── Identite du prestataire ───────────────────────────────────────────
+  // Le nom avait un repli en dur sur une identite reelle : un praticien aux
+  // reglages vides emettait a son patient un contrat de prestation au nom
+  // d'un confrere. Retirer le repli sans rien mettre a la place donnerait un
+  // contrat sans prestataire nomme — pas mieux pour un document qui engage.
+  // On refuse donc de generer tant que le nom manque (voir handleGenerer).
+  const nomPraticien = `${settings.nom ?? ''} ${settings.prenom ?? ''}`.trim();
+
+  // Ceux-la n'empechent pas de generer, mais un contrat sans SIRET ni adresse
+  // est incomplet : on les montre plutot que de les laisser sortir vides.
+  const champsManquants = [
+    !adressePraticien && 'adresse',
+    !settings.siret && 'SIRET',
+    !settings.telephone && 'telephone',
+    !settings.email && 'email',
+  ].filter(Boolean) as string[];
+
   const pdfData: ContratPDFData = {
-    pierre: {
-      nom: `${settings.nom ?? ''} ${settings.prenom ?? ''}`.trim() || 'Pierre CLAVIER',
-      adresse: adressePierre,
+    praticien: {
+      nom: nomPraticien,
+      adresse: adressePraticien,
       siret: settings.siret || '',
       telephone: settings.telephone || '',
       email: settings.email || '',
@@ -82,9 +100,17 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
   };
 
   async function handleGenerer() {
+    if (!nomPraticien) {
+      toast.error('Renseignez votre nom dans les reglages avant de generer un contrat.');
+      return;
+    }
     setLoading(true);
     try {
-      const nomFichier = `Contrat_${participant.nom}_${participant.prenom}_MouvAPA_${new Date().toISOString().split('T')[0]}.pdf`;
+      // Le nom de fichier portait une raison sociale en dur, celle du premier
+      // utilisateur, sur le contrat de n'importe quel praticien. On prend
+      // celle des reglages, ou rien.
+      const societe = (settings.societe ?? '').trim().replace(/[^A-Za-z0-9-]+/g, '');
+      const nomFichier = `Contrat_${participant.nom}_${participant.prenom}${societe ? '_' + societe : ''}_${new Date().toISOString().split('T')[0]}.pdf`;
       await exportContratPDF(pdfData, nomFichier);
       toast.success('Contrat PDF téléchargé !');
       onClose();
@@ -115,6 +141,38 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
           </div>
 
           <div className="p-6 space-y-5">
+
+            {/* Identite du prestataire manquante : bloquant.
+                Un contrat de prestation nomme les deux parties. Sans le nom du
+                praticien, le document n'a pas de prestataire — et il en avait
+                un en dur avant ce garde-fou, celui du premier utilisateur. */}
+            {!nomPraticien && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3.5">
+                <div className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-1">
+                  Contrat impossible à générer
+                </div>
+                <div className="text-xs text-red-800 leading-relaxed">
+                  Votre nom n'est pas renseigné. Un contrat de prestation doit nommer
+                  le prestataire.{' '}
+                  <Link to="/settings" onClick={onClose} className="underline font-semibold">
+                    Compléter mes informations
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {/* Non bloquant, mais un contrat sans SIRET ni adresse est incomplet. */}
+            {nomPraticien && champsManquants.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5">
+                <div className="text-xs text-amber-900 leading-relaxed">
+                  Ces informations manquent dans vos réglages et sortiront vides sur le
+                  contrat : <strong>{champsManquants.join(', ')}</strong>.{' '}
+                  <Link to="/settings" onClick={onClose} className="underline font-semibold">
+                    Les compléter
+                  </Link>
+                </div>
+              </div>
+            )}
 
             {/* Récap données auto */}
             <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3.5">
@@ -224,7 +282,7 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
               </button>
               <button
                 onClick={handleGenerer}
-                disabled={loading}
+                disabled={loading || !nomPraticien}
                 className="flex-1 flex items-center justify-center gap-2 bg-primary text-white rounded-xl py-2.5 font-semibold text-sm hover:bg-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {loading ? <Loader size={16} className="animate-spin" /> : <Download size={16} />}
