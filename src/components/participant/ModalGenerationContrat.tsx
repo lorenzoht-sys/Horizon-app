@@ -58,7 +58,16 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
   // d'un confrere. Retirer le repli sans rien mettre a la place donnerait un
   // contrat sans prestataire nomme — pas mieux pour un document qui engage.
   // On refuse donc de generer tant que le nom manque (voir handleGenerer).
-  const nomPraticien = `${settings.nom ?? ''} ${settings.prenom ?? ''}`.trim();
+  // Prenom ET nom, verifies SEPAREMENT.
+  //
+  // La version precedente testait la concatenation : `${nom} ${prenom}`.trim().
+  // Un praticien n'ayant que son prenom passait donc le garde-fou, et le
+  // contrat sortait avec « Nom, prénom : Marie ». C'etait le cas reel de tout
+  // compte issu de l'onboarding, qui ne collectait pas le nom de famille.
+  const prenomPraticien = (settings.prenom ?? '').trim();
+  const nomFamillePraticien = (settings.nom ?? '').trim();
+  const identiteComplete = Boolean(prenomPraticien && nomFamillePraticien);
+  const nomPraticien = `${nomFamillePraticien} ${prenomPraticien}`.trim();
 
   // Ceux-la n'empechent pas de generer, mais un contrat sans SIRET ni adresse
   // est incomplet : on les montre plutot que de les laisser sortir vides.
@@ -100,8 +109,8 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
   };
 
   async function handleGenerer() {
-    if (!nomPraticien) {
-      toast.error('Renseignez votre nom dans les reglages avant de generer un contrat.');
+    if (!identiteComplete) {
+      toast.error('Renseignez votre prénom et votre nom dans les réglages avant de générer un contrat.');
       return;
     }
     setLoading(true);
@@ -146,14 +155,18 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
                 Un contrat de prestation nomme les deux parties. Sans le nom du
                 praticien, le document n'a pas de prestataire — et il en avait
                 un en dur avant ce garde-fou, celui du premier utilisateur. */}
-            {!nomPraticien && (
+            {!identiteComplete && (
               <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3.5">
                 <div className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-1">
                   Contrat impossible à générer
                 </div>
                 <div className="text-xs text-red-800 leading-relaxed">
-                  Votre nom n'est pas renseigné. Un contrat de prestation doit nommer
-                  le prestataire.{' '}
+                  {!prenomPraticien && !nomFamillePraticien
+                    ? 'Votre prénom et votre nom ne sont pas renseignés.'
+                    : !nomFamillePraticien
+                      ? "Votre nom de famille n'est pas renseigné."
+                      : "Votre prénom n'est pas renseigné."}{' '}
+                  Un contrat de prestation doit nommer le prestataire.{' '}
                   <Link to="/settings" onClick={onClose} className="underline font-semibold">
                     Compléter mes informations
                   </Link>
@@ -162,7 +175,7 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
             )}
 
             {/* Non bloquant, mais un contrat sans SIRET ni adresse est incomplet. */}
-            {nomPraticien && champsManquants.length > 0 && (
+            {identiteComplete && champsManquants.length > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5">
                 <div className="text-xs text-amber-900 leading-relaxed">
                   Ces informations manquent dans vos réglages et sortiront vides sur le
@@ -282,7 +295,7 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
               </button>
               <button
                 onClick={handleGenerer}
-                disabled={loading || !nomPraticien}
+                disabled={loading || !identiteComplete}
                 className="flex-1 flex items-center justify-center gap-2 bg-primary text-white rounded-xl py-2.5 font-semibold text-sm hover:bg-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {loading ? <Loader size={16} className="animate-spin" /> : <Download size={16} />}

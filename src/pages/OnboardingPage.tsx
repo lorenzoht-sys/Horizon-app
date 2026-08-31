@@ -34,13 +34,15 @@ export default function OnboardingPage({ onComplete }: Props) {
   const navigate = useNavigate();
 
   const [prenom,  setPrenom]  = useState('');
+  const [nom,     setNom]     = useState('');
   const [titre,   setTitre]   = useState('');
   const [societe, setSociete] = useState('');
   const [siret,   setSiret]   = useState('');
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
 
-  // Charger le prénom depuis la table praticiens
+  // Précharger prénom et nom depuis la table praticiens : un compte qui a
+  // déjà une fiche ne doit pas les ressaisir.
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -48,11 +50,12 @@ export default function OnboardingPage({ onComplete }: Props) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (supabase as any)
         .from('praticiens')
-        .select('prenom')
+        .select('prenom, nom')
         .eq('id', user.id)
         .single()
-        .then(({ data }: { data: { prenom?: string } | null }) => {
+        .then(({ data }: { data: { prenom?: string; nom?: string } | null }) => {
           if (data?.prenom) setPrenom(data.prenom);
+          if (data?.nom) setNom(data.nom);
         });
     });
   }, []);
@@ -61,6 +64,15 @@ export default function OnboardingPage({ onComplete }: Props) {
     e.preventDefault();
     setError('');
 
+    // Identite complete exigee ICI, et pas seulement dans les reglages.
+    // L'onboarding ne demandait ni prenom ni nom : un praticien invite
+    // arrivait dans l'application sans identite, et generait un contrat de
+    // prestation sans prestataire nomme — ou avec son seul prenom, ce que
+    // le garde-fou de ModalGenerationContrat laissait passer.
+    if (!prenom.trim() || !nom.trim()) {
+      setError('Renseignez votre prénom et votre nom : ils figurent sur les contrats que vous générez.');
+      return;
+    }
     if (!titre.trim()) {
       setError('Veuillez sélectionner votre type de professionnel.');
       return;
@@ -78,6 +90,8 @@ export default function OnboardingPage({ onComplete }: Props) {
       .from('praticiens')
       .upsert({
         id:      user.id,
+        prenom:  prenom.trim(),
+        nom:     nom.trim(),
         titre:   titre.trim(),
         societe: societe.trim() || null,
         siret:   siretClean || null,
@@ -93,7 +107,7 @@ export default function OnboardingPage({ onComplete }: Props) {
 
     // Mise à jour du cache localStorage pour les composants PDF
     localStorage.setItem('settings_praticien', JSON.stringify({
-      prenom, titre: titre.trim(),
+      prenom: prenom.trim(), nom: nom.trim(), titre: titre.trim(),
       societe: societe.trim(), siret: siretClean,
     }));
     window.dispatchEvent(new Event('settings_praticien_updated'));
@@ -167,6 +181,36 @@ export default function OnboardingPage({ onComplete }: Props) {
         }}>
           <form onSubmit={handleSubmit}>
 
+            {/* Identite. Premiere position : c'est ce qui figurera sur les
+                documents que ce praticien emettra. */}
+            <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>
+                  Prénom <span style={{ color: '#DC2626' }}>*</span>
+                </label>
+                <input
+                  value={prenom}
+                  onChange={e => setPrenom(e.target.value)}
+                  autoComplete="given-name"
+                  autoFocus
+                  placeholder="Marie"
+                  style={inputStyle}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>
+                  Nom <span style={{ color: '#DC2626' }}>*</span>
+                </label>
+                <input
+                  value={nom}
+                  onChange={e => setNom(e.target.value)}
+                  autoComplete="family-name"
+                  placeholder="Durand"
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+
             {/* Type de professionnel */}
             <div style={{ marginBottom: 14 }}>
               <label style={labelStyle}>
@@ -175,7 +219,6 @@ export default function OnboardingPage({ onComplete }: Props) {
               <select
                 value={titre}
                 onChange={e => setTitre(e.target.value)}
-                autoFocus
                 style={{
                   ...inputStyle,
                   appearance: 'none',
