@@ -12,7 +12,7 @@ import {
   rowToSettings,
   enregistrerSettingsPraticien,
 } from '../lib/settingsPraticien';
-import { validerSiret } from '../lib/siret';
+import { validerSiret, normaliserSiret } from '../lib/siret';
 import { getAppHost } from '../lib/config';
 import { dbToParticipant, participantToDb, bilanToDb, programmeToDb } from '../lib/mappers';
 import { useRappelPreferences, type RappelPreferences } from '../hooks/useRappelPreferences';
@@ -660,6 +660,9 @@ export default function SettingsPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof SettingsPraticien, string>>>({});
   const [loading, setLoading] = useState(true);
   const logoPraticienRef = useRef<HTMLInputElement>(null);
+  // Le SIRET tel qu'il etait en base a l'ouverture de la page. Sert a
+  // distinguer un numero HERITE d'un numero SAISI ici — voir `validate()`.
+  const siretInitial = useRef('');
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
@@ -672,7 +675,18 @@ export default function SettingsPage() {
         .select('*')
         .eq('id', user.id)
         .single();
-      if (data) setForm(rowToSettings(data));
+      if (data) {
+        const charge = rowToSettings(data);
+        setForm(charge);
+        siretInitial.current = charge.siret;
+        // Erreur affichee des l'ouverture, sans attendre une tentative
+        // d'enregistrement : un SIRET herite invalide doit se voir, meme
+        // s'il n'empeche plus de sauvegarder le reste.
+        const controle = validerSiret(charge.siret);
+        if (charge.siret.trim() && !controle.valide) {
+          setErrors({ siret: controle.message });
+        }
+      }
       setLoading(false);
     })();
   }, []);
@@ -691,33 +705,56 @@ export default function SettingsPage() {
     reader.readAsDataURL(file);
   }
 
-  // Rend les erreurs plutot qu'un booleen : l'appelant a besoin de SAVOIR
-  // quel champ a echoue pour l'amener a l'ecran, pas seulement qu'il y en a.
+  /**
+   * Valide le formulaire.
+   *
+   * Renseigne `errors` avec TOUT ce qui est fautif — c'est l'affichage — et
+   * rend seulement ce qui INTERDIT d'enregistrer. Les deux ensembles ne
+   * coincident pas, a cause du SIRET : voir plus bas.
+   *
+   * Rend les erreurs plutot qu'un booleen parce que l'appelant a besoin de
+   * savoir QUEL champ a echoue pour l'amener a l'ecran.
+   */
   function validate(): Partial<Record<keyof SettingsPraticien, string>> {
     const required: (keyof SettingsPraticien)[] = [
       'prenom', 'nom', 'titre', 'email',
       'adresseRue', 'adresseCodePostal', 'adresseVille',
     ];
+    // `next` : ce qui s'affiche. `bloquants` : ce qui refuse l'enregistrement.
     const next: Partial<Record<keyof SettingsPraticien, string>> = {};
+    const bloquants: Partial<Record<keyof SettingsPraticien, string>> = {};
 
     for (const f of required) {
-      if (!form[f].trim()) next[f] = 'Champ obligatoire';
+      if (!form[f].trim()) { next[f] = 'Champ obligatoire'; bloquants[f] = next[f]; }
     }
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
       next.email = 'Email invalide';
+      bloquants.email = next.email;
     }
-    // Le SIRET reste facultatif ici — un salarie de structure n'en a pas, et
-    // ce formulaire sert a dix autres choses. C'est la generation du contrat
-    // qui exige sa presence. Mais s'il est saisi, il doit etre juste : la
-    // longueur seule laissait passer un chiffre errone ou deux chiffres
-    // intervertis, qui partaient ensuite sur un contrat de prestation.
+    // ── SIRET : affiche toujours, bloquant seulement s'il vient d'ici ────
+    // Le SIRET reste facultatif dans ce formulaire — un salarie de structure
+    // n'en a pas — et c'est la generation du contrat qui exige sa validite.
+    // La contrainte mord la ou l'exigence legale s'applique, pas sur un ecran
+    // qui sert a dix autres choses. C'est deja ce qui avait decide de placer
+    // le blocage au contrat plutot qu'a l'onboarding.
+    //
+    // D'ou la distinction. Un numero SAISI ICI et faux bloque : on ne laisse
+    // pas quelqu'un enregistrer une faute de frappe qu'il vient de commettre.
+    // Un numero HERITE et faux — entre par l'onboarding ou l'ecran mobile, a
+    // l'epoque ou aucun des deux ne validait quoi que ce soit — s'affiche en
+    // erreur mais n'interdit rien d'autre. Bloquer la totalite du formulaire
+    // sur une valeur qu'un autre ecran a laissee passer dresserait un mur au
+    // premier enregistrement d'un praticien invite, pour un champ sans
+    // rapport avec ce qu'il essaie de modifier.
     const controleSiret = validerSiret(form.siret);
+    const siretHerite = normaliserSiret(form.siret) === normaliserSiret(siretInitial.current);
     if (form.siret.trim() && !controleSiret.valide) {
       next.siret = controleSiret.message;
+      if (!siretHerite) bloquants.siret = next.siret;
     }
 
     setErrors(next);
-    return next;
+    return bloquants;
   }
 
   async function handleSave() {
