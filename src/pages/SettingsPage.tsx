@@ -10,8 +10,9 @@ import {
   type SettingsPraticien,
   DEFAULTS_SETTINGS as DEFAULTS,
   rowToSettings,
-  ecrireCacheSettingsPraticien,
+  enregistrerSettingsPraticien,
 } from '../lib/settingsPraticien';
+import { validerSiret } from '../lib/siret';
 import { getAppHost } from '../lib/config';
 import { dbToParticipant, participantToDb, bilanToDb, programmeToDb } from '../lib/mappers';
 import { useRappelPreferences, type RappelPreferences } from '../hooks/useRappelPreferences';
@@ -410,6 +411,42 @@ function Field({
   );
 }
 
+// Ordre d'apparition des champs a l'ecran. Sert a designer le PREMIER champ
+// en erreur, pas n'importe lequel : `Object.keys` suit l'ordre d'insertion
+// dans `validate()`, qui n'est pas l'ordre du formulaire.
+const ORDRE_CHAMPS: (keyof SettingsPraticien)[] = [
+  'prenom', 'nom', 'titre', 'email', 'telephone', 'societe',
+  'adresseRue', 'adresseCodePostal', 'adresseVille',
+  'siret', 'numeroSAP', 'numeroTVA',
+];
+
+/** Attribut `name` du champ, seul lien entre la validation et le DOM. */
+function nomChamp(champ: keyof SettingsPraticien): string {
+  return `settings-${champ}`;
+}
+
+/**
+ * Amene le premier champ en erreur sous les yeux, et lui donne le focus.
+ *
+ * Le toast rouge seul ne suffisait pas : ce formulaire fait plusieurs
+ * ecrans de haut, et l'erreur pouvait se trouver tres au-dessus ou tres en
+ * dessous de la zone visible. On voyait « Veuillez corriger les erreurs »
+ * sans jamais voir quoi corriger — au point de croire que l'enregistrement
+ * avait fonctionne. C'est ce malentendu qui a lance l'audit d'identite.
+ */
+function focaliserPremierChampEnErreur(
+  erreurs: Partial<Record<keyof SettingsPraticien, string>>,
+): void {
+  const champ = ORDRE_CHAMPS.find(c => erreurs[c]);
+  if (!champ) return;
+  const el = document.querySelector<HTMLInputElement>(`[name="${nomChamp(champ)}"]`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // `preventScroll` : sans lui, le focus saute instantanement a la position
+  // finale et annule le defilement doux qu'on vient de lancer.
+  el.focus({ preventScroll: true });
+}
+
 function inputClass(error?: string) {
   return `w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-colors font-sans ${
     error
@@ -654,7 +691,9 @@ export default function SettingsPage() {
     reader.readAsDataURL(file);
   }
 
-  function validate(): boolean {
+  // Rend les erreurs plutot qu'un booleen : l'appelant a besoin de SAVOIR
+  // quel champ a echoue pour l'amener a l'ecran, pas seulement qu'il y en a.
+  function validate(): Partial<Record<keyof SettingsPraticien, string>> {
     const required: (keyof SettingsPraticien)[] = [
       'prenom', 'nom', 'titre', 'email',
       'adresseRue', 'adresseCodePostal', 'adresseVille',
@@ -667,49 +706,45 @@ export default function SettingsPage() {
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
       next.email = 'Email invalide';
     }
-    const siretDigits = form.siret.replace(/\s/g, '');
-    if (form.siret && !/^\d{14}$/.test(siretDigits)) {
-      next.siret = 'Le SIRET doit contenir exactement 14 chiffres';
+    // Le SIRET reste facultatif ici — un salarie de structure n'en a pas, et
+    // ce formulaire sert a dix autres choses. C'est la generation du contrat
+    // qui exige sa presence. Mais s'il est saisi, il doit etre juste : la
+    // longueur seule laissait passer un chiffre errone ou deux chiffres
+    // intervertis, qui partaient ensuite sur un contrat de prestation.
+    const controleSiret = validerSiret(form.siret);
+    if (form.siret.trim() && !controleSiret.valide) {
+      next.siret = controleSiret.message;
     }
 
     setErrors(next);
-    return Object.keys(next).length === 0;
+    return next;
   }
 
   async function handleSave() {
-    if (!validate()) { toast.error('Veuillez corriger les erreurs'); return; }
-    const toSave = { ...form, siret: form.siret.replace(/\s/g, '') };
+    const erreurs = validate();
+    if (Object.keys(erreurs).length > 0) {
+      toast.error('Veuillez corriger les erreurs');
+      focaliserPremierChampEnErreur(erreurs);
+      return;
+    }
+    const toSave = { ...form, siret: validerSiret(form.siret).siret };
 
+    let userId = '';
     if (supabase) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { toast.error('Utilisateur non connecté'); return; }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
-        .from('praticiens')
-        .upsert({
-          id:                  user.id,
-          prenom:              toSave.prenom,
-          nom:                 toSave.nom,
-          titre:               toSave.titre,
-          email:               toSave.email,
-          telephone:           toSave.telephone || null,
-          adresse_rue:         toSave.adresseRue,
-          adresse_code_postal: toSave.adresseCodePostal,
-          adresse_ville:       toSave.adresseVille,
-          siret:               toSave.siret,
-          numero_sap:          toSave.numeroSAP,
-          numero_tva:          toSave.numeroTVA || null,
-          ville_signature:     toSave.villeSignature,
-          societe:             toSave.societe || null,
-          logo_praticien:      toSave.logoPraticien || null,
-          tarif_horaire:       toSave.tarifHoraire,
-          frais_km_defaut:     toSave.fraisKmDefaut,
-        });
-      if (error) { toast.error(`Erreur : ${error.message}`); return; }
+      userId = user.id;
     }
 
-    // Cache local pour les composants PDF qui lisent encore settings_praticien
-    ecrireCacheSettingsPraticien(toSave);
+    // La construction de la ligne et l'ordre base-puis-cache vivent dans
+    // `settingsPraticien` : cet ecran et l'ecran mobile en avaient chacun
+    // leur copie, avec des jeux de colonnes differents.
+    try {
+      await enregistrerSettingsPraticien(toSave, userId);
+    } catch (err) {
+      toast.error(`Erreur : ${err instanceof Error ? err.message : 'enregistrement impossible'}`);
+      return;
+    }
     toast.success('Paramètres enregistrés');
   }
 
@@ -743,28 +778,28 @@ export default function SettingsPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Prénom" required error={errors.prenom}>
-                  <input value={form.prenom} onChange={e => set('prenom', e.target.value)}
+                  <input name={nomChamp('prenom')} value={form.prenom} onChange={e => set('prenom', e.target.value)}
                     placeholder="Marie" className={inputClass(errors.prenom)} />
                 </Field>
                 <Field label="Nom" required error={errors.nom}>
-                  <input value={form.nom} onChange={e => set('nom', e.target.value)}
+                  <input name={nomChamp('nom')} value={form.nom} onChange={e => set('nom', e.target.value)}
                     placeholder="Durand" className={inputClass(errors.nom)} />
                 </Field>
               </div>
               <Field label="Titre professionnel" required error={errors.titre}>
-                <input value={form.titre} onChange={e => set('titre', e.target.value)}
+                <input name={nomChamp('titre')} value={form.titre} onChange={e => set('titre', e.target.value)}
                   placeholder="Enseignant en Activité Physique Adaptée" className={inputClass(errors.titre)} />
               </Field>
               <Field label="Email professionnel" required error={errors.email}>
-                <input type="email" value={form.email} onChange={e => set('email', e.target.value)}
+                <input type="email" name={nomChamp('email')} value={form.email} onChange={e => set('email', e.target.value)}
                   placeholder="marie.durand@exemple.fr" className={inputClass(errors.email)} />
               </Field>
               <Field label="Téléphone" error={errors.telephone}>
-                <input value={form.telephone} onChange={e => set('telephone', e.target.value)}
+                <input name={nomChamp('telephone')} value={form.telephone} onChange={e => set('telephone', e.target.value)}
                   placeholder="06 12 34 56 78" className={inputClass(errors.telephone)} />
               </Field>
               <Field label="Nom de la société" error={errors.societe}>
-                <input value={form.societe} onChange={e => set('societe', e.target.value)}
+                <input name={nomChamp('societe')} value={form.societe} onChange={e => set('societe', e.target.value)}
                   placeholder="Horizon APA" className={inputClass(errors.societe)} />
                 <p className="text-xs text-gray-400 mt-1">Optionnel — affiché dans l'en-tête de vos PDFs</p>
               </Field>
@@ -776,17 +811,17 @@ export default function SettingsPage() {
             <SectionTitle title="Mon adresse professionnelle" />
             <div className="space-y-4">
               <Field label="Adresse (rue)" required error={errors.adresseRue}>
-                <input value={form.adresseRue} onChange={e => set('adresseRue', e.target.value)}
+                <input name={nomChamp('adresseRue')} value={form.adresseRue} onChange={e => set('adresseRue', e.target.value)}
                   placeholder="12 rue des Lilas" className={inputClass(errors.adresseRue)} />
               </Field>
               <div className="grid grid-cols-3 gap-4">
                 <Field label="Code postal" required error={errors.adresseCodePostal}>
-                  <input value={form.adresseCodePostal} onChange={e => set('adresseCodePostal', e.target.value)}
+                  <input name={nomChamp('adresseCodePostal')} value={form.adresseCodePostal} onChange={e => set('adresseCodePostal', e.target.value)}
                     placeholder="75013" className={inputClass(errors.adresseCodePostal)} />
                 </Field>
                 <div className="col-span-2">
                   <Field label="Ville" required error={errors.adresseVille}>
-                    <input value={form.adresseVille} onChange={e => set('adresseVille', e.target.value)}
+                    <input name={nomChamp('adresseVille')} value={form.adresseVille} onChange={e => set('adresseVille', e.target.value)}
                       placeholder="Paris" className={inputClass(errors.adresseVille)} />
                   </Field>
                 </div>
@@ -804,7 +839,7 @@ export default function SettingsPage() {
                   La contrainte vit la ou elle mord : la generation de contrat
                   est bloquee sans SIRET (ModalGenerationContrat). */}
               <Field label="Numéro SIRET" error={errors.siret}>
-                <input value={form.siret} onChange={e => set('siret', e.target.value)}
+                <input name={nomChamp('siret')} value={form.siret} onChange={e => set('siret', e.target.value)}
                   placeholder="XXX XXX XXX XXXXX" className={inputClass(errors.siret)} />
                 {form.siret.trim()
                   ? <p className="text-xs text-gray-400 mt-1">14 chiffres (espaces autorisés)</p>
@@ -815,11 +850,11 @@ export default function SettingsPage() {
               {/* Meme correction : `required` n'etait pas non plus dans la
                   liste de validation. */}
               <Field label="Numéro de déclaration SAP" error={errors.numeroSAP}>
-                <input value={form.numeroSAP} onChange={e => set('numeroSAP', e.target.value)}
+                <input name={nomChamp('numeroSAP')} value={form.numeroSAP} onChange={e => set('numeroSAP', e.target.value)}
                   placeholder="SAP XXXXXXXXX" className={inputClass(errors.numeroSAP)} />
               </Field>
               <Field label="Numéro TVA intracommunautaire" error={errors.numeroTVA}>
-                <input value={form.numeroTVA} onChange={e => set('numeroTVA', e.target.value)}
+                <input name={nomChamp('numeroTVA')} value={form.numeroTVA} onChange={e => set('numeroTVA', e.target.value)}
                   placeholder="FR XX XXXXXXXXX" className={inputClass(errors.numeroTVA)} />
                 <p className="text-xs text-gray-400 mt-1">Optionnel — uniquement si assujetti à la TVA</p>
               </Field>
