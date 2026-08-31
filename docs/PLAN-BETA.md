@@ -813,6 +813,65 @@ d'une donnée doit vérifier qu'elle est là (`expect(...).toBeGreaterThan(0)`)
 plutôt que de boucler sur une liste éventuellement vide — sinon il passe au
 vert sans rien vérifier, ce qui est pire qu'un échec.
 
+## CHANTIER — le secret du cron est recopié en clair à chaque exécution
+
+**Identifié le 2026-08-31, pendant la rotation de `x-cron-secret`. Non traité,
+volontairement : la rotation devait aboutir d'abord.**
+
+### Le constat
+
+Le secret est écrit en clair dans la commande du job pg_cron :
+
+```sql
+SELECT net.http_post(
+  url     := 'https://app.horizon-suivi.fr/api/cron/rappels',
+  headers := jsonb_build_object('x-cron-secret', '<le secret, en clair>'),
+  body    := '{}'::jsonb
+);
+```
+
+`cron.job_run_details` conserve la colonne `command` de **chaque exécution**.
+Le job tourne toutes les heures : le secret est donc recopié 24 fois par jour
+dans un historique que rien ne purge. Le 2026-08-31, la purge qui a suivi la
+rotation a supprimé **1861 lignes**.
+
+### Pourquoi la purge n'est pas le correctif
+
+Elle nettoie le passé, elle n'empêche rien. Tant que le secret vit dans
+`cron.job.command`, l'historique se reconstitue à la vitesse d'une ligne par
+heure. **C'est une opération à refaire, pas une correction** — et une
+opération qu'on oubliera, parce que rien ne la déclenche.
+
+### La piste
+
+**Supabase Vault** (`vault.create_secret` / `vault.decrypted_secrets`) stocke
+le secret chiffré et le job ne référence plus qu'un identifiant :
+
+```sql
+headers := jsonb_build_object(
+  'x-cron-secret',
+  (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'cron_secret')
+)
+```
+
+La commande devient alors sans valeur pour qui la lit, et l'historique aussi.
+
+### Ce qui reste à trancher avant de le faire
+
+- **Le `command` enregistré contient-il la requête littérale ou son résultat ?**
+  À vérifier sur une exécution réelle : si pg_cron journalise la commande
+  telle qu'écrite, le problème disparaît ; s'il journalise autre chose, il
+  faut le constater avant de conclure. Ne pas raisonner sans la donnée.
+- **Quel rôle lit `vault.decrypted_secrets`** au moment où le job s'exécute,
+  et cette lecture est-elle possible depuis le contexte de pg_cron.
+- **La rotation devient une mise à jour du Vault**, plus une reprogrammation
+  du job : la procédure de rotation documentée est à réécrire en conséquence.
+
+### Portée
+
+Le même schéma vaut pour le job de staging. Et pour tout futur job pg_cron
+qui porterait un secret dans ses en-têtes.
+
 ## Chantiers de sécurité identifiés mais non appliqués
 
 Trouvés en préparant le lot 6 de l'étape 1 (rate limit `api/claude.ts`,
