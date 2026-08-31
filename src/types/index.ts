@@ -892,7 +892,14 @@ export interface VisibiliteBeneficiaire {
   bilans: boolean;
   rdv: boolean;
   programme: boolean;
-  messagePierre: boolean;
+  /** Message laisse par le praticien au beneficiaire. */
+  messagePraticien: boolean;
+  /** @deprecated Ancien nom de `messagePraticien`. CONSERVE le temps de la
+   *  transition : des lignes en base le portent encore, et tout code deja
+   *  deploye le lit. Les deux cles sont maintenues a la meme valeur par
+   *  `normaliserVisibilite` (src/lib/mappers.ts). Retire par la migration
+   *  de phase 2. */
+  messagePierre?: boolean;
   carteSante: boolean;
 }
 

@@ -14,7 +14,8 @@ import { withSentry } from '../_lib/sentry.js';
 // à un filtre purement côté affichage.
 
 export const VISIBILITE_DEFAULT = {
-  progression: true, bilans: true, rdv: true, programme: true, messagePierre: true, carteSante: true,
+  progression: true, bilans: true, rdv: true, programme: true,
+  messagePraticien: true, messagePierre: true, carteSante: true,
 };
 
 // Colonnes DB d'un bilan à retirer quand le résultat correspondant n'est pas
@@ -126,8 +127,17 @@ export default withSentry(async function handler(req: any, res: any) {
   await logAuditEvent(supabase, 'patient_data_access', participantId, getClientIp(req), true);
 
   const participant = participantRes.data;
-  const visibilite = { ...VISIBILITE_DEFAULT, ...(participant.visibilite_beneficiaire ?? {}) };
-  if (!visibilite.messagePierre) participant.message_beneficiaire = null;
+  const brut = (participant.visibilite_beneficiaire ?? {}) as Record<string, unknown>;
+  const visibilite = { ...VISIBILITE_DEFAULT, ...brut };
+
+  // Lu sur `brut`, PAS sur `visibilite` : le spread ci-dessus remplit
+  // `messagePraticien` avec le defaut `true` des que la ligne ne le porte
+  // pas. Une ligne pas encore migree, avec `messagePierre: false`,
+  // ressortirait alors « visible » — et le message qu'un praticien avait
+  // masque partirait chez son beneficiaire.
+  const messageAutorise =
+    (brut.messagePraticien ?? brut.messagePierre ?? true) as boolean;
+  if (!messageAutorise) participant.message_beneficiaire = null;
 
   const sedentariteVisible = participant.anamnese?.sedentariteVisibleBeneficiaire === true;
   const fatigueVisible = participant.anamnese?.fatigueVisibleBeneficiaire === true;

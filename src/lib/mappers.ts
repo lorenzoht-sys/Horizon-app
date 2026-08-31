@@ -1,4 +1,4 @@
-import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, TemplateStructure, DisponibilitesPatient, JourSemaine, CreneauPreference, EvenementAgenda } from '../types';
+import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, TemplateStructure, DisponibilitesPatient, JourSemaine, CreneauPreference, EvenementAgenda, VisibiliteBeneficiaire } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
 
 // ── Conversion anamnese.organisation → DisponibilitesPatient ──────────────────
@@ -90,7 +90,7 @@ export function dbToParticipant(row: any): Participant {
     rgpd: row.rgpd ?? undefined,
     bilans: (row.bilans ?? []).map(dbToBilan),
     programmes: (row.programmes ?? []).map(dbToProgramme),
-    visibiliteBeneficiaire: { ...VISIBILITE_BENEFICIAIRE_DEFAULT, ...(row.visibilite_beneficiaire ?? {}) },
+    visibiliteBeneficiaire: normaliserVisibilite(row.visibilite_beneficiaire),
     messageBeneficiaire: row.message_beneficiaire ?? undefined,
   };
 }
@@ -101,8 +101,33 @@ export function dbToParticipant(row: any): Participant {
 // de Bilan.visibleBeneficiaire, qui est un contrôle plus fin et volontairement
 // plus prudent.
 const VISIBILITE_BENEFICIAIRE_DEFAULT = {
-  progression: true, bilans: true, rdv: true, programme: true, messagePierre: true, carteSante: true,
+  progression: true, bilans: true, rdv: true, programme: true,
+  messagePraticien: true, messagePierre: true, carteSante: true,
 };
+
+// Reconcilie l'ancienne cle `messagePierre` et la nouvelle
+// `messagePraticien` (migration 20260831_visibilite_message_praticien).
+//
+// L'ORDRE COMPTE, et c'est tout l'interet de cette fonction : un simple
+// `{ ...DEFAUT, ...ligne }` donnerait `messagePraticien: true` a une ligne
+// qui ne porte que `messagePierre: false` — le message d'un praticien qui
+// l'avait masque redeviendrait visible chez son patient, sans erreur.
+//
+// Les deux cles ressortent a la MEME valeur : le reste de l'application
+// peut lire l'une ou l'autre, et une ligne reecrite conserve l'ancienne
+// pour le code encore deploye.
+export function normaliserVisibilite(
+  brut: Record<string, unknown> | null | undefined,
+): VisibiliteBeneficiaire {
+  const ligne = (brut ?? {}) as Record<string, unknown>;
+  const message = (ligne.messagePraticien ?? ligne.messagePierre ?? true) as boolean;
+  return {
+    ...VISIBILITE_BENEFICIAIRE_DEFAULT,
+    ...ligne,
+    messagePraticien: message,
+    messagePierre: message,
+  };
+}
 
 // Participant TypeScript → Supabase insert/update object
 // Colonnes exactes de la table participants Supabase
