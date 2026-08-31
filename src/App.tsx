@@ -2,7 +2,7 @@ import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { PageTransition } from './components/ui/PageTransition';
-import { supabase, typeLienAuth } from './lib/supabase';
+import { supabase, typeLienAuth, erreurLienAuth } from './lib/supabase';
 import { setCurrentUserId, loadAllBrouillonsFromSupabase } from './hooks/useBrouillonBilan';
 import { useDevice } from './hooks/useDevice';
 import AppMobile from './pages/mobile/AppMobile';
@@ -151,9 +151,19 @@ export default function App() {
   // il suffirait de fermer puis rouvrir l'application pour se retrouver
   // connecté sans être passé par la définition du mot de passe — le trou
   // exact que ce verrou existe pour fermer.
+  //
+  // `erreurLienAuth` prime sur tout : quand Supabase a REFUSÉ le lien, il
+  // n'y a aucune session de récupération à protéger. Armer le verrou dans ce
+  // cas enfermerait l'utilisateur sur une page dont il ne peut plus rien
+  // faire, puisque toute autre route y renvoie.
   const [enRecuperation, setEnRecuperation] = useState(
-    () => typeLienAuth !== null || localStorage.getItem('horizon_recuperation') === 'true',
+    () => erreurLienAuth === null
+      && (typeLienAuth !== null || localStorage.getItem('horizon_recuperation') === 'true'),
   );
+
+  // Vrai une fois le mot de passe défini ET la session rétablie : sert
+  // uniquement à quitter /reset-password. Voir la route plus bas.
+  const [redefinitionTerminee, setRedefinitionTerminee] = useState(false);
 
   // L'abonnement onAuthStateChange est posé une seule fois (effet à deps
   // vides) : il capturerait `enRecuperation` à sa valeur du premier rendu
@@ -167,7 +177,13 @@ export default function App() {
   // PASSWORD_RECOVERY : entre le chargement et l'émission, un onglet fermé
   // laisserait une session valide sans trace du verrou.
   useEffect(() => {
-    if (typeLienAuth !== null) localStorage.setItem('horizon_recuperation', 'true');
+    if (typeLienAuth !== null) {
+      localStorage.setItem('horizon_recuperation', 'true');
+      return;
+    }
+    // Lien refusé : on efface un éventuel drapeau resté d'une tentative
+    // précédente abandonnée. Sinon le verrou survit au lien qui l'a créé.
+    if (erreurLienAuth !== null) localStorage.removeItem('horizon_recuperation');
   }, []);
 
   useEffect(() => {
@@ -338,22 +354,49 @@ export default function App() {
             que cette route existe. Hors zone protégée : l'utilisateur n'est
             volontairement PAS considéré comme connecté à ce stade. */}
         <Route path="/reset-password" element={
-          <ResetPasswordPage
-            typeLien={typeLienAuth}
-            onMotDePasseDefini={() => {
-              // Le mot de passe est défini : le verrou tombe, et la session
-              // déjà ouverte devient une session ordinaire.
-              localStorage.removeItem('horizon_recuperation');
-              setEnRecuperation(false);
-              supabase?.auth.getSession().then(({ data }) => {
-                if (data.session) {
-                  setCurrentUserId(data.session.user.id);
-                  setIsLoggedIn(true);
-                  needsOnboarding(data.session.user.id).then(setShowOnboarding);
+          redefinitionTerminee ? (
+            // Le mot de passe est défini ET la session est rétablie : on quitte.
+            // Sans cette sortie, l'URL restait /reset-password et la route
+            // réaffichait le formulaire, bouton réarmé, sans rien qui signale
+            // le succès — d'où l'impression d'un clic sans effet, puis un
+            // second clic refusé en 422 (`same_password`).
+            <Navigate to="/" replace />
+          ) : (typeLienAuth !== null || erreurLienAuth !== null || enRecuperation) ? (
+            <ResetPasswordPage
+              typeLien={typeLienAuth}
+              erreurLien={erreurLienAuth}
+              onMotDePasseDefini={async () => {
+                // Le mot de passe est défini : le verrou tombe, et la session
+                // déjà ouverte devient une session ordinaire.
+                localStorage.removeItem('horizon_recuperation');
+                setEnRecuperation(false);
+
+                // L'ordre compte. On ne bascule `redefinitionTerminee` qu'une
+                // fois `isLoggedIn` et `showOnboarding` établis : plus tôt, le
+                // catch-all verrait `isLoggedIn` encore faux et renverrait sur
+                // /login — un aller-retour visible juste après un succès.
+                if (supabase) {
+                  const { data } = await supabase.auth.getSession();
+                  if (data.session) {
+                    setCurrentUserId(data.session.user.id);
+                    setShowOnboarding(await needsOnboarding(data.session.user.id));
+                    setIsLoggedIn(true);
+                  }
                 }
-              });
-            }}
-          />
+                // Si la session a disparu entre-temps, le catch-all enverra
+                // sur /login : le praticien se connectera avec son nouveau
+                // mot de passe. C'est le bon mode d'échec.
+                setRedefinitionTerminee(true);
+              }}
+            />
+          ) : (
+            // Ni lien, ni verrou en cours : personne n'a de mot de passe à
+            // définir ici. C'est cette garde qui manquait — sans elle, la
+            // route servait le formulaire à quiconque tapait l'URL, et le
+            // formulaire fantôme obtenu au bout d'un lien mort a été pris
+            // pour la preuve d'un lien réutilisable.
+            <Navigate to="/login" replace />
+          )
         } />
 
         {/* Vue client : pas de sidebar */}
