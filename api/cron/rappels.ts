@@ -25,6 +25,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getServiceClient } from '../_lib/patientAuth.js';
 import { withSentry } from '../_lib/sentry.js';
+import { secretsIdentiques } from '../_lib/secrets.js';
 import { envoyerRappel } from '../_lib/notifications.js';
 import {
   resoudrePrefs,
@@ -48,7 +49,10 @@ export default withSentry(async function handler(req: any, res: any) {
 
   const header = req.headers['x-cron-secret'];
   const fourni = Array.isArray(header) ? header[0] : header;
-  if (fourni !== secret) {
+  // Comparaison a temps constant : un `!==` s'arrete au premier caractere
+  // qui differe et fuite, par le temps de reponse, la longueur du prefixe
+  // correct du secret devine. Voir api/_lib/secrets.ts.
+  if (!secretsIdentiques(fourni ?? '', secret)) {
     return res.status(401).json({ error: 'Non autorisé' });
   }
 
