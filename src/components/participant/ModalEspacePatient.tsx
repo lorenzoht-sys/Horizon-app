@@ -5,7 +5,8 @@ import type { Participant, VisibiliteBeneficiaire } from '../../types';
 import { getAppHost } from '../../lib/config';
 
 const VISIBILITE_DEFAULT: VisibiliteBeneficiaire = {
-  progression: true, bilans: true, rdv: true, programme: true, messagePierre: true, carteSante: true,
+  progression: true, bilans: true, rdv: true, programme: true,
+  messagePraticien: true, messagePierre: true, carteSante: true,
 };
 
 const VISIBILITE_ITEMS = [
@@ -13,10 +14,7 @@ const VISIBILITE_ITEMS = [
   { key: 'bilans'        as const, label: 'Résultats des bilans' },
   { key: 'rdv'           as const, label: 'Prochains rendez-vous' },
   { key: 'programme'     as const, label: "Programme d'exercices" },
-  // La cle `messagePierre` est persistee en JSONB (colonne
-  // participants.visibilite_beneficiaire, DEFAULT en prod comme en staging) :
-  // seul le LIBELLE change ici. La renommer demande une migration.
-  { key: 'messagePierre' as const, label: 'Message du praticien' },
+  { key: 'messagePraticien' as const, label: 'Message du praticien' },
   { key: 'carteSante'    as const, label: 'Carte de santé téléchargeable' },
 ];
 
@@ -40,6 +38,10 @@ export default function ModalEspacePatient({ participant, onClose, onUpdate }: P
 
   function toggleVisibilite(key: keyof VisibiliteBeneficiaire, val: boolean) {
     const updated = { ...visibilite, [key]: val };
+    // Les deux cles restent synchronisees tant que la phase 2 n'a pas
+    // supprime l'ancienne : une ligne enregistree par ce code sans
+    // `messagePierre` serait lue « visible » par tout code encore deploye.
+    if (key === 'messagePraticien') updated.messagePierre = val;
     setVisibilite(updated);
     onUpdate({ visibiliteBeneficiaire: updated }).catch(() => {
       toast.error('Erreur lors de la sauvegarde, réessayez');
@@ -247,7 +249,7 @@ export default function ModalEspacePatient({ participant, onClose, onUpdate }: P
         </div>
 
         {/* Message du praticien */}
-        {visibilite.messagePierre && (
+        {visibilite.messagePraticien && (
           <div>
             <div style={{
               fontSize: 11, fontWeight: 700, color: 'var(--color-ink-2)',

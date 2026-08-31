@@ -355,7 +355,13 @@ function EcranAccueil({
     .sort((a, b) => b.dateCreation.localeCompare(a.dateCreation))[0] ?? null;
 
   // Message personnalisé = messageClient du dernier bilan
-  const messagePierre = dernierBilan?.messageClient;
+  const messagePraticien = dernierBilan?.messageClient;
+  // Repli sur l'ancienne cle : une ligne pas encore migree ne porte que
+  // `messagePierre`, et la lire comme absente l'afficherait par defaut.
+  const messageAutorise =
+    participant.visibiliteBeneficiaire?.messagePraticien
+    ?? participant.visibiliteBeneficiaire?.messagePierre
+    ?? true;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -470,7 +476,7 @@ function EcranAccueil({
       )}
 
       {/* Message du praticien */}
-      {messagePierre && participant.visibiliteBeneficiaire?.messagePierre !== false && (
+      {messagePraticien && messageAutorise && (
         <div style={{
           background: 'rgba(43,191,191,0.08)',
           border: '1px solid rgba(43,191,191,0.25)',
@@ -480,7 +486,7 @@ function EcranAccueil({
             Message de {praticien.nom.split(' ')[0]}
           </div>
           <div style={{ fontSize: 14, color: C.text, lineHeight: 1.7, fontStyle: 'italic' }}>
-            💬 "{messagePierre}"
+            💬 "{messagePraticien}"
           </div>
         </div>
       )}
