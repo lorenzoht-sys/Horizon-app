@@ -1,5 +1,11 @@
 -- VERIFICATION du trigger de role par defaut — lecture seule.
 -- Les 6 lignes doivent toutes afficher OK.
+--
+-- UNE SEULE requete par fichier : staging-query.ts fait `const { rows } =
+-- await client.query(sql)`, et `pg` renvoie un TABLEAU de resultats des
+-- qu'il y a plusieurs instructions — `rows` vaut alors undefined et le
+-- script affiche `undefined` sans erreur. La lecture de la population admin
+-- vit donc dans roles_admins.lecture.sql.
 SELECT n, controle, constate, attendu,
        CASE WHEN constate = attendu THEN 'OK' ELSE '### ECHEC ###' END AS verdict
   FROM ((
@@ -24,7 +30,14 @@ SELECT n, controle, constate, attendu,
   UNION ALL SELECT 5, 'comptes auth.users sans role',
          (SELECT count(*)::text FROM auth.users u
             LEFT JOIN public.user_roles r ON r.user_id=u.id WHERE r.user_id IS NULL), '0'
-  UNION ALL SELECT 6, 'comptes admin existants (aucun a ce stade)',
-         (SELECT count(*)::text FROM public.user_roles WHERE app_role='admin'), '0'
+  -- Le controle 6 comptait les admins et attendait '0' (« aucun a ce stade »).
+  -- C'etait un INSTANTANE, pas un invariant : il est devenu faux le 2026-08-31,
+  -- a la creation du premier admin de production, et serait sorti en ECHEC pour
+  -- une bonne raison. Remplace par ce qui doit rester vrai a jamais : le trigger
+  -- n'attribue que 'praticien', donc aucun role inconnu ne doit apparaitre. Un
+  -- admin se nomme a la main, et se relit dans la requete informative en bas.
+  UNION ALL SELECT 6, 'roles inattendus (ni admin ni praticien)',
+         (SELECT count(*)::text FROM public.user_roles
+           WHERE app_role NOT IN ('admin','praticien')), '0'
 )) t
 ORDER BY n;
