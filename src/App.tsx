@@ -16,6 +16,7 @@ import SettingsPage from './pages/SettingsPage';
 import OnboardingPage from './pages/OnboardingPage';
 import PageAccesPatient from './pages/PageAccesPatient';
 import EspacePatient from './pages/EspacePatient';
+import ErrorBoundaryPatient from './components/patient/ErrorBoundaryPatient';
 import { BandeauHorsLigne, NotificationMiseAJour } from './components/pwa/PWAComponents';
 import ClientView from './pages/ClientView';
 
@@ -402,9 +403,18 @@ export default function App() {
         {/* Vue client : pas de sidebar */}
         <Route path="/client/:token" element={<ClientView />} />
 
-        {/* Espace patient — public, sans auth praticien */}
-        <Route path="/patient" element={<PageAccesPatient />} />
-        <Route path="/patient/:id" element={<EspacePatient />} />
+        {/* Espace patient — public, sans auth praticien.
+            Chaque écran porte SA PROPRE frontière d'erreur, pas une seule
+            partagée : une frontière est consommée quand elle attrape, et une
+            frontière commune aux deux routes resterait en état d'erreur après
+            une navigation de l'une vers l'autre. Deux instances distinctes se
+            réinitialisent indépendamment. */}
+        <Route path="/patient" element={
+          <ErrorBoundaryPatient><PageAccesPatient /></ErrorBoundaryPatient>
+        } />
+        <Route path="/patient/:id" element={
+          <ErrorBoundaryPatient><EspacePatient /></ErrorBoundaryPatient>
+        } />
 
         {/* Portail structure — public, sans auth praticien */}
         <Route path="/structure/:token" element={
