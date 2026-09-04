@@ -61,6 +61,35 @@ export default withSentry(async function handler(req: any, res: any) {
   // est nullable depuis la migration FK SET NULL, ce n'est plus une condition
   // de rejet.
 
+  // ── Anti-IDOR [F-13] ──────────────────────────────────────────────────
+  // `seanceId` vient du body. Cette route utilise service_role, qui contourne
+  // RLS : la seule contrainte en base est la FK
+  // `retours_seance.seance_id -> seances_patient(id)` (vérifiée sur le schéma
+  // le 2026-09-03), qui prouve que la ligne EXISTE, jamais qu'elle appartient
+  // au participant du JWT. Sans ce contrôle, un bénéficiaire authentifié
+  // rattache son ressenti (Borg RPE, bien-être) à la séance d'un AUTRE
+  // bénéficiaire — donnée de santé écrite dans le dossier d'un tiers.
+  //
+  // L'id n'est pas à deviner : `seancePatientId` est renvoyé au navigateur par
+  // POST /api/patient/seance, et il reste valide indéfiniment.
+  //
+  // 404 et non 403 : un 403 confirmerait que l'id existe, ce qui rouvre par
+  // l'autre bout l'oracle d'existence que ce contrôle ferme.
+  if (seanceId) {
+    const { data: seancePatient, error: seancePatientErr } = await supabase
+      .from('seances_patient')
+      .select('id')
+      .eq('id', seanceId)
+      .eq('participant_id', participantId)
+      .maybeSingle();
+
+    if (seancePatientErr || !seancePatient) {
+      console.error('[retour-seance] seanceId refusé:', seanceId, 'participant:', participantId, seancePatientErr);
+      await logAuditEvent(supabase, 'patient_retour_submit', participantId, getClientIp(req), false);
+      return res.status(404).json({ error: 'Séance introuvable' });
+    }
+  }
+
   const { error: insErr } = await supabase.from('retours_seance').insert({
     participant_id: participantId,
     praticien_id: participant.praticien_id,
