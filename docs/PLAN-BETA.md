@@ -1,5 +1,49 @@
 # Plan bêta — points à traiter avant ouverture
 
+## CE FICHIER EST LA SEULE RÉFÉRENCE DE SUIVI — il n'existe pas de « plan en N étapes »
+
+**Ce document plus ce qui est prouvable depuis git : rien d'autre ne fait
+foi. Il n'existe aucun plan numéroté de 0 à N, ni ici ni ailleurs dans le
+dépôt.**
+
+Écrit le 2026-09-03, après un audit d'état mené en croyant qu'un plan en
+7 étapes (0 à 6) figurait dans ce fichier. Il n'y figure pas, et n'y a
+jamais figuré. Vérifié :
+
+- les titres de ce fichier — aucun n'est une étape numérotée ;
+- ses **21 révisions** depuis sa création (`git log --all -- docs/PLAN-BETA.md`)
+  — aucune n'a jamais porté de « Étape 0 » ;
+- **toutes** les branches locales et distantes, tous les `.md` du dépôt —
+  aucune occurrence.
+
+La numérotation existe, mais **uniquement dans les messages de commit et
+les titres de PR** : « Étape 1, lot N » (lots de sécurité F-xx), « Etape 3 »
+(`user_roles`), « Etape 4 » (administration des comptes), « Etape 6 »
+(retrait de l'identité du premier utilisateur). Il n'y a jamais eu d'étape
+0, 2 ni 5 — ce sont des cases vides d'une numérotation reconstituée après
+coup, pas des chantiers oubliés.
+
+### Pourquoi c'est noté ici plutôt que corrigé en silence
+
+Un plan qui n'existe que dans le souvenir d'une conversation se comporte
+comme un plan réel : on s'y réfère, on s'en sert pour décider quoi faire
+ensuite, et on lui attribue des contenus qu'il n'a jamais eus. Le
+2026-09-03, l'« étape 2 » retenue de mémoire portait deux sujets — des clés
+étrangères manquantes, et un verrou d'écriture sur `tm6_variantes` réservé
+à `service_role`. Le second décrit la **première version, abandonnée**, de
+`20260817_securite_01_tm6_variantes_rls.sql` : le modèle réellement appliqué
+est un propriétaire par ligne, la version `service_role` ayant été réécrite
+le 2026-08-19 parce qu'elle cassait `useTm6Variantes.ts`. Un mois de travail
+séparait le souvenir de la réalité, sans que rien ne le signale.
+
+**La règle qui en découle** : ce qui doit survivre à une session s'écrit
+ici. Un chantier qui n'est ni dans ce fichier, ni dans un commit sur `main`,
+ni dans une PR ouverte, n'existe pas — quelle que soit la netteté du
+souvenir qu'on en a. Voir l'inventaire plus bas : quatre IDOR sont restés
+ouverts en production jusqu'au 2026-09-03 alors que deux d'entre eux étaient
+« corrigés » depuis le 2026-08-19 — sur une branche que rien ne suivait, et
+dont aucun chantier de ce fichier ne mentionnait le contenu.
+
 ## RÈGLE DE MÉTHODE — un contrôle compare un ensemble exact
 
 **Un contrôle qui énumère des cas en oublie un. Comparer un ensemble exact,
@@ -872,29 +916,113 @@ La commande devient alors sans valeur pour qui la lit, et l'historique aussi.
 Le même schéma vaut pour le job de staging. Et pour tout futur job pg_cron
 qui porterait un secret dans ses en-têtes.
 
-## Chantiers de sécurité identifiés mais non appliqués
+## INVENTAIRE — ce qui n'a jamais été extrait d'`audit-securite-global`
 
-Trouvés en préparant le lot 6 de l'étape 1 (rate limit `api/claude.ts`,
-F-12) : `audit-securite-global` mélange ce correctif à 3 autres dans le même
-commit (`d6be50f`, fichier `api/claude.ts`), jamais revus ni planifiés.
-Ils ont l'air utiles mais n'ont pas été extraits — seul le rate limit l'a
-été (voir `20260817_securite_08_rate_limit_claude.sql`). À traiter comme un
-lot séparé, avec sa propre revue :
+**Dressé le 2026-09-03, fichier par fichier contre `origin/main`.** La liste
+qui précédait n'en comptait que 3 : elle avait été écrite en préparant le
+lot 6, à partir d'un seul commit (`d6be50f`), sans inventaire complet de la
+branche. Sept éléments manquaient, dont deux IDOR en production.
 
-- **Plafond de taille de prompt** (`PROMPT_MAX_LENGTH`, `api/_lib/guard.js`
-  sur `audit-securite-global`) — réduit l'abus de coût par des prompts
-  démesurés. Absent de `main`.
-- **Garde-fou anti prompt-injection** — message système dans `api/claude.ts`
-  instruisant le modèle à ne jamais traiter le contenu utilisateur (notes
-  cliniques, dictées patient) comme une instruction. Défense en profondeur,
-  pas une garantie absolue vu que 8 appelants différents côté `src/`
-  envoient des formats hétérogènes dans `prompt`.
-- **Sanitisation des messages d'erreur** — remplace `String(err)` (peut
-  exposer des détails internes au client) par un message générique
-  `'Erreur serveur'` + `console.error` côté serveur, sur les deux `catch`
-  de `api/claude.ts`.
+`audit-securite-global` compte **21 commits jamais mergés**. Elle est
+désormais poussée sur `origin` (2026-09-03) : `docs/ETAT_AUDIT.md` interdit
+le **merge**, pas la sauvegarde, et elle portait les seules versions connues
+de plusieurs correctifs sur un unique disque.
 
-### Code mort de l'ancienne architecture « client anon direct »
+### La liste, et l'état réel de chaque élément
+
+| # | Élément | Où | État au 2026-09-03 |
+|---|---|---|---|
+| 1 | **[F-13] IDOR `api/patient/retour-seance.ts`** — `seanceId` du body inséré sans contrôle d'appartenance | `api/` | **Corrigé**, branche `securite-idor-patient-f13-f14`, non mergée |
+| 2 | **[F-14] IDOR `api/patient/seance.ts`** — `exercices[].id` inséré sans contrôle | `api/` | **Corrigé**, même branche — avec 2 contrôles voisins qui manquaient aussi (`programmeId`, `seanceId`) |
+| 3 | **[F-02] `code_acces` tirés avec `Math.random()`** | `src/utils/codeAcces.ts` | **Ouvert.** Détail plus bas, section « chantiers annexes » |
+| 4 | **Plafond de taille de prompt** (`PROMPT_MAX_LENGTH`, `api/_lib/guard.ts`) | `api/claude.ts` | **Ouvert.** Le fichier `guard.ts` n'existe pas sur `main` |
+| 5 | **Garde-fou anti prompt-injection** — message système instruisant le modèle à traiter le texte utilisateur comme donnée, jamais comme instruction | `api/claude.ts` | **Ouvert** |
+| 6 | **Sanitisation des messages d'erreur** — `String(err)` → `'Erreur serveur'` + `console.error` | `api/claude.ts` (2 `catch`), `api/patient/seance.ts`, `api/patient/retour-seance.ts` | **Ouvert.** Volontairement laissé hors de la branche F-13/F-14 : le point couvre plusieurs routes et mérite un lot cohérent |
+| 7 | **En-têtes de sécurité HTTP** — HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP, CSP en `Report-Only`, plus `Cache-Control: no-store` sur `/api/*` | `vercel.json` | **Ouvert.** Aucun en-tête sur `main` |
+| 8 | **Durcissement Sentry client** — `delete event.user` et `event.request.cookies` dans `beforeSend` | `src/lib/sentry.ts` | **Ouvert.** Défense en profondeur : rien n'appelle `setUser()` et `sendDefaultPii` est déjà à `false` |
+| 9 | **Validation Zod des entrées API** (12 routes) | `api/` | **Jamais fait, et pas arbitré.** Bloqué par l'absence d'environnement de test au moment de l'audit (`ETAT_AUDIT.md`). Les 12 routes ont une validation manuelle par champ ; migrer vers Zod changerait la forme des réponses d'erreur consommées par `src/lib/patientApi.ts` |
+| 10 | **7 documents d'audit** — `RAPPORT_SECURITE.md`, `CARTOGRAPHIE_SECURITE.md`, `AUDIT_ROUTES_API.md`, `PACK_CODE_SECURITE_REFERENCE.md`, `MES_ACTIONS.md`, `ETAT_AUDIT.md`, `AUDIT_DEPENDANCE_XLSX.md` | `docs/` | **Absents de `main`.** Plusieurs migrations mergées les citent pourtant comme référence : ces renvois pointent aujourd'hui vers des fichiers introuvables pour qui ne connaît pas la branche |
+
+### Deux pièges à connaître avant toute extraction
+
+**Un cherry-pick brut régresserait.** La branche a été figée le 2026-08-19 ;
+`main` a avancé depuis. Trois fichiers y sont désormais **en retard** :
+
+- `api/structure/data.ts` et `api/_lib/structureAuth.ts` — dépassés par les
+  PR #12, #18 et #20 ;
+- `api/claude.ts` — la version de la branche est amputée du log Sentry du
+  rate limit, ajouté par la PR #11.
+
+L'extraction se fait à la main, correctif par correctif, en repartant de
+`main`.
+
+**Le schéma a bougé.** Quinze jours suffisent : entre le gel de la branche
+(2026-08-19) et le 2026-09-03, `user_roles` a été posée (2026-08-29), la
+parité des `GRANT` a été reprise deux fois (`20260821`, `20260822`),
+`structures.expires_at` est apparue, et `tm6_variantes` a reçu un
+propriétaire par ligne. Les hypothèses de base d'un correctif se revérifient
+donc sur la base réelle avant réécriture, quel que soit son âge apparent —
+c'est ce qui a été fait pour F-13/F-14, dont les quatre chaînes de clés
+étrangères ont été relues sur staging avant d'écrire une ligne.
+
+Le mot « étape 3 » ci-dessous renvoie à un message de commit, pas à un plan :
+voir la première section de ce fichier.
+
+### Compatibilité avec `user_roles` — vérifiée, pas supposée
+
+`git grep -i "user_roles\|app_role_courant"` sur `audit-securite-global`
+renvoie **zéro ligne** : la branche ignore totalement le modèle de rôles
+posé par l'étape 3. Ce qui reste à extraire est du code applicatif (`api/`,
+`src/`, `vercel.json`), pas des policies RLS, et rien n'y suppose que « tout
+compte authentifié est un praticien ». Aucune incompatibilité — seulement le
+retard décrit ci-dessus.
+
+## PREUVE D'EXPLOITATION — quatre IDOR exercés sur staging (2026-09-03)
+
+**Ce ne sont pas des failles déduites d'une lecture de code. Elles ont été
+exercées, et les écritures ont eu lieu.**
+
+`scripts/staging-sonde-idor-patient.ts` appelle les handlers de
+`POST /api/patient/seance` et `POST /api/patient/retour-seance` en process,
+avec le JWT d'un bénéficiaire et l'identifiant d'un autre. Sur le code de
+`main` du jour, **les quatre appels frauduleux ont renvoyé `200`** :
+
+| Contrôle absent | Ce qu'il permettait |
+|---|---|
+| `programmeId` | écrire une séance dans le programme d'un tiers |
+| `seanceId` | la rattacher à une séance qui n'est pas de ce programme |
+| `exercices[].id` — [F-14] | y joindre l'exercice d'un tiers |
+| `seanceId` du retour — [F-13] | rattacher son ressenti (Borg RPE, bien-être — **donnée de santé**) à la séance d'un tiers |
+
+```
+AVANT (routes à l'état main)   : 4 sens ROUGE en ÉCHEC (200 au lieu de 404),
+                                 2 sens VERT OK
+                                 >>> 4 contrôle(s) NON CONFORME(S) <<<
+APRÈS (securite-idor-patient-f13-f14) : 6/6 OK
+                                 >>> CONFORME <<<
+```
+
+Les identifiants ne sont pas à deviner : ils circulent légitimement jusqu'au
+navigateur via `GET /api/patient/me`, et `seancePatientId` est renvoyé par
+`POST /api/patient/seance`. Ils restent valides indéfiniment.
+
+### Ce que cet épisode apprend, au-delà des quatre correctifs
+
+1. **Une clé étrangère ne prouve jamais une appartenance.** Elle prouve
+   qu'une ligne existe. La règle était déjà écrite dans `CHECKLIST_RELEASE.md`
+   (section 3) après F-13/F-14 — elle n'a pas empêché les failles de rester
+   ouvertes, parce que le correctif, lui, n'était suivi nulle part.
+2. **Le sens vert d'une épreuve n'est pas décoratif.** Ces routes se
+   déploient **au merge**, sans étape manuelle : un contrôle trop strict
+   casse la validation de séance en production dans la minute. Chaque
+   contrôle est donc éprouvé dans les deux sens.
+3. **Une sonde peut mentir dans le sens rassurant.** Première version : sans
+   nettoyage entre chaque appel, un appel qui aboutit — le symptôme même du
+   contrôle manquant — laisse une ligne qui fait échouer le suivant sur la
+   contrainte d'unicité (`23505`). La sonde comptait ce `409` comme
+   « refusé ». Elle nettoie désormais avant, entre chaque appel, et après.
+
+## Code mort de l'ancienne architecture « client anon direct »
 
 `MIGRATION_ANON.md` décrit le passage d'un accès Supabase anon direct
 (portail structure) vers les routes serveur `GET /api/structure/*`
