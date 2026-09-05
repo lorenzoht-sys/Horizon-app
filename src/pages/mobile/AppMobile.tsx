@@ -22,6 +22,7 @@ import {
   type SettingsPraticien,
 } from '../../lib/settingsPraticien';
 import { validerSiret } from '../../lib/siret';
+import { initialesPraticien } from '../../lib/initiales';
 import { getContreIndications, getObjectifsActivites, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../../lib/anamnese';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -939,7 +940,10 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
 
 function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout: () => void; onOuvrirSettings: () => void; onNaviguerOnglet: (id: string) => void }) {
   const { settings } = usePraticienSettings();
-  const initiales = `${(settings.prenom || 'P')[0]}${(settings.nom || '')[0] || ''}`;
+  // Meme regle que la Sidebar : les vraies initiales, ou une silhouette.
+  // Ce calcul repliait sur « P » quand le prenom manquait. Voir
+  // src/lib/initiales.ts.
+  const initiales = initialesPraticien(settings.prenom, settings.nom);
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -983,7 +987,12 @@ function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout:
       {/* Profil praticien */}
       <div style={{ background: C.dark, borderRadius: 14, padding: '16px', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: 'white', flexShrink: 0 }}>
-          {initiales}
+          {initiales || (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Identité non renseignée">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          )}
         </div>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>
