@@ -102,6 +102,68 @@ export function ecrireCacheSettingsPraticien(settings: SettingsPraticien): void 
   window.dispatchEvent(new Event(EVENT_SETTINGS_PRATICIEN));
 }
 
+/** Réglages → colonnes de `praticiens`. Miroir de `rowToSettings`. */
+export function settingsToRow(s: SettingsPraticien, id: string): Record<string, unknown> {
+  return {
+    id,
+    prenom:              s.prenom,
+    nom:                 s.nom,
+    titre:               s.titre,
+    email:               s.email,
+    telephone:           s.telephone || null,
+    adresse_rue:         s.adresseRue,
+    adresse_code_postal: s.adresseCodePostal,
+    adresse_ville:       s.adresseVille,
+    siret:               s.siret,
+    numero_sap:          s.numeroSAP,
+    numero_tva:          s.numeroTVA || null,
+    ville_signature:     s.villeSignature,
+    societe:             s.societe || null,
+    logo_praticien:      s.logoPraticien || null,
+    tarif_horaire:       s.tarifHoraire,
+    frais_km_defaut:     s.fraisKmDefaut,
+  };
+}
+
+/**
+ * Enregistre les réglages : base D'ABORD, cache ENSUITE.
+ *
+ * L'ordre est la seule chose qui compte ici. Écrire le cache avant la base
+ * ferait croire à une sauvegarde réussie alors que la ligne n'a pas bougé —
+ * et comme le cache est ce que lisent les documents, le praticien émettrait
+ * des contrats avec une identité que la base ignore.
+ *
+ * Lève si la base refuse. L'appelant affiche l'erreur ; le cache n'est pas
+ * touché, donc rien ne ment sur ce qui est réellement enregistré.
+ */
+export async function enregistrerSettingsPraticien(
+  settings: SettingsPraticien,
+  userId: string,
+): Promise<void> {
+  if (!supabase) {
+    ecrireCacheSettingsPraticien(settings);
+    return;
+  }
+  const { error } = await supabase
+    .from('praticiens')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .upsert(settingsToRow(settings, userId) as any);
+  if (error) throw new Error(error.message);
+
+  ecrireCacheSettingsPraticien(settings);
+}
+
+/** Pourquoi l'hydratation n'a pas rempli le cache. */
+export type EchecHydratation =
+  | 'supabase-absent'   // pas de client configuré (mode local)
+  | 'session-absente'   // pas encore connecté — normal
+  | 'fiche-absente'     // compte sans ligne `praticiens` — onboarding à faire
+  | 'erreur';           // réseau, RLS, ou base indisponible
+
+export type ResultatHydratation =
+  | { ok: true }
+  | { ok: false; echec: EchecHydratation; message?: string };
+
 /**
  * Remplit le cache depuis `praticiens`. À appeler à l'ouverture de session.
  *
@@ -110,13 +172,25 @@ export function ecrireCacheSettingsPraticien(settings: SettingsPraticien): void 
  * écraser le cache avec du vide serait pire que de le laisser tel quel.
  *
  * Ne lève jamais : un échec réseau ne doit pas empêcher d'entrer dans
- * l'application. Le pire cas est le comportement d'avant — un cache absent.
+ * l'application.
+ *
+ * ── Pourquoi elle rend un motif, et plus un booléen ─────────────────────
+ * Elle rendait `false` dans quatre situations qui n'ont rien à voir : pas de
+ * client, pas de session, pas de fiche, base injoignable. L'appelant ne
+ * pouvait donc rien en faire, et n'en faisait rien.
+ *
+ * Or l'échec n'est pas neutre. Le cache est effacé à chaque connexion
+ * (App.tsx) ; si l'hydratation échoue derrière, le praticien travaille avec
+ * des réglages vides — contrats bloqués, documents sans identité — sans que
+ * rien ne le lui dise. « Pas de fiche » est un état normal d'avant
+ * onboarding ; « base injoignable » est une panne qu'il faut montrer. Les
+ * distinguer est la seule façon de ne signaler que la seconde.
  */
-export async function hydraterSettingsPraticien(): Promise<boolean> {
-  if (!supabase) return false;
+export async function hydraterSettingsPraticien(): Promise<ResultatHydratation> {
+  if (!supabase) return { ok: false, echec: 'supabase-absent' };
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return false;
+    if (!session) return { ok: false, echec: 'session-absente' };
 
     const { data, error } = await supabase
       .from('praticiens')
@@ -124,11 +198,12 @@ export async function hydraterSettingsPraticien(): Promise<boolean> {
       .eq('id', session.user.id)
       .maybeSingle();
 
-    if (error || !data) return false;
+    if (error) return { ok: false, echec: 'erreur', message: error.message };
+    if (!data) return { ok: false, echec: 'fiche-absente' };
 
     ecrireCacheSettingsPraticien(rowToSettings(data as Record<string, unknown>));
-    return true;
-  } catch {
-    return false;
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, echec: 'erreur', message: err instanceof Error ? err.message : undefined };
   }
 }

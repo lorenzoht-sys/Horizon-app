@@ -1,6 +1,12 @@
 import { useState, useEffect, type FormEvent, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { validerSiret } from '../lib/siret';
+import {
+  rowToSettings,
+  ecrireCacheSettingsPraticien,
+  hydraterSettingsPraticien,
+} from '../lib/settingsPraticien';
 
 interface Props {
   onComplete: () => void;
@@ -84,8 +90,17 @@ export default function OnboardingPage({ onComplete }: Props) {
       setError('Veuillez sélectionner votre type de professionnel.');
       return;
     }
-    if (!salarie && !siret.replace(/s/g, '')) {
-      setError("Renseignez votre numéro SIRET : il figure obligatoirement sur les contrats de prestation. Si vous êtes salarié·e d'une structure, cochez la case ci-dessous.");
+    // Le SIRET n'etait pas valide ici, seulement teste non-vide — et encore,
+    // par un `/s/g` qui retirait la lettre « s » au lieu des espaces. Un
+    // numero a 15 chiffres passait donc, et c'est ainsi qu'il en existe un
+    // en base. La validation est desormais la meme sur les trois ecrans.
+    const controleSiret = validerSiret(siret);
+    if (!salarie && !controleSiret.valide) {
+      setError(
+        controleSiret.echec === 'absent'
+          ? "Renseignez votre numéro SIRET : il figure obligatoirement sur les contrats de prestation. Si vous êtes salarié·e d'une structure, cochez la case ci-dessous."
+          : controleSiret.message!,
+      );
       return;
     }
 
@@ -95,9 +110,11 @@ export default function OnboardingPage({ onComplete }: Props) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { onComplete(); navigate('/'); return; }
 
-    const siretClean = siret.replace(/\s/g, '');
+    const siretClean = controleSiret.siret;
+    // `.select()` sur l'upsert : on veut la LIGNE COMPLETE en retour, pas
+    // seulement le succes. Voir l'ecriture du cache juste dessous.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: upsertError } = await (supabase as any)
+    const { data: ligne, error: upsertError } = await (supabase as any)
       .from('praticiens')
       .upsert({
         id:      user.id,
@@ -107,7 +124,9 @@ export default function OnboardingPage({ onComplete }: Props) {
         societe: societe.trim() || null,
         siret:   siretClean || null,
         email:   user.email,
-      });
+      })
+      .select()
+      .single();
 
     if (upsertError) {
       console.error('[Onboarding] Erreur upsert praticiens:', upsertError);
@@ -116,12 +135,22 @@ export default function OnboardingPage({ onComplete }: Props) {
       return;
     }
 
-    // Mise à jour du cache localStorage pour les composants PDF
-    localStorage.setItem('settings_praticien', JSON.stringify({
-      prenom: prenom.trim(), nom: nom.trim(), titre: titre.trim(),
-      societe: societe.trim(), siret: siretClean,
-    }));
-    window.dispatchEvent(new Event('settings_praticien_updated'));
+    // ── Cache COMPLET, et pas les cinq champs de ce formulaire ───────────
+    // L'onboarding ecrivait un cache partiel — prenom, nom, titre, societe,
+    // siret — qui REMPLACAIT le cache complet. `chargerSettingsPraticien`
+    // comblant le reste avec ses valeurs par defaut, l'adresse, le telephone
+    // et l'email retombaient a vide jusqu'a la prochaine hydratation. Un
+    // contrat genere dans la foulee sortait donc sans adresse ni telephone.
+    //
+    // On ecrit desormais la ligne renvoyee par la base, entiere. Elle porte
+    // ce que ce formulaire ne collecte pas : le cas reel est le praticien
+    // invite dont la fiche etait deja partiellement remplie.
+    if (ligne) {
+      ecrireCacheSettingsPraticien(rowToSettings(ligne as Record<string, unknown>));
+    } else {
+      // `.select()` muet (RLS de lecture, reponse tronquee) : on relit.
+      await hydraterSettingsPraticien();
+    }
 
     setLoading(false);
     onComplete();

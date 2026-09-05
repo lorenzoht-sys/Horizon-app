@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { chargerSettingsPraticien } from '../../lib/settingsPraticien';
+import { validerSiret } from '../../lib/siret';
 import { Link } from 'react-router-dom';
 import { X, Download, Loader } from 'lucide-react';
 import { toast } from 'sonner';
@@ -62,8 +63,20 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
   // compte issu de l'onboarding, qui ne collectait pas le nom de famille.
   const prenomPraticien = (settings.prenom ?? '').trim();
   const nomFamillePraticien = (settings.nom ?? '').trim();
-  const siretPraticien = (settings.siret ?? '').trim();
   const nomPraticien = `${nomFamillePraticien} ${prenomPraticien}`.trim();
+
+  // ── Le SIRET est verifie ICI, pas seulement a la saisie ──────────────
+  // Les trois ecrans qui le collectent le valident desormais, mais ce modal
+  // est le dernier point de sortie, et le seul par lequel un SIRET devient
+  // une mention legale. Il doit tenir quel que soit le chemin par lequel la
+  // valeur est entree — y compris celles deja en base, saisies a l'epoque ou
+  // aucun ecran ne controlait rien.
+  //
+  // Le garde-fou ne testait que la PRESENCE. Un numero a 15 chiffres passait
+  // donc, et s'imprimait. C'est le pire des deux cas : un SIRET absent se
+  // voit sur le document, un faux a 15 chiffres ne se voit pas.
+  const controleSiret = validerSiret(settings.siret ?? '');
+  const siretInvalide = !controleSiret.valide && controleSiret.echec !== 'absent';
 
   // Ce qui rend le contrat INVALIDE, donc ce qui bloque. Le SIRET en fait
   // partie : il est legalement attendu sur un contrat de prestation, et le
@@ -71,12 +84,17 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
   // La contrainte vit ICI et pas dans le formulaire des reglages, qui sert a
   // dix autres choses et bloquerait un salarie de structure — lequel n'a pas
   // de SIRET personnel, et n'emet pas de contrat de prestation non plus.
+  //
+  // `bloquants` ne liste que ce qui MANQUE. Un SIRET faux est traite a part
+  // (`siretInvalide`) : les deux empechent de generer, mais ils ne demandent
+  // pas le meme geste, et les confondre afficherait « il manque votre numéro
+  // SIRET » a quelqu'un qui en voit un rempli dans ses reglages.
   const bloquants = [
     !prenomPraticien && 'votre prénom',
     !nomFamillePraticien && 'votre nom',
-    !siretPraticien && 'votre numéro SIRET',
+    controleSiret.echec === 'absent' && 'votre numéro SIRET',
   ].filter(Boolean) as string[];
-  const identiteComplete = bloquants.length === 0;
+  const identiteComplete = bloquants.length === 0 && !siretInvalide;
 
   // Ceux-la n'empechent pas de generer, mais un contrat sans SIRET ni adresse
   // est incomplet : on les montre plutot que de les laisser sortir vides.
@@ -91,7 +109,7 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
     praticien: {
       nom: nomPraticien,
       adresse: adressePraticien,
-      siret: settings.siret || '',
+      siret: controleSiret.siret,
       telephone: settings.telephone || '',
       email: settings.email || '',
     },
@@ -119,7 +137,11 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
 
   async function handleGenerer() {
     if (!identiteComplete) {
-      toast.error(`Complétez vos réglages avant de générer un contrat : ${bloquants.join(', ')}.`);
+      toast.error(
+        bloquants.length > 0
+          ? `Complétez vos réglages avant de générer un contrat : ${bloquants.join(', ')}.`
+          : controleSiret.message!,
+      );
       return;
     }
     setLoading(true);
@@ -170,11 +192,27 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
                   Contrat impossible à générer
                 </div>
                 <div className="text-xs text-red-800 leading-relaxed">
-                  Il manque {bloquants.join(', ')} dans vos réglages. Un contrat de
-                  prestation doit nommer son prestataire et porter son SIRET.{' '}
-                  <Link to="/settings" onClick={onClose} className="underline font-semibold">
-                    Compléter mes informations
-                  </Link>
+                  {bloquants.length > 0 && (
+                    <p>
+                      Il manque {bloquants.join(', ')} dans vos réglages. Un contrat de
+                      prestation doit nommer son prestataire et porter son SIRET.
+                    </p>
+                  )}
+                  {/* Un SIRET saisi mais faux n'est pas un manque : le dire
+                      autrement, sinon le message envoie corriger un champ que
+                      le praticien voit rempli. */}
+                  {siretInvalide && (
+                    <p className={bloquants.length > 0 ? 'mt-1.5' : undefined}>
+                      Votre numéro SIRET est invalide. {controleSiret.message} Il figure
+                      comme mention légale sur le contrat : un numéro faux y passerait
+                      inaperçu, contrairement à un numéro absent.
+                    </p>
+                  )}
+                  <p className="mt-1.5">
+                    <Link to="/settings" onClick={onClose} className="underline font-semibold">
+                      Compléter mes informations
+                    </Link>
+                  </p>
                 </div>
               </div>
             )}
@@ -201,7 +239,14 @@ export default function ModalGenerationContrat({ contrat, participant, onClose }
                 <div>📋 Début du contrat : <strong>{formatDateFR(contrat.dateDebut)}</strong></div>
                 <div>⏱ Durée séance : <strong>{formatDuree(contrat.dureeMinutes)}</strong></div>
                 <div>📅 Fréquence : <strong>{formatFrequence(contrat.nbSeancesSemaine, contrat.heureDebut)}</strong></div>
-                <div>👤 Prestataire : <strong>{settings.prenom} {settings.nom}</strong> — SIRET {settings.siret || 'non renseigné'}</div>
+                <div>
+                  👤 Prestataire : <strong>{settings.prenom} {settings.nom}</strong> — SIRET{' '}
+                  {controleSiret.echec === 'absent'
+                    ? 'non renseigné'
+                    : siretInvalide
+                      ? `${controleSiret.siret} (invalide)`
+                      : controleSiret.siret}
+                </div>
               </div>
             </div>
 

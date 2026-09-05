@@ -12,6 +12,17 @@ import MarkdownRendu from '../../components/ui/MarkdownRendu';
 import type { Bilan } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, getAuthHeader } from '../../lib/supabase';
+import {
+  CLE_SETTINGS_PRATICIEN,
+  DEFAULTS_SETTINGS,
+  EVENT_SETTINGS_PRATICIEN,
+  chargerSettingsPraticien,
+  enregistrerSettingsPraticien,
+  hydraterSettingsPraticien,
+  type SettingsPraticien,
+} from '../../lib/settingsPraticien';
+import { validerSiret } from '../../lib/siret';
+import { initialesPraticien } from '../../lib/initiales';
 import { getContreIndications, getObjectifsActivites, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../../lib/anamnese';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -66,81 +77,50 @@ const card: React.CSSProperties = {
 
 // ── Hook paramètres praticien (Supabase) ─────────────────────────────────────
 
-const PRATICIEN_DEFAULTS = {
-  prenom: '', nom: '', titre: 'Enseignant en Activité Physique Adaptée',
-  email: '', telephone: '', siret: '', numeroSAP: '', villeSignature: '',
-  tarifHoraire: '45', societe: '', adresseRue: '', adresseCodePostal: '', adresseVille: '',
-};
-
-type PraticienSettings = typeof PRATICIEN_DEFAULTS;
-
+// Cet ecran avait ses propres valeurs par defaut, sa propre requete et ses
+// propres ecritures du cache — un dixieme lecteur de reglages, reste en
+// dehors de la consolidation. Il portait treize champs sur seize : ni
+// `numeroTVA`, ni `fraisKmDefaut`, ni `logoPraticien`. Tout passe desormais
+// par `settingsPraticien`, comme les ecrans desktop.
 function usePraticienSettings() {
-  const [settings, setSettings] = useState<PraticienSettings>(PRATICIEN_DEFAULTS);
+  const [settings, setSettings] = useState<SettingsPraticien>(chargerSettingsPraticien);
   const [loading, setLoading] = useState(true);
+  // Renseigne uniquement si la BASE est injoignable — pas si la fiche
+  // n'existe pas encore. Voir `EchecHydratation`. L'ecran de reglages s'en
+  // sert pour interdire l'enregistrement : sauvegarder un formulaire qu'on
+  // n'a pas pu pre-remplir ecraserait la fiche avec des champs vides.
+  const [echecChargement, setEchecChargement] = useState(false);
 
   useEffect(() => {
-    if (!supabase) { setLoading(false); return; }
     void (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLoading(false); return; }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
-        .from('praticiens')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      if (data) {
-        const s: PraticienSettings = {
-          prenom:            data.prenom            ?? '',
-          nom:               data.nom               ?? '',
-          titre:             data.titre             ?? PRATICIEN_DEFAULTS.titre,
-          email:             data.email             ?? '',
-          telephone:         data.telephone         ?? '',
-          siret:             data.siret             ?? '',
-          numeroSAP:         data.numero_sap        ?? '',
-          villeSignature:    data.ville_signature   ?? '',
-          tarifHoraire:      data.tarif_horaire     ?? '45',
-          societe:           data.societe           ?? '',
-          adresseRue:        data.adresse_rue       ?? '',
-          adresseCodePostal: data.adresse_code_postal ?? '',
-          adresseVille:      data.adresse_ville     ?? '',
-        };
-        setSettings(s);
-        // Maintenir le cache localStorage pour les composants PDF
-        localStorage.setItem('settings_praticien', JSON.stringify(s));
+      const resultat = await hydraterSettingsPraticien();
+      if (!resultat.ok && resultat.echec === 'erreur') {
+        console.error('[Mobile] Hydratation des reglages en echec :', resultat.message);
+        setEchecChargement(true);
       }
+      setSettings(chargerSettingsPraticien());
       setLoading(false);
     })();
   }, []);
 
-  async function sauvegarderSettings(form: PraticienSettings) {
+  // Rester synchrone avec les autres ecrans : `ecrireCacheSettingsPraticien`
+  // emet cet evenement a chaque ecriture du cache.
+  useEffect(() => {
+    const handler = () => setSettings(chargerSettingsPraticien());
+    window.addEventListener(EVENT_SETTINGS_PRATICIEN, handler);
+    return () => window.removeEventListener(EVENT_SETTINGS_PRATICIEN, handler);
+  }, []);
+
+  async function sauvegarderSettings(form: SettingsPraticien) {
     if (!supabase) throw new Error('Supabase non configuré');
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Non connecté');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any).from('praticiens').upsert({
-      id:                  user.id,
-      prenom:              form.prenom,
-      nom:                 form.nom,
-      titre:               form.titre,
-      email:               form.email,
-      telephone:           form.telephone || null,
-      siret:               form.siret,
-      numero_sap:          form.numeroSAP,
-      ville_signature:     form.villeSignature,
-      tarif_horaire:       form.tarifHoraire,
-      societe:             form.societe || null,
-      adresse_rue:         form.adresseRue || null,
-      adresse_code_postal: form.adresseCodePostal || null,
-      adresse_ville:       form.adresseVille || null,
-    });
-    if (error) throw error;
+    // Base d'abord, cache ensuite — l'ordre est garanti par le module.
+    await enregistrerSettingsPraticien(form, user.id);
     setSettings(form);
-    localStorage.setItem('settings_praticien', JSON.stringify(form));
-    window.dispatchEvent(new Event('settings_praticien_updated'));
   }
 
-  return { settings, loading, sauvegarderSettings };
+  return { settings, loading, echecChargement, sauvegarderSettings };
 }
 
 // ── Composants UI réutilisables ───────────────────────────────────────────────
@@ -787,8 +767,8 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
   const inp: React.CSSProperties = { width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, outline: 'none', marginBottom: 14, boxSizing: 'border-box', background: 'white' };
   const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
 
-  const { settings: praticienData, loading, sauvegarderSettings } = usePraticienSettings();
-  const [form, setForm] = useState<PraticienSettings>(PRATICIEN_DEFAULTS);
+  const { settings: praticienData, loading, echecChargement, sauvegarderSettings } = usePraticienSettings();
+  const [form, setForm] = useState<SettingsPraticien>(DEFAULTS_SETTINGS);
   const [saving, setSaving] = useState(false);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
 
@@ -800,10 +780,27 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
   function set(field: string, value: string) { setForm((f) => ({ ...f, [field]: value })); }
 
   async function sauvegarder() {
+    // Le formulaire n'a pas pu etre pre-rempli : l'enregistrer ecraserait la
+    // fiche avec des champs vides. On refuse plutot que de perdre la donnee.
+    if (echecChargement) {
+      toast.error("Vos réglages n'ont pas pu être chargés. Rechargez la page avant d'enregistrer.");
+      return;
+    }
     if (!form.prenom.trim() || !form.nom.trim()) { toast.error('Prénom et nom requis'); return; }
+
+    // Meme validation que les reglages desktop et l'onboarding. Le SIRET
+    // reste facultatif ici — un salarie de structure n'en a pas — mais s'il
+    // est saisi, il doit etre juste : c'est cet ecran, sans aucun controle,
+    // qui a laisse entrer un numero a 15 chiffres.
+    const controleSiret = validerSiret(form.siret);
+    if (form.siret.trim() && !controleSiret.valide) {
+      toast.error(controleSiret.message!);
+      return;
+    }
+
     setSaving(true);
     try {
-      await sauvegarderSettings(form);
+      await sauvegarderSettings({ ...form, siret: controleSiret.siret });
       toast.success('Paramètres enregistrés ✅');
       onBack();
     } catch {
@@ -844,6 +841,16 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
 
       <div style={{ padding: 16, paddingBottom: 40 }}>
 
+        {echecChargement && (
+          <div style={{
+            background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12,
+            padding: '12px 14px', marginBottom: 12, fontSize: 13, color: '#B91C1C', lineHeight: 1.5,
+          }}>
+            Vos réglages n'ont pas pu être chargés depuis le serveur. L'enregistrement
+            est désactivé pour ne pas écraser votre fiche — rechargez la page.
+          </div>
+        )}
+
         <InfoSection titre="Mon profil">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 0 }}>
             <div>
@@ -878,8 +885,8 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
 
         <div style={{ height: 12 }} />
 
-        <button onClick={sauvegarder} disabled={saving || loading}
-          style={{ width: '100%', padding: 16, background: saving || loading ? '#8FA8A8' : C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: saving || loading ? 'not-allowed' : 'pointer', marginTop: 16 }}>
+        <button onClick={sauvegarder} disabled={saving || loading || echecChargement}
+          style={{ width: '100%', padding: 16, background: saving || loading || echecChargement ? '#8FA8A8' : C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: saving || loading || echecChargement ? 'not-allowed' : 'pointer', marginTop: 16 }}>
           {saving ? 'Enregistrement...' : loading ? 'Chargement...' : '💾 Enregistrer'}
         </button>
 
@@ -933,13 +940,16 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
 
 function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout: () => void; onOuvrirSettings: () => void; onNaviguerOnglet: (id: string) => void }) {
   const { settings } = usePraticienSettings();
-  const initiales = `${(settings.prenom || 'P')[0]}${(settings.nom || '')[0] || ''}`;
+  // Meme regle que la Sidebar : les vraies initiales, ou une silhouette.
+  // Ce calcul repliait sur « P » quand le prenom manquait. Voir
+  // src/lib/initiales.ts.
+  const initiales = initialesPraticien(settings.prenom, settings.nom);
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const BACKUP_KEYS = [
     'mouvtrack_participants', 'mouvtrack_contrats', 'mouvtrack_seances',
-    'notes_seances', 'mouvtrack_exercices', 'settings_praticien',
+    'notes_seances', 'mouvtrack_exercices', CLE_SETTINGS_PRATICIEN,
     'mouvtrack_zones', 'mouvtrack_question_templates',
   ];
 
@@ -977,7 +987,12 @@ function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout:
       {/* Profil praticien */}
       <div style={{ background: C.dark, borderRadius: 14, padding: '16px', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: 'white', flexShrink: 0 }}>
-          {initiales}
+          {initiales || (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Identité non renseignée">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          )}
         </div>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>
