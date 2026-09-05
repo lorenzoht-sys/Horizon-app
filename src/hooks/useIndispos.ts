@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { IndisponibilitePierre } from '../types';
+import type { Indisponibilite } from '../types';
 import { supabase } from '../lib/supabase';
 
 export function useIndispos() {
-  const [indispos, setIndispos] = useState<IndisponibilitePierre[]>([]);
+  const [indispos, setIndispos] = useState<Indisponibilite[]>([]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -16,7 +16,7 @@ export function useIndispos() {
         if (error) { console.error('Erreur chargement indisponibilités:', error); return; }
         setIndispos((data ?? []).map(row => ({
           id: row.id,
-          jour: row.jour as IndisponibilitePierre['jour'],
+          jour: row.jour as Indisponibilite['jour'],
           heureDebut: row.heure_debut,
           heureFin: row.heure_fin,
           recurrente: row.recurrente ?? true,
@@ -27,7 +27,7 @@ export function useIndispos() {
   }, []);
 
   const indisposDuJour = useCallback(
-    (jour: IndisponibilitePierre['jour']): IndisponibilitePierre[] =>
+    (jour: Indisponibilite['jour']): Indisponibilite[] =>
       indispos
         .filter(i => i.jour === jour)
         .sort((a, b) => a.heureDebut.localeCompare(b.heureDebut)),

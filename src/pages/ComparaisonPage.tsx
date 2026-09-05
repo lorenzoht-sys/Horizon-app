@@ -364,7 +364,7 @@ export default function ComparaisonPage() {
         participant!,
         bilans,
         settings,
-        `Rapport_Evolution_${participant!.nom}_${participant!.prenom}_MouvAPA.pdf`
+        `Rapport_Evolution_${participant!.nom}_${participant!.prenom}.pdf`
       );
     } catch {
       toast.error("Erreur lors de la génération du PDF");
@@ -454,14 +454,17 @@ function PrintableRapportEvolution({ participant, bilans, settings }: {
   };
 
   const praticien = settings.prenom && settings.nom ? `${settings.prenom} ${settings.nom}` : 'Praticien APA';
+  const societe = (settings.societe ?? '').trim();
 
   return (
     <div style={s.page}>
       {/* Header */}
       <div style={s.header}>
         <div>
-          <div style={s.logo}>Mouv'APA</div>
-          <div style={{ fontSize: 10, color: '#8B9BB4', marginTop: 2 }}>{praticien}</div>
+          {/* Le nom de societe etait en dur : la marque du premier utilisateur
+              en tete du rapport clinique de n'importe quel praticien. */}
+          {societe && <div style={s.logo}>{societe}</div>}
+          <div style={{ fontSize: societe ? 10 : 13, fontWeight: societe ? 400 : 700, color: societe ? '#8B9BB4' : '#032c28', marginTop: 2 }}>{praticien}</div>
         </div>
         <div style={{ textAlign: 'right' as const }}>
           <div style={s.title}>Rapport d'évolution</div>
@@ -534,7 +537,7 @@ function PrintableRapportEvolution({ participant, bilans, settings }: {
 
       {/* Footer */}
       <div style={s.footer}>
-        <span>Mouv'APA — {praticien}</span>
+        <span>{societe ? `${societe} — ${praticien}` : praticien}</span>
         <span>Généré le {new Date().toLocaleDateString('fr-FR')}</span>
       </div>
     </div>

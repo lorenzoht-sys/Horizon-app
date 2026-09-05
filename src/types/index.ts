@@ -445,7 +445,7 @@ export interface DisponibilitesPatient {
   dureeSeanceMinutes: number;
 }
 
-export interface IndisponibilitePierre {
+export interface Indisponibilite {
   id: string;
   jour: JourSemaine | 'dim';
   heureDebut: string;
@@ -513,7 +513,7 @@ export interface Seance {
 
 // Événement d'agenda : distinct d'une séance patient. 'indisponibilite' ici
 // désigne un blocage ponctuel à une date précise (ex: rendez-vous médical),
-// différent de IndisponibilitePierre qui est récurrent hebdomadaire et sans
+// différent de Indisponibilite qui est récurrent hebdomadaire et sans
 // date. 'premier_contact_prospect' = bénéficiaire potentiel sans coordonnées
 // complètes (pas encore un Participant).
 // Les 3 premières valeurs sont historiques (migration 20260715) — conservées

@@ -815,6 +815,10 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
 
   function reinitialiserDonnees() {
     localStorage.setItem('mouvtrack_demo_cleared', '1');
+    // `mouvtrack_indispos_pierre` garde son nom historique VOLONTAIREMENT :
+    // c'est une liste de purge, et plus rien n'ecrit cette cle. La renommer
+    // cesserait de nettoyer celle que les navigateurs existants portent
+    // reellement — le contraire du but recherche.
     ['mouvtrack_participants', 'mouvtrack_seances', 'mouvtrack_contrats',
      'mouvtrack_zones', 'notes_seances', 'mouvtrack_indispos_pierre',
      'mouvtrack_question_templates'].forEach(k => localStorage.removeItem(k));
@@ -844,17 +848,17 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 0 }}>
             <div>
               <label style={lbl}>Prénom *</label>
-              <input value={form.prenom} onChange={e => set('prenom', e.target.value)} placeholder="Pierre" style={inp} />
+              <input value={form.prenom} onChange={e => set('prenom', e.target.value)} placeholder="Marie" style={inp} />
             </div>
             <div>
               <label style={lbl}>Nom *</label>
-              <input value={form.nom} onChange={e => set('nom', e.target.value)} placeholder="Clavier" style={inp} />
+              <input value={form.nom} onChange={e => set('nom', e.target.value)} placeholder="Durand" style={inp} />
             </div>
           </div>
           <label style={lbl}>Titre professionnel</label>
           <input value={form.titre} onChange={e => set('titre', e.target.value)} placeholder="Enseignant APA" style={inp} />
           <label style={lbl}>Email</label>
-          <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="pierre@mouvapa.com" style={inp} />
+          <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="marie.durand@exemple.fr" style={inp} />
           <label style={lbl}>Téléphone</label>
           <input type="tel" value={form.telephone} onChange={e => set('telephone', e.target.value)} placeholder="06 12 34 56 78" style={{ ...inp, marginBottom: 0 }} />
         </InfoSection>

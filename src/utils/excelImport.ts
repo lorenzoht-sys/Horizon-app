@@ -211,7 +211,7 @@ export function downloadTemplate(): void {
   wsInstr['!cols'] = [{ wch: 62 }];
   XLSX.utils.book_append_sheet(wb, wsInstr, 'Instructions');
 
-  XLSX.writeFile(wb, 'Template_Import_MouvAPA.xlsx');
+  XLSX.writeFile(wb, 'Template_Import_Patients.xlsx');
 }
 
 // ── Export patients → Excel ───────────────────────────────────
@@ -249,5 +249,5 @@ export function exportPatientsExcel(participants: Participant[]): void {
   XLSX.utils.book_append_sheet(wb, ws, 'Patients');
 
   const date = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `MouvAPA_Patients_${date}.xlsx`);
+  XLSX.writeFile(wb, `Patients_${date}.xlsx`);
 }

@@ -146,7 +146,7 @@ export default function ImportExcelModal({ onClose, participants, addParticipant
                   className="ml-8 flex items-center gap-2 border border-primary/30 text-primary hover:bg-primary hover:text-white px-3 py-2 rounded-xl text-xs font-semibold transition-colors"
                 >
                   <Download size={13} />
-                  Télécharger Template_Import_MouvAPA.xlsx
+                  Télécharger Template_Import_Patients.xlsx
                 </button>
               </div>
 

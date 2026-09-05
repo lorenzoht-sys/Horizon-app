@@ -3,7 +3,7 @@ import { Save, Upload, Plus, Trash2, Download, FileUp, Copy, RefreshCw, Calendar
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import PageWrapper from '../components/layout/PageWrapper';
-import type { IndisponibilitePierre, JourSemaine, Participant } from '../types';
+import type { Indisponibilite, JourSemaine, Participant } from '../types';
 import { SectionApplication } from '../components/pwa/PWAComponents';
 import { supabase } from '../lib/supabase';
 import { getAppHost } from '../lib/config';
@@ -18,12 +18,12 @@ const JOURS_LABELS: Record<JourSemaine | 'dim', string> = {
 // ── Section indisponibilités — données Supabase ────────────────────────────────
 
 interface ModalIndispoProps {
-  onSave: (item: IndisponibilitePierre) => void;
+  onSave: (item: Indisponibilite) => void;
   onClose: () => void;
 }
 
 function ModalAjoutIndispo({ onSave, onClose }: ModalIndispoProps) {
-  const [form, setForm] = useState<Omit<IndisponibilitePierre, 'id'>>({
+  const [form, setForm] = useState<Omit<Indisponibilite, 'id'>>({
     jour: 'lun', heureDebut: '12:00', heureFin: '14:00',
     recurrente: true, label: '',
   });
@@ -94,7 +94,7 @@ function ModalAjoutIndispo({ onSave, onClose }: ModalIndispoProps) {
 }
 
 function SectionIndisponibilites() {
-  const [indispos, setIndispos] = useState<IndisponibilitePierre[]>([]);
+  const [indispos, setIndispos] = useState<Indisponibilite[]>([]);
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
@@ -107,7 +107,7 @@ function SectionIndisponibilites() {
         if (error) { console.error('Erreur chargement indispos:', error); return; }
         setIndispos((data ?? []).map(row => ({
           id: row.id,
-          jour: row.jour as IndisponibilitePierre['jour'],
+          jour: row.jour as Indisponibilite['jour'],
           heureDebut: row.heure_debut,
           heureFin: row.heure_fin,
           recurrente: row.recurrente,
@@ -116,7 +116,7 @@ function SectionIndisponibilites() {
       });
   }, []);
 
-  async function handleSave(item: IndisponibilitePierre) {
+  async function handleSave(item: Indisponibilite) {
     if (supabase) {
       const { error } = await supabase.from('indisponibilites').insert({
         id: item.id,
@@ -786,11 +786,11 @@ export default function SettingsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Prénom" required error={errors.prenom}>
                   <input value={form.prenom} onChange={e => set('prenom', e.target.value)}
-                    placeholder="Pierre" className={inputClass(errors.prenom)} />
+                    placeholder="Marie" className={inputClass(errors.prenom)} />
                 </Field>
                 <Field label="Nom" required error={errors.nom}>
                   <input value={form.nom} onChange={e => set('nom', e.target.value)}
-                    placeholder="Clavier" className={inputClass(errors.nom)} />
+                    placeholder="Durand" className={inputClass(errors.nom)} />
                 </Field>
               </div>
               <Field label="Titre professionnel" required error={errors.titre}>
@@ -799,7 +799,7 @@ export default function SettingsPage() {
               </Field>
               <Field label="Email professionnel" required error={errors.email}>
                 <input type="email" value={form.email} onChange={e => set('email', e.target.value)}
-                  placeholder="pierre@mouvapa.com" className={inputClass(errors.email)} />
+                  placeholder="marie.durand@exemple.fr" className={inputClass(errors.email)} />
               </Field>
               <Field label="Téléphone" error={errors.telephone}>
                 <input value={form.telephone} onChange={e => set('telephone', e.target.value)}

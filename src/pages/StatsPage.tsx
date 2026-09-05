@@ -108,7 +108,9 @@ function loadSettingsPro() {
   try {
     return {
       prenom: '', nom: '', telephone: '', email: '',
-      tarifHoraire: '45', societe: "Mouv'APA",
+      // Aucune societe par defaut : la valeur en dur ici etait celle du
+      // premier utilisateur, et servait a tout praticien sans reglage.
+      tarifHoraire: '45', societe: '',
       ...JSON.parse(localStorage.getItem('settings_praticien') ?? '{}')
     };
   } catch {
