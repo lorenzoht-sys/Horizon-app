@@ -3,10 +3,11 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { AnimatePresence } from 'framer-motion';
 import { PageTransition } from './components/ui/PageTransition';
 import { supabase, typeLienAuth, erreurLienAuth } from './lib/supabase';
+import { hydraterSettingsPraticien } from './lib/settingsPraticien';
 import { setCurrentUserId, loadAllBrouillonsFromSupabase } from './hooks/useBrouillonBilan';
 import { useDevice } from './hooks/useDevice';
 import AppMobile from './pages/mobile/AppMobile';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 import Sidebar from './components/layout/Sidebar';
 import Dashboard from './pages/Dashboard';
 import ParticipantProfile from './pages/ParticipantProfile';
@@ -186,6 +187,40 @@ export default function App() {
     // précédente abandonnée. Sinon le verrou survit au lien qui l'a créé.
     if (erreurLienAuth !== null) localStorage.removeItem('horizon_recuperation');
   }, []);
+
+  // Remplit le cache `settings_praticien` des l'ouverture de session.
+  //
+  // Ce cache alimente TOUS les documents produits par l'application —
+  // contrat, fiches bilan, rapport d'evolution — qui le lisent de facon
+  // synchrone. Il n'etait ecrit que par la sauvegarde des reglages et la fin
+  // de l'onboarding, donc absent sur tout autre appareil : le poste du
+  // cabinet et le portable en visite, c'est-a-dire le quotidien. Le praticien
+  // se retrouvait sans identite sur ses propres documents, et rien ne le lui
+  // disait — visiter les Reglages ne suffisait meme pas, seul « Enregistrer »
+  // ecrivait le cache.
+  //
+  // L'echec n'est plus silencieux. Le cache est efface a chaque connexion
+  // (voir SIGNED_IN plus bas) : si l'hydratation ne le remplit pas, le
+  // praticien travaille avec des reglages vides — contrat bloque, documents
+  // sans identite — et rien ne lui disait pourquoi. Seule la panne se
+  // signale ; l'absence de fiche est l'etat normal d'avant onboarding, et
+  // l'onboarding s'en charge deja.
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    void (async () => {
+      const resultat = await hydraterSettingsPraticien();
+      if (resultat.ok) return;
+      if (resultat.echec !== 'erreur') {
+        console.info('[App] Hydratation des reglages non effectuee :', resultat.echec);
+        return;
+      }
+      console.error('[App] Hydratation des reglages en echec :', resultat.message);
+      toast.error(
+        "Vos réglages n'ont pas pu être chargés. Vos documents sortiraient sans votre identité — rechargez la page avant d'en générer un.",
+        { duration: 10000 },
+      );
+    })();
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (!supabase) {

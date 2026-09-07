@@ -1,4 +1,5 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { chargerSettingsPraticien } from '../../lib/settingsPraticien';
 import { toast } from 'sonner';
 import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical, TypeAntecedent, AnamneseData, ChutesData, ChuteDetail, ActivitePrecedente, NiveauActivite, CreneauHoraire, SedentariteReponses, MomentPrise, ContactSante } from '../../types';
 import { TYPES_ANTECEDENT_LABELS, TYPES_BLESSURE_CHUTE, MOMENTS_PRISE_LABELS } from '../../types';
@@ -1354,10 +1355,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
   const ibanClean = form.iban.replace(/\s/g, '');
   const ibanValide = ibanClean.length === 0 || validerIBAN(ibanClean);
 
-  const emailPraticien = (() => {
-    try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}').email || 'votre email professionnel'; }
-    catch { return 'votre email professionnel'; }
-  })();
+  const emailPraticien = chargerSettingsPraticien().email || 'votre email professionnel';
 
   const showAll = step === undefined;
   const Wrapper = showAll ? 'form' : 'div';

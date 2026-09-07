@@ -1,6 +1,12 @@
 import { useState, useEffect, type FormEvent, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { validerSiret } from '../lib/siret';
+import {
+  rowToSettings,
+  ecrireCacheSettingsPraticien,
+  hydraterSettingsPraticien,
+} from '../lib/settingsPraticien';
 
 interface Props {
   onComplete: () => void;
@@ -34,13 +40,22 @@ export default function OnboardingPage({ onComplete }: Props) {
   const navigate = useNavigate();
 
   const [prenom,  setPrenom]  = useState('');
+  const [nom,     setNom]     = useState('');
   const [titre,   setTitre]   = useState('');
   const [societe, setSociete] = useState('');
   const [siret,   setSiret]   = useState('');
+  // Echappatoire salarie. Le mode `intervenant` de
+  // CONCEPTION_MODE_ORGANISATION.md decrit un salarie APA d'une structure :
+  // il n'a pas de SIRET personnel, et n'emet pas de contrat de prestation.
+  // Non persiste — aucune colonne pour ca, et rien n'en depend ailleurs :
+  // cette case ne fait que lever l'exigence ICI. La regle reelle est
+  // appliquee la ou elle compte, a la generation du contrat.
+  const [salarie, setSalarie] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
 
-  // Charger le prénom depuis la table praticiens
+  // Précharger prénom et nom depuis la table praticiens : un compte qui a
+  // déjà une fiche ne doit pas les ressaisir.
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -48,11 +63,12 @@ export default function OnboardingPage({ onComplete }: Props) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (supabase as any)
         .from('praticiens')
-        .select('prenom')
+        .select('prenom, nom')
         .eq('id', user.id)
         .single()
-        .then(({ data }: { data: { prenom?: string } | null }) => {
+        .then(({ data }: { data: { prenom?: string; nom?: string } | null }) => {
           if (data?.prenom) setPrenom(data.prenom);
+          if (data?.nom) setNom(data.nom);
         });
     });
   }, []);
@@ -61,8 +77,30 @@ export default function OnboardingPage({ onComplete }: Props) {
     e.preventDefault();
     setError('');
 
+    // Identite complete exigee ICI, et pas seulement dans les reglages.
+    // L'onboarding ne demandait ni prenom ni nom : un praticien invite
+    // arrivait dans l'application sans identite, et generait un contrat de
+    // prestation sans prestataire nomme — ou avec son seul prenom, ce que
+    // le garde-fou de ModalGenerationContrat laissait passer.
+    if (!prenom.trim() || !nom.trim()) {
+      setError('Renseignez votre prénom et votre nom : ils figurent sur les contrats que vous générez.');
+      return;
+    }
     if (!titre.trim()) {
       setError('Veuillez sélectionner votre type de professionnel.');
+      return;
+    }
+    // Le SIRET n'etait pas valide ici, seulement teste non-vide — et encore,
+    // par un `/s/g` qui retirait la lettre « s » au lieu des espaces. Un
+    // numero a 15 chiffres passait donc, et c'est ainsi qu'il en existe un
+    // en base. La validation est desormais la meme sur les trois ecrans.
+    const controleSiret = validerSiret(siret);
+    if (!salarie && !controleSiret.valide) {
+      setError(
+        controleSiret.echec === 'absent'
+          ? "Renseignez votre numéro SIRET : il figure obligatoirement sur les contrats de prestation. Si vous êtes salarié·e d'une structure, cochez la case ci-dessous."
+          : controleSiret.message!,
+      );
       return;
     }
 
@@ -72,17 +110,23 @@ export default function OnboardingPage({ onComplete }: Props) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { onComplete(); navigate('/'); return; }
 
-    const siretClean = siret.replace(/\s/g, '');
+    const siretClean = controleSiret.siret;
+    // `.select()` sur l'upsert : on veut la LIGNE COMPLETE en retour, pas
+    // seulement le succes. Voir l'ecriture du cache juste dessous.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: upsertError } = await (supabase as any)
+    const { data: ligne, error: upsertError } = await (supabase as any)
       .from('praticiens')
       .upsert({
         id:      user.id,
+        prenom:  prenom.trim(),
+        nom:     nom.trim(),
         titre:   titre.trim(),
         societe: societe.trim() || null,
         siret:   siretClean || null,
         email:   user.email,
-      });
+      })
+      .select()
+      .single();
 
     if (upsertError) {
       console.error('[Onboarding] Erreur upsert praticiens:', upsertError);
@@ -91,12 +135,22 @@ export default function OnboardingPage({ onComplete }: Props) {
       return;
     }
 
-    // Mise à jour du cache localStorage pour les composants PDF
-    localStorage.setItem('settings_praticien', JSON.stringify({
-      prenom, titre: titre.trim(),
-      societe: societe.trim(), siret: siretClean,
-    }));
-    window.dispatchEvent(new Event('settings_praticien_updated'));
+    // ── Cache COMPLET, et pas les cinq champs de ce formulaire ───────────
+    // L'onboarding ecrivait un cache partiel — prenom, nom, titre, societe,
+    // siret — qui REMPLACAIT le cache complet. `chargerSettingsPraticien`
+    // comblant le reste avec ses valeurs par defaut, l'adresse, le telephone
+    // et l'email retombaient a vide jusqu'a la prochaine hydratation. Un
+    // contrat genere dans la foulee sortait donc sans adresse ni telephone.
+    //
+    // On ecrit desormais la ligne renvoyee par la base, entiere. Elle porte
+    // ce que ce formulaire ne collecte pas : le cas reel est le praticien
+    // invite dont la fiche etait deja partiellement remplie.
+    if (ligne) {
+      ecrireCacheSettingsPraticien(rowToSettings(ligne as Record<string, unknown>));
+    } else {
+      // `.select()` muet (RLS de lecture, reponse tronquee) : on relit.
+      await hydraterSettingsPraticien();
+    }
 
     setLoading(false);
     onComplete();
@@ -167,6 +221,36 @@ export default function OnboardingPage({ onComplete }: Props) {
         }}>
           <form onSubmit={handleSubmit}>
 
+            {/* Identite. Premiere position : c'est ce qui figurera sur les
+                documents que ce praticien emettra. */}
+            <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>
+                  Prénom <span style={{ color: '#DC2626' }}>*</span>
+                </label>
+                <input
+                  value={prenom}
+                  onChange={e => setPrenom(e.target.value)}
+                  autoComplete="given-name"
+                  autoFocus
+                  placeholder="Marie"
+                  style={inputStyle}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>
+                  Nom <span style={{ color: '#DC2626' }}>*</span>
+                </label>
+                <input
+                  value={nom}
+                  onChange={e => setNom(e.target.value)}
+                  autoComplete="family-name"
+                  placeholder="Durand"
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+
             {/* Type de professionnel */}
             <div style={{ marginBottom: 14 }}>
               <label style={labelStyle}>
@@ -175,7 +259,6 @@ export default function OnboardingPage({ onComplete }: Props) {
               <select
                 value={titre}
                 onChange={e => setTitre(e.target.value)}
-                autoFocus
                 style={{
                   ...inputStyle,
                   appearance: 'none',
@@ -208,7 +291,9 @@ export default function OnboardingPage({ onComplete }: Props) {
 
             {/* SIRET */}
             <div style={{ marginBottom: 22 }}>
-              <label style={labelStyle}>Numéro SIRET</label>
+              <label style={labelStyle}>
+                Numéro SIRET {!salarie && <span style={{ color: '#DC2626' }}>*</span>}
+              </label>
               <input
                 type="text"
                 placeholder="123 456 789 00012"
@@ -217,8 +302,17 @@ export default function OnboardingPage({ onComplete }: Props) {
                 style={inputStyle}
               />
               <div style={{ fontSize: 11, color: '#B8C8DC', marginTop: 4 }}>
-                14 chiffres — utilisé sur vos factures · Peut être complété dans les Paramètres
+                14 chiffres — il figure sur les contrats de prestation que vous émettrez.
               </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 12.5, color: '#4A6080', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={salarie}
+                  onChange={e => setSalarie(e.target.checked)}
+                  style={{ width: 15, height: 15, cursor: 'pointer' }}
+                />
+                Je suis salarié·e d'une structure (pas de SIRET personnel)
+              </label>
             </div>
 
             {error && (

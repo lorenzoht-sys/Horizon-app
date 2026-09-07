@@ -1,4 +1,5 @@
 import { useState, useEffect, Component, useCallback } from 'react';
+import { chargerSettingsPraticien } from '../lib/settingsPraticien';
 import type { ReactNode } from 'react';
 import {
   Chart as ChartJS,
@@ -104,19 +105,6 @@ function formatMoisAnnee(d: Date) {
 
 // ─── Helpers supplémentaires ─────────────────────────────────────────────────
 
-function loadSettingsPro() {
-  try {
-    return {
-      prenom: '', nom: '', telephone: '', email: '',
-      // Aucune societe par defaut : la valeur en dur ici etait celle du
-      // premier utilisateur, et servait a tout praticien sans reglage.
-      tarifHoraire: '45', societe: '',
-      ...JSON.parse(localStorage.getItem('settings_praticien') ?? '{}')
-    };
-  } catch {
-    return { prenom: '', nom: '', telephone: '', email: '', tarifHoraire: '45', societe: '' };
-  }
-}
 
 function premierJourMois(annee: number, mois: number): string {
   return `${annee}-${String(mois).padStart(2, '0')}-01`;
@@ -728,7 +716,7 @@ function SectionFactures({
   contratActif: (id: string) => Contrat | undefined;
 }) {
   const { factures, enRetard, aEnvoyer, envoyees, creerOuMettreAJour, marquerEnvoyee, loading, praticienId } = useFactures();
-  const settings = loadSettingsPro();
+  const settings = chargerSettingsPraticien();
   const tarifDefaut = parseFloat(settings.tarifHoraire) || 45;
   const now = new Date();
   const { annee: anneePrec, mois: moisPrec } = moisPrecedent(now.getFullYear(), now.getMonth() + 1);
@@ -1486,7 +1474,7 @@ export default function StatsPage() {
                 Projection {MOIS_COURTS[(now.getMonth() + 1) % 12]}
               </div>
               <div className="text-sm font-bold text-blue-800">
-                ~{(patientsActifs * (parseFloat(loadSettingsPro().tarifHoraire) || 45) * 4).toLocaleString('fr-FR')} €
+                ~{(patientsActifs * (parseFloat(chargerSettingsPraticien().tarifHoraire) || 45) * 4).toLocaleString('fr-FR')} €
               </div>
               <div className="text-xs text-blue-500 mt-0.5">
                 Basé sur {patientsActifs} bénéficiaires actifs × ~4 séances/mois

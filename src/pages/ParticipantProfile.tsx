@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { chargerSettingsPraticien } from '../lib/settingsPraticien';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
@@ -133,10 +134,6 @@ function formatDate(date: string): string {
   });
 }
 
-function loadSettings() {
-  try { return { prenom: '', nom: '', titre: '', email: '', telephone: '', societe: '', logoPraticien: '', ...JSON.parse(localStorage.getItem('settings_praticien') || '{}') }; }
-  catch { return { prenom: '', nom: '', titre: '', email: '', telephone: '', societe: '', logoPraticien: '' }; }
-}
 
 function noteToDot(note: 1|2|3|4|5): string {
   if (note >= 4) return DOT_COLORS.vert;
@@ -959,7 +956,7 @@ export default function ParticipantProfile() {
   const { seances } = useAgenda();
   useJournalSeance(); // conservé pour ne pas casser le hook
   const navigate = useNavigate();
-  const settings = loadSettings();
+  const settings = chargerSettingsPraticien();
 
   const [menuOuvert, setMenuOuvert]         = useState(false);
   const [confirmDelete, setConfirmDelete]   = useState(false);
