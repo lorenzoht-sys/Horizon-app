@@ -1200,3 +1200,62 @@ utilisé (`@typescript-eslint/no-unused-vars`). Antérieur au lot 8, présent
 à l'identique sur `main`. Soit la constante a un usage prévu qui n'a jamais
 été écrit, soit c'est un vestige : à trancher en la supprimant ou en
 l'utilisant, pas en désactivant la règle.
+
+## LOT — `EspacePatient` charge ses données sans `.catch()`
+
+**`src/pages/EspacePatient.tsx:2344` fait `void charger();`. La fonction
+`charger()` n'a ni `try/catch` interne, ni `.catch()` à l'appel. Toute
+exception qu'elle lève devient un rejet de promesse non intercepté, et
+`setLoading(false)` n'est jamais atteint : l'écran du bénéficiaire reste
+figé sur son chargement, indéfiniment, sans message.**
+
+Relevé le 2026-09-03, en instruisant l'incident du portail patient.
+
+### Pourquoi c'est un lot à part, et pas un détail
+
+L'`ErrorBoundary` posé sur le portail (PR #33) **ne couvre pas ce cas**.
+React ne remonte à une frontière d'erreur que ce qui est levé pendant le
+rendu, dans un constructeur ou dans une méthode de cycle de vie. Un rejet
+de promesse dans un `useEffect` passe à côté.
+
+Les deux défauts se ressemblent de l'extérieur et ont la même victime :
+
+| | Ce que voit le bénéficiaire | Qui l'attrape |
+|---|---|---|
+| Exception au rendu | écran **blanc** | `ErrorBoundaryPatient` (PR #33) |
+| Rejet dans `charger()` | écran **figé** sur le chargement | **personne** |
+
+**Un chargement infini est aussi mauvais qu'un écran blanc** pour quelqu'un
+qui n'a ni console, ni recours, et qui arrête simplement de faire ses
+exercices. Croire que la frontière d'erreur a réglé les deux serait
+exactement le genre de conclusion que ce fichier existe pour empêcher.
+
+### Ce qu'il faut faire
+
+1. Envelopper le corps de `charger()`, ou l'appel, de façon qu'un échec
+   mène à un état affiché — pas à un silence. `setLoading(false)` doit être
+   atteint dans **tous** les chemins.
+2. Distinguer les causes plutôt que de tout renvoyer sur `accessDenied` :
+   un réseau coupé, un 500, et un jeton refusé ne demandent pas le même
+   geste au bénéficiaire. Aujourd'hui `!result.ok` mène à
+   `<Navigate to="/patient" replace />` quel que soit le motif — un
+   bénéficiaire renvoyé à l'écran de saisie de code alors que son code est
+   bon retape son code, échoue à nouveau, et conclut que « ça ne marche
+   plus ».
+3. Prouver le correctif en le voyant rougir : forcer `patientFetchMe` à
+   rejeter, constater l'écran obtenu. Un `.catch()` qu'on n'a jamais vu
+   s'exécuter ne prouve rien (voir le corollaire en tête de ce fichier).
+
+### Voisin, relevé au même endroit : le `?code=` reste dans l'URL
+
+`EspacePatient` lit `searchParams.get('code')` et ouvre la session, mais
+**ne nettoie jamais l'URL** — aucun `replaceState`, aucun `navigate` de
+remplacement (vérifié le 2026-09-03). Le code d'accès reste donc dans la
+barre d'adresse et dans l'historique du navigateur après connexion.
+
+Ce n'est pas une donnée : c'est un justificatif qui ouvre le dossier de
+santé **en écriture** et n'expire pas. Le point devient sensible maintenant
+que `scripts/liens-acces-beneficiaires.ts` fabrique des liens qui portent
+ce code — acceptable sur l'appareil personnel du bénéficiaire, pas sur un
+poste partagé. Correctif : après une connexion réussie par `?code=`,
+remplacer l'URL par `/patient/<id>` sans paramètre.
