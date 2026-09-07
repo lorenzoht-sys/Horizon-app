@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
+import { chargerSettingsPraticien, EVENT_SETTINGS_PRATICIEN } from '../lib/settingsPraticien';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -63,10 +64,7 @@ export default function TourneePage() {
   const { indispos } = useIndispos();
   const navigate = useNavigate();
 
-  const [praticienSettings, setPraticienSettings] = useState<Record<string, string>>(() => {
-    try { return JSON.parse(localStorage.getItem('settings_praticien') || '{}'); }
-    catch { return {}; }
-  });
+  const [praticienSettings, setPraticienSettings] = useState(chargerSettingsPraticien);
 
   // App.tsx efface settings_praticien à chaque login → recharger l'adresse depuis Supabase.
   useEffect(() => {
@@ -97,13 +95,10 @@ export default function TourneePage() {
   // Se synchroniser si l'utilisateur modifie ses paramètres depuis SettingsPage.
   useEffect(() => {
     const handler = () => {
-      try {
-        const s = JSON.parse(localStorage.getItem('settings_praticien') || '{}');
-        setPraticienSettings(s);
-      } catch { /* ignore */ }
+      setPraticienSettings(chargerSettingsPraticien());
     };
-    window.addEventListener('settings_praticien_updated', handler);
-    return () => window.removeEventListener('settings_praticien_updated', handler);
+    window.addEventListener(EVENT_SETTINGS_PRATICIEN, handler);
+    return () => window.removeEventListener(EVENT_SETTINGS_PRATICIEN, handler);
   }, []);
 
   // Bandeau d'invitation à planifier : contrats actifs sans séances planifiées dans les 4 prochaines semaines
