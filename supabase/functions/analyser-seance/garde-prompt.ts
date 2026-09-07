@@ -60,6 +60,10 @@ export type NomChamp = keyof typeof CHAMP_MAX_LENGTH;
  *     bas alors que le modèle, lui, lit bien la phrase. On les retire AVANT
  *     de chercher les motifs, jamais après. */
 const INVISIBLES =
+  // Les caracteres de controle sont l'objet meme de cette expression :
+  // no-control-regex existe pour attraper ceux qu'on ecrit par accident,
+  // pas ceux qu'on cherche deliberement a retirer.
+  // eslint-disable-next-line no-control-regex
   /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g;
 
 /** Marqueurs structurels neutralisés systématiquement, sans faire échouer
