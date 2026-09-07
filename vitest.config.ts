@@ -7,7 +7,16 @@ import { defineConfig } from 'vitest/config';
 // préférences, anti-doublon, assignation des jours).
 export default defineConfig({
   test: {
-    include: ['api/**/*.test.ts', 'src/lib/**/*.test.ts', 'src/utils/**/*.test.ts', 'tests/security/*.spec.ts'],
+    include: [
+      'api/**/*.test.ts',
+      'src/lib/**/*.test.ts',
+      'src/utils/**/*.test.ts',
+      'tests/security/*.spec.ts',
+      // Edge Functions Supabase : seuls les modules PURS sont testés ici
+      // (supabase/functions/*/garde-prompt.ts). `index.ts` importe deno.land
+      // et ne peut pas être chargé par Vitest — il n'est pas dans le motif.
+      'supabase/functions/**/*.test.ts',
+    ],
     environment: 'node',
   },
 });
