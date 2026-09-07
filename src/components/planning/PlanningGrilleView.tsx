@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader, X, Trash2 } from 'lucide-react';
-import type { Contrat, IndisponibilitePierre, JourSemaine, OrganisationData, Participant, Seance, StatutSeance } from '../../types';
+import type { Contrat, Indisponibilite, JourSemaine, OrganisationData, Participant, Seance, StatutSeance } from '../../types';
 import { getOrganisation } from '../../lib/anamnese';
 import { heureEnMinutes, genererDatesSeances, trouveChevauchements, trouveChevauchement, dateDansMemeSemaine, datesManquantes, calculerStatutSeancesSemaine } from '../../utils/horaires';
 import { addMinutes } from '../../hooks/useAgenda';
@@ -104,7 +104,7 @@ interface Props {
   participants: Participant[];
   seances: Seance[];
   contrats: Contrat[];
-  indispos: IndisponibilitePierre[];
+  indispos: Indisponibilite[];
   bulkCreerSeances: (data: Omit<Seance, 'id'>[], options?: { ignorerChevauchements?: boolean }) => Promise<unknown>;
   modifierSeance: (id: string, updates: Partial<Seance>) => Promise<boolean>;
   supprimerSeance: (id: string) => Promise<void>;
@@ -899,7 +899,7 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
                   canSelect={false}
                   showHours={false}
                   onDrop={(heure, payload) => handleDrop(j, heure, payload)}
-                  indisposPierre={indisposForJour(j.key)}
+                  indispos={indisposForJour(j.key)}
                   seanceEnDeplacement={dragSeance ? { id: dragSeance.seance.id, dureeMinutes: dragSeance.seance.dureeMinutes } : null}
                   onSeanceClick={(seance, totalOccurrences) => setSeanceEditee({ seance, totalOccurrences })}
                   onSeanceDragStart={(seance, totalOccurrences) => {
@@ -926,7 +926,7 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-sm"
               style={{ background: 'repeating-linear-gradient(45deg,#fee2e2,#fee2e2 2px,#fef2f2 2px,#fef2f2 6px)' }} />
-            <span className="text-[11px] text-gray-500">Indisponibilités Pierre</span>
+            <span className="text-[11px] text-gray-500">Mes indisponibilités</span>
           </div>
           {!patientSelectionne && (
             <span className="text-[11px] text-gray-400 ml-auto">← Sélectionnez un bénéficiaire pour voir ses disponibilités</span>

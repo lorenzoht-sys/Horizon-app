@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { X, Calendar, Clock, Check, Loader } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Participant, Contrat, Seance, IndisponibilitePierre, JourSemaine } from '../../types';
+import type { Participant, Contrat, Seance, Indisponibilite, JourSemaine } from '../../types';
 import { getTrousRecurrents, getCreneauxLibresGlobal, type CreneauLibre } from '../../lib/analyse-tournee';
 import { getOrganisation } from '../../lib/anamnese';
 import { addMinutes, genererDatesSeances, trouveChevauchements, datesManquantes, MARGE_ENTRE_SEANCES_MIN } from '../../utils/horaires';
@@ -12,7 +12,7 @@ interface Props {
   participants: Participant[];
   contrats: Contrat[];
   seances: Seance[];
-  indispos: IndisponibilitePierre[];
+  indispos: Indisponibilite[];
   bulkCreerSeances: (data: Omit<Seance, 'id'>[], options?: { ignorerChevauchements?: boolean }) => Promise<Seance[] | void>;
 }
 

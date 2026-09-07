@@ -13,7 +13,10 @@ const VISIBILITE_ITEMS = [
   { key: 'bilans'        as const, label: 'Résultats des bilans' },
   { key: 'rdv'           as const, label: 'Prochains rendez-vous' },
   { key: 'programme'     as const, label: "Programme d'exercices" },
-  { key: 'messagePierre' as const, label: 'Message de Pierre' },
+  // La cle `messagePierre` est persistee en JSONB (colonne
+  // participants.visibilite_beneficiaire, DEFAULT en prod comme en staging) :
+  // seul le LIBELLE change ici. La renommer demande une migration.
+  { key: 'messagePierre' as const, label: 'Message du praticien' },
   { key: 'carteSante'    as const, label: 'Carte de santé téléchargeable' },
 ];
 
@@ -243,7 +246,7 @@ export default function ModalEspacePatient({ participant, onClose, onUpdate }: P
           ))}
         </div>
 
-        {/* Message de Pierre */}
+        {/* Message du praticien */}
         {visibilite.messagePierre && (
           <div>
             <div style={{

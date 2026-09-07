@@ -398,7 +398,7 @@ export const EXERCICES_BASE: Exercice[] = [
     id: 'mem-jeu-paires',
     nom: 'Jeu des paires verbal',
     categorie: 'memoire',
-    description: 'Pierre énonce 5 paires de mots. Le bénéficiaire les répète immédiatement, puis après 5 minutes.',
+    description: 'Le praticien énonce 5 paires de mots. Le bénéficiaire les répète immédiatement, puis après 5 minutes.',
     niveaux: {
       debutant: '3 paires de mots simples',
       intermediaire: '5 paires de mots variés',

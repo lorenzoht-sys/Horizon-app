@@ -469,7 +469,7 @@ function EcranAccueil({
         </div>
       )}
 
-      {/* Message de Pierre */}
+      {/* Message du praticien */}
       {messagePierre && participant.visibiliteBeneficiaire?.messagePierre !== false && (
         <div style={{
           background: 'rgba(43,191,191,0.08)',
@@ -2014,7 +2014,7 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
         </div>
       )}
 
-      {/* Documents partagés explicitement par Pierre */}
+      {/* Documents partagés explicitement par le praticien */}
       {documentsPatient.length > 0 && (
         <>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', paddingLeft: 2 }}>
@@ -2397,7 +2397,7 @@ export default function EspacePatient() {
         </div>
       </div>
 
-      {/* Bandeau "vue praticien" — évite toute confusion quand c'est Pierre qui consulte */}
+      {/* Bandeau "vue praticien" — évite toute confusion quand c'est le praticien qui consulte */}
       {viaPraticien && (
         <div style={{
           background: 'rgba(43,184,154,0.1)',

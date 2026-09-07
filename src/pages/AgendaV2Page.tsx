@@ -28,7 +28,7 @@ import {
   planSupprimerUnique, planSupprimerSerie, planActionSurSelection, executerOperations,
   optionsPorteePourAction, type MiseAJourSeance, type OptionPortee,
 } from '../lib/planificationManuelle';
-import type { Seance, StatutSeance, TypeSeance, Participant, Contrat, IndisponibilitePierre, OrganisationData, RaisonAnnulation, EvenementAgenda, TypeEvenementAgenda } from '../types';
+import type { Seance, StatutSeance, TypeSeance, Participant, Contrat, Indisponibilite, OrganisationData, RaisonAnnulation, EvenementAgenda, TypeEvenementAgenda } from '../types';
 
 // ============================================================================
 // AGENDA UNIFIÉ — ÉTAPE 2 (création par glisser) + ÉTAPE 3 (déplacement /
@@ -1363,7 +1363,7 @@ export default function AgendaV2Page() {
 
     // Indisponibilités de Pierre — toujours affichées, indépendamment du
     // bénéficiaire sélectionné.
-    const jourIndispo = CLE_JOUR_PAR_DOW[dow] as IndisponibilitePierre['jour'];
+    const jourIndispo = CLE_JOUR_PAR_DOW[dow] as Indisponibilite['jour'];
     const enIndispo = indisposDuJour(jourIndispo).some(i => heure >= i.heureDebut && heure < i.heureFin);
     if (enIndispo) {
       style.backgroundImage = 'repeating-linear-gradient(45deg,#fee2e2,#fee2e2 3px,#fef2f2 3px,#fef2f2 9px)';
@@ -1734,7 +1734,7 @@ export default function AgendaV2Page() {
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: 'repeating-linear-gradient(45deg,#fee2e2,#fee2e2 3px,#fef2f2 3px,#fef2f2 9px)' }} />
-                Indispo Pierre
+                Mes indisponibilités
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: '#0d9488' }} />

@@ -42,7 +42,7 @@ interface Props {
   canSelect: boolean;
   showHours?: boolean;
   onDrop?: (heure: string, payload: DragPayload) => void;
-  indisposPierre?: { debut: string; fin: string }[];
+  indispos?: { debut: string; fin: string }[];
   // Interactivité des séances déjà posées (déplacement + édition) — optionnels
   // et non fournis par ModalInsererPatient, qui garde ses blocs purement
   // visuels (pas de régression sur son usage existant : draggable/onClick
@@ -75,7 +75,7 @@ export default function FrisePlanningJour({
   canSelect,
   showHours = true,
   onDrop,
-  indisposPierre,
+  indispos,
   seanceEnDeplacement,
   onSeanceClick,
   onSeanceDragStart,
@@ -276,8 +276,8 @@ export default function FrisePlanningJour({
           );
         })}
 
-        {/* Indisponibilités Pierre (hachuré rouge) */}
-        {indisposPierre?.map((ind, i) => {
+        {/* Indisponibilités du praticien (hachuré rouge) */}
+        {indispos?.map((ind, i) => {
           const dMin = Math.max(heureEnMinutes(ind.debut), H_DEBUT);
           const fMin = Math.min(heureEnMinutes(ind.fin), H_FIN);
           if (fMin <= dMin) return null;

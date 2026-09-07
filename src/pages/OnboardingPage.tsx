@@ -199,7 +199,7 @@ export default function OnboardingPage({ onComplete }: Props) {
               <label style={labelStyle}>Nom de l'entreprise / cabinet</label>
               <input
                 type="text"
-                placeholder="Ex : MouvAPA, Cabinet Santé+"
+                placeholder="Ex : Cabinet Santé+, Activ'Forme"
                 value={societe}
                 onChange={e => setSociete(e.target.value)}
                 style={inputStyle}

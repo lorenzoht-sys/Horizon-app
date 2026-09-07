@@ -139,7 +139,7 @@ export default function RegisterPage() {
               <input
                 className="login-input"
                 type="text"
-                placeholder="Pierre"
+                placeholder="Marie"
                 value={prenom}
                 onChange={e => setPrenom(e.target.value)}
                 autoComplete="given-name"
@@ -152,7 +152,7 @@ export default function RegisterPage() {
               <input
                 className="login-input"
                 type="text"
-                placeholder="Clavier"
+                placeholder="Durand"
                 value={nom}
                 onChange={e => setNom(e.target.value)}
                 autoComplete="family-name"
@@ -167,7 +167,7 @@ export default function RegisterPage() {
             <input
               className="login-input"
               type="email"
-              placeholder="pierre@mouvapa.com"
+              placeholder="marie.durand@exemple.fr"
               value={email}
               onChange={e => setEmail(e.target.value)}
               autoComplete="email"

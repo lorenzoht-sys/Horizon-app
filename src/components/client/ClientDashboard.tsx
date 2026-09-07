@@ -157,7 +157,7 @@ function OngletProgres({ participant, bilans }: { participant: Participant; bila
         </div>
       )}
 
-      <p className="text-center text-xs text-gray-400 py-2">Suivi réalisé par votre coach Mouv'APA</p>
+      <p className="text-center text-xs text-gray-400 py-2">Suivi réalisé par votre praticien</p>
     </div>
   );
 }
@@ -261,7 +261,7 @@ export default function ClientDashboard({ participant }: Props) {
       <div className="bg-dark text-white px-6 pt-5 pb-0">
         <div className="max-w-lg mx-auto">
           <div className="flex items-center gap-3 mb-3">
-            <img src="/logo.png" alt="Mouv'APA" style={{ height: 34, width: 'auto' }} />
+            <img src="/logo.png" alt="" style={{ height: 34, width: 'auto' }} />
             <span className="text-white/40 text-xs">Votre espace progression</span>
           </div>
           <div className="font-heading font-bold text-white text-xl mb-4">

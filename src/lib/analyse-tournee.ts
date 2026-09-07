@@ -6,8 +6,8 @@ import { heureEnMinutes, minutesEnHeure, MARGE_ENTRE_SEANCES_MIN } from '../util
 
 const TROU_MIN_SUGGESTION_MINUTES = 45;
 const RAYON_ZONE_KM = 5;
-const HEURE_DEBUT_TRAVAIL = '08:00'; // plage de travail de Pierre — début
-const HEURE_FIN_TRAVAIL   = '19:00'; // plage de travail de Pierre — fin
+const HEURE_DEBUT_TRAVAIL = '08:00'; // plage de travail du praticien — début
+const HEURE_FIN_TRAVAIL   = '19:00'; // plage de travail du praticien — fin
 
 export interface CreneauLibre {
   jourSemaine: number;        // 0=dim…6=sam (JS Date.getDay())
