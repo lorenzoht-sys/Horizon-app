@@ -93,7 +93,10 @@ ${dernierBilan ? `DERNIERS SCORES (bilan du ${dernierBilan.date}) :
 - Ressenti à l'effort (Borg) : ${dernierBilan.tm6?.borgRPE ?? 'NR'}/20` : "Aucun bilan disponible — adapter le programme au profil et à la pathologie déclarés."}`;
 }
 
-function formatCatalogue(catalogue: Exercice[]): string {
+/** Exporté pour être mesurable : c'est ce texte qui domine le plus gros
+ *  prompt de l'application, et donc ce qui rapproche la génération de
+ *  programme du plafond de `api/_lib/guard.ts`. Voir le test associé. */
+export function formatCatalogue(catalogue: Exercice[]): string {
   return JSON.stringify(catalogue.map(ex => ({
     id: ex.id,
     nom: ex.nom,

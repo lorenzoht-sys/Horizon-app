@@ -4,8 +4,12 @@
 // projet n'a pas d'environnement DOM/RTL, et la logique testable sans réseau
 // (validation, résolution catalogue, mapping) est extraite en fonctions pures.
 import { describe, it, expect } from 'vitest';
-import { resoudreExercice, validerEtResoudre, versPayloadCreateProgramme, type ProgrammeIA, type ExerciceIA } from './genererProgrammeIA';
+import { resoudreExercice, validerEtResoudre, versPayloadCreateProgramme, formatCatalogue, type ProgrammeIA, type ExerciceIA } from './genererProgrammeIA';
 import type { Exercice } from '../types';
+// Le plafond vit côté serveur ; c'est précisément ce qui rend le lien
+// fragile et justifie de le verrouiller ici (voir le bloc en fin de fichier).
+import { PROMPT_MAX_LENGTH } from '../../api/_lib/guard.js';
+import { EXERCICES_BASE } from '../data/exercices';
 
 function exerciceCatalogue(overrides: Partial<Exercice> = {}): Exercice {
   return {
@@ -130,5 +134,64 @@ describe('versPayloadCreateProgramme — mapping vers createProgramme()', () => 
     const payload = versPayloadCreateProgramme(programme(), 'domicile', () => 'id');
     expect(payload.seances[0].exercices[0].repetitions).toBeUndefined();
     expect(payload.seances[1].exercices[0].dureeSecondes).toBeUndefined();
+  });
+});
+
+// ── Le catalogue d'exercices contre le plafond de prompt ────────────────
+//
+// Ajouté le 2026-09-07 avec `api/_lib/guard.ts`, qui refuse désormais les
+// prompts de plus de 60 000 caractères. Ce plafond a été posé sur une
+// MESURE : le catalogue sérialisé pesait 21 313 caractères pour 64
+// exercices, soit le gros du plus lourd prompt de l'application (génération
+// de programme, ~24 000 caractères au total).
+//
+// Le catalogue est une donnée vivante : `EXERCICES_BASE` grossit à chaque
+// exercice ajouté, et rien dans ce fichier ne renvoie au plafond posé dans
+// `api/`. Personne n'ira relire `guard.ts` en ajoutant un exercice. Sans ce
+// test, le jour où le catalogue franchit le seuil, la panne se produit en
+// production, sur l'écran de génération de programme, et le message parle
+// d'un « contenu trop long » que le praticien n'a pas écrit.
+//
+// Le test échoue AVANT ce jour-là, et laisse le choix : relever le plafond,
+// ou n'envoyer au modèle qu'une partie du catalogue.
+describe('catalogue d\'exercices et plafond de prompt', () => {
+  it('tient dans la moitié du plafond, marge comprise pour le contexte patient', () => {
+    const taille = formatCatalogue(EXERCICES_BASE).length;
+
+    // La moitié, et non « moins que le plafond » : le prompt de génération
+    // ajoute au catalogue le profil complet du patient, les derniers scores
+    // et la consigne. Le catalogue seul ne doit jamais occuper la place de
+    // ce qui l'accompagne.
+    expect(taille).toBeLessThan(PROMPT_MAX_LENGTH / 2);
+  });
+
+  it('conserve un coût par exercice conforme à la mesure d\'origine', () => {
+    const taille = formatCatalogue(EXERCICES_BASE).length;
+    const parExercice = taille / EXERCICES_BASE.length;
+
+    // ~333 caractères par exercice au 2026-09-07. Un dépassement franc de
+    // cette borne signale qu'un champ verbeux vient d'entrer dans la
+    // sérialisation — c'est ce qui ferait décrocher le total bien avant que
+    // le nombre d'exercices ne pose problème.
+    expect(parExercice).toBeLessThan(700);
+  });
+
+  it('n\'envoie au modèle que les champs utiles au choix d\'un exercice', () => {
+    const [premier] = JSON.parse(formatCatalogue(EXERCICES_BASE.slice(0, 1)));
+
+    // Liste blanche, pas liste d'interdits : un `...ex` à la place de la
+    // sélection actuelle enverrait tout l'objet — consignes de sécurité,
+    // niveaux, matériel, durées — et ferait exploser le prompt sans que
+    // personne ne le voie (même règle que api/_organisation-admin.test.ts).
+    expect(Object.keys(premier).sort()).toEqual([
+      'adaptations',
+      'categorie',
+      'description',
+      'id',
+      'niveauMobilite',
+      'nom',
+      'positionRequise',
+      'profilsCompatibles',
+    ]);
   });
 });

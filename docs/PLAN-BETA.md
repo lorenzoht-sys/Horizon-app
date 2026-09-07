@@ -918,6 +918,26 @@ qui porterait un secret dans ses en-têtes.
 
 ## INVENTAIRE — ce qui n'a jamais été extrait d'`audit-securite-global`
 
+> **Mise à jour du 2026-09-07.** Les points 4, 5 et 6 ont bougé (PR #38) —
+> voir leur colonne « État ». Deux remarques de portée, à lire avant de se
+> fier au tableau :
+>
+> - **Cet inventaire ne couvre que `api/`, `src/` et `vercel.json`.** Les
+>   Edge Functions Supabase n'y ont jamais figuré. `analyser-seance` était
+>   pourtant appelable sans vérification d'appelant et avec CORS à `*`
+>   jusqu'au 2026-09-07 (PR #37), et `interpreter-bilan`, jamais appelée par
+>   aucun code, transmettait un champ `prompt` brut à Anthropic — elle a été
+>   supprimée. Un inventaire dressé « fichier par fichier » qui omet un
+>   répertoire entier donne une fausse assurance : `supabase/functions/` est
+>   à traiter à part.
+> - **Un commentaire de migration affirmait un contrôle inexistant.**
+>   `20260817_securite_08_rate_limit_claude.sql` écrivait que `api/claude.ts`
+>   « a un plafond de taille de prompt », alors que le point 4 ci-dessous le
+>   classait `Ouvert` au même moment. Corrigé dans le fichier de migration
+>   (commentaire seul, DDL inchangé). À retenir pour la relecture des autres
+>   migrations : leurs préambules citent des documents absents de `main` et
+>   des contrôles supposés acquis.
+
 **Dressé le 2026-09-03, fichier par fichier contre `origin/main`.** La liste
 qui précédait n'en comptait que 3 : elle avait été écrite en préparant le
 lot 6, à partir d'un seul commit (`d6be50f`), sans inventaire complet de la
@@ -935,9 +955,9 @@ de plusieurs correctifs sur un unique disque.
 | 1 | **[F-13] IDOR `api/patient/retour-seance.ts`** — `seanceId` du body inséré sans contrôle d'appartenance | `api/` | **Corrigé**, branche `securite-idor-patient-f13-f14`, non mergée |
 | 2 | **[F-14] IDOR `api/patient/seance.ts`** — `exercices[].id` inséré sans contrôle | `api/` | **Corrigé**, même branche — avec 2 contrôles voisins qui manquaient aussi (`programmeId`, `seanceId`) |
 | 3 | **[F-02] `code_acces` tirés avec `Math.random()`** | `src/utils/codeAcces.ts` | **Ouvert.** Détail plus bas, section « chantiers annexes » |
-| 4 | **Plafond de taille de prompt** (`PROMPT_MAX_LENGTH`, `api/_lib/guard.ts`) | `api/claude.ts` | **Ouvert.** Le fichier `guard.ts` n'existe pas sur `main` |
-| 5 | **Garde-fou anti prompt-injection** — message système instruisant le modèle à traiter le texte utilisateur comme donnée, jamais comme instruction | `api/claude.ts` | **Ouvert** |
-| 6 | **Sanitisation des messages d'erreur** — `String(err)` → `'Erreur serveur'` + `console.error` | `api/claude.ts` (2 `catch`), `api/patient/seance.ts`, `api/patient/retour-seance.ts` | **Ouvert.** Volontairement laissé hors de la branche F-13/F-14 : le point couvre plusieurs routes et mérite un lot cohérent |
+| 4 | **Plafond de taille de prompt** (`PROMPT_MAX_LENGTH`, `api/_lib/guard.ts`) | `api/claude.ts` | **Corrigé** le 2026-09-07, PR #38. `guard.ts` existe désormais. Seuil 60 000 caractères, posé sur une mesure (catalogue d'exercices = 21 313 car. pour 64 exercices ; plus gros prompt ≈ 24 000) et non sur une estimation. Verrouillé par `src/utils/genererProgrammeIA.test.ts`, qui échoue si le catalogue grossit au point de menacer la génération de programme |
+| 5 | **Garde-fou anti prompt-injection** — message système instruisant le modèle à traiter le texte utilisateur comme donnée, jamais comme instruction | `api/claude.ts` | **Corrigé** le 2026-09-07, PR #38, sous la forme décrite : `SYSTEME_CADRAGE` dans `api/_lib/guard.ts`. **Portée à connaître** : le prompt arrive assemblé, la consigne de tâche et le texte dicté par un tiers y sont indiscernables. Un détecteur par motif est donc impossible ici — il fouillerait les prompts de l'application, qui sont faits d'instructions. Le message système distingue la consigne (à suivre) des données citées (à analyser) ; c'est le maximum exprimable sans délimiteur, et c'est plus faible que le bloc à nonce de `analyser-seance`. Le vrai renforcement serait de déplacer l'assemblage du prompt côté serveur, ou d'appliquer le détecteur au niveau des champs dans les 7 constructeurs — non fait |
+| 6 | **Sanitisation des messages d'erreur** — `String(err)` → `'Erreur serveur'` + `console.error` | `api/claude.ts` (2 `catch`), `api/patient/seance.ts`, `api/patient/retour-seance.ts` | **Partiellement corrigé.** `api/claude.ts` fait le 2026-09-07, PR #38 : les 2 `catch` plus le corps d'erreur d'Anthropic, qui repartait aussi au navigateur et n'était pas compté dans ce point. **Reste ouvert** sur `api/patient/seance.ts` et `api/patient/retour-seance.ts` |
 | 7 | **En-têtes de sécurité HTTP** — HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP, CSP en `Report-Only`, plus `Cache-Control: no-store` sur `/api/*` | `vercel.json` | **Ouvert.** Aucun en-tête sur `main` |
 | 8 | **Durcissement Sentry client** — `delete event.user` et `event.request.cookies` dans `beforeSend` | `src/lib/sentry.ts` | **Ouvert.** Défense en profondeur : rien n'appelle `setUser()` et `sendDefaultPii` est déjà à `false` |
 | 9 | **Validation Zod des entrées API** (12 routes) | `api/` | **Jamais fait, et pas arbitré.** Bloqué par l'absence d'environnement de test au moment de l'audit (`ETAT_AUDIT.md`). Les 12 routes ont une validation manuelle par champ ; migrer vers Zod changerait la forme des réponses d'erreur consommées par `src/lib/patientApi.ts` |
