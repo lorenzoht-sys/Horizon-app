@@ -918,9 +918,19 @@ qui porterait un secret dans ses en-têtes.
 
 ## INVENTAIRE — ce qui n'a jamais été extrait d'`audit-securite-global`
 
-> **Mise à jour du 2026-09-07.** Les points 4, 5 et 6 ont bougé (PR #38) —
-> voir leur colonne « État ». Deux remarques de portée, à lire avant de se
-> fier au tableau :
+> **Mise à jour du 2026-09-07.** Les points 4, 5 et 6 ont bougé (PR #38), et
+> les points 1 et 2 ont été **corrigés dans ce document, pas dans le code** :
+> ils annonçaient encore « branche `securite-idor-patient-f13-f14`, non
+> mergée » alors que la PR #31 était mergée depuis le 2026-09-04 (`aa61458`,
+> ancêtre de `main`). Un lecteur en concluait que les deux IDOR étaient
+> ouverts en production. Ils ne l'étaient pas.
+>
+> Leçon à retenir sur ce document plutôt que sur ces deux lignes : **un
+> inventaire daté ment dès que le code avance sans lui.** Les états y sont
+> désormais accompagnés du SHA qui les prouve, pour qu'une relecture puisse
+> les revérifier sans faire confiance à la phrase.
+>
+> Deux remarques de portée, à lire avant de se fier au tableau :
 >
 > - **Cet inventaire ne couvre que `api/`, `src/` et `vercel.json`.** Les
 >   Edge Functions Supabase n'y ont jamais figuré. `analyser-seance` était
@@ -952,8 +962,8 @@ de plusieurs correctifs sur un unique disque.
 
 | # | Élément | Où | État au 2026-09-03 |
 |---|---|---|---|
-| 1 | **[F-13] IDOR `api/patient/retour-seance.ts`** — `seanceId` du body inséré sans contrôle d'appartenance | `api/` | **Corrigé**, branche `securite-idor-patient-f13-f14`, non mergée |
-| 2 | **[F-14] IDOR `api/patient/seance.ts`** — `exercices[].id` inséré sans contrôle | `api/` | **Corrigé**, même branche — avec 2 contrôles voisins qui manquaient aussi (`programmeId`, `seanceId`) |
+| 1 | **[F-13] IDOR `api/patient/retour-seance.ts`** — `seanceId` du body inséré sans contrôle d'appartenance | `api/` | **Corrigé et mergé**, PR #31 (merge `aa61458`, 2026-09-04). Contrôle vérifié sur `main` le 2026-09-07 : `retour-seance.ts:82-83`, `.eq('id', seanceId).eq('participant_id', participantId)`, 404 et non 403 |
+| 2 | **[F-14] IDOR `api/patient/seance.ts`** — `exercices[].id` inséré sans contrôle | `api/` | **Corrigé et mergé**, même PR #31 — avec les 2 contrôles voisins qui manquaient aussi (`programmeId`, `seanceId`). Vérifiés sur `main` le 2026-09-07 : `seance.ts:73-74` (programme → participant), `:87-88` (séance → programme), `:109-111` (exercices → séance, en un seul aller-retour). `git log aa61458..main` sur ces deux fichiers est vide : rien ne les a touchés depuis |
 | 3 | **[F-02] `code_acces` tirés avec `Math.random()`** | `src/utils/codeAcces.ts` | **Ouvert.** Détail plus bas, section « chantiers annexes » |
 | 4 | **Plafond de taille de prompt** (`PROMPT_MAX_LENGTH`, `api/_lib/guard.ts`) | `api/claude.ts` | **Corrigé** le 2026-09-07, PR #38. `guard.ts` existe désormais. Seuil 60 000 caractères, posé sur une mesure (catalogue d'exercices = 21 313 car. pour 64 exercices ; plus gros prompt ≈ 24 000) et non sur une estimation. Verrouillé par `src/utils/genererProgrammeIA.test.ts`, qui échoue si le catalogue grossit au point de menacer la génération de programme |
 | 5 | **Garde-fou anti prompt-injection** — message système instruisant le modèle à traiter le texte utilisateur comme donnée, jamais comme instruction | `api/claude.ts` | **Corrigé** le 2026-09-07, PR #38, sous la forme décrite : `SYSTEME_CADRAGE` dans `api/_lib/guard.ts`. **Portée à connaître** : le prompt arrive assemblé, la consigne de tâche et le texte dicté par un tiers y sont indiscernables. Un détecteur par motif est donc impossible ici — il fouillerait les prompts de l'application, qui sont faits d'instructions. Le message système distingue la consigne (à suivre) des données citées (à analyser) ; c'est le maximum exprimable sans délimiteur, et c'est plus faible que le bloc à nonce de `analyser-seance`. Le vrai renforcement serait de déplacer l'assemblage du prompt côté serveur, ou d'appliquer le détecteur au niveau des champs dans les 7 constructeurs — non fait |
@@ -962,6 +972,81 @@ de plusieurs correctifs sur un unique disque.
 | 8 | **Durcissement Sentry client** — `delete event.user` et `event.request.cookies` dans `beforeSend` | `src/lib/sentry.ts` | **Ouvert.** Défense en profondeur : rien n'appelle `setUser()` et `sendDefaultPii` est déjà à `false` |
 | 9 | **Validation Zod des entrées API** (12 routes) | `api/` | **Jamais fait, et pas arbitré.** Bloqué par l'absence d'environnement de test au moment de l'audit (`ETAT_AUDIT.md`). Les 12 routes ont une validation manuelle par champ ; migrer vers Zod changerait la forme des réponses d'erreur consommées par `src/lib/patientApi.ts` |
 | 10 | **7 documents d'audit** — `RAPPORT_SECURITE.md`, `CARTOGRAPHIE_SECURITE.md`, `AUDIT_ROUTES_API.md`, `PACK_CODE_SECURITE_REFERENCE.md`, `MES_ACTIONS.md`, `ETAT_AUDIT.md`, `AUDIT_DEPENDANCE_XLSX.md` | `docs/` | **Absents de `main`.** Plusieurs migrations mergées les citent pourtant comme référence : ces renvois pointent aujourd'hui vers des fichiers introuvables pour qui ne connaît pas la branche |
+
+### Inventaire des surfaces déployées (dressé le 2026-09-07)
+
+Le tableau ci-dessus liste des **correctifs**, pas des **surfaces**. C'est ce
+qui a permis à deux angles morts de subsister : `supabase/functions/` n'y a
+jamais figuré, et deux routes API non plus. Cette section liste tout ce qui
+est joignable depuis l'extérieur, pour que l'omission suivante soit visible.
+
+Établi par `git ls-tree -r main --name-only -- api/` (hors `_lib/` et
+`*.test.ts`), `supabase/functions/`, et les `rewrites` de `vercel.json`.
+
+| Surface | Contrôle d'accès | Couverte par un audit précédent ? |
+|---|---|---|
+| `api/claude.ts` | JWT praticien + rate limit 100/h + plafond 60 000 | Oui — points 4, 5, 6 |
+| `api/cron/rappels.ts` | `x-cron-secret` vs `CRON_SECRET`, comparaison à temps constant | Oui — PR #23, #26 |
+| `api/organisation.ts` | `exigerAdmin` (`_lib/adminAuth.ts`) | Oui — PR #25 |
+| `api/patient/activite.ts` | token patient + 403 par test/exercice non activé | Partiellement |
+| `api/patient/me.ts` | token patient | Oui |
+| `api/patient/push-subscribe.ts` | token patient | Non |
+| `api/patient/retour-seance.ts` | token patient + appartenance (F-13) | Oui — points 1, 6 |
+| `api/patient/seance.ts` | token patient + 3 contrôles d'appartenance (F-14) | Oui — points 2, 6 |
+| `api/patient/session.ts` | émet le token ; rate limit par IP (`patient_login_attempts`) | Oui |
+| **`api/planning/ics.ts`** | **token en query string**, validé contre `praticiens.token_planning_ics` | **NON — jamais auditée** |
+| **`api/seances/supprimer-planifiees.ts`** | JWT praticien + 403 sur contrats non possédés | **NON — jamais auditée** |
+| `api/structure/data.ts` | `validateStructureToken` | Oui — PR #12, #18, #20 |
+| `supabase/functions/analyser-seance` | CORS fermé + JWT + plafonds + nonce | Depuis PR #37 seulement |
+| `vercel.json` rewrites | `/api/(.*)` et fallback SPA — aucune route cachée | — |
+
+Aucun webhook. Un seul cron. Une seule Edge Function depuis la suppression
+d'`interpreter-bilan` (#37).
+
+#### `api/planning/ics.ts` — ce qu'il faut savoir
+
+Endpoint **public à URL-capacité** : le token voyage en query string parce
+qu'aucune application calendrier ne sait ajouter d'en-tête à une
+souscription webcal (contrainte documentée dans le fichier, l.9-11). Il est
+validé côté serveur via `service_role`, qui contourne RLS.
+
+- **L'entropie est correcte** : `crypto.getRandomValues` (`SettingsPage.tsx:565`),
+  pas `Math.random()` — contrairement aux codes d'accès patient (point 3).
+- **Aucun rate limit** sur cette route, contrairement à `/api/claude` et à la
+  connexion patient. C'est la seule route authentifiée dans ce cas.
+- Le token apparaît dans les journaux Vercel, l'historique du navigateur et
+  la configuration de l'application calendrier du praticien — inhérent à
+  webcal, mais il donne accès à **tout le planning** d'un praticien, noms des
+  bénéficiaires compris.
+- Réponses volontairement peu bavardes (404 générique) : pas de fuite sur
+  l'existence d'un mécanisme d'authentification.
+
+#### `api/seances/supprimer-planifiees.ts` — ce qu'il faut savoir
+
+**Route destructive**, jamais listée dans un audit. Le contrôle d'accès y est
+correct : JWT praticien vérifié (l.19-30), puis appartenance de **tous** les
+contrats vérifiée avant toute suppression (403 l.50 si un seul n'appartient
+pas à l'appelant). La suppression est en outre bornée à `statut = 'planifiee'`
+et `date >= dateMin` (l.56-58) — elle ne touche pas les séances passées ni
+réalisées.
+
+Le point à connaître est ailleurs : **la journalisation est conditionnelle.**
+
+`logAuditEvent` n'est appelé que si `raison === 'fin_de_contrat'` **et**
+`nbSupprimees > 0` (l.65-75). Or sur les trois points d'appel côté client,
+un seul envoie cette raison :
+
+| Appelant | `raison` envoyée | Trace dans `audit_logs` |
+|---|---|---|
+| `ContratsTab.tsx:212` | `'fin_de_contrat'` | oui |
+| `ContratsTab.tsx:262` | aucune | **non** |
+| `ModalPlanificateur.tsx:32` | aucune | **non** |
+
+Deux des trois chemins de suppression de masse ne laissent donc aucune trace
+applicative. Ce n'est pas une faille d'accès — l'appelant est authentifié et
+propriétaire — mais cela retire toute possibilité de reconstituer après coup
+ce qui a été supprimé, par qui et quand. À arbitrer : soit rendre `raison`
+obligatoire, soit journaliser inconditionnellement.
 
 ### Deux pièges à connaître avant toute extraction
 
