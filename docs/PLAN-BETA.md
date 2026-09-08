@@ -852,6 +852,19 @@ survit.
 Playwright, remet le jeu de démo dans son état de départ. Toute écriture
 nouvelle introduite par un test doit y être ajoutée dans la même PR.
 
+**Le cas `02` a mis douze jours à recevoir son bloc.** La règle ci-dessus le
+nommait dès le 2026-08-27 (« `02` ajoute un participant à chaque passage »),
+mais seuls les deux autres cas ont reçu leur bloc dans le script. Entre-temps,
+49 fiches `Test E2E<timestamp>` se sont accumulées sur staging, du 2026-08-26
+au 2026-09-06, chacune portant un `code_acces` actif. Bloc 4 ajouté et
+exécuté le 2026-09-08 : 49 supprimées, les deux participants de démo intacts.
+
+Ce n'était pas une panne — `supprimer()` lève sur erreur HTTP, rien
+n'échouait en silence. C'était un **trou de couverture** : écrire la règle et
+nommer le cas ne suffit pas, tant que le bloc n'est pas dans le script. La
+phrase ci-dessus (« doit y être ajoutée dans la même PR ») est la seule chose
+qui l'empêche de se reproduire ; elle n'a pas été suivie.
+
 Le corollaire vaut aussi pour les tests eux-mêmes : un test qui a besoin
 d'une donnée doit vérifier qu'elle est là (`expect(...).toBeGreaterThan(0)`)
 plutôt que de boucler sur une liste éventuellement vide — sinon il passe au
