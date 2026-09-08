@@ -1226,6 +1226,67 @@ réinitialiser le mot de passe pour ne pas désynchroniser le secret GitHub
 utilisé par la CI), il doit être **documenté** plutôt que redécouvert :
 lancer le harnais en local suppose de poser cette variable soi-même.
 
+### Le compte `staging.praticien@example.com` est hors service — remplacé
+
+**Depuis le 2026-09-08, le compte praticien de staging est
+`staging.praticien2@example.com`
+(`0b38b494-3a9c-45c8-94de-b054d4e6204e`). L'ancien,
+`staging.praticien@example.com`, est mort : ne pas y revenir.**
+
+Pourquoi il a été contourné et non réparé : son mot de passe n'était plus
+connu (la valeur de `.env.test.local` était périmée, voir ci-dessus),
+l'interface Supabase n'offre pas de réinitialisation directe pour ce
+compte, et sa **suppression échoue** — `Database error deleting user`. Un
+compte qu'on ne peut ni ouvrir, ni réinitialiser, ni supprimer n'a pas de
+correctif : il a été remplacé.
+
+Ce que le remplacement a impliqué, et qu'un run futur suppose déjà fait :
+
+- les participants de démo **Camille Martin** et **Julien Bernard** sont
+  rattachés au nouveau `praticien_id` ;
+- `E2E_PATIENT_CODE` / `E2E_PATIENT_CODE_2` valaient `CAM001` / `JUL002`
+  dans `.env.test.local` — des codes qui ne correspondaient à aucune ligne
+  en base. Les valeurs justes sont `CAME2E26` / `JUNE2E27`, que les
+  variables de dépôt portaient déjà depuis le 2026-06-16 : c'est le fichier
+  local qui avait dérivé, pas la CI ;
+- la variable de dépôt `E2E_PRATICIEN_EMAIL` a été repointée le 2026-09-08.
+
+**La décision du 2026-08-27 de ne pas réinitialiser le mot de passe est
+caduque pour l'ancien compte, mais son motif vaut toujours pour le
+nouveau** : le mot de passe de `staging.praticien2@example.com` n'existe
+que dans le shell de l'opérateur et dans le secret GitHub
+`E2E_PRATICIEN_PASSWORD`. Le poser à la main avant chaque run local reste
+la procédure.
+
+### Cinq valeurs du harnais sont des *variables* de dépôt, pas des secrets
+
+Piège vérifié le 2026-09-08, après deux synchronisations manquées. Les deux
+workflows lisent :
+
+| Valeur | Lue comme |
+|---|---|
+| `E2E_PRATICIEN_EMAIL` | `vars.` |
+| `E2E_PATIENT_CODE`, `E2E_PATIENT_CODE_2` | `vars.` |
+| `E2E_STRUCTURE_TOKEN`, `E2E_BASE_URL` | `vars.` |
+| `E2E_PRATICIEN_PASSWORD` | `secrets.` |
+
+(`ci.yml:78-86`, `security.yml:94-98`.)
+
+`gh secret set E2E_PRATICIEN_EMAIL ...` **ne change donc rien** : la CI
+continue de lire `vars.E2E_PRATICIEN_EMAIL`. Un secret du même nom existe
+sans être lu par personne, et `gh secret list` affiche une date de mise à
+jour récente qui donne l'illusion de la synchro. C'est ce qui a fait croire
+deux fois que la CI était à jour.
+
+`scripts/staging-push-github-secrets.ts` n'aide pas ici : il ne connaît que
+`gh secret set` et ne pose aucune des cinq variables. Pour celles-là, la
+commande est `gh variable set`. **Vérifier avec `gh variable list`, pas avec
+`gh secret list`.**
+
+Trois secrets orphelins subsistent du 2026-09-08 (`E2E_PRATICIEN_EMAIL`,
+`E2E_PATIENT_CODE`, `E2E_PATIENT_CODE_2`) : aucun workflow ne les lit. À
+supprimer, pour que le prochain lecteur de `gh secret list` ne s'y fie pas.
+
 ### `STAGING_DATABASE_URL` est sur le pooler en mode *transaction*, pas *session*
 
 Depuis le 2026-08-27, la chaîne pointe sur
