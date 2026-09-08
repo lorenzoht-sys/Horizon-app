@@ -81,7 +81,7 @@
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.8"
   },
-  "description": "Application web de suivi des bilans fonctionnels pour Pierre Clavier, enseignant en Activité Physique Adaptée.",
+  "description": "Application web de suivi des bilans fonctionnels en Activité Physique Adaptée (APA).",
   "main": "eslint.config.js",
   "keywords": [],
   "author": "",
