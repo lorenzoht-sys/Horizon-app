@@ -481,7 +481,7 @@ export default function Dashboard() {
         )}
 
         {/* Contrats sans date de fin bloqués faute de jours de séance
-            renseignés : le cron (api/cron/renouveler-contrats.ts) ne les
+            renseignés : le cron (api/cron/rappels.ts, tâche « renouvellement ») ne les
             renouvelle jamais dans cet état, indéfiniment jusqu'à correction —
             signalé ici plutôt que seulement dans les logs du cron. */}
         {contratsSansJours.length > 0 && (

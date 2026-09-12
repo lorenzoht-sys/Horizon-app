@@ -1,7 +1,7 @@
 // scripts/renouveler-contrats-expires.ts
 //
 // Remédiation ponctuelle, à lancer UNE FOIS au déploiement du renouvellement
-// automatique des contrats à durée indéterminée (api/cron/renouveler-contrats.ts) :
+// automatique des contrats à durée indéterminée (api/cron/rappels.ts, tâche « renouvellement ») :
 // applique la même logique de renouvellement à tous les contrats
 // duree_indeterminee = true déjà expirés (date_fin < aujourd'hui) au moment
 // du déploiement, pour qu'aucun ne reste bloqué à attendre le prochain

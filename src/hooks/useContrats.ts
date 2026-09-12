@@ -163,7 +163,7 @@ export function useContrats() {
   }
 
   // dureeIndeterminee exclu : ces contrats se renouvellent automatiquement et
-  // silencieusement (api/cron/renouveler-contrats.ts), une échéance dans 14
+  // silencieusement (api/cron/rappels.ts, tâche « renouvellement »), une échéance dans 14
   // jours n'y signale donc rien qui demande une action de Pierre — même
   // exclusion que StatsPage.tsx (contratsExpirants).
   const contratsARenouveler = contrats.filter(c => {
