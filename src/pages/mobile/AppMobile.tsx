@@ -1731,15 +1731,21 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
                 <InfoSection titre="Contrat actif">
                   <InfoLigne icon="ti-calendar" texte={`${contrat.nbSeancesSemaine} séance${contrat.nbSeancesSemaine > 1 ? 's' : ''}/semaine à ${contrat.heureDebut} · ${contrat.dureeMinutes} min`} />
                   <InfoLigne icon="ti-clock" texte={`${new Date(contrat.dateDebut + 'T12:00').toLocaleDateString('fr-FR')} → ${new Date(contrat.dateFin + 'T12:00').toLocaleDateString('fr-FR')}`} />
-                  <div style={{ marginTop: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                      <span style={{ color: C.muted }}>Progression</span>
-                      <span style={{ fontWeight: 700, color: C.text }}>{contrat.nombreSeancesRealisees}/{contrat.nombreSeancesTotal}</span>
+                  {contrat.dureeIndeterminee ? (
+                    <div style={{ marginTop: 10, fontSize: 12, color: C.muted }}>
+                      Suivi actif depuis {new Date(contrat.dateDebut + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} · sans date de fin
                     </div>
-                    <div style={{ height: 6, background: C.border, borderRadius: 3 }}>
-                      <div style={{ height: '100%', width: `${Math.min(100, (contrat.nombreSeancesRealisees / contrat.nombreSeancesTotal) * 100)}%`, background: C.primary, borderRadius: 3 }} />
+                  ) : (
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                        <span style={{ color: C.muted }}>Progression</span>
+                        <span style={{ fontWeight: 700, color: C.text }}>{contrat.nombreSeancesRealisees}/{contrat.nombreSeancesTotal}</span>
+                      </div>
+                      <div style={{ height: 6, background: C.border, borderRadius: 3 }}>
+                        <div style={{ height: '100%', width: `${Math.min(100, (contrat.nombreSeancesRealisees / contrat.nombreSeancesTotal) * 100)}%`, background: C.primary, borderRadius: 3 }} />
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </InfoSection>
                 {prochaineSeance && (
                   <div style={{ marginTop: 12 }}>

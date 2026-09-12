@@ -516,7 +516,11 @@ export default function DossierPDF({
               <>
                 <Row label="Début du suivi" value={fmtDate(contratActif.dateDebut)} />
                 <Row label="Fréquence" value={`${contratActif.nbSeancesSemaine} séance${contratActif.nbSeancesSemaine > 1 ? 's' : ''}/semaine · ${contratActif.dureeMinutes} min`} />
-                <Row label="Progression" value={`${contratActif.nombreSeancesRealisees} / ${contratActif.nombreSeancesTotal} séances réalisées`} />
+                {contratActif.dureeIndeterminee ? (
+                  <Row label="Durée" value="Sans date de fin" />
+                ) : (
+                  <Row label="Progression" value={`${contratActif.nombreSeancesRealisees} / ${contratActif.nombreSeancesTotal} séances réalisées`} />
+                )}
               </>
             )}
             {programmeActif && (

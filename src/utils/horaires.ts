@@ -1,4 +1,4 @@
-import type { Contrat, PeriodiciteContrat, Seance } from '../types';
+import type { Contrat, PeriodiciteContrat, Seance } from '../types/index.js';
 
 export function heureEnMinutes(heure: string): number {
   const [h, m] = heure.split(':').map(Number);
