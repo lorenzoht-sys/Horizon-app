@@ -114,6 +114,29 @@ export function useContrats() {
     return true;
   }
 
+  // Reprise d'un contrat en pause : retour en 'actif' et effacement de la
+  // date de reprise prévue (elle n'a de sens que pendant la pause).
+  // nouvelleDateFin n'est fourni que pour un contrat à durée indéterminée
+  // expiré pendant l'arrêt, prolongé d'un an à la reprise (voir
+  // evaluerReprise, utils/repriseContrat.ts).
+  //
+  // Une SEULE écriture pour les trois champs : un contrat ne doit jamais se
+  // retrouver 'actif' avec une échéance déjà dépassée, même une fraction de
+  // seconde — c'est exactement l'état que le blocage de la reprise existe
+  // pour empêcher.
+  async function reprendreContrat(id: string, nouvelleDateFin?: string): Promise<boolean> {
+    const patch: Record<string, unknown> = { statut: 'actif', date_reprise_prevue: null };
+    if (nouvelleDateFin) patch.date_fin = nouvelleDateFin;
+    if (supabase) {
+      const { error } = await supabase.from('contrats').update(patch).eq('id', id);
+      if (error) { console.error('Erreur reprise contrat:', error); toast.error('Erreur : ' + error.message); return false; }
+    }
+    setContrats(prev => prev.map(c => c.id === id
+      ? { ...c, statut: 'actif' as const, dateReprisePrevue: undefined, ...(nouvelleDateFin ? { dateFin: nouvelleDateFin } : {}) }
+      : c));
+    return true;
+  }
+
   async function modifierDateFin(id: string, dateFin: string): Promise<boolean> {
     if (supabase) {
       const { error } = await supabase.from('contrats').update({ date_fin: dateFin }).eq('id', id);
@@ -187,6 +210,7 @@ export function useContrats() {
     creerContrat,
     modifierStatut,
     mettreEnPause,
+    reprendreContrat,
     modifierDateFin,
     toggleExclureTournee,
     supprimerContrat,

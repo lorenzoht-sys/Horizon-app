@@ -4,10 +4,12 @@ import { format, addDays } from 'date-fns';
 import { useContrats } from '../../hooks/useContrats';
 import { useAgenda } from '../../hooks/useAgenda';
 import { useParticipants } from '../../hooks/useParticipants';
-import { Plus, PauseCircle, XCircle, RefreshCw, FileText, Pencil } from 'lucide-react';
+import { Plus, PauseCircle, XCircle, RefreshCw, FileText, Pencil, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Contrat, Seance } from '../../types';
 import ModalGenerationContrat from './ModalGenerationContrat';
+import { evaluerReprise, calculerSeancesReprise } from '../../utils/repriseContrat';
+import { ChevauchementError } from '../../utils/horaires';
 import { getAuthHeader } from '../../lib/supabase';
 
 const STATUT_BADGE: Record<string, { label: string; class: string }> = {
@@ -203,8 +205,8 @@ interface Props {
 }
 
 export default function ContratsTab({ participantId }: Props) {
-  const { contratsDeParticipant, modifierStatut, mettreEnPause, modifierDateFin, toggleExclureTournee, supprimerContrat } = useContrats();
-  const { seances, retirerPlanifieesLocales } = useAgenda();
+  const { contratsDeParticipant, modifierStatut, mettreEnPause, reprendreContrat, modifierDateFin, toggleExclureTournee, supprimerContrat } = useContrats();
+  const { seances, bulkCreerSeances, retirerPlanifieesLocales } = useAgenda();
   const { participants } = useParticipants();
   const [modalPDF, setModalPDF] = useState<Contrat | null>(null);
   const [modalDateFin, setModalDateFin] = useState<Contrat | null>(null);
@@ -213,6 +215,12 @@ export default function ContratsTab({ participantId }: Props) {
   const [supprimant, setSupprimant] = useState(false);
   const [confirmTerminer, setConfirmTerminer] = useState<{ contratId: string; nbSeances: number } | null>(null);
   const [terminant, setTerminant] = useState(false);
+  // Contrat à durée fixe dont l'échéance est passée pendant la pause : la
+  // reprise est refusée, et cette modale est le SEUL chemin vers la
+  // correction de la date de fin (le crayon de ModalModifierDateFin est
+  // réservé aux contrats actif/a_venir — un contrat suspendu n'y a pas accès).
+  const [blocageReprise, setBlocageReprise] = useState<{ contrat: Contrat; dateFinExpiree: string } | null>(null);
+  const [reprenant, setReprenant] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
   const participant = participants.find(p => p.id === participantId);
@@ -231,9 +239,73 @@ export default function ContratsTab({ participantId }: Props) {
     return new Date(prochaine.date + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   }
 
-  function handleReactiver(contratId: string) {
-    modifierStatut(contratId, 'actif');
-    toast.success('Contrat réactivé');
+  // Reprise d'un contrat en pause. Ce qui décide du blocage est la date
+  // RÉELLE du clic (today), jamais contrat.dateReprisePrevue : cette
+  // dernière n'est qu'un pense-bête saisi au moment de la pause, qui peut
+  // être largement dépassé. Voir evaluerReprise (utils/repriseContrat.ts).
+  //
+  // Ordre volontaire : les séances sont créées AVANT le passage en 'actif'.
+  // Si l'insert échoue, le contrat reste suspendu et un nouveau clic
+  // retentera proprement ; l'inverse laisserait un contrat actif sans
+  // aucune séance, sans bouton pour rattraper (« Reprendre » disparaît dès
+  // que le statut change).
+  async function handleReprendre(contrat: Contrat) {
+    const decision = evaluerReprise(contrat, today);
+
+    if (decision.type === 'bloque') {
+      setBlocageReprise({ contrat, dateFinExpiree: decision.dateFinExpiree });
+      return;
+    }
+
+    setReprenant(true);
+    try {
+      // Dates déjà pourvues pour ce contrat, annulées exclues : reflète la
+      // contrainte d'unicité seances_no_double_contrat_idx. Filtré ici,
+      // avant l'insert, plutôt que de laisser la base rejeter l'opération.
+      const dejaCouvertes = seances
+        .filter(s => s.contratId === contrat.id && s.statut !== 'annulee')
+        .map(s => s.date);
+
+      const nouvelles = calculerSeancesReprise({
+        contrat,
+        participant,
+        debutGeneration: decision.debutGeneration,
+        finGeneration: decision.finGeneration,
+        datesDejaCouvertes: dejaCouvertes,
+      });
+
+      if (nouvelles.length > 0) {
+        await bulkCreerSeances(nouvelles);
+      }
+
+      const ok = await reprendreContrat(
+        contrat.id,
+        decision.type === 'prolonge' ? decision.nouvelleDateFin : undefined,
+      );
+      if (!ok) return;
+
+      const nb = nouvelles.length;
+      const partSeances = nb > 0
+        ? ` — ${nb} séance${nb > 1 ? 's' : ''} replanifiée${nb > 1 ? 's' : ''}`
+        : ' — aucune séance à replanifier';
+      toast.success(
+        decision.type === 'prolonge'
+          ? `Contrat repris et prolongé jusqu'au ${formatDateCourt(decision.nouvelleDateFin)}${partSeances}`
+          : `Contrat repris${partSeances}`
+      );
+    } catch (err) {
+      // Un créneau libre avant la pause a pu être attribué à quelqu'un
+      // d'autre pendant l'arrêt : on refuse plutôt que de superposer deux
+      // bénéficiaires au même horaire. Le contrat reste en pause.
+      if (err instanceof ChevauchementError) {
+        toast.error(`Reprise impossible : ${err.conflits.length} créneau${err.conflits.length > 1 ? 'x' : ''} est déjà occupé par une autre séance. Libérez l'agenda, puis reprenez le contrat.`);
+        return;
+      }
+      console.error('[handleReprendre]', err);
+      toast.error(err instanceof Error ? err.message : 'Erreur lors de la reprise du contrat');
+    } finally {
+      setReprenant(false);
+    }
   }
 
   // Séances futures de ce contrat qui tombent au-delà de la date proposée —
@@ -619,12 +691,13 @@ export default function ContratsTab({ participantId }: Props) {
               )}
               {contrat.statut === 'suspendu' && (
                 <button
-                  onClick={() => handleReactiver(contrat.id)}
-                  className="flex items-center gap-1.5 text-xs border border-green-200 text-green-600 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors"
-                  title="Reprise à implémenter — voir échange en cours sur le cas d'un contrat expiré pendant la pause"
+                  onClick={() => handleReprendre(contrat)}
+                  disabled={reprenant}
+                  className="flex items-center gap-1.5 text-xs border border-green-200 text-green-600 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors disabled:opacity-50"
+                  title="Replanifie les séances restantes à partir d'aujourd'hui (ou de la date de reprise prévue si elle est encore à venir)"
                 >
                   <RefreshCw size={12} />
-                  Reprendre
+                  {reprenant ? 'Reprise…' : 'Reprendre'}
                 </button>
               )}
             </div>
@@ -700,6 +773,48 @@ export default function ContratsTab({ participantId }: Props) {
           onConfirmer={dateReprisePrevue => handleConfirmerPause(modalPause, dateReprisePrevue)}
           onCancel={() => setModalPause(null)}
         />
+      )}
+
+      {/* Blocage de reprise — contrat à durée FIXE expiré pendant la pause.
+          Refuser sans offrir la sortie serait un cul-de-sac : le crayon qui
+          ouvre ModalModifierDateFin est réservé aux contrats actif/a_venir,
+          donc un contrat suspendu n'a aucun autre chemin vers cette modale.
+          Le bouton ci-dessous est cette sortie. */}
+      {blocageReprise && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1005 }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={18} className="text-orange-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-dark">Reprise impossible</h3>
+                <p className="text-sm text-gray-600 mt-1.5">
+                  Ce contrat a expiré le{' '}
+                  <span className="font-semibold text-dark">{formatDateCourt(blocageReprise.dateFinExpiree)}</span>,
+                  pendant la pause. Sa date de fin a été fixée à la prescription : elle n'est pas
+                  prolongée automatiquement.
+                </p>
+                <p className="text-xs text-gray-500 mt-2">
+                  Corrigez la date de fin, puis reprenez le contrat.
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <button
+                onClick={() => { const c = blocageReprise.contrat; setBlocageReprise(null); setModalDateFin(c); }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-dark transition-colors"
+              >
+                <Pencil size={13} />
+                Corriger la date de fin
+              </button>
+              <button
+                onClick={() => setBlocageReprise(null)}
+                className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Dialog confirmation "Terminer" avec séances — même mécanisme que la
