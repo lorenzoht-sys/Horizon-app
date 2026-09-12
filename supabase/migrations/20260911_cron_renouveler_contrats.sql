@@ -1,3 +1,13 @@
+-- ⚠️ SCRIPT OBSOLÈTE — NE PLUS EXÉCUTER.
+--
+-- Le job créé ici a été supprimé par la fusion des deux crons
+-- (20260912_cron_fusion_rappels_renouvellement.sql) : l'endpoint
+-- /api/cron/renouveler-contrats n'existe plus, le renouvellement est
+-- désormais porté par /api/cron/rappels. Réexécuter ce script recréerait un
+-- job qui appelle une URL morte — un 404 toutes les nuits, en silence.
+--
+-- Conservé uniquement comme trace historique.
+--
 -- ============================================================================
 -- 20260911_cron_renouveler_contrats.sql
 -- ============================================================================

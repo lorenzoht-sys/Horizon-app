@@ -93,7 +93,7 @@ export default function ContratNouveauPage() {
   }, [nbSeancesSemaine]);
 
   // Pour "durée indéterminée", générer 1 an de séances par défaut — cohérent
-  // avec le cycle de renouvellement automatique (api/cron/renouveler-contrats.ts,
+  // avec le cycle de renouvellement automatique (api/cron/rappels.ts, tâche « renouvellement »,
   // MARGE_RENOUVELLEMENT_JOURS) qui prolonge date_fin d'un an à chaque passage.
   const dateFinPourGeneration = (() => {
     if (mode !== 'duree' || !dureeIndeterminee) return dateFin;

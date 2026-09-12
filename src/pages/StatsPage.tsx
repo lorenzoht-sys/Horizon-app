@@ -506,7 +506,7 @@ function SectionAlertes({
   }
 
   // 🟡 Contrats sans date de fin bloqués faute de jours de séance renseignés
-  // — le cron (api/cron/renouveler-contrats.ts) ne les renouvelle jamais
+  // — le cron (api/cron/rappels.ts, tâche « renouvellement ») ne les renouvelle jamais
   // dans cet état, indéfiniment jusqu'à correction.
   const contratsSansJours = contrats.filter(c =>
     c.statut === 'actif' && c.dureeIndeterminee && (c.joursFixe?.length ?? 0) === 0
