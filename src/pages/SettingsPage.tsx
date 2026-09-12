@@ -600,7 +600,7 @@ function SectionExportPlanning() {
     <section>
       <SectionTitle title="📅 Export du planning" />
       <p className="text-xs text-gray-400 mb-4">
-        Abonnez votre calendrier personnel (Google Agenda, Calendrier iPhone…) à vos séances à venir (6 mois glissants).
+        Abonnez votre calendrier personnel (Google Agenda, Calendrier iPhone…) à vos séances, passées et à venir (24 mois d'historique, 12 mois à l'avance).
         Lecture seule et à sens unique : rien de ce que vous modifiez dans votre calendrier externe n'est répercuté dans Horizon.
       </p>
 

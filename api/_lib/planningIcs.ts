@@ -15,10 +15,26 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import ical from 'ical-generator';
-import { addMonths, format } from 'date-fns';
+import { addMonths, subMonths, format } from 'date-fns';
 import { dateHeureParisVersUTC } from './rappels.js';
 
-const FENETRE_MOIS = 6;
+// Fenêtre glissante du flux : large côté passé pour que le praticien
+// retrouve l'historique de ses séances (suivi patient, litiges, export
+// comptable), plus courte côté futur car au-delà la planification réelle
+// n'existe généralement pas encore. Ajustables ici sans relire la logique
+// de la requête ci-dessous.
+const FENETRE_MOIS_PASSE = 24;
+const FENETRE_MOIS_FUTUR = 12;
+
+// Calcule les bornes (inclusives, format YYYY-MM-DD) de la fenêtre glissante
+// à partir d'un instant donné. Fonction pure (pas d'accès à Date.now()
+// directement) pour rester testable sans mock de date globale.
+export function calculerBornesFenetreIcs(maintenant: Date): { debut: string; fin: string } {
+  return {
+    debut: format(subMonths(maintenant, FENETRE_MOIS_PASSE), 'yyyy-MM-dd'),
+    fin: format(addMonths(maintenant, FENETRE_MOIS_FUTUR), 'yyyy-MM-dd'),
+  };
+}
 
 export interface PraticienIcsInfo {
   praticienId: string;
@@ -52,20 +68,21 @@ export interface SeancePourIcs {
   personneContact: string | null;
 }
 
-// Charge les séances futures (fenêtre glissante de 6 mois) d'un praticien,
-// séances annulées exclues, colonnes explicites (jamais select('*'), jamais
+// Charge les séances passées et futures (fenêtre glissante, voir
+// FENETRE_MOIS_PASSE / FENETRE_MOIS_FUTUR) d'un praticien, avec leur statut
+// réel (planifiee/realisee/reportee) ; séances annulées exclues qu'elles
+// soient passées ou futures. Colonnes explicites (jamais select('*'), jamais
 // notes/motif_annulation*).
 export async function chargerSeancesPourIcs(supabase: SupabaseClient, praticienId: string): Promise<SeancePourIcs[]> {
-  const aujourdhui = format(new Date(), 'yyyy-MM-dd');
-  const dansSixMois = format(addMonths(new Date(), FENETRE_MOIS), 'yyyy-MM-dd');
+  const { debut, fin } = calculerBornesFenetreIcs(new Date());
 
   const { data, error } = await supabase
     .from('seances')
     .select('id, date, heure_debut, heure_fin, type, adresse, statut, participants(prenom, nom, code_portail, personne_contact)')
     .eq('praticien_id', praticienId)
     .neq('statut', 'annulee')
-    .gte('date', aujourdhui)
-    .lte('date', dansSixMois)
+    .gte('date', debut)
+    .lte('date', fin)
     .order('date', { ascending: true });
 
   if (error || !data) return [];
