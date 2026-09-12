@@ -301,24 +301,32 @@ export default function ParticipantProfileMobile() {
                 <span>📅 {contratActif.nbSeancesSemaine} séance{contratActif.nbSeancesSemaine > 1 ? 's' : ''}/semaine · {contratActif.heureDebut} · {contratActif.dureeMinutes} min</span>
                 <BadgeSeancesRestantes statut={statutSeances} />
               </div>
-              <div>
-                Séances : <strong className="text-gray-800">{contratActif.nombreSeancesRealisees}/{contratActif.nombreSeancesTotal}</strong>
-              </div>
-              <div className="h-1 bg-gray-100 rounded-full mt-2 overflow-hidden">
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${Math.min(100, Math.round(contratActif.nombreSeancesRealisees / contratActif.nombreSeancesTotal * 100))}%`,
-                    background: 'var(--color-teal)',
-                  }}
-                />
-              </div>
+              {contratActif.dureeIndeterminee ? (
+                <div className="text-gray-500">
+                  Suivi actif depuis {new Date(contratActif.dateDebut + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} · sans date de fin
+                </div>
+              ) : (
+                <>
+                  <div>
+                    Séances : <strong className="text-gray-800">{contratActif.nombreSeancesRealisees}/{contratActif.nombreSeancesTotal}</strong>
+                  </div>
+                  <div className="h-1 bg-gray-100 rounded-full mt-2 overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.min(100, Math.round(contratActif.nombreSeancesRealisees / contratActif.nombreSeancesTotal * 100))}%`,
+                        background: 'var(--color-teal)',
+                      }}
+                    />
+                  </div>
+                </>
+              )}
               {prochaineSeance && (
                 <div className="mt-2 text-[12px]" style={{ color: 'var(--color-teal)' }}>
                   📆 Prochain RDV : {formatDateCourt(prochaineSeance.date)} · {prochaineSeance.heureDebut}
                 </div>
               )}
-              {(() => {
+              {!contratActif.dureeIndeterminee && (() => {
                 const j = differenceInDays(new Date(contratActif.dateFin), new Date());
                 if (j <= 14 && j >= 0) return (
                   <div className="mt-1 text-[12px] font-semibold text-amber-600">

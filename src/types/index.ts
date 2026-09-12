@@ -469,8 +469,14 @@ export interface Contrat {
   praticienId?: string;
   dateDebut: string;
   dateFin: string;
-  /** @deprecated remplacé par nbSeancesSemaine — les jours réels sont décidés par le planificateur (src/lib/planificateur.ts) selon les disponibilités patient. Conservé pour les anciens contrats. */
-  joursFixe?: JourSemaine[];
+  /** Jours de la semaine où une séance a lieu, saisis obligatoirement à la
+   * création (ContratNouveauPage.tsx) — même longueur que dureesSeances,
+   * dans le même ordre chronologique (lundi → dimanche). Source exclusive du
+   * motif hebdomadaire utilisé par le renouvellement automatique
+   * (api/_lib/renouvellementContrats.ts) : jamais déduit des séances déjà
+   * générées. Peut être vide sur un contrat créé avant cette exigence — voir
+   * useContrats.ts (contratsSansJours) pour le signalement de ce cas. */
+  joursFixe: (JourSemaine | 'dim')[];
   nbSeancesSemaine: number;
   /** Défaut 'semaine' si absent (contrats créés avant cette fonctionnalité). */
   periodicite?: PeriodiciteContrat;
@@ -485,6 +491,12 @@ export interface Contrat {
   nombreSeancesTotal: number;
   nombreSeancesRealisees: number;
   dureeIndeterminee?: boolean;
+  /** Date de reprise prévue — n'a de sens que si statut === 'suspendu'.
+   * Purement indicative (calcule le point de départ de la régénération à la
+   * reprise, voir calculerDebutReprise dans utils/horaires.ts) : le cron de
+   * renouvellement ne la lit jamais, il exclut déjà tout contrat suspendu
+   * via son filtre statut = 'actif'. */
+  dateReprisePrevue?: string;
   tarifSeance?: number;
   /** Si true, ce contrat est ignoré par le planificateur de tournée (Mode A et
    * B) — le patient reste visible partout ailleurs dans l'app, mais n'est
@@ -622,6 +634,14 @@ export interface Participant {
   antecedentsMedicauxStructures?: AntecedentMedical[];
   anamnese?: AnamneseData;
   structureId?: string;
+  /** Archivage, distinct du statut des contrats : bascule manuelle
+   * uniquement (jamais dérivée de l'absence de contrat actif — un
+   * bénéficiaire sans contrat actif n'est pas forcément "fini"). Un
+   * bénéficiaire archivé disparaît des listes du quotidien (tournée,
+   * dashboard) mais reste consultable via un filtre, et ses séances
+   * passées restent comptées dans les stats/factures. */
+  archive?: boolean;
+  dateArchivage?: string;
   activitesSouhaitees?: string[];
   objectifsPatient?: string | string[];
   // Coordonnées bancaires (SAP)

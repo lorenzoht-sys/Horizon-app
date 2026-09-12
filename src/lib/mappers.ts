@@ -92,6 +92,8 @@ export function dbToParticipant(row: any): Participant {
     programmes: (row.programmes ?? []).map(dbToProgramme),
     visibiliteBeneficiaire: { ...VISIBILITE_BENEFICIAIRE_DEFAULT, ...(row.visibilite_beneficiaire ?? {}) },
     messageBeneficiaire: row.message_beneficiaire ?? undefined,
+    archive: row.archive ?? false,
+    dateArchivage: row.date_archivage ?? undefined,
   };
 }
 
@@ -153,6 +155,8 @@ export function participantToDb(p: Omit<Participant, 'bilans' | 'programmes'>): 
     code_acces: p.codeAcces ?? null,
     visibilite_beneficiaire: p.visibiliteBeneficiaire ?? VISIBILITE_BENEFICIAIRE_DEFAULT,
     message_beneficiaire: p.messageBeneficiaire ?? null,
+    archive: p.archive ?? false,
+    date_archivage: p.dateArchivage ?? null,
   };
 }
 
@@ -317,17 +321,19 @@ export function programmeToDb(p: Programme): Record<string, unknown> {
   };
 }
 
-const JOUR_LONG_TO_SHORT: Record<string, JourSemaine> = {
+const JOUR_LONG_TO_SHORT: Record<string, JourSemaine | 'dim'> = {
   lundi: 'lun', mardi: 'mar', mercredi: 'mer',
-  jeudi: 'jeu', vendredi: 'ven', samedi: 'sam',
+  jeudi: 'jeu', vendredi: 'ven', samedi: 'sam', dimanche: 'dim',
 };
 
-function normaliserJoursFixe(raw: string[] | null | undefined): JourSemaine[] {
+const JOURS_VALIDES = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+
+function normaliserJoursFixe(raw: string[] | null | undefined): (JourSemaine | 'dim')[] {
   if (!Array.isArray(raw)) return [];
   return raw.map(j => {
     const lower = (j ?? '').toLowerCase().trim();
-    return (JOUR_LONG_TO_SHORT[lower] ?? lower) as JourSemaine;
-  }).filter(j => ['lun','mar','mer','jeu','ven','sam'].includes(j));
+    return (JOUR_LONG_TO_SHORT[lower] ?? lower) as JourSemaine | 'dim';
+  }).filter(j => JOURS_VALIDES.includes(j));
 }
 
 export function dbToContrat(row: any): Contrat {
@@ -356,6 +362,7 @@ export function dbToContrat(row: any): Contrat {
     nombreSeancesTotal: row.nombre_seances_total,
     nombreSeancesRealisees: row.nombre_seances_realisees,
     dureeIndeterminee: row.duree_indeterminee ?? false,
+    dateReprisePrevue: row.date_reprise_prevue ?? undefined,
     tarifSeance: row.tarif_seance ?? undefined,
     exclureTournee: row.exclure_tournee ?? false,
   };
@@ -368,6 +375,7 @@ export function contratToDb(c: Contrat): Record<string, unknown> {
     praticien_id: c.praticienId ?? null,
     date_debut: c.dateDebut,
     date_fin: c.dateFin,
+    jours_fixe: c.joursFixe,
     nb_seances_semaine: c.nbSeancesSemaine,
     periodicite: c.periodicite ?? 'semaine',
     heure_debut: c.heureDebut,
@@ -379,6 +387,7 @@ export function contratToDb(c: Contrat): Record<string, unknown> {
     nombre_seances_total: c.nombreSeancesTotal,
     nombre_seances_realisees: c.nombreSeancesRealisees,
     duree_indeterminee: c.dureeIndeterminee ?? false,
+    date_reprise_prevue: c.dateReprisePrevue ?? null,
     tarif_seance: c.tarifSeance ?? null,
     exclure_tournee: c.exclureTournee ?? false,
   };

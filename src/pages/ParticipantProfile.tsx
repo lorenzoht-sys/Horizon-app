@@ -11,6 +11,7 @@ import {
   ArrowLeft, Pencil, FileText, TrendingUp, Share2,
   Download, Trash2, Dumbbell, NotebookPen, Calendar, MapPin,
   RefreshCw, ClipboardList, Mic, Save, ExternalLink, LayoutTemplate,
+  Archive, ArchiveRestore,
 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
@@ -176,21 +177,29 @@ function CarteStats({ participant, contratActif, prochaineSeance, seances }: {
 
       {contratActif ? (
         <>
-          <div className="flex justify-between text-[13px] text-gray-500 mb-1.5">
-            <span>Séances réalisées</span>
-            <span className="font-semibold text-gray-800">
-              {contratActif.nombreSeancesRealisees} / {contratActif.nombreSeancesTotal}
-            </span>
-          </div>
-          <div className="h-1 bg-gray-100 rounded-full mb-3 overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all"
-              style={{
-                width: `${Math.min(100, Math.round((contratActif.nombreSeancesRealisees / contratActif.nombreSeancesTotal) * 100))}%`,
-                background: 'var(--color-teal)',
-              }}
-            />
-          </div>
+          {contratActif.dureeIndeterminee ? (
+            <div className="text-[13px] text-gray-500 mb-3">
+              Suivi actif depuis {new Date(contratActif.dateDebut + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} · sans date de fin
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-between text-[13px] text-gray-500 mb-1.5">
+                <span>Séances réalisées</span>
+                <span className="font-semibold text-gray-800">
+                  {contratActif.nombreSeancesRealisees} / {contratActif.nombreSeancesTotal}
+                </span>
+              </div>
+              <div className="h-1 bg-gray-100 rounded-full mb-3 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(100, Math.round((contratActif.nombreSeancesRealisees / contratActif.nombreSeancesTotal) * 100))}%`,
+                    background: 'var(--color-teal)',
+                  }}
+                />
+              </div>
+            </>
+          )}
           <div className="space-y-1 text-[13px] text-gray-500">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span>📅 {contratActif.nbSeancesSemaine} séance{contratActif.nbSeancesSemaine > 1 ? 's' : ''}/semaine · {contratActif.heureDebut} · {contratActif.dureeMinutes} min</span>
@@ -948,7 +957,7 @@ function SectionRappelsPatient({ participantId }: { participantId: string }) {
 
 export default function ParticipantProfile() {
   const { id } = useParams<{ id: string }>();
-  const { participants, updateParticipant, deleteParticipant, deleteBilan, geocodeParticipant } = useParticipants();
+  const { participants, updateParticipant, deleteParticipant, deleteBilan, geocodeParticipant, archiverParticipant } = useParticipants();
   const { programmeActif, deleteProgramme } = useProgramme(id ?? '');
   const { programmes: programmesV2, seancesAutonomesStats } = useProgrammeV2(id ?? '');
   const { contrats } = useContrats();
@@ -1065,12 +1074,21 @@ export default function ParticipantProfile() {
 
   function handleAction(action: string) {
     setMenuOuvert(false);
+    if (!participant) return;
     switch (action) {
       case 'modifier':        navigate(`/participants/${id}/modifier`); break;
       case 'evolution':       navigate(`/participant/${id}/comparaison`); break;
       case 'lien':            copyClientLink(); break;
       case 'export':          handleExport(); break;
       case 'supprimer':       setConfirmDelete(true); break;
+      case 'archiver':
+        archiverParticipant(participant.id, true).catch(err => { console.error('Erreur archivage:', err); toast.error('Erreur lors de l\'archivage'); });
+        toast.success(`${participant.prenom} ${participant.nom} archivé(e).`);
+        break;
+      case 'desarchiver':
+        archiverParticipant(participant.id, false).catch(err => { console.error('Erreur désarchivage:', err); toast.error('Erreur lors du désarchivage'); });
+        toast.success(`${participant.prenom} ${participant.nom} désarchivé(e).`);
+        break;
       case 'programme':       navigate(`/participant/${id}/programme`); break;
       case 'nouveau_bilan':   navigate(`/participant/${id}/bilan/new`); break;
       case 'nouveau_contrat': navigate(`/participant/${id}/contrat/nouveau`); break;
@@ -1137,6 +1155,9 @@ export default function ParticipantProfile() {
     { Icon: TrendingUp, label: "Rapport d'évolution",    action: 'evolution', disabled: participant.bilans.length < 2 },
     { Icon: Share2,     label: 'Lien client',             action: 'lien' },
     { Icon: Download,   label: 'Mes données (JSON)',      action: 'export' },
+    participant.archive
+      ? { Icon: ArchiveRestore, label: 'Désarchiver', action: 'desarchiver' }
+      : { Icon: Archive,        label: 'Archiver',    action: 'archiver' },
     { Icon: Trash2,     label: 'Supprimer',               action: 'supprimer', danger: true },
   ];
 

@@ -187,12 +187,18 @@ const MiniMap = lazy(() => import('../components/map/MiniMap'));
 type DashTab = 'tous' | 'independants' | 'structures';
 
 export default function Dashboard() {
-  const { participants, loading: participantsLoading, addParticipant } = useParticipants();
+  // participants : liste complète, ne sert plus qu'à construire les vues
+  // ci-dessous. participantsActifs (exclut les archivés) est la vue par
+  // défaut de cet écran "du quotidien" — KPI (bilans dus, etc.) et grille
+  // en dépendent toujours, indépendamment du toggle "Afficher les
+  // archivés" (qui ne concerne que la grille, pas les KPI).
+  const { participants, participantsActifs, loading: participantsLoading, addParticipant } = useParticipants();
   const { seancesDuJour, patientsARelancer, seances } = useAgenda();
-  const { contratsARenouveler } = useContrats();
+  const { contratsARenouveler, contratsSansJours } = useContrats();
   const { structures, creerStructure } = useStructures();
   const { notes } = useJournalSeance();
   const [search, setSearch] = useState('');
+  const [showArchives, setShowArchives] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showCreateStructure, setShowCreateStructure] = useState(false);
   const [activeTab, setActiveTab] = useState<DashTab>('tous');
@@ -284,17 +290,22 @@ export default function Dashboard() {
     }
   }, [location.state, navigate]);
 
-  const independants = participants.filter(p => !p.structureId);
+  // Toggle "Afficher les archivés" : bascule la SOURCE de la grille entre la
+  // vue par défaut (participantsActifs) et la liste complète — n'affecte
+  // jamais les KPI ci-dessous (bilans dus, etc.), qui excluent toujours les
+  // archivés indépendamment de ce que la grille affiche.
+  const baseParticipants = showArchives ? participants : participantsActifs;
+  const independants = baseParticipants.filter(p => !p.structureId);
 
   const filtered = independants
     .filter(p => `${p.prenom} ${p.nom}`.toLowerCase().includes(search.toLowerCase()));
 
-  const filteredTous = participants
+  const filteredTous = baseParticipants
     .filter(p => `${p.prenom} ${p.nom}`.toLowerCase().includes(search.toLowerCase()));
 
   const listeFiltered = activeTab === 'tous' ? filteredTous : filtered;
 
-  const needsBilan = participants.filter(p => {
+  const needsBilan = participantsActifs.filter(p => {
     const last = p.bilans.at(-1);
     if (!last) return true;
     // Comparaison en chaînes ISO (YYYY-MM-DD) pour éviter les décalages
@@ -469,6 +480,39 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* Contrats sans date de fin bloqués faute de jours de séance
+            renseignés : le cron (api/cron/renouveler-contrats.ts) ne les
+            renouvelle jamais dans cet état, indéfiniment jusqu'à correction —
+            signalé ici plutôt que seulement dans les logs du cron. */}
+        {contratsSansJours.length > 0 && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4">
+            <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-2">
+              ⚠️ {contratsSansJours.length} contrat{contratsSansJours.length > 1 ? 's' : ''} sans date de fin sans jours de séance renseignés
+            </div>
+            <div className="space-y-1">
+              {contratsSansJours.map(c => {
+                const p = participants.find(x => x.id === c.participantId);
+                return (
+                  <div key={c.id} className="flex items-center justify-between text-sm">
+                    <span className="text-amber-800">
+                      <span className="font-medium">{p ? `${p.prenom} ${p.nom}` : '—'}</span>
+                      {' '}— ne se renouvellera pas tant que les jours ne sont pas complétés
+                    </span>
+                    {p && (
+                      <Link
+                        to={`/participant/${p.id}`}
+                        className="text-xs text-amber-700 underline hover:text-amber-900 font-medium"
+                      >
+                        Compléter →
+                      </Link>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Alertes ressentis — À surveiller */}
         {patientsASurveiller.length > 0 && (
           <div className="mb-6 bg-red-light border border-red-200 rounded-2xl px-5 py-4">
@@ -549,6 +593,15 @@ export default function Dashboard() {
                   onBlur={e => { e.target.style.borderColor = 'var(--color-border)'; e.target.style.boxShadow = 'none'; }}
                 />
               </div>
+              <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={showArchives}
+                  onChange={e => setShowArchives(e.target.checked)}
+                  className="accent-primary rounded"
+                />
+                Afficher les archivés
+              </label>
               <motion.button
                 onClick={() => setShowImport(true)}
                 className="flex items-center gap-2 text-sm font-medium"

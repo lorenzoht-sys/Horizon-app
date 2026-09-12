@@ -67,10 +67,18 @@ export default function ParticipantCard({ participant, structureNom }: Props) {
         </div>
         <div className="flex-1 min-w-0">
           <h3
-            className="font-heading font-semibold truncate m-0"
+            className="font-heading font-semibold truncate m-0 flex items-center gap-1.5"
             style={{ color: 'var(--color-ink)', fontSize: 15, lineHeight: 1.3 }}
           >
             {participant.prenom} {participant.nom}
+            {participant.archive && (
+              <span
+                className="flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                style={{ background: '#F1F2F4', color: '#6B7280' }}
+              >
+                Archivé
+              </span>
+            )}
           </h3>
           <p className="mt-0.5 m-0" style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>
             {age} ans

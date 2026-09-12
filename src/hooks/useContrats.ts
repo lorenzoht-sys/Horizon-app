@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { differenceInDays } from 'date-fns';
 import { toast } from 'sonner';
-import type { Contrat, StatutContrat, PeriodiciteContrat } from '../types';
+import type { Contrat, StatutContrat, PeriodiciteContrat, JourSemaine } from '../types';
 import { calculerNbSeancesEstime, CYCLE_SEMAINES } from '../utils/horaires';
 import { supabase } from '../lib/supabase';
 import { dbToContrat, contratToDb } from '../lib/mappers';
@@ -18,6 +18,9 @@ interface CreerContratData {
   heureDebut: string;
   /** Durée de chaque séance de la semaine, dans l'ordre chronologique (séance 1, séance 2...). */
   dureesSeances: number[];
+  /** Jours de la semaine, obligatoire, même longueur que dureesSeances — voir
+   * Contrat.joursFixe (types/index.ts) et ContratNouveauPage.tsx pour la validation. */
+  joursFixe: (JourSemaine | 'dim')[];
   statut?: StatutContrat;
   notes?: string;
   dureeIndeterminee?: boolean;
@@ -62,6 +65,7 @@ export function useContrats() {
       praticienId,
       dateDebut: data.dateDebut,
       dateFin: data.dateFin,
+      joursFixe: data.joursFixe,
       nbSeancesSemaine: data.nbSeancesSemaine,
       periodicite,
       heureDebut: data.heureDebut,
@@ -93,6 +97,21 @@ export function useContrats() {
       if (error) { console.error('Erreur modification statut contrat:', error); toast.error('Erreur : ' + error.message); return; }
     }
     setContrats(prev => prev.map(c => c.id === id ? { ...c, statut } : c));
+  }
+
+  // Mise en pause : statut='suspendu' + date de reprise prévue (nullable —
+  // purement indicative, voir Contrat.dateReprisePrevue). Écrite dans le
+  // même update que le statut pour ne jamais laisser un état intermédiaire
+  // "suspendu sans date de reprise connue" visible ailleurs.
+  async function mettreEnPause(id: string, dateReprisePrevue: string | null): Promise<boolean> {
+    if (supabase) {
+      const { error } = await supabase.from('contrats')
+        .update({ statut: 'suspendu', date_reprise_prevue: dateReprisePrevue })
+        .eq('id', id);
+      if (error) { console.error('Erreur mise en pause contrat:', error); toast.error('Erreur : ' + error.message); return false; }
+    }
+    setContrats(prev => prev.map(c => c.id === id ? { ...c, statut: 'suspendu', dateReprisePrevue: dateReprisePrevue ?? undefined } : c));
+    return true;
   }
 
   async function modifierDateFin(id: string, dateFin: string): Promise<boolean> {
@@ -143,16 +162,31 @@ export function useContrats() {
     return contrats.find(c => c.participantId === participantId && c.statut === 'actif');
   }
 
+  // dureeIndeterminee exclu : ces contrats se renouvellent automatiquement et
+  // silencieusement (api/cron/renouveler-contrats.ts), une échéance dans 14
+  // jours n'y signale donc rien qui demande une action de Pierre — même
+  // exclusion que StatsPage.tsx (contratsExpirants).
   const contratsARenouveler = contrats.filter(c => {
-    if (c.statut !== 'actif') return false;
+    if (c.statut !== 'actif' || c.dureeIndeterminee) return false;
     const joursRestants = differenceInDays(new Date(c.dateFin), new Date());
     return joursRestants <= 14 && joursRestants >= 0;
   });
+
+  // Contrats à durée indéterminée actifs sans jours_fixe renseignés : le
+  // cron (api/_lib/renouvellementContrats.ts) ne les renouvelle jamais dans
+  // cet état (aucune date_fin étendue, aucune séance générée, indéfiniment
+  // jusqu'à correction) — même prédicat ici pour signaler l'anomalie dans
+  // l'interface (badge sur le contrat, alerte dashboard) plutôt que
+  // seulement dans la réponse du cron.
+  const contratsSansJours = contrats.filter(c =>
+    c.statut === 'actif' && c.dureeIndeterminee && (c.joursFixe?.length ?? 0) === 0
+  );
 
   return {
     contrats,
     creerContrat,
     modifierStatut,
+    mettreEnPause,
     modifierDateFin,
     toggleExclureTournee,
     supprimerContrat,
@@ -160,5 +194,6 @@ export function useContrats() {
     contratsDeParticipant,
     contratActifDeParticipant,
     contratsARenouveler,
+    contratsSansJours,
   };
 }
