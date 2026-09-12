@@ -7,13 +7,22 @@ import PageWrapper from '../components/layout/PageWrapper';
 import { ArrowLeft, Check, Calendar, Hash, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { calculerNbSeancesEstime, calculerDateFinParFrequence, CYCLE_SEMAINES } from '../utils/horaires';
+import { validerNouveauContrat } from '../utils/contratValidation';
 import { getOrganisation, OPTIONS_FREQUENCE, trouverOptionFrequence, type OptionFrequence } from '../lib/anamnese';
 import { getTrousRecurrents } from '../lib/analyse-tournee';
+import type { JourSemaine } from '../types';
 
 const JOURS_DISPO_LIST = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
 const FREQUENCE_DEFAUT = OPTIONS_FREQUENCE[1]; // 2 séances/semaine
 
 const HEURE_DEBUT_DEFAUT = '08:00';
+
+// Jours de séance : clé persistée (contrats.jours_fixe) + libellé affiché.
+const JOURS_SEANCE_OPTIONS: { key: JourSemaine | 'dim'; label: string }[] = [
+  { key: 'lun', label: 'Lun' }, { key: 'mar', label: 'Mar' }, { key: 'mer', label: 'Mer' },
+  { key: 'jeu', label: 'Jeu' }, { key: 'ven', label: 'Ven' }, { key: 'sam', label: 'Sam' },
+  { key: 'dim', label: 'Dim' },
+];
 
 type ModePeriode = 'duree' | 'seances';
 
@@ -52,6 +61,15 @@ export default function ContratNouveauPage() {
   const [nbSeancesPrescrites, setNbSeancesPrescrites] = useState(12);
   const [notes, setNotes] = useState('');
   const [exclureTournee, setExclureTournee] = useState(false);
+  // Jours de séance — obligatoire, même longueur que nbSeancesSemaine (voir
+  // validerNouveauContrat). Persisté sur contrats.jours_fixe : source
+  // exclusive du motif hebdomadaire pour le renouvellement automatique
+  // (api/_lib/renouvellementContrats.ts), jamais déduit des séances générées.
+  const [joursSelectionnes, setJoursSelectionnes] = useState<(JourSemaine | 'dim')[]>([]);
+
+  function toggleJour(jour: JourSemaine | 'dim') {
+    setJoursSelectionnes(prev => prev.includes(jour) ? prev.filter(j => j !== jour) : [...prev, jour]);
+  }
 
   // Préremplit la fréquence et les durées depuis les préférences saisies sur la fiche patient.
   useEffect(() => {
@@ -74,11 +92,13 @@ export default function ContratNouveauPage() {
     setDureesSeances(prev => Array.from({ length: nbSeancesSemaine }, (_, i) => prev[i] ?? 45));
   }, [nbSeancesSemaine]);
 
-  // Pour "durée indéterminée", générer 6 mois de séances par défaut
+  // Pour "durée indéterminée", générer 1 an de séances par défaut — cohérent
+  // avec le cycle de renouvellement automatique (api/cron/renouveler-contrats.ts,
+  // MARGE_RENOUVELLEMENT_JOURS) qui prolonge date_fin d'un an à chaque passage.
   const dateFinPourGeneration = (() => {
     if (mode !== 'duree' || !dureeIndeterminee) return dateFin;
     const d = new Date(dateDebut);
-    d.setMonth(d.getMonth() + 6);
+    d.setFullYear(d.getFullYear() + 1);
     return d.toISOString().split('T')[0];
   })();
 
@@ -108,11 +128,24 @@ export default function ContratNouveauPage() {
       return;
     }
 
+    const erreurValidation = validerNouveauContrat({
+      modeDuree: mode,
+      dureeIndeterminee,
+      dateFin,
+      joursFixe: joursSelectionnes,
+      nbSeancesSemaine,
+    });
+    if (erreurValidation) {
+      toast.error(erreurValidation);
+      return;
+    }
+
     try {
       await creerContrat({
         participantId: participant.id,
         dateDebut,
         dateFin: dateFinEffective,
+        joursFixe: joursSelectionnes,
         nbSeancesSemaine,
         periodicite,
         heureDebut: HEURE_DEBUT_DEFAUT,
@@ -272,36 +305,7 @@ export default function ContratNouveauPage() {
                 />
               </div>
 
-              {mode === 'duree' ? (
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs text-gray-500">Date de fin</label>
-                    <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
-                      <input type="checkbox" checked={dureeIndeterminee} onChange={e => setDureeIndeterminee(e.target.checked)}
-                        className="accent-primary rounded" />
-                      Durée indéterminée
-                    </label>
-                  </div>
-                  {dureeIndeterminee ? (
-                    <div className="w-full border border-dashed border-gray-300 rounded-xl px-4 py-2.5 text-sm text-gray-400 bg-gray-50 text-center">
-                      Sans terme défini
-                    </div>
-                  ) : (
-                    <input
-                      type="date"
-                      value={dateFin}
-                      onChange={e => setDateFin(e.target.value)}
-                      required={!dureeIndeterminee}
-                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
-                    />
-                  )}
-                  {dureeIndeterminee && (
-                    <div className="text-xs text-gray-400 mt-1">
-                      6 mois de séances générées initialement
-                    </div>
-                  )}
-                </div>
-              ) : (
+              {mode === 'seances' && (
                 <div>
                   <label className="block text-xs text-gray-500 mb-1.5">
                     Séances prescrites *
@@ -331,6 +335,63 @@ export default function ContratNouveauPage() {
             )}
           </div>
 
+          {/* Durée du suivi — deux choix mutuellement exclusifs (jamais une
+              case à cocher à côté d'un champ toujours visible) : aucun état
+              ambigu n'est représentable. */}
+          {mode === 'duree' && (
+            <div>
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Durée du suivi *</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDureeIndeterminee(true)}
+                  className="text-left px-4 py-2.5 rounded-xl border-2 transition-colors"
+                  style={{
+                    borderColor: dureeIndeterminee ? '#1A5F9E' : '#E2EEF9',
+                    background: dureeIndeterminee ? '#E6F1FB' : 'white',
+                  }}
+                >
+                  <div className="text-sm font-semibold" style={{ color: dureeIndeterminee ? '#1A5F9E' : '#374151' }}>
+                    Sans date de fin
+                  </div>
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    Les séances continuent tant que le suivi n'est pas arrêté
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDureeIndeterminee(false)}
+                  className="text-left px-4 py-2.5 rounded-xl border-2 transition-colors"
+                  style={{
+                    borderColor: !dureeIndeterminee ? '#1A5F9E' : '#E2EEF9',
+                    background: !dureeIndeterminee ? '#E6F1FB' : 'white',
+                  }}
+                >
+                  <div className="text-sm font-semibold" style={{ color: !dureeIndeterminee ? '#1A5F9E' : '#374151' }}>
+                    Jusqu'à une date précise
+                  </div>
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    Les séances s'arrêtent à la date choisie
+                  </div>
+                </button>
+              </div>
+
+              {dureeIndeterminee ? (
+                <div className="text-xs text-gray-400 mt-2">
+                  1 an de séances générées initialement — renouvelé automatiquement ensuite
+                </div>
+              ) : (
+                <input
+                  type="date"
+                  value={dateFin}
+                  onChange={e => setDateFin(e.target.value)}
+                  required
+                  className="mt-2 w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
+                />
+              )}
+            </div>
+          )}
+
           {/* Fréquence */}
           <div>
             <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
@@ -357,8 +418,43 @@ export default function ContratNouveauPage() {
               })}
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              Les jours réels de passage sont décidés par le planificateur de tournée,
-              selon les disponibilités du bénéficiaire et l'optimisation des trajets.
+              L'heure exacte de chaque séance reste ajustable via le planificateur de
+              tournée (disponibilités du bénéficiaire, optimisation des trajets) ; les
+              jours choisis ci-dessous pilotent le renouvellement automatique du contrat.
+            </p>
+          </div>
+
+          {/* Jours de séance — obligatoire, même longueur que la fréquence
+              choisie (voir validerNouveauContrat). Persisté sur
+              contrats.jours_fixe : seule source du motif hebdomadaire pour
+              le renouvellement automatique (api/_lib/renouvellementContrats.ts). */}
+          <div>
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              Jours de séance *
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {JOURS_SEANCE_OPTIONS.map(j => {
+                const selected = joursSelectionnes.includes(j.key);
+                return (
+                  <button
+                    key={j.key}
+                    type="button"
+                    onClick={() => toggleJour(j.key)}
+                    className="px-3.5 py-2 rounded-xl text-sm font-semibold border-2 transition-colors"
+                    style={{
+                      borderColor: selected ? '#2BBFBF' : '#D1D5DB',
+                      background: selected ? '#2BBFBF' : 'white',
+                      color: selected ? 'white' : '#374151',
+                    }}
+                  >
+                    {j.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs mt-2" style={{ color: joursSelectionnes.length === nbSeancesSemaine ? '#9CA3AF' : '#B45309' }}>
+              {joursSelectionnes.length} / {nbSeancesSemaine} jour{nbSeancesSemaine > 1 ? 's' : ''} sélectionné{joursSelectionnes.length > 1 ? 's' : ''}
+              {joursSelectionnes.length !== nbSeancesSemaine && ` — sélectionnez exactement ${nbSeancesSemaine} jour${nbSeancesSemaine > 1 ? 's' : ''} (fréquence choisie)`}
             </p>
           </div>
 
@@ -423,8 +519,14 @@ export default function ContratNouveauPage() {
               {nbSeances > 0 && ` — ~${nbSeances} séances sur la période`}
             </div>
             <div className="text-gray-600">
-              📆 Du {new Date(dateDebut + 'T12:00').toLocaleDateString('fr-FR')} au{' '}
-              {new Date(dateFinEffective + 'T12:00').toLocaleDateString('fr-FR')}
+              📆 {mode === 'duree' && dureeIndeterminee
+                ? `Depuis le ${new Date(dateDebut + 'T12:00').toLocaleDateString('fr-FR')} · sans date de fin`
+                : `Du ${new Date(dateDebut + 'T12:00').toLocaleDateString('fr-FR')} au ${new Date(dateFinEffective + 'T12:00').toLocaleDateString('fr-FR')}`}
+            </div>
+            <div className="text-gray-600">
+              🗓 {joursSelectionnes.length > 0
+                ? JOURS_SEANCE_OPTIONS.filter(j => joursSelectionnes.includes(j.key)).map(j => j.label).join(', ')
+                : 'Aucun jour sélectionné'}
             </div>
             <div className="text-gray-600">⏱ {dureesSeances.map(d => `${d} min`).join(', ')}</div>
           </div>

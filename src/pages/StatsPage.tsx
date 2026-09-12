@@ -505,6 +505,22 @@ function SectionAlertes({
     });
   }
 
+  // 🟡 Contrats sans date de fin bloqués faute de jours de séance renseignés
+  // — le cron (api/cron/renouveler-contrats.ts) ne les renouvelle jamais
+  // dans cet état, indéfiniment jusqu'à correction.
+  const contratsSansJours = contrats.filter(c =>
+    c.statut === 'actif' && c.dureeIndeterminee && (c.joursFixe?.length ?? 0) === 0
+  );
+  if (contratsSansJours.length > 0) {
+    alertes.push({
+      type: 'orange',
+      emoji: '🟡',
+      texte: `${contratsSansJours.length} contrat${contratsSansJours.length > 1 ? 's' : ''} sans date de fin sans jours de séance renseignés — ne se renouvelle${contratsSansJours.length > 1 ? 'nt' : ''} pas`,
+      action: 'Voir les contrats',
+      href: '/',
+    });
+  }
+
   // 🔵 Patients sans séance depuis > 14 jours
   const patientsInactifs = participants.filter(p => {
     if (!contratActif(p.id)) return false;

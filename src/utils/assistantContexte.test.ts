@@ -16,6 +16,7 @@ function contrat(overrides: Partial<Contrat> = {}): Contrat {
     participantId: 'p1',
     dateDebut: '2026-01-05',
     dateFin: '2026-07-05',
+    joursFixe: ['lun', 'jeu'],
     nbSeancesSemaine: 2,
     heureDebut: '10:00',
     dureeMinutes: 45,
