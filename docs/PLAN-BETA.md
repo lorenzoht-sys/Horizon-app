@@ -1425,3 +1425,84 @@ que `scripts/liens-acces-beneficiaires.ts` fabrique des liens qui portent
 ce code — acceptable sur l'appareil personnel du bénéficiaire, pas sur un
 poste partagé. Correctif : après une connexion réussie par `?code=`,
 remplacer l'URL par `/patient/<id>` sans paramètre.
+
+## RETOURS DE PIERRE — reçus le 2026-09-13, triés le jour même
+
+**Source : `Retour_Pierre.pdf`, remis par Pierre. Dix-huit points, dont
+douze numérotés par lui et six en liste libre d'en-tête.**
+
+Ce tri est celui de la session du 2026-09-13. Il classe par **mode d'échec**,
+pas par la priorité annoncée dans le PDF : un bug qui produit une donnée
+fausse sans le dire passe devant un bug visible, quelle que soit l'étiquette
+posée par Pierre.
+
+Les priorités 🔴 / 🟠 ci-dessous sont celles de Pierre, conservées telles
+quelles. Le classement en sections est le nôtre et diverge parfois du sien —
+c'est voulu, et signalé au cas par cas.
+
+### Déjà traité, à vérifier avant de reprogrammer
+
+| # | Élément | État |
+|---|---|---|
+| 11 | 🟠 Dossier « Fin de contrat » | **Probablement livré** le 2026-09-12 (chantier archivage, `participants.archive` + `date_archivage`). Décrit exactement le besoin : archivage sans suppression, dossier conservé, réactivation possible. **Reste à faire** : Pierre veut trois onglets (Indépendant / Structure / Fin de contrat) là où le toggle « Afficher les archivés » a été livré sur la grille de `Dashboard.tsx`. Ajustement d'interface, pas un chantier |
+| 01 | 🔴 Séances passées qui disparaissent du calendrier | **Clos** le 2026-09-12. N'était pas un bug applicatif : le flux `.ics` n'exportait que le futur, par spécification. Fenêtre portée à 24 mois d'historique |
+| 02 | 🔴 Contrats à durée déterminée | **Clos** le 2026-09-13. `duree_indeterminee` était un booléen cosmétique posé à côté d'une `date_fin` réelle calculée à +6 mois en silence. Renouvellement automatique annuel désormais porté par le cron |
+
+### BLOQUANT BÊTA — l'application produit des données fausses sans le dire
+
+**C'est la catégorie la plus grave de la liste, et elle ne correspond pas à
+l'ordre du PDF.** Ces trois points ont le même mode d'échec : un résultat
+plausible, affiché sans erreur, sur des données de santé. Pierre ne peut pas
+les repérer à l'œil, et les comptes rendus qui en découlent héritent du
+défaut.
+
+| # | Élément | Ce qu'il faut en faire |
+|---|---|---|
+| 05 | 🔴 Scores inversés — fatigue et activité physique | Une personne assise < 2 h/jour obtient un score **plus mauvais** qu'une personne assise > 5 h. Si l'inversion de pondération est confirmée, **tous les questionnaires déjà remplis sont faux**. Le correctif ne suffit pas : il faut recalculer l'existant, ou le marquer comme non fiable |
+| 10.1 | 🔴 Le Scratch Test ne sauvegarde pas les modifications | Perte de données silencieuse sur un bilan clinique. Pierre saisit, enregistre, les valeurs disparaissent. Diagnostiquer où la chaîne casse : lecture, écriture, ou réaffichage |
+| — | Normes des tests : handgrip (âge/sexe), souplesse, Dubois | **Ce ne sont pas des tâches de développement.** Les barèmes cliniques ne s'inventent ni ne se « corrigent » par un agent : Pierre fournit les références, étude à l'appui. Le travail technique est d'appliquer ces normes et **d'afficher laquelle est utilisée**, ce que le handgrip ne fait pas aujourd'hui |
+
+⚠️ **Règle pour le point des normes** : aucun barème ne doit être écrit dans
+le code sans source citée en commentaire. Un chiffre sans provenance est
+indistinguable d'une invention, et personne ne pourra le revérifier.
+
+### AVANT LA BÊTA
+
+| # | Élément | Note |
+|---|---|---|
+| 03 | 🔴 Date de naissance non saisissable au clavier sur téléphone | **À faire en premier.** Correctif minuscule, gêne quotidienne maximale — sélecteur année par année pour une personne née en 1957. Meilleur rapport effort/soulagement de toute la liste |
+| 08 | 🔴 Page « Progrès / Suivi » vide côté bénéficiaire | Visible par les bénéficiaires eux-mêmes. **Commencer par le diagnostic** : données absentes, mal liées, ou simplement pas affichées ? Les trois demandent des correctifs différents |
+| — | « Ne plus avoir 2 agendas sur l'application » | **À clarifier avec Pierre** avant toute estimation — on ne sait pas ce qu'il voit. Un utilisateur qui ignore quel agenda fait foi est un problème de confiance, pas d'ergonomie |
+| — | Onglet pour signaler un bug depuis l'application | Petit à construire, **change tout pour une bêta** : les retours arrivent avec leur contexte au lieu de transiter par un PDF quinze jours plus tard. Ce document existe parce que ce canal n'existe pas |
+| — | Lier l'agenda au téléphone | Le flux `.ics` existe (`api/planning/ics.ts`). Vérifier ce qui manque côté Pierre : abonnement non configuré, ou attente différente |
+
+### APRÈS LE LANCEMENT
+
+| # | Élément | Note |
+|---|---|---|
+| 07 | 🟠 Paramètres financiers par personne | **Deuxième moitié du bug 01.** Pierre a demandé que ses séances passées restent visibles *pour faire ses factures* ; les tarifs verrouillés par personne complètent ce besoin. Son point sur la conservation du tarif applicable **au moment de la séance** est juste — c'est la partie qu'on rate facilement, et elle se conçoit dès le départ ou jamais |
+| 12 | 🟠 Séances collectives | **Le seul point qui touche le modèle de données en profondeur** : une séance rattachée à N bénéficiaires, sans conflit d'agenda, tout en apparaissant dans l'historique individuel de chacun. Ce n'est pas une fonctionnalité de plus, c'est une refonte. À ne pas lancer dans la même semaine qu'autre chose |
+| 04 | 🔴 Refonte du test de marche de 6 minutes | Pierre le classe 🔴 mais l'annonce lui-même comme « gros travail » à cadrer ensemble. Tableau trop chargé, stepper non actualisé, fonctionnement à revoir. **Nécessite une session de cadrage avec Pierre avant toute ligne de code** |
+| 06 | 🟠 Coordonnées des professionnels autour de la personne | Médecin, kiné, infirmier. Ajout de schéma simple, sans dépendance |
+| 09 | 🟠 Export PDF des programmes et séances | Côté praticien et côté bénéficiaire. `DossierPDF.tsx` existe déjà — vérifier ce qui est réutilisable |
+| 10.2 | 🟠 Intitulé « Souplesse — Distance doigts-sol » | Renommage. À faire en même temps que la vérification des normes de souplesse, même test |
+| — | Couleurs personnalisables des séances (bilan, réunion, séance, lieu) | Confort d'organisation |
+| — | Événements d'agenda avec titre, nom, adresse, téléphone | Recoupe partiellement `evenements_agenda`, déjà en base |
+| — | Renommer les dossiers de la bibliothèque | Petit |
+
+### Ce que cette liste apprend sur le canal de retour
+
+Pierre a accumulé dix-huit points dans un document avant de les transmettre.
+Deux conséquences, toutes deux visibles dans ce PDF :
+
+- **Les descriptions sont écrites après coup**, de mémoire, parfois à
+  distance du moment où le problème est survenu. Le bug 01 en est
+  l'illustration : « les séances disparaissent du calendrier » désignait en
+  réalité Google Agenda, pas l'application — l'information manquante a coûté
+  un diagnostic entier avant qu'une question directe ne la donne.
+- **Aucune capture d'écran n'accompagne les points**, alors que le modèle de
+  tableau en fin de document prévoit une colonne « Photos », restée vide.
+
+L'onglet de signalement (section « avant la bêta ») répond directement à ces
+deux points : un retour émis depuis l'écran concerné porte son contexte avec
+lui. C'est la raison de le classer avant le lancement plutôt qu'après.
