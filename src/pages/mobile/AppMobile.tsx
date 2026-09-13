@@ -13,7 +13,6 @@ import type { Bilan } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, getAuthHeader } from '../../lib/supabase';
 import {
-  CLE_SETTINGS_PRATICIEN,
   DEFAULTS_SETTINGS,
   EVENT_SETTINGS_PRATICIEN,
   chargerSettingsPraticien,
@@ -173,13 +172,21 @@ function InfoLigne({ icon, texte }: { icon: string; texte: string }) {
 
 // ── Bottom Nav ────────────────────────────────────────────────────────────────
 
+// « Plus » manquait : EcranPlus — et donc la DÉCONNEXION — n'était atteignable
+// par aucun chemin sur téléphone.
 const NAV = [
   { id: 'aujourdhui', icon: 'ti-home',       label: 'Accueil' },
   { id: 'patients',   icon: 'ti-users',      label: 'Bénéfic.' },
   { id: 'saisie',     icon: 'ti-plus',       label: 'Saisie', principal: true },
   { id: 'tournee',    icon: 'ti-route',      label: 'Tournée' },
   { id: 'assistant',  icon: 'ti-robot',      label: 'Assistant' },
+  { id: 'plus',       icon: 'ti-menu-2',     label: 'Plus' },
 ];
+
+// Ces écrans n'existent qu'en version desktop. Le praticien y accède en
+// tournant son téléphone : la bascule à 768 px est un usage voulu, pas un
+// défaut (voir App.tsx).
+const MESSAGE_PAYSAGE = 'Tournez votre téléphone en paysage pour afficher cet écran 🔄';
 
 function BottomNav({ onglet, onChange }: { onglet: string; onChange: (id: string) => void }) {
   return (
@@ -788,7 +795,7 @@ function EcranTournee() {
         )}
         {seances.filter(s => s.adresse).length > 1 && (
           <button
-            onClick={() => toast('Optimisation disponible depuis l\'ordinateur 💻', { icon: 'ℹ️' })}
+            onClick={() => toast(MESSAGE_PAYSAGE, { icon: 'ℹ️' })}
             style={{ width: '100%', marginTop: 10, padding: '10px', background: C.dark, color: 'white', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <i className="ti ti-route" style={{ fontSize: 16 }} />
             Optimiser l'itinéraire
@@ -1032,42 +1039,12 @@ function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout:
   // Ce calcul repliait sur « P » quand le prenom manquait. Voir
   // src/lib/initiales.ts.
   const initiales = initialesPraticien(settings.prenom, settings.nom);
-  const [showImportConfirm, setShowImportConfirm] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const BACKUP_KEYS = [
-    'mouvtrack_participants', 'mouvtrack_contrats', 'mouvtrack_seances',
-    'notes_seances', 'mouvtrack_exercices', CLE_SETTINGS_PRATICIEN,
-    'mouvtrack_zones', 'mouvtrack_question_templates',
-  ];
-
-  function exporterDonnees() {
-    const data: Record<string, string> = { _version: '1', _date: new Date().toISOString() };
-    BACKUP_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) data[k] = v; });
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `horizon-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Données exportées avec succès ✅');
-  }
-
-  function importerDonnees(file: File) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = JSON.parse(e.target?.result as string);
-        BACKUP_KEYS.forEach(k => { if (typeof data[k] === 'string') localStorage.setItem(k, data[k]); });
-        toast.success('Import réussi — rechargement…');
-        setTimeout(() => window.location.reload(), 800);
-      } catch {
-        toast.error('Fichier invalide');
-      }
-    };
-    reader.readAsText(file);
-  }
+  // L'export / import JSON a été RETIRÉ de cet écran (2026-09-13). Il lisait
+  // et écrivait l'ancien stockage localStorage, abandonné depuis le passage à
+  // Supabase : l'export sortait un fichier vide ou périmé, et l'import
+  // écrasait des clés que plus rien ne lit. Rendre l'onglet « Plus »
+  // atteignable l'aurait remis entre les mains du praticien.
 
   return (
     <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
@@ -1093,19 +1070,13 @@ function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout:
       {/* Section Mon activité */}
       <SectionMobile titre="Mon activité">
         <ItemMobile icon="ti-route" label="Tournée du jour" onClick={() => onNaviguerOnglet('tournee')} />
-        <ItemMobile icon="ti-calendar" label="Agenda complet" onClick={() => toast('Accessible depuis l\'ordinateur 💻', { icon: 'ℹ️' })} />
-        <ItemMobile icon="ti-map-pin" label="Carte bénéficiaires" onClick={() => toast('Accessible depuis l\'ordinateur 💻', { icon: 'ℹ️' })} />
+        <ItemMobile icon="ti-calendar" label="Agenda complet" onClick={() => toast(MESSAGE_PAYSAGE, { icon: 'ℹ️' })} />
+        <ItemMobile icon="ti-map-pin" label="Carte bénéficiaires" onClick={() => toast(MESSAGE_PAYSAGE, { icon: 'ℹ️' })} />
       </SectionMobile>
 
       {/* Section Contenu */}
       <SectionMobile titre="Contenu">
-        <ItemMobile icon="ti-dumbbell" label="Bibliothèque exercices" onClick={() => toast('Accessible depuis l\'ordinateur 💻', { icon: 'ℹ️' })} />
-      </SectionMobile>
-
-      {/* Section Gestion */}
-      <SectionMobile titre="Gestion">
-        <ItemMobile icon="ti-download" label="Exporter mes données (JSON)" onClick={exporterDonnees} />
-        <ItemMobile icon="ti-upload" label="Importer des données" onClick={() => setShowImportConfirm(true)} />
+        <ItemMobile icon="ti-dumbbell" label="Bibliothèque exercices" onClick={() => toast(MESSAGE_PAYSAGE, { icon: 'ℹ️' })} />
       </SectionMobile>
 
       {/* Section Compte */}
@@ -1128,34 +1099,6 @@ function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout:
       <div style={{ textAlign: 'center', marginTop: 20, fontSize: 11, color: C.muted }}>
         Horizon v1.0
       </div>
-
-      {/* Input fichier caché pour l'import */}
-      <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }}
-        onChange={e => { const f = e.target.files?.[0]; if (f) importerDonnees(f); e.target.value = ''; }} />
-
-      {/* Modal confirmation import */}
-      {showImportConfirm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24 }}>
-          <div style={{ background: 'white', borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>
-              📥 Importer des données
-            </div>
-            <p style={{ fontSize: 14, color: '#4A6080', lineHeight: 1.6, marginBottom: 20 }}>
-              Cette action <strong>remplacera toutes vos données actuelles</strong>.<br />
-              <strong style={{ color: '#E85050' }}>Continuer ?</strong>
-            </p>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setShowImportConfirm(false)} style={{ flex: 1, padding: '12px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
-                Annuler
-              </button>
-              <button onClick={() => { setShowImportConfirm(false); fileInputRef.current?.click(); }}
-                style={{ flex: 1, padding: '12px', background: C.primary, border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer' }}>
-                Confirmer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
