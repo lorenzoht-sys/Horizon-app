@@ -741,8 +741,16 @@ UNION ALL SELECT 'user_roles (table)',
                WHERE table_schema='public' AND table_name='user_roles')
 UNION ALL SELECT 'app_role_courant() (fonction)',
        EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-               WHERE n.nspname='public' AND p.proname='app_role_courant');
+               WHERE n.nspname='public' AND p.proname='app_role_courant')
+UNION ALL SELECT 'trg_participants_consentement_rgpd_creation (trigger)',
+       EXISTS (SELECT 1 FROM pg_trigger
+               WHERE tgrelid='public.participants'::regclass
+                 AND tgname='trg_participants_consentement_rgpd_creation' AND NOT tgisinternal);
 ```
+
+⚠️ Exception à l'ordre ci-dessus pour `20260913_rgpd_consentement_creation.sql` :
+elle s'applique **après** le déploiement du code, voir la section « RÈGLE —
+consentement RGPD obligatoire à la création » plus bas.
 
 ⚠️ Cette requête ne contrôle que la **présence** des objets, pas leurs
 privilèges. Pour `user_roles`, la présence ne suffit pas : voir la
@@ -757,6 +765,109 @@ manuelle et fait partie de la revue de toute PR touchant `supabase/migrations/`.
 Et elle se fait **après** l'application, jamais à la place : voir « un
 « Success » du SQL Editor ne prouve PAS qu'une migration est appliquée »
 ci-dessus. Une migration peut afficher un succès sans avoir rien créé.
+
+## RÈGLE — consentement RGPD obligatoire à la création d'un bénéficiaire
+
+**Aucune fiche ne se crée sans `rgpd.consentementObtenu = true`, quel que soit
+le chemin. Une fiche existante sans consentement reste modifiable.**
+
+### Ce qui a rendu cette règle nécessaire (2026-09-13)
+
+7 fiches de production sans consentement, toutes avec un objet `rgpd` complet
+à `false`, `methodeConsentement: "oral_note"` et `consentementDate` égale au
+jour de création : l'état initial du formulaire complet, enregistré sans que
+rien ne soit coché. Le formulaire affichait un avertissement et ne bloquait
+rien. Le formulaire mobile et l'import Excel n'écrivaient même pas `rgpd`.
+
+### Où la règle est appliquée
+
+| Chemin | Blocage |
+|---|---|
+| Formulaire complet (création) | `submit()` renvoie à l'étape 5 avec un message |
+| Formulaire mobile | même règle, même module |
+| Import Excel | colonne R « Consentement RGPD » : toute ligne sans « Oui » est refusée et listée |
+| Base de données | trigger `BEFORE INSERT` (`20260913_rgpd_consentement_creation.sql`) |
+
+Règles partagées : `src/lib/consentementRgpd.ts` (testé).
+
+**Pas de contrainte `CHECK … NOT VALID`** : `NOT VALID` n'épargne que la
+vérification initiale ; la contrainte est ensuite contrôlée à chaque UPDATE,
+ce qui aurait bloqué toute modification des fiches sans consentement
+(géocodage et archivage compris).
+
+### Ordre d'application : APRÈS le déploiement du code
+
+Inverse de la règle « migration en production AVANT le merge », parce que la
+dépendance est inversée : le nouveau code marche avec ou sans trigger, mais le
+trigger appliqué sous l'ancien code rejetterait toutes les créations mobiles et
+Excel (`rgpd = null`) en production.
+
+1. Merger, attendre la fin du déploiement de production.
+2. Appliquer en production, puis les deux requêtes ci-dessous.
+3. Appliquer sur staging, relancer le harnais.
+
+### Vérification (requête séparée, lecture seule)
+
+```sql
+SELECT
+  (SELECT tgtype FROM pg_trigger
+    WHERE tgrelid = 'public.participants'::regclass
+      AND tgname = 'trg_participants_consentement_rgpd_creation'
+      AND NOT tgisinternal) AS tgtype_attendu_7,
+  (SELECT count(*) FROM pg_proc p
+     JOIN pg_namespace n ON n.oid = p.pronamespace
+     CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) a
+    WHERE n.nspname = 'public' AND p.proname = 'exiger_consentement_rgpd_creation'
+      AND a.privilege_type = 'EXECUTE' AND a.grantee <> p.proowner) AS roles_execute_attendu_0;
+```
+
+Attendu : `7` (BEFORE INSERT FOR EACH ROW, ni UPDATE ni DELETE) et `0`.
+
+### Contre-épreuve (n'écrit rien)
+
+Le bloc se termine par une exception **volontaire** qui annule tout. Le
+résultat attendu est donc une erreur dont le message commence par
+`CONFORME`. Tout message `NON CONFORME` est un échec.
+
+```sql
+DO $contre$
+DECLARE v_id uuid;
+BEGIN
+  BEGIN
+    INSERT INTO public.participants (nom, prenom) VALUES ('ContreEpreuve', 'SansRgpd');
+    RAISE EXCEPTION 'NON CONFORME (1/4) : creation avec rgpd = null acceptee';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO public.participants (nom, prenom, rgpd)
+    VALUES ('ContreEpreuve', 'RgpdFalse', '{"consentementObtenu": false}'::jsonb);
+    RAISE EXCEPTION 'NON CONFORME (2/4) : creation avec consentementObtenu = false acceptee';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO public.participants (nom, prenom, rgpd)
+    VALUES ('ContreEpreuve', 'AvecRgpd', '{"consentementObtenu": true}'::jsonb)
+    RETURNING id INTO v_id;
+  EXCEPTION WHEN check_violation THEN
+    RAISE EXCEPTION 'NON CONFORME (3/4) : creation avec consentement refusee';
+  END;
+
+  BEGIN
+    UPDATE public.participants SET rgpd = NULL WHERE id = v_id;
+    UPDATE public.participants SET telephone = '0000000000' WHERE id = v_id;
+    INSERT INTO public.participants (id, nom, prenom, rgpd)
+    VALUES (v_id, 'ContreEpreuve', 'Upsert', NULL)
+    ON CONFLICT (id) DO UPDATE SET prenom = EXCLUDED.prenom;
+  EXCEPTION WHEN check_violation THEN
+    RAISE EXCEPTION 'NON CONFORME (4/4) : modification d''une fiche sans consentement refusee';
+  END;
+
+  RAISE EXCEPTION 'CONFORME (4/4) — exception volontaire : rien n''a ete ecrit';
+END
+$contre$;
+```
 
 ## Échecs connus et acceptés du harnais `tests/security/rls.spec.ts`
 

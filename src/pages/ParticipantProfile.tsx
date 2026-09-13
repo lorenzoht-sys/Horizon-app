@@ -82,7 +82,7 @@ const TESTS_TABLEAU: {
 ];
 
 const METHODE_LABEL: Record<string, string> = {
-  oral_note: 'oral noté', ecrit: 'écrit', numerique: 'numérique',
+  oral_note: 'oral noté', ecrit: 'écrit', numerique: 'numérique', declare_import: "déclaré à l'import",
 };
 
 const NORMES_LABEL: Record<string, string> = {

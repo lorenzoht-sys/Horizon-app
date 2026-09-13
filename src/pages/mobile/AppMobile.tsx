@@ -22,6 +22,8 @@ import {
   type SettingsPraticien,
 } from '../../lib/settingsPraticien';
 import { validerSiret } from '../../lib/siret';
+import { avecConsentement, erreurConsentementCreation, rgpdParDefaut } from '../../lib/consentementRgpd';
+import type { RgpdConsent } from '../../types';
 import { initialesPraticien } from '../../lib/initiales';
 import { getContreIndications, getObjectifsActivites, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../../lib/anamnese';
 
@@ -528,29 +530,119 @@ function ChoixSaisie({ onPatient, onBilan }: { onPatient: () => void; onBilan: (
 
 // ── Nouveau patient mobile ─────────────────────────────────────────────────────
 
+// Même bloc et mêmes règles que le formulaire complet
+// (ParticipantForm.tsx) : le libellé de la case principale est identique, et
+// la validation passe par src/lib/consentementRgpd.ts.
+function BlocConsentementMobile({ rgpd, onRgpdChange, droitImage, onDroitImageChange }: {
+  rgpd: RgpdConsent;
+  onRgpdChange: (rgpd: RgpdConsent) => void;
+  droitImage: boolean;
+  onDroitImageChange: (v: boolean) => void;
+}) {
+  const { settings } = usePraticienSettings();
+  const cases = [
+    { key: 'consentementObtenu', label: 'Le bénéficiaire a été informé et a consenti' },
+    { key: 'droitAcces',         label: "Droit d'accès expliqué" },
+    { key: 'droitRectification', label: 'Droit de rectification expliqué' },
+    { key: 'droitEffacement',    label: "Droit à l'effacement expliqué" },
+  ] as const;
+  const ligne: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: C.text, padding: '7px 0', cursor: 'pointer' };
+  const caseACocher: React.CSSProperties = { width: 20, height: 20, accentColor: 'var(--color-teal)', flexShrink: 0 };
+
+  return (
+    <div style={{ background: 'white', border: `1px solid ${rgpd.consentementObtenu ? C.border : '#FCD34D'}`, borderRadius: 12, padding: '14px 16px', marginBottom: 14 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+        🔒 Consentement RGPD *
+      </div>
+      <div style={{ background: C.bg, borderRadius: 8, padding: '8px 10px', fontSize: 12, color: '#4A6080', lineHeight: 1.5, marginBottom: 8 }}>
+        <strong>À lire au bénéficiaire :</strong> « Dans le cadre de votre suivi en APA, je collecte vos données personnelles et de santé.
+        Utilisées uniquement pour votre suivi. Droits d'accès, rectification, effacement : {settings.email || 'votre praticien'} »
+      </div>
+      {cases.map(({ key, label }) => (
+        <label key={key} style={ligne}>
+          <input type="checkbox" checked={rgpd[key]} style={caseACocher}
+            onChange={e => {
+              const coche = e.target.checked;
+              onRgpdChange(key === 'consentementObtenu'
+                ? avecConsentement(rgpd, coche, new Date().toISOString().slice(0, 10))
+                : { ...rgpd, [key]: coche });
+            }} />
+          {label}
+        </label>
+      ))}
+      <label style={ligne}>
+        <input type="checkbox" checked={droitImage} style={caseACocher} onChange={e => onDroitImageChange(e.target.checked)} />
+        Droit à l'image accordé (photos/vidéos en séance)
+      </label>
+      <div style={{ fontSize: 12, color: C.muted, margin: '8px 0 6px' }}>Mode de recueil</div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {(['oral_note', 'ecrit', 'numerique'] as const).map(m => (
+          <button key={m} type="button" onClick={() => onRgpdChange({ ...rgpd, methodeConsentement: m })}
+            style={{
+              flex: 1, padding: '8px 4px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              border: `1px solid ${rgpd.methodeConsentement === m ? C.primary : C.border}`,
+              background: rgpd.methodeConsentement === m ? C.primary : 'white',
+              color: rgpd.methodeConsentement === m ? 'white' : '#4A6080',
+            }}>
+            {m === 'oral_note' ? 'Oral noté' : m === 'ecrit' ? 'Écrit' : 'Numérique'}
+          </button>
+        ))}
+      </div>
+      {!rgpd.consentementObtenu && (
+        <div style={{ fontSize: 12, color: '#B45309', fontWeight: 600, marginTop: 10 }}>
+          ⚠️ Obligatoire pour créer la fiche : sans consentement, les données de santé ne peuvent pas être collectées légalement.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NouveauPatientMobile({ onBack }: { onBack: () => void }) {
   const { addParticipant } = useParticipants();
   const [form, setForm] = useState({ prenom: '', nom: '', dateNaissance: '', telephone: '', pathologie: '' });
+  const [rgpd, setRgpd] = useState<RgpdConsent>(rgpdParDefaut);
+  const [droitImage, setDroitImage] = useState(false);
+  const [enregistrement, setEnregistrement] = useState(false);
   const label: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
   const input: React.CSSProperties = { width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, outline: 'none', marginBottom: 14, boxSizing: 'border-box' };
 
-  function sauvegarder() {
+  async function sauvegarder() {
+    if (enregistrement) return;
     if (!form.prenom.trim() || !form.nom.trim() || !form.dateNaissance) {
       toast.error('Prénom, nom et date de naissance requis');
       return;
     }
-    addParticipant({
-      prenom: form.prenom.trim(),
-      nom: form.nom.trim(),
-      dateNaissance: form.dateNaissance,
-      telephone: form.telephone || undefined,
-      pathologie: form.pathologie || undefined,
-      dateCreation: new Date().toISOString(),
-      bilans: [],
-      token: uuidv4().slice(0, 12),
-    } as any);
-    toast.success(`${form.prenom} ${form.nom} créé(e) ✅`);
-    onBack();
+    // Ce formulaire n'enregistrait AUCUN consentement. Même règle que le
+    // formulaire complet désormais : bloquant à la création.
+    const erreurRgpd = erreurConsentementCreation(rgpd);
+    if (erreurRgpd) {
+      toast.error(erreurRgpd);
+      return;
+    }
+    setEnregistrement(true);
+    try {
+      // Attendu, et plus lancé sans `await` : le succès s'affichait même
+      // quand l'enregistrement échouait.
+      await addParticipant({
+        prenom: form.prenom.trim(),
+        nom: form.nom.trim(),
+        dateNaissance: form.dateNaissance,
+        telephone: form.telephone || undefined,
+        pathologie: form.pathologie || undefined,
+        dateCreation: new Date().toISOString(),
+        rgpd,
+        droitImage,
+        bilans: [],
+        token: uuidv4().slice(0, 12),
+      } as any);
+      toast.success(`${form.prenom} ${form.nom} créé(e) ✅`);
+      onBack();
+    } catch (err) {
+      console.error('[Mobile] Création bénéficiaire en échec :', err);
+      toast.error("La fiche n'a pas pu être créée, réessayez");
+    } finally {
+      setEnregistrement(false);
+    }
   }
 
   return (
@@ -577,9 +669,11 @@ function NouveauPatientMobile({ onBack }: { onBack: () => void }) {
       <label style={label}>Pathologie / contexte</label>
       <input value={form.pathologie} onChange={e => setForm(f => ({ ...f, pathologie: e.target.value }))} placeholder="Ex : arthrose genou droit" style={input} />
 
-      <button onClick={sauvegarder}
-        style={{ width: '100%', padding: 16, background: C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginTop: 8 }}>
-        ✅ Créer le bénéficiaire
+      <BlocConsentementMobile rgpd={rgpd} onRgpdChange={setRgpd} droitImage={droitImage} onDroitImageChange={setDroitImage} />
+
+      <button onClick={sauvegarder} disabled={enregistrement}
+        style={{ width: '100%', padding: 16, background: rgpd.consentementObtenu ? C.primary : '#8FA8A8', color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: enregistrement ? 'wait' : 'pointer', marginTop: 8 }}>
+        {enregistrement ? 'Enregistrement…' : '✅ Créer le bénéficiaire'}
       </button>
     </div>
   );

@@ -241,25 +241,30 @@ BEGIN
     id, praticien_id, nom, prenom, date_naissance, email, telephone,
     pathologie, profil, tags, tests_actifs,
     adresse_rue, adresse_code_postal, adresse_ville,
-    taille, poids, droit_image, code_acces
+    taille, poids, droit_image, code_acces, rgpd
   ) VALUES (
     v_camille_id, v_praticien_id, 'Martin', 'Camille', '1950-03-12',
     'camille.martin.staging@example.com', '0601020304',
     'Arthrose du genou', 'Autonome', ARRAY['senior'],
     ARRAY['equilibre','chair_stand_30','hand_grip','tug_3m','souplesse','tm6','memoire'],
     '1 rue de la Démo', '69001', 'Lyon',
-    165, 68, false, 'CAME2E26'
+    165, 68, false, 'CAME2E26',
+    -- Obligatoire depuis 20260913_rgpd_consentement_creation.sql (trigger BEFORE INSERT).
+    jsonb_build_object('consentementObtenu', true, 'droitAcces', true, 'droitRectification', true,
+      'droitEffacement', true, 'methodeConsentement', 'ecrit', 'consentementDate', CURRENT_DATE::text)
   );
 
   INSERT INTO participants (
     id, praticien_id, nom, prenom, date_naissance, email, telephone,
     pathologie, profil, tags,
-    adresse_rue, adresse_code_postal, adresse_ville, code_acces
+    adresse_rue, adresse_code_postal, adresse_ville, code_acces, rgpd
   ) VALUES (
     v_julien_id, v_praticien_id, 'Bernard', 'Julien', '1945-07-22',
     'julien.bernard.staging@example.com', '0605060708',
     'Suites d''AVC', 'Aide partielle', ARRAY['chronique'],
-    '2 avenue de la Démo', '69002', 'Lyon', 'JUNE2E27'
+    '2 avenue de la Démo', '69002', 'Lyon', 'JUNE2E27',
+    jsonb_build_object('consentementObtenu', true, 'droitAcces', true, 'droitRectification', true,
+      'droitEffacement', true, 'methodeConsentement', 'ecrit', 'consentementDate', CURRENT_DATE::text)
   );
 
   -- ── Structure de test + rattachement de Julien ────────────────────────

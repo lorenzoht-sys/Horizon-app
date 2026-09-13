@@ -31,6 +31,15 @@ test.describe('Création d\'un participant', () => {
     await page.getByRole('button', { name: '1 séance/semaine', exact: true }).click();
     await page.getByRole('button', { name: 'Suivant →' }).click();
 
+    // Consentement RGPD : BLOQUANT à la création depuis le 2026-09-13
+    // (src/lib/consentementRgpd.ts). Sans lui, « Créer la fiche » ne crée rien
+    // et affiche le message — vérifié avant de cocher, sinon ce test ne
+    // prouverait pas que le blocage existe.
+    await page.getByRole('button', { name: 'Créer la fiche' }).click();
+    await expect(page.getByText(/consentement RGPD du bénéficiaire est obligatoire/)).toBeVisible();
+    await expect(page).toHaveURL(/\/participants\/nouveau$/);
+
+    await page.getByLabel('Le bénéficiaire a été informé et a consenti').check();
     await page.getByRole('button', { name: 'Créer la fiche' }).click();
 
     await expect(page.getByText(`${prenom} ${nom} ajouté(e) !`)).toBeVisible();

@@ -59,11 +59,14 @@ BEGIN
   -- ── 1. Nadia Petit — rien de partagé ──────────────────────────────────────
   INSERT INTO participants (
     id, praticien_id, nom, prenom, date_naissance, email, telephone,
-    pathologie, profil, tags, code_acces
+    pathologie, profil, tags, code_acces, rgpd
   ) VALUES (
     v_nadia_id, v_praticien_id, 'Petit', 'Nadia', '1952-01-15',
     'nadia.petit.staging@example.com', '0611121314',
-    'Lombalgie chronique', 'Autonome', ARRAY['chronique'], 'PETI2E01'
+    'Lombalgie chronique', 'Autonome', ARRAY['chronique'], 'PETI2E01',
+    -- Obligatoire depuis 20260913_rgpd_consentement_creation.sql (trigger BEFORE INSERT).
+    jsonb_build_object('consentementObtenu', true, 'droitAcces', true, 'droitRectification', true,
+      'droitEffacement', true, 'methodeConsentement', 'ecrit', 'consentementDate', CURRENT_DATE::text)
   );
 
   INSERT INTO bilans (
@@ -86,11 +89,13 @@ BEGIN
   -- ── 2. Marc Rousseau — partage partiel (équilibre + endurance) ───────────
   INSERT INTO participants (
     id, praticien_id, nom, prenom, date_naissance, email, telephone,
-    pathologie, profil, tags, code_acces
+    pathologie, profil, tags, code_acces, rgpd
   ) VALUES (
     v_marc_id, v_praticien_id, 'Rousseau', 'Marc', '1948-09-03',
     'marc.rousseau.staging@example.com', '0615161718',
-    'Prothèse de hanche', 'Aide partielle', ARRAY['post_op'], 'ROUS2E02'
+    'Prothèse de hanche', 'Aide partielle', ARRAY['post_op'], 'ROUS2E02',
+    jsonb_build_object('consentementObtenu', true, 'droitAcces', true, 'droitRectification', true,
+      'droitEffacement', true, 'methodeConsentement', 'ecrit', 'consentementDate', CURRENT_DATE::text)
   );
 
   INSERT INTO bilans (
@@ -113,7 +118,7 @@ BEGIN
   -- ── 3. Sophie Lemoine — reproduit l'incident (force basse + inactif, partagés) ──
   INSERT INTO participants (
     id, praticien_id, nom, prenom, date_naissance, email, telephone,
-    pathologie, profil, tags, code_acces, anamnese
+    pathologie, profil, tags, code_acces, anamnese, rgpd
   ) VALUES (
     v_sophie_id, v_praticien_id, 'Lemoine', 'Sophie', '1955-11-28',
     'sophie.lemoine.staging@example.com', '0619202122',
@@ -123,7 +128,9 @@ BEGIN
       'sedentariteProfil', 'inactif',
       'sedentariteVisibleBeneficiaire', true,
       'fatigueVisibleBeneficiaire', false
-    )
+    ),
+    jsonb_build_object('consentementObtenu', true, 'droitAcces', true, 'droitRectification', true,
+      'droitEffacement', true, 'methodeConsentement', 'ecrit', 'consentementDate', CURRENT_DATE::text)
   );
 
   INSERT INTO bilans (

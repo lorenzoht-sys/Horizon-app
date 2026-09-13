@@ -157,7 +157,8 @@ export default function ImportExcelModal({ onClose, participants, addParticipant
                   <span className="text-sm font-semibold text-dark">Remplissez-le avec vos données</span>
                 </div>
                 <ul className="text-xs text-gray-500 ml-8 space-y-0.5 mt-1">
-                  <li>• <strong>Obligatoires :</strong> Nom, Prénom, Date de naissance (JJ/MM/AAAA)</li>
+                  <li>• <strong>Obligatoires :</strong> Nom, Prénom, Date de naissance (JJ/MM/AAAA), Consentement RGPD</li>
+                  <li>• <strong>Consentement RGPD (colonne R) :</strong> écrivez « Oui » seulement si le bénéficiaire a consenti — sinon la ligne est refusée</li>
                   <li>• Consultez la feuille "Instructions" du template pour les tags</li>
                   <li>• Remplir à partir de la ligne 2 (ligne 1 = en-têtes)</li>
                 </ul>

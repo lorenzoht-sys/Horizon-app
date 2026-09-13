@@ -5,6 +5,7 @@ import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, 
 import { TYPES_ANTECEDENT_LABELS, TYPES_BLESSURE_CHUTE, MOMENTS_PRISE_LABELS } from '../../types';
 import { useStructures } from '../../hooks/useStructures';
 import { getBrouillonParticipant, sauvegarderBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
+import { avecConsentement, erreurConsentementCreation, normaliserRgpd } from '../../lib/consentementRgpd';
 import { OPTIONS_FREQUENCE } from '../../lib/anamnese';
 import { Save, X } from 'lucide-react';
 import GIRWidget from '../bilan/GIRWidget';
@@ -1055,8 +1056,9 @@ export interface ParticipantFormHandle {
   /**
    * Tente la soumission. Retourne true si réussie, ou { step, message } si une
    * validation a échoué (prénom/nom manquant → étape 1, organisation des
-   * séances incomplète → étape 4) — à l'appelant de naviguer vers cette étape
-   * et d'afficher le message.
+   * séances incomplète → étape 4, consentement RGPD absent à la création →
+   * étape 5) — à l'appelant de naviguer vers cette étape et d'afficher le
+   * message.
    */
   submit: () => true | { step: 1 | 2 | 3 | 4 | 5; message: string };
 }
@@ -1186,15 +1188,16 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
   const [testsActifs] = useState<TestKey[]>(seed.testsActifs ?? []);
 
   // ── RGPD + droit à l'image ──────────────────────────────────────
-  const [rgpd, setRgpd] = useState<RgpdConsent>({
-    consentementObtenu:  seed.rgpd?.consentementObtenu  ?? false,
-    droitAcces:          seed.rgpd?.droitAcces          ?? false,
-    droitRectification:  seed.rgpd?.droitRectification  ?? false,
-    droitEffacement:     seed.rgpd?.droitEffacement     ?? false,
-    methodeConsentement: seed.rgpd?.methodeConsentement ?? 'oral_note',
-    consentementDate:    seed.rgpd?.consentementDate    ?? new Date().toISOString().slice(0, 10),
-  });
+  // L'ancien état initial posait `consentementDate` à la date du jour même
+  // sans consentement : 7 fiches de production portaient ainsi une date de
+  // recueil pour un consentement jamais recueilli. Voir src/lib/consentementRgpd.ts.
+  const [rgpd, setRgpd] = useState<RgpdConsent>(() => normaliserRgpd(seed.rgpd));
   const [droitImage, setDroitImage] = useState<boolean>(seed.droitImage ?? false);
+
+  // Pathologie saisie ailleurs (bilan initial, ou formulaire mobile dont le
+  // brouillon est partagé sous la même clé) : ce formulaire n'a pas de champ
+  // pour elle, mais ne doit pas la perdre en reprenant le brouillon.
+  const [pathologieBrouillon] = useState<string | undefined>(seed.pathologie);
 
   // ── Champs texte ────────────────────────────────────────────────
   const [form, setForm] = useState({
@@ -1271,7 +1274,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
       taille: form.taille ? Number(form.taille) : undefined,
       poids:  form.poids  ? Number(form.poids)  : undefined,
       // Préserver les données cliniques existantes (issues du bilan initial)
-      pathologie:              initial?.pathologie,
+      pathologie:              pathologieBrouillon,
       antecedentsMedicaux:     initial?.antecedentsMedicaux,
       antecedentsChirurgicaux: initial?.antecedentsChirurgicaux,
       modeDeplacementHabituel: profilActivite.modeDeplacementHabituel,
@@ -1301,6 +1304,12 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
       return;
     }
     setErreurOrganisation(null);
+    // Consentement RGPD : bloquant à la création, jamais en modification.
+    const erreurRgpd = enModification ? null : erreurConsentementCreation(rgpd);
+    if (erreurRgpd) {
+      toast.error(erreurRgpd);
+      return;
+    }
     onSubmit(buildPayload());
   }
 
@@ -1315,6 +1324,11 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
         return { step: 4, message: erreur };
       }
       setErreurOrganisation(null);
+      // Consentement RGPD : bloquant à la création, jamais en modification.
+      // Vaut aussi pour un brouillon repris d'un autre formulaire (mobile) :
+      // son `rgpd` a été normalisé à l'initialisation, rien ne le contourne.
+      const erreurRgpd = enModification ? null : erreurConsentementCreation(rgpd);
+      if (erreurRgpd) return { step: 5, message: erreurRgpd };
       onSubmit(buildPayload());
       return true;
     },
@@ -1330,6 +1344,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
         poids:  form.poids  ? Number(form.poids)  : undefined,
         anamnese, traitements, antecedentsMedicauxStructures: antecedents,
         rgpd, droitImage, structureId,
+        pathologie: pathologieBrouillon,
         modeDeplacementHabituel: profilActivite.modeDeplacementHabituel,
         modeDeplacementDetail:   profilActivite.modeDeplacementDetail || undefined,
         activitesSouhaitees:     profilActivite.activitesSouhaitees,
@@ -1337,7 +1352,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
       });
     }, 800);
     return () => clearTimeout(t);
-  }, [draftKey, step, form, anamnese, traitements, antecedents, rgpd, droitImage, structureId, profilActivite]);
+  }, [draftKey, step, form, anamnese, traitements, antecedents, rgpd, droitImage, structureId, profilActivite, pathologieBrouillon]);
 
   // ── Indicateur de complétion ─────────────────────────────────────
   useEffect(() => {
@@ -2155,7 +2170,13 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
             ] as const).map(({ key, label }) => (
               <label key={key} className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700 select-none">
                 <input type="checkbox" checked={rgpd[key]} className="w-4 h-4 accent-primary"
-                  onChange={e => setRgpd(r => ({ ...r, [key]: e.target.checked }))} />
+                  onChange={e => {
+                    const coche = e.target.checked;
+                    // La date de recueil suit la case du consentement.
+                    setRgpd(r => key === 'consentementObtenu'
+                      ? avecConsentement(r, coche, new Date().toISOString().slice(0, 10))
+                      : { ...r, [key]: coche });
+                  }} />
                 {label}
               </label>
             ))}
@@ -2180,7 +2201,11 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
             </div>
           </div>
           {!rgpd.consentementObtenu && (
-            <p className="text-xs text-warning font-medium">⚠️ Sans consentement, les données de santé ne peuvent pas être collectées légalement.</p>
+            <p className="text-xs text-warning font-medium">
+              {enModification
+                ? '⚠️ Sans consentement, les données de santé ne peuvent pas être collectées légalement.'
+                : '⚠️ Obligatoire pour créer la fiche : sans consentement, les données de santé ne peuvent pas être collectées légalement.'}
+            </p>
           )}
         </div>
       </div>
