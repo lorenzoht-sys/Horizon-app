@@ -23,6 +23,7 @@ import {
 } from '../utils/assistantContexte';
 import { filtrerLogsHistorique, regrouperLogsParBeneficiaire } from '../utils/assistantHistorique';
 import type { Participant, Bilan, Contrat, RessentiSeance, StatutSeance, TypeStructure } from '../types';
+import { libelleAge } from '../lib/age';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -136,14 +137,6 @@ function downloadPDF(patientNom: string, type: ActionType, markdownContent: stri
 
 let _msgId = 0;
 function newId() { return String(++_msgId); }
-
-function calcAge(d: string): number {
-  const today = new Date(), birth = new Date(d);
-  let age = today.getFullYear() - birth.getFullYear();
-  if (today.getMonth() < birth.getMonth() ||
-    (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
-  return age;
-}
 
 function loadPraticienPrenom(): string {
   return chargerSettingsPraticien().prenom;
@@ -281,7 +274,7 @@ Tu cites les recommandations HAS ou SFP-APA quand pertinent.`;
 
   if (!patient) return base;
 
-  const age = calcAge(patient.dateNaissance);
+  const age = libelleAge(patient.dateNaissance);
   const bilanInitial = patient.bilans.find(b => b.type === 'initial') ?? null;
   const profil = bilanInitial?.profilEnrichi;
   const ciInfo = getContreIndications(patient, bilanInitial);
@@ -331,7 +324,7 @@ Tu cites les recommandations HAS ou SFP-APA quand pertinent.`;
 PROFIL DU PATIENT
 ═══════════════════════════════════════
 Nom : ${patient.prenom} ${patient.nom}
-Âge : ${age} ans (né(e) le ${new Date(patient.dateNaissance).toLocaleDateString('fr-FR')})
+Âge : ${age} (né(e) le ${new Date(patient.dateNaissance).toLocaleDateString('fr-FR')})
 Taille / Poids / IMC : ${patient.taille ? patient.taille + 'cm' : 'NE'} · ${patient.poids ? patient.poids + 'kg' : 'NE'} · IMC ${imc}
 Pathologies : ${pathologies}
 Contre-indications à l'effort : ${ci}
@@ -457,7 +450,7 @@ function PatientChips({ participants, onSelect }: { participants: Participant[];
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{p.prenom} {p.nom}</div>
-              <div style={{ fontSize: 12, color: '#6B7280' }}>{calcAge(p.dateNaissance)} ans{p.pathologie ? ` · ${p.pathologie.slice(0, 28)}` : ''}</div>
+              <div style={{ fontSize: 12, color: '#6B7280' }}>{libelleAge(p.dateNaissance)}{p.pathologie ? ` · ${p.pathologie.slice(0, 28)}` : ''}</div>
             </div>
           </button>
         ))}
@@ -610,7 +603,7 @@ function LeftColumn({
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: 13, color: '#111827' }}>{selectedPatient.prenom} {selectedPatient.nom}</div>
                   <div style={{ fontSize: 11, color: '#6B7280', marginTop: 1 }}>
-                    {calcAge(selectedPatient.dateNaissance)} ans{selectedPatient.pathologie ? ` · ${selectedPatient.pathologie.slice(0, 24)}` : ''}
+                    {libelleAge(selectedPatient.dateNaissance)}{selectedPatient.pathologie ? ` · ${selectedPatient.pathologie.slice(0, 24)}` : ''}
                   </div>
                   {ciTexte && (
                     <div style={{ marginTop: 6, fontSize: 10, color: '#DC2626', fontWeight: 600, background: '#FEE2E2', borderRadius: 4, padding: '3px 7px' }}>
@@ -652,7 +645,7 @@ function LeftColumn({
                     {p.prenom[0]}{p.nom[0]}
                   </div>
                   <div><div style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{p.prenom} {p.nom}</div>
-                  <div style={{ fontSize: 11, color: '#6B7280' }}>{calcAge(p.dateNaissance)} ans</div></div>
+                  <div style={{ fontSize: 11, color: '#6B7280' }}>{libelleAge(p.dateNaissance)}</div></div>
                 </button>
               ))}
             </div>

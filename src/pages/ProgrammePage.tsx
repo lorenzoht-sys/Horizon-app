@@ -17,6 +17,7 @@ import { JOURS_PROGRAMME as JP } from '../types';
 import { loadExercicesPraticien } from '../data/exercices';
 import { TESTS_ETALONS } from '../data/testsEtalons';
 import type { Exercice } from '../types';
+import { libelleAge } from '../lib/age';
 import {
   genererQuestionsClarification, genererProgrammeStructure, versPayloadCreateProgramme,
   type ProgrammeIA,
@@ -100,11 +101,6 @@ const OBJECTIFS_IA: { value: string; label: string }[] = [
 
 const JOURS_IA: JourProgramme[] = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
 
-function calcAgeIA(dateNaissance: string): number {
-  if (!dateNaissance) return 0;
-  return Math.floor((Date.now() - new Date(dateNaissance).getTime()) / (365.25 * 24 * 3600 * 1000));
-}
-
 function ConfigIAModal({
   participant, config, onChange, onGenerer, onClose, generating, error,
   questions, chargementQuestions, reponses, onReponseChange,
@@ -130,7 +126,7 @@ function ConfigIAModal({
   precisionsLibres: string;
   onPrecisionsLibresChange: (valeur: string) => void;
 }) {
-  const age = calcAgeIA(participant.dateNaissance);
+  const age = libelleAge(participant.dateNaissance);
 
   const chip = (active: boolean): CSSProperties => ({
     flex: 1, padding: '9px 6px', fontSize: 13, fontWeight: 700, borderRadius: 10,
@@ -147,7 +143,7 @@ function ConfigIAModal({
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, color: 'white' }}>🤖 Générer un programme avec l'IA</div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
-              Pour {participant.prenom} {participant.nom} · {age} ans{participant.pathologie ? ` · ${participant.pathologie}` : ''}
+              Pour {participant.prenom} {participant.nom} · {age}{participant.pathologie ? ` · ${participant.pathologie}` : ''}
             </div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>L'IA s'adaptera automatiquement au profil du bénéficiaire.</div>
           </div>

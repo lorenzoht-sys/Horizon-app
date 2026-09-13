@@ -17,6 +17,7 @@ import type { Participant, Bilan, ProgrammeV2, Exercice, TypeProgramme, JourProg
 import { JOURS_PROGRAMME } from '../types';
 import { getAuthHeader } from '../lib/supabase';
 import { getContreIndications, getTestsAutonomie } from '../lib/anamnese';
+import { libelleAge } from '../lib/age';
 
 // ─── Types (déplacés depuis ProgrammePage.tsx — importés par les deux appelants) ──
 
@@ -61,13 +62,8 @@ export interface ProgrammeIA {
 
 // ─── Contexte patient ─────────────────────────────────────────────────────────
 
-function calcAge(dateNaissance: string): number {
-  if (!dateNaissance) return 0;
-  return Math.floor((Date.now() - new Date(dateNaissance).getTime()) / (365.25 * 24 * 3600 * 1000));
-}
-
 function buildContextePatient(patient: Participant, dernierBilan: Bilan | null): string {
-  const age = calcAge(patient.dateNaissance);
+  const age = libelleAge(patient.dateNaissance);
   const traitements = (patient.traitements ?? []).map(t => t.nom).filter(Boolean).join(', ');
   const antecedents = [patient.antecedentsMedicaux, patient.antecedentsChirurgicaux].filter(Boolean).join(' · ');
   const bilanInitial = patient.bilans.find(b => b.type === 'initial') ?? null;
@@ -75,7 +71,7 @@ function buildContextePatient(patient: Participant, dernierBilan: Bilan | null):
   const ci = ciInfo.actif ? (ciInfo.detail ?? 'non précisées') : 'aucune contre-indication renseignée';
   const { sedentarite, fatigue } = getTestsAutonomie(patient, bilanInitial);
 
-  return `PATIENT : ${patient.prenom} ${patient.nom}, ${age} ans
+  return `PATIENT : ${patient.prenom} ${patient.nom}, ${age}
 PATHOLOGIE : ${patient.pathologie || 'non renseignée'}
 ANTÉCÉDENTS : ${antecedents || 'non renseignés'}
 TRAITEMENTS : ${traitements || 'non renseignés'}

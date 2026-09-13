@@ -26,15 +26,9 @@ import { avecConsentement, erreurConsentementCreation, rgpdParDefaut } from '../
 import type { RgpdConsent } from '../../types';
 import { initialesPraticien } from '../../lib/initiales';
 import { getContreIndications, getObjectifsActivites, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../../lib/anamnese';
+import { libelleAge } from '../../lib/age';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function calcAge(d: string) {
-  const a = new Date(), b = new Date(d);
-  let age = a.getFullYear() - b.getFullYear();
-  if (a.getMonth() < b.getMonth()) age--;
-  return age;
-}
 
 function formatDateLong(d: Date) {
   return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -478,7 +472,7 @@ function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
                   {ci && <span style={{ fontSize: 13 }} title="Contre-indications actives">⚠️</span>}
                 </div>
                 <div style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>
-                  {calcAge(p.dateNaissance)} ans{prochaine ? ` · ${formatDateCourt(prochaine.date)}` : ''}
+                  {libelleAge(p.dateNaissance)}{prochaine ? ` · ${formatDateCourt(prochaine.date)}` : ''}
                 </div>
                 {(p.contexteClinic || p.pathologie) && (
                   <div style={{ fontSize: 11, color: 'var(--color-ink-2)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1528,7 +1522,7 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
 
         {/* Ligne 2 : âge · taille · poids */}
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 7, paddingLeft: 68 }}>
-          {calcAge(p.dateNaissance)} ans
+          {libelleAge(p.dateNaissance)}
           {p.taille ? ` · ${p.taille} cm` : ''}
           {p.poids ? ` · ${p.poids} kg` : ''}
         </div>
@@ -1624,7 +1618,7 @@ function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { partic
             </InfoSection>
 
             <InfoSection titre="Informations">
-              <InfoLigne icon="ti-calendar" texte={`Né(e) le ${new Date(p.dateNaissance).toLocaleDateString('fr-FR')} · ${calcAge(p.dateNaissance)} ans`} />
+              <InfoLigne icon="ti-calendar" texte={`Né(e) le ${new Date(p.dateNaissance).toLocaleDateString('fr-FR')} · ${libelleAge(p.dateNaissance)}`} />
               {p.taille && p.poids && (() => {
                 const imc = Math.round((p.poids / ((p.taille / 100) ** 2)) * 10) / 10;
                 const imcColor = imc < 18.5 ? '#3B82F6' : imc < 25 ? '#22C55E' : imc < 30 ? '#F59E0B' : '#EF4444';
@@ -1947,12 +1941,12 @@ Tu ne fais jamais de diagnostic médical.`;
 
   const patientCtx = patient
     ? (() => {
-        const age = calcAge(patient.dateNaissance);
+        const age = libelleAge(patient.dateNaissance);
         const bi = patient.bilans.find(b => b.type === 'initial') ?? null;
         const ciInfoExport = getContreIndications(patient, bi);
         const ci = ciInfoExport.actif ? (ciInfoExport.detail ?? 'non précisées') : 'aucune';
         const pathologies = [patient.pathologie, patient.antecedentsMedicaux].filter(Boolean).join(' / ') || 'non renseigné';
-        return `\n\nPATIENT : ${patient.prenom} ${patient.nom}, ${age} ans. Pathologies : ${pathologies}. Contre-indications : ${ci}.`;
+        return `\n\nPATIENT : ${patient.prenom} ${patient.nom}, ${age}. Pathologies : ${pathologies}. Contre-indications : ${ci}.`;
       })()
     : '';
 
@@ -2198,7 +2192,7 @@ function EcranAssistant({
                   </div>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{p.prenom} {p.nom}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{calcAge(p.dateNaissance)} ans{p.pathologie ? ` · ${p.pathologie.slice(0, 20)}` : ''}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{libelleAge(p.dateNaissance)}{p.pathologie ? ` · ${p.pathologie.slice(0, 20)}` : ''}</div>
                   </div>
                 </button>
               ))}

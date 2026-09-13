@@ -7,15 +7,9 @@ import { Activity, TrendingUp, Calendar, Award } from 'lucide-react';
 import { useProgramme } from '../../hooks/useProgramme';
 import { calculerNote, NORMES_SCORING } from '../../data/norms';
 import MarkdownRendu from '../ui/MarkdownRendu';
+import { libelleAge } from '../../lib/age';
 
 interface Props { participant: Participant }
-
-function calcAge(dateNaissance: string): number {
-  const today = new Date(), birth = new Date(dateNaissance);
-  let age = today.getFullYear() - birth.getFullYear();
-  if (today.getMonth() < birth.getMonth()) age--;
-  return age;
-}
 
 const TESTS_PROGRES = [
   { label: 'Équilibre',  normeKey: 'equilibreUnipodal', unite: 's',     lower: false, getVal: (b: Bilan) => b.equilibre.droite },
@@ -65,7 +59,7 @@ function OngletProgres({ participant, bilans }: { participant: Participant; bila
           <div>
             <h1 className="font-heading font-bold text-dark text-lg">Bonjour, {participant.prenom} ! 👋</h1>
             <p className="text-gray-400 text-sm">
-              {calcAge(participant.dateNaissance)} ans · {bilans.length} bilan{bilans.length > 1 ? 's' : ''} réalisé{bilans.length > 1 ? 's' : ''}
+              {libelleAge(participant.dateNaissance)} · {bilans.length} bilan{bilans.length > 1 ? 's' : ''} réalisé{bilans.length > 1 ? 's' : ''}
             </p>
           </div>
         </div>

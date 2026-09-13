@@ -45,6 +45,7 @@ import { patientAccesPraticien } from '../lib/patientApi';
 import type { Bilan, Participant, Contrat, Seance, ProfilHandicap } from '../types';
 import { getContreIndications, getTestsAutonomie, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../lib/anamnese';
 import type { CompteRenduSeance } from '../types/seance';
+import { libelleAge } from '../lib/age';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -114,14 +115,6 @@ const PROFILS_HANDICAP: { id: ProfilHandicap; label: string; emoji: string }[] =
   { id: 'parkinson',        label: 'Parkinson',            emoji: '🫸' },
   { id: 'sep',              label: 'Sclérose en plaques',  emoji: '🎗️' },
 ];
-
-function calcAge(dateNaissance: string): number {
-  const today = new Date(), birth = new Date(dateNaissance);
-  let age = today.getFullYear() - birth.getFullYear();
-  if (today.getMonth() < birth.getMonth() ||
-    (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
-  return age;
-}
 
 function formatDateCourt(date: string): string {
   return new Date(date + 'T12:00').toLocaleDateString('fr-FR', {
@@ -1060,7 +1053,7 @@ export default function ParticipantProfile() {
   const contratActif   = contrats.find(c => c.participantId === participant.id && c.statut === 'actif') ?? null;
   const contratsCount  = contrats.filter(c => c.participantId === participant.id).length;
   const color          = avatarColor(participant.id);
-  const age            = calcAge(participant.dateNaissance);
+  const age            = libelleAge(participant.dateNaissance);
   const today          = new Date().toISOString().slice(0, 10);
   const imc            = participant.taille && participant.poids
     ? Math.round((participant.poids / ((participant.taille / 100) ** 2)) * 10) / 10 : null;
@@ -1247,7 +1240,7 @@ export default function ParticipantProfile() {
               {/* Ligne secondaire : infos */}
               <div className="flex items-center gap-1.5 flex-wrap mt-1 text-[13px] text-gray-500">
                 <span>
-                  {age} ans · né(e) le {new Date(participant.dateNaissance).toLocaleDateString('fr-FR')}
+                  {age} · né(e) le {new Date(participant.dateNaissance).toLocaleDateString('fr-FR')}
                 </span>
                 {participant.taille && <><span className="text-gray-300">·</span><span>{participant.taille} cm</span></>}
                 {participant.poids && <><span className="text-gray-300">·</span><span>{participant.poids} kg</span></>}

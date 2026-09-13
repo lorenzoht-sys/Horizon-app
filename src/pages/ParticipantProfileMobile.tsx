@@ -25,6 +25,7 @@ import { TAG_CONFIG } from '../data/profiles';
 import { toast } from 'sonner';
 import type { Bilan, Participant } from '../types';
 import { getContreIndications, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../lib/anamnese';
+import { libelleAge } from '../lib/age';
 
 // ── Constants & helpers ───────────────────────────────────────────────────────
 
@@ -47,14 +48,6 @@ const MOBILE_TESTS: { label: string; unite: string; getVal: (b: Bilan) => number
   { label: 'TM6',        unite: ' m',    getVal: b => b.tm6.distanceMetres,     getColor: v => v >= 500 ? 'vert' : v >= 300 ? 'orange' : 'rouge' },
   { label: 'Mémoire',    unite: '/5',    getVal: b => b.memoire.scoreImmediat,  getColor: v => v >= 4 ? 'vert' : v >= 3 ? 'orange' : 'rouge' },
 ];
-
-function calcAge(dateNaissance: string): number {
-  const today = new Date(), birth = new Date(dateNaissance);
-  let age = today.getFullYear() - birth.getFullYear();
-  if (today.getMonth() < birth.getMonth() ||
-    (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
-  return age;
-}
 
 function imcLabel(imc: number): { label: string; bg: string; color: string } {
   if (imc < 18.5) return { label: 'Insuffisance', bg: '#FEE2E2', color: '#DC2626' };
@@ -141,7 +134,7 @@ export default function ParticipantProfileMobile() {
   const contratActif   = contrats.find(c => c.participantId === participant.id && c.statut === 'actif') ?? null;
   const statutSeances  = calculerStatutSeancesSemaine(contratActif, seances);
   const notes          = notesParPatient(participant.id);
-  const age            = calcAge(participant.dateNaissance);
+  const age            = libelleAge(participant.dateNaissance);
   const today          = new Date().toISOString().slice(0, 10);
   const imc            = participant.taille && participant.poids
     ? Math.round((participant.poids / ((participant.taille / 100) ** 2)) * 10) / 10 : null;
@@ -249,7 +242,7 @@ export default function ParticipantProfileMobile() {
 
         <MobileCard title="Informations">
           <InfoRow label="Date naissance" value={new Date(participant.dateNaissance).toLocaleDateString('fr-FR')} />
-          <InfoRow label="Âge calculé" value={`${age} ans`} />
+          <InfoRow label="Âge calculé" value={age} />
           {participant.taille && <InfoRow label="Taille" value={`${participant.taille} cm`} />}
           {participant.poids && <InfoRow label="Poids" value={`${participant.poids} kg`} />}
           {imc && (
@@ -667,7 +660,7 @@ export default function ParticipantProfileMobile() {
               </button>
             </div>
             <div className="flex flex-wrap gap-x-2 mt-0.5" style={{ color: '#9FE1CB', fontSize: 12 }}>
-              <span>{age} ans</span>
+              <span>{age}</span>
               {participant.taille && <span>· {participant.taille} cm</span>}
               {participant.poids && <span>· {participant.poids} kg</span>}
               {imc && <span>· IMC {imc}</span>}
