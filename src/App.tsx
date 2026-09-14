@@ -9,6 +9,7 @@ import { useDevice } from './hooks/useDevice';
 import AppMobile from './pages/mobile/AppMobile';
 import BarreNavigationMobile from './components/layout/BarreNavigationMobile';
 import { estRouteInterfaceUnique } from './lib/routesMobile';
+import { effacerTousEtatsSession } from './lib/etatSession';
 import { Toaster, toast } from 'sonner';
 import Sidebar from './components/layout/Sidebar';
 import Dashboard from './pages/Dashboard';
@@ -325,6 +326,9 @@ export default function App() {
       } else if (event === 'SIGNED_OUT') {
         // Ne pas effacer les brouillons ici — ils sont isolés par userId et
         // survivent à une expiration de session pour être repris à la reconnexion.
+        // Le travail en cours de l'onglet (sessionStorage), lui, est effacé :
+        // il ne doit pas rester à l'écran de la personne suivante.
+        effacerTousEtatsSession();
         setCurrentUserId(null);
         localStorage.removeItem('settings_praticien');
         localStorage.removeItem('isLoggedIn');
@@ -344,6 +348,7 @@ export default function App() {
   function handleLogout() {
     // Ne pas effacer les brouillons : ils sont isolés par userId (brouillon_bilan_{userId}_*)
     // et seront restaurés depuis Supabase à la prochaine connexion.
+    effacerTousEtatsSession();
     if (supabase) {
       void supabase.auth.signOut();
     } else {

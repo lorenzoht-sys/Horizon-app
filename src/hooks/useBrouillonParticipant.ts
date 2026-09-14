@@ -33,6 +33,18 @@ export function sauvegarderBrouillonParticipant(draftKey: string, step: number, 
   }
 }
 
+// Horodatage de la dernière suppression, par clé : voir la même mécanique dans
+// useBrouillonBilan.ts. Empêche un formulaire qui disparaît de recréer un
+// brouillon supprimé volontairement (fiche créée, « Annuler »).
+const suppressions = new Map<string, number>();
+
 export function supprimerBrouillonParticipant(draftKey: string): void {
   localStorage.removeItem(cle(draftKey));
+  suppressions.set(cle(draftKey), Date.now());
+}
+
+export function brouillonParticipantSupprimeDepuis(draftKey: string, depuis: number): boolean {
+  // Strictement après : une suppression suivie d'une réouverture dans la même
+  // milliseconde ne doit pas empêcher de sauvegarder le formulaire rouvert.
+  return (suppressions.get(cle(draftKey)) ?? 0) > depuis;
 }

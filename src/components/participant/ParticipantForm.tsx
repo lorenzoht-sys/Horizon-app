@@ -1,10 +1,10 @@
-import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { chargerSettingsPraticien } from '../../lib/settingsPraticien';
 import { toast } from 'sonner';
 import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical, TypeAntecedent, AnamneseData, ChutesData, ChuteDetail, ActivitePrecedente, NiveauActivite, CreneauHoraire, SedentariteReponses, MomentPrise, ContactSante } from '../../types';
 import { TYPES_ANTECEDENT_LABELS, TYPES_BLESSURE_CHUTE, MOMENTS_PRISE_LABELS } from '../../types';
 import { useStructures } from '../../hooks/useStructures';
-import { getBrouillonParticipant, sauvegarderBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
+import { brouillonParticipantSupprimeDepuis, getBrouillonParticipant, sauvegarderBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
 import { avecConsentement, erreurConsentementCreation, normaliserRgpd } from '../../lib/consentementRgpd';
 import { OPTIONS_FREQUENCE } from '../../lib/anamnese';
 import { Save, X } from 'lucide-react';
@@ -1335,24 +1335,54 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
   }));
 
   // ── Brouillon : sauvegarde auto (debounce 800ms) ─────────────────
+  const donneesBrouillon = useMemo(() => ({
+    ...form,
+    taille: form.taille ? Number(form.taille) : undefined,
+    poids:  form.poids  ? Number(form.poids)  : undefined,
+    anamnese, traitements, antecedentsMedicauxStructures: antecedents,
+    rgpd, droitImage, structureId,
+    pathologie: pathologieBrouillon,
+    modeDeplacementHabituel: profilActivite.modeDeplacementHabituel,
+    modeDeplacementDetail:   profilActivite.modeDeplacementDetail || undefined,
+    activitesSouhaitees:     profilActivite.activitesSouhaitees,
+    objectifsPatient:        profilActivite.objectifsPatient,
+  }), [form, anamnese, traitements, antecedents, rgpd, droitImage, structureId, profilActivite, pathologieBrouillon]);
+
+  const enAttenteRef = useRef(false);
+  const derniereEtapeRef = useRef(step ?? 0);
+  const dernieresDonneesRef = useRef(donneesBrouillon);
+  useEffect(() => {
+    derniereEtapeRef.current = step ?? 0;
+    dernieresDonneesRef.current = donneesBrouillon;
+  }, [step, donneesBrouillon]);
+
   useEffect(() => {
     if (!draftKey) return;
+    enAttenteRef.current = true;
     const t = setTimeout(() => {
-      sauvegarderBrouillonParticipant(draftKey, step ?? 0, {
-        ...form,
-        taille: form.taille ? Number(form.taille) : undefined,
-        poids:  form.poids  ? Number(form.poids)  : undefined,
-        anamnese, traitements, antecedentsMedicauxStructures: antecedents,
-        rgpd, droitImage, structureId,
-        pathologie: pathologieBrouillon,
-        modeDeplacementHabituel: profilActivite.modeDeplacementHabituel,
-        modeDeplacementDetail:   profilActivite.modeDeplacementDetail || undefined,
-        activitesSouhaitees:     profilActivite.activitesSouhaitees,
-        objectifsPatient:        profilActivite.objectifsPatient,
-      });
+      enAttenteRef.current = false;
+      sauvegarderBrouillonParticipant(draftKey, step ?? 0, donneesBrouillon);
     }, 800);
     return () => clearTimeout(t);
-  }, [draftKey, step, form, anamnese, traitements, antecedents, rgpd, droitImage, structureId, profilActivite, pathologieBrouillon]);
+  }, [draftKey, step, donneesBrouillon]);
+
+  // Démontage sans fermeture de page — rotation du téléphone, qui remplace le
+  // formulaire complet par le formulaire mobile (App.tsx). Le nettoyage du
+  // debounce annulait la sauvegarde en attente. On l'écrit, sauf si le
+  // brouillon a été supprimé volontairement depuis l'ouverture (fiche créée,
+  // « Annuler »).
+  useEffect(() => {
+    if (!draftKey) return;
+    const ouverture = Date.now();
+    const enAttente = enAttenteRef;
+    const etape = derniereEtapeRef;
+    const donnees = dernieresDonneesRef;
+    return () => {
+      if (enAttente.current && !brouillonParticipantSupprimeDepuis(draftKey, ouverture)) {
+        sauvegarderBrouillonParticipant(draftKey, etape.current, donnees.current);
+      }
+    };
+  }, [draftKey]);
 
   // ── Indicateur de complétion ─────────────────────────────────────
   useEffect(() => {

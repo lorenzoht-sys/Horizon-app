@@ -21,13 +21,18 @@ import {
   type SettingsPraticien,
 } from '../../lib/settingsPraticien';
 import { validerSiret } from '../../lib/siret';
-import { avecConsentement, erreurConsentementCreation, rgpdParDefaut } from '../../lib/consentementRgpd';
+import { avecConsentement, erreurConsentementCreation, normaliserRgpd } from '../../lib/consentementRgpd';
 import type { RgpdConsent } from '../../types';
 import { initialesPraticien } from '../../lib/initiales';
 import { getContreIndications } from '../../lib/anamnese';
 import { libelleAge } from '../../lib/age';
 import { URLS_MOBILE, ecranMobileDepuisUrl } from '../../lib/routesMobile';
 import BarreNavigationMobile from '../../components/layout/BarreNavigationMobile';
+import ModalRepriseBrouillon from '../../components/bilan/ModalRepriseBrouillon';
+import { useEtatSession } from '../../hooks/useEtatSession';
+import { ecrireEtatSession, effacerEtatSession, lireEtatSession } from '../../lib/etatSession';
+import { getBrouillonParticipant, sauvegarderBrouillonParticipant, supprimerBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
+import { getBrouillon, supprimerBrouillon } from '../../hooks/useBrouillonBilan';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -520,12 +525,53 @@ function BlocConsentementMobile({ rgpd, onRgpdChange, droitImage, onDroitImageCh
   );
 }
 
-function NouveauPatientMobile({ onBack, onCree }: { onBack: () => void; onCree: (participantId: string) => void }) {
+// Brouillon PARTAGÉ avec le formulaire complet (ParticipantFormPage, même clé) :
+// tourner le téléphone en paysage reprend la saisie dans le formulaire
+// complet, et inversement. Le consentement reste obligatoire des deux côtés —
+// le formulaire complet normalise le `rgpd` du brouillon et refuse la
+// création sans lui (src/lib/consentementRgpd.ts, testé).
+const CLE_BROUILLON_CREATION = 'nouveau';
+
+function texteBrouillon(v: unknown): string {
+  return typeof v === 'string' ? v : '';
+}
+
+function NouveauPatientMobile({ onBack: retourParent, onCree }: { onBack: () => void; onCree: (participantId: string) => void }) {
   const { addParticipant } = useParticipants();
-  const [form, setForm] = useState({ prenom: '', nom: '', dateNaissance: '', telephone: '', pathologie: '' });
-  const [rgpd, setRgpd] = useState<RgpdConsent>(rgpdParDefaut);
-  const [droitImage, setDroitImage] = useState(false);
+  const [brouillon] = useState<Record<string, unknown>>(() => getBrouillonParticipant(CLE_BROUILLON_CREATION)?.data ?? {});
+  const [form, setForm] = useState(() => ({
+    prenom: texteBrouillon(brouillon.prenom),
+    nom: texteBrouillon(brouillon.nom),
+    dateNaissance: texteBrouillon(brouillon.dateNaissance),
+    telephone: texteBrouillon(brouillon.telephone),
+    pathologie: texteBrouillon(brouillon.pathologie),
+  }));
+  const [rgpd, setRgpd] = useState<RgpdConsent>(() => normaliserRgpd(brouillon.rgpd as Partial<RgpdConsent> | undefined));
+  const [droitImage, setDroitImage] = useState<boolean>(brouillon.droitImage === true);
   const [enregistrement, setEnregistrement] = useState(false);
+
+  // Écrit à chaque changement, sans délai : c'est ce brouillon qui survit à la
+  // rotation. Fusionné avec l'existant, pour ne rien perdre de ce que le
+  // formulaire complet y a mis (anamnèse, organisation…).
+  useEffect(() => {
+    const existant = getBrouillonParticipant(CLE_BROUILLON_CREATION);
+    const saisieVide = !form.prenom && !form.nom && !form.dateNaissance && !form.telephone && !form.pathologie && !rgpd.consentementObtenu;
+    if (!existant && saisieVide) return;
+    sauvegarderBrouillonParticipant(CLE_BROUILLON_CREATION, existant?.step ?? 0, {
+      ...(existant?.data ?? {}),
+      ...form,
+      pathologie: form.pathologie || undefined,
+      rgpd,
+      droitImage,
+    });
+  }, [form, rgpd, droitImage]);
+
+  // Abandon explicite : le brouillon ne doit pas réapparaître, comme le
+  // bouton « Annuler » du formulaire complet.
+  function onBack() {
+    supprimerBrouillonParticipant(CLE_BROUILLON_CREATION);
+    retourParent();
+  }
   const label: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
   const input: React.CSSProperties = { width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, outline: 'none', marginBottom: 14, boxSizing: 'border-box' };
 
@@ -546,7 +592,16 @@ function NouveauPatientMobile({ onBack, onCree }: { onBack: () => void; onCree: 
     try {
       // Attendu, et plus lancé sans `await` : le succès s'affichait même
       // quand l'enregistrement échouait.
+      // Ce que le formulaire complet a mis dans le brouillon partagé (anamnèse,
+      // organisation…) n'est repris QUE pour la même personne : un brouillon
+      // abandonné ne doit pas prêter ses données de santé à un autre
+      // bénéficiaire.
+      const donneesBrouillon = getBrouillonParticipant(CLE_BROUILLON_CREATION)?.data ?? {};
+      const memePersonne =
+        texteBrouillon(donneesBrouillon.prenom).trim().toLowerCase() === form.prenom.trim().toLowerCase() &&
+        texteBrouillon(donneesBrouillon.nom).trim().toLowerCase() === form.nom.trim().toLowerCase();
       const cree = await addParticipant({
+        ...(memePersonne ? donneesBrouillon : {}),
         prenom: form.prenom.trim(),
         nom: form.nom.trim(),
         dateNaissance: form.dateNaissance,
@@ -558,6 +613,7 @@ function NouveauPatientMobile({ onBack, onCree }: { onBack: () => void; onCree: 
         bilans: [],
         token: uuidv4().slice(0, 12),
       } as any);
+      supprimerBrouillonParticipant(CLE_BROUILLON_CREATION);
       toast.success(`${form.prenom} ${form.nom} créé(e) ✅`);
       onCree(cree.id);
     } catch (err) {
@@ -646,9 +702,28 @@ function BilanMobile({ participantId, onTermine }: { participantId: string; onTe
   // doit se refléter aussitôt dans `participant`.
   const { participants, loading, addBilan, updateParticipant } = useParticipants();
   const [testsIgnores, setTestsIgnores] = useState(false);
+  const [brouillonSauve] = useState(() => getBrouillon(participantId));
+  const [reprise, setReprise] = useState<'a_decider' | 'reprendre' | 'recommencer'>(() => (brouillonSauve ? 'a_decider' : 'recommencer'));
   const participant = participants.find(p => p.id === participantId);
 
   if (!participant) return <EcranChargement loading={loading} texteIntrouvable="Bénéficiaire introuvable" onBack={onTermine} />;
+
+  // Brouillon existant — saisie interrompue, ou retour en portrait après une
+  // rotation. Ce bilan repartait d'un formulaire vide, dont la PREMIÈRE frappe
+  // écrasait le brouillon sauvegardé. Même choix que le bilan desktop.
+  if (brouillonSauve && reprise === 'a_decider') {
+    return (
+      <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+        <ModalRepriseBrouillon
+          brouillon={brouillonSauve}
+          participantNom={`${participant.prenom} ${participant.nom}`}
+          onReprendre={() => setReprise('reprendre')}
+          onRecommencer={() => { supprimerBrouillon(participant.id); setReprise('recommencer'); }}
+          onFermer={onTermine}
+        />
+      </div>
+    );
+  }
 
   const premierBilanSansTests = participant.bilans.length === 0 && (!participant.testsActifs || participant.testsActifs.length === 0);
   if (premierBilanSansTests && !testsIgnores) {
@@ -683,6 +758,7 @@ function BilanMobile({ participantId, onTermine }: { participantId: string; onTe
           onTermine();
         }}
         onCancel={onTermine}
+        brouillon={reprise === 'reprendre' ? brouillonSauve : null}
       />
     </div>
   );
@@ -695,7 +771,10 @@ function EcranTournee() {
   const { seancesDuJour, changerStatut } = useAgenda();
   const today = new Date().toISOString().slice(0, 10);
   const seances = seancesDuJour(today);
-  const [dicteeParticipant, setDicteeParticipant] = useState<import('../../types').Participant | null>(null);
+  // Dictée ouverte conservée si l'interface est remplacée (rotation) : son
+  // contenu, lui, est conservé par DicteePostSeance.
+  const [dicteeParticipantId, setDicteeParticipantId] = useEtatSession<string | null>('tournee_dictee', null);
+  const dicteeParticipant = participants.find(x => x.id === dicteeParticipantId) ?? null;
   const { ajouterCompteRendu } = useCompteRenduSeance(dicteeParticipant?.id ?? '');
 
   return (
@@ -765,7 +844,7 @@ function EcranTournee() {
               </button>
               {s.statut === 'realisee' && p && (
                 <button
-                  onClick={() => setDicteeParticipant(p)}
+                  onClick={() => setDicteeParticipantId(p.id)}
                   style={{ marginTop: 6, width: '100%', padding: '8px', background: C.bg, border: `1px dashed ${C.primary}`, borderRadius: 8, fontSize: 12, fontWeight: 700, color: C.primary, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                   🎙️ Dicter le compte-rendu
                 </button>
@@ -778,7 +857,7 @@ function EcranTournee() {
       {dicteeParticipant && (
         <DicteePostSeance
           participant={dicteeParticipant}
-          onClose={() => setDicteeParticipant(null)}
+          onClose={() => setDicteeParticipantId(null)}
           onSave={async (data) => { await ajouterCompteRendu(data); }}
         />
       )}
@@ -788,19 +867,36 @@ function EcranTournee() {
 
 // ── EcranSettings ─────────────────────────────────────────────────────────────
 
-function EcranSettings({ onBack }: { onBack: () => void }) {
+const CLE_SESSION_PARAMETRES = 'parametres_praticien';
+
+function EcranSettings({ onBack: retourParent }: { onBack: () => void }) {
   const inp: React.CSSProperties = { width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, outline: 'none', marginBottom: 14, boxSizing: 'border-box', background: 'white' };
   const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
 
   const { settings: praticienData, loading, echecChargement, sauvegarderSettings } = usePraticienSettings();
-  const [form, setForm] = useState<SettingsPraticien>(DEFAULTS_SETTINGS);
+  // Saisie en cours retrouvée après une rotation : elle prime sur le
+  // pré-remplissage depuis la base.
+  const [saisieRestauree] = useState(() => lireEtatSession<SettingsPraticien>(CLE_SESSION_PARAMETRES));
+  const [form, setForm] = useState<SettingsPraticien>(saisieRestauree ?? DEFAULTS_SETTINGS);
   const [saving, setSaving] = useState(false);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
 
   // Pré-remplir le formulaire dès que Supabase a répondu
   useEffect(() => {
-    if (!loading) setForm(praticienData);
+    if (!loading && !saisieRestauree) setForm(praticienData);
   }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Jamais tant que le formulaire porte encore les valeurs par défaut : elles
+  // seraient restaurées à la place des vrais réglages.
+  useEffect(() => {
+    if (saisieRestauree || form !== DEFAULTS_SETTINGS) ecrireEtatSession(CLE_SESSION_PARAMETRES, form);
+  }, [form, saisieRestauree]);
+
+  // Retour explicite ou réglages enregistrés : rien à reprendre.
+  function onBack() {
+    effacerEtatSession(CLE_SESSION_PARAMETRES);
+    retourParent();
+  }
 
   function set(field: string, value: string) { setForm((f) => ({ ...f, [field]: value })); }
 
@@ -1129,10 +1225,11 @@ function DetailBilanMobile({ bilan, onBack }: { bilan: import('../../types').Bil
 
 // ── Modification fiche patient mobile ────────────────────────────────────────
 
-function EditPatientMobile({ participant, onBack }: { participant: import('../../types').Participant; onBack: () => void }) {
+function EditPatientMobile({ participant, onBack: retourParent }: { participant: import('../../types').Participant; onBack: () => void }) {
   const { updateParticipant } = useParticipants();
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
+  // Conservée si l'interface est remplacée (rotation du téléphone).
+  const [form, setForm, effacerSaisie] = useEtatSession(`modifier_beneficiaire_${participant.id}`, () => ({
     prenom:                  participant.prenom ?? '',
     nom:                     participant.nom ?? '',
     dateNaissance:           participant.dateNaissance ?? '',
@@ -1147,7 +1244,13 @@ function EditPatientMobile({ participant, onBack }: { participant: import('../..
     antecedentsMedicaux:     participant.antecedentsMedicaux ?? '',
     antecedentsChirurgicaux: participant.antecedentsChirurgicaux ?? '',
     allergies:               participant.allergies ?? '',
-  });
+  }));
+
+  // Retour explicite ou fiche enregistrée : rien à reprendre.
+  function onBack() {
+    effacerSaisie();
+    retourParent();
+  }
 
   function setF(field: string, value: string) {
     setForm(f => ({ ...f, [field]: value }));
@@ -1330,9 +1433,13 @@ function EcranAssistant({
 }) {
   const { participants } = useParticipants();
   type Msg = { role: 'user' | 'assistant'; content: string };
-  const [selectedPatient, setSelectedPatient] = useState<import('../../types').Participant | null>(null);
-  const [messages, setMessages] = useState<Msg[]>([]);
-  const [input, setInput] = useState('');
+  // Conversation conservée si l'interface est remplacée (rotation). Une réponse
+  // encore en attente à ce moment-là est perdue ; la question, non.
+  const [selectedPatientId, setSelectedPatientId] = useEtatSession<string | null>('assistant_mobile_beneficiaire', null);
+  const selectedPatient = participants.find(p => p.id === selectedPatientId) ?? null;
+  const setSelectedPatient = (p: Participant | null) => setSelectedPatientId(p ? p.id : null);
+  const [messages, setMessages] = useEtatSession<Msg[]>('assistant_mobile_messages', []);
+  const [input, setInput] = useEtatSession('assistant_mobile_saisie', '');
   const [loading, setLoading] = useState(false);
   const [showSheet, setShowSheet] = useState(false);
   const [searchQ, setSearchQ] = useState('');
@@ -1341,9 +1448,9 @@ function EcranAssistant({
   useEffect(() => {
     if (preSelectedPatientId && participants.length > 0) {
       const p = participants.find(x => x.id === preSelectedPatientId);
-      if (p) setSelectedPatient(p);
+      if (p) setSelectedPatientId(p.id);
     }
-  }, [preSelectedPatientId, participants]);
+  }, [preSelectedPatientId, participants, setSelectedPatientId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
