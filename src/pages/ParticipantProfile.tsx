@@ -37,6 +37,7 @@ import { calculerNote, NORMES_SCORING } from '../data/norms';
 import { computeTinettiScores, tinettiRisque } from '../data/tinetti';
 import { TAG_CONFIG } from '../data/profiles';
 import { getSedProfil, getFSSProfil } from '../components/bilan/TestsAutonomie';
+import { etatSedentarite, etatFatigue, SED_TOTAL_MAX, FSS_TOTAL_MAX, type EtatQuestionnaire } from '../lib/scoresAutonomie';
 import { useRappelPreferences, type RappelPreferences } from '../hooks/useRappelPreferences';
 import { toast } from 'sonner';
 import { supabase, getAuthHeader } from '../lib/supabase';
@@ -375,8 +376,62 @@ function CarteProfilFonctionnel({ participant, bilans }: {
   if (!current) return null;
 
   const { sedentarite, fatigue } = getTestsAutonomie(participant, initial);
-  const sedInfo = sedentarite.score !== null ? getSedProfil(sedentarite.score) : null;
-  const fssInfo = fatigue.score !== null ? getFSSProfil(fatigue.score) : null;
+
+  // ── Score affiché, ou état « à régulariser » ────────────────────────────
+  //
+  // L'état est dérivé des RÉPONSES stockées, pas du score stocké : jusqu'au
+  // 2026-09-14, un questionnaire incomplet produisait quand même un total
+  // (absences comptées comme des zéros côté Ricci & Gagnon, items ignorés
+  // côté FSS). Les scores déjà en base héritent de ce défaut.
+  //
+  // Ils ne sont PAS recalculés en silence : Pierre a pu communiquer un score
+  // à un bénéficiaire ou le reprendre dans un compte rendu. On affiche donc
+  // ce qu'on peut affirmer — « à régulariser » — et la reprise du
+  // questionnaire recalcule proprement.
+  //
+  // Réponses absentes mais score présent : la complétude n'est pas
+  // vérifiable, et le score vient de l'ancien calcul. Même traitement.
+  function affichage(
+    etat: EtatQuestionnaire,
+    scoreStocke: number | null,
+    max: number,
+    prefixe: string,
+    profil: { label: string; color: string } | null,
+  ): { texte: string; color: string; detail: string } | null {
+    if (etat.etat === 'complet' && profil) {
+      return {
+        texte: `${profil.label} (${prefixe}${etat.score}/${max})`,
+        color: profil.color,
+        detail: '',
+      };
+    }
+    if (etat.etat === 'a_regulariser') {
+      return {
+        texte: 'À régulariser',
+        color: '#BA7517',
+        detail: `Questionnaire incomplet — aucun score fiable. Réponses manquantes : ${etat.manquants.join(', ')}.`,
+      };
+    }
+    if (scoreStocke !== null) {
+      return {
+        texte: 'À régulariser',
+        color: '#BA7517',
+        detail: 'Réponses détaillées absentes : la complétude du questionnaire ne peut pas être vérifiée.',
+      };
+    }
+    return null;
+  }
+
+  const etatSed = etatSedentarite(sedentarite.reponses);
+  const etatFss = etatFatigue(fatigue.reponses);
+  const affSed = affichage(
+    etatSed, sedentarite.score, SED_TOTAL_MAX, '',
+    etatSed.etat === 'complet' ? getSedProfil(etatSed.score) : null,
+  );
+  const affFss = affichage(
+    etatFss, fatigue.score, FSS_TOTAL_MAX, 'FSS ',
+    etatFss.etat === 'complet' ? getFSSProfil(etatFss.score) : null,
+  );
 
   const testsAvecValeur = TESTS_TABLEAU.map(test => {
     const val = test.getVal(current);
@@ -464,21 +519,21 @@ function CarteProfilFonctionnel({ participant, bilans }: {
       </div>
 
       {/* Activité physique & Fatigue du bilan initial */}
-      {(sedInfo || fssInfo) && (
+      {(affSed || affFss) && (
         <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-1.5">
-          {sedInfo && (
+          {affSed && (
             <div className="flex items-center justify-between text-[12px]">
               <span className="text-gray-500">Activité physique</span>
-              <span style={{ color: sedInfo.color, fontWeight: 600 }}>
-                {sedInfo.label}{sedentarite.score !== null ? ` (${sedentarite.score}/55)` : ''}
+              <span style={{ color: affSed.color, fontWeight: 600 }} title={affSed.detail}>
+                {affSed.texte}
               </span>
             </div>
           )}
-          {fssInfo && (
+          {affFss && (
             <div className="flex items-center justify-between text-[12px]">
               <span className="text-gray-500">Fatigue perçue</span>
-              <span style={{ color: fssInfo.color, fontWeight: 600 }}>
-                {fssInfo.label}{fatigue.score !== null ? ` (FSS ${fatigue.score}/63)` : ''}
+              <span style={{ color: affFss.color, fontWeight: 600 }} title={affFss.detail}>
+                {affFss.texte}
               </span>
             </div>
           )}
