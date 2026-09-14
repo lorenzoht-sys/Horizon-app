@@ -61,6 +61,8 @@ const NOTES_LABELS_TEST: Record<keyof NotesBilan, string> = {
 // cocher inutile pour un résultat qui ne serait affiché nulle part de toute
 // façon.
 type CleResultatPartageable = 'equilibre' | 'force' | 'handGrip' | 'mobilite' | 'endurance';
+import { EtatPartageBilan } from '../EtatPartageBeneficiaire';
+
 const PARTAGE_ITEMS: { key: CleResultatPartageable; label: string }[] = [
   { key: 'equilibre', label: 'Équilibre' },
   { key: 'force', label: 'Force jambes' },
@@ -177,6 +179,9 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
             Décoché par défaut — cochez uniquement les résultats que vous choisissez de rendre visibles
             dans l'espace bénéficiaire. Vous continuez de voir toutes les valeurs ici, quel que soit ce choix.
           </p>
+          <div className="mb-3">
+            <EtatPartageBilan bilan={form as Bilan} />
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {PARTAGE_ITEMS
               .filter(item => notes[item.key] !== undefined)

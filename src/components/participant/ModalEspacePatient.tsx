@@ -5,11 +5,10 @@ import type { Participant, VisibiliteBeneficiaire } from '../../types';
 import { getAppHost } from '../../lib/config';
 
 const VISIBILITE_DEFAULT: VisibiliteBeneficiaire = {
-  progression: true, bilans: true, rdv: true, programme: true, messagePierre: true, carteSante: true,
+  bilans: true, rdv: true, programme: true, messagePierre: true, carteSante: true,
 };
 
 const VISIBILITE_ITEMS = [
-  { key: 'progression'   as const, label: 'Graphiques de progression' },
   { key: 'bilans'        as const, label: 'Résultats des bilans' },
   { key: 'rdv'           as const, label: 'Prochains rendez-vous' },
   { key: 'programme'     as const, label: "Programme d'exercices" },

@@ -15,6 +15,7 @@ import MarkdownRendu from '../components/ui/MarkdownRendu';
 import { getTestsAutonomie } from '../lib/anamnese';
 import { libelleSedentariteBeneficiaire, libelleFatigueBeneficiaire } from '../lib/formulationBienveillante';
 import { etatSedentarite, etatFatigue, getSedProfil, getFSSProfil } from '../lib/scoresAutonomie';
+import { etatProgresBeneficiaire } from '../lib/partageBeneficiaire';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -656,7 +657,25 @@ function LigneQuestionnaireIncomplet({ libelle }: { libelle: string }) {
       </span>
     </div>
   );
+
 }
+/** Page « Progrès » sans contenu à montrer. Le texte dit POURQUOI elle est
+ *  vide : « aucun bilan » et « bilans non partagés » se ressemblent à l'écran
+ *  mais ne veulent pas dire la même chose. */
+function EtatVideProgres({ emoji, titre, texte }: { emoji: string; titre: string; texte: React.ReactNode }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+      <div style={{ fontSize: 48, marginBottom: 16 }}>{emoji}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: C.dark, marginBottom: 8 }}>
+        {titre}
+      </div>
+      <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>
+        {texte}
+      </div>
+    </div>
+  );
+}
+
 
 function EcranProgres({ participant, bilans }: { participant: Participant; bilans: Bilan[] }) {
   const sorted = [...bilans].sort((a, b) => a.date.localeCompare(b.date));
@@ -700,19 +719,34 @@ function EcranProgres({ participant, bilans }: { participant: Participant; bilan
     (p.lowerBetter ? p.val0 - p.val1 : p.val1 - p.val0) > 0
   ).length;
 
-  if (!bilanInitial) {
+  // Pourquoi la page est vide, quand elle l'est. Quatre causes distinctes, qui
+  // n'appellent ni le même message ni la même action — voir
+  // src/lib/partageBeneficiaire.ts.
+  const etatPage = etatProgresBeneficiaire(bilans, progressions.length);
+
+  if (etatPage.etat === 'aucun_bilan') {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: C.dark, marginBottom: 8 }}>
-          Pas encore de bilan
-        </div>
-        <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>
-          Votre premier bilan permettra de mesurer<br />vos capacités de départ.
-        </div>
-      </div>
+      <EtatVideProgres
+        emoji="📊"
+        titre="Pas encore de bilan"
+        texte={<>Votre premier bilan permettra de mesurer<br />vos capacités de départ.</>}
+      />
     );
   }
+
+  // Des bilans existent, rien n'est partagé. On dit qu'ils EXISTENT, jamais ce
+  // qu'ils contiennent : le partage appartient au praticien, pas à cet écran.
+  if (etatPage.etat === 'en_attente_partage') {
+    return (
+      <EtatVideProgres
+        emoji="🔒"
+        titre="Vos résultats ne sont pas encore partagés"
+        texte={<>Votre praticien a réalisé un ou plusieurs bilans.<br />
+          Il choisit quels résultats vous sont montrés ici.</>}
+      />
+    );
+  }
+
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -734,7 +768,7 @@ function EcranProgres({ participant, bilans }: { participant: Participant; bilan
       </div>
 
       {/* Cas un seul bilan */}
-      {!hasDeux && (
+      {etatPage.etat === 'un_seul_bilan' && (
         <div style={{
           background: 'white', border: `1px solid ${C.border}`,
           borderRadius: 18, padding: '24px 20px', textAlign: 'center',
@@ -746,6 +780,25 @@ function EcranProgres({ participant, bilans }: { participant: Participant; bilan
           <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>
             Votre prochain bilan permettra de mesurer<br />
             vos progrès depuis le départ.
+          </div>
+        </div>
+      )}
+
+      {/* Plusieurs bilans, des résultats partagés, mais aucun test partagé sur
+          DEUX bilans : il n'y a pas de quoi tracer une courbe. Ne rien dire
+          laisserait croire qu'il n'y a rien. */}
+      {etatPage.etat === 'partage_non_comparable' && (
+        <div style={{
+          background: 'white', border: `1px solid ${C.border}`,
+          borderRadius: 18, padding: '24px 20px', textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.dark, marginBottom: 8 }}>
+            Comparaison bientôt disponible
+          </div>
+          <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>
+            Vos progrès s'afficheront dès qu'un même test<br />
+            sera partagé sur deux bilans par votre praticien.
           </div>
         </div>
       )}
@@ -2515,9 +2568,12 @@ export default function EspacePatient() {
         zIndex: 30,
         boxShadow: '0 -4px 16px rgba(13,43,43,0.08)',
       }}>
+        {/* L'onglet « Progrès » est TOUJOURS proposé : il explique lui-même son
+            état (aucun bilan, en attente de partage, pas encore comparable).
+            L'ancien réglage visibilite.progression le masquait alors qu'il ne
+            commandait aucune donnée — voir src/lib/partageBeneficiaire.ts. */}
         {TABS_CONFIG.filter(t => {
           const v = participant?.visibiliteBeneficiaire;
-          if (t.id === 'progres') return v?.progression !== false;
           if (t.id === 'programme') return v?.programme !== false;
           return true;
         }).map(t => (
