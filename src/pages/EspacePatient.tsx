@@ -14,6 +14,7 @@ import { getSessionPatient, sauvegarderSessionPatient, purgerSessionPatient } fr
 import MarkdownRendu from '../components/ui/MarkdownRendu';
 import { getTestsAutonomie } from '../lib/anamnese';
 import { libelleSedentariteBeneficiaire, libelleFatigueBeneficiaire } from '../lib/formulationBienveillante';
+import { etatSedentarite, etatFatigue, getSedProfil, getFSSProfil } from '../lib/scoresAutonomie';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -638,13 +639,60 @@ function CarteProgression({ item }: { item: ProgItem }) {
   );
 }
 
+/**
+ * Questionnaire entamé mais incomplet, côté bénéficiaire.
+ *
+ * Aucun score n'est affiché : un total calculé sur des réponses manquantes
+ * serait indistinguable d'un résultat fiable (src/lib/scoresAutonomie.ts).
+ * On dit qu'il manque des réponses, sans chiffre et sans jugement — et sans
+ * demander au bénéficiaire une action qui revient au praticien.
+ */
+function LigneQuestionnaireIncomplet({ libelle }: { libelle: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+      <span style={{ fontSize: 13, color: C.muted }}>{libelle}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: '#BA7517' }}>
+        Questionnaire à compléter ⏳
+      </span>
+    </div>
+  );
+}
+
 function EcranProgres({ participant, bilans }: { participant: Participant; bilans: Bilan[] }) {
   const sorted = [...bilans].sort((a, b) => a.date.localeCompare(b.date));
   const bilanInitial = sorted.find(b => b.type === 'initial') ?? sorted[0] ?? null;
   const dernierBilan = sorted[sorted.length - 1] ?? null;
   const { sedentarite, fatigue } = getTestsAutonomie(participant, bilanInitial);
-  const sedProfil = sedentarite.profil;
-  const fssProfil = fatigue.profil;
+
+  // ── Profil affiché seulement si le questionnaire est COMPLET ────────────
+  //
+  // Cet écran lisait `sedentarite.profil` / `fatigue.profil`, c'est-à-dire les
+  // valeurs STOCKÉES. Celles calculées avant le 2026-09-14 comptaient les
+  // réponses manquantes comme des zéros (Ricci & Gagnon) ou les ignoraient
+  // (FSS) : un questionnaire à moitié rempli produisait quand même un profil.
+  //
+  // Le correctif du matin a couvert la fiche praticien et le contexte de
+  // l'assistant, pas cet écran-ci — le plus exposé, puisque c'est le
+  // bénéficiaire lui-même qui lit. On dérive donc l'état des RÉPONSES, comme
+  // ailleurs, et un questionnaire incomplet n'affiche aucun profil.
+  //
+  // Réponses absentes : `etat` vaut 'vide' et rien ne s'affiche — c'est aussi
+  // le cas quand le praticien n'a pas partagé ces résultats (api/patient/me.ts
+  // retire les trois clés ensemble). Ce silence est voulu : ne rien dire d'un
+  // résultat non partagé.
+  const etatSed = etatSedentarite(sedentarite.reponses);
+  const etatFss = etatFatigue(fatigue.reponses);
+  const sedLibelle = etatSed.etat === 'complet'
+    ? libelleSedentariteBeneficiaire(getSedProfil(etatSed.score).profil)
+    : null;
+  const fssLibelle = etatFss.etat === 'complet'
+    ? libelleFatigueBeneficiaire(getFSSProfil(etatFss.score).profil)
+    : null;
+  // « À régulariser » s'adresse au praticien : le bénéficiaire ne peut pas
+  // régulariser son propre questionnaire. Même état, registre de l'écran.
+  const sedIncomplet = etatSed.etat === 'a_regulariser';
+  const fssIncomplet = etatFss.etat === 'a_regulariser';
+  const afficheProfil = sedLibelle || fssLibelle || sedIncomplet || fssIncomplet;
 
   const hasDeux = bilanInitial && dernierBilan && bilanInitial.id !== dernierBilan.id;
   const progressions = hasDeux ? calculerProgressions(bilanInitial!, dernierBilan!) : [];
@@ -708,35 +756,33 @@ function EcranProgres({ participant, bilans }: { participant: Participant; bilan
       ))}
 
       {/* Activité physique & Fatigue */}
-      {(sedProfil || fssProfil) && (
+      {afficheProfil && (
         <div style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 18, padding: '16px 16px' }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: C.dark, marginBottom: 10 }}>
             Votre profil de forme
           </div>
-          {sedProfil && (() => {
-            const l = libelleSedentariteBeneficiaire(sedProfil);
-            return (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: 13, color: C.muted }}>Votre niveau d'activité</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: l.color }}>
-                  {l.label} {l.emoji}
-                </span>
-              </div>
-            );
-          })()}
-          {fssProfil && (() => {
-            const l = libelleFatigueBeneficiaire(fssProfil);
-            return (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontSize: 13, color: C.muted }}>Votre fatigue</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: l.color }}>
-                  {l.label} {l.emoji}
-                </span>
-              </div>
-            );
-          })()}
+          {sedLibelle && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 13, color: C.muted }}>Votre niveau d'activité</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: sedLibelle.color }}>
+                {sedLibelle.label} {sedLibelle.emoji}
+              </span>
+            </div>
+          )}
+          {sedIncomplet && <LigneQuestionnaireIncomplet libelle="Votre niveau d'activité" />}
+          {fssLibelle && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 13, color: C.muted }}>Votre fatigue</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: fssLibelle.color }}>
+                {fssLibelle.label} {fssLibelle.emoji}
+              </span>
+            </div>
+          )}
+          {fssIncomplet && <LigneQuestionnaireIncomplet libelle="Votre fatigue" />}
           <p style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>
-            Votre praticien adapte vos séances en conséquence.
+            {sedIncomplet || fssIncomplet
+              ? 'Votre praticien complétera ce questionnaire avec vous lors d\'une prochaine séance.'
+              : 'Votre praticien adapte vos séances en conséquence.'}
           </p>
         </div>
       )}
