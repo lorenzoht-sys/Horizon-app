@@ -18,6 +18,7 @@ import type { Bilan, Participant, NotesBilan } from '../../types';
 import { PdfHeader, PdfFooter, type PdfPraticienSettings } from './PdfShared';
 import { getContreIndications } from '../../lib/anamnese';
 import { libelleNoteBienveillant, libelleCategorieBilan, libelleBorgBeneficiaire } from '../../lib/formulationBienveillante';
+import { libelleAge } from '../../lib/age';
 
 const S = StyleSheet.create({
   page: { fontFamily: 'Helvetica', fontSize: 11, color: '#0D2B4B', paddingBottom: 46 },
@@ -55,13 +56,6 @@ const noteColor = (n: number) => n <= 2 ? '#EF4444' : n === 3 ? '#F59E0B' : '#22
 function fmt(d: string) {
   return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
-function calcAge(dn: string) {
-  const t = new Date(), b = new Date(dn);
-  let a = t.getFullYear() - b.getFullYear();
-  if (t.getMonth() < b.getMonth()) a--;
-  return a;
-}
-
 function Cellule({ titre, unite, body }: { titre: string; unite?: string; body?: string }) {
   return (
     <View style={S.cell}>
@@ -142,7 +136,7 @@ export default function FicheBilanBeneficiairePDF({ bilan, participant, notes, s
             </View>
             <View style={S.infoRight}>
               <Text style={S.dateTxt}>Date : {fmt(bilan.date)}</Text>
-              <Text style={S.participantTxt}>{participant.prenom} {participant.nom} · {calcAge(participant.dateNaissance)} ans</Text>
+              <Text style={S.participantTxt}>{participant.prenom} {participant.nom} · {libelleAge(participant.dateNaissance)}</Text>
             </View>
           </View>
           <View style={S.divider} />

@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { Participant, TagPatient } from '../types';
+import { consentementDepuisCellule, rgpdDeclareAImport } from '../lib/consentementRgpd';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -77,6 +78,11 @@ function parseCodePostal(v: unknown): string | undefined {
 
 const VALID_TAGS: TagPatient[] = ['senior', 'post_op', 'chronique', 'adulte_blessure'];
 
+// Colonne R. Ajoutée APRÈS « Notes » (Q) pour ne décaler aucune colonne des
+// fichiers existants — qui, n'ayant pas cette colonne, voient leurs lignes
+// refusées avec un message explicite plutôt qu'importées sans consentement.
+export const COL_CONSENTEMENT = 17;
+
 // ── Parsing du fichier ────────────────────────────────────────
 
 export function parseExcelRows(
@@ -119,6 +125,18 @@ export function parseExcelRows(
       continue;
     }
 
+    // Consentement RGPD : seul un « Oui » explicite est accepté, sinon la
+    // ligne est refusée et listée (décision du 2026-09-13, voir
+    // src/lib/consentementRgpd.ts). Après le contrôle de doublon : une fiche
+    // qui existe déjà est ignorée, pas signalée en erreur.
+    if (!consentementDepuisCellule(r[COL_CONSENTEMENT])) {
+      result.erreurs.push({
+        ligne: numLigne,
+        message: `${prenom} ${nom} — consentement RGPD non déclaré (colonne R : « Oui » attendu)`,
+      });
+      continue;
+    }
+
     // Tags
     const tagsRaw = str(r[12]);
     const tags: TagPatient[] = tagsRaw
@@ -127,11 +145,13 @@ export function parseExcelRows(
           .filter(t => VALID_TAGS.includes(t as TagPatient)) as TagPatient[])
       : [];
 
+    const aujourdhui = new Date().toISOString().slice(0, 10);
     result.succes.push({
       nom,
       prenom,
       dateNaissance,
-      dateCreation: new Date().toISOString().slice(0, 10),
+      dateCreation: aujourdhui,
+      rgpd: rgpdDeclareAImport(aujourdhui),
       telephone:            parseTelephone(r[3]),
       email:                str(r[4])  || undefined,
       adresseRue:           str(r[5])  || undefined,
@@ -172,6 +192,7 @@ const COLS = [
   { header: 'Pathologies',                                 wch: 28 },
   { header: 'Médecin traitant',                            wch: 22 },
   { header: 'Notes',                                       wch: 28 },
+  { header: 'Consentement RGPD ✱  (Oui/Non)',             wch: 30 },
 ];
 
 const INSTRUCTIONS = [
@@ -181,6 +202,7 @@ const INSTRUCTIONS = [
   ['  A — Nom'],
   ['  B — Prénom'],
   ['  C — Date de naissance  (format JJ/MM/AAAA, ex: 15/03/1952)'],
+  ['  R — Consentement RGPD  (« Oui » uniquement si le bénéficiaire a été informé et a consenti)'],
   [''],
   ['TAGS DISPONIBLES — colonne M  (séparez plusieurs tags par une virgule)'],
   ['  senior          → Sénior, prévention des chutes'],
@@ -196,6 +218,7 @@ const INSTRUCTIONS = [
   ['  • Remplir à partir de la ligne 2  (ligne 1 = en-têtes)'],
   ['  • Ne pas modifier les en-têtes de la feuille « Patients »'],
   ['  • Les doublons (même nom + prénom) seront ignorés automatiquement'],
+  ['  • Une ligne sans « Oui » en colonne R est refusée et listée en fin d\'import'],
   ['  • Les adresses seront géolocalisées automatiquement après import'],
   ['  • Le fichier exporté depuis Mouv\'APA peut être réimporté sans modification'],
 ];
@@ -241,6 +264,7 @@ export function exportPatientsExcel(participants: Participant[]): void {
     p.pathologie       ?? '',
     p.medecinTraitant  ?? '',
     '',
+    p.rgpd?.consentementObtenu ? 'Oui' : 'Non',
   ]);
 
   const wb = XLSX.utils.book_new();

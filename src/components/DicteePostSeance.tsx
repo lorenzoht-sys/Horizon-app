@@ -4,6 +4,7 @@ import type { Participant } from '../types';
 import type { ExerciceRealise, CompteRenduSeanceInsert } from '../types/seance';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { resoudreTranscriptionFinale } from '../lib/dicteeTranscription';
+import { ecrireEtatSession, effacerEtatSession, lireEtatSession } from '../lib/etatSession';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 
@@ -45,6 +46,15 @@ interface AiFilledFields {
   progression: boolean;
   pointsAttention: boolean;
   prochaineSeanceNotes: boolean;
+}
+
+// Compte-rendu en revue, conservé en session si l'interface est remplacée
+// (rotation du téléphone). Voir src/lib/etatSession.ts.
+interface RepriseDictee {
+  formData: FormCR;
+  aiFields: AiFilledFields;
+  manualMode: boolean;
+  transcription: string;
 }
 
 function emptyForm(): FormCR {
@@ -130,20 +140,39 @@ const inputCls = "w-full border border-gray-200 rounded-xl px-3 py-2 text-sm foc
 const areaCls  = `${inputCls} resize-none`;
 const selCls   = `${inputCls} bg-white`;
 
-export default function DicteePostSeance({ participant, onClose, onSave }: Props) {
-  const [etat, setEtat]               = useState<EtatDictee>('idle');
+export default function DicteePostSeance({ participant, onClose: fermerParent, onSave }: Props) {
+  // Un compte-rendu dicté puis analysé ne doit pas disparaître si l'interface
+  // est remplacée (rotation du téléphone depuis la tournée mobile). Seul
+  // l'état « en revue » est repris : un enregistrement vocal en cours ne peut
+  // pas survivre au démontage du composant.
+  const cleSession = `dictee_${participant.id}`;
+  const [reprise] = useState(() => lireEtatSession<RepriseDictee>(cleSession));
+  const [etat, setEtat]               = useState<EtatDictee>(reprise ? 'review' : 'idle');
   const [timer, setTimer]             = useState(0);
-  const [formData, setFormData]       = useState<FormCR>(emptyForm());
-  const [aiFields, setAiFields]       = useState<AiFilledFields>(allFalse());
+  const [formData, setFormData]       = useState<FormCR>(reprise?.formData ?? emptyForm());
+  const [aiFields, setAiFields]       = useState<AiFilledFields>(reprise?.aiFields ?? allFalse());
   const [analysePending, setAnalysePending] = useState(false);
   const [erreurAnalyse, setErreurAnalyse]   = useState<string | null>(null);
-  const [manualMode, setManualMode]   = useState(false);
+  const [manualMode, setManualMode]   = useState(reprise?.manualMode ?? false);
 
   const {
     isRecording, finalTranscript, interimTranscript,
     isSupported, isIOS, error: speechError,
     startRecording, stopRecording, reset: resetSpeech,
   } = useSpeechRecognition();
+
+  const transcription = finalTranscript || reprise?.transcription || '';
+
+  useEffect(() => {
+    if (etat !== 'review') return;
+    ecrireEtatSession(cleSession, { formData, aiFields, manualMode, transcription } satisfies RepriseDictee);
+  }, [etat, formData, aiFields, manualMode, transcription, cleSession]);
+
+  // Fermeture explicite ou compte-rendu enregistré : rien à reprendre.
+  function onClose() {
+    effacerEtatSession(cleSession);
+    fermerParent();
+  }
 
   useEffect(() => {
     if (!isRecording) return;
@@ -232,6 +261,7 @@ export default function DicteePostSeance({ participant, onClose, onSave }: Props
   }
 
   function handleRecommencer() {
+    effacerEtatSession(cleSession);
     resetSpeech();
     setTimer(0);
     setFormData(emptyForm());
@@ -256,7 +286,7 @@ export default function DicteePostSeance({ participant, onClose, onSave }: Props
         participantId: participant.id,
         dateSeance: formData.dateSeance,
         dureeMinutes: formData.dureeMinutes ? parseInt(formData.dureeMinutes) : null,
-        transcriptionBrute: finalTranscript.trim(),
+        transcriptionBrute: transcription.trim(),
         exercicesRealises: exercices,
         observations: formData.observations,
         douleursSignalees: formData.douleursSignalees || null,

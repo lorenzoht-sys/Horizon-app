@@ -258,10 +258,22 @@ function SectionDonnees() {
       const text = await pendingFile.text();
       const data: Participant[] = JSON.parse(text);
       let inserted = 0;
+      let refuses = 0;
+      let premiereErreur = '';
 
       for (const p of data) {
         const { bilans: pBilans, programmes: pProgs, ...rest } = p as Participant & { programmes?: unknown[] };
-        await supabase.from('participants').upsert(participantToDb(rest));
+        // L'erreur était ignorée : une fiche refusée par la base était comptée
+        // comme importée, puis ses bilans échouaient en silence. Cas concret
+        // depuis le 2026-09-13 : RE-créer une fiche supprimée qui n'a pas de
+        // consentement RGPD est refusé (trigger BEFORE INSERT) — restaurer une
+        // fiche qui existe encore reste possible.
+        const { error: erreurFiche } = await supabase.from('participants').upsert(participantToDb(rest));
+        if (erreurFiche) {
+          refuses++;
+          premiereErreur ||= erreurFiche.message;
+          continue;
+        }
 
         for (const b of pBilans ?? []) {
           await supabase.from('bilans').upsert(bilanToDb(p.id, b));
@@ -275,10 +287,19 @@ function SectionDonnees() {
         inserted++;
       }
 
-      toast.success(`Import réussi — ${inserted} bénéficiaires ajoutés`);
       setPendingFile(null);
       setImportStats(null);
-      setTimeout(() => window.location.reload(), 800);
+      if (refuses > 0) {
+        // Pas de rechargement automatique : il effacerait ce message.
+        toast.error(
+          `${refuses} bénéficiaire${refuses > 1 ? 's' : ''} non restauré${refuses > 1 ? 's' : ''} — ${premiereErreur}`,
+          { duration: 15000 },
+        );
+        if (inserted > 0) toast.success(`${inserted} bénéficiaire${inserted > 1 ? 's' : ''} restauré${inserted > 1 ? 's' : ''}`);
+      } else {
+        toast.success(`Import réussi — ${inserted} bénéficiaires ajoutés`);
+        setTimeout(() => window.location.reload(), 800);
+      }
     } catch (err) {
       console.error('Erreur import:', err);
       toast.error('Erreur lors de l\'import');

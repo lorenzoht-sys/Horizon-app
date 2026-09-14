@@ -303,7 +303,13 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
 
     const { data: participantB, error: participantBErr } = await admin
       .from('participants')
-      .insert({ praticien_id: praticienBId, prenom: 'RLS-Spec', nom: 'Participant B', code_acces: `RLSB${Date.now() % 100000}` })
+      // `rgpd` obligatoire : le trigger BEFORE INSERT de
+      // 20260913_rgpd_consentement_creation.sql refuse toute création sans
+      // consentement, service_role compris.
+      .insert({
+        praticien_id: praticienBId, prenom: 'RLS-Spec', nom: 'Participant B', code_acces: `RLSB${Date.now() % 100000}`,
+        rgpd: { consentementObtenu: true, droitAcces: true, droitRectification: true, droitEffacement: true, methodeConsentement: 'ecrit', consentementDate: new Date().toISOString().slice(0, 10) },
+      })
       .select('id')
       .single();
     if (participantBErr || !participantB) {

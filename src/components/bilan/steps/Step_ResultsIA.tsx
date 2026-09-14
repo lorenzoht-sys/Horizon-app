@@ -5,6 +5,7 @@ import { genererInterpretation } from '../../../utils/genererInterpretation';
 import { Brain, Check, AlertTriangle } from 'lucide-react';
 import { useConnexion } from '../../../hooks/useConnexion';
 import BoutonReformulation from '../../ui/BoutonReformulation';
+import { calculerAge } from '../../../lib/age';
 
 type BilanForm = Omit<Bilan, 'id'>;
 
@@ -40,13 +41,6 @@ function calculerNotes(form: BilanForm): NotesBilan {
   if (mi !== null || md !== null) n.memoire = calculerNote((mi ?? 0) + (md ?? 0), NORMES_SCORING.memoire);
 
   return n;
-}
-
-function calcAge(dateNaissance: string): number {
-  const today = new Date(), birth = new Date(dateNaissance);
-  let age = today.getFullYear() - birth.getFullYear();
-  if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
-  return age;
 }
 
 // ─── Affichage note /5 ────────────────────────────────────────────────────────
@@ -111,7 +105,7 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
           participant: {
             prenom: participant.prenom,
             nom: participant.nom,
-            age: calcAge(participant.dateNaissance),
+            age: calculerAge(participant.dateNaissance),
             profil: participant.contexteClinic || participant.pathologie || 'Non renseigné',
           },
           notes,

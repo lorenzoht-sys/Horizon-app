@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import type { Bilan, Participant } from '../../types';
 import { generateClientMessage } from '../../utils/generateClientMessage';
 import {
-  sauvegarderBrouillon, supprimerBrouillon, getBrouillon,
+  sauvegarderBrouillon, supprimerBrouillon, getBrouillon, brouillonSupprimeDepuis,
   syncBrouillonToSupabase, deleteBrouillonFromSupabase,
   type BrouillonBilan,
 } from '../../hooks/useBrouillonBilan';
@@ -105,11 +105,14 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
   // Autosave localStorage — debounce 800ms, skip first render
   const debounceRef   = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const isFirstRender = useRef(true);
+  const enAttenteRef  = useRef(false);
 
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
     clearTimeout(debounceRef.current);
+    enAttenteRef.current = true;
     debounceRef.current = setTimeout(() => {
+      enAttenteRef.current = false;
       sauvegarderBrouillon(participant.id, step, form);
       setLastSaveTime(new Date());
       setSaveStatus('saved_local');
@@ -140,6 +143,23 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
     const handler = () => sauvegarderBrouillon(participant.id, stepRef.current, formRef.current);
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
+  }, [participant.id]);
+
+  // Démontage SANS fermeture de page — rotation du téléphone, qui remplace
+  // l'interface mobile par la desktop (App.tsx). `beforeunload` ne se
+  // déclenche pas, et le nettoyage du debounce annulait la sauvegarde en
+  // attente : les dernières 800 ms de saisie étaient perdues. On l'écrit, sauf
+  // si le brouillon a été supprimé volontairement depuis l'ouverture.
+  useEffect(() => {
+    const ouverture = Date.now();
+    const enAttente = enAttenteRef;
+    const derniereEtape = stepRef;
+    const dernierForm = formRef;
+    return () => {
+      if (enAttente.current && !brouillonSupprimeDepuis(participant.id, ouverture)) {
+        sauvegarderBrouillon(participant.id, derniereEtape.current, dernierForm.current);
+      }
+    };
   }, [participant.id]);
 
   function update(patch: Partial<BilanForm>) {

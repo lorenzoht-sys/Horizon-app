@@ -4,6 +4,7 @@ import { fetchStructureData } from '../lib/structureApi';
 import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/mappers';
 import { useDevice } from '../hooks/useDevice';
 import type { Participant, Seance, Bilan } from '../types';
+import { libelleAge } from '../lib/age';
 
 type Praticien = { prenom: string; nom: string; titre?: string | null; email?: string | null; telephone?: string | null };
 
@@ -16,11 +17,6 @@ function fmtCourt(iso: string) {
   return new Date(iso + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 function fmtMois(m: number, y: number) { return `${MOIS_LONGS[m - 1]} ${y}`; }
-function calcAge(d: string) {
-  const diff = Date.now() - new Date(d).getTime();
-  return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
-}
-
 const LABELS_DOCUMENTS: Record<string, string> = {
   compte_rendu_medecin: 'Compte-rendu médecin',
   compte_rendu_famille: 'Compte-rendu famille',
@@ -332,7 +328,7 @@ export default function PortailStructure() {
       <div style={{ background: C.dark, padding: isMobile ? '14px 16px' : '20px 24px', position: 'sticky', top: 0, zIndex: 20 }}>
         <button onClick={() => setSelectedPatient(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: 0, marginBottom: 10 }}>← Retour aux bénéficiaires</button>
         <div style={{ fontSize: isMobile ? 17 : 19, fontWeight: 800, color: 'white' }}>
-          {selectedPatient.prenom} {selectedPatient.nom}{selectedPatient.dateNaissance && ` · ${calcAge(selectedPatient.dateNaissance)} ans`}
+          {selectedPatient.prenom} {selectedPatient.nom}{selectedPatient.dateNaissance && ` · ${libelleAge(selectedPatient.dateNaissance)}`}
         </div>
         {praticien && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Suivi par {praticien.prenom} {praticien.nom} · APA</div>}
       </div>
@@ -352,7 +348,7 @@ export default function PortailStructure() {
             </div>
             <div>
               <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>{selectedPatient.prenom} {selectedPatient.nom}</div>
-              {selectedPatient.dateNaissance && <div style={{ fontSize: 12, color: C.muted }}>{calcAge(selectedPatient.dateNaissance)} ans</div>}
+              {selectedPatient.dateNaissance && <div style={{ fontSize: 12, color: C.muted }}>{libelleAge(selectedPatient.dateNaissance)}</div>}
             </div>
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: statutSel.color }}>{statutSel.emoji} {statutSel.label}</div>
@@ -584,7 +580,7 @@ export default function PortailStructure() {
                           {p.prenom[0]}{p.nom[0]}
                         </div>
                         <div>
-                          <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>{p.prenom} {p.nom}{p.dateNaissance && ` · ${calcAge(p.dateNaissance)} ans`}</div>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>{p.prenom} {p.nom}{p.dateNaissance && ` · ${libelleAge(p.dateNaissance)}`}</div>
                           <div style={{ fontSize: 12, color: C.muted }}>
                             {p.dateCreation && `Suivi depuis ${fmtMois(new Date(p.dateCreation).getMonth() + 1, new Date(p.dateCreation).getFullYear())}`}
                             {programmeActif && ` · Programme : ${programmeActif.titre}`}
@@ -752,7 +748,7 @@ export default function PortailStructure() {
                 return (
                   <div key={p.id} style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 16, padding: 16, marginBottom: 10 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: C.dark, marginBottom: 8 }}>
-                      {p.prenom} {p.nom}{p.dateNaissance && ` · ${calcAge(p.dateNaissance)} ans`}
+                      {p.prenom} {p.nom}{p.dateNaissance && ` · ${libelleAge(p.dateNaissance)}`}
                     </div>
                     {!act ? (
                       <>

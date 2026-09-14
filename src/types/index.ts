@@ -238,7 +238,9 @@ export interface RgpdConsent {
   droitAcces: boolean;
   droitRectification: boolean;
   droitEffacement: boolean;
-  methodeConsentement: 'oral_note' | 'ecrit' | 'numerique';
+  // 'declare_import' : consentement déclaré par le praticien dans la colonne
+  // « Consentement RGPD » de l'import Excel — le mode réel n'est pas connu.
+  methodeConsentement: 'oral_note' | 'ecrit' | 'numerique' | 'declare_import';
 }
 
 export type Direction = 'up' | 'down' | 'equal' | 'first';

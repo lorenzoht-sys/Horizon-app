@@ -2,19 +2,11 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import type { Participant } from '../../types';
 import { Calendar, AlertCircle, ChevronRight, Phone, Building2 } from 'lucide-react';
+import { libelleAge } from '../../lib/age';
 
 interface Props {
   participant: Participant;
   structureNom?: string;
-}
-
-function calcAge(dateNaissance: string): number {
-  const today = new Date();
-  const birth = new Date(dateNaissance);
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-  return age;
 }
 
 function daysSince(date: string): number {
@@ -35,7 +27,7 @@ function avatarColor(id: string): string {
 }
 
 export default function ParticipantCard({ participant, structureNom }: Props) {
-  const age = calcAge(participant.dateNaissance);
+  const age = libelleAge(participant.dateNaissance);
   const lastBilan = participant.bilans.at(-1);
   const needsBilan = lastBilan ? daysSince(lastBilan.date) > 85 : true;
   const bgColor = avatarColor(participant.id);
@@ -81,7 +73,7 @@ export default function ParticipantCard({ participant, structureNom }: Props) {
             )}
           </h3>
           <p className="mt-0.5 m-0" style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>
-            {age} ans
+            {age}
           </p>
           {participant.pathologie ? (
             <p className="mt-0.5 m-0 truncate" style={{ fontSize: 12, color: 'var(--color-ink-3)' }}>

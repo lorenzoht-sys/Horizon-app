@@ -4,6 +4,7 @@ import { NORMES_SCORING, calculerNote } from '../../data/norms';
 import { PdfHeader, PdfFooter, type PdfPraticienSettings } from './PdfShared';
 import { getContreIndications } from '../../lib/anamnese';
 import { computeTinettiScores, tinettiRisque } from '../../data/tinetti';
+import { libelleAge } from '../../lib/age';
 
 // ─── Calcul notes ─────────────────────────────────────────────────────────────
 
@@ -79,13 +80,6 @@ function borgRPEInterp(v: number): string {
 function fmt(d: string) {
   return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
-function calcAge(dn: string) {
-  const t = new Date(), b = new Date(dn);
-  let a = t.getFullYear() - b.getFullYear();
-  if (t.getMonth() < b.getMonth()) a--;
-  return a;
-}
-
 function Cellule({ titre, unite, body }: { titre: string; unite?: string; body?: string }) {
   return (
     <View style={S.cell}>
@@ -141,7 +135,7 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
             </View>
             <View style={S.infoRight}>
               <Text style={S.dateTxt}>Date : {fmt(bilan.date)}</Text>
-              <Text style={S.participantTxt}>{participant.prenom} {participant.nom} · {calcAge(participant.dateNaissance)} ans</Text>
+              <Text style={S.participantTxt}>{participant.prenom} {participant.nom} · {libelleAge(participant.dateNaissance)}</Text>
             </View>
           </View>
           <View style={S.divider} />
