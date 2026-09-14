@@ -44,6 +44,85 @@ ouverts en production jusqu'au 2026-09-03 alors que deux d'entre eux étaient
 « corrigés » depuis le 2026-08-19 — sur une branche que rien ne suivait, et
 dont aucun chantier de ce fichier ne mentionnait le contenu.
 
+## POINT DE REPRISE — 2026-09-14 (chantier « fiche bénéficiaire + RGPD » clos)
+
+### 1. PREMIER SUJET AU RETOUR — 10 tests e2e en échec
+
+| Tests | Depuis quand | Constat |
+|---|---|---|
+| 01 connexion, 02 création participant, 03 création bilan, 04 export PDF, 05 création programme, 10 création contrat, 12 rappels praticien (×2) | **Avant la PR #44** : mêmes 8 échecs, mêmes éléments introuvables sur `main` (run 34689204148, commit `d6aadfc`) | Après connexion, les pages desktop n'affichent pas ce que le test attend : bouton « Nouveau participant », champ « Jean », carte « Camille Martin » |
+| 13 rotation portrait/paysage (×2) | Ajoutés par la PR #44 (run 34811192372) | La partie **mobile** passe ; le test bloque au même endroit que les autres : le formulaire **desktop** n'apparaît pas en paysage |
+
+Le test 11 (rappels patient) est instable (passe au second essai).
+
+**Conséquence** : la préservation de la saisie à la rotation n'est **pas
+prouvée par la CI**, seulement par le code et les tests unitaires. Et le
+blocage de création sans consentement n'est pas prouvé par l'e2e 02 non plus.
+
+**Hypothèse, non vérifiée** : le compte `staging.praticien2@example.com`
+(créé le 2026-09-08) n'a peut-être pas de `titre` dans `praticiens`, ce qui
+envoie vers `/onboarding` au lieu du tableau de bord (`needsOnboarding`,
+`App.tsx`). À confirmer par une capture d'écran juste après la connexion
+avant de corriger quoi que ce soit.
+
+### 2. Ce qui est fait et vérifié
+
+- **PR #44 mergée** le 2026-09-14 (`9f781b4`), déploiement de production
+  Ready sur `app.horizon-suivi.fr`.
+- **Migration `20260913_rgpd_consentement_creation.sql`** :
+  - production (par Lorenzo) : vérification `1 | 7 | 0`, contre-épreuve `CONFORME (4/4)` ;
+  - staging (par script) : vérification `1 | 7 | 0` et 0 fiche d'essai restante, contre-épreuve `CONFORME (4/4)`.
+- **Les 7 fiches** : `consentementDate` trompeuses effacées, vérifiées à 0.
+  Leur consentement, lui, manque toujours : régularisation à la main via le
+  badge « RGPD ⚠ ».
+
+### 3. Ce qui n'est PAS vérifié — harnais de sécurité
+
+Run local du 2026-09-14 contre staging, **sans** `E2E_PRATICIEN_PASSWORD` :
+**22 réussis, 42 ignorés, 1 suite en échec**. Le `beforeAll` du bloc
+« Cloisonnement RLS multi-tenant » s'arrête à la connexion du praticien A
+(`Invalid login credentials`), ce qui fait ignorer tout le bloc :
+
+- 20 tests praticien A ↔ B (tables à `praticien_id`) ;
+- 2 tests patient A ↔ B, 1 test structure ↔ patient non rattaché ;
+- 7 tests de tables protégées par jointure ;
+- 2 tests `audit_logs` append-only ;
+- 4 tests `[F-01]` `tm6_variantes` ;
+- 4 tests `[RÔLES]` `user_roles` ;
+- 1 test `[F-11]` ;
+- 1 test de couverture complète.
+
+Ont tourné et réussi : les 13 « Findings structurels » (connexion Postgres
+directe) et les 9 `[RÔLES]` du compte admin.
+
+**Point précis resté non exercé** : la création du participant B avec
+`rgpd`, modifiée pour le trigger (`rls.spec.ts`), se situe après la
+connexion qui a échoué. À relancer avec le mot de passe **et** le bon
+e-mail — voir le piège noté dans « Le compte `staging.praticien@example.com`
+est hors service ».
+
+### 4. Rien ne reste en local
+
+Sauvegardé sur GitHub le 2026-09-14, sans rien supprimer localement :
+
+- `sauvegarde/staging-trigger-preview-2026-08-22` : le commit de
+  déclenchement de la branche locale `staging`, sans valeur (voir le
+  commentaire du job `e2e` dans `ci.yml`) ;
+- `sauvegarde/stash-2026-09-12-baseline-lint-temp` : stash touchant
+  `api/cron/rappels.ts`, `api/cron/renouveler-contrats.ts` et une migration
+  cron. **Son contenu n'est pas identique à `main`** ;
+- `sauvegarde/stash-2026-08-10-wip-tm6-settings-hds` : stash
+  `Step3_EnduranceMemory.tsx`, `useTm6Variantes.ts`, `SettingsPage.tsx`.
+  **Son contenu n'est pas identique à `main`**.
+
+Les deux stashes existent encore sur la machine où ils ont été créés : à
+trier, puis supprimer (`git stash drop`) une fois la sauvegarde jugée
+suffisante.
+
+### 5. Suite du chantier mobile
+
+Voir « CHANTIER — fusion progressive mobile / desktop » plus bas.
+
 ## RÈGLE DE MÉTHODE — un contrôle compare un ensemble exact
 
 **Un contrôle qui énumère des cas en oublie un. Comparer un ensemble exact,
@@ -869,6 +948,82 @@ END
 $contre$;
 ```
 
+Sur staging, `staging-query.ts` ouvre une transaction **en lecture seule** :
+les INSERT de la contre-épreuve y échoueraient pour une autre raison, et le
+message ne serait jamais `CONFORME`. Il faut une transaction en écriture,
+annulée à la fin (`BEGIN` … `ROLLBACK`).
+
+### État au 2026-09-14
+
+- Code en production (PR #44, `9f781b4`).
+- Migration appliquée et vérifiée en **production** puis sur **staging**
+  (résultats dans le point de reprise en tête de fichier).
+- Les `consentementDate` trompeuses des 7 fiches sont effacées ; leur
+  consentement reste à régulariser à la main.
+- **Non prouvé** : l'e2e 02 (blocage de création) et le harnais praticien
+  avec trigger actif — voir le point de reprise.
+
+## CHANTIER — fusion progressive mobile / desktop
+
+### Décision (2026-09-13)
+
+L'espace pro existait en deux applications : l'interface desktop (20 écrans
+routés) et `AppMobile`, affichée sous 768 px (`useDevice`). Diagnostic
+chiffré du 2026-09-13 :
+
+- 9 écrans en double, 11 desktop seulement ;
+- 3 067 lignes propres au mobile, dont environ 90 % réécrivent un écran
+  existant et 1 016 lignes de code mort ;
+- une correction transversale devait être faite deux fois, et c'est ce qui
+  avait laissé entrer un SIRET à 15 chiffres.
+
+Option retenue : **fusionner écran par écran**, plutôt que combler les
+manques un par un ou tout unifier d'un coup.
+
+### RÈGLE — la bascule en paysage est un usage voulu
+
+Le praticien tourne **délibérément** son téléphone pour atteindre l'interface
+desktop : c'est son seul accès aux 11 écrans sans version mobile. **Ne pas la
+bloquer, ne pas déplacer le seuil de 768 px.** Le seul défaut à traiter était
+la perte de la saisie en cours. Cette bascule deviendra inutile écran par
+écran, à mesure de la fusion.
+
+### Mécanisme en place
+
+- **Routes fusionnées :** `src/lib/routesMobile.ts` → `estRouteInterfaceUnique`
+  liste les routes servies par l'interface unique même sous 768 px (testé).
+- **Choix de l'interface :** `EspacePro` dans `App.tsx`. Sur une route
+  fusionnée, mobile et desktop rendent le même arbre React : la rotation n'y
+  démonte rien.
+- **Cadre commun :** la barre latérale se replie en barre du bas
+  (`BarreNavigationMobile`) sous 768 px, en CSS seulement.
+- **`AppMobile` suit l'URL**, et ses URL sont celles des écrans desktop
+  équivalents. Un écran desktop seul affiche « Écran disponible en mode
+  paysage ».
+- **Saisies des écrans encore en double :** conservées en `sessionStorage`
+  (`src/lib/etatSession.ts`), effacées à la déconnexion. Les brouillons de
+  bilan et de bénéficiaire sont écrits au démontage.
+
+### Avancement
+
+| État | Écrans |
+|---|---|
+| Fusionné | Fiche bénéficiaire (`/participant/:id`) — 2026-09-14 |
+| Encore en double (8) | Tableau de bord ↔ Accueil + Bénéficiaires, nouveau bénéficiaire, modifier la fiche, nouveau bilan, détail bilan, assistant, tournée, paramètres |
+| Desktop seulement (11) | Agenda, carte, zones, stats, bibliothèque, programme, nouveau contrat, rapport d'évolution, modifier un bilan, détail structure, administration |
+
+### Fusionner l'écran suivant
+
+1. Rendre la page desktop utilisable sous 768 px, seulement ce dont cet
+   écran a besoin.
+2. Reprendre les fonctions que seule la version mobile offrait.
+3. Ajouter la route dans `estRouteInterfaceUnique`, avec un test dans
+   `routesMobile.test.ts`.
+4. Supprimer l'écran mobile, son cas dans `AppMobile` et la persistance en
+   session qui lui était propre : sur une route fusionnée, elle ne sert plus.
+5. Vérifier la page à 390 px **à l'écran**. Pour la fiche, ça n'a pas été
+   fait (l'onglet Contrats notamment).
+
 ## Échecs connus et acceptés du harnais `tests/security/rls.spec.ts`
 
 Le job `audit` de `.github/workflows/security.yml` fait échouer la CI sur tout
@@ -1368,6 +1523,12 @@ nouveau** : le mot de passe de `staging.praticien2@example.com` n'existe
 que dans le shell de l'opérateur et dans le secret GitHub
 `E2E_PRATICIEN_PASSWORD`. Le poser à la main avant chaque run local reste
 la procédure.
+
+**Piège relevé le 2026-09-14, non corrigé** : `scripts/run-harnais-local.mjs`
+pose encore par défaut `E2E_PRATICIEN_EMAIL=staging.praticien@example.com`,
+c'est-à-dire l'ancien compte mort. Poser le mot de passe ne suffit donc pas en
+local : il faut aussi `E2E_PRATICIEN_EMAIL=staging.praticien2@example.com`.
+Correctif attendu : changer cette valeur par défaut dans le script.
 
 ### Cinq valeurs du harnais sont des *variables* de dépôt, pas des secrets
 
