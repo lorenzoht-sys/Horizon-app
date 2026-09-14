@@ -9,7 +9,7 @@ import { avecConsentement, erreurConsentementCreation, normaliserRgpd } from '..
 import { OPTIONS_FREQUENCE } from '../../lib/anamnese';
 import { Save, X } from 'lucide-react';
 import GIRWidget from '../bilan/GIRWidget';
-import { EMPTY_SED, computeSedScore, getSedProfil, getFSSProfil, SectionSedentarite, SectionFatigue } from '../bilan/TestsAutonomie';
+import { EMPTY_SED, computeSedScore, computeFSSScore, getSedProfil, getFSSProfil, SectionSedentarite, SectionFatigue } from '../bilan/TestsAutonomie';
 
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -1258,8 +1258,10 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
   }
 
   function setFSSData(reponses: (number | null)[]) {
-    const answered = reponses.filter(v => v !== null);
-    const score = answered.length > 0 ? answered.reduce((sum, v) => sum + (v ?? 0), 0) : null;
+    // Score seulement si les neuf affirmations sont répondues : la somme des
+    // seuls items renseignés n'est pas comparable au seuil de 36, qui les
+    // suppose toutes. Voir src/lib/scoresAutonomie.ts.
+    const score = computeFSSScore(reponses);
     setAnamnese(a => ({
       ...a,
       fatigueReponses: reponses,

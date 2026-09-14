@@ -6,6 +6,7 @@ import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
 import { useStructures } from '../hooks/useStructures';
 import { getContreIndications, getTestsAutonomie, getTraitementsActifs, getTraitementsArretes } from '../lib/anamnese';
+import { etatSedentarite, etatFatigue, SED_TOTAL_MAX, FSS_TOTAL_MAX } from '../lib/scoresAutonomie';
 import { partagerDocument } from '../lib/partageDocument';
 import { supabase, getAuthHeader } from '../lib/supabase';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
@@ -290,6 +291,8 @@ Tu cites les recommandations HAS ou SFP-APA quand pertinent.`;
   const bilanPrecedent = sortedBilans[1] ?? null;
 
   const { sedentarite, fatigue } = getTestsAutonomie(patient, bilanInitial);
+  const etatSedAssistant = etatSedentarite(sedentarite.reponses);
+  const etatFssAssistant = etatFatigue(fatigue.reponses);
   const sedProfilLabel = sedentarite.profil === 'inactif' ? 'Inactif'
     : sedentarite.profil === 'actif' ? 'Actif'
     : sedentarite.profil === 'tres_actif' ? 'Très actif' : null;
@@ -309,8 +312,21 @@ Tu cites les recommandations HAS ou SFP-APA quand pertinent.`;
       ? `- Traitements arrêtés : ${traitementsArretesCtx.map(t => `${t.nom}${t.dose ? ` (${t.dose})` : ''} (arrêté le ${new Date((t.date_fin ?? '') + 'T12:00').toLocaleDateString('fr-FR')})`).join(', ')}`
       : null,
     profil?.objectifsPersonnels ? `- Objectifs personnels : ${profil.objectifsPersonnels}` : null,
-    sedProfilLabel ? `- Niveau d'activité physique : ${sedProfilLabel} (score ${sedentarite.score ?? '?'}/55 — Ricci & Gagnon)` : null,
-    fssProfilLabel ? `- Fatigue perçue : ${fssProfilLabel} (FSS ${fatigue.score ?? '?'}/63)` : null,
+    // Questionnaire incomplet : on transmet l'absence de score, pas le score
+    // stocké. Celui-ci vient de l'ancien calcul, qui comptait les réponses
+    // manquantes comme des zéros (Ricci & Gagnon) ou les ignorait (FSS). Un
+    // chiffre faux dans le contexte se retrouverait dans l'interprétation
+    // générée, sans que rien ne le signale.
+    sedProfilLabel && etatSedAssistant.etat === 'complet'
+      ? `- Niveau d'activité physique : ${sedProfilLabel} (score ${etatSedAssistant.score}/${SED_TOTAL_MAX} — Ricci & Gagnon)`
+      : etatSedAssistant.etat === 'a_regulariser'
+        ? `- Niveau d'activité physique : questionnaire Ricci & Gagnon incomplet, aucun score exploitable (manque : ${etatSedAssistant.manquants.join(', ')})`
+        : null,
+    fssProfilLabel && etatFssAssistant.etat === 'complet'
+      ? `- Fatigue perçue : ${fssProfilLabel} (FSS ${etatFssAssistant.score}/${FSS_TOTAL_MAX})`
+      : etatFssAssistant.etat === 'a_regulariser'
+        ? `- Fatigue perçue : échelle FSS incomplète, aucun score exploitable (${etatFssAssistant.manquants.length} affirmation(s) sans réponse)`
+        : null,
   ].filter(Boolean).join('\n');
 
   const dicteesText = formatDicteesContexte(extras?.compteRendus ?? []);
