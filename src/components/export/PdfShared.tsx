@@ -11,7 +11,7 @@ export interface PdfPraticienSettings {
 }
 
 const DARK = '#0D2B2B';
-export const LOGO_H = '/logo-horizon.png.png';
+export const LOGO_H = '/logo-horizon.png';
 
 const S = StyleSheet.create({
   header: {

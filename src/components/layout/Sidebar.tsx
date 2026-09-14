@@ -82,7 +82,7 @@ export default function Sidebar({ onLogout }: Props) {
       <div style={{ padding: '32px 20px 20px 16px' }}>
         <NavLink to="/" className="block">
           <img
-            src="/logo-horizon.png.png?v=2"
+            src="/logo-horizon.png?v=2"
             alt="Horizon"
             style={{ width: 150, height: 'auto', display: 'block' }}
             onError={e => {

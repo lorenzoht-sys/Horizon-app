@@ -206,7 +206,7 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
       <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 18px)', paddingLeft: 20, paddingRight: 20, paddingBottom: 22 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <img src="/logo-horizon.png.png?v=2" alt="Horizon" style={{ height: 22, marginBottom: 12 }}
+            <img src="/logo-horizon.png?v=2" alt="Horizon" style={{ height: 22, marginBottom: 12 }}
               onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }} />
             <div style={{ fontSize: 22, fontWeight: 800, color: 'white', lineHeight: 1.2 }}>Bonjour {prenom} 👋</div>
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 5 }}>{formatDateLong(new Date())}</div>
