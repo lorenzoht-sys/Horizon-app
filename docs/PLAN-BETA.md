@@ -46,39 +46,129 @@ dont aucun chantier de ce fichier ne mentionnait le contenu.
 
 ## POINT DE REPRISE — 2026-09-14 (chantier « fiche bénéficiaire + RGPD » clos)
 
-### 1. PREMIER SUJET AU RETOUR — 10 tests e2e en échec
+**Mis à jour le 2026-09-14 au soir** (migrations staging, e2e local, Apley).
+**Reprise prévue sur le PC portable**, pas sur la machine de bureau : lire la
+section 0 avant toute commande.
 
-| Tests | Depuis quand | Constat |
+### 0. REPRISE SUR UNE AUTRE MACHINE — avant toute commande
+
+1. `git pull` sur `main`, puis `npm ci` et `npx playwright install chromium`.
+2. **`.env.test.local` n'existe pas sur le portable.** Il n'est pas dans git
+   (`.gitignore:24`) et les secrets GitHub ne sont **jamais relisibles**
+   (`gh secret list` ne donne que les noms). Deux façons de le recréer :
+   - le copier depuis la machine de bureau par un canal sûr (gestionnaire de
+     mots de passe), jamais par mail ni dans une conversation ;
+   - ou reprendre chaque valeur à sa source : Supabase staging
+     (`nnfkchhtjrferxnwlcxp` : URL, clés anon et service_role, URL du pooler
+     port 6543), Vercel `horizon-app` > Settings > Deployment Protection >
+     Protection Bypass for Automation. Les valeurs non secrètes
+     (`E2E_BASE_URL`, e-mail praticien, codes patient) sont dans
+     `gh variable list`.
+
+   Clés attendues : `SUPABASE_TEST_URL`, `SUPABASE_TEST_ANON_KEY`,
+   `SUPABASE_TEST_SERVICE_ROLE_KEY`, `PATIENT_SESSION_SECRET`,
+   `STAGING_DATABASE_URL`, `E2E_BASE_URL`, `E2E_PRATICIEN_EMAIL`,
+   `E2E_PRATICIEN_PASSWORD`, `VERCEL_AUTOMATION_BYPASS_SECRET`,
+   `E2E_PATIENT_CODE`, `E2E_PATIENT_CODE_2`.
+3. **Une clé = une ligne.** Les scripts (`loadEnvFile`) gardent la
+   **dernière** occurrence d'une clé en double. Constaté ce soir : une
+   ancienne `STAGING_DATABASE_URL` recopiée en fin de fichier masquait la
+   bonne, et toute connexion échouait en « Authentication credentials are
+   invalid ». Même situation pour `E2E_PRATICIEN_PASSWORD`. Corrigé sur la
+   machine de bureau ; à ne pas reproduire en recréant le fichier.
+4. **Playwright ne lit pas `.env.test.local`** (seuls les scripts `tsx` le
+   font). Lancer la suite ainsi :
+   `node --env-file=.env.test.local node_modules/@playwright/test/cli.js test`
+5. **Avant chaque suite** : `npx tsx scripts/staging-reset-etat-e2e.ts --apply`
+   (comme `ci.yml:174`). Et **jamais deux suites à moins de 15 minutes** :
+   06, 07 et 11 consomment trois connexions patient sur un quota de
+   5 / 15 min / IP — le second run fait tomber 11 en « Trop de tentatives ».
+6. Les deux stashes ne sont que sur la machine de bureau ; leurs sauvegardes
+   sont sur GitHub (section 6).
+
+### 1. PREMIER SUJET AU RETOUR — PR #50 Apley Scratch Test
+
+Branche `apley-persistance`, commit `87293be` : migration
+`20260914_apley_scratch_test_bilans.sql` (`apley_data JSONB`), deux lignes dans
+`src/lib/mappers.ts`, et `src/lib/mappers.test.ts` qui fait l'aller-retour des
+14 clés de `ALL_TESTS` (ensemble exact).
+
+- **Staging : appliquée le 2026-09-14 au soir**, par script. Avant : colonne
+  absente. Vérification par requête séparée : `apley_data` de type `jsonb`,
+  0 bilan sur 3 modifié. Contre-épreuve : la même requête renvoie 0 pour une
+  colonne fictive. Vue par PostgREST (le chemin réel de l'enregistrement) :
+  `apley_data` → HTTP 200, colonne fictive → HTTP 400 (`42703`).
+- **Production : NON appliquée.**
+- **CI de la PR (run 34863890459) : e2e rouge.** 02 et 10 relèvent du fond
+  (section 3). 03 a échoué d'abord sur « Bilan enregistré ! » absent —
+  cohérent avec la colonne alors manquante sur staging — puis, au second
+  essai, sur le brouillon laissé par le premier (supprimé ce soir par le
+  script de remise à zéro).
+- **Non prouvé** : que 03 passe avec le code Apley. Le run local de ce soir
+  visait la branche `staging`, identique à `main`, donc **sans** ce code.
+
+Ordre à suivre :
+
+1. Relancer l'e2e de la PR : `gh run rerun 34863890459 --failed`. Attendu :
+   seuls 02 et 10 rouges, 03 vert.
+2. Appliquer la migration en **production** (SQL Editor), puis la vérification
+   et la contre-épreuve écrites dans le fichier de migration.
+3. Merger #50 **seulement ensuite** (règle « migration en production AVANT le
+   merge » : le code écrit `apley_data`, son absence ferait échouer tout
+   enregistrement de bilan).
+4. Recette : saisir un Apley, enregistrer, rouvrir le bilan.
+
+Les saisies Apley passées sont perdues : elles n'ont jamais quitté le
+navigateur.
+
+### 2. Migrations — état au 2026-09-14 au soir
+
+| Migration | Production | Staging |
 |---|---|---|
-| 01 connexion, 02 création participant, 03 création bilan, 04 export PDF, 05 création programme, 10 création contrat, 12 rappels praticien (×2) | **Avant la PR #44** : mêmes 8 échecs, mêmes éléments introuvables sur `main` (run 34689204148, commit `d6aadfc`) | Après connexion, les pages desktop n'affichent pas ce que le test attend : bouton « Nouveau participant », champ « Jean », carte « Camille Martin » |
-| 13 rotation portrait/paysage (×2) | Ajoutés par la PR #44 (run 34811192372) | La partie **mobile** passe ; le test bloque au même endroit que les autres : le formulaire **desktop** n'apparaît pas en paysage |
+| `20260913_rgpd_consentement_creation.sql` (PR #44) | Appliquée (par Lorenzo) : vérification `1 \| 7 \| 0`, contre-épreuve `CONFORME (4/4)` | Appliquée (par script) : `1 \| 7 \| 0`, 0 fiche d'essai restante, `CONFORME (4/4)` |
+| `20260914_retrait_visibilite_progression.sql` (PR #46) | Appliquée (par Lorenzo) **après** le merge de #46 et le déploiement — ordre inversé volontaire, le code ne lisant plus la clé. `onglet_masque = 0`, `UPDATE 27`, vérification à 0, contre-épreuve 27/27 | Appliquée le soir par script. Avant : 5 lignes sur 5 avec la clé. Après : 0, nouveau défaut sans `progression`, autres réglages identiques sur 5/5 lignes comparées à une sauvegarde. Contre-épreuve : le même contrôle trouve bien les 5 clés sur la sauvegarde d'avant |
+| `20260914_apley_scratch_test_bilans.sql` (PR #50, non mergée) | **Non appliquée** | Appliquée et vérifiée (section 1) |
 
-Le test 11 (rappels patient) est instable (passe au second essai).
+Autres faits vérifiés du jour :
 
-**Conséquence** : la préservation de la saisie à la rotation n'est **pas
-prouvée par la CI**, seulement par le code et les tests unitaires. Et le
-blocage de création sans consentement n'est pas prouvé par l'e2e 02 non plus.
+- **PR #44 mergée** (`9f781b4`), déploiement de production Ready sur
+  `app.horizon-suivi.fr`. Les `consentementDate` trompeuses des 7 fiches sont
+  effacées ; leur consentement manque toujours (badge « RGPD ⚠ »).
+- **Titre du praticien e2e** : l'hypothèse du matin était la bonne.
+  `staging.praticien2@example.com` n'avait pas de `titre` et partait sur
+  `/onboarding`. Corrigé (PR #48 + `staging-renseigner-titre-praticien.ts`) ;
+  relu ce soir à blanc : `titre = "Enseignant APA"`, rien à faire.
 
-**Hypothèse, non vérifiée** : le compte `staging.praticien2@example.com`
-(créé le 2026-09-08) n'a peut-être pas de `titre` dans `praticiens`, ce qui
-envoie vers `/onboarding` au lieu du tableau de bord (`needsOnboarding`,
-`App.tsx`). À confirmer par une capture d'écran juste après la connexion
-avant de corriger quoi que ce soit.
+### 3. Tests e2e — état au 2026-09-14 au soir
 
-### 2. Ce qui est fait et vérifié
+Run local contre `E2E_BASE_URL` (Preview de la branche `staging`, identique à
+`main`), après `staging-reset-etat-e2e.ts --apply` : **14 réussis, 3 échoués,
+1 non exécuté**. Les 10 échecs du matin sont résolus.
 
-- **PR #44 mergée** le 2026-09-14 (`9f781b4`), déploiement de production
-  Ready sur `app.horizon-suivi.fr`.
-- **Migration `20260913_rgpd_consentement_creation.sql`** :
-  - production (par Lorenzo) : vérification `1 | 7 | 0`, contre-épreuve `CONFORME (4/4)` ;
-  - staging (par script) : vérification `1 | 7 | 0` et 0 fiche d'essai restante, contre-épreuve `CONFORME (4/4)`.
-- **Les 7 fiches** : `consentementDate` trompeuses effacées, vérifiées à 0.
-  Leur consentement, lui, manque toujours : régularisation à la main via le
-  badge « RGPD ⚠ ».
+| Test | État | Cause |
+|---|---|---|
+| **02 création participant** | **Rouge** | Toast « … ajouté(e) ! » introuvable. Rouge aussi sur `main` en CI (run 34862690450). Chantier à part : PR #49 |
+| **10 création contrat** | **Rouge** | Assertion sur « Contrat créé. Allez sur Tournée » : comportement disparu. Rouge aussi sur `main`. PR #49 |
+| 11 rappels patient | Rouge **ce run-là seulement** | « Trop de tentatives » : second run à moins de 15 min du premier, où 11 était vert. Pas une régression |
+| 09 limitation connexion | Non exécuté | Voulu : dépend du projet `principal`, qui a des échecs |
+| 03 bilan, 07 séance | Verts | Rouges au premier run faute de remise à zéro (brouillon de la CI #50, séance du jour déjà validée) |
 
-### 3. Ce qui n'est PAS vérifié — harnais de sécurité
+**Toujours non prouvé par l'e2e** : le blocage de création sans consentement
+(02 échoue sur le toast, après la création).
 
-Run local du 2026-09-14 contre staging, **sans** `E2E_PRATICIEN_PASSWORD` :
+Point à instruire avec la PR #43 : son texte dit le bloc 4 (suppression des
+fiches `Test E2E…`) « ajouté et exécuté le 2026-09-08 », mais le script sur
+`main` n'a que 3 blocs — la PR n'est pas mergée. 02 recrée donc une fiche à
+chaque run.
+
+### 4. Ce qui n'est PAS vérifié — harnais de sécurité
+
+**Pas relancé depuis le matin.** Le mot de passe praticien est maintenant
+dans `.env.test.local` : relancer `npm run test:security`, en vérifiant
+l'e-mail utilisé (voir le piège de « Le compte `staging.praticien@example.com`
+est hors service »).
+
+Run local du 2026-09-14 au matin contre staging, **sans** `E2E_PRATICIEN_PASSWORD` :
 **22 réussis, 42 ignorés, 1 suite en échec**. Le `beforeAll` du bloc
 « Cloisonnement RLS multi-tenant » s'arrête à la connexion du praticien A
 (`Invalid login credentials`), ce qui fait ignorer tout le bloc :
@@ -101,7 +191,23 @@ connexion qui a échoué. À relancer avec le mot de passe **et** le bon
 e-mail — voir le piège noté dans « Le compte `staging.praticien@example.com`
 est hors service ».
 
-### 4. Rien ne reste en local
+### 5. PR ouvertes au 2026-09-14 au soir
+
+| PR | Branche | Ouverte le | Objet |
+|---|---|---|---|
+| #50 | `apley-persistance` | 2026-09-14 | Apley Scratch Test — **prochain chantier**, section 1 |
+| #49 | `note-nettoyage-tests-e2e` | 2026-09-14 | Documentation seule : chantier 02 / 10 |
+| #43 | `e2e-nettoyage-participants` | 2026-09-08 | Bloc 4 du script de remise à zéro (fiches `Test E2E…`) + note |
+| #42 | `securite-f02-code-acces-csprng` | 2026-09-08 | [F-02] code d'accès bénéficiaire tiré par un générateur non cryptographique |
+| #28 | `message-praticien-renommage` | 2026-08-31 | `messagePierre` → `messagePraticien`, migration coordonnée **non appliquée** |
+
+### 6. Rien ne reste en local
+
+Vérifié le 2026-09-14 au soir sur la machine de bureau : `git status` propre,
+`git log --branches --not --remotes` vide, et 0 commit propre sur chacune des
+16 branches locales sans suivi. Les branches marquées « ahead »
+(`frequence-contrat`, `optim-agenda-phase1`, `staging`) ne portent que des
+commits déjà présents sur `origin/main` ou sur une branche `sauvegarde/`.
 
 Sauvegardé sur GitHub le 2026-09-14, sans rien supprimer localement :
 
@@ -119,7 +225,7 @@ Les deux stashes existent encore sur la machine où ils ont été créés : à
 trier, puis supprimer (`git stash drop`) une fois la sauvegarde jugée
 suffisante.
 
-### 5. Suite du chantier mobile
+### 7. Suite du chantier mobile
 
 Voir « CHANTIER — fusion progressive mobile / desktop » plus bas.
 
@@ -830,6 +936,13 @@ UNION ALL SELECT 'trg_participants_consentement_rgpd_creation (trigger)',
 ⚠️ Exception à l'ordre ci-dessus pour `20260913_rgpd_consentement_creation.sql` :
 elle s'applique **après** le déploiement du code, voir la section « RÈGLE —
 consentement RGPD obligatoire à la création » plus bas.
+
+⚠️ Même exception pour `20260914_retrait_visibilite_progression.sql` (PR #46) :
+elle retire une clé que le nouveau code ne lit plus. Appliquée en production
+après le merge et le déploiement, vérifiée (voir le point de reprise en tête
+de fichier). Une exception se justifie migration par migration, jamais par
+défaut : `20260914_apley_scratch_test_bilans.sql` (PR #50) suit l'ordre
+normal, parce que le code écrit la nouvelle colonne.
 
 ⚠️ Cette requête ne contrôle que la **présence** des objets, pas leurs
 privilèges. Pour `user_roles`, la présence ne suffit pas : voir la
