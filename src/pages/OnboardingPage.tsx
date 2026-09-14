@@ -195,7 +195,7 @@ export default function OnboardingPage({ onComplete }: Props) {
             boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
           }}>
             <img
-              src="/logo-horizon.png.png"
+              src="/logo-horizon.png"
               style={{ height: 50, objectFit: 'contain' }}
               alt="Horizon"
               onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }}

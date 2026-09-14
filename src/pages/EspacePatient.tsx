@@ -2391,9 +2391,7 @@ export default function EspacePatient() {
           src="/logo-horizon.png"
           style={{ height: 22, flexShrink: 0 }}
           alt="Horizon"
-          onError={e => {
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
+          onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }}
         />
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
