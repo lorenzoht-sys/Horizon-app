@@ -11,6 +11,8 @@ import { calculerNotesAuto } from '../components/export/FicheBilanPDF';
 import { exportFicheBilanPDF, exportFicheBilanBeneficiairePDF } from '../utils/exportPDF';
 import { ArrowLeft, Calendar, MessageSquare, StickyNote, Target, AlertTriangle, FileText, TrendingUp, Share2 } from 'lucide-react';
 type CleResultatPartageable = 'equilibre' | 'force' | 'handGrip' | 'mobilite' | 'endurance';
+import { EtatPartageBilan } from '../components/bilan/EtatPartageBeneficiaire';
+
 const PARTAGE_ITEMS: { key: CleResultatPartageable; label: string }[] = [
   { key: 'equilibre', label: 'Équilibre' },
   { key: 'force', label: 'Force jambes' },
@@ -116,6 +118,9 @@ export default function BilanDetail() {
           Décoché par défaut. Contrôle ce qui apparaît dans l'espace bénéficiaire et dans la
           Fiche bilan bénéficiaire — n'affecte pas ce que vous voyez ici.
         </p>
+        <div className="mb-3">
+          <EtatPartageBilan bilan={bilan} />
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {PARTAGE_ITEMS
             .filter(item => (bilan.notesBilan ?? calculerNotesAuto(bilan))[item.key] !== undefined)

@@ -10,6 +10,7 @@ import { OPTIONS_FREQUENCE } from '../../lib/anamnese';
 import { Save, X } from 'lucide-react';
 import GIRWidget from '../bilan/GIRWidget';
 import { EMPTY_SED, computeSedScore, computeFSSScore, getSedProfil, getFSSProfil, SectionSedentarite, SectionFatigue } from '../bilan/TestsAutonomie';
+import { EtatPartageQuestionnaires } from '../bilan/EtatPartageBeneficiaire';
 
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -2141,6 +2142,10 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
           onChange={e => setAnamnese(a => ({ ...a, fatigueVisibleBeneficiaire: e.target.checked }))} />
         Partager le niveau de fatigue avec le bénéficiaire
       </label>
+      <EtatPartageQuestionnaires
+        sedentaritePartagee={anamnese.sedentariteVisibleBeneficiaire === true}
+        fatiguePartagee={anamnese.fatigueVisibleBeneficiaire === true}
+      />
       </>}
 
       {(showAll || step === 5) && <>

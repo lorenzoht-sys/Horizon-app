@@ -103,7 +103,7 @@ export function dbToParticipant(row: any): Participant {
 // de Bilan.visibleBeneficiaire, qui est un contrôle plus fin et volontairement
 // plus prudent.
 const VISIBILITE_BENEFICIAIRE_DEFAULT = {
-  progression: true, bilans: true, rdv: true, programme: true, messagePierre: true, carteSante: true,
+  bilans: true, rdv: true, programme: true, messagePierre: true, carteSante: true,
 };
 
 // Participant TypeScript → Supabase insert/update object

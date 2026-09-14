@@ -14,7 +14,7 @@ import { withSentry } from '../_lib/sentry.js';
 // à un filtre purement côté affichage.
 
 export const VISIBILITE_DEFAULT = {
-  progression: true, bilans: true, rdv: true, programme: true, messagePierre: true, carteSante: true,
+  bilans: true, rdv: true, programme: true, messagePierre: true, carteSante: true,
 };
 
 // Colonnes DB d'un bilan à retirer quand le résultat correspondant n'est pas

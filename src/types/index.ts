@@ -910,7 +910,6 @@ export interface AnamneseData {
  *  stockage était local à l'appareil qui l'écrivait (celui de Pierre), donc
  *  jamais vu par le bénéficiaire sur son propre appareil — corrigé ici. */
 export interface VisibiliteBeneficiaire {
-  progression: boolean;
   bilans: boolean;
   rdv: boolean;
   programme: boolean;
