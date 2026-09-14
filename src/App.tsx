@@ -7,6 +7,8 @@ import { hydraterSettingsPraticien } from './lib/settingsPraticien';
 import { setCurrentUserId, loadAllBrouillonsFromSupabase } from './hooks/useBrouillonBilan';
 import { useDevice } from './hooks/useDevice';
 import AppMobile from './pages/mobile/AppMobile';
+import BarreNavigationMobile from './components/layout/BarreNavigationMobile';
+import { estRouteInterfaceUnique } from './lib/routesMobile';
 import { Toaster, toast } from 'sonner';
 import Sidebar from './components/layout/Sidebar';
 import Dashboard from './pages/Dashboard';
@@ -57,12 +59,19 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
     return () => el.removeEventListener('scroll', onScroll);
   }, []);
 
+  // Cadre commun. À partir de 768 px (même seuil que useDevice) : barre
+  // latérale. En dessous — écrans fusionnés servis au téléphone — la même
+  // barre du bas que l'interface mobile. CSS seulement : l'arbre React ne
+  // change pas avec la largeur, une rotation ne démonte donc rien.
   return (
     <div className="flex min-h-screen" style={{ background: 'var(--color-bg)' }}>
-      <Sidebar onLogout={onLogout} />
+      <div className="hidden md:block">
+        <Sidebar onLogout={onLogout} />
+      </div>
       <div
         ref={scrollRef}
-        style={{ marginLeft: 220, flex: 1, height: '100vh', overflowY: 'auto', background: 'var(--color-bg)', position: 'relative' }}
+        className="flex-1 md:ml-[220px] pb-[calc(76px+env(safe-area-inset-bottom))] md:pb-0"
+        style={{ height: '100vh', overflowY: 'auto', background: 'var(--color-bg)', position: 'relative' }}
       >
         {/* Topbar scroll effect */}
         <div
@@ -107,8 +116,30 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
           </Routes>
         </AnimatePresence>
       </div>
+      <div className="md:hidden">
+        <BarreNavigationMobile />
+      </div>
     </div>
   );
+}
+
+// Choix de l'interface de l'espace pro.
+//
+// Sous 768 px : l'interface mobile, SAUF pour les écrans déjà fusionnés en une
+// version unique responsive (src/lib/routesMobile.ts). Au-dessus : desktop.
+//
+// ⚠️ La bascule en paysage est un USAGE VOULU, pas un défaut : le praticien
+// tourne son téléphone pour atteindre les écrans qui n'existent qu'en desktop.
+// Ne pas la bloquer, ne pas déplacer le seuil. Elle deviendra inutile écran par
+// écran, à mesure de la fusion.
+//
+// Sur un écran fusionné, les deux branches rendent le même composant au même
+// emplacement : React le conserve, et la rotation ne perd rien.
+function EspacePro({ onLogout }: { onLogout: () => void }) {
+  const { isMobile } = useDevice();
+  const { pathname } = useLocation();
+  if (isMobile && !estRouteInterfaceUnique(pathname)) return <AppMobile onLogout={onLogout} />;
+  return <DesktopContent onLogout={onLogout} />;
 }
 
 function MapFallback() {
@@ -136,7 +167,6 @@ async function needsOnboarding(userId: string): Promise<boolean> {
 }
 
 export default function App() {
-  const { isMobile }    = useDevice();
   const [isLoggedIn, setIsLoggedIn]       = useState(false);
   const [authLoading, setAuthLoading]     = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -481,11 +511,7 @@ export default function App() {
               showOnboarding ? (
                 <Navigate to="/onboarding" replace />
               ) : (
-                  isMobile ? (
-                    <AppMobile onLogout={handleLogout} />
-                  ) : (
-                    <DesktopContent onLogout={handleLogout} />
-                  )
+                <EspacePro onLogout={handleLogout} />
               )
             ) : (
               <Navigate to="/login" replace />
