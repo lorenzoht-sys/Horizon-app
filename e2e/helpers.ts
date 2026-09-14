@@ -64,20 +64,37 @@ export async function loginPraticien(page: Page): Promise<void> {
   // fausse suivie pendant plusieurs runs. Un helper qui valide à tort ne
   // retarde pas le diagnostic : il l'envoie ailleurs.
   //
-  // On attend donc le signal qui décide, pas celui qui précède : la réponse
-  // de la requête `titre` de `needsOnboarding`. Après elle, l'état est fixé
-  // et la redirection a eu lieu ou n'aura pas lieu.
+  // On attend donc le signal qui décide, pas celui qui précède : la réponse de
+  // la requête `titre` de `needsOnboarding`.
+  //
+  // Et on lit SON CONTENU plutôt que d'observer la redirection qui en découle.
+  // Première version de ce helper : après la réponse, elle testait
+  // `page.url()`. C'était encore une course — React doit re-rendre et naviguer
+  // APRÈS la réponse, si bien que l'URL était toujours « / » au moment du
+  // test. Le helper levait quand même, mais sur l'assertion suivante, avec un
+  // message qui ne nommait pas la cause : le défaut exact qu'il corrige.
+  // Constaté par le test 14 au premier run en CI (2026-09-14).
+  //
+  // Le corps de la réponse, lui, EST la décision : `needsOnboarding` renvoie
+  // `!data?.titre`. Pas de délai, pas d'attente à l'aveugle sur le chemin
+  // nominal.
   const decisionOnboarding = page
     .waitForResponse(
       r => /\/rest\/v1\/praticiens\b/.test(r.url()) && /select=titre/.test(r.url()),
       { timeout: 20_000 }
     )
-    .catch(() => null); // pas de requête observée : on retombe sur les contrôles ci-dessous
+    .catch(() => null); // pas de requête observée : on retombe sur le contrôle positif
 
   await page.getByRole('button', { name: 'Se connecter' }).click();
-  await decisionOnboarding;
+  const reponse = await decisionOnboarding;
+  const praticien = reponse
+    ? await (reponse.json() as Promise<{ titre?: string | null } | null>).catch(() => null)
+    : null;
 
-  if (new URL(page.url()).pathname.startsWith('/onboarding')) {
+  // `praticien` nul = réponse illisible ou absente : on ne conclut rien ici, le
+  // contrôle positif ci-dessous tranchera. Ligne absente (`.single()` en erreur)
+  // ou titre vide : les deux envoient vers /onboarding.
+  if (reponse && (!praticien || !praticien.titre)) {
     throw new Error(
       `Connexion partie sur /onboarding : le compte ${env.praticienEmail} n'a pas de ` +
         '`titre` dans `praticiens` (needsOnboarding, App.tsx). Renseigner le titre du ' +
