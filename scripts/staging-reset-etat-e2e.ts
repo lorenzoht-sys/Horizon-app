@@ -1,6 +1,12 @@
-// scripts/staging-reset-seances-du-jour.ts
+// scripts/staging-reset-etat-e2e.ts
 //
-// Supprime, sur STAGING, les séances patient enregistrées AUJOURD'HUI.
+// Remet, sur STAGING, le jeu de démo dans son état de départ AVANT un run
+// Playwright : séances du jour, brouillons de bilan, bilans trimestriels et
+// participants créés par les runs précédents.
+//
+// L'en-tête annonçait « les séances patient enregistrées AUJOURD'HUI » et
+// nommait un fichier qui n'existe pas (`staging-reset-seances-du-jour.ts`) :
+// le script a gagné trois blocs depuis, l'en-tête était resté au premier.
 //
 // POURQUOI CE SCRIPT EXISTE
 // -------------------------
@@ -148,6 +154,32 @@ async function main() {
   // run antérieur. Les laisser s'accumuler fait dériver l'état du patient de
   // démo run après run — 13 bilans le 2026-08-27, `trimestre` jusqu'à 13.
   await supprimer('bilans?type=eq.trimestriel', 'Bilans trimestriels supprimés');
+
+  // ── 4. Participants créés par 02-creation-patient ─────────────────────
+  // `02-creation-patient` crée une fiche `Test E2E<timestamp>` à chaque
+  // passage (`e2e/02-creation-patient.spec.ts:12-13`) et ne la supprime
+  // jamais. Ce cas était DÉJÀ décrit dans la règle « nettoie AVANT, pas
+  // après » (docs/PLAN-BETA.md, « Trois occurrences le même jour ») —
+  // « `02` ajoute un participant à chaque passage » — mais seuls les deux
+  // autres cas y avaient reçu leur bloc ici. Trou de couverture, pas panne :
+  // `supprimer()` lève sur erreur HTTP, rien n'échouait en silence.
+  //
+  // 49 fiches accumulées entre le 2026-08-26 et le 2026-09-06, constaté le
+  // 2026-09-08. Chacune porte un `code_acces` actif.
+  //
+  // `prenom=eq.Test` protège les participants de démo : Camille Martin et
+  // Julien Bernard portent leurs vrais prénoms. Le filtre ne peut donc pas
+  // emporter le jeu de référence, même si un `nom` venait à y ressembler.
+  //
+  // Toutes les tables filles de `participants` sont en ON DELETE CASCADE
+  // (`bilans`, `programmes`, `seances`, `seances_patient`, `notes_seances`,
+  // `documents_patient`…), sauf `audit_logs` en SET NULL : la trace d'audit
+  // survit à la suppression. Aucune contrainte en RESTRICT — la suppression
+  // ne peut pas bloquer à mi-chemin.
+  await supprimer(
+    'participants?prenom=eq.Test&nom=like.E2E*',
+    'Participants E2E supprimés',
+  );
 }
 
 main().catch(err => {
