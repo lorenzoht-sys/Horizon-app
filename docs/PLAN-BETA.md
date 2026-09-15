@@ -44,6 +44,35 @@ ouverts en production jusqu'au 2026-09-03 alors que deux d'entre eux étaient
 « corrigés » depuis le 2026-08-19 — sur une branche que rien ne suivait, et
 dont aucun chantier de ce fichier ne mentionnait le contenu.
 
+## CHANTIER À PART — nettoyage de deux tests e2e (noté le 2026-09-14, pas pour aujourd'hui)
+
+`02-creation-patient` et `10-creation-contrat` échouent **sur `main` lui-même**,
+indépendamment de toute PR (run 34843780251, commit `44473ae`). Tant qu'ils sont
+rouges, aucune PR ne peut afficher une CI verte, et chaque merge demande un
+arbitrage manuel « est-ce ma PR ou le fond ? ». C'est le coût réel de les
+laisser en l'état, plus que les deux tests eux-mêmes.
+
+**Ce ne sont pas des régressions applicatives.**
+
+| Test | Échoue sur | Nature |
+|---|---|---|
+| `10-creation-contrat` | `getByText(/Contrat créé\. Allez sur Tournée/)` introuvable | Le test affirme un comportement que **son propre commentaire décrit comme disparu** (« Ce test affirmait encore l'ancien comportement — il décrivait un produit qui n'existe plus », lignes 17-18). Le commentaire a été écrit, l'assertion pas corrigée |
+| `02-creation-patient` | toast `« {prénom} {nom} ajouté(e) ! »` introuvable | La fiche EST créée — le clic sur « Créer la fiche » réussit, l'échec porte sur le toast de confirmation. À vérifier : le texte a-t-il changé, ou le toast a-t-il disparu ? Les deux demandent des correctifs opposés |
+
+**À ne pas confondre avec `07-seance-coche-exercice`**, qui échoue par
+intermittence pour une raison différente et déjà documentée : l'index unique
+`seances_patient_no_double_validation_idx` rend le test non rejouable dans la
+même journée, et `staging-reset-etat-e2e.ts` ne protège pas de plusieurs runs
+concurrents contre une seule base de staging. Quatre runs le 2026-09-14 ont
+suffi à le faire tomber. Ce n'est pas le même chantier.
+
+**Règle qui s'applique ici** : un test qui décrit un produit qui n'existe plus
+est pire qu'un test absent — il occupe la place d'une vérification réelle tout
+en signalant en permanence une panne qui n'en est pas une. Corriger l'assertion
+sans vérifier ce que fait vraiment le produit reviendrait à déplacer le
+problème : commencer par constater le comportement actuel, puis écrire ce qu'on
+constate.
+
 ## POINT DE REPRISE — 2026-09-14 (chantier « fiche bénéficiaire + RGPD » clos)
 
 **Mis à jour le 2026-09-14 au soir** (migrations staging, e2e local, Apley).
