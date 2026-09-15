@@ -14,12 +14,20 @@
 // `source` en bash : il contient le mot de passe Postgres de staging, et une
 // ligne mal échappée peut le faire fuiter dans un message d'erreur du shell.
 //
-// ── Le mot de passe praticien n'est PAS dans ce fichier ──────────────────
-// `E2E_PRATICIEN_PASSWORD` présent dans `.env.test.local` est périmé : la
-// valeur qui fonctionne n'existe que dans le shell de l'opérateur, posée à
-// la main avant chaque run (voir docs/PLAN-BETA.md, « Chantiers annexes »).
-// Toute variable déjà présente dans l'environnement a la priorité sur le
-// fichier — c'est ce qui permet de la surcharger :
+// ── Compte praticien de staging ───────────────────────────────────────────
+// L'ancien compte `staging.praticien@example.com` est mort depuis le
+// 2026-09-08 (ne plus s'y référer). Le compte vivant est
+// `staging.praticien2@example.com` — mot de passe confirmé le 2026-09-14
+// (suite e2e à 14/18, script du titre praticien connecté sans erreur). Les
+// deux valeurs (email + mot de passe) sont posées dans `.env.test.local`
+// (`E2E_PRATICIEN_EMAIL` / `E2E_PRATICIEN_PASSWORD`, jamais commité — voir
+// .gitignore), donc aucune variable shell à poser à la main pour un run
+// normal.
+//
+// Si le compte est de nouveau tourné (rotation de mot de passe, nouveau
+// compte de staging), une variable déjà présente dans l'environnement a
+// toujours priorité sur le fichier — c'est ce qui permet de surcharger sans
+// éditer `.env.test.local` :
 //
 //   PowerShell :  $env:E2E_PRATICIEN_PASSWORD = "<valeur>"
 //                 npm run test:security
