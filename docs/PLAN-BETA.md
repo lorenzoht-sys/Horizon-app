@@ -157,6 +157,7 @@ navigateur.
 | `20260913_rgpd_consentement_creation.sql` (PR #44) | Appliquée (par Lorenzo) : vérification `1 \| 7 \| 0`, contre-épreuve `CONFORME (4/4)` | Appliquée (par script) : `1 \| 7 \| 0`, 0 fiche d'essai restante, `CONFORME (4/4)` |
 | `20260914_retrait_visibilite_progression.sql` (PR #46) | Appliquée (par Lorenzo) **après** le merge de #46 et le déploiement — ordre inversé volontaire, le code ne lisant plus la clé. `onglet_masque = 0`, `UPDATE 27`, vérification à 0, contre-épreuve 27/27 | Appliquée le soir par script. Avant : 5 lignes sur 5 avec la clé. Après : 0, nouveau défaut sans `progression`, autres réglages identiques sur 5/5 lignes comparées à une sauvegarde. Contre-épreuve : le même contrôle trouve bien les 5 clés sur la sauvegarde d'avant |
 | `20260914_apley_scratch_test_bilans.sql` (PR #50, non mergée) | **Non appliquée** | Appliquée et vérifiée (section 1) |
+| `20260912_pause_contrat_archivage_participant.sql` — **absente de ce tableau depuis sa création le 2026-09-12, c'est ce qui l'a fait passer sous le radar deux jours** ; ajoutée le 2026-09-15 après le signalement du `PGRST204` sur `participants.archive` | Appliquée et vérifiée le 2026-09-15 : contre-épreuve confirmée, archivage testé fonctionnel avec le compte de test | Appliquée et vérifiée le 2026-09-15 : contre-épreuve confirmée, archivage testé fonctionnel avec le compte de test |
 
 Autres faits vérifiés du jour :
 
