@@ -45,6 +45,11 @@ test.describe('Rotation portrait ↔ paysage', () => {
     await page.getByPlaceholder('Dupont', { exact: true }).fill(`Rgpd${Date.now()}`);
 
     await page.setViewportSize(PAYSAGE);
+    // Obligatoire depuis la fermeture du trou « date de naissance jamais
+    // vérifiée dans l'assistant par étapes » (bug 03, docs/PLAN-BETA.md) :
+    // sans elle, submit() bloque ici avec un message différent et le test
+    // ne peut jamais atteindre la vérification du consentement RGPD visée.
+    await page.getByPlaceholder('JJ/MM/AAAA').fill('12/05/1957');
     for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'Suivant →' }).click();
     await page.getByRole('button', { name: '1 séance/semaine', exact: true }).click();
     await page.getByRole('button', { name: 'Suivant →' }).click();
