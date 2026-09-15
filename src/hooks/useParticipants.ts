@@ -249,6 +249,17 @@ export function useParticipants() {
     return participants.find(p => p.token === token) ?? null;
   }, [participants]);
 
+  // Archivage : bascule manuelle, distincte du statut des contrats (voir
+  // Participant.archive, types/index.ts). date_archivage posée/vidée avec
+  // le flag pour tracer depuis quand — jamais dérivée de l'absence de
+  // contrat actif ailleurs dans le code.
+  const archiverParticipant = useCallback(async (id: string, archive: boolean) => {
+    await updateParticipant(id, {
+      archive,
+      dateArchivage: archive ? new Date().toISOString().split('T')[0] : undefined,
+    });
+  }, [updateParticipant]);
+
   const exportJSON = useCallback(() => {
     const blob = new Blob([JSON.stringify(participants, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -259,12 +270,21 @@ export function useParticipants() {
     URL.revokeObjectURL(url);
   }, [participants]);
 
+  // Vue par défaut pour les écrans du quotidien (tournée, dashboard,
+  // sélecteurs) : exclut les bénéficiaires archivés. `participants` reste
+  // volontairement complet et inchangé — les écrans de stats/facturation
+  // (StatsPage.tsx, DossierPDF.tsx, useFactures.ts) doivent continuer à
+  // tout compter, archivage ou non.
+  const participantsActifs = participants.filter(p => !p.archive);
+
   return {
     participants,
+    participantsActifs,
     loading,
     addParticipant,
     updateParticipant,
     deleteParticipant,
+    archiverParticipant,
     geocodeParticipant,
     addBilan,
     updateBilan,

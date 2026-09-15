@@ -53,9 +53,7 @@ export default function PageAccesPatient() {
         src="/logo-horizon.png"
         style={{ height: 44, marginBottom: 40 }}
         alt="Horizon"
-        onError={e => {
-          (e.target as HTMLImageElement).style.display = 'none';
-        }}
+        onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }}
       />
 
       <div style={{

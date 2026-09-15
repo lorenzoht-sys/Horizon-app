@@ -4,7 +4,8 @@ import { getAuthHeader } from '../lib/supabase';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ResultatsBilan {
-  participant: { prenom: string; nom: string; age: number; profil: string };
+  // null si la date de naissance est absente ou invalide (voir src/lib/age.ts).
+  participant: { prenom: string; nom: string; age: number | null; profil: string };
   notes: NotesBilan;
   valeurs: {
     equilibreD?: number | null; equilibreG?: number | null;
@@ -72,7 +73,7 @@ Analyse les résultats de bilan fonctionnel suivants et génère une interpréta
 
 PATIENT :
   Nom : ${r.participant.prenom} ${r.participant.nom}
-  Âge : ${r.participant.age} ans
+  Âge : ${r.participant.age === null ? 'non renseigné' : `${r.participant.age} ans`}
   Profil : ${r.participant.profil}
   Douleur quotidienne : ${r.douleur ?? 'non renseigné'}/10
   Fatigue quotidienne : ${r.fatigue ?? 'non renseigné'}/10

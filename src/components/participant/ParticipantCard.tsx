@@ -2,19 +2,11 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import type { Participant } from '../../types';
 import { Calendar, AlertCircle, ChevronRight, Phone, Building2 } from 'lucide-react';
+import { libelleAge } from '../../lib/age';
 
 interface Props {
   participant: Participant;
   structureNom?: string;
-}
-
-function calcAge(dateNaissance: string): number {
-  const today = new Date();
-  const birth = new Date(dateNaissance);
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-  return age;
 }
 
 function daysSince(date: string): number {
@@ -35,7 +27,7 @@ function avatarColor(id: string): string {
 }
 
 export default function ParticipantCard({ participant, structureNom }: Props) {
-  const age = calcAge(participant.dateNaissance);
+  const age = libelleAge(participant.dateNaissance);
   const lastBilan = participant.bilans.at(-1);
   const needsBilan = lastBilan ? daysSince(lastBilan.date) > 85 : true;
   const bgColor = avatarColor(participant.id);
@@ -67,13 +59,21 @@ export default function ParticipantCard({ participant, structureNom }: Props) {
         </div>
         <div className="flex-1 min-w-0">
           <h3
-            className="font-heading font-semibold truncate m-0"
+            className="font-heading font-semibold truncate m-0 flex items-center gap-1.5"
             style={{ color: 'var(--color-ink)', fontSize: 15, lineHeight: 1.3 }}
           >
             {participant.prenom} {participant.nom}
+            {participant.archive && (
+              <span
+                className="flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                style={{ background: '#F1F2F4', color: '#6B7280' }}
+              >
+                Archivé
+              </span>
+            )}
           </h3>
           <p className="mt-0.5 m-0" style={{ fontSize: 13, color: 'var(--color-ink-2)' }}>
-            {age} ans
+            {age}
           </p>
           {participant.pathologie ? (
             <p className="mt-0.5 m-0 truncate" style={{ fontSize: 12, color: 'var(--color-ink-3)' }}>

@@ -1,5 +1,264 @@
 # Plan bêta — points à traiter avant ouverture
 
+## CE FICHIER EST LA SEULE RÉFÉRENCE DE SUIVI — il n'existe pas de « plan en N étapes »
+
+**Ce document plus ce qui est prouvable depuis git : rien d'autre ne fait
+foi. Il n'existe aucun plan numéroté de 0 à N, ni ici ni ailleurs dans le
+dépôt.**
+
+Écrit le 2026-09-03, après un audit d'état mené en croyant qu'un plan en
+7 étapes (0 à 6) figurait dans ce fichier. Il n'y figure pas, et n'y a
+jamais figuré. Vérifié :
+
+- les titres de ce fichier — aucun n'est une étape numérotée ;
+- ses **21 révisions** depuis sa création (`git log --all -- docs/PLAN-BETA.md`)
+  — aucune n'a jamais porté de « Étape 0 » ;
+- **toutes** les branches locales et distantes, tous les `.md` du dépôt —
+  aucune occurrence.
+
+La numérotation existe, mais **uniquement dans les messages de commit et
+les titres de PR** : « Étape 1, lot N » (lots de sécurité F-xx), « Etape 3 »
+(`user_roles`), « Etape 4 » (administration des comptes), « Etape 6 »
+(retrait de l'identité du premier utilisateur). Il n'y a jamais eu d'étape
+0, 2 ni 5 — ce sont des cases vides d'une numérotation reconstituée après
+coup, pas des chantiers oubliés.
+
+### Pourquoi c'est noté ici plutôt que corrigé en silence
+
+Un plan qui n'existe que dans le souvenir d'une conversation se comporte
+comme un plan réel : on s'y réfère, on s'en sert pour décider quoi faire
+ensuite, et on lui attribue des contenus qu'il n'a jamais eus. Le
+2026-09-03, l'« étape 2 » retenue de mémoire portait deux sujets — des clés
+étrangères manquantes, et un verrou d'écriture sur `tm6_variantes` réservé
+à `service_role`. Le second décrit la **première version, abandonnée**, de
+`20260817_securite_01_tm6_variantes_rls.sql` : le modèle réellement appliqué
+est un propriétaire par ligne, la version `service_role` ayant été réécrite
+le 2026-08-19 parce qu'elle cassait `useTm6Variantes.ts`. Un mois de travail
+séparait le souvenir de la réalité, sans que rien ne le signale.
+
+**La règle qui en découle** : ce qui doit survivre à une session s'écrit
+ici. Un chantier qui n'est ni dans ce fichier, ni dans un commit sur `main`,
+ni dans une PR ouverte, n'existe pas — quelle que soit la netteté du
+souvenir qu'on en a. Voir l'inventaire plus bas : quatre IDOR sont restés
+ouverts en production jusqu'au 2026-09-03 alors que deux d'entre eux étaient
+« corrigés » depuis le 2026-08-19 — sur une branche que rien ne suivait, et
+dont aucun chantier de ce fichier ne mentionnait le contenu.
+
+## CHANTIER À PART — nettoyage de deux tests e2e (noté le 2026-09-14, pas pour aujourd'hui)
+
+`02-creation-patient` et `10-creation-contrat` échouent **sur `main` lui-même**,
+indépendamment de toute PR (run 34843780251, commit `44473ae`). Tant qu'ils sont
+rouges, aucune PR ne peut afficher une CI verte, et chaque merge demande un
+arbitrage manuel « est-ce ma PR ou le fond ? ». C'est le coût réel de les
+laisser en l'état, plus que les deux tests eux-mêmes.
+
+**Ce ne sont pas des régressions applicatives.**
+
+| Test | Échoue sur | Nature |
+|---|---|---|
+| `10-creation-contrat` | `getByText(/Contrat créé\. Allez sur Tournée/)` introuvable | Le test affirme un comportement que **son propre commentaire décrit comme disparu** (« Ce test affirmait encore l'ancien comportement — il décrivait un produit qui n'existe plus », lignes 17-18). Le commentaire a été écrit, l'assertion pas corrigée |
+| `02-creation-patient` | toast `« {prénom} {nom} ajouté(e) ! »` introuvable | La fiche EST créée — le clic sur « Créer la fiche » réussit, l'échec porte sur le toast de confirmation. À vérifier : le texte a-t-il changé, ou le toast a-t-il disparu ? Les deux demandent des correctifs opposés |
+
+**À ne pas confondre avec `07-seance-coche-exercice`**, qui échoue par
+intermittence pour une raison différente et déjà documentée : l'index unique
+`seances_patient_no_double_validation_idx` rend le test non rejouable dans la
+même journée, et `staging-reset-etat-e2e.ts` ne protège pas de plusieurs runs
+concurrents contre une seule base de staging. Quatre runs le 2026-09-14 ont
+suffi à le faire tomber. Ce n'est pas le même chantier.
+
+**Règle qui s'applique ici** : un test qui décrit un produit qui n'existe plus
+est pire qu'un test absent — il occupe la place d'une vérification réelle tout
+en signalant en permanence une panne qui n'en est pas une. Corriger l'assertion
+sans vérifier ce que fait vraiment le produit reviendrait à déplacer le
+problème : commencer par constater le comportement actuel, puis écrire ce qu'on
+constate.
+
+## POINT DE REPRISE — 2026-09-14 (chantier « fiche bénéficiaire + RGPD » clos)
+
+**Mis à jour le 2026-09-14 au soir** (migrations staging, e2e local, Apley).
+**Reprise prévue sur le PC portable**, pas sur la machine de bureau : lire la
+section 0 avant toute commande.
+
+### 0. REPRISE SUR UNE AUTRE MACHINE — avant toute commande
+
+1. `git pull` sur `main`, puis `npm ci` et `npx playwright install chromium`.
+2. **`.env.test.local` n'existe pas sur le portable.** Il n'est pas dans git
+   (`.gitignore:24`) et les secrets GitHub ne sont **jamais relisibles**
+   (`gh secret list` ne donne que les noms). Deux façons de le recréer :
+   - le copier depuis la machine de bureau par un canal sûr (gestionnaire de
+     mots de passe), jamais par mail ni dans une conversation ;
+   - ou reprendre chaque valeur à sa source : Supabase staging
+     (`nnfkchhtjrferxnwlcxp` : URL, clés anon et service_role, URL du pooler
+     port 6543), Vercel `horizon-app` > Settings > Deployment Protection >
+     Protection Bypass for Automation. Les valeurs non secrètes
+     (`E2E_BASE_URL`, e-mail praticien, codes patient) sont dans
+     `gh variable list`.
+
+   Clés attendues : `SUPABASE_TEST_URL`, `SUPABASE_TEST_ANON_KEY`,
+   `SUPABASE_TEST_SERVICE_ROLE_KEY`, `PATIENT_SESSION_SECRET`,
+   `STAGING_DATABASE_URL`, `E2E_BASE_URL`, `E2E_PRATICIEN_EMAIL`,
+   `E2E_PRATICIEN_PASSWORD`, `VERCEL_AUTOMATION_BYPASS_SECRET`,
+   `E2E_PATIENT_CODE`, `E2E_PATIENT_CODE_2`.
+3. **Une clé = une ligne.** Les scripts (`loadEnvFile`) gardent la
+   **dernière** occurrence d'une clé en double. Constaté ce soir : une
+   ancienne `STAGING_DATABASE_URL` recopiée en fin de fichier masquait la
+   bonne, et toute connexion échouait en « Authentication credentials are
+   invalid ». Même situation pour `E2E_PRATICIEN_PASSWORD`. Corrigé sur la
+   machine de bureau ; à ne pas reproduire en recréant le fichier.
+4. **Playwright ne lit pas `.env.test.local`** (seuls les scripts `tsx` le
+   font). Lancer la suite ainsi :
+   `node --env-file=.env.test.local node_modules/@playwright/test/cli.js test`
+5. **Avant chaque suite** : `npx tsx scripts/staging-reset-etat-e2e.ts --apply`
+   (comme `ci.yml:174`). Et **jamais deux suites à moins de 15 minutes** :
+   06, 07 et 11 consomment trois connexions patient sur un quota de
+   5 / 15 min / IP — le second run fait tomber 11 en « Trop de tentatives ».
+6. Les deux stashes ne sont que sur la machine de bureau ; leurs sauvegardes
+   sont sur GitHub (section 6).
+
+### 1. PREMIER SUJET AU RETOUR — PR #50 Apley Scratch Test
+
+Branche `apley-persistance`, commit `87293be` : migration
+`20260914_apley_scratch_test_bilans.sql` (`apley_data JSONB`), deux lignes dans
+`src/lib/mappers.ts`, et `src/lib/mappers.test.ts` qui fait l'aller-retour des
+14 clés de `ALL_TESTS` (ensemble exact).
+
+- **Staging : appliquée le 2026-09-14 au soir**, par script. Avant : colonne
+  absente. Vérification par requête séparée : `apley_data` de type `jsonb`,
+  0 bilan sur 3 modifié. Contre-épreuve : la même requête renvoie 0 pour une
+  colonne fictive. Vue par PostgREST (le chemin réel de l'enregistrement) :
+  `apley_data` → HTTP 200, colonne fictive → HTTP 400 (`42703`).
+- **Production : NON appliquée.**
+- **CI de la PR (run 34863890459) : e2e rouge.** 02 et 10 relèvent du fond
+  (section 3). 03 a échoué d'abord sur « Bilan enregistré ! » absent —
+  cohérent avec la colonne alors manquante sur staging — puis, au second
+  essai, sur le brouillon laissé par le premier (supprimé ce soir par le
+  script de remise à zéro).
+- **Non prouvé** : que 03 passe avec le code Apley. Le run local de ce soir
+  visait la branche `staging`, identique à `main`, donc **sans** ce code.
+
+Ordre à suivre :
+
+1. Relancer l'e2e de la PR : `gh run rerun 34863890459 --failed`. Attendu :
+   seuls 02 et 10 rouges, 03 vert.
+2. Appliquer la migration en **production** (SQL Editor), puis la vérification
+   et la contre-épreuve écrites dans le fichier de migration.
+3. Merger #50 **seulement ensuite** (règle « migration en production AVANT le
+   merge » : le code écrit `apley_data`, son absence ferait échouer tout
+   enregistrement de bilan).
+4. Recette : saisir un Apley, enregistrer, rouvrir le bilan.
+
+Les saisies Apley passées sont perdues : elles n'ont jamais quitté le
+navigateur.
+
+### 2. Migrations — état au 2026-09-14 au soir
+
+| Migration | Production | Staging |
+|---|---|---|
+| `20260913_rgpd_consentement_creation.sql` (PR #44) | Appliquée (par Lorenzo) : vérification `1 \| 7 \| 0`, contre-épreuve `CONFORME (4/4)` | Appliquée (par script) : `1 \| 7 \| 0`, 0 fiche d'essai restante, `CONFORME (4/4)` |
+| `20260914_retrait_visibilite_progression.sql` (PR #46) | Appliquée (par Lorenzo) **après** le merge de #46 et le déploiement — ordre inversé volontaire, le code ne lisant plus la clé. `onglet_masque = 0`, `UPDATE 27`, vérification à 0, contre-épreuve 27/27 | Appliquée le soir par script. Avant : 5 lignes sur 5 avec la clé. Après : 0, nouveau défaut sans `progression`, autres réglages identiques sur 5/5 lignes comparées à une sauvegarde. Contre-épreuve : le même contrôle trouve bien les 5 clés sur la sauvegarde d'avant |
+| `20260914_apley_scratch_test_bilans.sql` (PR #50, non mergée) | **Non appliquée** | Appliquée et vérifiée (section 1) |
+| `20260912_pause_contrat_archivage_participant.sql` — **absente de ce tableau depuis sa création le 2026-09-12, c'est ce qui l'a fait passer sous le radar deux jours** ; ajoutée le 2026-09-15 après le signalement du `PGRST204` sur `participants.archive` | Appliquée et vérifiée le 2026-09-15 : contre-épreuve confirmée, archivage testé fonctionnel avec le compte de test | Appliquée et vérifiée le 2026-09-15 : contre-épreuve confirmée, archivage testé fonctionnel avec le compte de test |
+
+Autres faits vérifiés du jour :
+
+- **PR #44 mergée** (`9f781b4`), déploiement de production Ready sur
+  `app.horizon-suivi.fr`. Les `consentementDate` trompeuses des 7 fiches sont
+  effacées ; leur consentement manque toujours (badge « RGPD ⚠ »).
+- **Titre du praticien e2e** : l'hypothèse du matin était la bonne.
+  `staging.praticien2@example.com` n'avait pas de `titre` et partait sur
+  `/onboarding`. Corrigé (PR #48 + `staging-renseigner-titre-praticien.ts`) ;
+  relu ce soir à blanc : `titre = "Enseignant APA"`, rien à faire.
+
+### 3. Tests e2e — état au 2026-09-14 au soir
+
+Run local contre `E2E_BASE_URL` (Preview de la branche `staging`, identique à
+`main`), après `staging-reset-etat-e2e.ts --apply` : **14 réussis, 3 échoués,
+1 non exécuté**. Les 10 échecs du matin sont résolus.
+
+| Test | État | Cause |
+|---|---|---|
+| **02 création participant** | **Rouge** | Toast « … ajouté(e) ! » introuvable. Rouge aussi sur `main` en CI (run 34862690450). Chantier à part : PR #49 |
+| **10 création contrat** | **Rouge** | Assertion sur « Contrat créé. Allez sur Tournée » : comportement disparu. Rouge aussi sur `main`. PR #49 |
+| 11 rappels patient | Rouge **ce run-là seulement** | « Trop de tentatives » : second run à moins de 15 min du premier, où 11 était vert. Pas une régression |
+| 09 limitation connexion | Non exécuté | Voulu : dépend du projet `principal`, qui a des échecs |
+| 03 bilan, 07 séance | Verts | Rouges au premier run faute de remise à zéro (brouillon de la CI #50, séance du jour déjà validée) |
+
+**Toujours non prouvé par l'e2e** : le blocage de création sans consentement
+(02 échoue sur le toast, après la création).
+
+Point à instruire avec la PR #43 : son texte dit le bloc 4 (suppression des
+fiches `Test E2E…`) « ajouté et exécuté le 2026-09-08 », mais le script sur
+`main` n'a que 3 blocs — la PR n'est pas mergée. 02 recrée donc une fiche à
+chaque run.
+
+### 4. Ce qui n'est PAS vérifié — harnais de sécurité
+
+**Pas relancé depuis le matin.** Le mot de passe praticien est maintenant
+dans `.env.test.local` : relancer `npm run test:security`, en vérifiant
+l'e-mail utilisé (voir le piège de « Le compte `staging.praticien@example.com`
+est hors service »).
+
+Run local du 2026-09-14 au matin contre staging, **sans** `E2E_PRATICIEN_PASSWORD` :
+**22 réussis, 42 ignorés, 1 suite en échec**. Le `beforeAll` du bloc
+« Cloisonnement RLS multi-tenant » s'arrête à la connexion du praticien A
+(`Invalid login credentials`), ce qui fait ignorer tout le bloc :
+
+- 20 tests praticien A ↔ B (tables à `praticien_id`) ;
+- 2 tests patient A ↔ B, 1 test structure ↔ patient non rattaché ;
+- 7 tests de tables protégées par jointure ;
+- 2 tests `audit_logs` append-only ;
+- 4 tests `[F-01]` `tm6_variantes` ;
+- 4 tests `[RÔLES]` `user_roles` ;
+- 1 test `[F-11]` ;
+- 1 test de couverture complète.
+
+Ont tourné et réussi : les 13 « Findings structurels » (connexion Postgres
+directe) et les 9 `[RÔLES]` du compte admin.
+
+**Point précis resté non exercé** : la création du participant B avec
+`rgpd`, modifiée pour le trigger (`rls.spec.ts`), se situe après la
+connexion qui a échoué. À relancer avec le mot de passe **et** le bon
+e-mail — voir le piège noté dans « Le compte `staging.praticien@example.com`
+est hors service ».
+
+### 5. PR ouvertes au 2026-09-14 au soir
+
+| PR | Branche | Ouverte le | Objet |
+|---|---|---|---|
+| #50 | `apley-persistance` | 2026-09-14 | Apley Scratch Test — **prochain chantier**, section 1 |
+| #49 | `note-nettoyage-tests-e2e` | 2026-09-14 | Documentation seule : chantier 02 / 10 |
+| #43 | `e2e-nettoyage-participants` | 2026-09-08 | Bloc 4 du script de remise à zéro (fiches `Test E2E…`) + note |
+| #42 | `securite-f02-code-acces-csprng` | 2026-09-08 | [F-02] code d'accès bénéficiaire tiré par un générateur non cryptographique |
+| #28 | `message-praticien-renommage` | 2026-08-31 | `messagePierre` → `messagePraticien`, migration coordonnée **non appliquée** |
+
+### 6. Rien ne reste en local
+
+Vérifié le 2026-09-14 au soir sur la machine de bureau : `git status` propre,
+`git log --branches --not --remotes` vide, et 0 commit propre sur chacune des
+16 branches locales sans suivi. Les branches marquées « ahead »
+(`frequence-contrat`, `optim-agenda-phase1`, `staging`) ne portent que des
+commits déjà présents sur `origin/main` ou sur une branche `sauvegarde/`.
+
+Sauvegardé sur GitHub le 2026-09-14, sans rien supprimer localement :
+
+- `sauvegarde/staging-trigger-preview-2026-08-22` : le commit de
+  déclenchement de la branche locale `staging`, sans valeur (voir le
+  commentaire du job `e2e` dans `ci.yml`) ;
+- `sauvegarde/stash-2026-09-12-baseline-lint-temp` : stash touchant
+  `api/cron/rappels.ts`, `api/cron/renouveler-contrats.ts` et une migration
+  cron. **Son contenu n'est pas identique à `main`** ;
+- `sauvegarde/stash-2026-08-10-wip-tm6-settings-hds` : stash
+  `Step3_EnduranceMemory.tsx`, `useTm6Variantes.ts`, `SettingsPage.tsx`.
+  **Son contenu n'est pas identique à `main`**.
+
+Les deux stashes existent encore sur la machine où ils ont été créés : à
+trier, puis supprimer (`git stash drop`) une fois la sauvegarde jugée
+suffisante.
+
+### 7. Suite du chantier mobile
+
+Voir « CHANTIER — fusion progressive mobile / desktop » plus bas.
+
 ## RÈGLE DE MÉTHODE — un contrôle compare un ensemble exact
 
 **Un contrôle qui énumère des cas en oublie un. Comparer un ensemble exact,
@@ -697,8 +956,23 @@ UNION ALL SELECT 'user_roles (table)',
                WHERE table_schema='public' AND table_name='user_roles')
 UNION ALL SELECT 'app_role_courant() (fonction)',
        EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-               WHERE n.nspname='public' AND p.proname='app_role_courant');
+               WHERE n.nspname='public' AND p.proname='app_role_courant')
+UNION ALL SELECT 'trg_participants_consentement_rgpd_creation (trigger)',
+       EXISTS (SELECT 1 FROM pg_trigger
+               WHERE tgrelid='public.participants'::regclass
+                 AND tgname='trg_participants_consentement_rgpd_creation' AND NOT tgisinternal);
 ```
+
+⚠️ Exception à l'ordre ci-dessus pour `20260913_rgpd_consentement_creation.sql` :
+elle s'applique **après** le déploiement du code, voir la section « RÈGLE —
+consentement RGPD obligatoire à la création » plus bas.
+
+⚠️ Même exception pour `20260914_retrait_visibilite_progression.sql` (PR #46) :
+elle retire une clé que le nouveau code ne lit plus. Appliquée en production
+après le merge et le déploiement, vérifiée (voir le point de reprise en tête
+de fichier). Une exception se justifie migration par migration, jamais par
+défaut : `20260914_apley_scratch_test_bilans.sql` (PR #50) suit l'ordre
+normal, parce que le code écrit la nouvelle colonne.
 
 ⚠️ Cette requête ne contrôle que la **présence** des objets, pas leurs
 privilèges. Pour `user_roles`, la présence ne suffit pas : voir la
@@ -713,6 +987,185 @@ manuelle et fait partie de la revue de toute PR touchant `supabase/migrations/`.
 Et elle se fait **après** l'application, jamais à la place : voir « un
 « Success » du SQL Editor ne prouve PAS qu'une migration est appliquée »
 ci-dessus. Une migration peut afficher un succès sans avoir rien créé.
+
+## RÈGLE — consentement RGPD obligatoire à la création d'un bénéficiaire
+
+**Aucune fiche ne se crée sans `rgpd.consentementObtenu = true`, quel que soit
+le chemin. Une fiche existante sans consentement reste modifiable.**
+
+### Ce qui a rendu cette règle nécessaire (2026-09-13)
+
+7 fiches de production sans consentement, toutes avec un objet `rgpd` complet
+à `false`, `methodeConsentement: "oral_note"` et `consentementDate` égale au
+jour de création : l'état initial du formulaire complet, enregistré sans que
+rien ne soit coché. Le formulaire affichait un avertissement et ne bloquait
+rien. Le formulaire mobile et l'import Excel n'écrivaient même pas `rgpd`.
+
+### Où la règle est appliquée
+
+| Chemin | Blocage |
+|---|---|
+| Formulaire complet (création) | `submit()` renvoie à l'étape 5 avec un message |
+| Formulaire mobile | même règle, même module |
+| Import Excel | colonne R « Consentement RGPD » : toute ligne sans « Oui » est refusée et listée |
+| Base de données | trigger `BEFORE INSERT` (`20260913_rgpd_consentement_creation.sql`) |
+
+Règles partagées : `src/lib/consentementRgpd.ts` (testé).
+
+**Pas de contrainte `CHECK … NOT VALID`** : `NOT VALID` n'épargne que la
+vérification initiale ; la contrainte est ensuite contrôlée à chaque UPDATE,
+ce qui aurait bloqué toute modification des fiches sans consentement
+(géocodage et archivage compris).
+
+### Ordre d'application : APRÈS le déploiement du code
+
+Inverse de la règle « migration en production AVANT le merge », parce que la
+dépendance est inversée : le nouveau code marche avec ou sans trigger, mais le
+trigger appliqué sous l'ancien code rejetterait toutes les créations mobiles et
+Excel (`rgpd = null`) en production.
+
+1. Merger, attendre la fin du déploiement de production.
+2. Appliquer en production, puis les deux requêtes ci-dessous.
+3. Appliquer sur staging, relancer le harnais.
+
+### Vérification (requête séparée, lecture seule)
+
+```sql
+SELECT
+  (SELECT tgtype FROM pg_trigger
+    WHERE tgrelid = 'public.participants'::regclass
+      AND tgname = 'trg_participants_consentement_rgpd_creation'
+      AND NOT tgisinternal) AS tgtype_attendu_7,
+  (SELECT count(*) FROM pg_proc p
+     JOIN pg_namespace n ON n.oid = p.pronamespace
+     CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) a
+    WHERE n.nspname = 'public' AND p.proname = 'exiger_consentement_rgpd_creation'
+      AND a.privilege_type = 'EXECUTE' AND a.grantee <> p.proowner) AS roles_execute_attendu_0;
+```
+
+Attendu : `7` (BEFORE INSERT FOR EACH ROW, ni UPDATE ni DELETE) et `0`.
+
+### Contre-épreuve (n'écrit rien)
+
+Le bloc se termine par une exception **volontaire** qui annule tout. Le
+résultat attendu est donc une erreur dont le message commence par
+`CONFORME`. Tout message `NON CONFORME` est un échec.
+
+```sql
+DO $contre$
+DECLARE v_id uuid;
+BEGIN
+  BEGIN
+    INSERT INTO public.participants (nom, prenom) VALUES ('ContreEpreuve', 'SansRgpd');
+    RAISE EXCEPTION 'NON CONFORME (1/4) : creation avec rgpd = null acceptee';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO public.participants (nom, prenom, rgpd)
+    VALUES ('ContreEpreuve', 'RgpdFalse', '{"consentementObtenu": false}'::jsonb);
+    RAISE EXCEPTION 'NON CONFORME (2/4) : creation avec consentementObtenu = false acceptee';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO public.participants (nom, prenom, rgpd)
+    VALUES ('ContreEpreuve', 'AvecRgpd', '{"consentementObtenu": true}'::jsonb)
+    RETURNING id INTO v_id;
+  EXCEPTION WHEN check_violation THEN
+    RAISE EXCEPTION 'NON CONFORME (3/4) : creation avec consentement refusee';
+  END;
+
+  BEGIN
+    UPDATE public.participants SET rgpd = NULL WHERE id = v_id;
+    UPDATE public.participants SET telephone = '0000000000' WHERE id = v_id;
+    INSERT INTO public.participants (id, nom, prenom, rgpd)
+    VALUES (v_id, 'ContreEpreuve', 'Upsert', NULL)
+    ON CONFLICT (id) DO UPDATE SET prenom = EXCLUDED.prenom;
+  EXCEPTION WHEN check_violation THEN
+    RAISE EXCEPTION 'NON CONFORME (4/4) : modification d''une fiche sans consentement refusee';
+  END;
+
+  RAISE EXCEPTION 'CONFORME (4/4) — exception volontaire : rien n''a ete ecrit';
+END
+$contre$;
+```
+
+Sur staging, `staging-query.ts` ouvre une transaction **en lecture seule** :
+les INSERT de la contre-épreuve y échoueraient pour une autre raison, et le
+message ne serait jamais `CONFORME`. Il faut une transaction en écriture,
+annulée à la fin (`BEGIN` … `ROLLBACK`).
+
+### État au 2026-09-14
+
+- Code en production (PR #44, `9f781b4`).
+- Migration appliquée et vérifiée en **production** puis sur **staging**
+  (résultats dans le point de reprise en tête de fichier).
+- Les `consentementDate` trompeuses des 7 fiches sont effacées ; leur
+  consentement reste à régulariser à la main.
+- **Non prouvé** : l'e2e 02 (blocage de création) et le harnais praticien
+  avec trigger actif — voir le point de reprise.
+
+## CHANTIER — fusion progressive mobile / desktop
+
+### Décision (2026-09-13)
+
+L'espace pro existait en deux applications : l'interface desktop (20 écrans
+routés) et `AppMobile`, affichée sous 768 px (`useDevice`). Diagnostic
+chiffré du 2026-09-13 :
+
+- 9 écrans en double, 11 desktop seulement ;
+- 3 067 lignes propres au mobile, dont environ 90 % réécrivent un écran
+  existant et 1 016 lignes de code mort ;
+- une correction transversale devait être faite deux fois, et c'est ce qui
+  avait laissé entrer un SIRET à 15 chiffres.
+
+Option retenue : **fusionner écran par écran**, plutôt que combler les
+manques un par un ou tout unifier d'un coup.
+
+### RÈGLE — la bascule en paysage est un usage voulu
+
+Le praticien tourne **délibérément** son téléphone pour atteindre l'interface
+desktop : c'est son seul accès aux 11 écrans sans version mobile. **Ne pas la
+bloquer, ne pas déplacer le seuil de 768 px.** Le seul défaut à traiter était
+la perte de la saisie en cours. Cette bascule deviendra inutile écran par
+écran, à mesure de la fusion.
+
+### Mécanisme en place
+
+- **Routes fusionnées :** `src/lib/routesMobile.ts` → `estRouteInterfaceUnique`
+  liste les routes servies par l'interface unique même sous 768 px (testé).
+- **Choix de l'interface :** `EspacePro` dans `App.tsx`. Sur une route
+  fusionnée, mobile et desktop rendent le même arbre React : la rotation n'y
+  démonte rien.
+- **Cadre commun :** la barre latérale se replie en barre du bas
+  (`BarreNavigationMobile`) sous 768 px, en CSS seulement.
+- **`AppMobile` suit l'URL**, et ses URL sont celles des écrans desktop
+  équivalents. Un écran desktop seul affiche « Écran disponible en mode
+  paysage ».
+- **Saisies des écrans encore en double :** conservées en `sessionStorage`
+  (`src/lib/etatSession.ts`), effacées à la déconnexion. Les brouillons de
+  bilan et de bénéficiaire sont écrits au démontage.
+
+### Avancement
+
+| État | Écrans |
+|---|---|
+| Fusionné | Fiche bénéficiaire (`/participant/:id`) — 2026-09-14 |
+| Encore en double (8) | Tableau de bord ↔ Accueil + Bénéficiaires, nouveau bénéficiaire, modifier la fiche, nouveau bilan, détail bilan, assistant, tournée, paramètres |
+| Desktop seulement (11) | Agenda, carte, zones, stats, bibliothèque, programme, nouveau contrat, rapport d'évolution, modifier un bilan, détail structure, administration |
+
+### Fusionner l'écran suivant
+
+1. Rendre la page desktop utilisable sous 768 px, seulement ce dont cet
+   écran a besoin.
+2. Reprendre les fonctions que seule la version mobile offrait.
+3. Ajouter la route dans `estRouteInterfaceUnique`, avec un test dans
+   `routesMobile.test.ts`.
+4. Supprimer l'écran mobile, son cas dans `AppMobile` et la persistance en
+   session qui lui était propre : sur une route fusionnée, elle ne sert plus.
+5. Vérifier la page à 390 px **à l'écran**. Pour la fiche, ça n'a pas été
+   fait (l'onglet Contrats notamment).
 
 ## Échecs connus et acceptés du harnais `tests/security/rls.spec.ts`
 
@@ -808,34 +1261,295 @@ survit.
 Playwright, remet le jeu de démo dans son état de départ. Toute écriture
 nouvelle introduite par un test doit y être ajoutée dans la même PR.
 
+**Le cas `02` a mis douze jours à recevoir son bloc.** La règle ci-dessus le
+nommait dès le 2026-08-27 (« `02` ajoute un participant à chaque passage »),
+mais seuls les deux autres cas ont reçu leur bloc dans le script. Entre-temps,
+49 fiches `Test E2E<timestamp>` se sont accumulées sur staging, du 2026-08-26
+au 2026-09-06, chacune portant un `code_acces` actif. Bloc 4 ajouté et
+exécuté le 2026-09-08 : 49 supprimées, les deux participants de démo intacts.
+
+Ce n'était pas une panne — `supprimer()` lève sur erreur HTTP, rien
+n'échouait en silence. C'était un **trou de couverture** : écrire la règle et
+nommer le cas ne suffit pas, tant que le bloc n'est pas dans le script. La
+phrase ci-dessus (« doit y être ajoutée dans la même PR ») est la seule chose
+qui l'empêche de se reproduire ; elle n'a pas été suivie.
+
 Le corollaire vaut aussi pour les tests eux-mêmes : un test qui a besoin
 d'une donnée doit vérifier qu'elle est là (`expect(...).toBeGreaterThan(0)`)
 plutôt que de boucler sur une liste éventuellement vide — sinon il passe au
 vert sans rien vérifier, ce qui est pire qu'un échec.
 
-## Chantiers de sécurité identifiés mais non appliqués
+## CHANTIER — le secret du cron est recopié en clair à chaque exécution
 
-Trouvés en préparant le lot 6 de l'étape 1 (rate limit `api/claude.ts`,
-F-12) : `audit-securite-global` mélange ce correctif à 3 autres dans le même
-commit (`d6be50f`, fichier `api/claude.ts`), jamais revus ni planifiés.
-Ils ont l'air utiles mais n'ont pas été extraits — seul le rate limit l'a
-été (voir `20260817_securite_08_rate_limit_claude.sql`). À traiter comme un
-lot séparé, avec sa propre revue :
+**Identifié le 2026-08-31, pendant la rotation de `x-cron-secret`. Non traité,
+volontairement : la rotation devait aboutir d'abord.**
 
-- **Plafond de taille de prompt** (`PROMPT_MAX_LENGTH`, `api/_lib/guard.js`
-  sur `audit-securite-global`) — réduit l'abus de coût par des prompts
-  démesurés. Absent de `main`.
-- **Garde-fou anti prompt-injection** — message système dans `api/claude.ts`
-  instruisant le modèle à ne jamais traiter le contenu utilisateur (notes
-  cliniques, dictées patient) comme une instruction. Défense en profondeur,
-  pas une garantie absolue vu que 8 appelants différents côté `src/`
-  envoient des formats hétérogènes dans `prompt`.
-- **Sanitisation des messages d'erreur** — remplace `String(err)` (peut
-  exposer des détails internes au client) par un message générique
-  `'Erreur serveur'` + `console.error` côté serveur, sur les deux `catch`
-  de `api/claude.ts`.
+### Le constat
 
-### Code mort de l'ancienne architecture « client anon direct »
+Le secret est écrit en clair dans la commande du job pg_cron :
+
+```sql
+SELECT net.http_post(
+  url     := 'https://app.horizon-suivi.fr/api/cron/rappels',
+  headers := jsonb_build_object('x-cron-secret', '<le secret, en clair>'),
+  body    := '{}'::jsonb
+);
+```
+
+`cron.job_run_details` conserve la colonne `command` de **chaque exécution**.
+Le job tourne toutes les heures : le secret est donc recopié 24 fois par jour
+dans un historique que rien ne purge. Le 2026-08-31, la purge qui a suivi la
+rotation a supprimé **1861 lignes**.
+
+### Pourquoi la purge n'est pas le correctif
+
+Elle nettoie le passé, elle n'empêche rien. Tant que le secret vit dans
+`cron.job.command`, l'historique se reconstitue à la vitesse d'une ligne par
+heure. **C'est une opération à refaire, pas une correction** — et une
+opération qu'on oubliera, parce que rien ne la déclenche.
+
+### La piste
+
+**Supabase Vault** (`vault.create_secret` / `vault.decrypted_secrets`) stocke
+le secret chiffré et le job ne référence plus qu'un identifiant :
+
+```sql
+headers := jsonb_build_object(
+  'x-cron-secret',
+  (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'cron_secret')
+)
+```
+
+La commande devient alors sans valeur pour qui la lit, et l'historique aussi.
+
+### Ce qui reste à trancher avant de le faire
+
+- **Le `command` enregistré contient-il la requête littérale ou son résultat ?**
+  À vérifier sur une exécution réelle : si pg_cron journalise la commande
+  telle qu'écrite, le problème disparaît ; s'il journalise autre chose, il
+  faut le constater avant de conclure. Ne pas raisonner sans la donnée.
+- **Quel rôle lit `vault.decrypted_secrets`** au moment où le job s'exécute,
+  et cette lecture est-elle possible depuis le contexte de pg_cron.
+- **La rotation devient une mise à jour du Vault**, plus une reprogrammation
+  du job : la procédure de rotation documentée est à réécrire en conséquence.
+
+### Portée
+
+Le même schéma vaut pour le job de staging. Et pour tout futur job pg_cron
+qui porterait un secret dans ses en-têtes.
+
+## INVENTAIRE — ce qui n'a jamais été extrait d'`audit-securite-global`
+
+> **Mise à jour du 2026-09-07.** Les points 4, 5 et 6 ont bougé (PR #38), et
+> les points 1 et 2 ont été **corrigés dans ce document, pas dans le code** :
+> ils annonçaient encore « branche `securite-idor-patient-f13-f14`, non
+> mergée » alors que la PR #31 était mergée depuis le 2026-09-04 (`aa61458`,
+> ancêtre de `main`). Un lecteur en concluait que les deux IDOR étaient
+> ouverts en production. Ils ne l'étaient pas.
+>
+> Leçon à retenir sur ce document plutôt que sur ces deux lignes : **un
+> inventaire daté ment dès que le code avance sans lui.** Les états y sont
+> désormais accompagnés du SHA qui les prouve, pour qu'une relecture puisse
+> les revérifier sans faire confiance à la phrase.
+>
+> Deux remarques de portée, à lire avant de se fier au tableau :
+>
+> - **Cet inventaire ne couvre que `api/`, `src/` et `vercel.json`.** Les
+>   Edge Functions Supabase n'y ont jamais figuré. `analyser-seance` était
+>   pourtant appelable sans vérification d'appelant et avec CORS à `*`
+>   jusqu'au 2026-09-07 (PR #37), et `interpreter-bilan`, jamais appelée par
+>   aucun code, transmettait un champ `prompt` brut à Anthropic — elle a été
+>   supprimée. Un inventaire dressé « fichier par fichier » qui omet un
+>   répertoire entier donne une fausse assurance : `supabase/functions/` est
+>   à traiter à part.
+> - **Un commentaire de migration affirmait un contrôle inexistant.**
+>   `20260817_securite_08_rate_limit_claude.sql` écrivait que `api/claude.ts`
+>   « a un plafond de taille de prompt », alors que le point 4 ci-dessous le
+>   classait `Ouvert` au même moment. Corrigé dans le fichier de migration
+>   (commentaire seul, DDL inchangé). À retenir pour la relecture des autres
+>   migrations : leurs préambules citent des documents absents de `main` et
+>   des contrôles supposés acquis.
+
+**Dressé le 2026-09-03, fichier par fichier contre `origin/main`.** La liste
+qui précédait n'en comptait que 3 : elle avait été écrite en préparant le
+lot 6, à partir d'un seul commit (`d6be50f`), sans inventaire complet de la
+branche. Sept éléments manquaient, dont deux IDOR en production.
+
+`audit-securite-global` compte **21 commits jamais mergés**. Elle est
+désormais poussée sur `origin` (2026-09-03) : `docs/ETAT_AUDIT.md` interdit
+le **merge**, pas la sauvegarde, et elle portait les seules versions connues
+de plusieurs correctifs sur un unique disque.
+
+### La liste, et l'état réel de chaque élément
+
+| # | Élément | Où | État au 2026-09-03 |
+|---|---|---|---|
+| 1 | **[F-13] IDOR `api/patient/retour-seance.ts`** — `seanceId` du body inséré sans contrôle d'appartenance | `api/` | **Corrigé et mergé**, PR #31 (merge `aa61458`, 2026-09-04). Contrôle vérifié sur `main` le 2026-09-07 : `retour-seance.ts:82-83`, `.eq('id', seanceId).eq('participant_id', participantId)`, 404 et non 403 |
+| 2 | **[F-14] IDOR `api/patient/seance.ts`** — `exercices[].id` inséré sans contrôle | `api/` | **Corrigé et mergé**, même PR #31 — avec les 2 contrôles voisins qui manquaient aussi (`programmeId`, `seanceId`). Vérifiés sur `main` le 2026-09-07 : `seance.ts:73-74` (programme → participant), `:87-88` (séance → programme), `:109-111` (exercices → séance, en un seul aller-retour). `git log aa61458..main` sur ces deux fichiers est vide : rien ne les a touchés depuis |
+| 3 | **[F-02] `code_acces` tirés avec `Math.random()`** | `src/utils/codeAcces.ts` | **Ouvert.** Détail plus bas, section « chantiers annexes » |
+| 4 | **Plafond de taille de prompt** (`PROMPT_MAX_LENGTH`, `api/_lib/guard.ts`) | `api/claude.ts` | **Corrigé** le 2026-09-07, PR #38. `guard.ts` existe désormais. Seuil 60 000 caractères, posé sur une mesure (catalogue d'exercices = 21 313 car. pour 64 exercices ; plus gros prompt ≈ 24 000) et non sur une estimation. Verrouillé par `src/utils/genererProgrammeIA.test.ts`, qui échoue si le catalogue grossit au point de menacer la génération de programme |
+| 5 | **Garde-fou anti prompt-injection** — message système instruisant le modèle à traiter le texte utilisateur comme donnée, jamais comme instruction | `api/claude.ts` | **Corrigé** le 2026-09-07, PR #38, sous la forme décrite : `SYSTEME_CADRAGE` dans `api/_lib/guard.ts`. **Portée à connaître** : le prompt arrive assemblé, la consigne de tâche et le texte dicté par un tiers y sont indiscernables. Un détecteur par motif est donc impossible ici — il fouillerait les prompts de l'application, qui sont faits d'instructions. Le message système distingue la consigne (à suivre) des données citées (à analyser) ; c'est le maximum exprimable sans délimiteur, et c'est plus faible que le bloc à nonce de `analyser-seance`. Le vrai renforcement serait de déplacer l'assemblage du prompt côté serveur, ou d'appliquer le détecteur au niveau des champs dans les 7 constructeurs — non fait |
+| 6 | **Sanitisation des messages d'erreur** — `String(err)` → `'Erreur serveur'` + `console.error` | `api/claude.ts` (2 `catch`), `api/patient/seance.ts`, `api/patient/retour-seance.ts` | **Partiellement corrigé.** `api/claude.ts` fait le 2026-09-07, PR #38 : les 2 `catch` plus le corps d'erreur d'Anthropic, qui repartait aussi au navigateur et n'était pas compté dans ce point. **Reste ouvert** sur `api/patient/seance.ts` et `api/patient/retour-seance.ts` |
+| 7 | **En-têtes de sécurité HTTP** — HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP, CSP en `Report-Only`, plus `Cache-Control: no-store` sur `/api/*` | `vercel.json` | **Ouvert.** Aucun en-tête sur `main` |
+| 8 | **Durcissement Sentry client** — `delete event.user` et `event.request.cookies` dans `beforeSend` | `src/lib/sentry.ts` | **Ouvert.** Défense en profondeur : rien n'appelle `setUser()` et `sendDefaultPii` est déjà à `false` |
+| 9 | **Validation Zod des entrées API** (12 routes) | `api/` | **Jamais fait, et pas arbitré.** Bloqué par l'absence d'environnement de test au moment de l'audit (`ETAT_AUDIT.md`). Les 12 routes ont une validation manuelle par champ ; migrer vers Zod changerait la forme des réponses d'erreur consommées par `src/lib/patientApi.ts` |
+| 10 | **7 documents d'audit** — `RAPPORT_SECURITE.md`, `CARTOGRAPHIE_SECURITE.md`, `AUDIT_ROUTES_API.md`, `PACK_CODE_SECURITE_REFERENCE.md`, `MES_ACTIONS.md`, `ETAT_AUDIT.md`, `AUDIT_DEPENDANCE_XLSX.md` | `docs/` | **Absents de `main`.** Plusieurs migrations mergées les citent pourtant comme référence : ces renvois pointent aujourd'hui vers des fichiers introuvables pour qui ne connaît pas la branche |
+
+### Inventaire des surfaces déployées (dressé le 2026-09-07)
+
+Le tableau ci-dessus liste des **correctifs**, pas des **surfaces**. C'est ce
+qui a permis à deux angles morts de subsister : `supabase/functions/` n'y a
+jamais figuré, et deux routes API non plus. Cette section liste tout ce qui
+est joignable depuis l'extérieur, pour que l'omission suivante soit visible.
+
+Établi par `git ls-tree -r main --name-only -- api/` (hors `_lib/` et
+`*.test.ts`), `supabase/functions/`, et les `rewrites` de `vercel.json`.
+
+| Surface | Contrôle d'accès | Couverte par un audit précédent ? |
+|---|---|---|
+| `api/claude.ts` | JWT praticien + rate limit 100/h + plafond 60 000 | Oui — points 4, 5, 6 |
+| `api/cron/rappels.ts` | `x-cron-secret` vs `CRON_SECRET`, comparaison à temps constant | Oui — PR #23, #26 |
+| `api/organisation.ts` | `exigerAdmin` (`_lib/adminAuth.ts`) | Oui — PR #25 |
+| `api/patient/activite.ts` | token patient + 403 par test/exercice non activé | Partiellement |
+| `api/patient/me.ts` | token patient | Oui |
+| `api/patient/push-subscribe.ts` | token patient | Non |
+| `api/patient/retour-seance.ts` | token patient + appartenance (F-13) | Oui — points 1, 6 |
+| `api/patient/seance.ts` | token patient + 3 contrôles d'appartenance (F-14) | Oui — points 2, 6 |
+| `api/patient/session.ts` | émet le token ; rate limit par IP (`patient_login_attempts`) | Oui |
+| **`api/planning/ics.ts`** | **token en query string**, validé contre `praticiens.token_planning_ics` | **NON — jamais auditée** |
+| **`api/seances/supprimer-planifiees.ts`** | JWT praticien + 403 sur contrats non possédés | **NON — jamais auditée** |
+| `api/structure/data.ts` | `validateStructureToken` | Oui — PR #12, #18, #20 |
+| `supabase/functions/analyser-seance` | CORS fermé + JWT + plafonds + nonce | Depuis PR #37 seulement |
+| `vercel.json` rewrites | `/api/(.*)` et fallback SPA — aucune route cachée | — |
+
+Aucun webhook. Un seul cron. Une seule Edge Function depuis la suppression
+d'`interpreter-bilan` (#37).
+
+#### `api/planning/ics.ts` — ce qu'il faut savoir
+
+Endpoint **public à URL-capacité** : le token voyage en query string parce
+qu'aucune application calendrier ne sait ajouter d'en-tête à une
+souscription webcal (contrainte documentée dans le fichier, l.9-11). Il est
+validé côté serveur via `service_role`, qui contourne RLS.
+
+- **L'entropie est correcte** : `crypto.getRandomValues` (`SettingsPage.tsx:565`),
+  pas `Math.random()` — contrairement aux codes d'accès patient (point 3).
+- **Aucun rate limit** sur cette route, contrairement à `/api/claude` et à la
+  connexion patient. C'est la seule route authentifiée dans ce cas.
+- Le token apparaît dans les journaux Vercel, l'historique du navigateur et
+  la configuration de l'application calendrier du praticien — inhérent à
+  webcal, mais il donne accès à **tout le planning** d'un praticien, noms des
+  bénéficiaires compris.
+- Réponses volontairement peu bavardes (404 générique) : pas de fuite sur
+  l'existence d'un mécanisme d'authentification.
+
+#### `api/seances/supprimer-planifiees.ts` — ce qu'il faut savoir
+
+**Route destructive**, jamais listée dans un audit. Le contrôle d'accès y est
+correct : JWT praticien vérifié (l.19-30), puis appartenance de **tous** les
+contrats vérifiée avant toute suppression (403 l.50 si un seul n'appartient
+pas à l'appelant). La suppression est en outre bornée à `statut = 'planifiee'`
+et `date >= dateMin` (l.56-58) — elle ne touche pas les séances passées ni
+réalisées.
+
+Le point à connaître est ailleurs : **la journalisation est conditionnelle.**
+
+`logAuditEvent` n'est appelé que si `raison === 'fin_de_contrat'` **et**
+`nbSupprimees > 0` (l.65-75). Or sur les trois points d'appel côté client,
+un seul envoie cette raison :
+
+| Appelant | `raison` envoyée | Trace dans `audit_logs` |
+|---|---|---|
+| `ContratsTab.tsx:212` | `'fin_de_contrat'` | oui |
+| `ContratsTab.tsx:262` | aucune | **non** |
+| `ModalPlanificateur.tsx:32` | aucune | **non** |
+
+Deux des trois chemins de suppression de masse ne laissent donc aucune trace
+applicative. Ce n'est pas une faille d'accès — l'appelant est authentifié et
+propriétaire — mais cela retire toute possibilité de reconstituer après coup
+ce qui a été supprimé, par qui et quand. À arbitrer : soit rendre `raison`
+obligatoire, soit journaliser inconditionnellement.
+
+### Deux pièges à connaître avant toute extraction
+
+**Un cherry-pick brut régresserait.** La branche a été figée le 2026-08-19 ;
+`main` a avancé depuis. Trois fichiers y sont désormais **en retard** :
+
+- `api/structure/data.ts` et `api/_lib/structureAuth.ts` — dépassés par les
+  PR #12, #18 et #20 ;
+- `api/claude.ts` — la version de la branche est amputée du log Sentry du
+  rate limit, ajouté par la PR #11.
+
+L'extraction se fait à la main, correctif par correctif, en repartant de
+`main`.
+
+**Le schéma a bougé.** Quinze jours suffisent : entre le gel de la branche
+(2026-08-19) et le 2026-09-03, `user_roles` a été posée (2026-08-29), la
+parité des `GRANT` a été reprise deux fois (`20260821`, `20260822`),
+`structures.expires_at` est apparue, et `tm6_variantes` a reçu un
+propriétaire par ligne. Les hypothèses de base d'un correctif se revérifient
+donc sur la base réelle avant réécriture, quel que soit son âge apparent —
+c'est ce qui a été fait pour F-13/F-14, dont les quatre chaînes de clés
+étrangères ont été relues sur staging avant d'écrire une ligne.
+
+Le mot « étape 3 » ci-dessous renvoie à un message de commit, pas à un plan :
+voir la première section de ce fichier.
+
+### Compatibilité avec `user_roles` — vérifiée, pas supposée
+
+`git grep -i "user_roles\|app_role_courant"` sur `audit-securite-global`
+renvoie **zéro ligne** : la branche ignore totalement le modèle de rôles
+posé par l'étape 3. Ce qui reste à extraire est du code applicatif (`api/`,
+`src/`, `vercel.json`), pas des policies RLS, et rien n'y suppose que « tout
+compte authentifié est un praticien ». Aucune incompatibilité — seulement le
+retard décrit ci-dessus.
+
+## PREUVE D'EXPLOITATION — quatre IDOR exercés sur staging (2026-09-03)
+
+**Ce ne sont pas des failles déduites d'une lecture de code. Elles ont été
+exercées, et les écritures ont eu lieu.**
+
+`scripts/staging-sonde-idor-patient.ts` appelle les handlers de
+`POST /api/patient/seance` et `POST /api/patient/retour-seance` en process,
+avec le JWT d'un bénéficiaire et l'identifiant d'un autre. Sur le code de
+`main` du jour, **les quatre appels frauduleux ont renvoyé `200`** :
+
+| Contrôle absent | Ce qu'il permettait |
+|---|---|
+| `programmeId` | écrire une séance dans le programme d'un tiers |
+| `seanceId` | la rattacher à une séance qui n'est pas de ce programme |
+| `exercices[].id` — [F-14] | y joindre l'exercice d'un tiers |
+| `seanceId` du retour — [F-13] | rattacher son ressenti (Borg RPE, bien-être — **donnée de santé**) à la séance d'un tiers |
+
+```
+AVANT (routes à l'état main)   : 4 sens ROUGE en ÉCHEC (200 au lieu de 404),
+                                 2 sens VERT OK
+                                 >>> 4 contrôle(s) NON CONFORME(S) <<<
+APRÈS (securite-idor-patient-f13-f14) : 6/6 OK
+                                 >>> CONFORME <<<
+```
+
+Les identifiants ne sont pas à deviner : ils circulent légitimement jusqu'au
+navigateur via `GET /api/patient/me`, et `seancePatientId` est renvoyé par
+`POST /api/patient/seance`. Ils restent valides indéfiniment.
+
+### Ce que cet épisode apprend, au-delà des quatre correctifs
+
+1. **Une clé étrangère ne prouve jamais une appartenance.** Elle prouve
+   qu'une ligne existe. La règle était déjà écrite dans `CHECKLIST_RELEASE.md`
+   (section 3) après F-13/F-14 — elle n'a pas empêché les failles de rester
+   ouvertes, parce que le correctif, lui, n'était suivi nulle part.
+2. **Le sens vert d'une épreuve n'est pas décoratif.** Ces routes se
+   déploient **au merge**, sans étape manuelle : un contrôle trop strict
+   casse la validation de séance en production dans la minute. Chaque
+   contrôle est donc éprouvé dans les deux sens.
+3. **Une sonde peut mentir dans le sens rassurant.** Première version : sans
+   nettoyage entre chaque appel, un appel qui aboutit — le symptôme même du
+   contrôle manquant — laisse une ligne qui fait échouer le suivant sur la
+   contrainte d'unicité (`23505`). La sonde comptait ce `409` comme
+   « refusé ». Elle nettoie désormais avant, entre chaque appel, et après.
+
+## Code mort de l'ancienne architecture « client anon direct »
 
 `MIGRATION_ANON.md` décrit le passage d'un accès Supabase anon direct
 (portail structure) vers les routes serveur `GET /api/structure/*`
@@ -934,6 +1648,73 @@ réinitialiser le mot de passe pour ne pas désynchroniser le secret GitHub
 utilisé par la CI), il doit être **documenté** plutôt que redécouvert :
 lancer le harnais en local suppose de poser cette variable soi-même.
 
+### Le compte `staging.praticien@example.com` est hors service — remplacé
+
+**Depuis le 2026-09-08, le compte praticien de staging est
+`staging.praticien2@example.com`
+(`0b38b494-3a9c-45c8-94de-b054d4e6204e`). L'ancien,
+`staging.praticien@example.com`, est mort : ne pas y revenir.**
+
+Pourquoi il a été contourné et non réparé : son mot de passe n'était plus
+connu (la valeur de `.env.test.local` était périmée, voir ci-dessus),
+l'interface Supabase n'offre pas de réinitialisation directe pour ce
+compte, et sa **suppression échoue** — `Database error deleting user`. Un
+compte qu'on ne peut ni ouvrir, ni réinitialiser, ni supprimer n'a pas de
+correctif : il a été remplacé.
+
+Ce que le remplacement a impliqué, et qu'un run futur suppose déjà fait :
+
+- les participants de démo **Camille Martin** et **Julien Bernard** sont
+  rattachés au nouveau `praticien_id` ;
+- `E2E_PATIENT_CODE` / `E2E_PATIENT_CODE_2` valaient `CAM001` / `JUL002`
+  dans `.env.test.local` — des codes qui ne correspondaient à aucune ligne
+  en base. Les valeurs justes sont `CAME2E26` / `JUNE2E27`, que les
+  variables de dépôt portaient déjà depuis le 2026-06-16 : c'est le fichier
+  local qui avait dérivé, pas la CI ;
+- la variable de dépôt `E2E_PRATICIEN_EMAIL` a été repointée le 2026-09-08.
+
+**La décision du 2026-08-27 de ne pas réinitialiser le mot de passe est
+caduque pour l'ancien compte, mais son motif vaut toujours pour le
+nouveau** : le mot de passe de `staging.praticien2@example.com` n'existe
+que dans le shell de l'opérateur et dans le secret GitHub
+`E2E_PRATICIEN_PASSWORD`. Le poser à la main avant chaque run local reste
+la procédure.
+
+**Piège relevé le 2026-09-14, non corrigé** : `scripts/run-harnais-local.mjs`
+pose encore par défaut `E2E_PRATICIEN_EMAIL=staging.praticien@example.com`,
+c'est-à-dire l'ancien compte mort. Poser le mot de passe ne suffit donc pas en
+local : il faut aussi `E2E_PRATICIEN_EMAIL=staging.praticien2@example.com`.
+Correctif attendu : changer cette valeur par défaut dans le script.
+
+### Cinq valeurs du harnais sont des *variables* de dépôt, pas des secrets
+
+Piège vérifié le 2026-09-08, après deux synchronisations manquées. Les deux
+workflows lisent :
+
+| Valeur | Lue comme |
+|---|---|
+| `E2E_PRATICIEN_EMAIL` | `vars.` |
+| `E2E_PATIENT_CODE`, `E2E_PATIENT_CODE_2` | `vars.` |
+| `E2E_STRUCTURE_TOKEN`, `E2E_BASE_URL` | `vars.` |
+| `E2E_PRATICIEN_PASSWORD` | `secrets.` |
+
+(`ci.yml:78-86`, `security.yml:94-98`.)
+
+`gh secret set E2E_PRATICIEN_EMAIL ...` **ne change donc rien** : la CI
+continue de lire `vars.E2E_PRATICIEN_EMAIL`. Un secret du même nom existe
+sans être lu par personne, et `gh secret list` affiche une date de mise à
+jour récente qui donne l'illusion de la synchro. C'est ce qui a fait croire
+deux fois que la CI était à jour.
+
+`scripts/staging-push-github-secrets.ts` n'aide pas ici : il ne connaît que
+`gh secret set` et ne pose aucune des cinq variables. Pour celles-là, la
+commande est `gh variable set`. **Vérifier avec `gh variable list`, pas avec
+`gh secret list`.**
+
+Trois secrets orphelins subsistent du 2026-09-08 (`E2E_PRATICIEN_EMAIL`,
+`E2E_PATIENT_CODE`, `E2E_PATIENT_CODE_2`) : aucun workflow ne les lit. À
+supprimer, pour que le prochain lecteur de `gh secret list` ne s'y fie pas.
+
 ### `STAGING_DATABASE_URL` est sur le pooler en mode *transaction*, pas *session*
 
 Depuis le 2026-08-27, la chaîne pointe sur
@@ -1013,3 +1794,143 @@ utilisé (`@typescript-eslint/no-unused-vars`). Antérieur au lot 8, présent
 à l'identique sur `main`. Soit la constante a un usage prévu qui n'a jamais
 été écrit, soit c'est un vestige : à trancher en la supprimant ou en
 l'utilisant, pas en désactivant la règle.
+
+## LOT — `EspacePatient` charge ses données sans `.catch()`
+
+**`src/pages/EspacePatient.tsx:2344` fait `void charger();`. La fonction
+`charger()` n'a ni `try/catch` interne, ni `.catch()` à l'appel. Toute
+exception qu'elle lève devient un rejet de promesse non intercepté, et
+`setLoading(false)` n'est jamais atteint : l'écran du bénéficiaire reste
+figé sur son chargement, indéfiniment, sans message.**
+
+Relevé le 2026-09-03, en instruisant l'incident du portail patient.
+
+### Pourquoi c'est un lot à part, et pas un détail
+
+L'`ErrorBoundary` posé sur le portail (PR #33) **ne couvre pas ce cas**.
+React ne remonte à une frontière d'erreur que ce qui est levé pendant le
+rendu, dans un constructeur ou dans une méthode de cycle de vie. Un rejet
+de promesse dans un `useEffect` passe à côté.
+
+Les deux défauts se ressemblent de l'extérieur et ont la même victime :
+
+| | Ce que voit le bénéficiaire | Qui l'attrape |
+|---|---|---|
+| Exception au rendu | écran **blanc** | `ErrorBoundaryPatient` (PR #33) |
+| Rejet dans `charger()` | écran **figé** sur le chargement | **personne** |
+
+**Un chargement infini est aussi mauvais qu'un écran blanc** pour quelqu'un
+qui n'a ni console, ni recours, et qui arrête simplement de faire ses
+exercices. Croire que la frontière d'erreur a réglé les deux serait
+exactement le genre de conclusion que ce fichier existe pour empêcher.
+
+### Ce qu'il faut faire
+
+1. Envelopper le corps de `charger()`, ou l'appel, de façon qu'un échec
+   mène à un état affiché — pas à un silence. `setLoading(false)` doit être
+   atteint dans **tous** les chemins.
+2. Distinguer les causes plutôt que de tout renvoyer sur `accessDenied` :
+   un réseau coupé, un 500, et un jeton refusé ne demandent pas le même
+   geste au bénéficiaire. Aujourd'hui `!result.ok` mène à
+   `<Navigate to="/patient" replace />` quel que soit le motif — un
+   bénéficiaire renvoyé à l'écran de saisie de code alors que son code est
+   bon retape son code, échoue à nouveau, et conclut que « ça ne marche
+   plus ».
+3. Prouver le correctif en le voyant rougir : forcer `patientFetchMe` à
+   rejeter, constater l'écran obtenu. Un `.catch()` qu'on n'a jamais vu
+   s'exécuter ne prouve rien (voir le corollaire en tête de ce fichier).
+
+### Voisin, relevé au même endroit : le `?code=` reste dans l'URL
+
+`EspacePatient` lit `searchParams.get('code')` et ouvre la session, mais
+**ne nettoie jamais l'URL** — aucun `replaceState`, aucun `navigate` de
+remplacement (vérifié le 2026-09-03). Le code d'accès reste donc dans la
+barre d'adresse et dans l'historique du navigateur après connexion.
+
+Ce n'est pas une donnée : c'est un justificatif qui ouvre le dossier de
+santé **en écriture** et n'expire pas. Le point devient sensible maintenant
+que `scripts/liens-acces-beneficiaires.ts` fabrique des liens qui portent
+ce code — acceptable sur l'appareil personnel du bénéficiaire, pas sur un
+poste partagé. Correctif : après une connexion réussie par `?code=`,
+remplacer l'URL par `/patient/<id>` sans paramètre.
+
+## RETOURS DE PIERRE — reçus le 2026-09-13, triés le jour même
+
+**Source : `Retour_Pierre.pdf`, remis par Pierre. Dix-huit points, dont
+douze numérotés par lui et six en liste libre d'en-tête.**
+
+Ce tri est celui de la session du 2026-09-13. Il classe par **mode d'échec**,
+pas par la priorité annoncée dans le PDF : un bug qui produit une donnée
+fausse sans le dire passe devant un bug visible, quelle que soit l'étiquette
+posée par Pierre.
+
+Les priorités 🔴 / 🟠 ci-dessous sont celles de Pierre, conservées telles
+quelles. Le classement en sections est le nôtre et diverge parfois du sien —
+c'est voulu, et signalé au cas par cas.
+
+### Déjà traité, à vérifier avant de reprogrammer
+
+| # | Élément | État |
+|---|---|---|
+| 11 | 🟠 Dossier « Fin de contrat » | **Probablement livré** le 2026-09-12 (chantier archivage, `participants.archive` + `date_archivage`). Décrit exactement le besoin : archivage sans suppression, dossier conservé, réactivation possible. **Reste à faire** : Pierre veut trois onglets (Indépendant / Structure / Fin de contrat) là où le toggle « Afficher les archivés » a été livré sur la grille de `Dashboard.tsx`. Ajustement d'interface, pas un chantier |
+| 01 | 🔴 Séances passées qui disparaissent du calendrier | **Clos** le 2026-09-12. N'était pas un bug applicatif : le flux `.ics` n'exportait que le futur, par spécification. Fenêtre portée à 24 mois d'historique |
+| 02 | 🔴 Contrats à durée déterminée | **Clos** le 2026-09-13. `duree_indeterminee` était un booléen cosmétique posé à côté d'une `date_fin` réelle calculée à +6 mois en silence. Renouvellement automatique annuel désormais porté par le cron |
+
+### BLOQUANT BÊTA — l'application produit des données fausses sans le dire
+
+**C'est la catégorie la plus grave de la liste, et elle ne correspond pas à
+l'ordre du PDF.** Ces trois points ont le même mode d'échec : un résultat
+plausible, affiché sans erreur, sur des données de santé. Pierre ne peut pas
+les repérer à l'œil, et les comptes rendus qui en découlent héritent du
+défaut.
+
+| # | Élément | Ce qu'il faut en faire |
+|---|---|---|
+| 05 | 🔴 Scores inversés — fatigue et activité physique | Une personne assise < 2 h/jour obtient un score **plus mauvais** qu'une personne assise > 5 h. Si l'inversion de pondération est confirmée, **tous les questionnaires déjà remplis sont faux**. Le correctif ne suffit pas : il faut recalculer l'existant, ou le marquer comme non fiable |
+| 10.1 | 🔴 Le Scratch Test ne sauvegarde pas les modifications | Perte de données silencieuse sur un bilan clinique. Pierre saisit, enregistre, les valeurs disparaissent. Diagnostiquer où la chaîne casse : lecture, écriture, ou réaffichage |
+| — | Normes des tests : handgrip (âge/sexe), souplesse, Dubois | **Ce ne sont pas des tâches de développement.** Les barèmes cliniques ne s'inventent ni ne se « corrigent » par un agent : Pierre fournit les références, étude à l'appui. Le travail technique est d'appliquer ces normes et **d'afficher laquelle est utilisée**, ce que le handgrip ne fait pas aujourd'hui |
+
+⚠️ **Règle pour le point des normes** : aucun barème ne doit être écrit dans
+le code sans source citée en commentaire. Un chiffre sans provenance est
+indistinguable d'une invention, et personne ne pourra le revérifier.
+
+### AVANT LA BÊTA
+
+| # | Élément | Note |
+|---|---|---|
+| 03 | 🔴 Date de naissance non saisissable au clavier sur téléphone | **À faire en premier.** Correctif minuscule, gêne quotidienne maximale — sélecteur année par année pour une personne née en 1957. Meilleur rapport effort/soulagement de toute la liste |
+| 08 | 🔴 Page « Progrès / Suivi » vide côté bénéficiaire | Visible par les bénéficiaires eux-mêmes. **Commencer par le diagnostic** : données absentes, mal liées, ou simplement pas affichées ? Les trois demandent des correctifs différents |
+| — | « Ne plus avoir 2 agendas sur l'application » | **À clarifier avec Pierre** avant toute estimation — on ne sait pas ce qu'il voit. Un utilisateur qui ignore quel agenda fait foi est un problème de confiance, pas d'ergonomie |
+| — | Onglet pour signaler un bug depuis l'application | Petit à construire, **change tout pour une bêta** : les retours arrivent avec leur contexte au lieu de transiter par un PDF quinze jours plus tard. Ce document existe parce que ce canal n'existe pas |
+| — | Lier l'agenda au téléphone | Le flux `.ics` existe (`api/planning/ics.ts`). Vérifier ce qui manque côté Pierre : abonnement non configuré, ou attente différente |
+
+### APRÈS LE LANCEMENT
+
+| # | Élément | Note |
+|---|---|---|
+| 07 | 🟠 Paramètres financiers par personne | **Deuxième moitié du bug 01.** Pierre a demandé que ses séances passées restent visibles *pour faire ses factures* ; les tarifs verrouillés par personne complètent ce besoin. Son point sur la conservation du tarif applicable **au moment de la séance** est juste — c'est la partie qu'on rate facilement, et elle se conçoit dès le départ ou jamais |
+| 12 | 🟠 Séances collectives | **Le seul point qui touche le modèle de données en profondeur** : une séance rattachée à N bénéficiaires, sans conflit d'agenda, tout en apparaissant dans l'historique individuel de chacun. Ce n'est pas une fonctionnalité de plus, c'est une refonte. À ne pas lancer dans la même semaine qu'autre chose |
+| 04 | 🔴 Refonte du test de marche de 6 minutes | Pierre le classe 🔴 mais l'annonce lui-même comme « gros travail » à cadrer ensemble. Tableau trop chargé, stepper non actualisé, fonctionnement à revoir. **Nécessite une session de cadrage avec Pierre avant toute ligne de code** |
+| 06 | 🟠 Coordonnées des professionnels autour de la personne | Médecin, kiné, infirmier. Ajout de schéma simple, sans dépendance |
+| 09 | 🟠 Export PDF des programmes et séances | Côté praticien et côté bénéficiaire. `DossierPDF.tsx` existe déjà — vérifier ce qui est réutilisable |
+| 10.2 | 🟠 Intitulé « Souplesse — Distance doigts-sol » | Renommage. À faire en même temps que la vérification des normes de souplesse, même test |
+| — | Couleurs personnalisables des séances (bilan, réunion, séance, lieu) | Confort d'organisation |
+| — | Événements d'agenda avec titre, nom, adresse, téléphone | Recoupe partiellement `evenements_agenda`, déjà en base |
+| — | Renommer les dossiers de la bibliothèque | Petit |
+
+### Ce que cette liste apprend sur le canal de retour
+
+Pierre a accumulé dix-huit points dans un document avant de les transmettre.
+Deux conséquences, toutes deux visibles dans ce PDF :
+
+- **Les descriptions sont écrites après coup**, de mémoire, parfois à
+  distance du moment où le problème est survenu. Le bug 01 en est
+  l'illustration : « les séances disparaissent du calendrier » désignait en
+  réalité Google Agenda, pas l'application — l'information manquante a coûté
+  un diagnostic entier avant qu'une question directe ne la donne.
+- **Aucune capture d'écran n'accompagne les points**, alors que le modèle de
+  tableau en fin de document prévoit une colonne « Photos », restée vide.
+
+L'onglet de signalement (section « avant la bêta ») répond directement à ces
+deux points : un retour émis depuis l'écran concerné porte son contexte avec
+lui. C'est la raison de le classer avant le lancement plutôt qu'après.

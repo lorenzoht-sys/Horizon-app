@@ -411,3 +411,18 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# ── Edge Functions ──────────────────────────────────────────────────────
+# `verify_jwt = true` est déjà le défaut ; il est écrit ici pour que sa
+# portée exacte soit consignée, parce qu'elle prête à confusion.
+#
+# Le gateway vérifie la SIGNATURE du jeton, pas l'identité derrière. Or la
+# clé `anon` du projet EST un jeton valablement signé, et elle est publique
+# par nature : elle part dans le bundle du navigateur. `verify_jwt` seul
+# n'écarte donc personne — c'est `supabase.auth.getUser(token)`, dans
+# analyser-seance/index.ts, qui exige une vraie session de praticien.
+#
+# Les deux sont conservés : le gateway écarte le bruit sans consommer de
+# ressource, la fonction établit qui appelle.
+[functions.analyser-seance]
+verify_jwt = true

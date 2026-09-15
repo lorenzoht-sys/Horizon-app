@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Home, Calendar, Route, Layers, Settings,
-  LogOut, Map, BarChart2, Bot, Library, ShieldCheck,
+  LogOut, Map, BarChart2, Bot, Library, ShieldCheck, User,
 } from 'lucide-react';
+import { initialesPraticien } from '../../lib/initiales';
 import { IndicateurConnexion, BoutonInstallerApp } from '../pwa/PWAComponents';
 import { supabase } from '../../lib/supabase';
 import LegalFooterLinks from '../legal/LegalFooterLinks';
@@ -59,7 +60,10 @@ export default function Sidebar({ onLogout }: Props) {
   const prenom         = praticien?.prenom || '';
   const nom            = praticien?.nom    || '';
   const titrePraticien = praticien?.titre  || 'Praticien APA';
-  const initiales      = `${prenom[0] ?? 'P'}${nom[0] ?? 'C'}`.toUpperCase();
+  // Vide tant que la fiche praticien n'a ni prenom ni nom : la pastille
+  // affiche alors une silhouette, pas deux lettres inventees. Voir
+  // src/lib/initiales.ts.
+  const initiales      = initialesPraticien(prenom, nom);
   const incomplete     = !praticien?.siret || !praticien?.numero_sap;
 
   return (
@@ -78,7 +82,7 @@ export default function Sidebar({ onLogout }: Props) {
       <div style={{ padding: '32px 20px 20px 16px' }}>
         <NavLink to="/" className="block">
           <img
-            src="/logo-horizon.png.png?v=2"
+            src="/logo-horizon.png?v=2"
             alt="Horizon"
             style={{ width: 150, height: 'auto', display: 'block' }}
             onError={e => {
@@ -152,7 +156,7 @@ export default function Sidebar({ onLogout }: Props) {
             className="flex-shrink-0 flex items-center justify-center font-bold text-white rounded-full"
             style={{ width: 36, height: 36, background: 'var(--color-teal)', fontSize: 12 }}
           >
-            {initiales}
+            {initiales || <User size={18} strokeWidth={2.2} aria-label="Identité non renseignée" />}
           </div>
           <div className="flex-1 min-w-0">
             <div

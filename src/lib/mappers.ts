@@ -1,4 +1,4 @@
-import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, TemplateStructure, DisponibilitesPatient, JourSemaine, CreneauPreference, EvenementAgenda } from '../types';
+import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, TemplateStructure, DisponibilitesPatient, JourSemaine, CreneauPreference, EvenementAgenda, VisibiliteBeneficiaire } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
 
 // ── Conversion anamnese.organisation → DisponibilitesPatient ──────────────────
@@ -90,8 +90,10 @@ export function dbToParticipant(row: any): Participant {
     rgpd: row.rgpd ?? undefined,
     bilans: (row.bilans ?? []).map(dbToBilan),
     programmes: (row.programmes ?? []).map(dbToProgramme),
-    visibiliteBeneficiaire: { ...VISIBILITE_BENEFICIAIRE_DEFAULT, ...(row.visibilite_beneficiaire ?? {}) },
+    visibiliteBeneficiaire: normaliserVisibilite(row.visibilite_beneficiaire),
     messageBeneficiaire: row.message_beneficiaire ?? undefined,
+    archive: row.archive ?? false,
+    dateArchivage: row.date_archivage ?? undefined,
   };
 }
 
@@ -101,8 +103,32 @@ export function dbToParticipant(row: any): Participant {
 // de Bilan.visibleBeneficiaire, qui est un contrôle plus fin et volontairement
 // plus prudent.
 const VISIBILITE_BENEFICIAIRE_DEFAULT = {
-  progression: true, bilans: true, rdv: true, programme: true, messagePierre: true, carteSante: true,
+  bilans: true, rdv: true, programme: true, messagePraticien: true, messagePierre: true, carteSante: true,
 };
+
+// Reconcilie l'ancienne cle `messagePierre` et la nouvelle
+// `messagePraticien` (migration 20260831_visibilite_message_praticien).
+//
+// L'ORDRE COMPTE, et c'est tout l'interet de cette fonction : un simple
+// `{ ...DEFAUT, ...ligne }` donnerait `messagePraticien: true` a une ligne
+// qui ne porte que `messagePierre: false` — le message d'un praticien qui
+// l'avait masque redeviendrait visible chez son patient, sans erreur.
+//
+// Les deux cles ressortent a la MEME valeur : le reste de l'application
+// peut lire l'une ou l'autre, et une ligne reecrite conserve l'ancienne
+// pour le code encore deploye.
+export function normaliserVisibilite(
+  brut: Record<string, unknown> | null | undefined,
+): VisibiliteBeneficiaire {
+  const ligne = (brut ?? {}) as Record<string, unknown>;
+  const message = (ligne.messagePraticien ?? ligne.messagePierre ?? true) as boolean;
+  return {
+    ...VISIBILITE_BENEFICIAIRE_DEFAULT,
+    ...ligne,
+    messagePraticien: message,
+    messagePierre: message,
+  };
+}
 
 // Participant TypeScript → Supabase insert/update object
 // Colonnes exactes de la table participants Supabase
@@ -153,6 +179,8 @@ export function participantToDb(p: Omit<Participant, 'bilans' | 'programmes'>): 
     code_acces: p.codeAcces ?? null,
     visibilite_beneficiaire: p.visibiliteBeneficiaire ?? VISIBILITE_BENEFICIAIRE_DEFAULT,
     message_beneficiaire: p.messageBeneficiaire ?? null,
+    archive: p.archive ?? false,
+    date_archivage: p.dateArchivage ?? null,
   };
 }
 
@@ -198,6 +226,7 @@ export function dbToBilan(row: any): Bilan {
       dubois: row.memoire_dubois ?? undefined,
     },
     tinetti: row.tinetti_data ?? undefined,
+    apley: row.apley_data ?? undefined,
     berg: row.berg_data ?? null,
     mocaScore: row.moca_score ?? null,
     marche10m: (row.marche10m_habituel != null || row.marche10m_max != null)
@@ -260,6 +289,7 @@ export function bilanToDb(participantId: string, b: Omit<Bilan, 'id'> & { id?: s
     memoire_score_differe: b.memoire?.scoreDiffere ?? null,
     memoire_dubois: b.memoire?.dubois ?? null,
     tinetti_data: b.tinetti ?? null,
+    apley_data: b.apley ?? null,
     berg_data: b.berg ?? null,
     moca_score: b.mocaScore ?? null,
     marche10m_habituel: b.marche10m?.habituel ?? null,
@@ -317,17 +347,19 @@ export function programmeToDb(p: Programme): Record<string, unknown> {
   };
 }
 
-const JOUR_LONG_TO_SHORT: Record<string, JourSemaine> = {
+const JOUR_LONG_TO_SHORT: Record<string, JourSemaine | 'dim'> = {
   lundi: 'lun', mardi: 'mar', mercredi: 'mer',
-  jeudi: 'jeu', vendredi: 'ven', samedi: 'sam',
+  jeudi: 'jeu', vendredi: 'ven', samedi: 'sam', dimanche: 'dim',
 };
 
-function normaliserJoursFixe(raw: string[] | null | undefined): JourSemaine[] {
+const JOURS_VALIDES = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+
+function normaliserJoursFixe(raw: string[] | null | undefined): (JourSemaine | 'dim')[] {
   if (!Array.isArray(raw)) return [];
   return raw.map(j => {
     const lower = (j ?? '').toLowerCase().trim();
-    return (JOUR_LONG_TO_SHORT[lower] ?? lower) as JourSemaine;
-  }).filter(j => ['lun','mar','mer','jeu','ven','sam'].includes(j));
+    return (JOUR_LONG_TO_SHORT[lower] ?? lower) as JourSemaine | 'dim';
+  }).filter(j => JOURS_VALIDES.includes(j));
 }
 
 export function dbToContrat(row: any): Contrat {
@@ -356,6 +388,7 @@ export function dbToContrat(row: any): Contrat {
     nombreSeancesTotal: row.nombre_seances_total,
     nombreSeancesRealisees: row.nombre_seances_realisees,
     dureeIndeterminee: row.duree_indeterminee ?? false,
+    dateReprisePrevue: row.date_reprise_prevue ?? undefined,
     tarifSeance: row.tarif_seance ?? undefined,
     exclureTournee: row.exclure_tournee ?? false,
   };
@@ -368,6 +401,7 @@ export function contratToDb(c: Contrat): Record<string, unknown> {
     praticien_id: c.praticienId ?? null,
     date_debut: c.dateDebut,
     date_fin: c.dateFin,
+    jours_fixe: c.joursFixe,
     nb_seances_semaine: c.nbSeancesSemaine,
     periodicite: c.periodicite ?? 'semaine',
     heure_debut: c.heureDebut,
@@ -379,6 +413,7 @@ export function contratToDb(c: Contrat): Record<string, unknown> {
     nombre_seances_total: c.nombreSeancesTotal,
     nombre_seances_realisees: c.nombreSeancesRealisees,
     duree_indeterminee: c.dureeIndeterminee ?? false,
+    date_reprise_prevue: c.dateReprisePrevue ?? null,
     tarif_seance: c.tarifSeance ?? null,
     exclure_tournee: c.exclureTournee ?? false,
   };

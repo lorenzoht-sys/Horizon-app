@@ -5,6 +5,7 @@ import { genererInterpretation } from '../../../utils/genererInterpretation';
 import { Brain, Check, AlertTriangle } from 'lucide-react';
 import { useConnexion } from '../../../hooks/useConnexion';
 import BoutonReformulation from '../../ui/BoutonReformulation';
+import { calculerAge } from '../../../lib/age';
 
 type BilanForm = Omit<Bilan, 'id'>;
 
@@ -42,13 +43,6 @@ function calculerNotes(form: BilanForm): NotesBilan {
   return n;
 }
 
-function calcAge(dateNaissance: string): number {
-  const today = new Date(), birth = new Date(dateNaissance);
-  let age = today.getFullYear() - birth.getFullYear();
-  if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
-  return age;
-}
-
 // ─── Affichage note /5 ────────────────────────────────────────────────────────
 
 const NOTE_COLORS: Record<number, string> = {
@@ -67,6 +61,8 @@ const NOTES_LABELS_TEST: Record<keyof NotesBilan, string> = {
 // cocher inutile pour un résultat qui ne serait affiché nulle part de toute
 // façon.
 type CleResultatPartageable = 'equilibre' | 'force' | 'handGrip' | 'mobilite' | 'endurance';
+import { EtatPartageBilan } from '../EtatPartageBeneficiaire';
+
 const PARTAGE_ITEMS: { key: CleResultatPartageable; label: string }[] = [
   { key: 'equilibre', label: 'Équilibre' },
   { key: 'force', label: 'Force jambes' },
@@ -111,7 +107,7 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
           participant: {
             prenom: participant.prenom,
             nom: participant.nom,
-            age: calcAge(participant.dateNaissance),
+            age: calculerAge(participant.dateNaissance),
             profil: participant.contexteClinic || participant.pathologie || 'Non renseigné',
           },
           notes,
@@ -183,6 +179,9 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
             Décoché par défaut — cochez uniquement les résultats que vous choisissez de rendre visibles
             dans l'espace bénéficiaire. Vous continuez de voir toutes les valeurs ici, quel que soit ce choix.
           </p>
+          <div className="mb-3">
+            <EtatPartageBilan bilan={form as Bilan} />
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {PARTAGE_ITEMS
               .filter(item => notes[item.key] !== undefined)

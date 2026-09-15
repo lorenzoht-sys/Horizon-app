@@ -2,14 +2,7 @@ import type { Bilan, Contrat, Participant, Programme, Structure } from '../types
 import { EXERCICES_BASE } from '../data/exercices';
 import { computeTinettiScores, tinettiRisque } from '../data/tinetti';
 import type { ChampFormulaire } from './detecterTypeTemplate';
-
-function calcAge(dateNaissance: string): number {
-  const today = new Date(), birth = new Date(dateNaissance);
-  let age = today.getFullYear() - birth.getFullYear();
-  if (today.getMonth() < birth.getMonth() ||
-    (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
-  return age;
-}
+import { libelleAge } from '../lib/age';
 
 function fmtDate(d: string): string {
   return new Date(d + (d.includes('T') ? '' : 'T12:00')).toLocaleDateString('fr-FR', {
@@ -119,7 +112,7 @@ function buildDonneesPatientText(
     dernierBilan?.objectifsSuivants ? `Objectifs suivants (dernier bilan) : ${dernierBilan.objectifsSuivants}` : null,
   ].filter(Boolean).join('\n') || 'Non renseigné';
 
-  return `Identité : ${patient.prenom} ${patient.nom}, ${calcAge(patient.dateNaissance)} ans
+  return `Identité : ${patient.prenom} ${patient.nom}, ${libelleAge(patient.dateNaissance)}
 Pathologie principale : ${patient.pathologie || 'non renseignée'}
 
 ${dernierBilan ? `DERNIER BILAN — ${fmtDate(dernierBilan.date)} (${dernierBilan.type === 'initial' ? 'initial' : `T${dernierBilan.trimestre}`})

@@ -7,7 +7,10 @@ import { hydraterSettingsPraticien } from './lib/settingsPraticien';
 import { setCurrentUserId, loadAllBrouillonsFromSupabase } from './hooks/useBrouillonBilan';
 import { useDevice } from './hooks/useDevice';
 import AppMobile from './pages/mobile/AppMobile';
-import { Toaster } from 'sonner';
+import BarreNavigationMobile from './components/layout/BarreNavigationMobile';
+import { estRouteInterfaceUnique } from './lib/routesMobile';
+import { effacerTousEtatsSession } from './lib/etatSession';
+import { Toaster, toast } from 'sonner';
 import Sidebar from './components/layout/Sidebar';
 import Dashboard from './pages/Dashboard';
 import ParticipantProfile from './pages/ParticipantProfile';
@@ -17,6 +20,7 @@ import SettingsPage from './pages/SettingsPage';
 import OnboardingPage from './pages/OnboardingPage';
 import PageAccesPatient from './pages/PageAccesPatient';
 import EspacePatient from './pages/EspacePatient';
+import ErrorBoundaryPatient from './components/patient/ErrorBoundaryPatient';
 import { BandeauHorsLigne, NotificationMiseAJour } from './components/pwa/PWAComponents';
 import ClientView from './pages/ClientView';
 
@@ -56,12 +60,19 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
     return () => el.removeEventListener('scroll', onScroll);
   }, []);
 
+  // Cadre commun. À partir de 768 px (même seuil que useDevice) : barre
+  // latérale. En dessous — écrans fusionnés servis au téléphone — la même
+  // barre du bas que l'interface mobile. CSS seulement : l'arbre React ne
+  // change pas avec la largeur, une rotation ne démonte donc rien.
   return (
     <div className="flex min-h-screen" style={{ background: 'var(--color-bg)' }}>
-      <Sidebar onLogout={onLogout} />
+      <div className="hidden md:block">
+        <Sidebar onLogout={onLogout} />
+      </div>
       <div
         ref={scrollRef}
-        style={{ marginLeft: 220, flex: 1, height: '100vh', overflowY: 'auto', background: 'var(--color-bg)', position: 'relative' }}
+        className="flex-1 md:ml-[220px] pb-[calc(76px+env(safe-area-inset-bottom))] md:pb-0"
+        style={{ height: '100vh', overflowY: 'auto', background: 'var(--color-bg)', position: 'relative' }}
       >
         {/* Topbar scroll effect */}
         <div
@@ -106,8 +117,30 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
           </Routes>
         </AnimatePresence>
       </div>
+      <div className="md:hidden">
+        <BarreNavigationMobile />
+      </div>
     </div>
   );
+}
+
+// Choix de l'interface de l'espace pro.
+//
+// Sous 768 px : l'interface mobile, SAUF pour les écrans déjà fusionnés en une
+// version unique responsive (src/lib/routesMobile.ts). Au-dessus : desktop.
+//
+// ⚠️ La bascule en paysage est un USAGE VOULU, pas un défaut : le praticien
+// tourne son téléphone pour atteindre les écrans qui n'existent qu'en desktop.
+// Ne pas la bloquer, ne pas déplacer le seuil. Elle deviendra inutile écran par
+// écran, à mesure de la fusion.
+//
+// Sur un écran fusionné, les deux branches rendent le même composant au même
+// emplacement : React le conserve, et la rotation ne perd rien.
+function EspacePro({ onLogout }: { onLogout: () => void }) {
+  const { isMobile } = useDevice();
+  const { pathname } = useLocation();
+  if (isMobile && !estRouteInterfaceUnique(pathname)) return <AppMobile onLogout={onLogout} />;
+  return <DesktopContent onLogout={onLogout} />;
 }
 
 function MapFallback() {
@@ -135,7 +168,6 @@ async function needsOnboarding(userId: string): Promise<boolean> {
 }
 
 export default function App() {
-  const { isMobile }    = useDevice();
   const [isLoggedIn, setIsLoggedIn]       = useState(false);
   const [authLoading, setAuthLoading]     = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -197,9 +229,28 @@ export default function App() {
   // se retrouvait sans identite sur ses propres documents, et rien ne le lui
   // disait — visiter les Reglages ne suffisait meme pas, seul « Enregistrer »
   // ecrivait le cache.
+  //
+  // L'echec n'est plus silencieux. Le cache est efface a chaque connexion
+  // (voir SIGNED_IN plus bas) : si l'hydratation ne le remplit pas, le
+  // praticien travaille avec des reglages vides — contrat bloque, documents
+  // sans identite — et rien ne lui disait pourquoi. Seule la panne se
+  // signale ; l'absence de fiche est l'etat normal d'avant onboarding, et
+  // l'onboarding s'en charge deja.
   useEffect(() => {
     if (!isLoggedIn) return;
-    void hydraterSettingsPraticien();
+    void (async () => {
+      const resultat = await hydraterSettingsPraticien();
+      if (resultat.ok) return;
+      if (resultat.echec !== 'erreur') {
+        console.info('[App] Hydratation des reglages non effectuee :', resultat.echec);
+        return;
+      }
+      console.error('[App] Hydratation des reglages en echec :', resultat.message);
+      toast.error(
+        "Vos réglages n'ont pas pu être chargés. Vos documents sortiraient sans votre identité — rechargez la page avant d'en générer un.",
+        { duration: 10000 },
+      );
+    })();
   }, [isLoggedIn]);
 
   useEffect(() => {
@@ -275,6 +326,9 @@ export default function App() {
       } else if (event === 'SIGNED_OUT') {
         // Ne pas effacer les brouillons ici — ils sont isolés par userId et
         // survivent à une expiration de session pour être repris à la reconnexion.
+        // Le travail en cours de l'onglet (sessionStorage), lui, est effacé :
+        // il ne doit pas rester à l'écran de la personne suivante.
+        effacerTousEtatsSession();
         setCurrentUserId(null);
         localStorage.removeItem('settings_praticien');
         localStorage.removeItem('isLoggedIn');
@@ -294,6 +348,7 @@ export default function App() {
   function handleLogout() {
     // Ne pas effacer les brouillons : ils sont isolés par userId (brouillon_bilan_{userId}_*)
     // et seront restaurés depuis Supabase à la prochaine connexion.
+    effacerTousEtatsSession();
     if (supabase) {
       void supabase.auth.signOut();
     } else {
@@ -418,9 +473,18 @@ export default function App() {
         {/* Vue client : pas de sidebar */}
         <Route path="/client/:token" element={<ClientView />} />
 
-        {/* Espace patient — public, sans auth praticien */}
-        <Route path="/patient" element={<PageAccesPatient />} />
-        <Route path="/patient/:id" element={<EspacePatient />} />
+        {/* Espace patient — public, sans auth praticien.
+            Chaque écran porte SA PROPRE frontière d'erreur, pas une seule
+            partagée : une frontière est consommée quand elle attrape, et une
+            frontière commune aux deux routes resterait en état d'erreur après
+            une navigation de l'une vers l'autre. Deux instances distinctes se
+            réinitialisent indépendamment. */}
+        <Route path="/patient" element={
+          <ErrorBoundaryPatient><PageAccesPatient /></ErrorBoundaryPatient>
+        } />
+        <Route path="/patient/:id" element={
+          <ErrorBoundaryPatient><EspacePatient /></ErrorBoundaryPatient>
+        } />
 
         {/* Portail structure — public, sans auth praticien */}
         <Route path="/structure/:token" element={
@@ -452,11 +516,7 @@ export default function App() {
               showOnboarding ? (
                 <Navigate to="/onboarding" replace />
               ) : (
-                  isMobile ? (
-                    <AppMobile onLogout={handleLogout} />
-                  ) : (
-                    <DesktopContent onLogout={handleLogout} />
-                  )
+                <EspacePro onLogout={handleLogout} />
               )
             ) : (
               <Navigate to="/login" replace />

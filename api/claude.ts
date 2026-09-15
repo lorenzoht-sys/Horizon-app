@@ -6,6 +6,7 @@
 import { getServiceClient, extractBearerToken } from './_lib/patientAuth.js';
 import { withSentry, captureMessage } from './_lib/sentry.js';
 import { checkClaudeRateLimit, recordClaudeRequest } from './_lib/rateLimit.js';
+import { SYSTEME_CADRAGE, validerPrompt } from './_lib/guard.js';
 
 export default withSentry(async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -19,7 +20,11 @@ export default withSentry(async function handler(req: any, res: any) {
   try {
     supabase = getServiceClient();
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    // Second des deux `catch` visés par PLAN-BETA §4 n°6. Celui-ci se
+    // déclenche quand SUPABASE_SERVICE_ROLE_KEY manque : `String(err)`
+    // annonçait au navigateur quelle variable d'environnement est absente.
+    console.error(`[api/claude] client service indisponible : ${String(err)}`);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 
   const { data: userData, error: userErr } = await supabase.auth.getUser(token);
@@ -59,10 +64,26 @@ export default withSentry(async function handler(req: any, res: any) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY non configuré dans Vercel' });
   }
 
-  const { prompt, model } = req.body ?? {};
-  if (!prompt || typeof prompt !== 'string') {
-    return res.status(400).json({ error: 'prompt requis' });
+  // Plafond de taille (PLAN-BETA §4 n°4). Refusé, jamais tronqué : voir
+  // api/_lib/guard.ts pour la mesure qui fixe PROMPT_MAX_LENGTH, et pourquoi
+  // la détection d'injection par motif ne s'applique pas à cette frontière.
+  const validation = validerPrompt(req.body?.prompt);
+  if (!validation.ok) {
+    if (validation.statut === 413) {
+      // Journalisé comme le rate limit, et pour la même raison : le seuil a
+      // été posé sur une mesure du catalogue d'exercices, pas sur un usage
+      // observé. Sans trace, impossible de savoir s'il gêne quelqu'un.
+      console.warn(`[api/claude] prompt trop long pour praticien ${praticienId}`);
+      await captureMessage('[api/claude] plafond de prompt atteint', {
+        level: 'warning',
+        tags: { praticien_id: praticienId },
+      });
+    }
+    return res.status(validation.statut).json({ error: validation.message });
   }
+  const prompt = validation.prompt;
+
+  const { model } = req.body ?? {};
 
   // Modèle par défaut inchangé pour tous les appelants existants. Un appelant
   // peut explicitement demander Sonnet pour les usages nécessitant plus de
@@ -83,13 +104,21 @@ export default withSentry(async function handler(req: any, res: any) {
       body: JSON.stringify({
         model: resolvedModel,
         max_tokens: 8192,
+        // Garde-fou anti prompt-injection (PLAN-BETA §4 n°5). Le prompt
+        // arrive assemblé : ce message est le seul endroit où l'on puisse
+        // distinguer la consigne de tâche des données citées. Voir
+        // api/_lib/guard.ts pour la limite de ce mécanisme.
+        system: SYSTEME_CADRAGE,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
 
     if (!claudeRes.ok) {
-      const errText = await claudeRes.text();
-      return res.status(500).json({ error: `Erreur Claude API: ${errText}` });
+      // Le corps d'erreur d'Anthropic — nom de modèle, quotas, état de la
+      // clé — ne repart plus au navigateur (PLAN-BETA §4 n°6). Il reste dans
+      // les logs, où il sert au diagnostic sans être exposé à l'appelant.
+      console.error(`[api/claude] Anthropic ${claudeRes.status}: ${await claudeRes.text()}`);
+      return res.status(502).json({ error: "Le service d'analyse est momentanément indisponible" });
     }
 
     const data = await claudeRes.json();
@@ -103,6 +132,8 @@ export default withSentry(async function handler(req: any, res: any) {
 
     return res.status(200).json({ text: cleanText });
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    // `String(err)` renvoyait la stack au navigateur (PLAN-BETA §4 n°6).
+    console.error(`[api/claude] erreur inattendue : ${String(err)}`);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 });

@@ -1,4 +1,4 @@
-import type { Contrat, PeriodiciteContrat, Seance } from '../types';
+import type { Contrat, PeriodiciteContrat, Seance } from '../types/index.js';
 
 export function heureEnMinutes(heure: string): number {
   const [h, m] = heure.split(':').map(Number);
@@ -362,6 +362,19 @@ export function genererDatesSeances(
     current.setDate(current.getDate() + 1);
   }
   return dates;
+}
+
+// Point de départ de la régénération des séances à la reprise d'une pause.
+// La date de reprise prévue (Contrat.dateReprisePrevue) n'est qu'un
+// pense-bête saisi au moment de la pause : on ne la suit que si elle est
+// ENCORE future. Dépassée, ou absente, on repart d'aujourd'hui — jamais en
+// arrière, sinon la reprise recréerait les séances que la mise en pause
+// venait justement de supprimer. Même principe que calculerDebutGeneration
+// (api/_lib/renouvellementContrats.ts) et creerDatesRecurrentes
+// (PlanningGrilleView.tsx) : on ne remonte jamais avant aujourd'hui.
+export function calculerDebutReprise(aujourdhuiStr: string, dateReprisePrevue?: string | null): string {
+  if (dateReprisePrevue && dateReprisePrevue > aujourdhuiStr) return dateReprisePrevue;
+  return aujourdhuiStr;
 }
 
 export function lundiDeLaSemaine(dateStr: string): string {

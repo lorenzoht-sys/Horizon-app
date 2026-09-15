@@ -15,6 +15,7 @@ import {
 import { TYPES_ANTECEDENT_LABELS } from '../../types';
 import { PdfFooter, LOGO_H } from './PdfShared';
 import { computeTinettiScores } from '../../data/tinetti';
+import { libelleAge } from '../../lib/age';
 
 // ── Palette « Horizon » ────────────────────────────────────────────────────────
 
@@ -71,13 +72,6 @@ function fmtDate(d: string | null | undefined): string {
   try {
     return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   } catch { return String(d); }
-}
-
-function calcAge(dn: string): number {
-  const t = new Date(), b = new Date(dn);
-  let a = t.getFullYear() - b.getFullYear();
-  if (t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) a--;
-  return a;
 }
 
 function getCategorieIMC(imc: number): string {
@@ -317,7 +311,7 @@ export default function DossierPDF({
   const dateGeneration = fmtDate(new Date().toISOString().slice(0, 10));
 
   const bioline = [
-    `${calcAge(participant.dateNaissance)} ans`,
+    libelleAge(participant.dateNaissance),
     `né(e) le ${fmtDate(participant.dateNaissance)}${lieuNaissance ? ` à ${lieuNaissance}` : ''}`,
     participant.taille ? `${participant.taille} cm` : null,
     participant.poids ? `${participant.poids} kg` : null,
@@ -516,7 +510,11 @@ export default function DossierPDF({
               <>
                 <Row label="Début du suivi" value={fmtDate(contratActif.dateDebut)} />
                 <Row label="Fréquence" value={`${contratActif.nbSeancesSemaine} séance${contratActif.nbSeancesSemaine > 1 ? 's' : ''}/semaine · ${contratActif.dureeMinutes} min`} />
-                <Row label="Progression" value={`${contratActif.nombreSeancesRealisees} / ${contratActif.nombreSeancesTotal} séances réalisées`} />
+                {contratActif.dureeIndeterminee ? (
+                  <Row label="Durée" value="Sans date de fin" />
+                ) : (
+                  <Row label="Progression" value={`${contratActif.nombreSeancesRealisees} / ${contratActif.nombreSeancesTotal} séances réalisées`} />
+                )}
               </>
             )}
             {programmeActif && (

@@ -41,13 +41,14 @@ export default function ModalInsererPatient({ onClose, participants, contrats, s
   const [applying, setApplying] = useState(false);
   const [jourForceIdx, setJourForceIdx] = useState(0);
 
-  const eligibles = useMemo(() =>
-    contrats.filter(c =>
+  const eligibles = useMemo(() => {
+    const archives = new Set(participants.filter(p => p.archive).map(p => p.id));
+    return contrats.filter(c =>
       c.statut === 'actif' &&
+      !archives.has(c.participantId) &&
       !seances.some(s => s.contratId === c.id && s.statut === 'planifiee' && s.date >= today)
-    ),
-    [contrats, seances, today]
-  );
+    );
+  }, [contrats, participants, seances, today]);
 
   const patient = useMemo(() =>
     participants.find(p => p.id === contratChoisi?.participantId),

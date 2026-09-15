@@ -14,6 +14,8 @@ import { getSessionPatient, sauvegarderSessionPatient, purgerSessionPatient } fr
 import MarkdownRendu from '../components/ui/MarkdownRendu';
 import { getTestsAutonomie } from '../lib/anamnese';
 import { libelleSedentariteBeneficiaire, libelleFatigueBeneficiaire } from '../lib/formulationBienveillante';
+import { etatSedentarite, etatFatigue, getSedProfil, getFSSProfil } from '../lib/scoresAutonomie';
+import { etatProgresBeneficiaire } from '../lib/partageBeneficiaire';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -363,7 +365,13 @@ function EcranAccueil({
     .sort((a, b) => b.dateCreation.localeCompare(a.dateCreation))[0] ?? null;
 
   // Message personnalisé = messageClient du dernier bilan
-  const messagePierre = dernierBilan?.messageClient;
+  const messagePraticien = dernierBilan?.messageClient;
+  // Repli sur l'ancienne cle : une ligne pas encore migree ne porte que
+  // `messagePierre`, et la lire comme absente l'afficherait par defaut.
+  const messageAutorise =
+    participant.visibiliteBeneficiaire?.messagePraticien
+    ?? participant.visibiliteBeneficiaire?.messagePierre
+    ?? true;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -478,7 +486,7 @@ function EcranAccueil({
       )}
 
       {/* Message du praticien */}
-      {messagePierre && participant.visibiliteBeneficiaire?.messagePierre !== false && (
+      {messagePraticien && messageAutorise && (
         <div style={{
           background: 'rgba(43,191,191,0.08)',
           border: '1px solid rgba(43,191,191,0.25)',
@@ -488,7 +496,7 @@ function EcranAccueil({
             Message de {praticien.nom.split(' ')[0]}
           </div>
           <div style={{ fontSize: 14, color: C.text, lineHeight: 1.7, fontStyle: 'italic' }}>
-            💬 "{messagePierre}"
+            💬 "{messagePraticien}"
           </div>
         </div>
       )}
@@ -638,13 +646,78 @@ function CarteProgression({ item }: { item: ProgItem }) {
   );
 }
 
+/**
+ * Questionnaire entamé mais incomplet, côté bénéficiaire.
+ *
+ * Aucun score n'est affiché : un total calculé sur des réponses manquantes
+ * serait indistinguable d'un résultat fiable (src/lib/scoresAutonomie.ts).
+ * On dit qu'il manque des réponses, sans chiffre et sans jugement — et sans
+ * demander au bénéficiaire une action qui revient au praticien.
+ */
+function LigneQuestionnaireIncomplet({ libelle }: { libelle: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+      <span style={{ fontSize: 13, color: C.muted }}>{libelle}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: '#BA7517' }}>
+        Questionnaire à compléter ⏳
+      </span>
+    </div>
+  );
+
+}
+/** Page « Progrès » sans contenu à montrer. Le texte dit POURQUOI elle est
+ *  vide : « aucun bilan » et « bilans non partagés » se ressemblent à l'écran
+ *  mais ne veulent pas dire la même chose. */
+function EtatVideProgres({ emoji, titre, texte }: { emoji: string; titre: string; texte: React.ReactNode }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+      <div style={{ fontSize: 48, marginBottom: 16 }}>{emoji}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: C.dark, marginBottom: 8 }}>
+        {titre}
+      </div>
+      <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>
+        {texte}
+      </div>
+    </div>
+  );
+}
+
+
 function EcranProgres({ participant, bilans }: { participant: Participant; bilans: Bilan[] }) {
   const sorted = [...bilans].sort((a, b) => a.date.localeCompare(b.date));
   const bilanInitial = sorted.find(b => b.type === 'initial') ?? sorted[0] ?? null;
   const dernierBilan = sorted[sorted.length - 1] ?? null;
   const { sedentarite, fatigue } = getTestsAutonomie(participant, bilanInitial);
-  const sedProfil = sedentarite.profil;
-  const fssProfil = fatigue.profil;
+
+  // ── Profil affiché seulement si le questionnaire est COMPLET ────────────
+  //
+  // Cet écran lisait `sedentarite.profil` / `fatigue.profil`, c'est-à-dire les
+  // valeurs STOCKÉES. Celles calculées avant le 2026-09-14 comptaient les
+  // réponses manquantes comme des zéros (Ricci & Gagnon) ou les ignoraient
+  // (FSS) : un questionnaire à moitié rempli produisait quand même un profil.
+  //
+  // Le correctif du matin a couvert la fiche praticien et le contexte de
+  // l'assistant, pas cet écran-ci — le plus exposé, puisque c'est le
+  // bénéficiaire lui-même qui lit. On dérive donc l'état des RÉPONSES, comme
+  // ailleurs, et un questionnaire incomplet n'affiche aucun profil.
+  //
+  // Réponses absentes : `etat` vaut 'vide' et rien ne s'affiche — c'est aussi
+  // le cas quand le praticien n'a pas partagé ces résultats (api/patient/me.ts
+  // retire les trois clés ensemble). Ce silence est voulu : ne rien dire d'un
+  // résultat non partagé.
+  const etatSed = etatSedentarite(sedentarite.reponses);
+  const etatFss = etatFatigue(fatigue.reponses);
+  const sedLibelle = etatSed.etat === 'complet'
+    ? libelleSedentariteBeneficiaire(getSedProfil(etatSed.score).profil)
+    : null;
+  const fssLibelle = etatFss.etat === 'complet'
+    ? libelleFatigueBeneficiaire(getFSSProfil(etatFss.score).profil)
+    : null;
+  // « À régulariser » s'adresse au praticien : le bénéficiaire ne peut pas
+  // régulariser son propre questionnaire. Même état, registre de l'écran.
+  const sedIncomplet = etatSed.etat === 'a_regulariser';
+  const fssIncomplet = etatFss.etat === 'a_regulariser';
+  const afficheProfil = sedLibelle || fssLibelle || sedIncomplet || fssIncomplet;
 
   const hasDeux = bilanInitial && dernierBilan && bilanInitial.id !== dernierBilan.id;
   const progressions = hasDeux ? calculerProgressions(bilanInitial!, dernierBilan!) : [];
@@ -652,19 +725,34 @@ function EcranProgres({ participant, bilans }: { participant: Participant; bilan
     (p.lowerBetter ? p.val0 - p.val1 : p.val1 - p.val0) > 0
   ).length;
 
-  if (!bilanInitial) {
+  // Pourquoi la page est vide, quand elle l'est. Quatre causes distinctes, qui
+  // n'appellent ni le même message ni la même action — voir
+  // src/lib/partageBeneficiaire.ts.
+  const etatPage = etatProgresBeneficiaire(bilans, progressions.length);
+
+  if (etatPage.etat === 'aucun_bilan') {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: C.dark, marginBottom: 8 }}>
-          Pas encore de bilan
-        </div>
-        <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>
-          Votre premier bilan permettra de mesurer<br />vos capacités de départ.
-        </div>
-      </div>
+      <EtatVideProgres
+        emoji="📊"
+        titre="Pas encore de bilan"
+        texte={<>Votre premier bilan permettra de mesurer<br />vos capacités de départ.</>}
+      />
     );
   }
+
+  // Des bilans existent, rien n'est partagé. On dit qu'ils EXISTENT, jamais ce
+  // qu'ils contiennent : le partage appartient au praticien, pas à cet écran.
+  if (etatPage.etat === 'en_attente_partage') {
+    return (
+      <EtatVideProgres
+        emoji="🔒"
+        titre="Vos résultats ne sont pas encore partagés"
+        texte={<>Votre praticien a réalisé un ou plusieurs bilans.<br />
+          Il choisit quels résultats vous sont montrés ici.</>}
+      />
+    );
+  }
+
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -686,7 +774,7 @@ function EcranProgres({ participant, bilans }: { participant: Participant; bilan
       </div>
 
       {/* Cas un seul bilan */}
-      {!hasDeux && (
+      {etatPage.etat === 'un_seul_bilan' && (
         <div style={{
           background: 'white', border: `1px solid ${C.border}`,
           borderRadius: 18, padding: '24px 20px', textAlign: 'center',
@@ -702,41 +790,58 @@ function EcranProgres({ participant, bilans }: { participant: Participant; bilan
         </div>
       )}
 
+      {/* Plusieurs bilans, des résultats partagés, mais aucun test partagé sur
+          DEUX bilans : il n'y a pas de quoi tracer une courbe. Ne rien dire
+          laisserait croire qu'il n'y a rien. */}
+      {etatPage.etat === 'partage_non_comparable' && (
+        <div style={{
+          background: 'white', border: `1px solid ${C.border}`,
+          borderRadius: 18, padding: '24px 20px', textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.dark, marginBottom: 8 }}>
+            Comparaison bientôt disponible
+          </div>
+          <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>
+            Vos progrès s'afficheront dès qu'un même test<br />
+            sera partagé sur deux bilans par votre praticien.
+          </div>
+        </div>
+      )}
+
       {/* Cartes de progression */}
       {progressions.map(item => (
         <CarteProgression key={item.key} item={item} />
       ))}
 
       {/* Activité physique & Fatigue */}
-      {(sedProfil || fssProfil) && (
+      {afficheProfil && (
         <div style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 18, padding: '16px 16px' }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: C.dark, marginBottom: 10 }}>
             Votre profil de forme
           </div>
-          {sedProfil && (() => {
-            const l = libelleSedentariteBeneficiaire(sedProfil);
-            return (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: 13, color: C.muted }}>Votre niveau d'activité</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: l.color }}>
-                  {l.label} {l.emoji}
-                </span>
-              </div>
-            );
-          })()}
-          {fssProfil && (() => {
-            const l = libelleFatigueBeneficiaire(fssProfil);
-            return (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontSize: 13, color: C.muted }}>Votre fatigue</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: l.color }}>
-                  {l.label} {l.emoji}
-                </span>
-              </div>
-            );
-          })()}
+          {sedLibelle && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 13, color: C.muted }}>Votre niveau d'activité</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: sedLibelle.color }}>
+                {sedLibelle.label} {sedLibelle.emoji}
+              </span>
+            </div>
+          )}
+          {sedIncomplet && <LigneQuestionnaireIncomplet libelle="Votre niveau d'activité" />}
+          {fssLibelle && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 13, color: C.muted }}>Votre fatigue</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: fssLibelle.color }}>
+                {fssLibelle.label} {fssLibelle.emoji}
+              </span>
+            </div>
+          )}
+          {fssIncomplet && <LigneQuestionnaireIncomplet libelle="Votre fatigue" />}
           <p style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>
-            Votre praticien adapte vos séances en conséquence.
+            {sedIncomplet || fssIncomplet
+              ? 'Votre praticien complétera ce questionnaire avec vous lors d\'une prochaine séance.'
+              : 'Votre praticien adapte vos séances en conséquence.'}
           </p>
         </div>
       )}
@@ -2391,9 +2496,7 @@ export default function EspacePatient() {
           src="/logo-horizon.png"
           style={{ height: 22, flexShrink: 0 }}
           alt="Horizon"
-          onError={e => {
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
+          onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }}
         />
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -2469,9 +2572,12 @@ export default function EspacePatient() {
         zIndex: 30,
         boxShadow: '0 -4px 16px rgba(13,43,43,0.08)',
       }}>
+        {/* L'onglet « Progrès » est TOUJOURS proposé : il explique lui-même son
+            état (aucun bilan, en attente de partage, pas encore comparable).
+            L'ancien réglage visibilite.progression le masquait alors qu'il ne
+            commandait aucune donnée — voir src/lib/partageBeneficiaire.ts. */}
         {TABS_CONFIG.filter(t => {
           const v = participant?.visibiliteBeneficiaire;
-          if (t.id === 'progres') return v?.progression !== false;
           if (t.id === 'programme') return v?.programme !== false;
           return true;
         }).map(t => (

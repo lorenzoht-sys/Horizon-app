@@ -17,6 +17,7 @@ import type { Participant, Bilan, ProgrammeV2, Exercice, TypeProgramme, JourProg
 import { JOURS_PROGRAMME } from '../types';
 import { getAuthHeader } from '../lib/supabase';
 import { getContreIndications, getTestsAutonomie } from '../lib/anamnese';
+import { libelleAge } from '../lib/age';
 
 // ─── Types (déplacés depuis ProgrammePage.tsx — importés par les deux appelants) ──
 
@@ -61,13 +62,8 @@ export interface ProgrammeIA {
 
 // ─── Contexte patient ─────────────────────────────────────────────────────────
 
-function calcAge(dateNaissance: string): number {
-  if (!dateNaissance) return 0;
-  return Math.floor((Date.now() - new Date(dateNaissance).getTime()) / (365.25 * 24 * 3600 * 1000));
-}
-
 function buildContextePatient(patient: Participant, dernierBilan: Bilan | null): string {
-  const age = calcAge(patient.dateNaissance);
+  const age = libelleAge(patient.dateNaissance);
   const traitements = (patient.traitements ?? []).map(t => t.nom).filter(Boolean).join(', ');
   const antecedents = [patient.antecedentsMedicaux, patient.antecedentsChirurgicaux].filter(Boolean).join(' · ');
   const bilanInitial = patient.bilans.find(b => b.type === 'initial') ?? null;
@@ -75,7 +71,7 @@ function buildContextePatient(patient: Participant, dernierBilan: Bilan | null):
   const ci = ciInfo.actif ? (ciInfo.detail ?? 'non précisées') : 'aucune contre-indication renseignée';
   const { sedentarite, fatigue } = getTestsAutonomie(patient, bilanInitial);
 
-  return `PATIENT : ${patient.prenom} ${patient.nom}, ${age} ans
+  return `PATIENT : ${patient.prenom} ${patient.nom}, ${age}
 PATHOLOGIE : ${patient.pathologie || 'non renseignée'}
 ANTÉCÉDENTS : ${antecedents || 'non renseignés'}
 TRAITEMENTS : ${traitements || 'non renseignés'}
@@ -93,7 +89,10 @@ ${dernierBilan ? `DERNIERS SCORES (bilan du ${dernierBilan.date}) :
 - Ressenti à l'effort (Borg) : ${dernierBilan.tm6?.borgRPE ?? 'NR'}/20` : "Aucun bilan disponible — adapter le programme au profil et à la pathologie déclarés."}`;
 }
 
-function formatCatalogue(catalogue: Exercice[]): string {
+/** Exporté pour être mesurable : c'est ce texte qui domine le plus gros
+ *  prompt de l'application, et donc ce qui rapproche la génération de
+ *  programme du plafond de `api/_lib/guard.ts`. Voir le test associé. */
+export function formatCatalogue(catalogue: Exercice[]): string {
   return JSON.stringify(catalogue.map(ex => ({
     id: ex.id,
     nom: ex.nom,

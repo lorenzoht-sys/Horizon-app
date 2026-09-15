@@ -5,12 +5,12 @@ import {
   ResponsiveContainer, Legend,
 } from 'recharts';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import ParticipantProfileMobile from './ParticipantProfileMobile';
 import { differenceInDays } from 'date-fns';
 import {
   ArrowLeft, Pencil, FileText, TrendingUp, Share2,
   Download, Trash2, Dumbbell, NotebookPen, Calendar, MapPin,
   RefreshCw, ClipboardList, Mic, Save, ExternalLink, LayoutTemplate,
+  Archive, ArchiveRestore, Bot, Phone, Navigation,
 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
@@ -37,6 +37,7 @@ import { calculerNote, NORMES_SCORING } from '../data/norms';
 import { computeTinettiScores, tinettiRisque } from '../data/tinetti';
 import { TAG_CONFIG } from '../data/profiles';
 import { getSedProfil, getFSSProfil } from '../components/bilan/TestsAutonomie';
+import { etatSedentarite, etatFatigue, SED_TOTAL_MAX, FSS_TOTAL_MAX, type EtatQuestionnaire } from '../lib/scoresAutonomie';
 import { useRappelPreferences, type RappelPreferences } from '../hooks/useRappelPreferences';
 import { toast } from 'sonner';
 import { supabase, getAuthHeader } from '../lib/supabase';
@@ -44,6 +45,7 @@ import { patientAccesPraticien } from '../lib/patientApi';
 import type { Bilan, Participant, Contrat, Seance, ProfilHandicap } from '../types';
 import { getContreIndications, getTestsAutonomie, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../lib/anamnese';
 import type { CompteRenduSeance } from '../types/seance';
+import { libelleAge } from '../lib/age';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -81,7 +83,7 @@ const TESTS_TABLEAU: {
 ];
 
 const METHODE_LABEL: Record<string, string> = {
-  oral_note: 'oral noté', ecrit: 'écrit', numerique: 'numérique',
+  oral_note: 'oral noté', ecrit: 'écrit', numerique: 'numérique', declare_import: "déclaré à l'import",
 };
 
 const NORMES_LABEL: Record<string, string> = {
@@ -113,14 +115,6 @@ const PROFILS_HANDICAP: { id: ProfilHandicap; label: string; emoji: string }[] =
   { id: 'parkinson',        label: 'Parkinson',            emoji: '🫸' },
   { id: 'sep',              label: 'Sclérose en plaques',  emoji: '🎗️' },
 ];
-
-function calcAge(dateNaissance: string): number {
-  const today = new Date(), birth = new Date(dateNaissance);
-  let age = today.getFullYear() - birth.getFullYear();
-  if (today.getMonth() < birth.getMonth() ||
-    (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
-  return age;
-}
 
 function formatDateCourt(date: string): string {
   return new Date(date + 'T12:00').toLocaleDateString('fr-FR', {
@@ -176,21 +170,29 @@ function CarteStats({ participant, contratActif, prochaineSeance, seances }: {
 
       {contratActif ? (
         <>
-          <div className="flex justify-between text-[13px] text-gray-500 mb-1.5">
-            <span>Séances réalisées</span>
-            <span className="font-semibold text-gray-800">
-              {contratActif.nombreSeancesRealisees} / {contratActif.nombreSeancesTotal}
-            </span>
-          </div>
-          <div className="h-1 bg-gray-100 rounded-full mb-3 overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all"
-              style={{
-                width: `${Math.min(100, Math.round((contratActif.nombreSeancesRealisees / contratActif.nombreSeancesTotal) * 100))}%`,
-                background: 'var(--color-teal)',
-              }}
-            />
-          </div>
+          {contratActif.dureeIndeterminee ? (
+            <div className="text-[13px] text-gray-500 mb-3">
+              Suivi actif depuis {new Date(contratActif.dateDebut + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} · sans date de fin
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-between text-[13px] text-gray-500 mb-1.5">
+                <span>Séances réalisées</span>
+                <span className="font-semibold text-gray-800">
+                  {contratActif.nombreSeancesRealisees} / {contratActif.nombreSeancesTotal}
+                </span>
+              </div>
+              <div className="h-1 bg-gray-100 rounded-full mb-3 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(100, Math.round((contratActif.nombreSeancesRealisees / contratActif.nombreSeancesTotal) * 100))}%`,
+                    background: 'var(--color-teal)',
+                  }}
+                />
+              </div>
+            </>
+          )}
           <div className="space-y-1 text-[13px] text-gray-500">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span>📅 {contratActif.nbSeancesSemaine} séance{contratActif.nbSeancesSemaine > 1 ? 's' : ''}/semaine · {contratActif.heureDebut} · {contratActif.dureeMinutes} min</span>
@@ -374,8 +376,62 @@ function CarteProfilFonctionnel({ participant, bilans }: {
   if (!current) return null;
 
   const { sedentarite, fatigue } = getTestsAutonomie(participant, initial);
-  const sedInfo = sedentarite.score !== null ? getSedProfil(sedentarite.score) : null;
-  const fssInfo = fatigue.score !== null ? getFSSProfil(fatigue.score) : null;
+
+  // ── Score affiché, ou état « à régulariser » ────────────────────────────
+  //
+  // L'état est dérivé des RÉPONSES stockées, pas du score stocké : jusqu'au
+  // 2026-09-14, un questionnaire incomplet produisait quand même un total
+  // (absences comptées comme des zéros côté Ricci & Gagnon, items ignorés
+  // côté FSS). Les scores déjà en base héritent de ce défaut.
+  //
+  // Ils ne sont PAS recalculés en silence : Pierre a pu communiquer un score
+  // à un bénéficiaire ou le reprendre dans un compte rendu. On affiche donc
+  // ce qu'on peut affirmer — « à régulariser » — et la reprise du
+  // questionnaire recalcule proprement.
+  //
+  // Réponses absentes mais score présent : la complétude n'est pas
+  // vérifiable, et le score vient de l'ancien calcul. Même traitement.
+  function affichage(
+    etat: EtatQuestionnaire,
+    scoreStocke: number | null,
+    max: number,
+    prefixe: string,
+    profil: { label: string; color: string } | null,
+  ): { texte: string; color: string; detail: string } | null {
+    if (etat.etat === 'complet' && profil) {
+      return {
+        texte: `${profil.label} (${prefixe}${etat.score}/${max})`,
+        color: profil.color,
+        detail: '',
+      };
+    }
+    if (etat.etat === 'a_regulariser') {
+      return {
+        texte: 'À régulariser',
+        color: '#BA7517',
+        detail: `Questionnaire incomplet — aucun score fiable. Réponses manquantes : ${etat.manquants.join(', ')}.`,
+      };
+    }
+    if (scoreStocke !== null) {
+      return {
+        texte: 'À régulariser',
+        color: '#BA7517',
+        detail: 'Réponses détaillées absentes : la complétude du questionnaire ne peut pas être vérifiée.',
+      };
+    }
+    return null;
+  }
+
+  const etatSed = etatSedentarite(sedentarite.reponses);
+  const etatFss = etatFatigue(fatigue.reponses);
+  const affSed = affichage(
+    etatSed, sedentarite.score, SED_TOTAL_MAX, '',
+    etatSed.etat === 'complet' ? getSedProfil(etatSed.score) : null,
+  );
+  const affFss = affichage(
+    etatFss, fatigue.score, FSS_TOTAL_MAX, 'FSS ',
+    etatFss.etat === 'complet' ? getFSSProfil(etatFss.score) : null,
+  );
 
   const testsAvecValeur = TESTS_TABLEAU.map(test => {
     const val = test.getVal(current);
@@ -438,17 +494,18 @@ function CarteProfilFonctionnel({ participant, bilans }: {
       </div>
 
       {/* Test grid 2 colonnes */}
-      <div className="grid grid-cols-2 gap-0">
-        <div className="pr-4 border-r border-gray-100">
+      {/* Une colonne sur téléphone : à deux, libellé et valeur se chevauchaient. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-0">
+        <div className="sm:pr-4 sm:border-r border-gray-100">
           {leftTests.map((item, i) => <TestRow key={i} {...item} />)}
         </div>
-        <div className="pl-4">
+        <div className="sm:pl-4">
           {rightTests.map((item, i) => <TestRow key={i} {...item} />)}
         </div>
       </div>
 
       {/* Légende */}
-      <div className="flex gap-4 mt-3 pt-3 border-t border-gray-100">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 pt-3 border-t border-gray-100">
         {([
           { color: DOT_COLORS.vert,   label: 'Dans les normes' },
           { color: DOT_COLORS.orange, label: 'À surveiller' },
@@ -462,21 +519,21 @@ function CarteProfilFonctionnel({ participant, bilans }: {
       </div>
 
       {/* Activité physique & Fatigue du bilan initial */}
-      {(sedInfo || fssInfo) && (
+      {(affSed || affFss) && (
         <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-1.5">
-          {sedInfo && (
+          {affSed && (
             <div className="flex items-center justify-between text-[12px]">
               <span className="text-gray-500">Activité physique</span>
-              <span style={{ color: sedInfo.color, fontWeight: 600 }}>
-                {sedInfo.label}{sedentarite.score !== null ? ` (${sedentarite.score}/55)` : ''}
+              <span style={{ color: affSed.color, fontWeight: 600 }} title={affSed.detail}>
+                {affSed.texte}
               </span>
             </div>
           )}
-          {fssInfo && (
+          {affFss && (
             <div className="flex items-center justify-between text-[12px]">
               <span className="text-gray-500">Fatigue perçue</span>
-              <span style={{ color: fssInfo.color, fontWeight: 600 }}>
-                {fssInfo.label}{fatigue.score !== null ? ` (FSS ${fatigue.score}/63)` : ''}
+              <span style={{ color: affFss.color, fontWeight: 600 }} title={affFss.detail}>
+                {affFss.texte}
               </span>
             </div>
           )}
@@ -778,14 +835,15 @@ function TabsSection({ activeTab, setActiveTab, tabs, children }: {
   return (
     <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm">
       {/* Tab bar */}
-      <div className="flex border-b border-gray-200/60 px-4">
+      {/* Défilement horizontal sur téléphone : les quatre onglets n'y tiennent pas. */}
+      <div className="flex border-b border-gray-200/60 px-2 sm:px-4 overflow-x-auto scrollbar-hide">
         {tabs.map(tab => {
           const active = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`relative flex items-center gap-2 px-3 py-3.5 text-[13px] font-medium transition-colors ${
+              className={`relative flex flex-shrink-0 items-center gap-2 px-3 py-3.5 text-[13px] font-medium whitespace-nowrap transition-colors ${
                 active ? 'text-[#2BBFBF]' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -803,7 +861,7 @@ function TabsSection({ activeTab, setActiveTab, tabs, children }: {
         })}
       </div>
       {/* Tab content */}
-      <div className="p-5">
+      <div className="p-3 sm:p-5">
         {children}
       </div>
     </div>
@@ -948,7 +1006,7 @@ function SectionRappelsPatient({ participantId }: { participantId: string }) {
 
 export default function ParticipantProfile() {
   const { id } = useParams<{ id: string }>();
-  const { participants, updateParticipant, deleteParticipant, deleteBilan, geocodeParticipant } = useParticipants();
+  const { participants, loading: chargementParticipants, updateParticipant, deleteParticipant, deleteBilan, geocodeParticipant, archiverParticipant } = useParticipants();
   const { programmeActif, deleteProgramme } = useProgramme(id ?? '');
   const { programmes: programmesV2, seancesAutonomesStats } = useProgrammeV2(id ?? '');
   const { contrats } = useContrats();
@@ -1033,15 +1091,16 @@ export default function ParticipantProfile() {
   const participant = participants.find(p => p.id === id);
   const { compteRendus, ajouterCompteRendu } = useCompteRenduSeance(participant?.id ?? '');
 
+  // Fiche UNIQUE depuis le 2026-09-13 : servie telle quelle sous 768 px
+  // (App.tsx, estRouteInterfaceUnique). ParticipantProfileMobile, montée ici
+  // sous `md:hidden`, n'était jamais visible — cette page n'était jamais
+  // affichée sous 768 px — mais chargeait ses données en double.
   if (!participant) return (
-    <>
-      <div className="md:hidden"><ParticipantProfileMobile /></div>
-      <div className="hidden md:block">
-        <PageWrapper>
-          <div className="text-center py-20 text-gray-400">Participant introuvable</div>
-        </PageWrapper>
+    <PageWrapper>
+      <div className="text-center py-20 text-gray-400">
+        {chargementParticipants ? 'Chargement…' : 'Participant introuvable'}
       </div>
-    </>
+    </PageWrapper>
   );
 
   const sortedBilans   = [...participant.bilans].sort((a, b) => a.date.localeCompare(b.date));
@@ -1051,7 +1110,7 @@ export default function ParticipantProfile() {
   const contratActif   = contrats.find(c => c.participantId === participant.id && c.statut === 'actif') ?? null;
   const contratsCount  = contrats.filter(c => c.participantId === participant.id).length;
   const color          = avatarColor(participant.id);
-  const age            = calcAge(participant.dateNaissance);
+  const age            = libelleAge(participant.dateNaissance);
   const today          = new Date().toISOString().slice(0, 10);
   const imc            = participant.taille && participant.poids
     ? Math.round((participant.poids / ((participant.taille / 100) ** 2)) * 10) / 10 : null;
@@ -1065,12 +1124,21 @@ export default function ParticipantProfile() {
 
   function handleAction(action: string) {
     setMenuOuvert(false);
+    if (!participant) return;
     switch (action) {
       case 'modifier':        navigate(`/participants/${id}/modifier`); break;
       case 'evolution':       navigate(`/participant/${id}/comparaison`); break;
       case 'lien':            copyClientLink(); break;
       case 'export':          handleExport(); break;
       case 'supprimer':       setConfirmDelete(true); break;
+      case 'archiver':
+        archiverParticipant(participant.id, true).catch(err => { console.error('Erreur archivage:', err); toast.error('Erreur lors de l\'archivage'); });
+        toast.success(`${participant.prenom} ${participant.nom} archivé(e).`);
+        break;
+      case 'desarchiver':
+        archiverParticipant(participant.id, false).catch(err => { console.error('Erreur désarchivage:', err); toast.error('Erreur lors du désarchivage'); });
+        toast.success(`${participant.prenom} ${participant.nom} désarchivé(e).`);
+        break;
       case 'programme':       navigate(`/participant/${id}/programme`); break;
       case 'nouveau_bilan':   navigate(`/participant/${id}/bilan/new`); break;
       case 'nouveau_contrat': navigate(`/participant/${id}/contrat/nouveau`); break;
@@ -1137,6 +1205,9 @@ export default function ParticipantProfile() {
     { Icon: TrendingUp, label: "Rapport d'évolution",    action: 'evolution', disabled: participant.bilans.length < 2 },
     { Icon: Share2,     label: 'Lien client',             action: 'lien' },
     { Icon: Download,   label: 'Mes données (JSON)',      action: 'export' },
+    participant.archive
+      ? { Icon: ArchiveRestore, label: 'Désarchiver', action: 'desarchiver' }
+      : { Icon: Archive,        label: 'Archiver',    action: 'archiver' },
     { Icon: Trash2,     label: 'Supprimer',               action: 'supprimer', danger: true },
   ];
 
@@ -1148,9 +1219,6 @@ export default function ParticipantProfile() {
   ];
 
   return (
-    <>
-    <div className="md:hidden"><ParticipantProfileMobile /></div>
-    <div className="hidden md:block">
     <PageWrapper>
       <Link to="/" className="inline-flex items-center gap-1.5 text-[13px] text-gray-400 hover:text-gray-700 mb-4 transition-colors">
         <ArrowLeft size={14} /> Tableau de bord
@@ -1158,7 +1226,7 @@ export default function ParticipantProfile() {
 
       {/* ── HEADER BLANC ───────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-200/50 shadow-sm mb-4">
-        <div className="px-5 pt-5 pb-4">
+        <div className="px-4 sm:px-5 pt-5 pb-4">
 
           {/* Ligne 1 : avatar + nom + badges + menu */}
           <div className="flex items-start gap-3.5">
@@ -1226,7 +1294,7 @@ export default function ParticipantProfile() {
               {/* Ligne secondaire : infos */}
               <div className="flex items-center gap-1.5 flex-wrap mt-1 text-[13px] text-gray-500">
                 <span>
-                  {age} ans · né(e) le {new Date(participant.dateNaissance).toLocaleDateString('fr-FR')}
+                  {age} · né(e) le {new Date(participant.dateNaissance).toLocaleDateString('fr-FR')}
                 </span>
                 {participant.taille && <><span className="text-gray-300">·</span><span>{participant.taille} cm</span></>}
                 {participant.poids && <><span className="text-gray-300">·</span><span>{participant.poids} kg</span></>}
@@ -1345,7 +1413,8 @@ export default function ParticipantProfile() {
                     onClick={() => setShowProfilPicker(v => !v)}
                     className="text-[12px] font-medium px-2.5 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
                   >
-                    ♿ {participant.profilHandicap ? 'Modifier profil' : '+ Profil handicap'}
+                    {/* Libellé masqué sur téléphone : il écrasait le nom du bénéficiaire. */}
+                    ♿<span className="hidden sm:inline"> {participant.profilHandicap ? 'Modifier profil' : '+ Profil handicap'}</span>
                   </button>
                   {showProfilPicker && (
                     <>
@@ -1406,7 +1475,7 @@ export default function ParticipantProfile() {
         </div>
 
         {/* Séparateur + boutons d'action */}
-        <div className="border-t border-gray-100 px-5 py-3">
+        <div className="border-t border-gray-100 px-4 sm:px-5 py-3">
           <div className="flex items-center gap-2 flex-wrap">
             {/* Groupe 1 : primaires */}
             <button
@@ -1422,6 +1491,35 @@ export default function ParticipantProfile() {
             >
               <Mic size={13} style={{ color: 'var(--color-teal)' }} /> Dicter séance
             </button>
+            {/* Repris de l'ancienne fiche mobile. L'URL sert la version mobile
+                de l'assistant sous 768 px ; le state, la version desktop. */}
+            <button
+              onClick={() => navigate(`/assistant?beneficiaire=${encodeURIComponent(participant.id)}`, { state: { patientId: participant.id } })}
+              className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Bot size={13} /> Assistant
+            </button>
+            {/* Boutons terrain : sur téléphone seulement, où l'on appelle et
+                où l'on part en visite. Sur desktop, le téléphone et l'adresse
+                restent des liens dans la ligne d'informations. */}
+            {participant.telephone && (
+              <a
+                href={`tel:${participant.telephone}`}
+                className="md:hidden flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg"
+              >
+                <Phone size={13} style={{ color: 'var(--color-teal)' }} /> Appeler
+              </a>
+            )}
+            {hasAddress && (
+              <a
+                href={`https://maps.google.com/?q=${encodeURIComponent(`${participant.adresseRue}, ${participant.adresseCodePostal} ${participant.adresseVille}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="md:hidden flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg"
+              >
+                <Navigation size={13} style={{ color: 'var(--color-teal)' }} /> Itinéraire
+              </a>
+            )}
 
             {/* Groupe 2 : secondaires */}
             {participant.bilans.length >= 2 && (
@@ -1498,7 +1596,7 @@ export default function ParticipantProfile() {
       {/* ── PROGRAMME EN COURS ─────────────────────────────────── */}
       {programmeActif ? (
         <div className="bg-white rounded-xl border border-gray-200/50 shadow-sm mb-4 p-5">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-1">Programme en cours</div>
               <div className="font-heading font-semibold text-dark text-[15px]">{programmeActif.titre}</div>
@@ -1558,7 +1656,7 @@ export default function ParticipantProfile() {
         <div className="bg-white rounded-xl border border-gray-200/50 shadow-sm mb-4 p-5">
           <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 mb-1">Programme</div>
           <div className="text-[13px] text-gray-500 mb-3">Aucun programme en cours pour ce bénéficiaire.</div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => handleAction('programme')}
               className="flex items-center gap-1.5 bg-primary text-white text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-dark transition-colors"
@@ -1951,7 +2049,5 @@ export default function ParticipantProfile() {
       )}
 
     </PageWrapper>
-    </div>
-    </>
   );
 }

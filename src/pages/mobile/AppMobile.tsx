@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useParticipants } from '../../hooks/useParticipants';
 import { useAgenda } from '../../hooks/useAgenda';
@@ -7,21 +8,33 @@ import { useCompteRenduSeance } from '../../hooks/useCompteRenduSeance';
 import BilanStepper from '../../components/bilan/BilanStepper';
 import ModalSelectionTests from '../../components/bilan/ModalSelectionTests';
 import DicteePostSeance from '../../components/DicteePostSeance';
-import ModalEspacePatient from '../../components/participant/ModalEspacePatient';
 import MarkdownRendu from '../../components/ui/MarkdownRendu';
-import type { Bilan } from '../../types';
+import type { Bilan, Participant } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, getAuthHeader } from '../../lib/supabase';
-import { getContreIndications, getObjectifsActivites, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../../lib/anamnese';
+import {
+  DEFAULTS_SETTINGS,
+  EVENT_SETTINGS_PRATICIEN,
+  chargerSettingsPraticien,
+  enregistrerSettingsPraticien,
+  hydraterSettingsPraticien,
+  type SettingsPraticien,
+} from '../../lib/settingsPraticien';
+import { validerSiret } from '../../lib/siret';
+import { avecConsentement, erreurConsentementCreation, normaliserRgpd } from '../../lib/consentementRgpd';
+import type { RgpdConsent } from '../../types';
+import { initialesPraticien } from '../../lib/initiales';
+import { getContreIndications } from '../../lib/anamnese';
+import { libelleAge } from '../../lib/age';
+import { URLS_MOBILE, ecranMobileDepuisUrl } from '../../lib/routesMobile';
+import BarreNavigationMobile from '../../components/layout/BarreNavigationMobile';
+import ModalRepriseBrouillon from '../../components/bilan/ModalRepriseBrouillon';
+import { useEtatSession } from '../../hooks/useEtatSession';
+import { ecrireEtatSession, effacerEtatSession, lireEtatSession } from '../../lib/etatSession';
+import { getBrouillonParticipant, sauvegarderBrouillonParticipant, supprimerBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
+import { getBrouillon, supprimerBrouillon } from '../../hooks/useBrouillonBilan';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function calcAge(d: string) {
-  const a = new Date(), b = new Date(d);
-  let age = a.getFullYear() - b.getFullYear();
-  if (a.getMonth() < b.getMonth()) age--;
-  return age;
-}
 
 function formatDateLong(d: Date) {
   return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -33,20 +46,6 @@ function formatDateCourt(d: string) {
 
 function ouvrirMaps(adresse: string) {
   window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}`, '_blank');
-}
-
-function formatPhone(tel: string): string {
-  const digits = String(tel).replace(/\D/g, '');
-  // Normalise +33XXXXXXXXX → 0XXXXXXXXX
-  const norm = digits.startsWith('33') && digits.length === 11 ? '0' + digits.slice(2) : digits;
-  if (norm.length === 10) return norm.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5');
-  return String(tel);
-}
-
-function telHref(tel: string): string {
-  const digits = String(tel).replace(/\D/g, '');
-  const local = digits.startsWith('33') && digits.length === 11 ? digits.slice(2) : digits.replace(/^0/, '');
-  return `tel:+33${local}`;
 }
 
 const C = { // colors
@@ -66,81 +65,50 @@ const card: React.CSSProperties = {
 
 // ── Hook paramètres praticien (Supabase) ─────────────────────────────────────
 
-const PRATICIEN_DEFAULTS = {
-  prenom: '', nom: '', titre: 'Enseignant en Activité Physique Adaptée',
-  email: '', telephone: '', siret: '', numeroSAP: '', villeSignature: '',
-  tarifHoraire: '45', societe: '', adresseRue: '', adresseCodePostal: '', adresseVille: '',
-};
-
-type PraticienSettings = typeof PRATICIEN_DEFAULTS;
-
+// Cet ecran avait ses propres valeurs par defaut, sa propre requete et ses
+// propres ecritures du cache — un dixieme lecteur de reglages, reste en
+// dehors de la consolidation. Il portait treize champs sur seize : ni
+// `numeroTVA`, ni `fraisKmDefaut`, ni `logoPraticien`. Tout passe desormais
+// par `settingsPraticien`, comme les ecrans desktop.
 function usePraticienSettings() {
-  const [settings, setSettings] = useState<PraticienSettings>(PRATICIEN_DEFAULTS);
+  const [settings, setSettings] = useState<SettingsPraticien>(chargerSettingsPraticien);
   const [loading, setLoading] = useState(true);
+  // Renseigne uniquement si la BASE est injoignable — pas si la fiche
+  // n'existe pas encore. Voir `EchecHydratation`. L'ecran de reglages s'en
+  // sert pour interdire l'enregistrement : sauvegarder un formulaire qu'on
+  // n'a pas pu pre-remplir ecraserait la fiche avec des champs vides.
+  const [echecChargement, setEchecChargement] = useState(false);
 
   useEffect(() => {
-    if (!supabase) { setLoading(false); return; }
     void (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLoading(false); return; }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
-        .from('praticiens')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      if (data) {
-        const s: PraticienSettings = {
-          prenom:            data.prenom            ?? '',
-          nom:               data.nom               ?? '',
-          titre:             data.titre             ?? PRATICIEN_DEFAULTS.titre,
-          email:             data.email             ?? '',
-          telephone:         data.telephone         ?? '',
-          siret:             data.siret             ?? '',
-          numeroSAP:         data.numero_sap        ?? '',
-          villeSignature:    data.ville_signature   ?? '',
-          tarifHoraire:      data.tarif_horaire     ?? '45',
-          societe:           data.societe           ?? '',
-          adresseRue:        data.adresse_rue       ?? '',
-          adresseCodePostal: data.adresse_code_postal ?? '',
-          adresseVille:      data.adresse_ville     ?? '',
-        };
-        setSettings(s);
-        // Maintenir le cache localStorage pour les composants PDF
-        localStorage.setItem('settings_praticien', JSON.stringify(s));
+      const resultat = await hydraterSettingsPraticien();
+      if (!resultat.ok && resultat.echec === 'erreur') {
+        console.error('[Mobile] Hydratation des reglages en echec :', resultat.message);
+        setEchecChargement(true);
       }
+      setSettings(chargerSettingsPraticien());
       setLoading(false);
     })();
   }, []);
 
-  async function sauvegarderSettings(form: PraticienSettings) {
+  // Rester synchrone avec les autres ecrans : `ecrireCacheSettingsPraticien`
+  // emet cet evenement a chaque ecriture du cache.
+  useEffect(() => {
+    const handler = () => setSettings(chargerSettingsPraticien());
+    window.addEventListener(EVENT_SETTINGS_PRATICIEN, handler);
+    return () => window.removeEventListener(EVENT_SETTINGS_PRATICIEN, handler);
+  }, []);
+
+  async function sauvegarderSettings(form: SettingsPraticien) {
     if (!supabase) throw new Error('Supabase non configuré');
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Non connecté');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any).from('praticiens').upsert({
-      id:                  user.id,
-      prenom:              form.prenom,
-      nom:                 form.nom,
-      titre:               form.titre,
-      email:               form.email,
-      telephone:           form.telephone || null,
-      siret:               form.siret,
-      numero_sap:          form.numeroSAP,
-      ville_signature:     form.villeSignature,
-      tarif_horaire:       form.tarifHoraire,
-      societe:             form.societe || null,
-      adresse_rue:         form.adresseRue || null,
-      adresse_code_postal: form.adresseCodePostal || null,
-      adresse_ville:       form.adresseVille || null,
-    });
-    if (error) throw error;
+    // Base d'abord, cache ensuite — l'ordre est garanti par le module.
+    await enregistrerSettingsPraticien(form, user.id);
     setSettings(form);
-    localStorage.setItem('settings_praticien', JSON.stringify(form));
-    window.dispatchEvent(new Event('settings_praticien_updated'));
   }
 
-  return { settings, loading, sauvegarderSettings };
+  return { settings, loading, echecChargement, sauvegarderSettings };
 }
 
 // ── Composants UI réutilisables ───────────────────────────────────────────────
@@ -185,60 +153,14 @@ function InfoSection({ titre, children }: { titre: string; children: React.React
   );
 }
 
-function InfoLigne({ icon, texte }: { icon: string; texte: string }) {
-  return (
-    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080', marginBottom: 6 }}>
-      <i className={`ti ${icon}`} style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
-      <span>{texte}</span>
-    </div>
-  );
-}
+// La barre du bas vit dans components/layout/BarreNavigationMobile.tsx : elle
+// est partagée avec le cadre commun, qui la montre sous 768 px sur les écrans
+// fusionnés (la fiche bénéficiaire).
 
-
-// ── Bottom Nav ────────────────────────────────────────────────────────────────
-
-const NAV = [
-  { id: 'aujourdhui', icon: 'ti-home',       label: 'Accueil' },
-  { id: 'patients',   icon: 'ti-users',      label: 'Bénéfic.' },
-  { id: 'saisie',     icon: 'ti-plus',       label: 'Saisie', principal: true },
-  { id: 'tournee',    icon: 'ti-route',      label: 'Tournée' },
-  { id: 'assistant',  icon: 'ti-robot',      label: 'Assistant' },
-];
-
-function BottomNav({ onglet, onChange }: { onglet: string; onChange: (id: string) => void }) {
-  return (
-    <div style={{
-      position: 'fixed', bottom: 0, left: 0, right: 0,
-      maxWidth: 480, margin: '0 auto',
-      background: 'white',
-      boxShadow: '0 -2px 20px rgba(13,43,43,0.08)',
-      display: 'flex', padding: 'calc(8px + env(safe-area-inset-bottom)) 0 8px',
-      zIndex: 100,
-    }}>
-      {NAV.map(item => {
-        const isActive = onglet === item.id;
-        return (
-          <button key={item.id} onClick={() => onChange(item.id)}
-            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0' }}>
-            {item.principal ? (
-              <div style={{ width: 48, height: 48, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: -20, boxShadow: '0 4px 12px rgba(43,191,191,0.4)' }}>
-                <i className="ti ti-plus" style={{ fontSize: 22, color: 'white' }} />
-              </div>
-            ) : (
-              <i className={`ti ${item.icon}`} style={{ fontSize: 22, color: isActive ? C.primary : C.muted }} />
-            )}
-            <span style={{ fontSize: 10, fontWeight: isActive ? 700 : 400, color: isActive ? C.primary : C.muted }}>
-              {item.label}
-            </span>
-            {isActive && !item.principal && (
-              <span style={{ width: 4, height: 4, borderRadius: '50%', background: C.primary, marginTop: 1 }} />
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+// Ces écrans n'existent qu'en version desktop. Le praticien y accède en
+// tournant son téléphone : la bascule à 768 px est un usage voulu, pas un
+// défaut (voir App.tsx).
+const MESSAGE_PAYSAGE = 'Tournez votre téléphone en paysage pour afficher cet écran 🔄';
 
 // ── EcranAujourdhui ───────────────────────────────────────────────────────────
 
@@ -284,7 +206,7 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
       <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 18px)', paddingLeft: 20, paddingRight: 20, paddingBottom: 22 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <img src="/logo-horizon.png.png?v=2" alt="Horizon" style={{ height: 22, marginBottom: 12 }}
+            <img src="/logo-horizon.png?v=2" alt="Horizon" style={{ height: 22, marginBottom: 12 }}
               onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }} />
             <div style={{ fontSize: 22, fontWeight: 800, color: 'white', lineHeight: 1.2 }}>Bonjour {prenom} 👋</div>
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 5 }}>{formatDateLong(new Date())}</div>
@@ -496,7 +418,7 @@ function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
                   {ci && <span style={{ fontSize: 13 }} title="Contre-indications actives">⚠️</span>}
                 </div>
                 <div style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>
-                  {calcAge(p.dateNaissance)} ans{prochaine ? ` · ${formatDateCourt(prochaine.date)}` : ''}
+                  {libelleAge(p.dateNaissance)}{prochaine ? ` · ${formatDateCourt(prochaine.date)}` : ''}
                 </div>
                 {(p.contexteClinic || p.pathologie) && (
                   <div style={{ fontSize: 11, color: 'var(--color-ink-2)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -514,18 +436,6 @@ function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
 }
 
 // ── EcranSaisie ───────────────────────────────────────────────────────────────
-
-type ModeSaisie = 'choix' | 'patient' | 'bilan';
-
-function EcranSaisie({ onVoirFiche }: { onVoirFiche?: (id: string) => void }) {
-  const [mode, setMode] = useState<ModeSaisie>('choix');
-  const back = () => setMode('choix');
-  if (mode === 'patient') return <NouveauPatientMobile onBack={back} />;
-  if (mode === 'bilan')   return <NouveauBilanMobile onBack={back} onVoirFiche={onVoirFiche} />;
-  return <ChoixSaisie onPatient={() => setMode('patient')} onBilan={() => setMode('bilan')} />;
-}
-
-
 
 function ChoixSaisie({ onPatient, onBilan }: { onPatient: () => void; onBilan: () => void }) {
   const btn: React.CSSProperties = { width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: 16, background: 'white', border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 10, cursor: 'pointer', textAlign: 'left' };
@@ -548,29 +458,170 @@ function ChoixSaisie({ onPatient, onBilan }: { onPatient: () => void; onBilan: (
 
 // ── Nouveau patient mobile ─────────────────────────────────────────────────────
 
-function NouveauPatientMobile({ onBack }: { onBack: () => void }) {
+// Même bloc et mêmes règles que le formulaire complet
+// (ParticipantForm.tsx) : le libellé de la case principale est identique, et
+// la validation passe par src/lib/consentementRgpd.ts.
+function BlocConsentementMobile({ rgpd, onRgpdChange, droitImage, onDroitImageChange }: {
+  rgpd: RgpdConsent;
+  onRgpdChange: (rgpd: RgpdConsent) => void;
+  droitImage: boolean;
+  onDroitImageChange: (v: boolean) => void;
+}) {
+  const { settings } = usePraticienSettings();
+  const cases = [
+    { key: 'consentementObtenu', label: 'Le bénéficiaire a été informé et a consenti' },
+    { key: 'droitAcces',         label: "Droit d'accès expliqué" },
+    { key: 'droitRectification', label: 'Droit de rectification expliqué' },
+    { key: 'droitEffacement',    label: "Droit à l'effacement expliqué" },
+  ] as const;
+  const ligne: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: C.text, padding: '7px 0', cursor: 'pointer' };
+  const caseACocher: React.CSSProperties = { width: 20, height: 20, accentColor: 'var(--color-teal)', flexShrink: 0 };
+
+  return (
+    <div style={{ background: 'white', border: `1px solid ${rgpd.consentementObtenu ? C.border : '#FCD34D'}`, borderRadius: 12, padding: '14px 16px', marginBottom: 14 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+        🔒 Consentement RGPD *
+      </div>
+      <div style={{ background: C.bg, borderRadius: 8, padding: '8px 10px', fontSize: 12, color: '#4A6080', lineHeight: 1.5, marginBottom: 8 }}>
+        <strong>À lire au bénéficiaire :</strong> « Dans le cadre de votre suivi en APA, je collecte vos données personnelles et de santé.
+        Utilisées uniquement pour votre suivi. Droits d'accès, rectification, effacement : {settings.email || 'votre praticien'} »
+      </div>
+      {cases.map(({ key, label }) => (
+        <label key={key} style={ligne}>
+          <input type="checkbox" checked={rgpd[key]} style={caseACocher}
+            onChange={e => {
+              const coche = e.target.checked;
+              onRgpdChange(key === 'consentementObtenu'
+                ? avecConsentement(rgpd, coche, new Date().toISOString().slice(0, 10))
+                : { ...rgpd, [key]: coche });
+            }} />
+          {label}
+        </label>
+      ))}
+      <label style={ligne}>
+        <input type="checkbox" checked={droitImage} style={caseACocher} onChange={e => onDroitImageChange(e.target.checked)} />
+        Droit à l'image accordé (photos/vidéos en séance)
+      </label>
+      <div style={{ fontSize: 12, color: C.muted, margin: '8px 0 6px' }}>Mode de recueil</div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {(['oral_note', 'ecrit', 'numerique'] as const).map(m => (
+          <button key={m} type="button" onClick={() => onRgpdChange({ ...rgpd, methodeConsentement: m })}
+            style={{
+              flex: 1, padding: '8px 4px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              border: `1px solid ${rgpd.methodeConsentement === m ? C.primary : C.border}`,
+              background: rgpd.methodeConsentement === m ? C.primary : 'white',
+              color: rgpd.methodeConsentement === m ? 'white' : '#4A6080',
+            }}>
+            {m === 'oral_note' ? 'Oral noté' : m === 'ecrit' ? 'Écrit' : 'Numérique'}
+          </button>
+        ))}
+      </div>
+      {!rgpd.consentementObtenu && (
+        <div style={{ fontSize: 12, color: '#B45309', fontWeight: 600, marginTop: 10 }}>
+          ⚠️ Obligatoire pour créer la fiche : sans consentement, les données de santé ne peuvent pas être collectées légalement.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Brouillon PARTAGÉ avec le formulaire complet (ParticipantFormPage, même clé) :
+// tourner le téléphone en paysage reprend la saisie dans le formulaire
+// complet, et inversement. Le consentement reste obligatoire des deux côtés —
+// le formulaire complet normalise le `rgpd` du brouillon et refuse la
+// création sans lui (src/lib/consentementRgpd.ts, testé).
+const CLE_BROUILLON_CREATION = 'nouveau';
+
+function texteBrouillon(v: unknown): string {
+  return typeof v === 'string' ? v : '';
+}
+
+function NouveauPatientMobile({ onBack: retourParent, onCree }: { onBack: () => void; onCree: (participantId: string) => void }) {
   const { addParticipant } = useParticipants();
-  const [form, setForm] = useState({ prenom: '', nom: '', dateNaissance: '', telephone: '', pathologie: '' });
+  const [brouillon] = useState<Record<string, unknown>>(() => getBrouillonParticipant(CLE_BROUILLON_CREATION)?.data ?? {});
+  const [form, setForm] = useState(() => ({
+    prenom: texteBrouillon(brouillon.prenom),
+    nom: texteBrouillon(brouillon.nom),
+    dateNaissance: texteBrouillon(brouillon.dateNaissance),
+    telephone: texteBrouillon(brouillon.telephone),
+    pathologie: texteBrouillon(brouillon.pathologie),
+  }));
+  const [rgpd, setRgpd] = useState<RgpdConsent>(() => normaliserRgpd(brouillon.rgpd as Partial<RgpdConsent> | undefined));
+  const [droitImage, setDroitImage] = useState<boolean>(brouillon.droitImage === true);
+  const [enregistrement, setEnregistrement] = useState(false);
+
+  // Écrit à chaque changement, sans délai : c'est ce brouillon qui survit à la
+  // rotation. Fusionné avec l'existant, pour ne rien perdre de ce que le
+  // formulaire complet y a mis (anamnèse, organisation…).
+  useEffect(() => {
+    const existant = getBrouillonParticipant(CLE_BROUILLON_CREATION);
+    const saisieVide = !form.prenom && !form.nom && !form.dateNaissance && !form.telephone && !form.pathologie && !rgpd.consentementObtenu;
+    if (!existant && saisieVide) return;
+    sauvegarderBrouillonParticipant(CLE_BROUILLON_CREATION, existant?.step ?? 0, {
+      ...(existant?.data ?? {}),
+      ...form,
+      pathologie: form.pathologie || undefined,
+      rgpd,
+      droitImage,
+    });
+  }, [form, rgpd, droitImage]);
+
+  // Abandon explicite : le brouillon ne doit pas réapparaître, comme le
+  // bouton « Annuler » du formulaire complet.
+  function onBack() {
+    supprimerBrouillonParticipant(CLE_BROUILLON_CREATION);
+    retourParent();
+  }
   const label: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
   const input: React.CSSProperties = { width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, outline: 'none', marginBottom: 14, boxSizing: 'border-box' };
 
-  function sauvegarder() {
+  async function sauvegarder() {
+    if (enregistrement) return;
     if (!form.prenom.trim() || !form.nom.trim() || !form.dateNaissance) {
       toast.error('Prénom, nom et date de naissance requis');
       return;
     }
-    addParticipant({
-      prenom: form.prenom.trim(),
-      nom: form.nom.trim(),
-      dateNaissance: form.dateNaissance,
-      telephone: form.telephone || undefined,
-      pathologie: form.pathologie || undefined,
-      dateCreation: new Date().toISOString(),
-      bilans: [],
-      token: uuidv4().slice(0, 12),
-    } as any);
-    toast.success(`${form.prenom} ${form.nom} créé(e) ✅`);
-    onBack();
+    // Ce formulaire n'enregistrait AUCUN consentement. Même règle que le
+    // formulaire complet désormais : bloquant à la création.
+    const erreurRgpd = erreurConsentementCreation(rgpd);
+    if (erreurRgpd) {
+      toast.error(erreurRgpd);
+      return;
+    }
+    setEnregistrement(true);
+    try {
+      // Attendu, et plus lancé sans `await` : le succès s'affichait même
+      // quand l'enregistrement échouait.
+      // Ce que le formulaire complet a mis dans le brouillon partagé (anamnèse,
+      // organisation…) n'est repris QUE pour la même personne : un brouillon
+      // abandonné ne doit pas prêter ses données de santé à un autre
+      // bénéficiaire.
+      const donneesBrouillon = getBrouillonParticipant(CLE_BROUILLON_CREATION)?.data ?? {};
+      const memePersonne =
+        texteBrouillon(donneesBrouillon.prenom).trim().toLowerCase() === form.prenom.trim().toLowerCase() &&
+        texteBrouillon(donneesBrouillon.nom).trim().toLowerCase() === form.nom.trim().toLowerCase();
+      const cree = await addParticipant({
+        ...(memePersonne ? donneesBrouillon : {}),
+        prenom: form.prenom.trim(),
+        nom: form.nom.trim(),
+        dateNaissance: form.dateNaissance,
+        telephone: form.telephone || undefined,
+        pathologie: form.pathologie || undefined,
+        dateCreation: new Date().toISOString(),
+        rgpd,
+        droitImage,
+        bilans: [],
+        token: uuidv4().slice(0, 12),
+      } as any);
+      supprimerBrouillonParticipant(CLE_BROUILLON_CREATION);
+      toast.success(`${form.prenom} ${form.nom} créé(e) ✅`);
+      onCree(cree.id);
+    } catch (err) {
+      console.error('[Mobile] Création bénéficiaire en échec :', err);
+      toast.error("La fiche n'a pas pu être créée, réessayez");
+    } finally {
+      setEnregistrement(false);
+    }
   }
 
   return (
@@ -597,9 +648,11 @@ function NouveauPatientMobile({ onBack }: { onBack: () => void }) {
       <label style={label}>Pathologie / contexte</label>
       <input value={form.pathologie} onChange={e => setForm(f => ({ ...f, pathologie: e.target.value }))} placeholder="Ex : arthrose genou droit" style={input} />
 
-      <button onClick={sauvegarder}
-        style={{ width: '100%', padding: 16, background: C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginTop: 8 }}>
-        ✅ Créer le bénéficiaire
+      <BlocConsentementMobile rgpd={rgpd} onRgpdChange={setRgpd} droitImage={droitImage} onDroitImageChange={setDroitImage} />
+
+      <button onClick={sauvegarder} disabled={enregistrement}
+        style={{ width: '100%', padding: 16, background: rgpd.consentementObtenu ? C.primary : '#8FA8A8', color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: enregistrement ? 'wait' : 'pointer', marginTop: 8 }}>
+        {enregistrement ? 'Enregistrement…' : '✅ Créer le bénéficiaire'}
       </button>
     </div>
   );
@@ -607,52 +660,13 @@ function NouveauPatientMobile({ onBack }: { onBack: () => void }) {
 
 // ── Nouveau bilan mobile ───────────────────────────────────────────────────────
 
-function NouveauBilanMobile({ onBack, onVoirFiche }: { onBack: () => void; onVoirFiche?: (id: string) => void }) {
-  const { participants, addBilan, updateParticipant } = useParticipants();
+// Deux écrans, deux URL : le choix du bénéficiaire (/?onglet=saisie&mode=bilan)
+// et le bilan lui-même (/participant/:id/bilan/new — la même que le desktop,
+// pour qu'une rotation affiche le même bilan).
+
+function ChoixBeneficiaireBilanMobile({ onBack, onChoisir }: { onBack: () => void; onChoisir: (participantId: string) => void }) {
+  const { participants } = useParticipants();
   const [participantId, setParticipantId] = useState('');
-  const [etape, setEtape] = useState<'choix' | 'bilan'>('choix');
-
-  const participant = participants.find(p => p.id === participantId);
-
-  if (etape === 'bilan' && participant) {
-    const premierBilanSansTests = participant.bilans.length === 0 && (!participant.testsActifs || participant.testsActifs.length === 0);
-    if (premierBilanSansTests) {
-      return (
-        <ModalSelectionTests
-          participant={participant}
-          onValider={async tests => { await updateParticipant(participant.id, { testsActifs: tests }); }}
-          onCancel={() => {}}
-        />
-      );
-    }
-    return (
-      <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-          <button onClick={() => setEtape('choix')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-            <i className="ti ti-arrow-left" style={{ fontSize: 22, color: C.text }} />
-          </button>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Bilan — {participant.prenom} {participant.nom}</div>
-            <div style={{ fontSize: 12, color: C.muted }}>Bilan n° {participant.bilans.length + 1}</div>
-          </div>
-        </div>
-        <BilanStepper
-          participant={participant}
-          onSave={async (bilan: Omit<Bilan, 'id'>) => {
-            await addBilan(participant.id, bilan);
-            toast.success('Bilan enregistré ✅');
-            if (onVoirFiche) {
-              onVoirFiche(participant.id);
-            } else {
-              onBack();
-            }
-          }}
-          onCancel={() => setEtape('choix')}
-        />
-      </div>
-    );
-  }
-
   const label: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
 
   return (
@@ -674,11 +688,78 @@ function NouveauBilanMobile({ onBack, onVoirFiche }: { onBack: () => void; onVoi
       </select>
 
       <button
-        onClick={() => { if (participantId) setEtape('bilan'); }}
+        onClick={() => { if (participantId) onChoisir(participantId); }}
         disabled={!participantId}
         style={{ width: '100%', padding: 16, background: participantId ? C.primary : '#D0DCDC', color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: participantId ? 'pointer' : 'not-allowed' }}>
         Commencer le bilan →
       </button>
+    </div>
+  );
+}
+
+function BilanMobile({ participantId, onTermine }: { participantId: string; onTermine: () => void }) {
+  // Lecture ET écritures sur la même instance du hook : la sélection des tests
+  // doit se refléter aussitôt dans `participant`.
+  const { participants, loading, addBilan, updateParticipant } = useParticipants();
+  const [testsIgnores, setTestsIgnores] = useState(false);
+  const [brouillonSauve] = useState(() => getBrouillon(participantId));
+  const [reprise, setReprise] = useState<'a_decider' | 'reprendre' | 'recommencer'>(() => (brouillonSauve ? 'a_decider' : 'recommencer'));
+  const participant = participants.find(p => p.id === participantId);
+
+  if (!participant) return <EcranChargement loading={loading} texteIntrouvable="Bénéficiaire introuvable" onBack={onTermine} />;
+
+  // Brouillon existant — saisie interrompue, ou retour en portrait après une
+  // rotation. Ce bilan repartait d'un formulaire vide, dont la PREMIÈRE frappe
+  // écrasait le brouillon sauvegardé. Même choix que le bilan desktop.
+  if (brouillonSauve && reprise === 'a_decider') {
+    return (
+      <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+        <ModalRepriseBrouillon
+          brouillon={brouillonSauve}
+          participantNom={`${participant.prenom} ${participant.nom}`}
+          onReprendre={() => setReprise('reprendre')}
+          onRecommencer={() => { supprimerBrouillon(participant.id); setReprise('recommencer'); }}
+          onFermer={onTermine}
+        />
+      </div>
+    );
+  }
+
+  const premierBilanSansTests = participant.bilans.length === 0 && (!participant.testsActifs || participant.testsActifs.length === 0);
+  if (premierBilanSansTests && !testsIgnores) {
+    return (
+      <ModalSelectionTests
+        participant={participant}
+        onValider={async tests => { await updateParticipant(participant.id, { testsActifs: tests }); }}
+        // « Annuler » ne faisait rien : le praticien restait bloqué sur la
+        // modale. Même comportement que le bilan desktop (NewBilan) :
+        // continuer avec tous les tests.
+        onCancel={() => setTestsIgnores(true)}
+      />
+    );
+  }
+
+  return (
+    <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+        <button onClick={onTermine} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+          <i className="ti ti-arrow-left" style={{ fontSize: 22, color: C.text }} />
+        </button>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Bilan — {participant.prenom} {participant.nom}</div>
+          <div style={{ fontSize: 12, color: C.muted }}>Bilan n° {participant.bilans.length + 1}</div>
+        </div>
+      </div>
+      <BilanStepper
+        participant={participant}
+        onSave={async (bilan: Omit<Bilan, 'id'>) => {
+          await addBilan(participant.id, bilan);
+          toast.success('Bilan enregistré ✅');
+          onTermine();
+        }}
+        onCancel={onTermine}
+        brouillon={reprise === 'reprendre' ? brouillonSauve : null}
+      />
     </div>
   );
 }
@@ -690,7 +771,10 @@ function EcranTournee() {
   const { seancesDuJour, changerStatut } = useAgenda();
   const today = new Date().toISOString().slice(0, 10);
   const seances = seancesDuJour(today);
-  const [dicteeParticipant, setDicteeParticipant] = useState<import('../../types').Participant | null>(null);
+  // Dictée ouverte conservée si l'interface est remplacée (rotation) : son
+  // contenu, lui, est conservé par DicteePostSeance.
+  const [dicteeParticipantId, setDicteeParticipantId] = useEtatSession<string | null>('tournee_dictee', null);
+  const dicteeParticipant = participants.find(x => x.id === dicteeParticipantId) ?? null;
   const { ajouterCompteRendu } = useCompteRenduSeance(dicteeParticipant?.id ?? '');
 
   return (
@@ -720,7 +804,7 @@ function EcranTournee() {
         )}
         {seances.filter(s => s.adresse).length > 1 && (
           <button
-            onClick={() => toast('Optimisation disponible depuis l\'ordinateur 💻', { icon: 'ℹ️' })}
+            onClick={() => toast(MESSAGE_PAYSAGE, { icon: 'ℹ️' })}
             style={{ width: '100%', marginTop: 10, padding: '10px', background: C.dark, color: 'white', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <i className="ti ti-route" style={{ fontSize: 16 }} />
             Optimiser l'itinéraire
@@ -760,7 +844,7 @@ function EcranTournee() {
               </button>
               {s.statut === 'realisee' && p && (
                 <button
-                  onClick={() => setDicteeParticipant(p)}
+                  onClick={() => setDicteeParticipantId(p.id)}
                   style={{ marginTop: 6, width: '100%', padding: '8px', background: C.bg, border: `1px dashed ${C.primary}`, borderRadius: 8, fontSize: 12, fontWeight: 700, color: C.primary, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                   🎙️ Dicter le compte-rendu
                 </button>
@@ -773,7 +857,7 @@ function EcranTournee() {
       {dicteeParticipant && (
         <DicteePostSeance
           participant={dicteeParticipant}
-          onClose={() => setDicteeParticipant(null)}
+          onClose={() => setDicteeParticipantId(null)}
           onSave={async (data) => { await ajouterCompteRendu(data); }}
         />
       )}
@@ -783,27 +867,61 @@ function EcranTournee() {
 
 // ── EcranSettings ─────────────────────────────────────────────────────────────
 
-function EcranSettings({ onBack }: { onBack: () => void }) {
+const CLE_SESSION_PARAMETRES = 'parametres_praticien';
+
+function EcranSettings({ onBack: retourParent }: { onBack: () => void }) {
   const inp: React.CSSProperties = { width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, outline: 'none', marginBottom: 14, boxSizing: 'border-box', background: 'white' };
   const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
 
-  const { settings: praticienData, loading, sauvegarderSettings } = usePraticienSettings();
-  const [form, setForm] = useState<PraticienSettings>(PRATICIEN_DEFAULTS);
+  const { settings: praticienData, loading, echecChargement, sauvegarderSettings } = usePraticienSettings();
+  // Saisie en cours retrouvée après une rotation : elle prime sur le
+  // pré-remplissage depuis la base.
+  const [saisieRestauree] = useState(() => lireEtatSession<SettingsPraticien>(CLE_SESSION_PARAMETRES));
+  const [form, setForm] = useState<SettingsPraticien>(saisieRestauree ?? DEFAULTS_SETTINGS);
   const [saving, setSaving] = useState(false);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
 
   // Pré-remplir le formulaire dès que Supabase a répondu
   useEffect(() => {
-    if (!loading) setForm(praticienData);
+    if (!loading && !saisieRestauree) setForm(praticienData);
   }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Jamais tant que le formulaire porte encore les valeurs par défaut : elles
+  // seraient restaurées à la place des vrais réglages.
+  useEffect(() => {
+    if (saisieRestauree || form !== DEFAULTS_SETTINGS) ecrireEtatSession(CLE_SESSION_PARAMETRES, form);
+  }, [form, saisieRestauree]);
+
+  // Retour explicite ou réglages enregistrés : rien à reprendre.
+  function onBack() {
+    effacerEtatSession(CLE_SESSION_PARAMETRES);
+    retourParent();
+  }
 
   function set(field: string, value: string) { setForm((f) => ({ ...f, [field]: value })); }
 
   async function sauvegarder() {
+    // Le formulaire n'a pas pu etre pre-rempli : l'enregistrer ecraserait la
+    // fiche avec des champs vides. On refuse plutot que de perdre la donnee.
+    if (echecChargement) {
+      toast.error("Vos réglages n'ont pas pu être chargés. Rechargez la page avant d'enregistrer.");
+      return;
+    }
     if (!form.prenom.trim() || !form.nom.trim()) { toast.error('Prénom et nom requis'); return; }
+
+    // Meme validation que les reglages desktop et l'onboarding. Le SIRET
+    // reste facultatif ici — un salarie de structure n'en a pas — mais s'il
+    // est saisi, il doit etre juste : c'est cet ecran, sans aucun controle,
+    // qui a laisse entrer un numero a 15 chiffres.
+    const controleSiret = validerSiret(form.siret);
+    if (form.siret.trim() && !controleSiret.valide) {
+      toast.error(controleSiret.message!);
+      return;
+    }
+
     setSaving(true);
     try {
-      await sauvegarderSettings(form);
+      await sauvegarderSettings({ ...form, siret: controleSiret.siret });
       toast.success('Paramètres enregistrés ✅');
       onBack();
     } catch {
@@ -844,6 +962,16 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
 
       <div style={{ padding: 16, paddingBottom: 40 }}>
 
+        {echecChargement && (
+          <div style={{
+            background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12,
+            padding: '12px 14px', marginBottom: 12, fontSize: 13, color: '#B91C1C', lineHeight: 1.5,
+          }}>
+            Vos réglages n'ont pas pu être chargés depuis le serveur. L'enregistrement
+            est désactivé pour ne pas écraser votre fiche — rechargez la page.
+          </div>
+        )}
+
         <InfoSection titre="Mon profil">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 0 }}>
             <div>
@@ -878,8 +1006,8 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
 
         <div style={{ height: 12 }} />
 
-        <button onClick={sauvegarder} disabled={saving || loading}
-          style={{ width: '100%', padding: 16, background: saving || loading ? '#8FA8A8' : C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: saving || loading ? 'not-allowed' : 'pointer', marginTop: 16 }}>
+        <button onClick={sauvegarder} disabled={saving || loading || echecChargement}
+          style={{ width: '100%', padding: 16, background: saving || loading || echecChargement ? '#8FA8A8' : C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: saving || loading || echecChargement ? 'not-allowed' : 'pointer', marginTop: 16 }}>
           {saving ? 'Enregistrement...' : loading ? 'Chargement...' : '💾 Enregistrer'}
         </button>
 
@@ -931,45 +1059,18 @@ function EcranSettings({ onBack }: { onBack: () => void }) {
 
 // ── EcranPlus ─────────────────────────────────────────────────────────────────
 
-function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout: () => void; onOuvrirSettings: () => void; onNaviguerOnglet: (id: string) => void }) {
+function EcranPlus({ onLogout, onNaviguer }: { onLogout: () => void; onNaviguer: (url: string) => void }) {
   const { settings } = usePraticienSettings();
-  const initiales = `${(settings.prenom || 'P')[0]}${(settings.nom || '')[0] || ''}`;
-  const [showImportConfirm, setShowImportConfirm] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Meme regle que la Sidebar : les vraies initiales, ou une silhouette.
+  // Ce calcul repliait sur « P » quand le prenom manquait. Voir
+  // src/lib/initiales.ts.
+  const initiales = initialesPraticien(settings.prenom, settings.nom);
 
-  const BACKUP_KEYS = [
-    'mouvtrack_participants', 'mouvtrack_contrats', 'mouvtrack_seances',
-    'notes_seances', 'mouvtrack_exercices', 'settings_praticien',
-    'mouvtrack_zones', 'mouvtrack_question_templates',
-  ];
-
-  function exporterDonnees() {
-    const data: Record<string, string> = { _version: '1', _date: new Date().toISOString() };
-    BACKUP_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) data[k] = v; });
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `horizon-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Données exportées avec succès ✅');
-  }
-
-  function importerDonnees(file: File) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = JSON.parse(e.target?.result as string);
-        BACKUP_KEYS.forEach(k => { if (typeof data[k] === 'string') localStorage.setItem(k, data[k]); });
-        toast.success('Import réussi — rechargement…');
-        setTimeout(() => window.location.reload(), 800);
-      } catch {
-        toast.error('Fichier invalide');
-      }
-    };
-    reader.readAsText(file);
-  }
+  // L'export / import JSON a été RETIRÉ de cet écran (2026-09-13). Il lisait
+  // et écrivait l'ancien stockage localStorage, abandonné depuis le passage à
+  // Supabase : l'export sortait un fichier vide ou périmé, et l'import
+  // écrasait des clés que plus rien ne lit. Rendre l'onglet « Plus »
+  // atteignable l'aurait remis entre les mains du praticien.
 
   return (
     <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
@@ -977,7 +1078,12 @@ function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout:
       {/* Profil praticien */}
       <div style={{ background: C.dark, borderRadius: 14, padding: '16px', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: 'white', flexShrink: 0 }}>
-          {initiales}
+          {initiales || (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Identité non renseignée">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          )}
         </div>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>
@@ -988,26 +1094,22 @@ function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout:
       </div>
 
       {/* Section Mon activité */}
+      {/* Agenda, carte, bibliothèque : leur URL desktop. Sous 768 px elle affiche
+          l'invitation à tourner le téléphone — et en paysage, l'écran lui-même. */}
       <SectionMobile titre="Mon activité">
-        <ItemMobile icon="ti-route" label="Tournée du jour" onClick={() => onNaviguerOnglet('tournee')} />
-        <ItemMobile icon="ti-calendar" label="Agenda complet" onClick={() => toast('Accessible depuis l\'ordinateur 💻', { icon: 'ℹ️' })} />
-        <ItemMobile icon="ti-map-pin" label="Carte bénéficiaires" onClick={() => toast('Accessible depuis l\'ordinateur 💻', { icon: 'ℹ️' })} />
+        <ItemMobile icon="ti-route" label="Tournée du jour" onClick={() => onNaviguer(URLS_MOBILE.tournee)} />
+        <ItemMobile icon="ti-calendar" label="Agenda complet" onClick={() => onNaviguer('/agenda-v2')} />
+        <ItemMobile icon="ti-map-pin" label="Carte bénéficiaires" onClick={() => onNaviguer('/map')} />
       </SectionMobile>
 
       {/* Section Contenu */}
       <SectionMobile titre="Contenu">
-        <ItemMobile icon="ti-dumbbell" label="Bibliothèque exercices" onClick={() => toast('Accessible depuis l\'ordinateur 💻', { icon: 'ℹ️' })} />
-      </SectionMobile>
-
-      {/* Section Gestion */}
-      <SectionMobile titre="Gestion">
-        <ItemMobile icon="ti-download" label="Exporter mes données (JSON)" onClick={exporterDonnees} />
-        <ItemMobile icon="ti-upload" label="Importer des données" onClick={() => setShowImportConfirm(true)} />
+        <ItemMobile icon="ti-dumbbell" label="Bibliothèque exercices" onClick={() => onNaviguer('/bibliotheque')} />
       </SectionMobile>
 
       {/* Section Compte */}
       <SectionMobile titre="Compte">
-        <ItemMobile icon="ti-settings" label="Paramètres" onClick={onOuvrirSettings} />
+        <ItemMobile icon="ti-settings" label="Paramètres" onClick={() => onNaviguer(URLS_MOBILE.parametres)} />
       </SectionMobile>
 
       {/* Déconnexion */}
@@ -1025,34 +1127,6 @@ function EcranPlus({ onLogout, onOuvrirSettings, onNaviguerOnglet }: { onLogout:
       <div style={{ textAlign: 'center', marginTop: 20, fontSize: 11, color: C.muted }}>
         Horizon v1.0
       </div>
-
-      {/* Input fichier caché pour l'import */}
-      <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }}
-        onChange={e => { const f = e.target.files?.[0]; if (f) importerDonnees(f); e.target.value = ''; }} />
-
-      {/* Modal confirmation import */}
-      {showImportConfirm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24 }}>
-          <div style={{ background: 'white', borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>
-              📥 Importer des données
-            </div>
-            <p style={{ fontSize: 14, color: '#4A6080', lineHeight: 1.6, marginBottom: 20 }}>
-              Cette action <strong>remplacera toutes vos données actuelles</strong>.<br />
-              <strong style={{ color: '#E85050' }}>Continuer ?</strong>
-            </p>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setShowImportConfirm(false)} style={{ flex: 1, padding: '12px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
-                Annuler
-              </button>
-              <button onClick={() => { setShowImportConfirm(false); fileInputRef.current?.click(); }}
-                style={{ flex: 1, padding: '12px', background: C.primary, border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer' }}>
-                Confirmer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -1151,10 +1225,11 @@ function DetailBilanMobile({ bilan, onBack }: { bilan: import('../../types').Bil
 
 // ── Modification fiche patient mobile ────────────────────────────────────────
 
-function EditPatientMobile({ participant, onBack }: { participant: import('../../types').Participant; onBack: () => void }) {
+function EditPatientMobile({ participant, onBack: retourParent }: { participant: import('../../types').Participant; onBack: () => void }) {
   const { updateParticipant } = useParticipants();
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
+  // Conservée si l'interface est remplacée (rotation du téléphone).
+  const [form, setForm, effacerSaisie] = useEtatSession(`modifier_beneficiaire_${participant.id}`, () => ({
     prenom:                  participant.prenom ?? '',
     nom:                     participant.nom ?? '',
     dateNaissance:           participant.dateNaissance ?? '',
@@ -1169,7 +1244,13 @@ function EditPatientMobile({ participant, onBack }: { participant: import('../..
     antecedentsMedicaux:     participant.antecedentsMedicaux ?? '',
     antecedentsChirurgicaux: participant.antecedentsChirurgicaux ?? '',
     allergies:               participant.allergies ?? '',
-  });
+  }));
+
+  // Retour explicite ou fiche enregistrée : rien à reprendre.
+  function onBack() {
+    effacerSaisie();
+    retourParent();
+  }
 
   function setF(field: string, value: string) {
     setForm(f => ({ ...f, [field]: value }));
@@ -1318,511 +1399,6 @@ function EditPatientMobile({ participant, onBack }: { participant: import('../..
   );
 }
 
-// ── Fiche patient mobile ───────────────────────────────────────────────────────
-
-function FichePatientMobile({ participantId, onBack, onOpenAssistant }: { participantId: string; onBack: () => void; onOpenAssistant?: (id: string) => void }) {
-  const { participants, addBilan, updateParticipant } = useParticipants();
-  const { seances } = useAgenda();
-  const { contratActifDeParticipant } = useContrats();
-  const { ajouterCompteRendu, compteRendus } = useCompteRenduSeance(participantId);
-  const p = participants.find(x => x.id === participantId);
-  const [onglet, setOnglet] = useState('infos');
-  const [bilanDetail, setBilanDetail] = useState<import('../../types').Bilan | null>(null);
-  const [showEdit, setShowEdit] = useState(false);
-  const [showDictee, setShowDictee] = useState(false);
-  const [showNewBilan, setShowNewBilan] = useState(false);
-  const [showEspacePatient, setShowEspacePatient] = useState(false);
-  if (!p) return null;
-  if (bilanDetail) return <DetailBilanMobile bilan={bilanDetail} onBack={() => setBilanDetail(null)} />;
-  if (showEdit) return <EditPatientMobile participant={p} onBack={() => setShowEdit(false)} />;
-  if (showNewBilan) {
-    if (p.bilans.length === 0 && (!p.testsActifs || p.testsActifs.length === 0)) {
-      return (
-        <ModalSelectionTests
-          participant={p}
-          onValider={async tests => { await updateParticipant(p.id, { testsActifs: tests }); }}
-          onCancel={() => {}}
-        />
-      );
-    }
-    return (
-    <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <button onClick={() => setShowNewBilan(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 22, color: C.text }} />
-        </button>
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Nouveau bilan</div>
-          <div style={{ fontSize: 12, color: C.muted }}>{p.prenom} {p.nom}</div>
-        </div>
-      </div>
-      <BilanStepper
-        participant={p}
-        onSave={async (bilan: Omit<Bilan, 'id'>) => {
-          await addBilan(p.id, bilan);
-          toast.success('Bilan enregistré ✅');
-          setShowNewBilan(false);
-        }}
-        onCancel={() => setShowNewBilan(false)}
-      />
-    </div>
-    );
-  }
-
-  const bilanInitial = p.bilans.find(b => b.type === 'initial') ?? null;
-  const contreIndicationsTexte: string | null = getContreIndications(p, bilanInitial).detail;
-
-  const sortedBilans = [...p.bilans].sort((a, b) => b.date.localeCompare(a.date));
-  const contrat = contratActifDeParticipant(participantId);
-  const today = new Date().toISOString().slice(0, 10);
-  const prochaineSeance = seances
-    .filter(s => s.participantId === participantId && s.date >= today && s.statut === 'planifiee')
-    .sort((a, b) => a.date.localeCompare(b.date))[0];
-
-  const ONGLETS = [
-    { id: 'infos',   label: 'Infos' },
-    { id: 'sante',   label: 'Santé' },
-    { id: 'bilans',  label: 'Bilans' },
-    { id: 'contrat', label: 'Contrat' },
-    { id: 'journal', label: 'Journal' },
-    { id: 'ia',      label: '🤖 IA' },
-  ];
-
-  const actionBtn: React.CSSProperties = {
-    flex: 1, minHeight: 64,
-    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5,
-    background: 'white', border: `1px solid ${C.border}`, borderRadius: 12, cursor: 'pointer',
-    boxShadow: '0 1px 4px rgba(13,43,43,0.06)',
-  };
-
-  return (
-    <div style={{ minHeight: '100vh', background: '#F0F4F4' }}>
-      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
-
-        {/* Ligne 1 : flèche + avatar + nom + crayon */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}>
-            <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.6)' }} aria-hidden="true" />
-          </button>
-          <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: 'white', flexShrink: 0 }}>
-            {p.prenom[0]}{p.nom[0]}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {p.prenom} {p.nom}
-            </div>
-          </div>
-          <button onClick={() => setShowEdit(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, flexShrink: 0 }} aria-label="Modifier">
-            <i className="ti ti-pencil" style={{ fontSize: 18, color: 'rgba(255,255,255,0.5)' }} />
-          </button>
-        </div>
-
-        {/* Ligne 2 : âge · taille · poids */}
-        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 7, paddingLeft: 68 }}>
-          {calcAge(p.dateNaissance)} ans
-          {p.taille ? ` · ${p.taille} cm` : ''}
-          {p.poids ? ` · ${p.poids} kg` : ''}
-        </div>
-
-        {/* Badge CI */}
-        {contreIndicationsTexte && (
-          <div style={{ marginTop: 8, paddingLeft: 68 }}>
-            <div style={{ display: 'inline-block', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '5px 10px', fontSize: 12, color: '#FCA5A5', fontWeight: 600 }}>
-              ⚠️ {contreIndicationsTexte}
-            </div>
-          </div>
-        )}
-
-        {/* Dernier bilan discret */}
-        {sortedBilans[0] && (
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', marginTop: 6, paddingLeft: 68 }}>
-            Dernier bilan : {new Date(sortedBilans[0].date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
-          </div>
-        )}
-      </div>
-
-      {/* Actions rapides */}
-      <div style={{ display: 'flex', gap: 10, padding: '14px 16px', background: 'white', borderBottom: `1px solid ${C.border}` }}>
-        <button onClick={() => setShowEspacePatient(true)} style={{ ...actionBtn, background: C.primary, border: 'none' }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-            <rect x="3" y="14" width="7" height="7"/><path d="M14 14h7v7"/>
-          </svg>
-          <span style={{ fontSize: 11, color: 'white', fontWeight: 700 }}>Espace bénéficiaire</span>
-        </button>
-        <button onClick={() => { setOnglet('journal'); setShowDictee(true); }} style={actionBtn}>
-          <i className="ti ti-microphone" style={{ fontSize: 22, color: C.primary }} />
-          <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>Note</span>
-        </button>
-        {(p.adresseRue || p.adresseVille) && (
-          <button
-            onClick={() => ouvrirMaps([p.adresseRue, p.adresseCodePostal, p.adresseVille].filter(Boolean).join(' '))}
-            style={actionBtn}>
-            <i className="ti ti-map-pin" style={{ fontSize: 22, color: C.primary }} />
-            <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>Maps</span>
-          </button>
-        )}
-      </div>
-
-      {/* Onglets scrollables */}
-      <div style={{ display: 'flex', background: 'white', borderBottom: `1px solid ${C.border}`, position: 'sticky', top: 0, zIndex: 10, overflowX: 'auto' }}>
-        {ONGLETS.map(o => (
-          <button key={o.id} onClick={() => setOnglet(o.id)}
-            style={{ flexShrink: 0, padding: '12px 16px', background: 'none', border: 'none', borderBottom: `2px solid ${onglet === o.id ? C.primary : 'transparent'}`, color: onglet === o.id ? C.primary : '#9CA3AF', fontWeight: onglet === o.id ? 700 : 400, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            {o.label}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ padding: 16 }}>
-
-        {onglet === 'infos' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-            <InfoSection titre="Coordonnées">
-              {p.telephone && (
-                <a href={telHref(String(p.telephone))} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13, color: '#4A6080', marginBottom: 8, textDecoration: 'none' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.72 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.63 1.4h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.29 6.29l1.88-1.88a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
-                  </svg>
-                  <span style={{ flex: 1, minWidth: 0, wordBreak: 'break-all', fontWeight: 500 }}>
-                    {formatPhone(String(p.telephone))}
-                  </span>
-                </a>
-              )}
-              {(p.adresseRue || p.adresseVille) && (
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080', marginBottom: 8 }}>
-                  <i className="ti ti-map-pin" style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 2 }} />
-                  <a href={`https://maps.google.com/?q=${encodeURIComponent([p.adresseRue, p.adresseCodePostal, p.adresseVille].filter(Boolean).join(' '))}`}
-                    target="_blank" rel="noreferrer"
-                    style={{ color: '#4A6080', textDecoration: 'none', flex: 1, minWidth: 0 }}>
-                    {[p.adresseRue, p.adresseCodePostal, p.adresseVille].filter(Boolean).join(', ')}
-                  </a>
-                </div>
-              )}
-              {p.email && (
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13, color: '#4A6080' }}>
-                  <i className="ti ti-mail" style={{ fontSize: 16, color: C.primary, flexShrink: 0 }} />
-                  <a href={`mailto:${p.email}`}
-                    style={{ color: '#4A6080', textDecoration: 'none', flex: 1, minWidth: 0, wordBreak: 'break-all' }}>
-                    {p.email}
-                  </a>
-                </div>
-              )}
-              {!p.telephone && !p.email && !p.adresseRue && (
-                <div style={{ fontSize: 13, color: C.muted, fontStyle: 'italic' }}>Aucune coordonnée renseignée</div>
-              )}
-            </InfoSection>
-
-            <InfoSection titre="Informations">
-              <InfoLigne icon="ti-calendar" texte={`Né(e) le ${new Date(p.dateNaissance).toLocaleDateString('fr-FR')} · ${calcAge(p.dateNaissance)} ans`} />
-              {p.taille && p.poids && (() => {
-                const imc = Math.round((p.poids / ((p.taille / 100) ** 2)) * 10) / 10;
-                const imcColor = imc < 18.5 ? '#3B82F6' : imc < 25 ? '#22C55E' : imc < 30 ? '#F59E0B' : '#EF4444';
-                const imcLabel = imc < 18.5 ? 'Insuf. pond.' : imc < 25 ? 'Normal' : imc < 30 ? 'Surpoids' : 'Obésité';
-                return (
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13, color: '#4A6080', marginBottom: 6 }}>
-                    <i className="ti ti-weight" style={{ fontSize: 16, color: C.primary, flexShrink: 0 }} />
-                    <span>{p.taille} cm · {p.poids} kg · IMC {imc}</span>
-                    <span style={{ background: `${imcColor}20`, color: imcColor, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, flexShrink: 0 }}>
-                      {imcLabel}
-                    </span>
-                  </div>
-                );
-              })()}
-              {(p.contexteClinic || p.pathologie) && (
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: '#4A6080', marginTop: p.taille && p.poids ? 0 : 0 }}>
-                  <i className="ti ti-stethoscope" style={{ fontSize: 16, color: C.primary, flexShrink: 0, marginTop: 1 }} />
-                  <span>{p.contexteClinic || p.pathologie}</span>
-                </div>
-              )}
-            </InfoSection>
-
-            {(() => {
-              const { objectifsPatient, activitesSouhaitees } = getObjectifsActivites(p, bilanInitial);
-              if (objectifsPatient.length === 0 && activitesSouhaitees.length === 0) return null;
-              return (
-                <InfoSection titre="Objectifs APA">
-                  {objectifsPatient.length > 0 && (
-                    <div style={{ marginBottom: 6 }}>
-                      {objectifsPatient.map((o, i) => (
-                        <span key={i} style={{ display: 'inline-block', background: '#E6F7F5', color: '#0F7265', borderRadius: 10, padding: '2px 8px', margin: '2px', fontSize: 12, fontWeight: 600 }}>{o}</span>
-                      ))}
-                    </div>
-                  )}
-                  {activitesSouhaitees.length > 0 && (
-                    <div style={{ fontSize: 13, color: '#4A6080' }}>🎯 {activitesSouhaitees.join(' · ')}</div>
-                  )}
-                </InfoSection>
-              );
-            })()}
-          </div>
-        )}
-
-        {onglet === 'sante' && (() => {
-          const traitementsActifs = getTraitementsActifs(p.traitements);
-          const traitementsArretes = getTraitementsArretes(p.traitements);
-          const antecedentsStructures = p.antecedentsMedicauxStructures ?? [];
-          const hasAnyData = !!(p.pathologie || p.antecedentsMedicaux || p.antecedentsChirurgicaux || p.allergies
-            || traitementsActifs.length || traitementsArretes.length || antecedentsStructures.length);
-
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-              {/* Pathologie / contexte */}
-              {(p.pathologie || p.antecedentsMedicaux) && (
-                <InfoSection titre="Pathologies & contexte médical">
-                  {p.pathologie && <div style={{ fontSize: 13, color: '#4A6080', lineHeight: 1.6, marginBottom: p.antecedentsMedicaux ? 6 : 0 }}>🏥 {p.pathologie}</div>}
-                  {p.antecedentsMedicaux && <div style={{ fontSize: 13, color: '#4A6080', lineHeight: 1.6 }}>📋 {p.antecedentsMedicaux}</div>}
-                </InfoSection>
-              )}
-
-              {/* Traitements structurés */}
-              {(traitementsActifs.length > 0 || traitementsArretes.length > 0) && (
-                <InfoSection titre="Traitements en cours">
-                  {traitementsActifs.length > 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {traitementsActifs.map(t => (
-                        <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13 }}>
-                          <span>💊</span>
-                          <div style={{ flex: 1 }}>
-                            <span style={{ fontWeight: 600, color: '#032c28' }}>{t.nom}</span>
-                            {t.dose && <span style={{ color: '#4A6080' }}> · {t.dose}</span>}
-                            {t.frequence && <span style={{ color: '#4A6080' }}> · {t.frequence}</span>}
-                            {(t.moments?.length ?? 0) > 0 && <span style={{ color: '#4A6080' }}> · {formatMomentsTraitement(t.moments)}</span>}
-                            {t.effetSecondaire && <div style={{ fontSize: 12, color: '#8FA8A8' }}>{t.effetSecondaire}</div>}
-                          </div>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '2px 6px', borderRadius: 20, whiteSpace: 'nowrap' }}>En cours ✅</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: 13, color: '#8FA8A8', fontStyle: 'italic' }}>Aucun traitement en cours</div>
-                  )}
-                  {traitementsArretes.length > 0 && (
-                    <details style={{ marginTop: 10 }}>
-                      <summary style={{ fontSize: 12, color: '#8FA8A8', fontWeight: 600, cursor: 'pointer', listStyle: 'none' }}>
-                        ▶ Traitements arrêtés ({traitementsArretes.length})
-                      </summary>
-                      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {traitementsArretes.map(t => (
-                          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#8FA8A8' }}>
-                            <span>💊</span>
-                            <span style={{ textDecoration: 'line-through' }}>{t.nom}</span>
-                            {t.dose && <span>· {t.dose}</span>}
-                            <span style={{ marginLeft: 'auto', fontSize: 10, background: '#f3f4f6', padding: '2px 6px', borderRadius: 20, whiteSpace: 'nowrap' }}>
-                              Arrêté le {new Date((t.date_fin ?? '') + 'T12:00').toLocaleDateString('fr-FR')}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  )}
-                </InfoSection>
-              )}
-
-              {/* Antécédents structurés */}
-              {antecedentsStructures.length > 0 && (
-                <InfoSection titre="Antécédents médicaux">
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {antecedentsStructures.map(a => (
-                      <div key={a.id}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                          <span>{getAntecedentIcon(a)}</span>
-                          <span style={{ fontWeight: 600, color: '#032c28' }}>{getAntecedentTitre(a)}</span>
-                          {a.douleur === 'oui' && (
-                            <span style={{ fontSize: 10, color: '#c2410c', background: '#fff7ed', border: '1px solid #fed7aa', padding: '2px 6px', borderRadius: 20 }}>Douleur liée</span>
-                          )}
-                        </div>
-                        {getAntecedentSousLigne(a) && <div style={{ fontSize: 12, color: '#8FA8A8', marginLeft: 24, marginTop: 2 }}>{getAntecedentSousLigne(a)}</div>}
-                        {a.notes && <div style={{ fontSize: 12, color: '#8FA8A8', fontStyle: 'italic', marginLeft: 24, marginTop: 2 }}>{a.notes}</div>}
-                      </div>
-                    ))}
-                  </div>
-                </InfoSection>
-              )}
-
-              {/* Antécédents chirurgicaux texte (ancien format) */}
-              {p.antecedentsChirurgicaux && (
-                <InfoSection titre="Antécédents chirurgicaux">
-                  <div style={{ fontSize: 13, color: '#4A6080', lineHeight: 1.6 }}>✂️ {p.antecedentsChirurgicaux}</div>
-                </InfoSection>
-              )}
-
-              {/* Allergies */}
-              {p.allergies && (
-                <InfoSection titre="Allergies">
-                  <div style={{ fontSize: 13, color: '#4A6080' }}>⚠️ {p.allergies}</div>
-                </InfoSection>
-              )}
-
-              {/* Message vide */}
-              {!hasAnyData && (
-                <div style={{ color: C.muted, textAlign: 'center', padding: 30 }}>Aucune information de santé renseignée</div>
-              )}
-
-              {/* Bouton Modifier */}
-              <button
-                onClick={() => setShowEdit(true)}
-                style={{ background: 'white', border: `1.5px solid ${C.primary}`, color: C.primary, borderRadius: 12, padding: '12px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-              >
-                ✏️ Modifier les infos santé
-              </button>
-            </div>
-          );
-        })()}
-
-        {onglet === 'bilans' && (
-          <div>
-            {sortedBilans.length === 0 ? (
-              <div style={{ color: C.muted, textAlign: 'center', padding: 30 }}>Aucun bilan</div>
-            ) : sortedBilans.map((b, i) => (
-              <div key={b.id} onClick={() => setBilanDetail(b)} style={{ ...card, cursor: 'pointer' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                  <div>
-                    <div style={{ fontWeight: 700, color: C.text, fontSize: 14 }}>
-                      📊 {b.type === 'initial' ? 'Bilan initial' : `Bilan T${b.trimestre}`}
-                    </div>
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-                      {new Date(b.date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-                    {i === 0 && <span style={{ background: '#E8F8F8', color: C.primary, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20 }}>Récent</span>}
-                    {b.interpretationIA && <span style={{ background: '#DCFCE7', color: '#166534', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20 }}>🤖 IA</span>}
-                    <i className="ti ti-chevron-right" style={{ fontSize: 15, color: '#D0DCDC' }} />
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {b.tug3m != null && <span style={{ fontSize: 11, color: C.muted, background: C.bg, padding: '2px 8px', borderRadius: 10 }}>TUG {b.tug3m}s</span>}
-                  {b.tm6.borgRPE != null && <span style={{ fontSize: 11, color: C.muted, background: C.bg, padding: '2px 8px', borderRadius: 10 }}>Borg {b.tm6.borgRPE}</span>}
-                  {b.chairStand30 != null && <span style={{ fontSize: 11, color: C.muted, background: C.bg, padding: '2px 8px', borderRadius: 10 }}>Chair Stand {b.chairStand30}</span>}
-                  {b.handGrip.droite != null && <span style={{ fontSize: 11, color: C.muted, background: C.bg, padding: '2px 8px', borderRadius: 10 }}>Grip {b.handGrip.droite} kg</span>}
-                </div>
-              </div>
-            ))}
-            <button
-              onClick={() => setShowNewBilan(true)}
-              style={{ width: '100%', padding: '12px 16px', marginTop: 4, background: C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              ➕ Nouveau bilan
-            </button>
-          </div>
-        )}
-
-        {onglet === 'contrat' && (
-          <div>
-            {contrat ? (
-              <div>
-                <InfoSection titre="Contrat actif">
-                  <InfoLigne icon="ti-calendar" texte={`${contrat.nbSeancesSemaine} séance${contrat.nbSeancesSemaine > 1 ? 's' : ''}/semaine à ${contrat.heureDebut} · ${contrat.dureeMinutes} min`} />
-                  <InfoLigne icon="ti-clock" texte={`${new Date(contrat.dateDebut + 'T12:00').toLocaleDateString('fr-FR')} → ${new Date(contrat.dateFin + 'T12:00').toLocaleDateString('fr-FR')}`} />
-                  <div style={{ marginTop: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                      <span style={{ color: C.muted }}>Progression</span>
-                      <span style={{ fontWeight: 700, color: C.text }}>{contrat.nombreSeancesRealisees}/{contrat.nombreSeancesTotal}</span>
-                    </div>
-                    <div style={{ height: 6, background: C.border, borderRadius: 3 }}>
-                      <div style={{ height: '100%', width: `${Math.min(100, (contrat.nombreSeancesRealisees / contrat.nombreSeancesTotal) * 100)}%`, background: C.primary, borderRadius: 3 }} />
-                    </div>
-                  </div>
-                </InfoSection>
-                {prochaineSeance && (
-                  <div style={{ marginTop: 12 }}>
-                    <InfoSection titre="Prochaine séance">
-                      <InfoLigne icon="ti-calendar" texte={new Date(prochaineSeance.date + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} />
-                      <InfoLigne icon="ti-clock" texte={`${prochaineSeance.heureDebut} · ${prochaineSeance.dureeMinutes} min`} />
-                    </InfoSection>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '30px 20px' }}>
-                <div style={{ fontSize: 36, marginBottom: 10 }}>📋</div>
-                <div style={{ fontSize: 14, color: C.muted }}>Aucun contrat actif</div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {onglet === 'journal' && (
-          <div>
-            <button
-              onClick={() => setShowDictee(true)}
-              style={{
-                width: '100%', minHeight: 72, padding: '16px', marginBottom: 14,
-                background: C.primary, color: 'white', border: 'none', borderRadius: 14,
-                fontSize: 16, fontWeight: 700, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
-                boxShadow: '0 4px 16px rgba(43,191,191,0.3)',
-              }}
-            >
-              <span style={{ fontSize: 26 }}>🎙️</span>
-              <div style={{ textAlign: 'left' }}>
-                <div>Dicter une séance</div>
-                <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 400, marginTop: 2 }}>
-                  Claude structure vos notes automatiquement
-                </div>
-              </div>
-            </button>
-
-            {compteRendus.length > 0 && (
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-                Séances dictées
-              </div>
-            )}
-
-            {compteRendus.length === 0 ? (
-              <div style={{ color: C.muted, textAlign: 'center', padding: '16px 0' }}>
-                Aucune séance dictée — utilisez le bouton ci-dessus
-              </div>
-            ) : compteRendus.slice(0, 10).map(cr => (
-              <div key={cr.id} style={card}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: 10, background: '#E8F8F8', color: C.primary, fontWeight: 700, padding: '2px 6px', borderRadius: 6 }}>🎙️ Dictée</span>
-                  <span style={{ fontSize: 12, color: C.muted }}>{formatDateCourt(cr.dateSeance)}</span>
-                  {cr.progression && <span style={{ fontSize: 11, fontWeight: 700, color: cr.progression === 'en progrès' ? '#16A34A' : C.muted }}>{cr.progression === 'en progrès' ? '📈' : '➡️'} {cr.progression}</span>}
-                </div>
-                {cr.observations && <div style={{ fontSize: 13, color: C.text }}>"{cr.observations}"</div>}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {onglet === 'ia' && (
-          <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-            <div style={{ fontSize: 44, marginBottom: 14 }}>🤖</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 8 }}>Mon assistant</div>
-            <div style={{ fontSize: 13, color: C.muted, marginBottom: 24, lineHeight: 1.6, maxWidth: 280, margin: '0 auto 24px' }}>
-              Posez vos questions cliniques APA avec le profil de <strong>{p.prenom}</strong> automatiquement chargé.
-            </div>
-            <button
-              onClick={() => onOpenAssistant?.(p.id)}
-              style={{ width: '100%', padding: '15px', background: C.primary, color: 'white', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              Ouvrir l'assistant →
-            </button>
-          </div>
-        )}
-      </div>
-
-      {showDictee && (
-        <DicteePostSeance
-          participant={p}
-          onClose={() => setShowDictee(false)}
-          onSave={async (data) => { await ajouterCompteRendu(data); }}
-        />
-      )}
-
-      {showEspacePatient && (
-        <ModalEspacePatient
-          participant={p}
-          onClose={() => setShowEspacePatient(false)}
-          onUpdate={data => updateParticipant(p.id, data)}
-        />
-      )}
-    </div>
-  );
-}
-
 // ── EcranAssistant ────────────────────────────────────────────────────────────
 
 function buildAssistantPrompt(patient: import('../../types').Participant | null, history: { role: string; content: string }[], question: string): string {
@@ -1832,12 +1408,12 @@ Tu ne fais jamais de diagnostic médical.`;
 
   const patientCtx = patient
     ? (() => {
-        const age = calcAge(patient.dateNaissance);
+        const age = libelleAge(patient.dateNaissance);
         const bi = patient.bilans.find(b => b.type === 'initial') ?? null;
         const ciInfoExport = getContreIndications(patient, bi);
         const ci = ciInfoExport.actif ? (ciInfoExport.detail ?? 'non précisées') : 'aucune';
         const pathologies = [patient.pathologie, patient.antecedentsMedicaux].filter(Boolean).join(' / ') || 'non renseigné';
-        return `\n\nPATIENT : ${patient.prenom} ${patient.nom}, ${age} ans. Pathologies : ${pathologies}. Contre-indications : ${ci}.`;
+        return `\n\nPATIENT : ${patient.prenom} ${patient.nom}, ${age}. Pathologies : ${pathologies}. Contre-indications : ${ci}.`;
       })()
     : '';
 
@@ -1857,9 +1433,13 @@ function EcranAssistant({
 }) {
   const { participants } = useParticipants();
   type Msg = { role: 'user' | 'assistant'; content: string };
-  const [selectedPatient, setSelectedPatient] = useState<import('../../types').Participant | null>(null);
-  const [messages, setMessages] = useState<Msg[]>([]);
-  const [input, setInput] = useState('');
+  // Conversation conservée si l'interface est remplacée (rotation). Une réponse
+  // encore en attente à ce moment-là est perdue ; la question, non.
+  const [selectedPatientId, setSelectedPatientId] = useEtatSession<string | null>('assistant_mobile_beneficiaire', null);
+  const selectedPatient = participants.find(p => p.id === selectedPatientId) ?? null;
+  const setSelectedPatient = (p: Participant | null) => setSelectedPatientId(p ? p.id : null);
+  const [messages, setMessages] = useEtatSession<Msg[]>('assistant_mobile_messages', []);
+  const [input, setInput] = useEtatSession('assistant_mobile_saisie', '');
   const [loading, setLoading] = useState(false);
   const [showSheet, setShowSheet] = useState(false);
   const [searchQ, setSearchQ] = useState('');
@@ -1868,9 +1448,9 @@ function EcranAssistant({
   useEffect(() => {
     if (preSelectedPatientId && participants.length > 0) {
       const p = participants.find(x => x.id === preSelectedPatientId);
-      if (p) setSelectedPatient(p);
+      if (p) setSelectedPatientId(p.id);
     }
-  }, [preSelectedPatientId, participants]);
+  }, [preSelectedPatientId, participants, setSelectedPatientId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -2083,7 +1663,7 @@ function EcranAssistant({
                   </div>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{p.prenom} {p.nom}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{calcAge(p.dateNaissance)} ans{p.pathologie ? ` · ${p.pathologie.slice(0, 20)}` : ''}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{libelleAge(p.dateNaissance)}{p.pathologie ? ` · ${p.pathologie.slice(0, 20)}` : ''}</div>
                   </div>
                 </button>
               ))}
@@ -2095,61 +1675,132 @@ function EcranAssistant({
   );
 }
 
+// ── Écrans de routage ─────────────────────────────────────────────────────────
+
+function EcranChargement({ loading, texteIntrouvable, onBack }: { loading: boolean; texteIntrouvable: string; onBack: () => void }) {
+  return (
+    <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 48px)', paddingLeft: 24, paddingRight: 24, textAlign: 'center', color: C.muted, fontSize: 14 }}>
+      <div style={{ marginBottom: 16 }}>{loading ? 'Chargement…' : texteIntrouvable}</div>
+      {!loading && (
+        <button onClick={onBack} style={{ padding: '10px 18px', background: 'white', border: `1.5px solid ${C.primary}`, color: C.primary, borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          ← Retour
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Écran desktop seulement. L'URL est déjà celle de la version paysage : il
+// suffit de tourner le téléphone.
+function EcranPaysage({ onRetour }: { onRetour: () => void }) {
+  return (
+    <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 48px)', paddingLeft: 24, paddingRight: 24, paddingBottom: 24, textAlign: 'center' }}>
+      <div style={{ fontSize: 52, marginBottom: 14 }} aria-hidden="true">🔄</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 8 }}>Écran disponible en mode paysage</div>
+      <div style={{ fontSize: 14, color: '#4A6080', lineHeight: 1.6, marginBottom: 28 }}>
+        Cet écran n'a pas encore de version téléphone. Tournez votre téléphone : il s'affichera directement.
+      </div>
+      <button onClick={onRetour} style={{ padding: '12px 20px', background: 'white', border: `1.5px solid ${C.primary}`, color: C.primary, borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+        ← Retour
+      </button>
+    </div>
+  );
+}
+
+function ModifierBeneficiaireMobile({ participantId, onBack }: { participantId: string; onBack: () => void }) {
+  const { participants, loading } = useParticipants();
+  const participant: Participant | undefined = participants.find(p => p.id === participantId);
+  if (!participant) return <EcranChargement loading={loading} texteIntrouvable="Bénéficiaire introuvable" onBack={onBack} />;
+  return <EditPatientMobile participant={participant} onBack={onBack} />;
+}
+
+function DetailBilanMobileRoute({ participantId, bilanId, onBack }: { participantId: string; bilanId: string; onBack: () => void }) {
+  const { participants, loading } = useParticipants();
+  const bilan = participants.find(p => p.id === participantId)?.bilans.find(b => b.id === bilanId);
+  if (!bilan) return <EcranChargement loading={loading} texteIntrouvable="Bilan introuvable" onBack={onBack} />;
+  return <DetailBilanMobile bilan={bilan} onBack={onBack} />;
+}
+
 // ── App Mobile principal ──────────────────────────────────────────────────────
 
 interface Props { onLogout: () => void }
 
+// L'écran affiché se lit dans l'URL (src/lib/routesMobile.ts), et non plus dans
+// un état en mémoire : une rotation, un lien ou le bouton « retour » du
+// téléphone retrouvent l'écran. La fiche bénéficiaire n'arrive jamais ici —
+// App.tsx la sert par l'interface unique, même sous 768 px.
 export default function AppMobile({ onLogout }: Props) {
-  const [onglet, setOnglet] = useState('aujourdhui');
-  const [ficheId, setFicheId] = useState<string | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [assistantPatientId, setAssistantPatientId] = useState<string | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const ecran = ecranMobileDepuisUrl(location.pathname, location.search);
+  const voirFiche = (id: string) => navigate(URLS_MOBILE.fiche(id));
 
   const shell: React.CSSProperties = { maxWidth: 480, margin: '0 auto', minHeight: '100vh', background: C.bg, fontFamily: "var(--font-sans)" };
 
-  if (showSettings) {
-    return <div style={shell}><EcranSettings onBack={() => setShowSettings(false)} /></div>;
-  }
+  let contenu: React.ReactNode = null;
+  let avecBarre = true;
 
-  if (ficheId) {
-    return (
-      <div style={shell}>
-        <FichePatientMobile
-          participantId={ficheId}
-          onBack={() => setFicheId(null)}
-          onOpenAssistant={(patientId: string) => {
-            setAssistantPatientId(patientId);
-            setFicheId(null);
-            setOnglet('assistant');
-          }}
-        />
-      </div>
-    );
-  }
-
-  function handleChangeOnglet(id: string) {
-    setOnglet(id);
-    if (id !== 'assistant') setAssistantPatientId(null);
+  switch (ecran.ecran) {
+    case 'accueil':
+      contenu = <EcranAujourdhui onVoirFiche={voirFiche} />;
+      break;
+    case 'beneficiaires':
+      contenu = <EcranPatients onVoirFiche={voirFiche} />;
+      break;
+    case 'saisie':
+      contenu = <ChoixSaisie onPatient={() => navigate(URLS_MOBILE.nouveauBeneficiaire)} onBilan={() => navigate(URLS_MOBILE.choixBeneficiaireBilan)} />;
+      break;
+    case 'tournee':
+      contenu = <EcranTournee />;
+      break;
+    case 'assistant':
+      contenu = <EcranAssistant preSelectedPatientId={ecran.beneficiaireId} onOuvrirSettings={() => navigate(URLS_MOBILE.parametres)} />;
+      break;
+    case 'plus':
+      contenu = <EcranPlus onLogout={onLogout} onNaviguer={url => navigate(url)} />;
+      break;
+    case 'paysage': {
+      const retour = ecran.retour;
+      contenu = <EcranPaysage onRetour={() => navigate(retour)} />;
+      break;
+    }
+    case 'parametres':
+      avecBarre = false;
+      contenu = <EcranSettings onBack={() => navigate(URLS_MOBILE.plus)} />;
+      break;
+    case 'nouveauBeneficiaire':
+      avecBarre = false;
+      contenu = <NouveauPatientMobile onBack={() => navigate(URLS_MOBILE.saisie)} onCree={voirFiche} />;
+      break;
+    case 'modifierBeneficiaire': {
+      const id = ecran.participantId;
+      avecBarre = false;
+      contenu = <ModifierBeneficiaireMobile participantId={id} onBack={() => voirFiche(id)} />;
+      break;
+    }
+    case 'nouveauBilan': {
+      const id = ecran.participantId;
+      avecBarre = false;
+      contenu = id
+        ? <BilanMobile participantId={id} onTermine={() => voirFiche(id)} />
+        : <ChoixBeneficiaireBilanMobile onBack={() => navigate(URLS_MOBILE.saisie)} onChoisir={pid => navigate(URLS_MOBILE.nouveauBilan(pid))} />;
+      break;
+    }
+    case 'detailBilan': {
+      const { participantId, bilanId } = ecran;
+      avecBarre = false;
+      contenu = <DetailBilanMobileRoute participantId={participantId} bilanId={bilanId} onBack={() => voirFiche(participantId)} />;
+      break;
+    }
   }
 
   return (
     <div style={{ ...shell, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 80 }}>
-        {onglet === 'aujourdhui' && <EcranAujourdhui onVoirFiche={setFicheId} onNaviguerSaisie={() => handleChangeOnglet('saisie')} />}
-        {onglet === 'patients'   && <EcranPatients onVoirFiche={setFicheId} />}
-        {onglet === 'saisie'     && <EcranSaisie onVoirFiche={setFicheId} />}
-        {onglet === 'tournee'    && <EcranTournee />}
-        {onglet === 'assistant'  && (
-          <EcranAssistant
-            preSelectedPatientId={assistantPatientId}
-            onOuvrirSettings={() => setShowSettings(true)}
-          />
-        )}
-        {onglet === 'plus' && (
-          <EcranPlus onLogout={onLogout} onOuvrirSettings={() => setShowSettings(true)} onNaviguerOnglet={handleChangeOnglet} />
-        )}
+      {/* Clé = URL : un changement d'écran repart d'un état neuf, comme avant. */}
+      <div key={location.pathname + location.search} style={{ flex: 1, overflowY: 'auto', paddingBottom: avecBarre ? 80 : 0 }}>
+        {contenu}
       </div>
-      <BottomNav onglet={onglet} onChange={handleChangeOnglet} />
+      {avecBarre && <BarreNavigationMobile />}
     </div>
   );
 }

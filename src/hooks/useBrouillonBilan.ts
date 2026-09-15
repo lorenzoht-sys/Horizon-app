@@ -101,10 +101,23 @@ export function sauvegarderBrouillon(
   localStorage.setItem(cle(participantId), JSON.stringify(brouillon));
 }
 
+// Horodatage de la dernière suppression, par clé. Un formulaire qui disparaît
+// écrit sa sauvegarde en attente (voir BilanStepper) — sauf si le brouillon a
+// été supprimé VOLONTAIREMENT depuis son ouverture (bilan enregistré,
+// « Recommencer »), sinon il le ferait réapparaître.
+const suppressions = new Map<string, number>();
+
 export function supprimerBrouillon(participantId: string): void {
   localStorage.removeItem(cle(participantId));
   // Compatibilité avec l'ancienne clé
   localStorage.removeItem(`bilan_en_cours_${participantId}`);
+  suppressions.set(cle(participantId), Date.now());
+}
+
+export function brouillonSupprimeDepuis(participantId: string, depuis: number): boolean {
+  // Strictement après : « Recommencer » supprime puis rouvre le formulaire,
+  // parfois dans la même milliseconde — ce formulaire-là doit être sauvegardé.
+  return (suppressions.get(cle(participantId)) ?? 0) > depuis;
 }
 
 // ── Fonctions Supabase (cloud backup, fail silently si table absente) ─────────

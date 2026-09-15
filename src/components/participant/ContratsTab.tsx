@@ -4,10 +4,12 @@ import { format, addDays } from 'date-fns';
 import { useContrats } from '../../hooks/useContrats';
 import { useAgenda } from '../../hooks/useAgenda';
 import { useParticipants } from '../../hooks/useParticipants';
-import { Plus, PauseCircle, XCircle, RefreshCw, FileText, Pencil } from 'lucide-react';
+import { Plus, PauseCircle, XCircle, RefreshCw, FileText, Pencil, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Contrat, Seance } from '../../types';
 import ModalGenerationContrat from './ModalGenerationContrat';
+import { evaluerReprise, calculerSeancesReprise } from '../../utils/repriseContrat';
+import { ChevauchementError } from '../../utils/horaires';
 import { getAuthHeader } from '../../lib/supabase';
 
 const STATUT_BADGE: Record<string, { label: string; class: string }> = {
@@ -125,6 +127,73 @@ function ModalModifierDateFin({ contrat, seancesImpacteesPour, onConfirmer, onCa
   );
 }
 
+// Mise en pause d'un contrat : date de reprise prévue (facultative — pause
+// "indéterminée" acceptée, voir Contrat.dateReprisePrevue) + suppression des
+// séances planifiées strictement après aujourd'hui (celle du jour même, si
+// elle existe, et tout le passé restent intacts — même fonction que
+// "modifier date de fin", seancesImpacteesPourContrat, avec pour cutoff
+// aujourd'hui plutôt qu'une date choisie). Jamais de suppression sans
+// confirmation explicite du nombre de séances concernées.
+function ModalMettreEnPause({ seancesASupprimer, onConfirmer, onCancel }: {
+  seancesASupprimer: Seance[];
+  onConfirmer: (dateReprisePrevue: string | null) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [dateReprise, setDateReprise] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const datesTriees = [...seancesASupprimer].map(s => s.date).sort();
+
+  async function handleConfirmer() {
+    setLoading(true);
+    try {
+      await onConfirmer(dateReprise || null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1010 }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+        <h3 className="font-semibold text-dark">Mettre en pause ce contrat</h3>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Date de reprise prévue (optionnel)</label>
+          <input
+            type="date"
+            value={dateReprise}
+            min={new Date().toISOString().split('T')[0]}
+            onChange={e => setDateReprise(e.target.value)}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary"
+          />
+          <p className="text-xs text-gray-400 mt-1">Laissez vide si vous ne savez pas encore quand le suivi reprendra.</p>
+        </div>
+        {seancesASupprimer.length > 0 && (
+          <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
+            <p className="text-sm text-dark">
+              <span className="font-semibold">{seancesASupprimer.length} séance{seancesASupprimer.length > 1 ? 's' : ''}</span>
+              {' '}planifiée{seancesASupprimer.length > 1 ? 's' : ''} sera{seancesASupprimer.length > 1 ? 'ont' : ''}{' '}
+              <span className="font-semibold">définitivement supprimée{seancesASupprimer.length > 1 ? 's' : ''}</span>, du{' '}
+              <span className="font-medium">{formatDateCourt(datesTriees[0])}</span> au{' '}
+              <span className="font-medium">{formatDateCourt(datesTriees[datesTriees.length - 1])}</span>.
+            </p>
+            <p className="text-xs text-gray-500 mt-1.5">Les séances déjà réalisées et celle d'aujourd'hui, s'il y en a une, restent intactes.</p>
+          </div>
+        )}
+        <div className="flex gap-3">
+          <button onClick={onCancel} disabled={loading} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
+            Annuler
+          </button>
+          <button onClick={handleConfirmer} disabled={loading}
+            className="flex-1 py-2 rounded-xl text-sm font-semibold bg-orange-500 text-white hover:opacity-90 transition-opacity disabled:opacity-50">
+            {loading ? 'Mise en pause…' : 'Confirmer la pause'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function labelFrequence(contrat: Contrat): string {
   if (contrat.periodicite === 'deux_semaines') return '1 séance toutes les 2 semaines';
   if (contrat.periodicite === 'trois_semaines') return '1 séance toutes les 3 semaines';
@@ -136,13 +205,22 @@ interface Props {
 }
 
 export default function ContratsTab({ participantId }: Props) {
-  const { contratsDeParticipant, modifierStatut, modifierDateFin, toggleExclureTournee, supprimerContrat } = useContrats();
-  const { seances, retirerPlanifieesLocales } = useAgenda();
+  const { contratsDeParticipant, modifierStatut, mettreEnPause, reprendreContrat, modifierDateFin, toggleExclureTournee, supprimerContrat } = useContrats();
+  const { seances, bulkCreerSeances, retirerPlanifieesLocales } = useAgenda();
   const { participants } = useParticipants();
   const [modalPDF, setModalPDF] = useState<Contrat | null>(null);
   const [modalDateFin, setModalDateFin] = useState<Contrat | null>(null);
+  const [modalPause, setModalPause] = useState<Contrat | null>(null);
   const [confirmSuppr, setConfirmSuppr] = useState<{ contratId: string; nbSeances: number } | null>(null);
   const [supprimant, setSupprimant] = useState(false);
+  const [confirmTerminer, setConfirmTerminer] = useState<{ contratId: string; nbSeances: number } | null>(null);
+  const [terminant, setTerminant] = useState(false);
+  // Contrat à durée fixe dont l'échéance est passée pendant la pause : la
+  // reprise est refusée, et cette modale est le SEUL chemin vers la
+  // correction de la date de fin (le crayon de ModalModifierDateFin est
+  // réservé aux contrats actif/a_venir — un contrat suspendu n'y a pas accès).
+  const [blocageReprise, setBlocageReprise] = useState<{ contrat: Contrat; dateFinExpiree: string } | null>(null);
+  const [reprenant, setReprenant] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
   const participant = participants.find(p => p.id === participantId);
@@ -161,21 +239,73 @@ export default function ContratsTab({ participantId }: Props) {
     return new Date(prochaine.date + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   }
 
-  function handleSuspendre(contratId: string) {
-    if (!confirm('Suspendre ce contrat ? Les séances futures restent dans l\'agenda.')) return;
-    modifierStatut(contratId, 'suspendu');
-    toast.success('Contrat suspendu');
-  }
+  // Reprise d'un contrat en pause. Ce qui décide du blocage est la date
+  // RÉELLE du clic (today), jamais contrat.dateReprisePrevue : cette
+  // dernière n'est qu'un pense-bête saisi au moment de la pause, qui peut
+  // être largement dépassé. Voir evaluerReprise (utils/repriseContrat.ts).
+  //
+  // Ordre volontaire : les séances sont créées AVANT le passage en 'actif'.
+  // Si l'insert échoue, le contrat reste suspendu et un nouveau clic
+  // retentera proprement ; l'inverse laisserait un contrat actif sans
+  // aucune séance, sans bouton pour rattraper (« Reprendre » disparaît dès
+  // que le statut change).
+  async function handleReprendre(contrat: Contrat) {
+    const decision = evaluerReprise(contrat, today);
 
-  function handleTerminer(contratId: string) {
-    if (!confirm('Terminer ce contrat ?')) return;
-    modifierStatut(contratId, 'termine');
-    toast.success('Contrat terminé');
-  }
+    if (decision.type === 'bloque') {
+      setBlocageReprise({ contrat, dateFinExpiree: decision.dateFinExpiree });
+      return;
+    }
 
-  function handleReactiver(contratId: string) {
-    modifierStatut(contratId, 'actif');
-    toast.success('Contrat réactivé');
+    setReprenant(true);
+    try {
+      // Dates déjà pourvues pour ce contrat, annulées exclues : reflète la
+      // contrainte d'unicité seances_no_double_contrat_idx. Filtré ici,
+      // avant l'insert, plutôt que de laisser la base rejeter l'opération.
+      const dejaCouvertes = seances
+        .filter(s => s.contratId === contrat.id && s.statut !== 'annulee')
+        .map(s => s.date);
+
+      const nouvelles = calculerSeancesReprise({
+        contrat,
+        participant,
+        debutGeneration: decision.debutGeneration,
+        finGeneration: decision.finGeneration,
+        datesDejaCouvertes: dejaCouvertes,
+      });
+
+      if (nouvelles.length > 0) {
+        await bulkCreerSeances(nouvelles);
+      }
+
+      const ok = await reprendreContrat(
+        contrat.id,
+        decision.type === 'prolonge' ? decision.nouvelleDateFin : undefined,
+      );
+      if (!ok) return;
+
+      const nb = nouvelles.length;
+      const partSeances = nb > 0
+        ? ` — ${nb} séance${nb > 1 ? 's' : ''} replanifiée${nb > 1 ? 's' : ''}`
+        : ' — aucune séance à replanifier';
+      toast.success(
+        decision.type === 'prolonge'
+          ? `Contrat repris et prolongé jusqu'au ${formatDateCourt(decision.nouvelleDateFin)}${partSeances}`
+          : `Contrat repris${partSeances}`
+      );
+    } catch (err) {
+      // Un créneau libre avant la pause a pu être attribué à quelqu'un
+      // d'autre pendant l'arrêt : on refuse plutôt que de superposer deux
+      // bénéficiaires au même horaire. Le contrat reste en pause.
+      if (err instanceof ChevauchementError) {
+        toast.error(`Reprise impossible : ${err.conflits.length} créneau${err.conflits.length > 1 ? 'x' : ''} est déjà occupé par une autre séance. Libérez l'agenda, puis reprenez le contrat.`);
+        return;
+      }
+      console.error('[handleReprendre]', err);
+      toast.error(err instanceof Error ? err.message : 'Erreur lors de la reprise du contrat');
+    } finally {
+      setReprenant(false);
+    }
   }
 
   // Séances futures de ce contrat qui tombent au-delà de la date proposée —
@@ -230,6 +360,99 @@ export default function ContratsTab({ participantId }: Props) {
     if (!ok) { setModalDateFin(null); return; }
     toast.success('Date de fin modifiée');
     setModalDateFin(null);
+  }
+
+  // Mise en pause : ouvre le modal (date de reprise + récapitulatif des
+  // séances impactées, calculées avec aujourd'hui comme cutoff — voir
+  // ModalMettreEnPause). Aucune écriture avant confirmation explicite.
+  function handleSuspendreClick(contrat: Contrat) {
+    setModalPause(contrat);
+  }
+
+  // Même mécanisme que handleConfirmerDateFin (endpoint, garde-fous, trace
+  // audit) mais cutoff fixe = aujourd'hui plutôt qu'une date choisie, et
+  // statut='suspendu' + date_reprise_prevue au lieu de date_fin.
+  async function handleConfirmerPause(contrat: Contrat, dateReprisePrevue: string | null) {
+    const seancesASupprimer = seancesImpacteesPourContrat(contrat, today);
+    if (seancesASupprimer.length > 0) {
+      const dateMinSuppression = format(addDays(new Date(today + 'T12:00'), 1), 'yyyy-MM-dd');
+      try {
+        const authHeader = await getAuthHeader();
+        const r = await fetch('/api/seances/supprimer-planifiees', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeader },
+          body: JSON.stringify({
+            contratIds: [contrat.id],
+            dateMin: dateMinSuppression,
+            raison: 'pause',
+            participantId: contrat.participantId,
+          }),
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(body.error ?? 'Erreur suppression séances');
+        retirerPlanifieesLocales([contrat.id], dateMinSuppression);
+      } catch (err) {
+        console.error('[handleConfirmerPause]', err);
+        toast.error(err instanceof Error ? err.message : 'Erreur lors de la suppression des séances');
+        return;
+      }
+    }
+    const ok = await mettreEnPause(contrat.id, dateReprisePrevue);
+    if (!ok) return;
+    toast.success(seancesASupprimer.length > 0
+      ? `Contrat mis en pause — ${seancesASupprimer.length} séance${seancesASupprimer.length > 1 ? 's' : ''} supprimée${seancesASupprimer.length > 1 ? 's' : ''}`
+      : 'Contrat mis en pause');
+    setModalPause(null);
+  }
+
+  // Terminer : mêmes garde-fous que la suppression de contrat (choix
+  // explicite avec/sans séances futures) — jamais de suppression sans
+  // confirmation si des séances planifiées existent à partir d'aujourd'hui.
+  function handleTerminer(contratId: string) {
+    const nbFutures = seances.filter(
+      s => s.contratId === contratId && s.statut === 'planifiee' && s.date >= today
+    ).length;
+    if (nbFutures === 0) {
+      modifierStatut(contratId, 'termine');
+      toast.success('Contrat terminé');
+      return;
+    }
+    setConfirmTerminer({ contratId, nbSeances: nbFutures });
+  }
+
+  async function handleTerminerAvecSeances() {
+    if (!confirmTerminer) return;
+    setTerminant(true);
+    try {
+      const authHeader = await getAuthHeader();
+      const r = await fetch('/api/seances/supprimer-planifiees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({ contratIds: [confirmTerminer.contratId], dateMin: today, raison: 'fin_de_contrat', participantId }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error ?? 'Erreur suppression séances');
+      retirerPlanifieesLocales([confirmTerminer.contratId], today);
+      await modifierStatut(confirmTerminer.contratId, 'termine');
+      if ((body.supprimees ?? -1) === 0) {
+        toast.warning('Contrat terminé mais aucune séance n\'a pu être retirée — vérifiez votre agenda manuellement');
+      } else {
+        toast.success('Contrat terminé et séances futures supprimées');
+      }
+      setConfirmTerminer(null);
+    } catch (err) {
+      console.error('[handleTerminerAvecSeances]', err);
+      toast.error(err instanceof Error ? err.message : 'Erreur lors de la suppression');
+    } finally {
+      setTerminant(false);
+    }
+  }
+
+  function handleTerminerSansSeances() {
+    if (!confirmTerminer) return;
+    modifierStatut(confirmTerminer.contratId, 'termine');
+    toast.success('Contrat terminé (séances futures conservées)');
+    setConfirmTerminer(null);
   }
 
   function handleToggleExclureTournee(contratId: string, exclureTournee: boolean) {
@@ -343,6 +566,14 @@ export default function ContratsTab({ participantId }: Props) {
                       Hors tournée
                     </span>
                   )}
+                  {contrat.statut === 'actif' && contrat.dureeIndeterminee && (contrat.joursFixe?.length ?? 0) === 0 && (
+                    <span
+                      className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700"
+                      title="Sans jours de séance renseignés, ce contrat ne peut pas se renouveler automatiquement"
+                    >
+                      ⚠️ Jours non renseignés
+                    </span>
+                  )}
                 </div>
                 <div className="text-sm font-semibold text-dark flex items-center gap-1.5">
                   {new Date(contrat.dateDebut + 'T12:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
@@ -372,23 +603,37 @@ export default function ContratsTab({ participantId }: Props) {
               </button>
             </div>
 
-            {/* Barre de progression */}
-            <div className="mb-2">
-              <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
-                <span>{realisees} / {total} séances réalisées</span>
-                <span>{pct}%</span>
+            {contrat.dureeIndeterminee ? (
+              <div className="text-xs text-gray-400 mb-2">
+                Suivi actif depuis {new Date(contrat.dateDebut + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} · sans date de fin
               </div>
-              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${pct}%`, background: contrat.statut === 'termine' ? '#3B6D11' : '#1A5F9E' }}
-                />
+            ) : (
+              /* Barre de progression */
+              <div className="mb-2">
+                <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                  <span>{realisees} / {total} séances réalisées</span>
+                  <span>{pct}%</span>
+                </div>
+                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${pct}%`, background: contrat.statut === 'termine' ? '#3B6D11' : '#1A5F9E' }}
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {prochaine && contrat.statut === 'actif' && (
               <div className="text-xs text-gray-500 mb-3">
                 Prochain RDV : <span className="font-medium text-dark">{prochaine}</span>
+              </div>
+            )}
+
+            {contrat.statut === 'suspendu' && (
+              <div className="text-xs text-gray-500 mb-3">
+                En pause{contrat.dateReprisePrevue
+                  ? <> — reprise prévue le <span className="font-medium text-dark">{formatDateCourt(contrat.dateReprisePrevue)}</span></>
+                  : ' — date de reprise non définie'}
               </div>
             )}
 
@@ -422,11 +667,11 @@ export default function ContratsTab({ participantId }: Props) {
               {contrat.statut === 'actif' && (
                 <>
                   <button
-                    onClick={() => handleSuspendre(contrat.id)}
+                    onClick={() => handleSuspendreClick(contrat)}
                     className="flex items-center gap-1.5 text-xs border border-orange-200 text-orange-600 px-3 py-1.5 rounded-lg hover:bg-orange-50 transition-colors"
                   >
                     <PauseCircle size={12} />
-                    Suspendre
+                    Mettre en pause
                   </button>
                   <button
                     onClick={() => handleTerminer(contrat.id)}
@@ -446,11 +691,13 @@ export default function ContratsTab({ participantId }: Props) {
               )}
               {contrat.statut === 'suspendu' && (
                 <button
-                  onClick={() => handleReactiver(contrat.id)}
-                  className="flex items-center gap-1.5 text-xs border border-green-200 text-green-600 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors"
+                  onClick={() => handleReprendre(contrat)}
+                  disabled={reprenant}
+                  className="flex items-center gap-1.5 text-xs border border-green-200 text-green-600 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors disabled:opacity-50"
+                  title="Replanifie les séances restantes à partir d'aujourd'hui (ou de la date de reprise prévue si elle est encore à venir)"
                 >
                   <RefreshCw size={12} />
-                  Réactiver
+                  {reprenant ? 'Reprise…' : 'Reprendre'}
                 </button>
               )}
             </div>
@@ -509,6 +756,98 @@ export default function ContratsTab({ participantId }: Props) {
               <button
                 onClick={() => setConfirmSuppr(null)}
                 disabled={supprimant}
+                className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal mise en pause — date de reprise + suppression des séances
+          futures (cutoff aujourd'hui), avec récapitulatif obligatoire. */}
+      {modalPause && (
+        <ModalMettreEnPause
+          seancesASupprimer={seancesImpacteesPourContrat(modalPause, today)}
+          onConfirmer={dateReprisePrevue => handleConfirmerPause(modalPause, dateReprisePrevue)}
+          onCancel={() => setModalPause(null)}
+        />
+      )}
+
+      {/* Blocage de reprise — contrat à durée FIXE expiré pendant la pause.
+          Refuser sans offrir la sortie serait un cul-de-sac : le crayon qui
+          ouvre ModalModifierDateFin est réservé aux contrats actif/a_venir,
+          donc un contrat suspendu n'a aucun autre chemin vers cette modale.
+          Le bouton ci-dessous est cette sortie. */}
+      {blocageReprise && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1005 }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={18} className="text-orange-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-dark">Reprise impossible</h3>
+                <p className="text-sm text-gray-600 mt-1.5">
+                  Ce contrat a expiré le{' '}
+                  <span className="font-semibold text-dark">{formatDateCourt(blocageReprise.dateFinExpiree)}</span>,
+                  pendant la pause. Sa date de fin a été fixée à la prescription : elle n'est pas
+                  prolongée automatiquement.
+                </p>
+                <p className="text-xs text-gray-500 mt-2">
+                  Corrigez la date de fin, puis reprenez le contrat.
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <button
+                onClick={() => { const c = blocageReprise.contrat; setBlocageReprise(null); setModalDateFin(c); }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-dark transition-colors"
+              >
+                <Pencil size={13} />
+                Corriger la date de fin
+              </button>
+              <button
+                onClick={() => setBlocageReprise(null)}
+                className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dialog confirmation "Terminer" avec séances — même mécanisme que la
+          suppression de contrat (choix explicite avec/sans séances futures). */}
+      {confirmTerminer && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1001 }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-semibold text-dark">Terminer ce contrat ?</h3>
+            <p className="text-sm text-gray-600">
+              Ce contrat a{' '}
+              <span className="font-semibold text-dark">
+                {confirmTerminer.nbSeances} séance{confirmTerminer.nbSeances > 1 ? 's' : ''} planifiée{confirmTerminer.nbSeances > 1 ? 's' : ''}
+              </span>{' '}
+              à venir. Voulez-vous les supprimer également ?
+            </p>
+            <div className="space-y-2">
+              <button
+                onClick={handleTerminerAvecSeances}
+                disabled={terminant}
+                className="w-full py-2.5 bg-danger text-white rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-40"
+              >
+                {terminant ? 'Suppression…' : 'Terminer et supprimer les séances futures'}
+              </button>
+              <button
+                onClick={handleTerminerSansSeances}
+                disabled={terminant}
+                className="w-full py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-40"
+              >
+                Terminer en conservant les séances futures
+              </button>
+              <button
+                onClick={() => setConfirmTerminer(null)}
+                disabled={terminant}
                 className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
               >
                 Annuler

@@ -611,10 +611,14 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
     return indispos.filter(i => i.jour === jourKey).map(i => ({ debut: i.heureDebut, fin: i.heureFin }));
   }
 
-  // Patients filtrés + triés
+  // Patients filtrés + triés — roster glissable pour une NOUVELLE séance,
+  // jamais un bénéficiaire archivé (il reste dans `participants`, utilisé
+  // ailleurs dans ce composant pour résoudre le nom de séances déjà
+  // posées : ne jamais lui substituer cette liste filtrée).
   const patientsFiltres = useMemo(() => {
     const q = search.toLowerCase().trim();
     return [...participants]
+      .filter(p => !p.archive)
       .filter(p => !q || `${p.prenom} ${p.nom}`.toLowerCase().includes(q))
       .sort((a, b) => a.nom.localeCompare(b.nom));
   }, [participants, search]);
@@ -638,7 +642,24 @@ export default function PlanningGrilleView({ participants, seances, contrats, in
     if (!pid) return;
     const contrat = contrats.find(c => c.participantId === pid && c.statut === 'actif');
     if (!contrat) {
-      toast.error("Ce bénéficiaire n'a pas de contrat actif. Créez d'abord un contrat.");
+      // Ne jamais suggérer "créez un contrat" si un contrat existe déjà en
+      // pause/terminé — ça pousse exactement au doublon que ce message est
+      // censé éviter. On distingue donc pourquoi il n'y a pas de contrat
+      // actif : le plus RÉCENT contrat non-actif du bénéficiaire (peu importe
+      // lequel exactement) suffit à donner un message juste.
+      const dernierContrat = contrats
+        .filter(c => c.participantId === pid)
+        .sort((a, b) => b.dateCreation.localeCompare(a.dateCreation))[0];
+      if (dernierContrat?.statut === 'suspendu') {
+        const reprise = dernierContrat.dateReprisePrevue
+          ? ` (reprise prévue le ${new Date(dernierContrat.dateReprisePrevue + 'T12:00').toLocaleDateString('fr-FR')})`
+          : '';
+        toast.error(`Ce bénéficiaire est en pause${reprise} — reprenez son suivi depuis sa fiche avant de le planifier.`);
+      } else if (dernierContrat?.statut === 'termine') {
+        toast.error('Le suivi de ce bénéficiaire est terminé — créez un nouveau contrat depuis sa fiche si besoin.');
+      } else {
+        toast.error("Ce bénéficiaire n'a pas de contrat actif. Créez d'abord un contrat.");
+      }
       return;
     }
     setDropPendant({ participantId: pid, jour, heure, contrat });

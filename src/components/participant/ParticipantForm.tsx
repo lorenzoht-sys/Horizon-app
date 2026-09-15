@@ -1,14 +1,16 @@
-import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { chargerSettingsPraticien } from '../../lib/settingsPraticien';
 import { toast } from 'sonner';
 import type { Participant, TagPatient, TestKey, RgpdConsent, TraitementPatient, AntecedentMedical, TypeAntecedent, AnamneseData, ChutesData, ChuteDetail, ActivitePrecedente, NiveauActivite, CreneauHoraire, SedentariteReponses, MomentPrise, ContactSante } from '../../types';
 import { TYPES_ANTECEDENT_LABELS, TYPES_BLESSURE_CHUTE, MOMENTS_PRISE_LABELS } from '../../types';
 import { useStructures } from '../../hooks/useStructures';
-import { getBrouillonParticipant, sauvegarderBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
+import { brouillonParticipantSupprimeDepuis, getBrouillonParticipant, sauvegarderBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
+import { avecConsentement, erreurConsentementCreation, normaliserRgpd } from '../../lib/consentementRgpd';
 import { OPTIONS_FREQUENCE } from '../../lib/anamnese';
 import { Save, X } from 'lucide-react';
 import GIRWidget from '../bilan/GIRWidget';
-import { EMPTY_SED, computeSedScore, getSedProfil, getFSSProfil, SectionSedentarite, SectionFatigue } from '../bilan/TestsAutonomie';
+import { EMPTY_SED, computeSedScore, computeFSSScore, getSedProfil, getFSSProfil, SectionSedentarite, SectionFatigue } from '../bilan/TestsAutonomie';
+import { EtatPartageQuestionnaires } from '../bilan/EtatPartageBeneficiaire';
 
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -1055,8 +1057,9 @@ export interface ParticipantFormHandle {
   /**
    * Tente la soumission. Retourne true si réussie, ou { step, message } si une
    * validation a échoué (prénom/nom manquant → étape 1, organisation des
-   * séances incomplète → étape 4) — à l'appelant de naviguer vers cette étape
-   * et d'afficher le message.
+   * séances incomplète → étape 4, consentement RGPD absent à la création →
+   * étape 5) — à l'appelant de naviguer vers cette étape et d'afficher le
+   * message.
    */
   submit: () => true | { step: 1 | 2 | 3 | 4 | 5; message: string };
 }
@@ -1186,15 +1189,16 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
   const [testsActifs] = useState<TestKey[]>(seed.testsActifs ?? []);
 
   // ── RGPD + droit à l'image ──────────────────────────────────────
-  const [rgpd, setRgpd] = useState<RgpdConsent>({
-    consentementObtenu:  seed.rgpd?.consentementObtenu  ?? false,
-    droitAcces:          seed.rgpd?.droitAcces          ?? false,
-    droitRectification:  seed.rgpd?.droitRectification  ?? false,
-    droitEffacement:     seed.rgpd?.droitEffacement     ?? false,
-    methodeConsentement: seed.rgpd?.methodeConsentement ?? 'oral_note',
-    consentementDate:    seed.rgpd?.consentementDate    ?? new Date().toISOString().slice(0, 10),
-  });
+  // L'ancien état initial posait `consentementDate` à la date du jour même
+  // sans consentement : 7 fiches de production portaient ainsi une date de
+  // recueil pour un consentement jamais recueilli. Voir src/lib/consentementRgpd.ts.
+  const [rgpd, setRgpd] = useState<RgpdConsent>(() => normaliserRgpd(seed.rgpd));
   const [droitImage, setDroitImage] = useState<boolean>(seed.droitImage ?? false);
+
+  // Pathologie saisie ailleurs (bilan initial, ou formulaire mobile dont le
+  // brouillon est partagé sous la même clé) : ce formulaire n'a pas de champ
+  // pour elle, mais ne doit pas la perdre en reprenant le brouillon.
+  const [pathologieBrouillon] = useState<string | undefined>(seed.pathologie);
 
   // ── Champs texte ────────────────────────────────────────────────
   const [form, setForm] = useState({
@@ -1255,8 +1259,10 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
   }
 
   function setFSSData(reponses: (number | null)[]) {
-    const answered = reponses.filter(v => v !== null);
-    const score = answered.length > 0 ? answered.reduce((sum, v) => sum + (v ?? 0), 0) : null;
+    // Score seulement si les neuf affirmations sont répondues : la somme des
+    // seuls items renseignés n'est pas comparable au seuil de 36, qui les
+    // suppose toutes. Voir src/lib/scoresAutonomie.ts.
+    const score = computeFSSScore(reponses);
     setAnamnese(a => ({
       ...a,
       fatigueReponses: reponses,
@@ -1271,7 +1277,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
       taille: form.taille ? Number(form.taille) : undefined,
       poids:  form.poids  ? Number(form.poids)  : undefined,
       // Préserver les données cliniques existantes (issues du bilan initial)
-      pathologie:              initial?.pathologie,
+      pathologie:              pathologieBrouillon,
       antecedentsMedicaux:     initial?.antecedentsMedicaux,
       antecedentsChirurgicaux: initial?.antecedentsChirurgicaux,
       modeDeplacementHabituel: profilActivite.modeDeplacementHabituel,
@@ -1301,6 +1307,12 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
       return;
     }
     setErreurOrganisation(null);
+    // Consentement RGPD : bloquant à la création, jamais en modification.
+    const erreurRgpd = enModification ? null : erreurConsentementCreation(rgpd);
+    if (erreurRgpd) {
+      toast.error(erreurRgpd);
+      return;
+    }
     onSubmit(buildPayload());
   }
 
@@ -1315,29 +1327,65 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
         return { step: 4, message: erreur };
       }
       setErreurOrganisation(null);
+      // Consentement RGPD : bloquant à la création, jamais en modification.
+      // Vaut aussi pour un brouillon repris d'un autre formulaire (mobile) :
+      // son `rgpd` a été normalisé à l'initialisation, rien ne le contourne.
+      const erreurRgpd = enModification ? null : erreurConsentementCreation(rgpd);
+      if (erreurRgpd) return { step: 5, message: erreurRgpd };
       onSubmit(buildPayload());
       return true;
     },
   }));
 
   // ── Brouillon : sauvegarde auto (debounce 800ms) ─────────────────
+  const donneesBrouillon = useMemo(() => ({
+    ...form,
+    taille: form.taille ? Number(form.taille) : undefined,
+    poids:  form.poids  ? Number(form.poids)  : undefined,
+    anamnese, traitements, antecedentsMedicauxStructures: antecedents,
+    rgpd, droitImage, structureId,
+    pathologie: pathologieBrouillon,
+    modeDeplacementHabituel: profilActivite.modeDeplacementHabituel,
+    modeDeplacementDetail:   profilActivite.modeDeplacementDetail || undefined,
+    activitesSouhaitees:     profilActivite.activitesSouhaitees,
+    objectifsPatient:        profilActivite.objectifsPatient,
+  }), [form, anamnese, traitements, antecedents, rgpd, droitImage, structureId, profilActivite, pathologieBrouillon]);
+
+  const enAttenteRef = useRef(false);
+  const derniereEtapeRef = useRef(step ?? 0);
+  const dernieresDonneesRef = useRef(donneesBrouillon);
+  useEffect(() => {
+    derniereEtapeRef.current = step ?? 0;
+    dernieresDonneesRef.current = donneesBrouillon;
+  }, [step, donneesBrouillon]);
+
   useEffect(() => {
     if (!draftKey) return;
+    enAttenteRef.current = true;
     const t = setTimeout(() => {
-      sauvegarderBrouillonParticipant(draftKey, step ?? 0, {
-        ...form,
-        taille: form.taille ? Number(form.taille) : undefined,
-        poids:  form.poids  ? Number(form.poids)  : undefined,
-        anamnese, traitements, antecedentsMedicauxStructures: antecedents,
-        rgpd, droitImage, structureId,
-        modeDeplacementHabituel: profilActivite.modeDeplacementHabituel,
-        modeDeplacementDetail:   profilActivite.modeDeplacementDetail || undefined,
-        activitesSouhaitees:     profilActivite.activitesSouhaitees,
-        objectifsPatient:        profilActivite.objectifsPatient,
-      });
+      enAttenteRef.current = false;
+      sauvegarderBrouillonParticipant(draftKey, step ?? 0, donneesBrouillon);
     }, 800);
     return () => clearTimeout(t);
-  }, [draftKey, step, form, anamnese, traitements, antecedents, rgpd, droitImage, structureId, profilActivite]);
+  }, [draftKey, step, donneesBrouillon]);
+
+  // Démontage sans fermeture de page — rotation du téléphone, qui remplace le
+  // formulaire complet par le formulaire mobile (App.tsx). Le nettoyage du
+  // debounce annulait la sauvegarde en attente. On l'écrit, sauf si le
+  // brouillon a été supprimé volontairement depuis l'ouverture (fiche créée,
+  // « Annuler »).
+  useEffect(() => {
+    if (!draftKey) return;
+    const ouverture = Date.now();
+    const enAttente = enAttenteRef;
+    const etape = derniereEtapeRef;
+    const donnees = dernieresDonneesRef;
+    return () => {
+      if (enAttente.current && !brouillonParticipantSupprimeDepuis(draftKey, ouverture)) {
+        sauvegarderBrouillonParticipant(draftKey, etape.current, donnees.current);
+      }
+    };
+  }, [draftKey]);
 
   // ── Indicateur de complétion ─────────────────────────────────────
   useEffect(() => {
@@ -2094,6 +2142,10 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
           onChange={e => setAnamnese(a => ({ ...a, fatigueVisibleBeneficiaire: e.target.checked }))} />
         Partager le niveau de fatigue avec le bénéficiaire
       </label>
+      <EtatPartageQuestionnaires
+        sedentaritePartagee={anamnese.sedentariteVisibleBeneficiaire === true}
+        fatiguePartagee={anamnese.fatigueVisibleBeneficiaire === true}
+      />
       </>}
 
       {(showAll || step === 5) && <>
@@ -2155,7 +2207,13 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
             ] as const).map(({ key, label }) => (
               <label key={key} className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700 select-none">
                 <input type="checkbox" checked={rgpd[key]} className="w-4 h-4 accent-primary"
-                  onChange={e => setRgpd(r => ({ ...r, [key]: e.target.checked }))} />
+                  onChange={e => {
+                    const coche = e.target.checked;
+                    // La date de recueil suit la case du consentement.
+                    setRgpd(r => key === 'consentementObtenu'
+                      ? avecConsentement(r, coche, new Date().toISOString().slice(0, 10))
+                      : { ...r, [key]: coche });
+                  }} />
                 {label}
               </label>
             ))}
@@ -2180,7 +2238,11 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
             </div>
           </div>
           {!rgpd.consentementObtenu && (
-            <p className="text-xs text-warning font-medium">⚠️ Sans consentement, les données de santé ne peuvent pas être collectées légalement.</p>
+            <p className="text-xs text-warning font-medium">
+              {enModification
+                ? '⚠️ Sans consentement, les données de santé ne peuvent pas être collectées légalement.'
+                : '⚠️ Obligatoire pour créer la fiche : sans consentement, les données de santé ne peuvent pas être collectées légalement.'}
+            </p>
           )}
         </div>
       </div>

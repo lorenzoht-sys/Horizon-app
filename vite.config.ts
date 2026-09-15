@@ -18,7 +18,7 @@ export default defineConfig({
       manifest: {
         name: "Mouv'APA Suivis",
         short_name: 'MouvAPA',
-        description: "Suivi patient APA — Pierre Clavier",
+        description: "Suivi patient en Activité Physique Adaptée",
         theme_color: '#032c28',
         background_color: '#ffffff',
         display: 'standalone',

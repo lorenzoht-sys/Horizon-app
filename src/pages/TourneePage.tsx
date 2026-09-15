@@ -313,7 +313,11 @@ export default function TourneePage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-dark">{p.prenom} {p.nom}</span>
-                      {totalContrat > 0 && rang > 0 && (
+                      {s.contrat?.dureeIndeterminee ? (
+                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                          Sans date de fin
+                        </span>
+                      ) : totalContrat > 0 && rang > 0 && (
                         <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
                           Séance {rang}/{totalContrat}
                         </span>

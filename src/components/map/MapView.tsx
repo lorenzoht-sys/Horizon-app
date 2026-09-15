@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import L from 'leaflet';
 import type { Participant, TagPatient } from '../../types';
 import { TAG_CONFIG, getPriorityTag } from '../../data/profiles';
+import { libelleAge } from '../../lib/age';
 
 // ── Génération du marqueur SVG personnalisé ───────────────────
 
@@ -44,13 +45,6 @@ function createMarkerIcon(participant: Participant): L.DivIcon {
 
 // ── Popup contenu ─────────────────────────────────────────────
 
-function calcAge(dob: string): number {
-  const today = new Date(), birth = new Date(dob);
-  let age = today.getFullYear() - birth.getFullYear();
-  if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
-  return age;
-}
-
 function daysSince(date: string): number {
   return Math.floor((Date.now() - new Date(date).getTime()) / 86400000);
 }
@@ -72,7 +66,7 @@ function PatientPopup({ p }: { p: Participant }) {
         </div>
         <div>
           <div className="font-semibold text-gray-900 text-sm">{p.prenom} {p.nom}</div>
-          <div className="text-xs text-gray-500">{calcAge(p.dateNaissance)} ans</div>
+          <div className="text-xs text-gray-500">{libelleAge(p.dateNaissance)}</div>
         </div>
       </div>
 

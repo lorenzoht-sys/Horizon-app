@@ -7,9 +7,28 @@
 -- Anthropic. Vérifier auth + rate limit par praticien".
 --
 -- Preuve : `api/claude.ts` vérifie déjà l'authentification (JWT praticien
--- vérifié via `supabase.auth.getUser`) et a un plafond de taille de prompt
--- (voir lot précédent, docs/RAPPORT_SECURITE.md). Il n'existe en revanche
--- aucune limite sur le NOMBRE d'appels qu'un même praticien peut faire —
+-- vérifié via `supabase.auth.getUser`).
+--
+-- ⚠️ CORRECTION 2026-09-07 — la phrase suivante figurait ici et était
+-- FAUSSE : « et a un plafond de taille de prompt (voir lot précédent,
+-- docs/RAPPORT_SECURITE.md) ». Aucun plafond n'existait dans
+-- `api/claude.ts` sur `main` au moment où cette migration a été écrite, ni
+-- pendant les trois semaines qui ont suivi. Le lot en question n'a jamais
+-- été mergé : `docs/PLAN-BETA.md` §4 le classait n°4, « Ouvert. Le fichier
+-- guard.ts n'existe pas sur main », et `docs/RAPPORT_SECURITE.md` est
+-- lui-même absent de `main` (§4 n°10).
+--
+-- Le plafond existe depuis le 2026-09-07 : `api/_lib/guard.ts`
+-- (PROMPT_MAX_LENGTH), branché dans `api/claude.ts`. La phrase est
+-- corrigée plutôt que supprimée parce qu'elle a servi de justification à
+-- la portée réduite de cette migration — un lecteur qui la découvrirait
+-- effacée ne saurait pas qu'un contrôle avait été supposé acquis à tort.
+--
+-- (Seuls des commentaires changent ici : le DDL est identique, la migration
+-- reste appliquée telle quelle.)
+--
+-- Il n'existait en revanche, à la date de rédaction, aucune limite sur le
+-- NOMBRE d'appels qu'un même praticien peut faire —
 -- confirmé dans docs/CARTOGRAPHIE_SECURITE.md §4 : "Pas de rate limit par
 -- praticien, pas de plafond de tokens visible".
 --

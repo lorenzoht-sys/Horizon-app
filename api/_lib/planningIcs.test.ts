@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import ical, { type VEvent } from 'node-ical';
-import { genererCalendrierPlanning, type SeancePourIcs } from './planningIcs.js';
+import { subMonths, format } from 'date-fns';
+import { genererCalendrierPlanning, calculerBornesFenetreIcs, type SeancePourIcs } from './planningIcs.js';
 import { dateHeureParisVersUTC } from './rappels.js';
 
 function seance(overrides: Partial<SeancePourIcs> = {}): SeancePourIcs {
@@ -97,5 +98,33 @@ describe('genererCalendrierPlanning', () => {
     const s = seance({ codePortail: null, personneContact: null });
     const events = parseEvents(genererCalendrierPlanning([s]));
     expect(events[0].description).toBeFalsy();
+  });
+
+  it('inclut une séance passée (statut réalisée) avec son horaire exact — historique 24 mois', () => {
+    const s = seance({
+      id: '44444444-4444-4444-4444-444444444444',
+      date: format(subMonths(new Date(), 3), 'yyyy-MM-dd'),
+    });
+    const events = parseEvents(genererCalendrierPlanning([s]));
+    expect(events).toHaveLength(1);
+    expect(events[0].uid).toContain(s.id);
+  });
+});
+
+describe('calculerBornesFenetreIcs', () => {
+  it('couvre 24 mois en arrière et 12 mois en avant, bornes inclusives au jour près', () => {
+    const maintenant = new Date('2026-09-10T12:00:00.000Z');
+    const { debut, fin } = calculerBornesFenetreIcs(maintenant);
+    expect(debut).toBe('2024-09-10');
+    expect(fin).toBe('2027-09-10');
+  });
+
+  it('conserve la stabilité des UID : les bornes ne dépendent que de "maintenant", jamais de l\'id de la séance', () => {
+    // Élargir la fenêtre ne doit jamais changer l'UID des séances déjà
+    // synchronisées côté praticien (basé uniquement sur seance.id, voir
+    // genererCalendrierPlanning) — sinon Google Agenda les recrée en doublon.
+    const s = seance({ id: '55555555-5555-5555-5555-555555555555' });
+    const events = parseEvents(genererCalendrierPlanning([s]));
+    expect(events[0].uid).toContain(s.id);
   });
 });

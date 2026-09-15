@@ -1,0 +1,47 @@
+-- ============================================================================
+-- Apley Scratch Test — colonne manquante depuis l'origine
+--
+-- POURQUOI
+-- --------
+-- Le test existe de bout en bout dans l'interface : composant de saisie et
+-- barème (Step2_Physical.tsx), type `Bilan.apley` (types/index.ts), normes
+-- (data/norms.ts), radar, delta, tableau comparatif de la fiche. Il figure
+-- dans ALL_TESTS à côté des autres.
+--
+-- Mais `bilans` n'a aucune colonne pour lui, et src/lib/mappers.ts ne l'écrit
+-- ni ne le lit. `bilanToDb` construit un objet à champs nommés : un champ non
+-- listé n'est pas une erreur, il n'existe simplement pas dans le résultat.
+-- L'enregistrement réussissait donc, sans Apley, et la réouverture n'avait
+-- rien à restaurer.
+--
+-- Signalé par Pierre le 2026-09-13 (point 10.1, « le Scratch Test ne sauvegarde
+-- pas les modifications »), diagnostiqué le 2026-09-14.
+--
+-- L'oubli remonte à 20260701_nouveaux_tests.sql, qui a posé berg_data,
+-- moca_score, marche10m_* , adl_data et iadl_data — le même lot de tests, sans
+-- apley_data.
+--
+-- LES SAISIES PASSÉES SONT PERDUES : elles ne sont jamais parties du
+-- navigateur. Aucune récupération n'est possible, et il n'y a pas de chemin de
+-- secours à chercher — `apley` ne voyageait pas non plus dans le JSON
+-- `bilan_initial_data`, qui ne porte que le formulaire d'anamnèse.
+--
+-- ORDRE D'APPLICATION : cette migration passe AVANT le déploiement du code.
+-- Une colonne ajoutée est invisible au code qui l'ignore, donc sans risque pour
+-- la production actuelle ; l'inverse ne l'est pas — du code écrivant
+-- `apley_data` sur une table sans cette colonne ferait échouer PostgREST, et
+-- avec lui TOUT enregistrement de bilan.
+--
+-- Modèle : tinetti_data (20260619_tinetti_bilans.sql), même forme JSONB pour un
+-- test composite.
+--
+-- IDEMPOTENTE : ADD COLUMN IF NOT EXISTS ne fait rien si la colonne existe.
+-- ============================================================================
+
+-- Apley Scratch Test — amplitude d'épaule, 4 mesures (haut/bas × droite/gauche)
+-- cotées 1 à 4, plus le score moyen et des notes libres.
+ALTER TABLE bilans ADD COLUMN IF NOT EXISTS apley_data JSONB;
+
+-- Contre-épreuve — doit renvoyer une ligne :
+--   SELECT column_name, data_type FROM information_schema.columns
+--   WHERE table_name = 'bilans' AND column_name = 'apley_data';
