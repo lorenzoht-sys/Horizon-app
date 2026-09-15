@@ -20,7 +20,9 @@
 --    20260714_01_mode_organisation_fondations.sql).
 --
 -- IDEMPOTENTE : ADD COLUMN IF NOT EXISTS ne fait rien si la colonne existe déjà.
--- NE PAS EXÉCUTER SUR PROD sans validation préalable.
+-- APPLIQUÉE ET VÉRIFIÉE le 2026-09-15 sur staging et sur production (contre-
+-- épreuve confirmée sur les deux, archivage testé fonctionnel avec le compte
+-- de test) — voir docs/PLAN-BETA.md, tableau « Migrations ».
 -- ============================================================================
 
 ALTER TABLE public.contrats
