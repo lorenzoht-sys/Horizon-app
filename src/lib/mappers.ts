@@ -202,6 +202,7 @@ export function dbToBilan(row: any): Bilan {
       dubois: row.memoire_dubois ?? undefined,
     },
     tinetti: row.tinetti_data ?? undefined,
+    apley: row.apley_data ?? undefined,
     berg: row.berg_data ?? null,
     mocaScore: row.moca_score ?? null,
     marche10m: (row.marche10m_habituel != null || row.marche10m_max != null)
@@ -264,6 +265,7 @@ export function bilanToDb(participantId: string, b: Omit<Bilan, 'id'> & { id?: s
     memoire_score_differe: b.memoire?.scoreDiffere ?? null,
     memoire_dubois: b.memoire?.dubois ?? null,
     tinetti_data: b.tinetti ?? null,
+    apley_data: b.apley ?? null,
     berg_data: b.berg ?? null,
     moca_score: b.mocaScore ?? null,
     marche10m_habituel: b.marche10m?.habituel ?? null,
