@@ -33,6 +33,7 @@ import { useEtatSession } from '../../hooks/useEtatSession';
 import { ecrireEtatSession, effacerEtatSession, lireEtatSession } from '../../lib/etatSession';
 import { getBrouillonParticipant, sauvegarderBrouillonParticipant, supprimerBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
 import { getBrouillon, supprimerBrouillon } from '../../hooks/useBrouillonBilan';
+import { formaterDateNaissanceAffichage, masquerSaisieDateNaissance, messageErreurDateNaissance, parserDateNaissanceSaisie } from '../../utils/dateNaissance';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -550,6 +551,36 @@ function NouveauPatientMobile({ onBack: retourParent, onCree }: { onBack: () => 
   const [droitImage, setDroitImage] = useState<boolean>(brouillon.droitImage === true);
   const [enregistrement, setEnregistrement] = useState(false);
 
+  // Date de naissance : saisie au clavier JJ/MM/AAAA. form.dateNaissance
+  // reste l'ISO (inchangé, c'est lui qui est écrit dans le brouillon et
+  // envoyé à addParticipant) ; ce texte séparé est ce que l'utilisateur voit
+  // et tape. Voir src/utils/dateNaissance.ts (même logique que le formulaire
+  // complet, ParticipantForm.tsx).
+  const [dateNaissanceSaisie, setDateNaissanceSaisie] = useState(
+    formaterDateNaissanceAffichage(texteBrouillon(brouillon.dateNaissance)),
+  );
+  const [dateNaissanceErreur, setDateNaissanceErreur] = useState<string | null>(null);
+
+  function handleChangeDateNaissance(e: React.ChangeEvent<HTMLInputElement>) {
+    const masque = masquerSaisieDateNaissance(e.target.value);
+    setDateNaissanceSaisie(masque);
+    setDateNaissanceErreur(null);
+    const resultat = parserDateNaissanceSaisie(masque);
+    setForm(f => ({ ...f, dateNaissance: resultat.statut === 'valide' ? resultat.iso : '' }));
+  }
+
+  function handleBlurDateNaissance() {
+    if (!dateNaissanceSaisie) return; // le contrôle « obligatoire » se fait à la sauvegarde
+    setDateNaissanceErreur(messageErreurDateNaissance(parserDateNaissanceSaisie(dateNaissanceSaisie)));
+  }
+
+  function validerDateNaissance(): string | null {
+    if (form.dateNaissance) return null;
+    return dateNaissanceSaisie
+      ? messageErreurDateNaissance(parserDateNaissanceSaisie(dateNaissanceSaisie))
+      : 'La date de naissance est obligatoire.';
+  }
+
   // Écrit à chaque changement, sans délai : c'est ce brouillon qui survit à la
   // rotation. Fusionné avec l'existant, pour ne rien perdre de ce que le
   // formulaire complet y a mis (anamnèse, organisation…).
@@ -577,8 +608,14 @@ function NouveauPatientMobile({ onBack: retourParent, onCree }: { onBack: () => 
 
   async function sauvegarder() {
     if (enregistrement) return;
-    if (!form.prenom.trim() || !form.nom.trim() || !form.dateNaissance) {
-      toast.error('Prénom, nom et date de naissance requis');
+    if (!form.prenom.trim() || !form.nom.trim()) {
+      toast.error('Prénom et nom requis');
+      return;
+    }
+    const erreurDate = validerDateNaissance();
+    if (erreurDate) {
+      setDateNaissanceErreur(erreurDate);
+      toast.error(erreurDate);
       return;
     }
     // Ce formulaire n'enregistrait AUCUN consentement. Même règle que le
@@ -640,7 +677,20 @@ function NouveauPatientMobile({ onBack: retourParent, onCree }: { onBack: () => 
       <input value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))} placeholder="Dupont" style={input} />
 
       <label style={label}>Date de naissance *</label>
-      <input type="date" value={form.dateNaissance} onChange={e => setForm(f => ({ ...f, dateNaissance: e.target.value }))} style={input} />
+      <input
+        type="text"
+        inputMode="numeric"
+        autoComplete="bday"
+        placeholder="JJ/MM/AAAA"
+        maxLength={10}
+        value={dateNaissanceSaisie}
+        onChange={handleChangeDateNaissance}
+        onBlur={handleBlurDateNaissance}
+        style={{ ...input, marginBottom: dateNaissanceErreur ? 4 : 14, borderColor: dateNaissanceErreur ? '#FCA5A5' : C.border }}
+      />
+      {dateNaissanceErreur && (
+        <div style={{ fontSize: 12, color: '#B91C1C', marginBottom: 10 }}>{dateNaissanceErreur}</div>
+      )}
 
       <label style={label}>Téléphone</label>
       <input type="tel" value={form.telephone} onChange={e => setForm(f => ({ ...f, telephone: e.target.value }))} placeholder="06 00 00 00 00" style={input} />
@@ -1256,8 +1306,44 @@ function EditPatientMobile({ participant, onBack: retourParent }: { participant:
     setForm(f => ({ ...f, [field]: value }));
   }
 
+  // Date de naissance : saisie au clavier JJ/MM/AAAA, même logique que
+  // NouveauPatientMobile ci-dessus et que ParticipantForm.tsx (voir
+  // src/utils/dateNaissance.ts) — mais champ non obligatoire ici : une fiche
+  // en modification a déjà une date de naissance, la laisser vide au blur
+  // garde simplement l'existante (voir sauvegarder ci-dessous).
+  const [dateNaissanceSaisie, setDateNaissanceSaisie] = useState(
+    formaterDateNaissanceAffichage(participant.dateNaissance ?? ''),
+  );
+  const [dateNaissanceErreur, setDateNaissanceErreur] = useState<string | null>(null);
+
+  function handleChangeDateNaissance(e: React.ChangeEvent<HTMLInputElement>) {
+    const masque = masquerSaisieDateNaissance(e.target.value);
+    setDateNaissanceSaisie(masque);
+    setDateNaissanceErreur(null);
+    const resultat = parserDateNaissanceSaisie(masque);
+    setF('dateNaissance', resultat.statut === 'valide' ? resultat.iso : '');
+  }
+
+  function handleBlurDateNaissance() {
+    if (!dateNaissanceSaisie) return;
+    setDateNaissanceErreur(messageErreurDateNaissance(parserDateNaissanceSaisie(dateNaissanceSaisie)));
+  }
+
+  // Non obligatoire : une saisie vide garde la date existante (voir
+  // sauvegarder). Seule une saisie NON vide mais invalide/incomplète bloque.
+  function validerDateNaissance(): string | null {
+    if (!dateNaissanceSaisie || form.dateNaissance) return null;
+    return messageErreurDateNaissance(parserDateNaissanceSaisie(dateNaissanceSaisie));
+  }
+
   async function sauvegarder() {
     if (!form.prenom.trim() || !form.nom.trim()) { toast.error('Prénom et nom requis'); return; }
+    const erreurDate = validerDateNaissance();
+    if (erreurDate) {
+      setDateNaissanceErreur(erreurDate);
+      toast.error(erreurDate);
+      return;
+    }
     setLoading(true);
     try {
       await updateParticipant(participant.id, {
@@ -1331,7 +1417,20 @@ function EditPatientMobile({ participant, onBack: retourParent }: { participant:
             </div>
           </div>
           <label style={lbl}>Date de naissance</label>
-          <input type="date" value={form.dateNaissance} onChange={e => setF('dateNaissance', e.target.value)} style={inp} />
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="bday"
+            placeholder="JJ/MM/AAAA"
+            maxLength={10}
+            value={dateNaissanceSaisie}
+            onChange={handleChangeDateNaissance}
+            onBlur={handleBlurDateNaissance}
+            style={{ ...inp, marginBottom: dateNaissanceErreur ? 4 : 12, borderColor: dateNaissanceErreur ? '#FCA5A5' : C.border }}
+          />
+          {dateNaissanceErreur && (
+            <div style={{ fontSize: 12, color: '#B91C1C', marginBottom: 10 }}>{dateNaissanceErreur}</div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <label style={lbl}>Taille (cm)</label>

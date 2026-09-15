@@ -6,6 +6,7 @@ import { TYPES_ANTECEDENT_LABELS, TYPES_BLESSURE_CHUTE, MOMENTS_PRISE_LABELS } f
 import { useStructures } from '../../hooks/useStructures';
 import { brouillonParticipantSupprimeDepuis, getBrouillonParticipant, sauvegarderBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
 import { avecConsentement, erreurConsentementCreation, normaliserRgpd } from '../../lib/consentementRgpd';
+import { formaterDateNaissanceAffichage, masquerSaisieDateNaissance, messageErreurDateNaissance, parserDateNaissanceSaisie } from '../../utils/dateNaissance';
 import { OPTIONS_FREQUENCE } from '../../lib/anamnese';
 import { Save, X } from 'lucide-react';
 import GIRWidget from '../bilan/GIRWidget';
@@ -1224,6 +1225,42 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
     allergies:            seed.allergies         ?? '',
   });
 
+  // ── Date de naissance : saisie au clavier JJ/MM/AAAA ──────────────
+  // form.dateNaissance reste l'ISO stocké (AAAA-MM-JJ, inchangé) ; ce texte
+  // séparé est ce que l'utilisateur voit et tape — les deux ne peuvent pas
+  // être le même state, l'ordre des chiffres diffère entre les deux formats.
+  // Voir src/utils/dateNaissance.ts.
+  const [dateNaissanceSaisie, setDateNaissanceSaisie] = useState(
+    formaterDateNaissanceAffichage(seed.dateNaissance ?? ''),
+  );
+  const [dateNaissanceErreur, setDateNaissanceErreur] = useState<string | null>(null);
+
+  function handleChangeDateNaissance(e: React.ChangeEvent<HTMLInputElement>) {
+    const masque = masquerSaisieDateNaissance(e.target.value);
+    setDateNaissanceSaisie(masque);
+    // Pas d'erreur affichée pendant la frappe, y compris sur une saisie
+    // incomplète : seulement au blur (handleBlurDateNaissance) ou à la
+    // soumission (validerDateNaissance). Une date valide ou incomplète
+    // efface toujours une éventuelle erreur précédente.
+    setDateNaissanceErreur(null);
+    const resultat = parserDateNaissanceSaisie(masque);
+    setForm(f => ({ ...f, dateNaissance: resultat.statut === 'valide' ? resultat.iso : '' }));
+  }
+
+  function handleBlurDateNaissance() {
+    if (!dateNaissanceSaisie) return; // required s'en charge à la soumission
+    setDateNaissanceErreur(messageErreurDateNaissance(parserDateNaissanceSaisie(dateNaissanceSaisie)));
+  }
+
+  // Revalidée à la soumission (pas seulement au blur) : un champ jamais
+  // quitté après une saisie invalide ne doit pas passer inaperçu.
+  function validerDateNaissance(): string | null {
+    if (form.dateNaissance) return null;
+    return dateNaissanceSaisie
+      ? messageErreurDateNaissance(parserDateNaissanceSaisie(dateNaissanceSaisie))
+      : 'La date de naissance est obligatoire.';
+  }
+
   // ── Organisation des séances : nb séances/semaine + durées obligatoires ──
   const [erreurOrganisation, setErreurOrganisation] = useState<string | null>(null);
 
@@ -1300,6 +1337,12 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const erreurDate = validerDateNaissance();
+    if (erreurDate) {
+      setDateNaissanceErreur(erreurDate);
+      toast.error(erreurDate);
+      return;
+    }
     const erreur = validerOrganisation();
     if (erreur) {
       setErreurOrganisation(erreur);
@@ -1320,6 +1363,11 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
     submit: () => {
       if (!form.prenom.trim() || !form.nom.trim()) {
         return { step: 1, message: 'Le prénom et le nom sont obligatoires.' };
+      }
+      const erreurDate = validerDateNaissance();
+      if (erreurDate) {
+        setDateNaissanceErreur(erreurDate);
+        return { step: 1, message: erreurDate };
       }
       const erreur = validerOrganisation();
       if (erreur) {
@@ -1433,7 +1481,22 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className={CLS_LABEL}>Date de naissance *</label>
-          <input type="date" name="dateNaissance" value={form.dateNaissance} onChange={handleChange} required className={CLS_INPUT} />
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="bday"
+            name="dateNaissance"
+            placeholder="JJ/MM/AAAA"
+            maxLength={10}
+            value={dateNaissanceSaisie}
+            onChange={handleChangeDateNaissance}
+            onBlur={handleBlurDateNaissance}
+            required
+            className={`${CLS_INPUT}${dateNaissanceErreur ? ' border-red-300 focus:border-red-400 focus:ring-red-100' : ''}`}
+          />
+          {dateNaissanceErreur && (
+            <p className="text-xs text-red-500 mt-1">{dateNaissanceErreur}</p>
+          )}
         </div>
         <div>
           <label className={CLS_LABEL}>Date d'entrée *</label>
