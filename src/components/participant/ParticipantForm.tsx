@@ -905,14 +905,23 @@ function ContactsSanteForm({
               className={`w-full mb-2 ${CLS_CELL}`}
             />
           )}
-          <input
-            type="text"
-            value={item.nom}
-            onChange={e => upd(idx, { nom: e.target.value })}
-            placeholder="Nom"
-            className={`w-full mb-2 ${CLS_CELL}`}
-          />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <input
+              type="text"
+              value={item.prenom ?? ''}
+              onChange={e => upd(idx, { prenom: e.target.value })}
+              placeholder="Prénom"
+              className={`w-full ${CLS_CELL}`}
+            />
+            <input
+              type="text"
+              value={item.nom}
+              onChange={e => upd(idx, { nom: e.target.value })}
+              placeholder="Nom"
+              className={`w-full ${CLS_CELL}`}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2 mb-2">
             <input
               type="tel"
               value={item.telephone ?? ''}
@@ -928,6 +937,13 @@ function ContactsSanteForm({
               className={`w-full ${CLS_CELL}`}
             />
           </div>
+          <textarea
+            value={item.notes ?? ''}
+            onChange={e => upd(idx, { notes: e.target.value })}
+            placeholder="Notes (optionnel)"
+            rows={2}
+            className={`w-full ${CLS_CELL} resize-none`}
+          />
         </div>
       ))}
       <button type="button" onClick={add}
