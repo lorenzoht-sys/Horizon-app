@@ -1216,6 +1216,9 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['obesite'],
     positionRequise: 'debout',
     niveauMobilite: 'modere',
+    adaptations: {
+      obesite: 'Privilégier un terrain plat et souple (piste, chemin) plutôt que le bitume. Le fractionnement 2 min rapide / 1 min lent permet de tenir la durée sans surcharger genoux et chevilles.',
+    },
     niveau_config: {
       "1": { series: 1, repetitions: null, duree_secondes: 600,  description: 'Allure confortable Borg 9-11, FC < 120', conseil: 'Vous devez pouvoir parler sans essoufflement' },
       "2": { series: 1, repetitions: null, duree_secondes: 1200, description: 'Allure modérée Borg 11-13, FC < 130', conseil: 'Légère transpiration attendue' },
@@ -1237,6 +1240,9 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['obesite'],
     positionRequise: 'assis',
     niveauMobilite: 'minimal',
+    adaptations: {
+      obesite: 'La position assise supprime la contrainte de charge sur les articulations portantes : c\'est l\'entrée la plus sûre vers le renforcement. Vérifier que la chaise ne glisse pas.',
+    },
     niveau_config: {
       "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Débutant, sans résistance', conseil: 'Allez à votre rythme' },
       "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Avec résistance légère', conseil: 'Maintenez une bonne posture' },
@@ -1258,6 +1264,9 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['obesite'],
     positionRequise: 'debout',
     niveauMobilite: 'modere',
+    adaptations: {
+      obesite: 'L\'eau à hauteur de poitrine décharge une grande partie du poids du corps : c\'est l\'exercice de choix quand la marche au sol réveille des douleurs articulaires.',
+    },
     niveau_config: {
       "1": { series: 1, repetitions: null, duree_secondes: 1200, description: 'Effort léger Borg 9-11, marche aquatique', conseil: 'Conversation possible sans essoufflement' },
       "2": { series: 1, repetitions: null, duree_secondes: 1800, description: 'Effort modéré Borg 11-13, résistance aquatique', conseil: 'Légère transpiration normale' },
@@ -1281,6 +1290,9 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['diabete'],
     positionRequise: 'debout',
     niveauMobilite: 'modere',
+    adaptations: {
+      diabete: 'Marcher dans l\'heure qui suit le repas cible directement le pic glycémique post-prandial. Contrôler la glycémie avant et après tant que le traitement n\'est pas stabilisé.',
+    },
     niveau_config: {
       "1": { series: 1, repetitions: null, duree_secondes: 900,  description: 'Allure confortable Borg 9-11, FC < 110', conseil: 'Vous devez pouvoir parler sans essoufflement' },
       "2": { series: 1, repetitions: null, duree_secondes: 1500, description: 'Allure soutenue Borg 11-13, FC < 130', conseil: 'Légère transpiration attendue' },
@@ -1302,6 +1314,9 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['diabete'],
     positionRequise: 'tous',
     niveauMobilite: 'modere',
+    adaptations: {
+      diabete: 'Le travail en résistance augmente la captation du glucose par le muscle pendant plusieurs heures après la séance. Ne pas bloquer la respiration pendant l\'effort (risque tensionnel).',
+    },
     niveau_config: {
       "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Résistance légère', conseil: 'Allez à votre rythme' },
       "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Résistance modérée', conseil: 'Maintenez une bonne posture' },
@@ -1323,6 +1338,9 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['diabete'],
     positionRequise: 'assis',
     niveauMobilite: 'minimal',
+    adaptations: {
+      diabete: 'Inspection des pieds systématique avant et après : une neuropathie peut masquer une plaie débutante. Ne jamais pratiquer pieds nus.',
+    },
     niveau_config: {
       "1": { series: 2, repetitions: null, duree_secondes: 15, description: 'Débutant, mouvement lent', conseil: 'Arrêtez à la première sensation d\'étirement' },
       "2": { series: 3, repetitions: null, duree_secondes: 25, description: 'Mobilisation complète', conseil: 'Respirez profondément dans l\'étirement' },
@@ -1346,6 +1364,10 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['prothese_hanche', 'prothese_genou'],
     positionRequise: 'debout',
     niveauMobilite: 'modere',
+    adaptations: {
+      prothese_hanche: 'Reprise autorisée par le chirurgien avant tout. Éviter les pivots sur la jambe opérée : tourner en faisant plusieurs petits pas.',
+      prothese_genou: 'Terrain plat au départ. Une boiterie persistante signale une reprise trop rapide : réduire la distance plutôt que de forcer.',
+    },
     niveau_config: {
       "1": { series: 1, repetitions: null, duree_secondes: 600,  description: 'Allure confortable Borg 9-11', conseil: 'Vous devez pouvoir parler sans essoufflement' },
       "2": { series: 1, repetitions: null, duree_secondes: 1200, description: 'Allure modérée Borg 11-13', conseil: 'Légère transpiration attendue' },
@@ -1367,6 +1389,10 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['prothese_hanche', 'prothese_genou'],
     positionRequise: 'tous',
     niveauMobilite: 'modere',
+    adaptations: {
+      prothese_hanche: 'Pas d\'adduction (ne pas croiser les jambes), pas de rotation interne, flexion limitée à 90°. Le travail isométrique respecte ces limites sans risque.',
+      prothese_genou: 'Récupérer l\'extension complète est prioritaire sur le gain de flexion. Ne pas placer de coussin sous le genou au repos (risque de flexum).',
+    },
     niveau_config: {
       "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Contractions isométriques', conseil: 'Allez à votre rythme' },
       "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Contractions isotoniques légères', conseil: 'Maintenez une bonne posture' },
@@ -1388,6 +1414,10 @@ export const EXERCICES_BASE: Exercice[] = [
     profilsCompatibles: ['prothese_hanche', 'prothese_genou'],
     positionRequise: 'debout',
     niveauMobilite: 'modere',
+    adaptations: {
+      prothese_hanche: 'Toujours une barre ou un plan de travail à portée. Ne pas se rattraper par un mouvement de torsion sur la jambe opérée.',
+      prothese_genou: 'Commencer l\'appui unipodal du côté sain. Côté opéré, réduire le temps et augmenter très progressivement.',
+    },
     niveau_config: {
       "1": { series: 2, repetitions: null, duree_secondes: 10, description: 'Débutant avec appui', conseil: 'Gardez un appui à portée de main' },
       "2": { series: 3, repetitions: null, duree_secondes: 20, description: 'Intermédiaire sans appui', conseil: 'Regard fixe sur un point immobile' },
@@ -1685,6 +1715,226 @@ export const EXERCICES_BASE: Exercice[] = [
       "1": { series: 2, repetitions: null, duree_secondes: 10, description: '5 pas, main longeant un mur', conseil: 'Un aidant reste à portée de bras tout le long' },
       "2": { series: 3, repetitions: null, duree_secondes: 15, description: '8 pas, sans appui, supervision à distance', conseil: 'Posez le pied talon en premier, comme en marche avant' },
       "3": { series: 3, repetitions: null, duree_secondes: 20, description: '10 pas en regardant par-dessus l\'épaule', conseil: 'Ne tournez que la tête, pas tout le buste' },
+    },
+  },
+
+  // ── LOT 2 — MOBILITÉ (prothèse hanche / genou) ───────────────────────────────
+  {
+    id: 'mob_chevilles_assis',
+    nom: 'Mobilisation des chevilles assis',
+    categorie: 'mobilite',
+    description: 'Assis, fléchir et étendre les chevilles de façon répétée (pointe vers soi, puis pointe vers le sol). À pratiquer plusieurs fois par jour.',
+    consigneSecurite: 'Mouvement lent, sans à-coup. Signaler immédiatement toute douleur du mollet, tout gonflement ou rougeur (signes de phlébite).',
+    niveaux: {
+      debutant: '2 séries × 10 flexions/extensions, amplitude confortable',
+      intermediaire: '3 séries × 15 flexions/extensions, amplitude complète',
+      avance: '3 séries × 20, réparties sur 3 à 4 moments de la journée',
+    },
+    materielNecessaire: 'Chaise stable',
+    dureeEstimeeMinutes: 5,
+    profilsCompatibles: ['prothese_genou', 'prothese_hanche', 'tous'],
+    positionRequise: 'assis',
+    niveauMobilite: 'minimal',
+    adaptations: {
+      prothese_genou: 'Praticable dès les premiers jours post-opératoires : la pompe veineuse du mollet limite le risque thromboembolique. Garder le genou opéré en extension, sans coussin dessous.',
+      prothese_hanche: 'Praticable assis au bord du lit ou sur une chaise haute. Ne pas se pencher en avant pour attraper le pied : la limite de flexion de hanche prime sur l\'amplitude de cheville.',
+    },
+    reference: 'Guide de rééducation prothèse totale du genou, Centre Hospitalier de Versailles',
+    niveau_config: {
+      "1": { series: 2, repetitions: 10, duree_secondes: null, description: 'Assis, amplitude confortable', conseil: 'Mouvement lent, sans à-coup' },
+      "2": { series: 3, repetitions: 15, duree_secondes: null, description: 'Amplitude complète, pointe et talon', conseil: 'Tirez bien les orteils vers vous en fin de course' },
+      "3": { series: 3, repetitions: 20, duree_secondes: null, description: 'Amplitude complète, plusieurs fois par jour', conseil: 'Répartissez sur 3 à 4 moments dans la journée' },
+    },
+  },
+  {
+    id: 'mob_glissement_talon',
+    nom: 'Roulement de jambe sur planche ou serviette, assis',
+    categorie: 'mobilite',
+    description: 'Assis, le pied posé sur une serviette ou une planche glissante, faire glisser doucement le talon vers l\'avant puis vers l\'arrière. Travaille l\'amplitude du genou sans mise en charge.',
+    consigneSecurite: 'Amplitude jamais forcée : aller jusqu\'à la sensation de tension, jamais jusqu\'à la douleur. Arrêter si le genou gonfle ou chauffe après la séance.',
+    niveaux: {
+      debutant: '2 séries × 8 glissements courts, retour lent',
+      intermediaire: '3 séries × 10 glissements, amplitude modérée',
+      avance: '3 séries × 12 glissements, maintien 3s en position fléchie',
+    },
+    materielNecessaire: 'Serviette, planche glissante ou sol lisse',
+    dureeEstimeeMinutes: 6,
+    profilsCompatibles: ['prothese_genou', 'prothese_hanche'],
+    positionRequise: 'assis',
+    niveauMobilite: 'minimal',
+    adaptations: {
+      prothese_genou: 'Exercice central de récupération de la flexion du genou. Progresser de quelques centimètres par séance : la douleur est un signal d\'arrêt, jamais un objectif à dépasser.',
+      prothese_hanche: 'Glissement de faible amplitude uniquement : ne pas ramener le talon au point de dépasser 90° de flexion de hanche.',
+    },
+    reference: 'Guide de rééducation prothèse totale du genou, Centre Hospitalier de Versailles',
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Glissement court sur serviette', conseil: 'Arrêtez à la sensation de tension, jamais à la douleur' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Amplitude modérée, retour contrôlé', conseil: 'Gagnez quelques centimètres par séance, pas plus' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Amplitude maximale indolore, maintien 3s', conseil: 'Maintenez la position fléchie 3 secondes avant de revenir' },
+    },
+  },
+  {
+    id: 'mob_flexion_hanche_debout',
+    nom: 'Flexion de hanche debout avec appui',
+    categorie: 'mobilite',
+    description: 'Debout, une main sur une chaise ou un plan de travail stable, lever le genou vers la poitrine puis reposer le pied. Amplitude progressive.',
+    consigneSecurite: 'Appui stable obligatoire (chaise lourde, plan de travail). Ne jamais dépasser 90° de flexion de hanche après prothèse totale de hanche. Arrêter en cas de douleur ou de sensation d\'instabilité.',
+    niveaux: {
+      debutant: '2 séries × 8 levers, deux mains sur l\'appui, genou bas',
+      intermediaire: '3 séries × 10 levers, une main sur l\'appui',
+      avance: '3 séries × 12 levers avec maintien 2s en position haute',
+    },
+    materielNecessaire: 'Chaise stable ou plan de travail',
+    dureeEstimeeMinutes: 5,
+    profilsCompatibles: ['prothese_hanche', 'prothese_genou'],
+    positionRequise: 'debout',
+    niveauMobilite: 'modere',
+    adaptations: {
+      prothese_hanche: 'Ne jamais dépasser 90° de flexion : le genou ne monte pas au-dessus du niveau de la hanche. Pas de rotation du pied vers l\'intérieur pendant le mouvement.',
+      prothese_genou: 'Lever le genou opéré en gardant le pied dans l\'axe. Commencer par la jambe non opérée pour repérer l\'amplitude confortable.',
+    },
+    reference: 'Guide de rééducation prothèse totale du genou, Centre Hospitalier de Versailles — principes équivalents appliqués à la hanche',
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Deux mains sur l\'appui, genou bas', conseil: 'Le genou reste sous le niveau de la hanche' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Une main sur l\'appui', conseil: 'Gardez le buste droit, ne vous penchez pas en arrière' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Appui léger, maintien 2s en haut', conseil: 'Ne dépassez jamais 90° de flexion de hanche' },
+    },
+  },
+  {
+    id: 'mob_extension_hanche_debout',
+    nom: 'Extension de hanche debout avec appui',
+    categorie: 'mobilite',
+    description: 'Debout face à un appui, emmener la jambe tendue vers l\'arrière sans cambrer le dos, puis revenir lentement.',
+    consigneSecurite: 'Appui stable devant soi. Ne pas cambrer le bas du dos pour gagner de l\'amplitude. Arrêter immédiatement en cas de douleur de hanche ou de lombaires.',
+    niveaux: {
+      debutant: '2 séries × 8 extensions de faible amplitude, deux mains sur l\'appui',
+      intermediaire: '3 séries × 10 extensions, une main sur l\'appui',
+      avance: '3 séries × 12 extensions avec maintien 2s en arrière',
+    },
+    materielNecessaire: 'Chaise stable ou plan de travail',
+    dureeEstimeeMinutes: 5,
+    profilsCompatibles: ['prothese_hanche', 'prothese_genou'],
+    positionRequise: 'debout',
+    niveauMobilite: 'modere',
+    adaptations: {
+      prothese_hanche: 'Mouvement de faible amplitude : l\'extension vient de la hanche, pas des lombaires. Éviter toute rotation interne du pied pendant le mouvement.',
+      prothese_genou: 'Garder le genou opéré tendu sans le verrouiller brutalement. Réduire l\'amplitude arrière en cas de tension à l\'avant du genou.',
+    },
+    reference: 'Guide de rééducation prothèse totale du genou, Centre Hospitalier de Versailles — principes équivalents appliqués à la hanche',
+    niveau_config: {
+      "1": { series: 2, repetitions: 8,  duree_secondes: null, description: 'Deux mains sur l\'appui, faible amplitude', conseil: 'Le mouvement part de la hanche, pas du dos' },
+      "2": { series: 3, repetitions: 10, duree_secondes: null, description: 'Une main sur l\'appui', conseil: 'Gardez le bassin face avant' },
+      "3": { series: 3, repetitions: 12, duree_secondes: null, description: 'Maintien 2s en position arrière', conseil: 'Serrez le fessier sans cambrer les lombaires' },
+    },
+  },
+  {
+    id: 'mob_velo_sans_resistance',
+    nom: 'Vélo d\'appartement sans résistance',
+    categorie: 'mobilite',
+    description: 'Pédalage à vide ou à résistance très faible sur vélo d\'appartement. Entretient et récupère l\'amplitude du genou par un mouvement circulaire continu.',
+    consigneSecurite: 'Résistance nulle ou minimale. Ne jamais forcer le passage du point haut de la pédale : si le tour complet est douloureux, rester en demi-tours avant/arrière. Arrêter si douleur ou gonflement du genou.',
+    niveaux: {
+      debutant: '5 min en demi-tours avant/arrière, selle haute',
+      intermediaire: '10 min en tours complets, résistance nulle',
+      avance: '15 min en tours complets, résistance très faible',
+    },
+    materielNecessaire: 'Vélo d\'appartement',
+    dureeEstimeeMinutes: 15,
+    profilsCompatibles: ['prothese_genou', 'prothese_hanche'],
+    positionRequise: 'assis',
+    niveauMobilite: 'modere',
+    adaptations: {
+      prothese_genou: 'Régler la selle haute au départ et la descendre progressivement à mesure que la flexion revient. Le tour complet n\'est un objectif qu\'une fois l\'amplitude suffisante acquise.',
+      prothese_hanche: 'Selle haute impérative pour ne pas dépasser 90° de flexion de hanche. Monter sur le vélo en enjambant par le côté non opéré.',
+    },
+    reference: 'Guide de rééducation prothèse totale du genou, Centre Hospitalier de Versailles',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 300, description: 'Demi-tours avant/arrière, selle haute', conseil: 'Ne forcez pas le passage du point haut' },
+      "2": { series: 1, repetitions: null, duree_secondes: 600, description: 'Tours complets, résistance nulle', conseil: 'Descendez la selle progressivement selon la flexion' },
+      "3": { series: 1, repetitions: null, duree_secondes: 900, description: 'Tours complets, résistance très faible', conseil: 'Cadence régulière, sans à-coup' },
+    },
+  },
+
+  // ── LOT 2 — ENDURANCE (diabète / obésité) ────────────────────────────────────
+  {
+    id: 'end_marche_fractionnee',
+    nom: 'Marche à rythme modéré, fractionnée',
+    categorie: 'endurance',
+    description: 'Marche à intensité modérée, en continu ou fractionnée en plusieurs périodes de 10 minutes dans la journée. Objectif de référence : 150 minutes par semaine.',
+    consigneSecurite: 'Diabète sous insuline ou sulfamides : contrôler la glycémie avant et après, avoir un resucrage sur soi. Inspecter les pieds après chaque marche. Arrêter en cas de malaise, de sueurs ou de tremblements.',
+    niveaux: {
+      debutant: '10 min en une fois, allure confortable',
+      intermediaire: '2 × 15 min dans la journée, allure modérée',
+      avance: '30 min en continu, allure modérée soutenue',
+    },
+    materielNecessaire: 'Chaussures de marche adaptées',
+    dureeEstimeeMinutes: 30,
+    profilsCompatibles: ['diabete', 'obesite'],
+    positionRequise: 'debout',
+    niveauMobilite: 'modere',
+    adaptations: {
+      diabete: 'Fractionner en périodes de 10 minutes compte autant que la marche continue pour atteindre les 150 min hebdomadaires. Ne pas laisser passer plus de 2 jours consécutifs sans activité : l\'effet sur la sensibilité à l\'insuline s\'estompe au-delà.',
+      obesite: 'Le fractionnement en 3 × 10 min rend le volume atteignable sans surcharge articulaire. Privilégier un terrain plat et souple plutôt que le bitume.',
+    },
+    reference: 'HAS — Prescription d\'activité physique et sportive, Diabète de type 2, 2018',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 600,  description: '10 min, allure confortable Borg 9-11', conseil: 'Vous devez pouvoir parler sans essoufflement' },
+      "2": { series: 2, repetitions: null, duree_secondes: 900,  description: '2 × 15 min, allure modérée Borg 11-13', conseil: 'Fractionnez dans la journée si besoin' },
+      "3": { series: 1, repetitions: null, duree_secondes: 1800, description: '30 min en continu, Borg 12-13', conseil: 'Visez 150 min par semaine au total' },
+    },
+  },
+  {
+    id: 'end_velo_faible_resistance',
+    nom: 'Vélo d\'appartement à faible résistance, en continu',
+    categorie: 'endurance',
+    description: 'Pédalage continu à faible résistance et intensité modérée, 15 à 20 minutes. Durée adaptable selon la tolérance.',
+    consigneSecurite: 'Vérifier la glycémie avant et après en cas d\'insulinothérapie, avoir une collation à disposition. Arrêter en cas d\'essoufflement anormal, de douleur thoracique ou de vertige.',
+    niveaux: {
+      debutant: '10 min à résistance minimale',
+      intermediaire: '15 min à résistance faible',
+      avance: '20 min à intensité modérée',
+    },
+    materielNecessaire: 'Vélo d\'appartement',
+    dureeEstimeeMinutes: 20,
+    profilsCompatibles: ['diabete', 'obesite'],
+    positionRequise: 'assis',
+    niveauMobilite: 'modere',
+    adaptations: {
+      diabete: 'Alternative à la marche en cas de neuropathie périphérique ou de plaie du pied : le vélo décharge l\'appui plantaire. Contrôler la glycémie avant et après tant que le traitement n\'est pas stabilisé.',
+      obesite: 'Position assise et absence d\'impact : utile quand la marche prolongée réveille des douleurs de genou ou de hanche. Régler la selle pour éviter l\'hyperflexion du genou.',
+    },
+    reference: 'HAS — Prescription d\'activité physique et sportive, Diabète de type 2, 2018',
+    niveau_config: {
+      "1": { series: 1, repetitions: null, duree_secondes: 600,  description: '10 min, résistance minimale Borg 9-11', conseil: 'Conversation possible sans essoufflement' },
+      "2": { series: 1, repetitions: null, duree_secondes: 900,  description: '15 min, résistance faible Borg 11-13', conseil: 'Légère transpiration normale' },
+      "3": { series: 1, repetitions: null, duree_secondes: 1200, description: '20 min, intensité modérée Borg 12-13', conseil: 'Surveillez la FC si prescrite' },
+    },
+  },
+  {
+    id: 'end_montee_genoux_place',
+    nom: 'Montée de genoux sur place, rythme modéré',
+    categorie: 'endurance',
+    description: 'Montée alternée des genoux sur place, sans déplacement. Alternative en intérieur pour un bénéficiaire à mobilité réduite ou disposant d\'un espace limité.',
+    consigneSecurite: 'Appui stable à portée de main. Diabète sous insuline : resucrage à disposition et glycémie contrôlée avant si la séance dépasse 20 minutes. Arrêter en cas de vertige ou d\'essoufflement important.',
+    niveaux: {
+      debutant: '2 séries × 1 min, genoux à mi-hauteur, appui disponible',
+      intermediaire: '3 séries × 2 min, genoux à hauteur de hanche',
+      avance: '3 séries × 3 min, rythme modéré soutenu',
+    },
+    materielNecessaire: 'Chaise ou plan de travail pour l\'appui',
+    dureeEstimeeMinutes: 10,
+    profilsCompatibles: ['diabete', 'obesite', 'tous'],
+    positionRequise: 'debout',
+    niveauMobilite: 'modere',
+    adaptations: {
+      diabete: 'Permet de tenir l\'objectif hebdomadaire les jours où sortir n\'est pas possible : la régularité prime sur l\'intensité. Garder un resucrage à portée de main.',
+      obesite: 'Monter les genoux à mi-hauteur seulement et poser le pied à plat pour limiter l\'impact articulaire. Se tenir à un appui stable si l\'équilibre est précaire.',
+    },
+    reference: 'HAS — Prescription d\'activité physique et sportive, Diabète de type 2, 2018',
+    niveau_config: {
+      "1": { series: 2, repetitions: null, duree_secondes: 60,  description: 'Genoux à mi-hauteur, appui disponible', conseil: 'Posez le pied à plat pour limiter l\'impact' },
+      "2": { series: 3, repetitions: null, duree_secondes: 120, description: 'Genoux à hauteur de hanche, sans appui', conseil: 'Laissez les bras accompagner le mouvement' },
+      "3": { series: 3, repetitions: null, duree_secondes: 180, description: 'Rythme modéré soutenu Borg 12-13', conseil: 'Ralentissez dès que la respiration devient difficile' },
     },
   },
 ];
