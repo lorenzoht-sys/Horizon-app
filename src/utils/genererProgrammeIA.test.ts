@@ -5,7 +5,7 @@
 // (validation, résolution catalogue, mapping) est extraite en fonctions pures.
 import { describe, it, expect } from 'vitest';
 import { resoudreExercice, validerEtResoudre, versPayloadCreateProgramme, formatCatalogue, type ProgrammeIA, type ExerciceIA } from './genererProgrammeIA';
-import type { Exercice } from '../types';
+import type { Exercice, ProfilHandicap, ProfilPathologie } from '../types';
 // Le plafond vit côté serveur ; c'est précisément ce qui rend le lien
 // fragile et justifie de le verrouiller ici (voir le bloc en fin de fichier).
 import { PROMPT_MAX_LENGTH } from '../../api/_lib/guard.js';
@@ -154,9 +154,29 @@ describe('versPayloadCreateProgramme — mapping vers createProgramme()', () => 
 //
 // Le test échoue AVANT ce jour-là, et laisse le choix : relever le plafond,
 // ou n'envoyer au modèle qu'une partie du catalogue.
+// Depuis que `formatCatalogue` ne transmet que l'adaptation du profil du
+// patient, la taille dépend du profil demandé. Mesurer le catalogue nu
+// donnerait une marge flatteuse (25 810 au 2026-09-16) et laisserait passer
+// une dérive sur le profil le mieux couvert — c'est donc le PIRE cas qui est
+// verrouillé ici, pas le cas confortable.
+const PROFILS_MESURE: (ProfilHandicap | ProfilPathologie)[] = [
+  'fauteuil_roulant', 'avc_hemiplegie', 'parkinson', 'sep',
+  'obesite', 'diabete', 'prothese_hanche', 'prothese_genou',
+];
+
+function taillePireCas(): { taille: number; profil: string } {
+  let taille = formatCatalogue(EXERCICES_BASE, null).length;
+  let profil = 'aucun';
+  for (const p of PROFILS_MESURE) {
+    const t = formatCatalogue(EXERCICES_BASE, p).length;
+    if (t > taille) { taille = t; profil = p; }
+  }
+  return { taille, profil };
+}
+
 describe('catalogue d\'exercices et plafond de prompt', () => {
   it('tient dans la moitié du plafond, marge comprise pour le contexte patient', () => {
-    const taille = formatCatalogue(EXERCICES_BASE).length;
+    const { taille } = taillePireCas();
 
     // La moitié, et non « moins que le plafond » : le prompt de génération
     // ajoute au catalogue le profil complet du patient, les derniers scores
@@ -166,7 +186,7 @@ describe('catalogue d\'exercices et plafond de prompt', () => {
   });
 
   it('conserve un coût par exercice conforme à la mesure d\'origine', () => {
-    const taille = formatCatalogue(EXERCICES_BASE).length;
+    const { taille } = taillePireCas();
     const parExercice = taille / EXERCICES_BASE.length;
 
     // ~333 caractères par exercice au 2026-09-07. Un dépassement franc de
@@ -184,7 +204,7 @@ describe('catalogue d\'exercices et plafond de prompt', () => {
     // niveaux, matériel, durées — et ferait exploser le prompt sans que
     // personne ne le voie (même règle que api/_organisation-admin.test.ts).
     expect(Object.keys(premier).sort()).toEqual([
-      'adaptations',
+      'adaptation',
       'categorie',
       'description',
       'id',

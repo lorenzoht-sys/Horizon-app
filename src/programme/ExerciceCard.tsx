@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Exercice, CategorieExercice, ProfilHandicap } from '../types';
+import type { Exercice, CategorieExercice, ProfilHandicap, ProfilPathologie } from '../types';
 import { Plus, Play, X } from 'lucide-react';
 import YoutubePlayer from '../components/YoutubePlayer';
 
@@ -26,25 +26,39 @@ export const CATEGORIE_COLORS: Record<CategorieExercice, string> = {
   memoire:   'bg-purple-100 text-purple-700',
 };
 
-const COULEURS_PROFILS: Record<ProfilHandicap, string> = {
+// Couleurs alignées sur les pastilles de filtre de ExercicesPage.tsx
+// (PROFILS_HANDICAP et PROFILS_PATHOLOGIE) : c'est la même notion de profil,
+// vue depuis la carte.
+const COULEURS_PROFILS: Record<ProfilHandicap | ProfilPathologie, string> = {
   fauteuil_roulant: '#1A5F9E',
   avc_hemiplegie:   '#8B5CF6',
   parkinson:        '#F59E0B',
   sep:              '#1D9E75',
+  obesite:          '#EF8C00',
+  diabete:          '#E85050',
+  prothese_hanche:  '#6B7280',
+  prothese_genou:   '#059669',
 };
 
-const LABELS_PROFILS: Record<ProfilHandicap, string> = {
-  fauteuil_roulant: 'Fauteuil',
-  avc_hemiplegie:   'AVC',
-  parkinson:        'Parkinson',
-  sep:              'SEP',
+// L'emoji fait partie du libellé. Il était auparavant codé en dur (♿) dans le
+// badge : correct tant que seuls les 4 profils de handicap arrivaient ici, faux
+// dès le premier profil pathologie (un ♿ devant « Diabète »).
+const LABELS_PROFILS: Record<ProfilHandicap | ProfilPathologie, string> = {
+  fauteuil_roulant: '♿ Fauteuil',
+  avc_hemiplegie:   '🧠 AVC',
+  parkinson:        '🫸 Parkinson',
+  sep:              '🎗️ SEP',
+  obesite:          '⚖️ Obésité',
+  diabete:          '🩸 Diabète',
+  prothese_hanche:  '🦴 Prothèse hanche',
+  prothese_genou:   '🦿 Prothèse genou',
 };
 
 interface Props {
   exercice: Exercice;
   onAdd?: (exercice: Exercice) => void;
   compact?: boolean;
-  profilHandicap?: ProfilHandicap;
+  profilHandicap?: ProfilHandicap | ProfilPathologie;
   incompatible?: boolean;
   /** Glisser-déposer vers un dossier (bibliothèque d'exercices) — désactivé
    *  par défaut, opt-in pour ne pas affecter les autres usages du composant. */
@@ -167,7 +181,7 @@ export default function ExerciceCard({
               color: 'white',
               padding: '2px 8px', borderRadius: 20, fontWeight: 700, whiteSpace: 'nowrap',
             }}>
-              ♿ {LABELS_PROFILS[profilHandicap]}
+              {LABELS_PROFILS[profilHandicap]}
             </span>
           )}
         </div>

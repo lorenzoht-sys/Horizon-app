@@ -39,6 +39,13 @@ const PROFILS_PATHOLOGIE: { id: ProfilPathologie; label: string; emoji: string; 
   { id: 'prothese_genou',  label: 'Prothèse genou',       emoji: '🦿', color: '#059669' },
 ];
 
+// Les deux familles réunies : le filtre de profil accepte les deux depuis
+// l'ajout des pastilles pathologie, mais le bandeau et le compteur ne
+// cherchaient que dans PROFILS_HANDICAP — d'où un bandeau absent et un
+// compteur faux dès qu'on filtrait sur « Diabète » ou « Prothèse genou ».
+const PROFILS_TOUS: { id: ProfilHandicap | ProfilPathologie; label: string; emoji: string; color: string }[] =
+  [...PROFILS_HANDICAP, ...PROFILS_PATHOLOGIE];
+
 const POSITIONS: { id: string; label: string }[] = [
   { id: 'tous',     label: 'Toutes positions' },
   { id: 'fauteuil', label: '♿ Fauteuil' },
@@ -383,7 +390,7 @@ export default function ExercicesPage() {
     toast.success('Exercice ajouté à la bibliothèque !');
   }
 
-  const profilActif = profilFilter ? PROFILS_HANDICAP.find(p => p.id === profilFilter) : null;
+  const profilActif = profilFilter ? PROFILS_TOUS.find(p => p.id === profilFilter) ?? null : null;
   const dossierOuvert = dossiers.find(d => d.id === dossierOuvertId) ?? null;
 
   return (
@@ -605,11 +612,7 @@ export default function ExercicesPage() {
           <ExerciceCard
             key={ex.id}
             exercice={ex}
-            profilHandicap={
-              profilFilter && ['fauteuil_roulant','avc_hemiplegie','parkinson','sep'].includes(profilFilter)
-                ? profilFilter as ProfilHandicap
-                : undefined
-            }
+            profilHandicap={profilFilter ?? undefined}
             draggable
             onDragStart={() => setDraggedExercice(refDe(ex))}
             onDragEnd={() => setDraggedExercice(null)}

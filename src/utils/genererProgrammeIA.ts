@@ -13,7 +13,7 @@
 // injection du catalogue réel (exerciceId) et résolution niveau_config →
 // series/repetitions/duree_secondes, cohérente avec ExerciceForm.
 
-import type { Participant, Bilan, ProgrammeV2, Exercice, TypeProgramme, JourProgramme } from '../types';
+import type { Participant, Bilan, ProgrammeV2, Exercice, TypeProgramme, JourProgramme, ProfilHandicap, ProfilPathologie } from '../types';
 import { JOURS_PROGRAMME } from '../types';
 import { getAuthHeader } from '../lib/supabase';
 import { getContreIndications, getTestsAutonomie } from '../lib/anamnese';
@@ -92,7 +92,10 @@ ${dernierBilan ? `DERNIERS SCORES (bilan du ${dernierBilan.date}) :
 /** Exporté pour être mesurable : c'est ce texte qui domine le plus gros
  *  prompt de l'application, et donc ce qui rapproche la génération de
  *  programme du plafond de `api/_lib/guard.ts`. Voir le test associé. */
-export function formatCatalogue(catalogue: Exercice[]): string {
+export function formatCatalogue(
+  catalogue: Exercice[],
+  profil?: ProfilHandicap | ProfilPathologie | null,
+): string {
   return JSON.stringify(catalogue.map(ex => ({
     id: ex.id,
     nom: ex.nom,
@@ -101,7 +104,12 @@ export function formatCatalogue(catalogue: Exercice[]): string {
     positionRequise: ex.positionRequise ?? null,
     niveauMobilite: ex.niveauMobilite ?? null,
     profilsCompatibles: ex.profilsCompatibles ?? null,
-    adaptations: ex.adaptations ?? null,
+    // UNE seule adaptation — celle du profil du patient — et non les huit.
+    // Envoyer les consignes « prothèse de hanche » pour un patient diabétique
+    // n'aidait pas le modèle et coûtait 29 % du prompt : 36 526 caractères
+    // contre un seuil de 30 000 (mesure du 2026-09-16, catalogue à 82
+    // exercices). Sans profil, aucune adaptation n'est transmise.
+    adaptation: profil ? ex.adaptations?.[profil] ?? null : null,
   })));
 }
 
@@ -180,14 +188,14 @@ RÉPONSES DU PRATICIEN AUX QUESTIONS DE CLARIFICATION :
 ${reponsesClarification || '(aucune réponse fournie)'}
 ${precisionsLibres?.trim() ? `\nPRÉCISIONS SUPPLÉMENTAIRES DU PRATICIEN : ${precisionsLibres.trim()}\n` : ''}
 CATALOGUE D'EXERCICES DISPONIBLES (utilise en PRIORITÉ un "id" de ce catalogue via le champ "exerciceId" — ne propose un exercice hors catalogue que si aucun exercice du catalogue ne convient) :
-${formatCatalogue(catalogue)}
+${formatCatalogue(catalogue, patient.profilHandicap ?? null)}
 
 RÈGLES ABSOLUES :
 1. Respecter toutes les contre-indications, pathologies et allergies signalées, sans exception.
 2. En cas de traitement anticoagulant ou de risque de chute → éviter tout exercice à risque de choc ou de chute.
 3. Adapter le niveau de difficulté aux scores fonctionnels du dernier bilan, s'ils sont disponibles.
 4. Ne pas reproduire à l'identique les programmes existants listés ci-dessus.
-5. Priorise les exercices du catalogue dont "profilsCompatibles"/"adaptations" correspondent au profil du patient (profil de handicap, mobilité).
+5. Priorise les exercices du catalogue dont "profilsCompatibles"/"adaptation" correspondent au profil du patient (profil de handicap, mobilité).
 6. Pour un exercice du catalogue, indique un "niveau" ("1"|"2"|"3") adapté — n'invente pas series/repetitions/duree_secondes toi-même pour ces exercices-là, ils seront recalculés automatiquement à partir du niveau choisi.
 7. Pour un exercice hors catalogue (uniquement si nécessaire), fournis toi-même series/repetitions/duree_secondes cohérents.
 
