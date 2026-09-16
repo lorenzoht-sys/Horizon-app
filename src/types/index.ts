@@ -287,7 +287,12 @@ export interface Exercice {
   dureeEstimeeMinutes: number;
   custom?: boolean;
   profilsCompatibles?: (ProfilHandicap | ProfilPathologie | 'tous')[];
-  adaptations?: Partial<Record<ProfilHandicap, string>>;
+  // Élargi de ProfilHandicap à ProfilHandicap | ProfilPathologie (lot Otago) :
+  // profilsCompatibles acceptait déjà les deux depuis l'origine, adaptations
+  // était resté limité aux 4 profils handicap. Incohérence de type, pas un
+  // choix voulu — aucun exercice n'avait de texte d'adaptation pour
+  // diabete/obesite/prothese_genou/prothese_hanche avant ce lot.
+  adaptations?: Partial<Record<ProfilHandicap | ProfilPathologie, string>>;
   positionRequise?: 'debout' | 'assis' | 'couche' | 'fauteuil' | 'tous';
   niveauMobilite?: 'minimal' | 'modere' | 'complet';
   reference?: string;
