@@ -789,12 +789,17 @@ export interface AutonomieData {
 }
 
 /** Professionnel de santé à contacter (médecin traitant, kiné...) — pour
- *  faciliter l'envoi de comptes-rendus, pas un dossier médical structuré. */
+ *  faciliter l'envoi de comptes-rendus, pas un dossier médical structuré.
+ *  `prenom` et `notes` optionnels, ajoutés après coup (bug 06) : un contact
+ *  déjà en base sans ces clés reste valide, `nom` seul continue de
+ *  s'afficher normalement. */
 export interface ContactSante {
   profession: string;
   nom: string;
+  prenom?: string;
   telephone?: string;
   email?: string;
+  notes?: string;
 }
 
 // ── HABITUDES DE VIE ──────────────────────────────────────────────────────────

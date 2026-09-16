@@ -247,6 +247,7 @@ function CarteSante({ participant, bilanInitial, onModifier }: {
   const traitementsActifs = getTraitementsActifs(participant.traitements);
   const traitementsArretes = getTraitementsArretes(participant.traitements);
   const antecedents = participant.antecedentsMedicauxStructures ?? [];
+  const contactsSante = participant.anamnese?.autonomie?.contactsSante ?? [];
 
   const lignes = ([
     participant.pathologie && { icon: '🏥', texte: participant.pathologie },
@@ -259,7 +260,7 @@ function CarteSante({ participant, bilanInitial, onModifier }: {
     profil?.objectifsPersonnels && { icon: '🎯', texte: profil.objectifsPersonnels },
   ] as ({ icon: string; texte: string } | false)[]).filter((l): l is { icon: string; texte: string } => Boolean(l));
 
-  const hasContent = lignes.length > 0 || traitementsActifs.length > 0 || traitementsArretes.length > 0 || antecedents.length > 0;
+  const hasContent = lignes.length > 0 || traitementsActifs.length > 0 || traitementsArretes.length > 0 || antecedents.length > 0 || contactsSante.length > 0;
   if (!hasContent) return null;
 
   return (
@@ -354,6 +355,40 @@ function CarteSante({ participant, bilanInitial, onModifier }: {
                 )}
                 {a.notes && (
                   <p className="text-[12px] text-gray-400 ml-5 mt-0.5 italic">{a.notes}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Contacts professionnels — saisis dans l'anamnèse (ContactsSanteForm,
+          ParticipantForm.tsx), jamais réaffichés nulle part avant ce bug 06.
+          `prenom`/`notes` optionnels : un contact plus ancien sans ces clés
+          affiche simplement `nom` seul, sans notes. */}
+      {contactsSante.length > 0 && (
+        <div className="mt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-gray-400 mb-2">Contacts professionnels</div>
+          <div className="space-y-2">
+            {contactsSante.map((c, i) => (
+              <div key={i}>
+                <div className="flex items-center gap-2 text-[13px] flex-wrap">
+                  <span className="flex-shrink-0">🩺</span>
+                  <span className="font-medium text-gray-700">{[c.prenom, c.nom].filter(Boolean).join(' ') || '—'}</span>
+                  {c.profession && <span className="text-gray-400">· {c.profession}</span>}
+                  {c.telephone && (
+                    <a href={`tel:${c.telephone}`} className="text-gray-500 hover:text-gray-800 transition-colors">
+                      📞 {c.telephone}
+                    </a>
+                  )}
+                  {c.email && (
+                    <a href={`mailto:${c.email}`} className="text-gray-500 hover:text-gray-800 transition-colors">
+                      ✉️ {c.email}
+                    </a>
+                  )}
+                </div>
+                {c.notes && (
+                  <p className="text-[12px] text-gray-400 ml-5 mt-0.5 italic">{c.notes}</p>
                 )}
               </div>
             ))}
