@@ -16,6 +16,7 @@ import { getTestsAutonomie } from '../lib/anamnese';
 import { libelleSedentariteBeneficiaire, libelleFatigueBeneficiaire } from '../lib/formulationBienveillante';
 import { etatSedentarite, etatFatigue, getSedProfil, getFSSProfil } from '../lib/scoresAutonomie';
 import { etatProgresBeneficiaire } from '../lib/partageBeneficiaire';
+import CarteErreurPatient from '../components/patient/CarteErreurPatient';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -2301,6 +2302,13 @@ export default function EspacePatient() {
 
   const [loading, setLoading]           = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
+  // Distingue deux échecs qui n'appellent ni le même message ni la même
+  // action de récupération : une panne réseau (déjà catchée dans
+  // patientApi.ts, `status === 0`) n'a rien à voir avec le bénéficiaire ni
+  // son code, alors que `accessDenied` (401, mauvais code) le renvoie à bon
+  // droit ressaisir un code. Une erreur de mapping après un fetch réussi
+  // (données malformées) est un bug applicatif, journalisé en conséquence.
+  const [erreurChargement, setErreurChargement] = useState<{ source: 'reseau' | 'mapping'; detail?: string } | null>(null);
   const [token, setToken]               = useState<string | null>(null);
   const [participant, setParticipant]   = useState<Participant | null>(null);
   const [seances, setSeances]           = useState<Seance[]>([]);
@@ -2342,6 +2350,17 @@ export default function EspacePatient() {
 
       const result = await patientFetchMe(tok);
       if (!result.ok) {
+        // status === 0 : patientFetchMe a catché une erreur réseau (fetch qui
+        // rejette), pas une réponse du serveur. Rien à voir avec le code du
+        // bénéficiaire — le renvoyer le ressaisir sur /patient serait
+        // trompeur (voir docs/PLAN-BETA.md, lot EspacePatient). Toute autre
+        // valeur (401, 403, 500…) est une vraie réponse serveur, traitée
+        // comme avant.
+        if (result.status === 0) {
+          setErreurChargement({ source: 'reseau' });
+          setLoading(false);
+          return;
+        }
         if (result.status === 401) purgerSessionPatient();
         setAccessDenied(true);
         setLoading(false);
@@ -2350,6 +2369,7 @@ export default function EspacePatient() {
       setToken(tok);
       const data = result.data;
 
+      try {
       setParticipant(dbToParticipant(data.participant));
       setBilans(data.bilans.map(dbToBilan));
       setSeances(data.seances.map(dbToSeance));
@@ -2448,14 +2468,46 @@ export default function EspacePatient() {
           nbTotal: items.length,
         };
       }));
-
-      setLoading(false);
+      } catch (err) {
+        // Données reçues du serveur, mais dont la forme a fait planter le
+        // mapping (champ manquant, type inattendu…) — pas un problème de
+        // réseau, un bug applicatif. Même pattern que ErrorBoundaryPatient
+        // (console.error, pas d'appel Sentry direct : voir son commentaire
+        // « Pas de dépendance à Sentry » — Sentry n'est pas utilisé
+        // manuellement ailleurs côté bénéficiaire, aucune raison de commencer
+        // ici. En production, si Sentry tourne, son propre hook global ne
+        // captera PAS cette erreur puisqu'elle est interceptée ici et ne
+        // remonte jamais comme rejet non géré).
+        console.error('[espace patient] échec du traitement des données reçues :', err);
+        setErreurChargement({ source: 'mapping', detail: err instanceof Error ? err.message : String(err) });
+      } finally {
+        setLoading(false);
+      }
     }
 
     void charger();
   }, [id, codeUrl, ptokenUrl]);
 
   if (!id || accessDenied) return <Navigate to="/patient" replace />;
+
+  if (erreurChargement) {
+    return erreurChargement.source === 'reseau' ? (
+      <CarteErreurPatient
+        titre="La connexion a échoué"
+        messagePrincipal="Votre code n'y est pour rien — c'est la connexion à internet qui a été interrompue pendant le chargement."
+        messageSecondaire="Réessayez dans un instant. Si ça persiste, vérifiez votre connexion."
+        onReessayer={() => window.location.reload()}
+      />
+    ) : (
+      <CarteErreurPatient
+        titre="L'application n'a pas réussi à s'afficher"
+        messagePrincipal="Le problème vient de l'application, pas de vous, et vos données n'ont rien perdu."
+        messageSecondaire="Réessayez maintenant. Si l'écran revient, prévenez votre enseignant en Activité Physique Adaptée : il saura quoi faire."
+        detailTechnique={erreurChargement.detail}
+        onReessayer={() => window.location.reload()}
+      />
+    );
+  }
 
   if (loading) {
     return (
