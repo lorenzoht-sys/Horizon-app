@@ -1413,13 +1413,13 @@ function EcranProgramme({ participant, programmes, programmesV2, historiqueSeanc
   // Programme sélectionné pour le détail
   const selectedProg = selectedProgId ? progsV2Actifs.find(p => p.id === selectedProgId) : null;
 
-  // PDF pour programme V1
-  async function telechargerPDF() {
-    if (!programmeV1) return;
+  // PDF programme — V1 (fallback ci-dessous) ou V2 (vue détail), même
+  // fonction : exportProgrammePDF normalise selon la forme reçue.
+  async function telechargerProgrammePDF(programme: Programme | ProgrammeV2) {
     setPdfLoading(true);
     try {
       await exportProgrammePDF(
-        { programme: programmeV1, exercices: exercicesCatalog, participant, settings: { prenom: praticien.nom, nom: '', email: '', telephone: '', societe: praticien.societe } },
+        { programme, exercices: exercicesCatalog, participant, settings: { prenom: praticien.nom, nom: '', email: '', telephone: '', societe: praticien.societe } },
         `programme-${participant.prenom.toLowerCase()}.pdf`
       );
     } finally { setPdfLoading(false); }
@@ -1569,6 +1569,10 @@ function EcranProgramme({ participant, programmes, programmesV2, historiqueSeanc
             ))}
           </div>
         )}
+
+        <button onClick={() => telechargerProgrammePDF(selectedProg)} disabled={pdfLoading} style={{ width: '100%', marginTop: 14, padding: '16px', background: pdfLoading ? C.muted : C.dark, color: 'white', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: pdfLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52 }}>
+          {pdfLoading ? '⏳ Génération…' : '📄 Télécharger ce programme en PDF'}
+        </button>
       </div>
     );
   }
@@ -1789,7 +1793,7 @@ function EcranProgramme({ participant, programmes, programmesV2, historiqueSeanc
               );
             })}
           </div>
-          <button onClick={telechargerPDF} disabled={pdfLoading} style={{ width: '100%', padding: '16px', background: pdfLoading ? C.muted : C.dark, color: 'white', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: pdfLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52 }}>
+          <button onClick={() => telechargerProgrammePDF(programmeV1!)} disabled={pdfLoading} style={{ width: '100%', padding: '16px', background: pdfLoading ? C.muted : C.dark, color: 'white', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: pdfLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52 }}>
             {pdfLoading ? '⏳ Génération…' : '📄 Télécharger mon programme PDF'}
           </button>
         </div>

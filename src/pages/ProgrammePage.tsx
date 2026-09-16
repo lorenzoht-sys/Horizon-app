@@ -18,6 +18,8 @@ import { loadExercicesPraticien } from '../data/exercices';
 import { TESTS_ETALONS } from '../data/testsEtalons';
 import type { Exercice } from '../types';
 import { libelleAge } from '../lib/age';
+import { chargerSettingsPraticien } from '../lib/settingsPraticien';
+import { exportProgrammePDF } from '../utils/exportPDF';
 import {
   genererQuestionsClarification, genererProgrammeStructure, versPayloadCreateProgramme,
   type ProgrammeIA,
@@ -443,12 +445,14 @@ function PreviewIAModal({
 
 // ── Carte programme V2 ───────────────────────────────────────────────────────
 
-function ProgrammeCard({ prog, seancesAutonomes, onToggle, onDelete, onEdit }: {
+function ProgrammeCard({ prog, seancesAutonomes, onToggle, onDelete, onEdit, onTelecharger, telechargeant }: {
   prog: ProgrammeV2;
   seancesAutonomes: { count: number; dates: string[] } | null;
   onToggle: () => void;
   onDelete: () => void;
   onEdit: () => void;
+  onTelecharger: () => void;
+  telechargeant: boolean;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const jourActifs = JP.filter(j => prog.planning.some(p => p.jour === j));
@@ -514,6 +518,9 @@ function ProgrammeCard({ prog, seancesAutonomes, onToggle, onDelete, onEdit }: {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
         <button onClick={onEdit} style={{ ...btnSmall, background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
           ✏️ Modifier
+        </button>
+        <button onClick={onTelecharger} disabled={telechargeant} style={{ ...btnSmall, opacity: telechargeant ? 0.6 : 1, cursor: telechargeant ? 'not-allowed' : 'pointer' }}>
+          {telechargeant ? '⏳ …' : '📄 PDF'}
         </button>
         <button onClick={onToggle} style={{
           ...btnSmall,
@@ -765,6 +772,23 @@ export default function ProgrammePage() {
   const activitesHorsProgramme = useActivitesHorsProgramme(id!);
 
   const participant = participants.find(p => p.id === id);
+
+  // Export PDF programme (V2) — catalogue chargé séparément ici, celui de
+  // PickerExerciceLibreModal (plus bas dans ce fichier) est local à une
+  // autre modale et n'est pas accessible depuis ce composant.
+  const [exercicesCatalogue, setExercicesCatalogue] = useState<Exercice[]>([]);
+  useEffect(() => { loadExercicesPraticien().then(setExercicesCatalogue); }, []);
+  const [pdfLoadingId, setPdfLoadingId] = useState<string | null>(null);
+  async function handleTelechargerProgramme(prog: ProgrammeV2) {
+    if (!participant) return;
+    setPdfLoadingId(prog.id);
+    try {
+      await exportProgrammePDF(
+        { programme: prog, exercices: exercicesCatalogue, participant, settings: chargerSettingsPraticien() },
+        `programme-${participant.prenom.toLowerCase()}-${prog.nom.toLowerCase().replace(/\s+/g, '-')}.pdf`
+      );
+    } finally { setPdfLoadingId(null); }
+  }
 
   // Handoff depuis "Mon assistant" (AssistantPage.tsx) : programme déjà
   // généré (mêmes fonctions partagées, voir genererProgrammeIA.ts), on
@@ -1066,6 +1090,8 @@ export default function ProgrammePage() {
                   onToggle={() => toggleActif(prog.id, false)}
                   onDelete={() => deleteProgrammeV2(prog.id).then(() => toast.success('Programme supprimé'))}
                   onEdit={() => openEditWizard(prog)}
+                  onTelecharger={() => handleTelechargerProgramme(prog)}
+                  telechargeant={pdfLoadingId === prog.id}
                 />
               ))}
             </section>
@@ -1084,6 +1110,8 @@ export default function ProgrammePage() {
                   onToggle={() => toggleActif(prog.id, true)}
                   onDelete={() => deleteProgrammeV2(prog.id).then(() => toast.success('Programme supprimé'))}
                   onEdit={() => openEditWizard(prog)}
+                  onTelecharger={() => handleTelechargerProgramme(prog)}
+                  telechargeant={pdfLoadingId === prog.id}
                 />
               ))}
             </section>
