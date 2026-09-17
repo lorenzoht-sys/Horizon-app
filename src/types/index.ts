@@ -537,6 +537,50 @@ export interface TarifContrat {
   createdAt: string;
 }
 
+export type ModeFacturationCours = 'structure' | 'individuel';
+export type StatutCoursCollectif = 'planifie' | 'realise' | 'annule';
+export type StatutPresenceCours = 'present' | 'absent' | 'excuse';
+
+/**
+ * Cours collectif : plusieurs bénéficiaires sur un même créneau (EHPAD/
+ * structures). programmeCommunId référence programmes_modeles, jamais
+ * programmes — programmes.participantId est obligatoire, incompatible avec
+ * un programme commun à un groupe (voir migration
+ * 20260917_cours_collectifs.sql).
+ */
+export interface CoursCollectif {
+  id: string;
+  praticienId: string;
+  /** Obligatoire si modeFacturation === 'structure' (contrainte DB). */
+  structureId?: string;
+  titre: string;
+  date: string;
+  heureDebut: string;
+  dureeMinutes: number;
+  programmeCommunId?: string;
+  modeFacturation: ModeFacturationCours;
+  statut: StatutCoursCollectif;
+  createdAt: string;
+}
+
+/**
+ * Inscription d'un bénéficiaire à un cours collectif. ressentiBorg/
+ * ressentiBienetre reprennent l'échelle de retours_seance (1-10 / 1-5) mais
+ * sont saisis par le praticien pendant la prise de présence, pas par le
+ * bénéficiaire — retours_seance est verrouillée à l'écriture patient.
+ */
+export interface ParticipationCoursCollectif {
+  id: string;
+  coursId: string;
+  participantId: string;
+  statutPresence: StatutPresenceCours;
+  /** Présent en base pour v1, aucune UI ne le renseigne encore. */
+  programmeIndividuelId?: string;
+  ressentiBorg?: number;
+  ressentiBienetre?: number;
+  createdAt: string;
+}
+
 export interface Seance {
   id: string;
   participantId: string;
