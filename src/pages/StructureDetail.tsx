@@ -5,6 +5,8 @@ import { useStructures } from '../hooks/useStructures';
 import { useParticipants } from '../hooks/useParticipants';
 import { useAgenda } from '../hooks/useAgenda';
 import { useFactures } from '../hooks/useFactures';
+import { useCoursCollectifs } from '../hooks/useCoursCollectifs';
+import { coursCollectifsStructureFacturables } from '../lib/coursCollectifs';
 import { supabase } from '../lib/supabase';
 import { getAppHost } from '../lib/config';
 import { dbToStructure } from '../lib/mappers';
@@ -35,6 +37,7 @@ export default function StructureDetail() {
   const { participants } = useParticipants();
   const { seances } = useAgenda();
   const { factures, creerOuMettreAJourStructure, marquerEnvoyee } = useFactures();
+  const { coursCollectifs } = useCoursCollectifs();
 
   // Structure depuis le hook ou location.state ou fetch direct
   const [structureFetchee, setStructureFetchee] = useState<Structure | null>(null);
@@ -83,16 +86,23 @@ export default function StructureDetail() {
       patientsStr.some(p => p.id === s.participantId) &&
       s.statut === 'realisee' && s.date >= debut && s.date <= fin
     );
-    if (seancesMois.length === 0) { toast('Aucune séance ce mois pour cette structure'); setGenLoading(false); return; }
+    // Cours collectifs facturés à la structure (mode_facturation =
+    // 'structure') : chaque cours réalisé compte pour UNE unité au tarif
+    // forfaitaire de la structure, indépendamment du nombre de présents —
+    // pas de facture individuelle générée pour ces cours (voir
+    // StatsPage.tsx pour le mode individuel, distinct).
+    const coursStructureMois = coursCollectifsStructureFacturables(coursCollectifs, structure.id, debut, fin);
+    const nbUnites = seancesMois.length + coursStructureMois.length;
+    if (nbUnites === 0) { toast('Aucune séance ce mois pour cette structure'); setGenLoading(false); return; }
     const tarif = structure.tarifSeance;
     const result = await creerOuMettreAJourStructure({
       structureId: structure.id,
       periodeMois: mois, periodeAnnee: annee,
-      nbSeances: seancesMois.length,
-      montantTotal: seancesMois.length * tarif,
+      nbSeances: nbUnites,
+      montantTotal: nbUnites * tarif,
       dateEcheance: echeance,
     });
-    if (result) toast.success(`Facture générée : ${seancesMois.length} séances × ${tarif}€`);
+    if (result) toast.success(`Facture générée : ${nbUnites} séances × ${tarif}€`);
     else toast.error('Erreur lors de la génération');
     setGenLoading(false);
   }

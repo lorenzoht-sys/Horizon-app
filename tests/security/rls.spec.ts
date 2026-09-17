@@ -140,6 +140,21 @@ const TABLE_OVERRIDES: Record<string, { via: string; note: string }> = {
   programme_modele_planning: { via: 'programmes_modeles!inner(praticien_id)', note: 'jointure vers programmes_modeles' },
   programme_modele_exercices: { via: 'programmes_modeles!inner(praticien_id)', note: 'jointure vers programmes_modeles' },
   dossier_exercice_membres: { via: 'dossiers_exercices!inner(praticien_id)', note: 'jointure vers dossiers_exercices' },
+  // Bug 07 : tarifs_contrats n'a pas de colonne praticien_id directe, mais
+  // contrats (dont elle dépend via contrat_id) en a une — même famille que
+  // programme_modele_*. Manquait à cette liste au merge de la PR bug 07 :
+  // staging n'avait pas encore la table à ce moment-là, le test de
+  // couverture ne pouvait donc pas la détecter (elle n'apparaît dans
+  // information_schema qu'une fois la migration réellement appliquée) —
+  // détecté au moment d'appliquer la migration cours_collectifs, une fois
+  // tarifs_contrats enfin présente en staging.
+  tarifs_contrats: { via: 'contrats!inner(praticien_id)', note: 'jointure vers contrats' },
+  // Cours collectifs : participations_cours_collectifs n'a pas de colonne
+  // praticien_id directe (participant_id oui, mais l'appartenance réelle
+  // remonte par cours_id → cours_collectifs.praticien_id).
+  // cours_collectifs, lui, a une colonne praticien_id directe : testée par
+  // le bloc générique ci-dessous (testedDirect), pas ici.
+  participations_cours_collectifs: { via: 'cours_collectifs!inner(praticien_id)', note: 'jointure vers cours_collectifs' },
 };
 
 // Tables du test générique "Praticien A ↔ Praticien B" (ci-dessous) dont la
@@ -385,6 +400,7 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
         'comptes_rendus_seances', 'documents_patient', 'factures_suivi', 'structures',
         'bilans_brouillons', 'templates_structure', 'dossiers_exercices',
         'exercices_personnalises', 'programmes_modeles', 'evenements_agenda',
+        'cours_collectifs',
       ] as const
     )('praticien B ne peut ni lire ni écrire une ligne de %s appartenant à praticien A', async (table) => {
       // Colonne de filtrage : praticien_id par défaut, sauf override (voir
@@ -801,7 +817,7 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
       'rappels_envoyes', 'retours_seance', 'tests_etalons_activations', 'tests_etalons_resultats',
       'exercices_libres_activations', 'exercices_libres_validations', 'organisations',
       'organisation_membres', 'organisation_invitations', 'structure_access_logs',
-      'documents_partages',
+      'documents_partages', 'cours_collectifs',
     ];
     const known = new Set([...testedDirect, ...Object.keys(TABLE_OVERRIDES), ...Object.keys(EXCLUDED_TABLES)]);
     const unknown = publicTables.filter((t) => !known.has(t) && !t.startsWith('_'));

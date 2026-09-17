@@ -22,6 +22,8 @@ import jsPDF from 'jspdf';
 import { cleanTextPdf } from '../utils/pdfText';
 import { chargerTarifsContrat } from '../hooks/useTarifsContrat';
 import { trouverTarifApplicable, totalFactureSeance } from '../lib/tarifsContrats';
+import { useCoursCollectifs } from '../hooks/useCoursCollectifs';
+import { datesCoursCollectifsIndividuelFacturables } from '../lib/coursCollectifs';
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -734,6 +736,7 @@ function SectionFactures({
   contratActif: (id: string) => Contrat | undefined;
 }) {
   const { factures, enRetard, aEnvoyer, envoyees, creerOuMettreAJour, marquerEnvoyee, loading, praticienId } = useFactures();
+  const { coursCollectifs, participations: participationsCoursCollectifs } = useCoursCollectifs();
   const settings = chargerSettingsPraticien();
   const tarifDefaut = parseFloat(settings.tarifHoraire) || 45;
   const now = new Date();
@@ -761,7 +764,17 @@ function SectionFactures({
         s.statut === 'realisee' &&
         s.date >= debut && s.date <= fin
       );
-      if (seancesPatient.length === 0) continue;
+      // Cours collectifs en mode individuel où ce participant était présent
+      // : chaque présence compte comme une séance facturée à ce
+      // participant, même fonction de résolution de tarif que ses séances
+      // classiques — voir Checkpoint A/B (nouvelle fonctionnalité cours
+      // collectifs). datesCoursCollectifsIndividuelFacturables filtre déjà
+      // statut === 'realise' (jamais planifié ni annulé).
+      const datesCoursCollectifs = datesCoursCollectifsIndividuelFacturables(
+        coursCollectifs, participationsCoursCollectifs, p.id, debut, fin,
+      );
+      const toutesLesDates = [...seancesPatient.map(s => s.date), ...datesCoursCollectifs];
+      if (toutesLesDates.length === 0) continue;
       // Vérifie si une facture existe déjà
       const existe = factures.some(
         f => f.participantId === p.id && f.periodeMois === mois && f.periodeAnnee === annee
@@ -774,21 +787,21 @@ function SectionFactures({
       // Repli sur le tarif par défaut du praticien pour toute séance
       // antérieure à la première version connue (contrat jamais tarifé).
       const versions = await chargerTarifsContrat(c.id);
-      const montantTotal = seancesPatient.reduce((somme, s) => {
-        const applicable = trouverTarifApplicable(versions, s.date);
+      const montantTotal = toutesLesDates.reduce((somme, date) => {
+        const applicable = trouverTarifApplicable(versions, date);
         return somme + (applicable ? totalFactureSeance(applicable) : tarifDefaut);
       }, 0);
       await creerOuMettreAJour({
         participantId: p.id,
         periodeMois: mois,
         periodeAnnee: annee,
-        nbSeances: seancesPatient.length,
+        nbSeances: toutesLesDates.length,
         montantTotal,
         dateEcheance: echeance,
       });
     }
     setGenLoading(false);
-  }, [praticienId, participants, seances, contratActif, factures, creerOuMettreAJour, tarifDefaut, genLoading]);
+  }, [praticienId, participants, seances, contratActif, factures, creerOuMettreAJour, tarifDefaut, genLoading, coursCollectifs, participationsCoursCollectifs]);
 
   useEffect(() => {
     if (!loading && !dejaGenere && praticienId && participants.length > 0) {

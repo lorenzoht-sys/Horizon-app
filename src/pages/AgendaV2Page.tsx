@@ -14,10 +14,15 @@ import { useContrats } from '../hooks/useContrats';
 import { useIndispos } from '../hooks/useIndispos';
 import { useEvenementsAgenda } from '../hooks/useEvenementsAgenda';
 import { useZones } from '../hooks/useZones';
+import { useCoursCollectifs } from '../hooks/useCoursCollectifs';
+import { useStructures } from '../hooks/useStructures';
+import { useProgrammesModeles } from '../hooks/useProgrammesModeles';
 import { getOrganisation } from '../lib/anamnese';
 import BadgeSeancesRestantes from '../components/ui/BadgeSeancesRestantes';
 import PageWrapper from '../components/layout/PageWrapper';
 import NoteSeanceModal from '../components/journal/NoteSeanceModal';
+import ModalNouveauCoursCollectif from '../components/agenda/ModalNouveauCoursCollectif';
+import ModalPresenceCoursCollectif from '../components/agenda/ModalPresenceCoursCollectif';
 import {
   genererDatesSeances, datesManquantes, trouveChevauchements, trouveChevauchement,
   calculerStatutSeancesSemaine, addMinutes,
@@ -28,7 +33,7 @@ import {
   planSupprimerUnique, planSupprimerSerie, planActionSurSelection, executerOperations,
   optionsPorteePourAction, type MiseAJourSeance, type OptionPortee,
 } from '../lib/planificationManuelle';
-import type { Seance, StatutSeance, TypeSeance, Participant, Contrat, Indisponibilite, OrganisationData, RaisonAnnulation, EvenementAgenda, TypeEvenementAgenda } from '../types';
+import type { Seance, StatutSeance, TypeSeance, Participant, Contrat, Indisponibilite, OrganisationData, RaisonAnnulation, EvenementAgenda, TypeEvenementAgenda, CoursCollectif, StatutCoursCollectif } from '../types';
 
 // ============================================================================
 // AGENDA UNIFIÉ — ÉTAPE 2 (création par glisser) + ÉTAPE 3 (déplacement /
@@ -227,9 +232,13 @@ function windowsDispoPourJour(
 // le même tableau `events` du calendrier, mais jamais le même style ni le
 // même comportement (un événement n'est ni glissable ni éditable comme une
 // séance, voir draggableAccessor et onSelectEvent plus bas).
+// cours_collectif : troisième kind, jamais glissable ni fusionné avec une
+// séance individuelle — ouvre l'écran de prise de présence plutôt que
+// ModalEditSeance (voir onSelectEvent plus bas).
 type CalEvent =
   | { id: string; title: string; start: Date; end: Date; kind: 'seance'; resource: Seance }
-  | { id: string; title: string; start: Date; end: Date; kind: 'evenement'; resource: EvenementAgenda };
+  | { id: string; title: string; start: Date; end: Date; kind: 'evenement'; resource: EvenementAgenda }
+  | { id: string; title: string; start: Date; end: Date; kind: 'cours_collectif'; resource: CoursCollectif };
 
 // ── Confirmation de création (équivalent de ModalConfirmDrop, non exporté
 //    depuis PlanningGrilleView.tsx — nouvelle implémentation, même logique
@@ -1210,10 +1219,18 @@ export default function AgendaV2Page() {
   // hook pour retrouver la zone d'un bénéficiaire donné, réutilisée telle
   // quelle (aucune logique de zone redupliquée ici).
   const { zones, zoneDePatient } = useZones();
+  const {
+    coursCollectifs, participations: participationsCoursCollectifs, creerCoursCollectif, modifierStatutCours,
+    mettreAJourParticipation, participationsDuCours,
+  } = useCoursCollectifs();
+  const { structures } = useStructures();
+  const { modeles: programmesModeles } = useProgrammesModeles();
 
   const [seanceEditee, setSeanceEditee] = useState<Seance | null>(null);
   const [evenementEdite, setEvenementEdite] = useState<EvenementAgenda | null>(null);
   const [nouvelEvenementOuvert, setNouvelEvenementOuvert] = useState(false);
+  const [nouveauCoursCollectifOuvert, setNouveauCoursCollectifOuvert] = useState(false);
+  const [coursCollectifSelectionne, setCoursCollectifSelectionne] = useState<CoursCollectif | null>(null);
   // Création manuelle (bouton "Nouvelle séance") — indépendante du glisser-
   // déposer contrat/récurrent : n'importe quel bénéficiaire, avec ou sans
   // contrat actif (bilan initial d'un prospect, séance ponctuelle...).
@@ -1299,8 +1316,22 @@ export default function AgendaV2Page() {
       kind: 'evenement',
       resource: e,
     }));
-    return [...eventsSeances, ...eventsAgenda];
-  }, [seances, evenements, participantMap]);
+    const eventsCoursCollectifs: CalEvent[] = coursCollectifs
+      .filter(c => c.statut !== 'annule')
+      .map(c => {
+        const fin = new Date(heureToDate(c.date, c.heureDebut).getTime() + c.dureeMinutes * 60000);
+        const nbParticipants = participationsCoursCollectifs.filter(p => p.coursId === c.id).length;
+        return {
+          id: c.id,
+          title: `${c.titre} — ${nbParticipants} participant${nbParticipants > 1 ? 's' : ''}`,
+          start: heureToDate(c.date, c.heureDebut),
+          end: fin,
+          kind: 'cours_collectif',
+          resource: c,
+        };
+      });
+    return [...eventsSeances, ...eventsAgenda, ...eventsCoursCollectifs];
+  }, [seances, evenements, coursCollectifs, participationsCoursCollectifs, participantMap]);
 
   function nomBeneficiaireDe(s: Seance): string {
     const p = participantMap.get(s.participantId);
@@ -1744,6 +1775,10 @@ export default function AgendaV2Page() {
                 <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: '#6B7280', border: '1px dashed rgba(0,0,0,0.45)' }} />
                 Événement d'agenda — couleur libre, bordure en tirets (ni une séance ni un vrai bénéficiaire)
               </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: '#DB2777' }} />
+                Cours collectif
+              </div>
             </div>
 
             <div className="flex-shrink-0 flex gap-2">
@@ -1753,6 +1788,14 @@ export default function AgendaV2Page() {
                 className="bg-primary text-white text-xs font-semibold rounded-xl px-3 py-2 hover:bg-dark transition-colors"
               >
                 + Nouvelle séance
+              </button>
+              <button
+                type="button"
+                onClick={() => setNouveauCoursCollectifOuvert(true)}
+                className="text-white text-xs font-semibold rounded-xl px-3 py-2 hover:opacity-90 transition-opacity"
+                style={{ backgroundColor: '#DB2777' }}
+              >
+                + Nouveau cours collectif
               </button>
               <button
                 type="button"
@@ -1793,6 +1836,23 @@ export default function AgendaV2Page() {
                     },
                   };
                 }
+                // Cours collectif : couleur dédiée (magenta), jamais utilisée
+                // ailleurs dans ce calendrier — distinct au premier coup
+                // d'œil d'une séance individuelle ou d'un événement d'agenda
+                // (dont la couleur est libre mais toujours en tirets).
+                if (event.kind === 'cours_collectif') {
+                  return {
+                    style: {
+                      backgroundColor: '#DB2777',
+                      opacity: event.resource.statut === 'realise' ? 1 : 0.85,
+                      borderRadius: 6,
+                      border: 'none',
+                      color: 'white',
+                      fontSize: 12,
+                      fontWeight: 600,
+                    },
+                  };
+                }
                 // Séances déjà existantes du bénéficiaire sélectionné :
                 // remplacent la couleur habituelle par statut par un vert
                 // (teal #0d9488) — choix assumé, repérer où est ce
@@ -1826,6 +1886,7 @@ export default function AgendaV2Page() {
               }}
               onSelectEvent={(event: CalEvent) => {
                 if (event.kind === 'evenement') { setEvenementEdite(event.resource); return; }
+                if (event.kind === 'cours_collectif') { setCoursCollectifSelectionne(event.resource); return; }
                 setSeanceEditee(event.resource);
               }}
               onDropFromOutside={onDropFromOutside}
@@ -1920,6 +1981,39 @@ export default function AgendaV2Page() {
             setEvenementEdite(null);
           }}
           onClose={() => setEvenementEdite(null)}
+        />
+      )}
+
+      {nouveauCoursCollectifOuvert && (
+        <ModalNouveauCoursCollectif
+          participants={participants}
+          structures={structures}
+          programmesModeles={programmesModeles}
+          onCreer={async data => {
+            const cours = await creerCoursCollectif(data);
+            if (cours) toast.success('Cours collectif créé');
+            return !!cours;
+          }}
+          onClose={() => setNouveauCoursCollectifOuvert(false)}
+        />
+      )}
+
+      {coursCollectifSelectionne && (
+        <ModalPresenceCoursCollectif
+          cours={coursCollectifSelectionne}
+          participations={participationsDuCours(coursCollectifSelectionne.id)}
+          participants={participants}
+          programmeNom={programmesModeles.find(m => m.id === coursCollectifSelectionne.programmeCommunId)?.nom}
+          onMettreAJourParticipation={(participationId, patch) => mettreAJourParticipation(participationId, patch)}
+          onModifierStatutCours={async (statut: StatutCoursCollectif) => {
+            const ok = await modifierStatutCours(coursCollectifSelectionne.id, statut);
+            if (ok) {
+              setCoursCollectifSelectionne(prev => prev ? { ...prev, statut } : prev);
+              toast.success('Statut du cours mis à jour');
+            }
+            return ok;
+          }}
+          onClose={() => setCoursCollectifSelectionne(null)}
         />
       )}
 

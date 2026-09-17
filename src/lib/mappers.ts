@@ -1,4 +1,4 @@
-import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, TemplateStructure, DisponibilitesPatient, JourSemaine, CreneauPreference, EvenementAgenda, VisibiliteBeneficiaire, TarifContrat } from '../types';
+import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, TemplateStructure, DisponibilitesPatient, JourSemaine, CreneauPreference, EvenementAgenda, VisibiliteBeneficiaire, TarifContrat, CoursCollectif, ParticipationCoursCollectif } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
 
 // ── Conversion anamnese.organisation → DisponibilitesPatient ──────────────────
@@ -438,6 +438,62 @@ export function tarifContratToDb(t: Omit<TarifContrat, 'id' | 'createdAt'>): Rec
     frais_deplacement: t.fraisDeplacement,
     date_debut_validite: t.dateDebutValidite,
     date_fin_validite: t.dateFinValidite ?? null,
+  };
+}
+
+export function dbToCoursCollectif(row: any): CoursCollectif {
+  return {
+    id: row.id,
+    praticienId: row.praticien_id,
+    structureId: row.structure_id ?? undefined,
+    titre: row.titre,
+    date: row.date,
+    heureDebut: row.heure_debut,
+    dureeMinutes: row.duree_minutes,
+    programmeCommunId: row.programme_commun_id ?? undefined,
+    modeFacturation: row.mode_facturation,
+    statut: row.statut,
+    createdAt: row.created_at,
+  };
+}
+
+export function coursCollectifToDb(c: Omit<CoursCollectif, 'createdAt'>): Record<string, unknown> {
+  return {
+    id: c.id,
+    praticien_id: c.praticienId,
+    structure_id: c.structureId ?? null,
+    titre: c.titre,
+    date: c.date,
+    heure_debut: c.heureDebut,
+    duree_minutes: c.dureeMinutes,
+    programme_commun_id: c.programmeCommunId ?? null,
+    mode_facturation: c.modeFacturation,
+    statut: c.statut,
+  };
+}
+
+export function dbToParticipationCoursCollectif(row: any): ParticipationCoursCollectif {
+  return {
+    id: row.id,
+    coursId: row.cours_id,
+    participantId: row.participant_id,
+    statutPresence: row.statut_presence,
+    programmeIndividuelId: row.programme_individuel_id ?? undefined,
+    ressentiBorg: row.ressenti_borg ?? undefined,
+    ressentiBienetre: row.ressenti_bienetre ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
+export function participationCoursCollectifToDb(p: Omit<ParticipationCoursCollectif, 'createdAt'>): Record<string, unknown> {
+  return {
+    id: p.id,
+    cours_id: p.coursId,
+    participant_id: p.participantId,
+    statut_presence: p.statutPresence,
+    programme_individuel_id: p.programmeIndividuelId ?? null,
+    ressenti_borg: p.ressentiBorg ?? null,
+    ressenti_bienetre: p.ressentiBienetre ?? null,
   };
 }
 
