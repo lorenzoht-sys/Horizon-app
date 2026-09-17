@@ -504,11 +504,37 @@ export interface Contrat {
    * renouvellement ne la lit jamais, il exclut déjà tout contrat suspendu
    * via son filtre statut = 'actif'. */
   dateReprisePrevue?: string;
+  /** @deprecated Dépréciée informellement depuis tarifs_contrats (bug 07,
+   * 2026-09-17) : plus aucun écran ne lit ni n'écrit ce champ. Le tarif d'un
+   * contrat est désormais une suite de versions datées — voir TarifContrat
+   * et trouverTarifApplicable() (src/lib/tarifsContrats.ts). Conservée en
+   * base et dans ce type pour compatibilité descendante et comme source du
+   * backfill initial ; à retirer une fois confirmé qu'aucun usage résiduel
+   * n'en dépend. */
   tarifSeance?: number;
   /** Si true, ce contrat est ignoré par le planificateur de tournée (Mode A et
    * B) — le patient reste visible partout ailleurs dans l'app, mais n'est
    * jamais candidaté pour une optimisation automatique. */
   exclureTournee?: boolean;
+}
+
+/**
+ * Une version datée du tarif d'un contrat (bug 07). Le tarif n'est jamais
+ * une valeur unique mutable : chaque changement ferme la version en cours
+ * (dateFinValidite) et en ouvre une nouvelle à partir d'aujourd'hui — une
+ * ligne existante n'est jamais réécrite (sauf pour la fermer). Voir
+ * trouverTarifApplicable() dans src/lib/tarifsContrats.ts, seule fonction du
+ * projet qui résout quelle version s'applique à une date de séance donnée.
+ */
+export interface TarifContrat {
+  id: string;
+  contratId: string;
+  tarifSeance: number;
+  fraisDeplacement: number;
+  dateDebutValidite: string;
+  /** undefined = version actuelle (en cours). */
+  dateFinValidite?: string;
+  createdAt: string;
 }
 
 export interface Seance {

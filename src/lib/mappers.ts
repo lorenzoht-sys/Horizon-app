@@ -1,4 +1,4 @@
-import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, TemplateStructure, DisponibilitesPatient, JourSemaine, CreneauPreference, EvenementAgenda, VisibiliteBeneficiaire } from '../types';
+import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, TemplateStructure, DisponibilitesPatient, JourSemaine, CreneauPreference, EvenementAgenda, VisibiliteBeneficiaire, TarifContrat } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
 
 // ── Conversion anamnese.organisation → DisponibilitesPatient ──────────────────
@@ -416,6 +416,28 @@ export function contratToDb(c: Contrat): Record<string, unknown> {
     date_reprise_prevue: c.dateReprisePrevue ?? null,
     tarif_seance: c.tarifSeance ?? null,
     exclure_tournee: c.exclureTournee ?? false,
+  };
+}
+
+export function dbToTarifContrat(row: any): TarifContrat {
+  return {
+    id: row.id,
+    contratId: row.contrat_id,
+    tarifSeance: Number(row.tarif_seance),
+    fraisDeplacement: Number(row.frais_deplacement ?? 0),
+    dateDebutValidite: row.date_debut_validite,
+    dateFinValidite: row.date_fin_validite ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
+export function tarifContratToDb(t: Omit<TarifContrat, 'id' | 'createdAt'>): Record<string, unknown> {
+  return {
+    contrat_id: t.contratId,
+    tarif_seance: t.tarifSeance,
+    frais_deplacement: t.fraisDeplacement,
+    date_debut_validite: t.dateDebutValidite,
+    date_fin_validite: t.dateFinValidite ?? null,
   };
 }
 
