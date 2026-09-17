@@ -20,6 +20,8 @@ import type { Participant, Contrat } from '../types';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import { cleanTextPdf } from '../utils/pdfText';
+import { chargerTarifsContrat } from '../hooks/useTarifsContrat';
+import { trouverTarifApplicable, totalFactureSeance } from '../lib/tarifsContrats';
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -765,13 +767,23 @@ function SectionFactures({
         f => f.participantId === p.id && f.periodeMois === mois && f.periodeAnnee === annee
       );
       if (existe) continue;
-      const tarif = c.tarifSeance ?? tarifDefaut;
+      // Somme par séance via le tarif verrouillé applicable à sa date
+      // (bug 07) — jamais un tarif unique multiplié par le nombre de
+      // séances : un changement de tarif en cours de mois doit se
+      // répercuter séance par séance, pas rétroactivement sur tout le mois.
+      // Repli sur le tarif par défaut du praticien pour toute séance
+      // antérieure à la première version connue (contrat jamais tarifé).
+      const versions = await chargerTarifsContrat(c.id);
+      const montantTotal = seancesPatient.reduce((somme, s) => {
+        const applicable = trouverTarifApplicable(versions, s.date);
+        return somme + (applicable ? totalFactureSeance(applicable) : tarifDefaut);
+      }, 0);
       await creerOuMettreAJour({
         participantId: p.id,
         periodeMois: mois,
         periodeAnnee: annee,
         nbSeances: seancesPatient.length,
-        montantTotal: seancesPatient.length * tarif,
+        montantTotal,
         dateEcheance: echeance,
       });
     }
@@ -803,8 +815,11 @@ function SectionFactures({
 
   function genererPDF(f: typeof factures[0]) {
     const p = f.participantId ? participants.find(x => x.id === f.participantId) : undefined;
-    const c = f.participantId ? contratActif(f.participantId) : undefined;
-    const tarif = c?.tarifSeance ?? tarifDefaut;
+    // Tarif affiché = montant réellement facturé / nombre de séances : reste
+    // exact même si le tarif a changé en cours de période (bug 07), sans
+    // recharger l'historique juste pour l'affichage — le montant total, lui,
+    // vient déjà de la somme par séance calculée à la génération.
+    const tarif = f.nbSeances > 0 ? f.montantTotal / f.nbSeances : tarifDefaut;
     exportFacturePDF({
       nomPatient: p ? `${p.prenom} ${p.nom}` : '—',
       periode: nomMoisAnnee(f.periodeMois, f.periodeAnnee),
@@ -825,15 +840,16 @@ function SectionFactures({
   function CartFacture({ f, showRappel }: { f: typeof factures[0]; showRappel?: boolean }) {
     const nom = f.participantId ? nomPatient(f.participantId) : 'Facture structure';
     const periode = nomMoisAnnee(f.periodeMois, f.periodeAnnee);
-    const c = f.participantId ? contratActif(f.participantId) : undefined;
-    const tarif = c?.tarifSeance ?? tarifDefaut;
+    // Même calcul que genererPDF : montant réel / nb de séances, correct
+    // même après un changement de tarif en cours de période.
+    const tarif = f.nbSeances > 0 ? f.montantTotal / f.nbSeances : tarifDefaut;
     return (
       <div className={`${CARD_CLS} ${showRappel ? 'border-red-200 bg-red-light' : 'border-gray-200 bg-white'}`}>
         <div className="flex items-start justify-between gap-3 mb-2">
           <div>
             <div className="font-semibold text-gray-900 text-sm">{nom}</div>
             <div className="text-xs text-gray-500 mt-0.5">
-              {periode} · {f.nbSeances} séance{f.nbSeances > 1 ? 's' : ''} × {tarif}€
+              {periode} · {f.nbSeances} séance{f.nbSeances > 1 ? 's' : ''} × {tarif.toFixed(2)}€
             </div>
           </div>
           <div className="text-right flex-shrink-0">

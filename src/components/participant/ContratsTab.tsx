@@ -8,6 +8,7 @@ import { Plus, PauseCircle, XCircle, RefreshCw, FileText, Pencil, AlertTriangle 
 import { toast } from 'sonner';
 import type { Contrat, Seance } from '../../types';
 import ModalGenerationContrat from './ModalGenerationContrat';
+import SectionTarifContrat from './SectionTarifContrat';
 import { evaluerReprise, calculerSeancesReprise } from '../../utils/repriseContrat';
 import { ChevauchementError } from '../../utils/horaires';
 import { getAuthHeader } from '../../lib/supabase';
@@ -640,6 +641,8 @@ export default function ContratsTab({ participantId }: Props) {
             {contrat.notes && (
               <div className="text-xs text-gray-400 italic mb-3">{contrat.notes}</div>
             )}
+
+            <SectionTarifContrat contratId={contrat.id} />
 
             {(contrat.statut === 'actif' || contrat.statut === 'a_venir') && (
               <label className="flex items-center gap-2 cursor-pointer select-none mb-3">
