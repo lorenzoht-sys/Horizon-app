@@ -1060,7 +1060,7 @@ export default function ParticipantProfile() {
   const { contrats } = useContrats();
   const { structures } = useStructures();
   const { seances } = useAgenda();
-  const { coursCollectifs, participations: participationsCours } = useCoursCollectifs();
+  const { coursCollectifs, participations: participationsCours, loading: chargementCours } = useCoursCollectifs();
   useJournalSeance(); // conservé pour ne pas casser le hook
   const navigate = useNavigate();
   const settings = chargerSettingsPraticien();
@@ -1616,7 +1616,9 @@ export default function ParticipantProfile() {
             )}
             <button
               onClick={handleExportDossier}
-              disabled={exportingDossier}
+              // Désactivé tant que les cours se chargent (comme le PDF du programme) : cliquer trop tôt
+              // produirait un dossier SANS les cours, sans le moindre message.
+              disabled={exportingDossier || chargementCours}
               className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               <FileText size={13} />
