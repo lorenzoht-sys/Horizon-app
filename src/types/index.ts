@@ -718,9 +718,10 @@ export interface Participant {
   /** Archivage, distinct du statut des contrats : bascule manuelle
    * uniquement (jamais dérivée de l'absence de contrat actif — un
    * bénéficiaire sans contrat actif n'est pas forcément "fini"). Un
-   * bénéficiaire archivé disparaît des listes du quotidien (tournée,
-   * dashboard) mais reste consultable via un filtre, et ses séances
-   * passées restent comptées dans les stats/factures. */
+   * bénéficiaire archivé n'apparaît plus dans le tableau de bord des actifs :
+   * il a sa propre page (/archives, ArchivesPage). Rien n'est supprimé — sa
+   * fiche reste ouverte, et ses séances passées restent comptées dans les
+   * stats/factures. Règle de séparation : lib/archivage.ts. */
   archive?: boolean;
   dateArchivage?: string;
   activitesSouhaitees?: string[];

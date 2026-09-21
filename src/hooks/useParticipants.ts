@@ -6,6 +6,7 @@ import { genererCodeAcces } from '../utils/codeAcces';
 import { geocodeAdresse } from '../utils/geocodeAdresse';
 import { supabase } from '../lib/supabase';
 import { dbToParticipant, participantToDb, bilanToDb } from '../lib/mappers';
+import { separerParArchivage } from '../lib/archivage';
 
 const DEMO_PATIENTS: Participant[] = [
   {
@@ -275,11 +276,12 @@ export function useParticipants() {
   // volontairement complet et inchangé — les écrans de stats/facturation
   // (StatsPage.tsx, DossierPDF.tsx, useFactures.ts) doivent continuer à
   // tout compter, archivage ou non.
-  const participantsActifs = participants.filter(p => !p.archive);
+  const { actifs: participantsActifs, archives: participantsArchives } = separerParArchivage(participants);
 
   return {
     participants,
     participantsActifs,
+    participantsArchives,
     loading,
     addParticipant,
     updateParticipant,

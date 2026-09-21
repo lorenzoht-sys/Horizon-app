@@ -126,7 +126,8 @@ export function useAgenda() {
   }
 
   function patientsARelancer(joursMax = 21): typeof participants {
-    return participants.filter(p => {
+    // Un bénéficiaire archivé n'est plus suivi : il n'a pas à être « relancé ».
+    return participants.filter(p => !p.archive).filter(p => {
       const derniereSeance = seances
         .filter(s => s.participantId === p.id && s.statut === 'realisee')
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];

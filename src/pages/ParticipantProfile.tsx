@@ -1195,12 +1195,16 @@ export default function ParticipantProfile() {
       case 'export':          handleExport(); break;
       case 'supprimer':       setConfirmDelete(true); break;
       case 'archiver':
-        archiverParticipant(participant.id, true).catch(err => { console.error('Erreur archivage:', err); toast.error('Erreur lors de l\'archivage'); });
-        toast.success(`${participant.prenom} ${participant.nom} archivé(e).`);
+        // Le message de succès n'est affiché qu'une fois l'enregistrement confirmé : il
+        // s'affichait avant, même quand l'écriture échouait juste après.
+        archiverParticipant(participant.id, true)
+          .then(() => toast.success(`${participant.prenom} ${participant.nom} archivé(e). Retrouvez-le dans « Bénéficiaires archivés » ; son dossier est conservé.`))
+          .catch(err => { console.error('Erreur archivage:', err); toast.error('Erreur lors de l\'archivage'); });
         break;
       case 'desarchiver':
-        archiverParticipant(participant.id, false).catch(err => { console.error('Erreur désarchivage:', err); toast.error('Erreur lors du désarchivage'); });
-        toast.success(`${participant.prenom} ${participant.nom} désarchivé(e).`);
+        archiverParticipant(participant.id, false)
+          .then(() => toast.success(`${participant.prenom} ${participant.nom} est de nouveau parmi les bénéficiaires actifs.`))
+          .catch(err => { console.error('Erreur désarchivage:', err); toast.error('Erreur lors du désarchivage'); });
         break;
       case 'programme':       navigate(`/participant/${id}/programme`); break;
       case 'nouveau_bilan':   navigate(`/participant/${id}/bilan/new`); break;

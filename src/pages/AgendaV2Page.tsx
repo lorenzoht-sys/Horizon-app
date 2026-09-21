@@ -1209,7 +1209,9 @@ function ModalCreerSeanceManuelle({ participants, detecterConflits, onCreer, onC
 
 export default function AgendaV2Page() {
   const { seances, bulkCreerSeances, modifierSeance, supprimerSeance, creerSeance, detecterConflits } = useAgenda();
-  const { participants } = useParticipants();
+  // `participants` (tous) : recherches par identifiant et cours passés. `participantsActifs` :
+  // listes de choix et de recherche — un archivé n'est plus suivi.
+  const { participants, participantsActifs } = useParticipants();
   const { contrats, contratActifDeParticipant } = useContrats();
   const { indisposDuJour } = useIndispos();
   const { evenements, creerEvenement, supprimerEvenement } = useEvenementsAgenda();
@@ -1287,14 +1289,14 @@ export default function AgendaV2Page() {
 
   const patientsFiltres = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return [...participants]
+    return [...participantsActifs]
       .filter(p => !q || `${p.prenom} ${p.nom}`.toLowerCase().includes(q))
       .filter(p => zonesFiltreIds.size === 0 || (() => {
         const zone = zoneDePatient(p.id);
         return !!zone && zonesFiltreIds.has(zone.id);
       })())
       .sort((a, b) => a.nom.localeCompare(b.nom));
-  }, [participants, search, zonesFiltreIds, zoneDePatient]);
+  }, [participantsActifs, search, zonesFiltreIds, zoneDePatient]);
 
   const events: CalEvent[] = useMemo(() => {
     const eventsSeances: CalEvent[] = seances.map(s => {
@@ -1953,7 +1955,7 @@ export default function AgendaV2Page() {
 
       {nouvelleSeanceOuverte && (
         <ModalCreerSeanceManuelle
-          participants={participants}
+          participants={participantsActifs}
           detecterConflits={detecterConflits}
           initial={slotInitialSeance}
           onCreer={async data => { await creerSeance(data); }}
@@ -1986,7 +1988,7 @@ export default function AgendaV2Page() {
 
       {nouveauCoursCollectifOuvert && (
         <ModalNouveauCoursCollectif
-          participants={participants}
+          participants={participantsActifs}
           structures={structures}
           programmesModeles={programmesModeles}
           onCreer={async data => {

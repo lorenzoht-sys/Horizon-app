@@ -167,7 +167,9 @@ const MESSAGE_PAYSAGE = 'Tournez votre téléphone en paysage pour afficher cet 
 // ── EcranAujourdhui ───────────────────────────────────────────────────────────
 
 function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; onNaviguerSaisie?: () => void }) {
-  const { participants } = useParticipants();
+  // `participants` (tous) sert aux recherches par identifiant ; les compteurs et listes du
+  // quotidien n'utilisent que les actifs — un archivé n'est plus suivi.
+  const { participants, participantsActifs } = useParticipants();
   const { seances: allSeances, seancesDuJour } = useAgenda();
   const { contratsARenouveler } = useContrats();
   const { settings: praticienSettings } = usePraticienSettings();
@@ -186,7 +188,7 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
   );
 
   const il90jFmt = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10); })();
-  const bilansAFaire = participants.filter(p =>
+  const bilansAFaire = participantsActifs.filter(p =>
     p.bilans.length === 0 || p.bilans.every(b => b.date < il90jFmt)
   );
 
@@ -227,7 +229,7 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <span style={{ fontSize: 22 }}>👥</span>
               <div>
-                <div style={{ fontSize: 24, fontWeight: 800, color: C.primary, lineHeight: 1 }}>{participants.length}</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: C.primary, lineHeight: 1 }}>{participantsActifs.length}</div>
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>bénéficiaires actifs</div>
               </div>
             </div>
@@ -356,7 +358,7 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
 type FiltrePatients = 'tous' | 'ci' | 'bilan' | 'seance';
 
 function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
-  const { participants } = useParticipants();
+  const { participantsActifs: participants } = useParticipants();
   const { seances } = useAgenda();
   const [q, setQ] = useState('');
   const [filtre, setFiltre] = useState<FiltrePatients>('tous');
