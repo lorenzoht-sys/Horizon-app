@@ -66,6 +66,7 @@ import {
   type Tache,
 } from '../_lib/cronTaches.js';
 import { MARGE_RENOUVELLEMENT_JOURS, renouvelerContratsEligibles } from '../_lib/renouvellementContrats.js';
+import { chargerIdsParticipantsArchives, exclureBeneficiairesArchives } from '../_lib/participantsArchives.js';
 import {
   resoudrePrefs,
   dateHeureParisVersUTC,
@@ -195,7 +196,19 @@ async function chargerPrefsParticipants(supabase: SupabaseClient, participantIds
   return new Map((data ?? []).map((r: any) => [r.participant_id as string, r as RowPrefs]));
 }
 
-async function traiterRappelsSeance(supabase: SupabaseClient): Promise<{ examinees: number; envoyes: number }> {
+interface LigneSeanceRappel { id: string; participant_id: string; praticien_id: string | null; date: string; heure_debut: string }
+interface LigneSeanceVeille { participant_id: string; praticien_id: string | null }
+
+// Exportée pour être testée (api/_lib/cronRappelsArchives.test.ts) : le handler par défaut ne
+// s'appelle que par HTTP avec le secret du cron.
+//
+// Un bénéficiaire ARCHIVÉ ne reçoit aucun rappel, même si une séance planifiée existe encore
+// pour lui (l'archivage ne touche ni aux séances ni au contrat). La séance reste au planning ;
+// seul l'envoi est supprimé. Si l'état d'archivage est illisible, la fonction lève (tâche en
+// erreur, rien n'est envoyé) plutôt que d'envoyer par défaut.
+export async function traiterRappelsSeance(
+  supabase: SupabaseClient,
+): Promise<{ examinees: number; envoyes: number; ignoreesArchivees: number }> {
   const maintenant = new Date();
   const aujourdhui = maintenant.toISOString().slice(0, 10);
   const demain = new Date(maintenant.getTime() + 86_400_000).toISOString().slice(0, 10);
@@ -210,10 +223,16 @@ async function traiterRappelsSeance(supabase: SupabaseClient): Promise<{ examine
     .eq('statut', 'planifiee')
     .in('date', [aujourdhui, demain]);
 
-  if (error || !seances || seances.length === 0) return { examinees: 0, envoyes: 0 };
+  if (error || !seances || seances.length === 0) return { examinees: 0, envoyes: 0, ignoreesArchivees: 0 };
 
-  const participantIds = [...new Set(seances.map((s: any) => s.participant_id as string))];
-  const praticienIds = [...new Set(seances.map((s: any) => s.praticien_id as string | null).filter((id): id is string => !!id))];
+  const lignes = seances as LigneSeanceRappel[];
+  const archives = await chargerIdsParticipantsArchives(supabase, lignes.map(s => s.participant_id));
+  const seancesASuivre = exclureBeneficiairesArchives(lignes, archives);
+  const ignoreesArchivees = lignes.length - seancesASuivre.length;
+  if (seancesASuivre.length === 0) return { examinees: seances.length, envoyes: 0, ignoreesArchivees };
+
+  const participantIds = [...new Set(seancesASuivre.map(s => s.participant_id))];
+  const praticienIds = [...new Set(seancesASuivre.map(s => s.praticien_id).filter((id): id is string => !!id))];
 
   const [prefsGlobales, prefsParticipants] = await Promise.all([
     chargerPrefsGlobales(supabase, praticienIds),
@@ -221,8 +240,8 @@ async function traiterRappelsSeance(supabase: SupabaseClient): Promise<{ examine
   ]);
 
   let envoyes = 0;
-  for (const seance of seances as any[]) {
-    const prefs = resoudrePrefs(prefsParticipants.get(seance.participant_id), prefsGlobales.get(seance.praticien_id));
+  for (const seance of seancesASuivre) {
+    const prefs = resoudrePrefs(prefsParticipants.get(seance.participant_id), seance.praticien_id ? prefsGlobales.get(seance.praticien_id) : undefined);
     const dateHeure = dateHeureParisVersUTC(seance.date, seance.heure_debut);
     if (!seanceDansLaFenetreDeRappel(maintenant, dateHeure, prefs)) continue;
 
@@ -244,10 +263,14 @@ async function traiterRappelsSeance(supabase: SupabaseClient): Promise<{ examine
     envoyes++;
   }
 
-  return { examinees: seances.length, envoyes };
+  return { examinees: seances.length, envoyes, ignoreesArchivees };
 }
 
-async function traiterRappelsVeilleSeance(supabase: SupabaseClient): Promise<{ examines: number; envoyes: number }> {
+// Exportée pour être testée, comme traiterRappelsSeance — même règle : aucun rappel à un
+// bénéficiaire archivé, séances et contrat inchangés.
+export async function traiterRappelsVeilleSeance(
+  supabase: SupabaseClient,
+): Promise<{ examines: number; envoyes: number; ignoreesArchivees: number }> {
   const maintenant = new Date();
   const aujourdhui = maintenant.toISOString().slice(0, 10);
   const demain = new Date(maintenant.getTime() + 86_400_000).toISOString().slice(0, 10);
@@ -263,10 +286,16 @@ async function traiterRappelsVeilleSeance(supabase: SupabaseClient): Promise<{ e
     .eq('statut', 'planifiee')
     .eq('date', demain);
 
-  if (error || !seances || seances.length === 0) return { examines: 0, envoyes: 0 };
+  if (error || !seances || seances.length === 0) return { examines: 0, envoyes: 0, ignoreesArchivees: 0 };
+
+  const lignes = seances as LigneSeanceVeille[];
+  const archives = await chargerIdsParticipantsArchives(supabase, lignes.map(s => s.participant_id));
+  const seancesASuivre = exclureBeneficiairesArchives(lignes, archives);
+  const participantsArchivesIgnores = new Set(lignes.map(s => s.participant_id).filter(id => archives.has(id))).size;
+  if (seancesASuivre.length === 0) return { examines: 0, envoyes: 0, ignoreesArchivees: participantsArchivesIgnores };
 
   const praticienIdParParticipant = new Map<string, string | null>();
-  for (const s of seances as any[]) {
+  for (const s of seancesASuivre) {
     if (!praticienIdParParticipant.has(s.participant_id)) {
       praticienIdParParticipant.set(s.participant_id, s.praticien_id ?? null);
     }
@@ -311,5 +340,5 @@ async function traiterRappelsVeilleSeance(supabase: SupabaseClient): Promise<{ e
     envoyes++;
   }
 
-  return { examines: participantIds.length, envoyes };
+  return { examines: participantIds.length, envoyes, ignoreesArchivees: participantsArchivesIgnores };
 }
