@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { Bilan } from '../../types';
 import { Calendar, ChevronRight, Pencil, Trash2 } from 'lucide-react';
+import { resultatTm6 } from '../../lib/tm6';
 
 interface Props {
   bilans: Bilan[];
@@ -14,7 +15,7 @@ function getKeyScores(bilan: Bilan): { label: string; value: string }[] {
   if (bilan.tug3m != null)                    scores.push({ label: 'TUG',    value: `${bilan.tug3m}s` });
   if (bilan.chairStand30 != null)             scores.push({ label: 'CS',     value: `${bilan.chairStand30} rép.` });
   if (bilan.handGrip?.droite != null)         scores.push({ label: 'Grip',   value: `${bilan.handGrip.droite} kg` });
-  if (bilan.tm6?.distanceMetres != null)      scores.push({ label: 'TM6',    value: `${bilan.tm6.distanceMetres} m` });
+  if (resultatTm6(bilan.tm6).valeur != null)  scores.push({ label: 'TM6',    value: resultatTm6(bilan.tm6).texte });
   if (bilan.equilibre?.droite != null)        scores.push({ label: 'Équil.', value: `${bilan.equilibre.droite}s` });
   if (bilan.memoire?.scoreImmediat != null)   scores.push({ label: 'Mém.',   value: `${bilan.memoire.scoreImmediat}/5` });
   return scores.slice(0, 4);

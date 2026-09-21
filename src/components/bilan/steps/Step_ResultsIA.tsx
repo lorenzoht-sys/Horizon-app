@@ -35,7 +35,8 @@ function calculerNotes(form: BilanForm): NotesBilan {
 
   if (form.tug3m !== null) n.mobilite = calculerNote(form.tug3m, NORMES_SCORING.tug3m);
   if (form.souplesse.valeur !== null) n.souplesse = calculerNote(form.souplesse.valeur, NORMES_SCORING.souplesse);
-  if (form.tm6.distanceMetres !== null) n.endurance = calculerNote(form.tm6.distanceMetres, NORMES_SCORING.tm6Distance);
+  const distTm6 = distanceTm6(form.tm6);
+  if (distTm6 !== null) n.endurance = calculerNote(distTm6, NORMES_SCORING.tm6Distance);
 
   const mi = form.memoire.scoreImmediat, md = form.memoire.scoreDiffere;
   if (mi !== null || md !== null) n.memoire = calculerNote((mi ?? 0) + (md ?? 0), NORMES_SCORING.memoire);
@@ -62,6 +63,7 @@ const NOTES_LABELS_TEST: Record<keyof NotesBilan, string> = {
 // façon.
 type CleResultatPartageable = 'equilibre' | 'force' | 'handGrip' | 'mobilite' | 'endurance';
 import { EtatPartageBilan } from '../EtatPartageBeneficiaire';
+import { distanceTm6, resultatTm6 } from '../../../lib/tm6';
 
 const PARTAGE_ITEMS: { key: CleResultatPartageable; label: string }[] = [
   { key: 'equilibre', label: 'Équilibre' },
@@ -96,6 +98,9 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
   const notes = useMemo(() => calculerNotes(form), [form]);
   const interpretation = form.interpretationIA ?? null;
   const hasAnyNote = Object.values(notes).some(v => v !== undefined);
+  // TMC en pas : pas de norme, donc pas de note /5, mais le résultat doit rester visible
+  const tm6Res = resultatTm6(form.tm6);
+  const tm6EnPasSaisi = tm6Res.type !== 'distance' && tm6Res.valeur != null;
 
   async function handleGenerate() {
     setGenerating(true);
@@ -119,7 +124,7 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
             handGripG: form.handGrip.gauche,
             tug: form.tug3m,
             souplesse: form.souplesse.valeur,
-            tm6Distance: form.tm6.distanceMetres,
+            tm6Distance: distanceTm6(form.tm6),
             memoireImmediat: form.memoire.scoreImmediat,
             memoireDiffere: form.memoire.scoreDiffere,
           },
@@ -148,6 +153,13 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
       <h2 className="text-lg font-heading font-semibold text-dark">Résultats & Interprétation IA</h2>
 
       {/* ── Tableau des notes /5 ── */}
+      {tm6EnPasSaisi && (
+        <div className="flex items-center justify-between bg-white border border-gray-100 rounded-xl px-4 py-3" data-testid="tm6-resultat-pas">
+          <span className="text-sm font-medium text-gray-600">Endurance — TM6 ({tm6Res.modeLabel})</span>
+          <span className="text-sm font-semibold text-dark">{tm6Res.texte} <span className="text-xs font-normal text-gray-400">· pas de norme en pas, non noté</span></span>
+        </div>
+      )}
+
       {hasAnyNote ? (
         <div>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Notes calculées automatiquement</p>
@@ -163,7 +175,7 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
               ))}
           </div>
         </div>
-      ) : (
+      ) : tm6EnPasSaisi ? null : (
         <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-400 text-center">
           Aucun test renseigné — revenez à l'étape précédente pour saisir les résultats.
         </div>

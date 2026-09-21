@@ -24,7 +24,8 @@ const BORG_RPE_LEVELS = [
 import DeltaIndicator from '../DeltaIndicator';
 import { useBilanDelta } from '../../../hooks/useBilanDelta';
 import { TEST_LABELS } from '../../../data/profiles';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
+import { lireMesures, ecrireMesures, tm6EnPas, type Tm6Mesure } from '../../../lib/tm6';
 import DuboisMISWidget from '../DuboisMISWidget';
 import Tm6ChronoWidget from '../Tm6ChronoWidget';
 import { TM6_DUREES_FIXES } from '../../../data/norms';
@@ -177,6 +178,21 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
   const [showModalVariante, setShowModalVariante] = useState(false);
   const tm6 = form.tm6;
   const setTm6 = (patch: Partial<typeof tm6>) => update({ tm6: { ...tm6, ...patch } });
+  // Tableau chronologique unique — ancien format converti à la lecture, sans perte
+  const mesures = lireMesures(tm6);
+  const setMesures = (next: Tm6Mesure[]) => setTm6(ecrireMesures(next));
+  const setMesure = (i: number, patch: Partial<Tm6Mesure>) =>
+    setMesures(mesures.map((m, j) => (j === i ? { ...m, ...patch } : m)));
+  const supprimerMesure = (i: number) => setMesures(mesures.filter((_, j) => j !== i));
+  const ajouterMinute = () => {
+    const nbMinutes = mesures.filter(m => m.kind === 'minute').length;
+    const derniere = mesures.map(m => m.kind).lastIndexOf('minute');
+    const ligne: Tm6Mesure = { kind: 'minute', label: `Minute ${nbMinutes + 1}`, bpm: null, spo2: null };
+    const idx = derniere >= 0 ? derniere + 1 : mesures.findIndex(m => m.kind === 'avant') + 1;
+    setMesures([...mesures.slice(0, idx), ligne, ...mesures.slice(idx)]);
+  };
+  const ajouterMesure = () =>
+    setMesures([...mesures, { kind: 'autre', label: 'Mesure', bpm: null, spo2: null }]);
   const dureeModeEff: 'fixe' | 'libre' = tm6.dureeMode ?? 'fixe';
   const dureeEffectiveSecondes = tm6.dureeReelleSecondes ?? (dureeModeEff === 'fixe' ? (tm6.dureeCibleSecondes ?? 360) : null);
   const mem = form.memoire;
@@ -193,7 +209,7 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
   const varianteActive = tm6.varianteId ? variantes.find(v => v.id === tm6.varianteId) ?? null : null;
   const mesureType: 'distance' | 'pas' | 'tours' = varianteActive
     ? varianteActive.typeMesure
-    : (tm6.mode ?? 'standard') === 'marche_sur_place' ? 'pas' : 'distance';
+    : tm6EnPas(tm6) ? 'pas' : 'distance';
 
   // Badges
   const badgeTm6: BadgeInfo | null = mesureType === 'distance' && tm6.distanceMetres != null
@@ -239,16 +255,18 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
           <div className="mb-4">
             <label htmlFor="tm6-type-test" className="block text-xs text-gray-500 mb-2">Type de test</label>
             <select id="tm6-type-test"
-              value={tm6.varianteId ?? ((tm6.mode ?? 'standard') === 'marche_sur_place' ? 'sur_place' : 'standard')}
+              value={tm6.varianteId ?? (tm6.mode === 'marche_sur_place' ? 'sur_place' : tm6.mode === 'stepper' ? 'stepper' : 'standard')}
               onChange={e => {
                 const val = e.target.value;
                 if (val === 'standard') setTm6({ mode: 'standard', varianteId: null });
                 else if (val === 'sur_place') setTm6({ mode: 'marche_sur_place', varianteId: null });
+                else if (val === 'stepper') setTm6({ mode: 'stepper', varianteId: null });
                 else setTm6({ mode: 'standard', varianteId: val });
               }}
               className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 mb-2">
-              <option value="standard">🚶 Marche 6 minutes (standard)</option>
-              <option value="sur_place">🚶 Marche sur place</option>
+              <option value="standard">🚶 Marche — distance en mètres</option>
+              <option value="stepper">🪜 Stepper — nombre de pas</option>
+              <option value="sur_place">🚶‍♂️ Marche sur place — nombre de pas</option>
               {variantes.map(v => (
                 <option key={v.id} value={v.id}>{v.nom}</option>
               ))}
@@ -324,7 +342,7 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
           <div className="mb-4">
             {mesureType === 'pas' ? (
               <Num id="tm6-pas" label="Nombre de pas" value={tm6.repetitions ?? tm6.nbPas ?? null} unit="pas" min={0} max={2000}
-                onChange={v => setTm6({ repetitions: v })} />
+                onChange={v => setTm6({ repetitions: v, nbPas: v })} />
             ) : mesureType === 'tours' ? (
               <Num id="tm6-tours" label="Nombre de tours" value={tm6.nbTours ?? null} unit="tours" min={0} max={5000}
                 onChange={v => setTm6({ nbTours: v })} />
@@ -354,91 +372,61 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
           </div>
 
-          {/* Mesures par minute */}
+          {/* Tableau chronologique unique : avant → test → récupération */}
           <div className="mb-4">
-            <p className="text-xs text-gray-500 mb-2">Mesures pendant le test (par minute)</p>
+            <p className="text-xs text-gray-500 mb-2">Mesures FC et SpO₂ — avant, pendant et après le test</p>
             <div className="rounded-xl border border-gray-200 overflow-hidden">
-              <div className="grid grid-cols-3 gap-0 bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wide">
-                <div className="px-3 py-2">Min</div>
+              <div className="grid grid-cols-[minmax(0,1.6fr)_1fr_1fr_2rem] gap-0 bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wide">
+                <div className="px-3 py-2">Moment</div>
                 <div className="px-3 py-2 text-center border-l border-gray-200">FC (bpm)</div>
                 <div className="px-3 py-2 text-center border-l border-gray-200">SpO₂ (%)</div>
+                <div />
               </div>
-              {Array.from({ length: 6 }, (_, i) => {
-                const mesures = tm6.mesuresParMinute ?? Array(6).fill({ bpm: null, spo2: null });
-                const m = mesures[i] ?? { bpm: null, spo2: null };
-                return (
-                  <div key={i} className={`grid grid-cols-3 gap-0 ${i % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'} border-b border-gray-100 last:border-b-0`}>
-                    <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 flex items-center">Min {i + 1}</div>
-                    <div className="px-2 py-1.5 border-l border-gray-100">
-                      <input type="number" min={40} max={220} value={m.bpm ?? ''}
-                        aria-label={`FC minute ${i + 1}`}
-                        onChange={e => {
-                          const next = [...(tm6.mesuresParMinute ?? Array(6).fill({ bpm: null, spo2: null }))];
-                          next[i] = { ...next[i], bpm: e.target.value === '' ? null : Number(e.target.value) };
-                          setTm6({ mesuresParMinute: next });
-                        }}
-                        className="w-full text-xs border-0 focus:outline-none bg-transparent text-center placeholder-gray-300"
-                        placeholder="—" />
-                    </div>
-                    <div className="px-2 py-1.5 border-l border-gray-100">
-                      <input type="number" min={70} max={100} value={m.spo2 ?? ''}
-                        aria-label={`SpO2 minute ${i + 1}`}
-                        onChange={e => {
-                          const next = [...(tm6.mesuresParMinute ?? Array(6).fill({ bpm: null, spo2: null }))];
-                          next[i] = { ...next[i], spo2: e.target.value === '' ? null : Number(e.target.value) };
-                          setTm6({ mesuresParMinute: next });
-                        }}
-                        className="w-full text-xs border-0 focus:outline-none bg-transparent text-center placeholder-gray-300"
-                        placeholder="—" />
-                    </div>
+              {mesures.map((m, i) => (
+                <div key={i} className={`grid grid-cols-[minmax(0,1.6fr)_1fr_1fr_2rem] gap-0 ${i % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'} border-b border-gray-100 last:border-b-0`}>
+                  <div className="px-2 py-1.5 flex items-center">
+                    <input type="text" value={m.label ?? ''} aria-label={`Moment de la mesure ${i + 1}`}
+                      onChange={e => setMesure(i, { label: e.target.value })}
+                      className="w-full text-xs font-semibold text-gray-600 border-0 focus:outline-none bg-transparent" />
                   </div>
-                );
-              })}
+                  <div className="px-2 py-1.5 border-l border-gray-100">
+                    <input type="number" min={40} max={220} value={m.bpm ?? ''}
+                      aria-label={`FC — ${m.label}`}
+                      onChange={e => setMesure(i, { bpm: e.target.value === '' ? null : Number(e.target.value) })}
+                      className="w-full text-xs border-0 focus:outline-none bg-transparent text-center placeholder-gray-300"
+                      placeholder="—" />
+                  </div>
+                  <div className="px-2 py-1.5 border-l border-gray-100">
+                    <input type="number" min={70} max={100} value={m.spo2 ?? ''}
+                      aria-label={`SpO2 — ${m.label}`}
+                      onChange={e => setMesure(i, { spo2: e.target.value === '' ? null : Number(e.target.value) })}
+                      className="w-full text-xs border-0 focus:outline-none bg-transparent text-center placeholder-gray-300"
+                      placeholder="—" />
+                  </div>
+                  <div className="flex items-center justify-center">
+                    <button type="button" onClick={() => supprimerMesure(i)}
+                      aria-label={`Supprimer la mesure ${m.label}`}
+                      className="text-gray-300 hover:text-red-500 focus:outline-none focus:text-red-500">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
-
-          {/* Grille AVANT / APRÈS */}
-          <div className="grid grid-cols-4 gap-2 mb-3">
-            <div>
-              <div className="text-xs font-bold text-blue-700 text-center mb-2 pb-1 border-b border-blue-100">AVANT</div>
-              <div className="space-y-2">
-                <Num id="tm6-fc-avant" label="FC (bpm)" value={tm6.fcAvant} min={40} max={200}
-                  onChange={v => setTm6({ fcAvant: v })} />
-                <Num id="tm6-spo2-avant" label="SpO₂ (%)" value={tm6.spo2Avant} min={70} max={100}
-                  onChange={v => setTm6({ spo2Avant: v })} />
-              </div>
-            </div>
-            <div>
-              <div className="text-xs font-bold text-red-600 text-center mb-2 pb-1 border-b border-red-100">JUSTE APRÈS</div>
-              <div className="space-y-2">
-                <Num id="tm6-fc-apres" label="FC (bpm)" value={tm6.fcApres} min={40} max={220}
-                  onChange={v => setTm6({ fcApres: v })} />
-                <Num id="tm6-spo2-apres" label="SpO₂ (%)" value={tm6.spo2Apres} min={70} max={100}
-                  onChange={v => setTm6({ spo2Apres: v })} />
-              </div>
-            </div>
-            <div>
-              <div className="text-xs font-bold text-orange-600 text-center mb-2 pb-1 border-b border-orange-100">1 MIN APRÈS</div>
-              <div className="space-y-2">
-                <Num id="tm6-fc-1min" label="FC (bpm)" value={tm6.fc1min ?? null} min={40} max={200}
-                  onChange={v => setTm6({ fc1min: v })} />
-                <Num id="tm6-spo2-1min" label="SpO₂ (%)" value={tm6.spo21min ?? null} min={70} max={100}
-                  onChange={v => setTm6({ spo21min: v })} />
-              </div>
-            </div>
-            <div>
-              <div className="text-xs font-bold text-green-700 text-center mb-2 pb-1 border-b border-green-100">2 MIN APRÈS</div>
-              <div className="space-y-2">
-                <Num id="tm6-fc-2min" label="FC (bpm)" value={tm6.fc2min} min={40} max={200}
-                  onChange={v => setTm6({ fc2min: v })} />
-                <Num id="tm6-spo2-2min" label="SpO₂ (%)" value={tm6.spo22min ?? null} min={70} max={100}
-                  onChange={v => setTm6({ spo22min: v })} />
-              </div>
+            <div className="flex flex-wrap gap-2 mt-2">
+              <button type="button" onClick={ajouterMinute}
+                className="flex items-center gap-1 text-xs text-primary border border-primary/30 hover:bg-primary/5 px-2.5 py-1 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <Plus size={11} />Ajouter une minute
+              </button>
+              <button type="button" onClick={ajouterMesure}
+                className="flex items-center gap-1 text-xs text-primary border border-primary/30 hover:bg-primary/5 px-2.5 py-1 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <Plus size={11} />Ajouter une mesure
+              </button>
             </div>
           </div>
 
           <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-4">
-            💡 Les mesures à 1 min et 2 min après permettent d'évaluer la récupération cardiaque.
+            💡 Les mesures de récupération (1 min et 2 min après) permettent d'évaluer la récupération cardiaque.
           </p>
 
           {/* Borg RPE */}

@@ -8,6 +8,7 @@ import { useProgramme } from '../../hooks/useProgramme';
 import { calculerNote, NORMES_SCORING } from '../../data/norms';
 import MarkdownRendu from '../ui/MarkdownRendu';
 import { libelleAge } from '../../lib/age';
+import { distanceTm6, resultatTm6 } from '../../lib/tm6';
 
 interface Props { participant: Participant }
 
@@ -15,7 +16,7 @@ const TESTS_PROGRES = [
   { label: 'Équilibre',  normeKey: 'equilibreUnipodal', unite: 's',     lower: false, getVal: (b: Bilan) => b.equilibre.droite },
   { label: 'Force',      normeKey: 'chairStand30',      unite: ' rép.', lower: false, getVal: (b: Bilan) => b.chairStand30 },
   { label: 'Mobilité',   normeKey: 'tug3m',             unite: 's',     lower: true,  getVal: (b: Bilan) => b.tug3m },
-  { label: 'Endurance',  normeKey: 'tm6Distance',        unite: ' m',    lower: false, getVal: (b: Bilan) => b.tm6.distanceMetres },
+  { label: 'Endurance',  normeKey: 'tm6Distance',        unite: ' m',    lower: false, getVal: (b: Bilan) => distanceTm6(b.tm6) },
   { label: 'Souplesse',  normeKey: 'souplesse',          unite: ' cm',   lower: false, getVal: (b: Bilan) => b.souplesse.valeur },
   { label: 'Mémoire',    normeKey: 'memoire',            unite: '/5',    lower: false, getVal: (b: Bilan) => b.memoire.scoreImmediat },
 ];
@@ -197,8 +198,8 @@ function OngletHistorique({ bilans }: { bilans: Bilan[] }) {
                 {b.tug3m != null && (
                   <div><div className="text-xs text-gray-400">TUG 3m</div><div className="font-bold text-dark text-sm">{b.tug3m}s</div></div>
                 )}
-                {b.tm6.distanceMetres != null && (
-                  <div><div className="text-xs text-gray-400">TM6</div><div className="font-bold text-dark text-sm">{b.tm6.distanceMetres}m</div></div>
+                {resultatTm6(b.tm6).valeur != null && (
+                  <div><div className="text-xs text-gray-400">TM6</div><div className="font-bold text-dark text-sm">{resultatTm6(b.tm6).texte}</div></div>
                 )}
               </div>
 

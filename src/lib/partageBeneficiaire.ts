@@ -21,6 +21,7 @@
 // est toujours visible, et ce module dit ce qui s'y trouve.
 
 import type { Bilan } from '../types';
+import { resultatTm6 } from './tm6';
 
 /** Les cinq résultats partageables, dans l'ordre d'affichage. */
 export const CLES_PARTAGE = ['equilibre', 'force', 'handGrip', 'mobilite', 'endurance'] as const;
@@ -50,7 +51,7 @@ function valeurResultat(bilan: Bilan, cle: ClePartage): number | null | undefine
     case 'force': return bilan.chairStand30;
     case 'handGrip': return bilan.handGrip?.droite ?? bilan.handGrip?.gauche;
     case 'mobilite': return bilan.tug3m;
-    case 'endurance': return bilan.tm6?.distanceMetres;
+    case 'endurance': return resultatTm6(bilan.tm6).valeur;
   }
 }
 

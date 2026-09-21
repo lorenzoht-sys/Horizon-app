@@ -1,4 +1,5 @@
 import type { Bilan } from '../../types';
+import { distanceTm6 } from '../../lib/tm6';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -62,7 +63,7 @@ const TESTS: TestCfg[] = [
   },
   {
     key: 'tm6', label: 'TM6', unit: 'm', lowerBetter: false,
-    getValue: b => b.tm6.distanceMetres,
+    getValue: b => distanceTm6(b.tm6),
     cat: v => v >= 400 ? 'g' : v >= 200 ? 'o' : 'r',
     score: v => clamp(v / 600 * 100),
   },

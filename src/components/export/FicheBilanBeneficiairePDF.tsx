@@ -19,6 +19,7 @@ import { PdfHeader, PdfFooter, type PdfPraticienSettings } from './PdfShared';
 import { getContreIndications } from '../../lib/anamnese';
 import { libelleNoteBienveillant, libelleCategorieBilan, libelleBorgBeneficiaire } from '../../lib/formulationBienveillante';
 import { libelleAge } from '../../lib/age';
+import { resultatTm6 } from '../../lib/tm6';
 
 const S = StyleSheet.create({
   page: { fontFamily: 'Helvetica', fontSize: 11, color: '#0D2B4B', paddingBottom: 46 },
@@ -96,7 +97,7 @@ export default function FicheBilanBeneficiairePDF({ bilan, participant, notes, s
   const enduranceCell = enduranceVisible ? (
     <Cellule
       titre="Endurance"
-      unite={`${tm6.distanceMetres ?? '—'} M`}
+      unite={resultatTm6(tm6).valeur != null ? (resultatTm6(tm6).type === 'distance' ? `${resultatTm6(tm6).valeur} M` : resultatTm6(tm6).texte.toUpperCase()) : '— M'}
       body={tm6.borgRPE != null ? `Ressenti effort : ${libelleBorgBeneficiaire(tm6.borgRPE)}` : undefined}
     />
   ) : null;

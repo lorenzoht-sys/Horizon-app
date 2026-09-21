@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { Bilan } from '../types';
 import { supabase } from '../lib/supabase';
+import { resultatTm6 } from '../lib/tm6';
 
 // ── SQL Supabase à exécuter une fois (Settings → SQL Editor) ──────────────────
 //
@@ -66,7 +67,7 @@ export function calculerCompletion(data: Partial<BilanForm>): number {
     data.handGrip?.droite, data.handGrip?.gauche,
     data.tug3m,
     data.souplesse?.valeur,
-    data.tm6?.distanceMetres,
+    data.tm6 ? resultatTm6(data.tm6 as Bilan['tm6']).valeur : null,
     data.memoire?.scoreImmediat, data.memoire?.scoreDiffere,
   ];
   const filled = vals.filter(v => v !== null && v !== undefined).length;

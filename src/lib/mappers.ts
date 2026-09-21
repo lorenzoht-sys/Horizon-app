@@ -1,5 +1,6 @@
 import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, TemplateStructure, DisponibilitesPatient, JourSemaine, CreneauPreference, EvenementAgenda, VisibiliteBeneficiaire, TarifContrat, CoursCollectif, ParticipationCoursCollectif } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
+import { tm6EnPas } from './tm6';
 
 // ── Conversion anamnese.organisation → DisponibilitesPatient ──────────────────
 // Retourne undefined si les données sont absentes ou incomplètes (patient sans
@@ -263,8 +264,10 @@ export function bilanToDb(participantId: string, b: Omit<Bilan, 'id'> & { id?: s
     souplesse_methode: b.souplesse?.methode ?? null,
     souplesse_valeur: b.souplesse?.valeur ?? null,
     tm6_mode: b.tm6?.mode ?? null,
-    tm6_distance_metres: b.tm6?.distanceMetres ?? null,
-    tm6_repetitions: b.tm6?.repetitions ?? null,
+    // Seule la valeur du mode actif est écrite en base : l'autre reste en mémoire à l'écran
+    // (changement de mode réversible) mais n'est jamais enregistrée.
+    tm6_distance_metres: b.tm6 && tm6EnPas(b.tm6) ? null : (b.tm6?.distanceMetres ?? null),
+    tm6_repetitions: b.tm6 && !tm6EnPas(b.tm6) && !b.tm6.varianteId ? null : (b.tm6?.repetitions ?? null),
     tm6_fc_avant: b.tm6?.fcAvant ?? null,
     tm6_fc_apres: b.tm6?.fcApres ?? null,
     tm6_fc_1min: b.tm6?.fc1min ?? null,
@@ -282,7 +285,7 @@ export function bilanToDb(participantId: string, b: Omit<Bilan, 'id'> & { id?: s
     tm6_notes_pauses: b.tm6?.notesPauses ?? '',
     tm6_pauses_detail: b.tm6?.pausesDetail ?? null,
     tm6_mesures_par_minute: b.tm6?.mesuresParMinute ?? null,
-    tm6_nb_pas: b.tm6?.nbPas ?? null,
+    tm6_nb_pas: b.tm6 && !tm6EnPas(b.tm6) && !b.tm6.varianteId ? null : (b.tm6?.nbPas ?? null),
     tm6_nb_tours: b.tm6?.nbTours ?? null,
     tm6_variante_id: b.tm6?.varianteId ?? null,
     memoire_score_immediat: b.memoire?.scoreImmediat ?? null,
