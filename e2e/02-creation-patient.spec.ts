@@ -18,6 +18,12 @@ test.describe('Création d\'un participant', () => {
     await page.getByPlaceholder('Jean', { exact: true }).fill(prenom);
     await page.getByPlaceholder('Dupont', { exact: true }).fill(nom);
 
+    // Date de naissance : OBLIGATOIRE et vérifiée AVANT le consentement
+    // (ParticipantForm.tsx, handleSubmit → validerDateNaissance). Sans elle, « Créer
+    // la fiche » affiche « La date de naissance est obligatoire. » et jamais le
+    // message RGPD attendu plus bas : le test ne prouvait donc pas le blocage RGPD.
+    await page.getByPlaceholder('JJ/MM/AAAA', { exact: true }).fill('15/03/1955');
+
     // Stepper en 5 étapes. La fréquence des séances est OBLIGATOIRE à la
     // création depuis `validerOrganisation()` (ParticipantForm.tsx:1230) :
     // sans elle, `submit()` renvoie une erreur, le stepper revient à
