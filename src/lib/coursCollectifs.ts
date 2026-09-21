@@ -116,3 +116,46 @@ export function entreesCoursDuParticipant(
     b.cours.date.localeCompare(a.cours.date) || b.cours.heureDebut.localeCompare(a.cours.heureDebut),
   );
 }
+
+// ── Présence ANNONCÉE par les bénéficiaires (vue praticien) ─────────────────
+
+export interface ResumeAnnonces {
+  vient: number;
+  neVientPas: number;
+  /** Pas de réponse : ceux à relancer. */
+  sansReponse: number;
+  total: number;
+}
+
+/**
+ * Où en sont les réponses « Je viens / Je ne viens pas » d'un cours. Trois états :
+ * « vient », « ne vient pas », et « sans réponse » (undefined) — c'est ce dernier qui
+ * permet au praticien de repérer les indécis avant la séance.
+ */
+export function resumeAnnonces(participations: Pick<ParticipationCoursCollectif, 'presenceAnnoncee'>[]): ResumeAnnonces {
+  let vient = 0;
+  let neVientPas = 0;
+  for (const p of participations) {
+    if (p.presenceAnnoncee === 'vient') vient++;
+    else if (p.presenceAnnoncee === 'ne_vient_pas') neVientPas++;
+  }
+  return { vient, neVientPas, sansReponse: participations.length - vient - neVientPas, total: participations.length };
+}
+
+/** « 5 viennent · 1 ne vient pas · 2 sans réponse » — les zéros sont omis. */
+export function libelleResumeAnnonces(r: ResumeAnnonces): string {
+  const parts: string[] = [];
+  if (r.vient > 0) parts.push(`${r.vient} ${r.vient > 1 ? 'viennent' : 'vient'}`);
+  if (r.neVientPas > 0) parts.push(`${r.neVientPas} ${r.neVientPas > 1 ? 'ne viennent pas' : 'ne vient pas'}`);
+  if (r.sansReponse > 0) parts.push(`${r.sansReponse} sans réponse`);
+  return parts.join(' · ');
+}
+
+/** Forme compacte pour une étiquette de calendrier : « ✓5 ✗1 ?2 » (les zéros sont omis). */
+export function libelleCompactAnnonces(r: ResumeAnnonces): string {
+  const parts: string[] = [];
+  if (r.vient > 0) parts.push(`✓${r.vient}`);
+  if (r.neVientPas > 0) parts.push(`✗${r.neVientPas}`);
+  if (r.sansReponse > 0) parts.push(`?${r.sansReponse}`);
+  return parts.join(' ');
+}

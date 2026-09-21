@@ -7,6 +7,9 @@ export type PresenceCoursPatient = 'present' | 'absent' | 'excuse';
 export type StatutCoursPatient = 'planifie' | 'realise' | 'annule';
 export type ReponseAnnonceeCours = 'vient' | 'ne_vient_pas';
 
+/** Nombre de prochains cours pour lesquels le bénéficiaire peut répondre (décidé : 4). */
+export const NB_COURS_A_REPONDRE = 4;
+
 /** Miroir du DTO de api/_lib/coursPatient.ts (le client n'importe pas le code serveur). */
 export interface CoursPatientRecord {
   coursId: string;
@@ -32,9 +35,19 @@ export function jourLocal(d: Date = new Date()): string {
  * (Même règle que « prochain rendez-vous » : la date compte, pas l'heure.)
  */
 export function prochainCours(cours: CoursPatientRecord[], aujourdhui: string): CoursPatientRecord | null {
+  return prochainsCours(cours, aujourdhui, 1)[0] ?? null;
+}
+
+/**
+ * Les prochains cours à venir (planifiés, aujourd'hui ou plus tard), du plus proche au plus
+ * lointain, au plus `n` : ceux auxquels le bénéficiaire peut répondre « Je viens / Je ne
+ * viens pas ». Un groupe hebdomadaire peut vouloir répondre plusieurs semaines à l'avance.
+ */
+export function prochainsCours(cours: CoursPatientRecord[], aujourdhui: string, n: number = NB_COURS_A_REPONDRE): CoursPatientRecord[] {
   return cours
     .filter(c => c.statut === 'planifie' && c.date >= aujourdhui)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.heureDebut.localeCompare(b.heureDebut))[0] ?? null;
+    .sort((a, b) => a.date.localeCompare(b.date) || a.heureDebut.localeCompare(b.heureDebut))
+    .slice(0, n);
 }
 
 /**
@@ -54,3 +67,50 @@ export const LIBELLE_PRESENCE_PATIENT: Record<PresenceCoursPatient, string> = {
   absent: 'Absent',
   excuse: 'Excusé',
 };
+
+// ── Ouverture des réponses : jusqu'au DÉBUT du cours ───────────────────────
+
+const DATE_ISO = /^\d{4}-\d{2}-\d{2}$/;
+const HEURE = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+
+/** Décalage Europe/Paris ↔ UTC, en minutes, à l'instant donné (CET/CEST gérés). */
+function decalageParisMinutes(date: Date): number {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Paris', hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const parts: Record<string, string> = {};
+  for (const p of dtf.formatToParts(date)) if (p.type !== 'literal') parts[p.type] = p.value;
+  const heure = parts.hour === '24' ? '00' : parts.hour;
+  const enUTC = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(heure), Number(parts.minute), Number(parts.second));
+  return Math.round((enUTC - date.getTime()) / 60_000);
+}
+
+/**
+ * Instant de début d'un cours (ms depuis l'epoch), date + heure civiles EUROPE/PARIS, ou null
+ * si la date est inexploitable. Heure inexploitable : 23h59 de ce jour-là.
+ *
+ * MIROIR de instantDebutCours (api/_lib/presenceAnnoncee.ts) : le SERVEUR fait foi, il refuse
+ * toute réponse tardive. Ce calcul ne sert qu'à ne plus proposer les boutons au bon moment,
+ * sans dépendre du fuseau du téléphone. Les tests de ce fichier reprennent les mêmes cas que
+ * ceux du serveur, pour que les deux ne divergent pas.
+ */
+export function debutCoursParis(date: string, heureDebut: string): number | null {
+  if (!DATE_ISO.test(date)) return null;
+  const heure = HEURE.test(heureDebut) ? heureDebut : '23:59';
+  const [annee, mois, jour] = date.split('-').map(Number);
+  const [h, m] = heure.split(':').map(Number);
+  const approx = new Date(Date.UTC(annee, mois - 1, jour, h, m, 0));
+  if (Number.isNaN(approx.getTime())) return null;
+  return approx.getTime() - decalageParisMinutes(approx) * 60_000;
+}
+
+/**
+ * Le bénéficiaire peut-il encore répondre ? Cours planifié ET instant présent STRICTEMENT
+ * avant son début (aucune tolérance, comme le serveur).
+ */
+export function reponseEncoreOuverte(cours: CoursPatientRecord, maintenantMs: number): boolean {
+  if (cours.statut !== 'planifie') return false;
+  const debut = debutCoursParis(cours.date, cours.heureDebut);
+  return debut !== null && maintenantMs < debut;
+}

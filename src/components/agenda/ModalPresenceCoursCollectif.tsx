@@ -3,6 +3,8 @@ import { X, Users, Check, Mic, MicOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { NIVEAUX_EFFORT, NIVEAUX_BIEN_ETRE } from '../../lib/ressentiCours';
+import { resumeAnnonces, libelleResumeAnnonces } from '../../lib/coursCollectifs';
+import PastilleAnnonce from './PastilleAnnonce';
 import type { CoursCollectif, ParticipationCoursCollectif, Participant, StatutPresenceCours, StatutCoursCollectif } from '../../types';
 
 const LABEL_PRESENCE: Record<StatutPresenceCours, string> = {
@@ -25,11 +27,13 @@ type PatchParticipation = {
 
 interface LigneProps {
   participation: ParticipationCoursCollectif;
+  /** Sert à décider quoi dire de la présence ANNONCÉE (à venir : les trois états ; réalisé : « avait annoncé »). */
+  statutCours: StatutCoursCollectif;
   participant: Participant | undefined;
   onSauvegarder: (patch: PatchParticipation) => Promise<boolean>;
 }
 
-function LigneParticipant({ participation, participant, onSauvegarder }: LigneProps) {
+function LigneParticipant({ participation, statutCours, participant, onSauvegarder }: LigneProps) {
   const [statutPresence, setStatutPresence] = useState<StatutPresenceCours>(participation.statutPresence);
   const [ressentiBorg, setRessentiBorg] = useState<number | null>(participation.ressentiBorg ?? null);
   const [ressentiBienetre, setRessentiBienetre] = useState<number | null>(participation.ressentiBienetre ?? null);
@@ -84,9 +88,14 @@ function LigneParticipant({ participation, participant, onSauvegarder }: LignePr
   return (
     <div className="border border-gray-100 rounded-xl p-3">
       <div className="flex items-center justify-between gap-3 mb-2">
-        <span className="text-sm font-medium text-dark">
-          {participant ? `${participant.prenom} ${participant.nom}` : 'Participant introuvable'}
-        </span>
+        <div className="min-w-0">
+          <span className="text-sm font-medium text-dark">
+            {participant ? `${participant.prenom} ${participant.nom}` : 'Participant introuvable'}
+          </span>
+          <div className="mt-0.5">
+            <PastilleAnnonce presenceAnnoncee={participation.presenceAnnoncee} statutCours={statutCours} />
+          </div>
+        </div>
         <div className="flex gap-1">
           {(['present', 'absent', 'excuse'] as StatutPresenceCours[]).map(s => (
             <button
@@ -202,6 +211,14 @@ interface Props {
 export default function ModalPresenceCoursCollectif({ cours, participations, participants, programmeNom, onMettreAJourParticipation, onModifierStatutCours, onClose }: Props) {
   const participantMap = new Map(participants.map(p => [p.id, p]));
   const badge = STATUT_COURS_BADGE[cours.statut];
+  // Réponses annoncées par les bénéficiaires : à venir seulement (après le cours, la présence
+  // constatée prend le relais). Les noms des « sans réponse » servent à relancer.
+  const resume = resumeAnnonces(participations);
+  const aRelancer = participations
+    .filter(p => !p.presenceAnnoncee)
+    .map(p => participantMap.get(p.participantId))
+    .filter((p): p is Participant => Boolean(p))
+    .map(p => `${p.prenom} ${p.nom}`);
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -224,11 +241,26 @@ export default function ModalPresenceCoursCollectif({ cours, participations, par
           )}
         </div>
 
+        {cours.statut === 'planifie' && participations.length > 0 && (
+          <div
+            data-testid="resume-annonces"
+            className="mb-3 rounded-xl px-3 py-2 text-xs"
+            style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}
+          >
+            <span className="font-semibold text-gray-700">Réponses annoncées : </span>
+            <span className="text-gray-600">{libelleResumeAnnonces(resume)}</span>
+            {aRelancer.length > 0 && (
+              <div className="mt-1 text-gray-500" data-testid="a-relancer">À relancer : {aRelancer.join(', ')}</div>
+            )}
+          </div>
+        )}
+
         <div className="space-y-2">
           {participations.map(p => (
             <LigneParticipant
               key={p.id}
               participation={p}
+              statutCours={cours.statut}
               participant={participantMap.get(p.participantId)}
               onSauvegarder={patch => onMettreAJourParticipation(p.id, patch)}
             />

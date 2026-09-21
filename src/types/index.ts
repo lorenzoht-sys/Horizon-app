@@ -588,8 +588,18 @@ export interface ParticipationCoursCollectif {
    * (même défaut que seances.notes, corrigé par la PR #68).
    */
   notes?: string;
+  /**
+   * Ce que le BÉNÉFICIAIRE a annoncé avant le cours (« Je viens » / « Je ne viens pas »).
+   * undefined = pas de réponse. Distinct de `statutPresence` (constatée par le praticien).
+   * Écrit uniquement par la route patient : le praticien ne le saisit pas à sa place.
+   */
+  presenceAnnoncee?: PresenceAnnoncee;
+  /** Quand le bénéficiaire a donné (ou changé) sa réponse. */
+  presenceAnnonceeLe?: string;
   createdAt: string;
 }
+
+export type PresenceAnnoncee = 'vient' | 'ne_vient_pas';
 
 export interface Seance {
   id: string;

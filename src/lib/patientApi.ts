@@ -3,7 +3,7 @@
 // les requêtes passent par des endpoints serverless qui valident le code
 // patient / le JWT côté serveur (clé service_role, jamais exposée ici).
 
-import type { CoursPatientRecord } from './coursPatient';
+import type { CoursPatientRecord, ReponseAnnonceeCours } from './coursPatient';
 
 export interface PatientMeResponse {
   participantId: string;
@@ -195,5 +195,39 @@ export async function patientDesactiverRappels(token: string, endpoint: string):
     return res.ok;
   } catch {
     return false;
+  }
+}
+
+export type ResultatAnnoncePresence =
+  | { ok: true; presenceAnnoncee: ReponseAnnonceeCours }
+  | {
+      ok: false;
+      /** 0 = réseau injoignable (pas une réponse du serveur). 409 = le cours n'accepte plus de réponse. */
+      status: number;
+      /** Code lisible renvoyé par le serveur sur un 409 : cours_annule, cours_realise, deja_commence… */
+      code?: string;
+      error?: string;
+    };
+
+/**
+ * « Je viens » / « Je ne viens pas » pour un cours collectif. Le participant vient du JETON,
+ * jamais de cette requête : on n'envoie que l'identifiant du cours et la réponse.
+ */
+export async function patientAnnoncerPresence(
+  token: string,
+  coursId: string,
+  reponse: ReponseAnnonceeCours,
+): Promise<ResultatAnnoncePresence> {
+  try {
+    const res = await fetch('/api/patient/activite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ type: 'cours-presence', coursId, reponse }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, status: res.status, code: data?.code, error: data?.error };
+    return { ok: true, presenceAnnoncee: data?.presenceAnnoncee ?? reponse };
+  } catch {
+    return { ok: false, status: 0, error: 'Connexion impossible. Vérifiez votre réseau et réessayez.' };
   }
 }
