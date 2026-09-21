@@ -582,6 +582,12 @@ export interface ParticipationCoursCollectif {
   programmeIndividuelId?: string;
   ressentiBorg?: number;
   ressentiBienetre?: number;
+  /**
+   * Note libre du praticien sur ce participant pour ce cours. INTERNE au
+   * praticien : ne jamais l'envoyer au bénéficiaire ni au portail structure
+   * (même défaut que seances.notes, corrigé par la PR #68).
+   */
+  notes?: string;
   createdAt: string;
 }
 

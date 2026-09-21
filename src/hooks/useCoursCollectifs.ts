@@ -109,13 +109,14 @@ export function useCoursCollectifs() {
 
   async function mettreAJourParticipation(
     participationId: string,
-    patch: { statutPresence?: StatutPresenceCours; ressentiBorg?: number | null; ressentiBienetre?: number | null },
+    patch: { statutPresence?: StatutPresenceCours; ressentiBorg?: number | null; ressentiBienetre?: number | null; notes?: string | null },
   ): Promise<boolean> {
     if (!supabase) return false;
     const dbPatch: Record<string, unknown> = {};
     if (patch.statutPresence !== undefined) dbPatch.statut_presence = patch.statutPresence;
     if (patch.ressentiBorg !== undefined) dbPatch.ressenti_borg = patch.ressentiBorg;
     if (patch.ressentiBienetre !== undefined) dbPatch.ressenti_bienetre = patch.ressentiBienetre;
+    if (patch.notes !== undefined) dbPatch.notes = patch.notes;
 
     const { error } = await supabase.from('participations_cours_collectifs').update(dbPatch).eq('id', participationId);
     if (error) {
@@ -130,6 +131,7 @@ export function useCoursCollectifs() {
         ...(patch.statutPresence !== undefined ? { statutPresence: patch.statutPresence } : {}),
         ...(patch.ressentiBorg !== undefined ? { ressentiBorg: patch.ressentiBorg ?? undefined } : {}),
         ...(patch.ressentiBienetre !== undefined ? { ressentiBienetre: patch.ressentiBienetre ?? undefined } : {}),
+        ...(patch.notes !== undefined ? { notes: patch.notes ?? undefined } : {}),
       };
     }));
     return true;
