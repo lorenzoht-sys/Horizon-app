@@ -3,8 +3,8 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import {
-  SELECT_COURS_PATIENT, COLONNES_PARTICIPATION_PATIENT, COLONNES_COURS_PATIENT,
-  construireCoursPatient, LIMITE_COURS_PATIENT,
+  SELECT_COURS_PATIENT, SELECT_COURS_PATIENT_SANS_ANNONCE, COLONNES_PARTICIPATION_PATIENT, COLONNES_COURS_PATIENT,
+  construireCoursPatient, lireLignesCoursPatient, LIMITE_COURS_PATIENT,
 } from './coursPatient.js';
 
 const dossierApi = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -31,19 +31,33 @@ describe('colonnes de cours collectifs envoyées au bénéficiaire', () => {
     for (const interdite of [
       'notes', 'participant_id', 'programme_individuel_id', 'created_at',
       'praticien_id', 'structure_id', 'mode_facturation', 'programme_commun_id',
+      'presence_annoncee_le',
     ]) {
       expect(colonnes, `« ${interdite} » ne doit jamais quitter le praticien`).not.toContain(interdite);
     }
     expect(SELECT_COURS_PATIENT).not.toMatch(/\*/);
   });
 
-  it('api/patient/me.ts lit ces tables avec la liste commune, sans select en clair', () => {
+  it('api/patient/me.ts lit les cours par lireLignesCoursPatient, jamais directement', () => {
     const source = readFileSync(path.join(dossierApi, 'patient/me.ts'), 'utf-8');
-    const appel = /from\('participations_cours_collectifs'\)\s*\.select\(([^)]*)\)/s.exec(source);
-    expect(appel, 'lecture de participations_cours_collectifs introuvable dans me.ts').not.toBeNull();
-    expect(appel![1].trim()).toBe('SELECT_COURS_PATIENT');
-    // Et aucune lecture directe de cours_collectifs, qui contournerait la liste.
+    expect(source).toMatch(/lireLignesCoursPatient\(supabase, participantId/);
+    // Aucune lecture directe de ces tables dans me.ts : elle contournerait la liste fermée.
+    expect(source).not.toMatch(/from\('participations_cours_collectifs'\)/);
     expect(source).not.toMatch(/from\('cours_collectifs'\)/);
+  });
+
+  it("lireLignesCoursPatient utilise les listes fermées (avec et sans la colonne d'annonce), sans select en clair", () => {
+    const source = readFileSync(path.join(dossierApi, '_lib/coursPatient.ts'), 'utf-8');
+    expect(source).toMatch(/\.select\(colonnes\)/);
+    expect(source).toMatch(/lire\(SELECT_COURS_PATIENT\)/);
+    expect(source).toMatch(/lire\(SELECT_COURS_PATIENT_SANS_ANNONCE\)/);
+    expect(source).not.toMatch(/\.select\('\*'\)/);
+  });
+
+  it("la liste de repli est la même, moins la colonne d'annonce", () => {
+    expect(SELECT_COURS_PATIENT).toContain('presence_annoncee');
+    expect(SELECT_COURS_PATIENT_SANS_ANNONCE).not.toContain('presence_annoncee');
+    expect(SELECT_COURS_PATIENT.replace(', presence_annoncee', '')).toBe(SELECT_COURS_PATIENT_SANS_ANNONCE);
   });
 });
 
@@ -83,7 +97,7 @@ describe('construireCoursPatient', () => {
     }
     // Le DTO a EXACTEMENT ces clés : un champ ajouté par erreur ferait échouer ce test.
     expect(Object.keys(dto[0]).sort()).toEqual([
-      'coursId', 'date', 'dureeMinutes', 'heureDebut', 'presence', 'ressentiBienetre', 'ressentiBorg', 'statut', 'titre',
+      'coursId', 'date', 'dureeMinutes', 'heureDebut', 'presence', 'presenceAnnoncee', 'ressentiBienetre', 'ressentiBorg', 'statut', 'titre',
     ]);
   });
 
@@ -120,5 +134,88 @@ describe('construireCoursPatient', () => {
 
   it('aucun cours : liste vide', () => {
     expect(construireCoursPatient([])).toEqual([]);
+  });
+});
+
+describe('construireCoursPatient — présence annoncée', () => {
+  it('la propre réponse du bénéficiaire, distincte de la présence constatée', () => {
+    const [c] = construireCoursPatient([ligne({ cours: { statut: 'planifie' }, participation: { presence_annoncee: 'ne_vient_pas' } })]);
+    expect(c.presenceAnnoncee).toBe('ne_vient_pas');
+    expect(c.presence).toBeNull(); // rien de constaté : le cours n'a pas eu lieu
+  });
+
+  it('annoncé « vient » puis constaté absent : les deux coexistent', () => {
+    const [c] = construireCoursPatient([ligne({ participation: { statut_presence: 'absent', presence_annoncee: 'vient' } })]);
+    expect(c.presenceAnnoncee).toBe('vient');
+    expect(c.presence).toBe('absent');
+  });
+
+  it('pas de réponse (null), colonne absente ou valeur inconnue : null — jamais « vient » par défaut', () => {
+    expect(construireCoursPatient([ligne({ participation: { presence_annoncee: null } })])[0].presenceAnnoncee).toBeNull();
+    expect(construireCoursPatient([ligne()])[0].presenceAnnoncee).toBeNull();
+    expect(construireCoursPatient([ligne({ participation: { presence_annoncee: 'n_importe_quoi' } })])[0].presenceAnnoncee).toBeNull();
+  });
+
+  it("presence_annoncee_le ne sort jamais", () => {
+    const json = JSON.stringify(construireCoursPatient([
+      ligne({ participation: { presence_annoncee: 'vient', presence_annoncee_le: '2026-09-21T10:00:00Z' } }),
+    ]));
+    expect(json).not.toContain('presence_annoncee_le');
+    expect(json).not.toContain('2026-09-21T10:00:00Z');
+  });
+});
+
+describe('lireLignesCoursPatient — le bénéficiaire ne perd pas ses cours si la migration manque', () => {
+  type Reponse = { data: unknown[] | null; error: { code?: string; message?: string } | null };
+
+  // Faux client : enregistre les colonnes demandées et rejoue des réponses scriptées.
+  function fauxClient(reponses: Reponse[]) {
+    const demandes: string[] = [];
+    const client = {
+      from: () => ({
+        select: (colonnes: string) => ({
+          eq: () => ({
+            limit: () => { demandes.push(colonnes); return Promise.resolve(reponses.shift()!); },
+          }),
+        }),
+      }),
+    };
+    return { client, demandes };
+  }
+
+  it("colonne présente : une seule lecture, avec la colonne d'annonce", async () => {
+    const { client, demandes } = fauxClient([{ data: [{ ok: 1 }], error: null }]);
+    const r = await lireLignesCoursPatient(client, 'p1');
+    expect(r.data).toEqual([{ ok: 1 }]);
+    expect(demandes).toEqual([SELECT_COURS_PATIENT]);
+  });
+
+  it('colonne ABSENTE (42703, constaté) : relit sans elle, rend les cours, et le signale', async () => {
+    const signale: string[] = [];
+    const { client, demandes } = fauxClient([
+      { data: null, error: { code: '42703', message: 'column participations_cours_collectifs.presence_annoncee does not exist' } },
+      { data: [{ cours: 1 }, { cours: 2 }], error: null },
+    ]);
+    const r = await lireLignesCoursPatient(client, 'p1', e => { signale.push(e.message ?? ''); });
+    expect(r.error).toBeNull();
+    expect(r.data).toHaveLength(2); // les cours sont TOUJOURS là
+    expect(demandes).toEqual([SELECT_COURS_PATIENT, SELECT_COURS_PATIENT_SANS_ANNONCE]);
+    expect(signale).toHaveLength(1); // et l'incident est signalé, pas silencieux
+    expect(signale[0]).toContain('presence_annoncee');
+  });
+
+  it('attend le signalement avant de relire (Sentry doit avoir le temps de partir en serverless)', async () => {
+    const ordre: string[] = [];
+    const { client } = fauxClient([{ data: null, error: { code: '42703' } }, { data: [], error: null }]);
+    await lireLignesCoursPatient(client, 'p1', async () => { await Promise.resolve(); ordre.push('signalé'); });
+    ordre.push('terminé');
+    expect(ordre).toEqual(['signalé', 'terminé']);
+  });
+
+  it("toute AUTRE erreur n'est pas masquée par le repli : elle est renvoyée telle quelle", async () => {
+    const { client, demandes } = fauxClient([{ data: null, error: { code: 'PGRST301', message: 'autre' } }]);
+    const r = await lireLignesCoursPatient(client, 'p1');
+    expect(r.error?.code).toBe('PGRST301');
+    expect(demandes).toHaveLength(1);
   });
 });

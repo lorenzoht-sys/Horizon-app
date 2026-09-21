@@ -4,7 +4,7 @@ import { prochainCours, historiqueCours, jourLocal, type CoursPatientRecord } fr
 function cours(over: Partial<CoursPatientRecord> = {}): CoursPatientRecord {
   return {
     coursId: 'c1', titre: 'Gym douce', date: '2026-09-22', heureDebut: '10:00', dureeMinutes: 45,
-    statut: 'planifie', presence: null, ressentiBorg: null, ressentiBienetre: null, ...over,
+    statut: 'planifie', presence: null, ressentiBorg: null, ressentiBienetre: null, presenceAnnoncee: null, ...over,
   };
 }
 
