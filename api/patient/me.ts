@@ -1,12 +1,13 @@
 // GET /api/patient/me
 // Renvoie toutes les données de l'espace patient (participant, bilans,
-// séances, programmes V1/V2, documents partagés, historique de séances)
+// séances, cours collectifs, programmes V1/V2, documents partagés, historique de séances)
 // filtrées par le participant_id du JWT — jamais par un id fourni par le
 // client.
 
 import { getServiceClient, verifyPatientToken, extractBearerToken, getClientIp, logAuditEvent } from '../_lib/patientAuth.js';
 import { withSentry } from '../_lib/sentry.js';
 import { COLONNES_SEANCE_EXPOSEE } from '../_lib/colonnesSeancesExposees.js';
+import { SELECT_COURS_PATIENT, construireCoursPatient } from '../_lib/coursPatient.js';
 
 // Contrôle de partage bénéficiaire — voir supabase/migrations/20260713_visibilite_beneficiaire.sql
 // et src/types/index.ts (VisibiliteBeneficiaire, Bilan.visibleBeneficiaire).
@@ -89,7 +90,7 @@ export default withSentry(async function handler(req: any, res: any) {
     return res.status(500).json({ error: String(err) });
   }
 
-  const [participantRes, bilansRes, seancesRes, programmesRes, docsRes, testsActifsRes, testsResultatsRes, exLibresActifsRes, exLibresValidationsRes] = await Promise.all([
+  const [participantRes, bilansRes, seancesRes, programmesRes, docsRes, testsActifsRes, testsResultatsRes, exLibresActifsRes, exLibresValidationsRes, coursRes] = await Promise.all([
     supabase.from('participants').select('*').eq('id', participantId).single(),
     supabase.from('bilans').select('*').eq('participant_id', participantId).order('date'),
     // Liste commune et FERMÉE (pas select('*')) : `notes` et
@@ -118,6 +119,13 @@ export default withSentry(async function handler(req: any, res: any) {
     supabase.from('exercices_libres_validations')
       .select('exercice_id, date, fait, note').eq('participant_id', participantId)
       .order('date', { ascending: false }).limit(200),
+    // Cours collectifs de CE bénéficiaire (participant_id du JWT), colonnes listées
+    // explicitement : la note du praticien et la facturation n'en font jamais
+    // partie — voir api/_lib/coursPatient.ts.
+    supabase.from('participations_cours_collectifs')
+      .select(SELECT_COURS_PATIENT)
+      .eq('participant_id', participantId)
+      .limit(500),
   ]);
 
   if (participantRes.error || !participantRes.data) {
@@ -157,6 +165,13 @@ export default withSentry(async function handler(req: any, res: any) {
     ? (bilansRes.data ?? []).map((b: any) => filtrerBilan(b, sedentariteVisible, fatigueVisible))
     : [];
   const seances = visibilite.rdv ? (seancesRes.data ?? []) : [];
+  // Les cours suivent le réglage « rendez-vous ». Une erreur sur CETTE lecture ne doit
+  // pas faire tomber tout l'espace patient : on la journalise et on renvoie une liste
+  // vide, les cours manquent mais le reste de la réponse est intact.
+  if (coursRes.error) {
+    console.error('[patient/me] lecture des cours collectifs impossible:', coursRes.error.code, coursRes.error.message);
+  }
+  const coursCollectifs = visibilite.rdv && !coursRes.error ? construireCoursPatient(coursRes.data ?? []) : [];
 
   const programmes = visibilite.programme ? (programmesRes.data ?? []) : [];
   const v2ProgrammeIds = programmes.filter((p: any) => p.type != null).map((p: any) => p.id);
@@ -221,6 +236,7 @@ export default withSentry(async function handler(req: any, res: any) {
     participant,
     bilans,
     seances,
+    coursCollectifs,
     programmes,
     programmeSeances,
     programmePlanning,

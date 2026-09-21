@@ -4,6 +4,11 @@ import { toast } from 'sonner';
 import type { Participant, Seance, Bilan, Programme, ProgrammeV2, ProgrammeSeanceV2, JourProgramme } from '../types';
 import { JOURS_PROGRAMME } from '../types';
 import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/mappers';
+import {
+  prochainCours, historiqueCours, jourLocal, LIBELLE_PRESENCE_PATIENT,
+  type CoursPatientRecord, type PresenceCoursPatient,
+} from '../lib/coursPatient';
+import { niveauEffort, niveauBienEtre } from '../lib/ressentiCours';
 import { patientFetchMe, patientSauvegarderSeance, patientEnvoyerRetour, patientLogin, patientActiverRappels, patientDesactiverRappels, patientEnregistrerTestEtalon, patientMarquerExerciceLibre } from '../lib/patientApi';
 import { activerRappelsPush, desactiverRappelsPush, etatAbonnementPush, estIOS, estInstalleeSurEcranAccueil, pushSupporte } from '../lib/push';
 import { loadExercices } from '../data/exercices';
@@ -337,13 +342,107 @@ function SectionRappels({ token }: { token: string }) {
   );
 }
 
+// ── Cours collectifs (lecture seule) ──────────────────────────────────────────
+// Les données arrivent de /api/patient/me, déjà filtrées côté serveur : jamais de note du
+// praticien, jamais de facturation, et une présence SEULEMENT sur un cours réalisé.
+
+function CarteProchainCours({ cours }: { cours: CoursPatientRecord }) {
+  return (
+    <div style={{ background: C.dark, borderRadius: 18, padding: '18px 16px' }} data-testid="prochain-cours">
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.teal, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+        Votre prochain cours collectif
+      </div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: 'white', textTransform: 'capitalize', marginBottom: 4 }}>
+        👥 {fmt(cours.date)}
+      </div>
+      <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
+        {fmtHeure(cours.heureDebut)} · {cours.dureeMinutes} min · {cours.titre}
+      </div>
+    </div>
+  );
+}
+
+const COULEURS_PRESENCE_PATIENT: Record<PresenceCoursPatient, { fond: string; texte: string }> = {
+  present: { fond: '#DCFCE7', texte: '#166534' },
+  absent:  { fond: '#FEF0EF', texte: '#B42318' },
+  excuse:  { fond: '#FEF5E7', texte: '#92400E' },
+};
+
+const NB_COURS_VISIBLES = 5;
+
+function CarteMesCours({ cours }: { cours: CoursPatientRecord[] }) {
+  const [toutVoir, setToutVoir] = useState(false);
+  const historique = historiqueCours(cours);
+  if (historique.length === 0) return null;
+  const visibles = toutVoir ? historique : historique.slice(0, NB_COURS_VISIBLES);
+
+  return (
+    <div style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 18, padding: '18px 16px' }} data-testid="mes-cours">
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+        Vos cours collectifs
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {visibles.map(c => {
+          const effort = niveauEffort(c.ressentiBorg);
+          const bienEtre = niveauBienEtre(c.ressentiBienetre);
+          const annule = c.statut === 'annule';
+          const pastille = annule
+            ? { libelle: 'Cours annulé', fond: '#F3F4F6', texte: '#6B7280' }
+            : c.presence
+              ? { libelle: LIBELLE_PRESENCE_PATIENT[c.presence], ...COULEURS_PRESENCE_PATIENT[c.presence] }
+              : null;
+          return (
+            <div key={c.coursId} data-testid="cours-historique">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: annule ? C.muted : C.dark }}>👥 {c.titre}</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{fmtCourt(c.date)} · {fmtHeure(c.heureDebut)}</div>
+                </div>
+                {pastille && (
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 8, background: pastille.fond, color: pastille.texte, whiteSpace: 'nowrap' }}>
+                    {pastille.libelle}
+                  </span>
+                )}
+              </div>
+              {(effort || bienEtre) && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                  {effort && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: 'white', background: effort.couleur, padding: '2px 8px', borderRadius: 999 }}>
+                      Effort : {effort.label}
+                    </span>
+                  )}
+                  {bienEtre && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: 'white', background: bienEtre.couleur, padding: '2px 8px', borderRadius: 999 }}>
+                      Bien-être : {bienEtre.label}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {historique.length > NB_COURS_VISIBLES && (
+        <button
+          type="button"
+          onClick={() => setToutVoir(v => !v)}
+          style={{ marginTop: 14, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: C.teal }}
+        >
+          {toutVoir ? 'Voir moins' : `Voir tout (${historique.length})`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── ÉCRAN 1 — Accueil ─────────────────────────────────────────────────────────
 
 function EcranAccueil({
-  participant, seances, bilans, programmes, programmesV2, token,
+  participant, seances, coursCollectifs, bilans, programmes, programmesV2, token,
 }: {
   participant: Participant;
   seances: Seance[];
+  coursCollectifs: CoursPatientRecord[];
   bilans: Bilan[];
   programmes: Programme[];
   programmesV2: ProgrammeV2[];
@@ -440,6 +539,15 @@ function EcranAccueil({
           </div>
         </div>
       )}
+
+      {/* Prochain cours collectif */}
+      {(() => {
+        const prochain = prochainCours(coursCollectifs, jourLocal());
+        return prochain ? <CarteProchainCours cours={prochain} /> : null;
+      })()}
+
+      {/* Historique des cours collectifs : présence, effort perçu, bien-être */}
+      <CarteMesCours cours={coursCollectifs} />
 
       {/* Programmes en cours — V2 */}
       {progsV2Actifs.length > 0 && (
@@ -2320,6 +2428,7 @@ export default function EspacePatient() {
   const [token, setToken]               = useState<string | null>(null);
   const [participant, setParticipant]   = useState<Participant | null>(null);
   const [seances, setSeances]           = useState<Seance[]>([]);
+  const [coursCollectifs, setCoursCollectifs] = useState<CoursPatientRecord[]>([]);
   const [bilans, setBilans]             = useState<Bilan[]>([]);
   const [programmes, setProgrammes]     = useState<Programme[]>([]);
   const [programmesV2, setProgrammesV2] = useState<ProgrammeV2[]>([]);
@@ -2381,6 +2490,7 @@ export default function EspacePatient() {
       setParticipant(dbToParticipant(data.participant));
       setBilans(data.bilans.map(dbToBilan));
       setSeances(data.seances.map(dbToSeance));
+      setCoursCollectifs(data.coursCollectifs ?? []);
 
       const allProgs = data.programmes;
       setProgrammes(allProgs.map(dbToProgramme));
@@ -2587,6 +2697,7 @@ export default function EspacePatient() {
           <EcranAccueil
             participant={participant}
             seances={seances}
+            coursCollectifs={coursCollectifs}
             bilans={bilans}
             programmes={programmes}
             programmesV2={programmesV2}

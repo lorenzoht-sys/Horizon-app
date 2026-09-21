@@ -3,11 +3,19 @@
 // les requêtes passent par des endpoints serverless qui valident le code
 // patient / le JWT côté serveur (clé service_role, jamais exposée ici).
 
+import type { CoursPatientRecord } from './coursPatient';
+
 export interface PatientMeResponse {
   participantId: string;
   participant: Record<string, unknown>;
   bilans: Record<string, unknown>[];
   seances: Record<string, unknown>[];
+  /**
+   * Cours collectifs du bénéficiaire, déjà filtrés côté serveur (pas de note du
+   * praticien, présence seulement sur un cours réalisé). Optionnel : une réponse
+   * qui n'en porte pas s'affiche comme « aucun cours ».
+   */
+  coursCollectifs?: CoursPatientRecord[];
   programmes: Record<string, unknown>[];
   programmeSeances: Record<string, unknown>[];
   programmePlanning: Record<string, unknown>[];
