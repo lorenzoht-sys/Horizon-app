@@ -159,3 +159,39 @@ export function libelleCompactAnnonces(r: ResumeAnnonces): string {
   if (r.sansReponse > 0) parts.push(`?${r.sansReponse}`);
   return parts.join(' ');
 }
+
+// ── Synthèse d'assiduité (dossier PDF) ──────────────────────────────────────
+
+export interface SyntheseCours {
+  realises: number;
+  presents: number;
+  absents: number;
+  excuses: number;
+}
+
+/**
+ * Assiduité sur les cours RÉALISÉS, et eux seuls : un cours à venir ou annulé n'a aucune
+ * présence constatée (statut_presence vaut « present » par défaut dès l'inscription), il ne
+ * doit ni gonfler ni diluer le décompte.
+ */
+export function syntheseCoursRealises(entrees: EntreeCours[]): SyntheseCours {
+  const s: SyntheseCours = { realises: 0, presents: 0, absents: 0, excuses: 0 };
+  for (const e of entrees) {
+    const presence = presenceConstatee(e); // null tant que le cours n'est pas réalisé
+    if (presence === null) continue;
+    s.realises++;
+    if (presence === 'present') s.presents++;
+    else if (presence === 'absent') s.absents++;
+    else s.excuses++;
+  }
+  return s;
+}
+
+/** « Présent à 8 cours sur 10 réalisés · 1 absence · 1 excusé » — vide s'il n'y a aucun cours réalisé. */
+export function libelleSyntheseCours(s: SyntheseCours): string {
+  if (s.realises === 0) return '';
+  const parts = [`Présent à ${s.presents} cours sur ${s.realises} réalisé${s.realises > 1 ? 's' : ''}`];
+  if (s.absents > 0) parts.push(`${s.absents} absence${s.absents > 1 ? 's' : ''}`);
+  if (s.excuses > 0) parts.push(`${s.excuses} excusé${s.excuses > 1 ? 's' : ''}`);
+  return parts.join(' · ');
+}

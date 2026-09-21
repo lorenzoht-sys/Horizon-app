@@ -17,6 +17,9 @@ import { PdfFooter, LOGO_H } from './PdfShared';
 import { computeTinettiScores } from '../../data/tinetti';
 import { libelleAge } from '../../lib/age';
 import { distanceTm6 } from '../../lib/tm6';
+import { presenceConstatee, syntheseCoursRealises, libelleSyntheseCours, type EntreeCours } from '../../lib/coursCollectifs';
+import { niveauEffort, niveauBienEtre } from '../../lib/ressentiCours';
+import { cleanTextPdfMultiligne } from '../../utils/pdfText';
 
 // ── Palette « Horizon » ────────────────────────────────────────────────────────
 
@@ -31,6 +34,8 @@ const GREEN  = '#15803D';
 const GREEN_BG = '#F0FDF4';
 const ORANGE = '#B45309';
 const ORANGE_BG = '#FFFBEB';
+
+const LIBELLE_PRESENCE_COURS = { present: 'Présent', absent: 'Absent', excuse: 'Excusé' } as const;
 
 const JOURS_FR: Record<string, string> = {
   lun: 'Lundi', mar: 'Mardi', mer: 'Mercredi', jeu: 'Jeudi',
@@ -59,6 +64,12 @@ export interface DossierPDFData {
   contratActif: Contrat | null;
   programmeActif: Programme | null;
   compteRendus: CompteRenduSeance[];
+  /**
+   * Cours collectifs de CE bénéficiaire (une participation chacun). Optionnel : la carte santé du
+   * bénéficiaire (mode « patient ») n'en passe jamais, et le mode patient n'en imprimerait de toute
+   * façon aucun. Le composant refiltre lui-même : voir coursDuDossier.
+   */
+  coursRealises?: EntreeCours[];
   settings: DossierPraticienSettings;
 }
 
@@ -284,7 +295,7 @@ function DossierHeader({
 // ── Composant principal ───────────────────────────────────────────────────────
 
 export default function DossierPDF({
-  participant, bilans, contratActif, programmeActif, compteRendus, settings, mode,
+  participant, bilans, contratActif, programmeActif, compteRendus, coursRealises, settings, mode,
 }: DossierPDFProps) {
   const isPraticien = mode === 'praticien';
   const sortedBilans = [...bilans].sort((a, b) => a.date.localeCompare(b.date));
@@ -358,6 +369,16 @@ export default function DossierPDF({
   const interpText = interpTextRaw ? interpTextRaw.replace(/#{1,3} /g, '').replace(/\*\*/g, '').trim() : null;
 
   const derniersCR = compteRendus.slice(0, 5);
+
+  // Cours collectifs : RÉALISÉS et de CE bénéficiaire, quelle que soit la liste reçue. Un cours à
+  // venir ou annulé n'a aucune présence constatée (statut_presence vaut « present » par défaut) ;
+  // et la note d'une participation est celle d'UNE personne : elle ne doit jamais atterrir dans le
+  // dossier d'une autre. Le refiltrage ici rend ces deux garanties indépendantes de l'appelant.
+  const coursDuDossier = (coursRealises ?? [])
+    .filter(e => e.cours.statut === 'realise' && e.participation.participantId === participant.id)
+    .sort((a, b) => b.cours.date.localeCompare(a.cours.date) || b.cours.heureDebut.localeCompare(a.cours.heureDebut));
+  const derniersCours = coursDuDossier.slice(0, 5);
+  const syntheseCours = libelleSyntheseCours(syntheseCoursRealises(coursDuDossier));
 
   const testWidths = hasEvol ? [2.4, 0.9, 0.9, 1.3, 1.1] : [2.8, 0.9, 0.9, 1.2];
 
@@ -549,6 +570,35 @@ export default function DossierPDF({
                   {cr.prochaineSeanceNotes?.trim() && (
                     <Text style={S.crNext}>Prochaine séance : {cr.prochaineSeanceNotes.trim()}</Text>
                   )}
+                </View>
+              );
+            })}
+          </Card>
+        )}
+
+        {/* ── COURS COLLECTIFS (praticien uniquement) ── */}
+        {isPraticien && derniersCours.length > 0 && (
+          <Card title={coursDuDossier.length > derniersCours.length ? `Cours collectifs (${derniersCours.length} derniers sur ${coursDuDossier.length})` : `Cours collectifs (${coursDuDossier.length})`}>
+            <Row label="Assiduité" value={syntheseCours} />
+            {derniersCours.map(entree => {
+              const { cours, participation } = entree;
+              const presence = presenceConstatee(entree);
+              const effort = niveauEffort(participation.ressentiBorg);
+              const bienEtre = niveauBienEtre(participation.ressentiBienetre);
+              const meta = [
+                presence ? LIBELLE_PRESENCE_COURS[presence] : null,
+                effort ? `effort ${effort.label.toLowerCase()}` : null,
+                bienEtre ? `bien-être ${bienEtre.label.toLowerCase()}` : null,
+              ].filter(Boolean).join(' · ');
+              // Texte libre : Helvetica ne dessine pas les émojis (carré vide) — on les retire, en gardant les lignes.
+              const note = participation.notes ? cleanTextPdfMultiligne(participation.notes) : '';
+              return (
+                // Une note très longue ne doit pas forcer un bloc indivisible plus grand qu'une page.
+                <View key={participation.id} style={S.crItem} wrap={note.length > 600}>
+                  <Text style={S.crDate}>
+                    {fmtDate(cours.date)} — {cleanTextPdfMultiligne(cours.titre)}{meta ? ` — ${meta}` : ''}
+                  </Text>
+                  {note && <Text style={S.crText}>{note}</Text>}
                 </View>
               );
             })}

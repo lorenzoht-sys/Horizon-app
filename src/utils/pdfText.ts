@@ -8,3 +8,22 @@ const SYMBOLES_NON_SUPPORTES = /[\u{1F000}-\u{1FFFF}\u{2190}-\u{2BFF}\u{FE00}-\u
 export function cleanTextPdf(text: string): string {
   return text.replace(SYMBOLES_NON_SUPPORTES, '').replace(/\s{2,}/g, ' ').trim();
 }
+
+/**
+ * Comme cleanTextPdf, pour un texte LIBRE sur plusieurs lignes (note du praticien) : retire les
+ * caractères que Helvetica ne sait pas dessiner (un émoji devient un carré vide dans le PDF),
+ * mais GARDE les retours à la ligne — cleanTextPdf les écrase en un espace.
+ *
+ * Retours Windows/Mac ramenés à \n ; espaces multiples réduits dans chaque ligne ; pas plus
+ * d'une ligne vide d'affilée ; rien en début ni en fin de texte.
+ */
+export function cleanTextPdfMultiligne(text: string): string {
+  return text
+    .replace(/\r\n?/g, '\n')
+    .replace(SYMBOLES_NON_SUPPORTES, '')
+    .split('\n')
+    .map(ligne => ligne.replace(/[ \t]{2,}/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
