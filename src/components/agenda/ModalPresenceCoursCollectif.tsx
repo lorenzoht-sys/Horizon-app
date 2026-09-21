@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { X, Users, Check } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Users, Check, Mic, MicOff } from 'lucide-react';
 import { toast } from 'sonner';
+import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import type { CoursCollectif, ParticipationCoursCollectif, Participant, StatutPresenceCours, StatutCoursCollectif } from '../../types';
 
 // Même échelle que retours_seance / EspacePatient.tsx (NIVEAUX_EFFORT,
@@ -33,26 +34,68 @@ const STATUT_COURS_BADGE: Record<StatutCoursCollectif, { label: string; class: s
   annule: { label: 'Annulé', class: 'bg-gray-100 text-gray-500' },
 };
 
+type PatchParticipation = {
+  statutPresence: StatutPresenceCours;
+  ressentiBorg: number | null;
+  ressentiBienetre: number | null;
+  /** Absent tant que la note n'a pas changé ; null = note effacée. */
+  notes?: string | null;
+};
+
 interface LigneProps {
   participation: ParticipationCoursCollectif;
   participant: Participant | undefined;
-  onSauvegarder: (patch: { statutPresence: StatutPresenceCours; ressentiBorg: number | null; ressentiBienetre: number | null }) => Promise<boolean>;
+  onSauvegarder: (patch: PatchParticipation) => Promise<boolean>;
 }
 
 function LigneParticipant({ participation, participant, onSauvegarder }: LigneProps) {
   const [statutPresence, setStatutPresence] = useState<StatutPresenceCours>(participation.statutPresence);
   const [ressentiBorg, setRessentiBorg] = useState<number | null>(participation.ressentiBorg ?? null);
   const [ressentiBienetre, setRessentiBienetre] = useState<number | null>(participation.ressentiBienetre ?? null);
+  const [notes, setNotes] = useState(participation.notes ?? '');
   const [saving, setSaving] = useState(false);
 
+  // Dictée : le texte dicté s'ajoute à ce qui était déjà écrit au moment où on
+  // appuie sur « Dicter » (le hook repart de zéro à chaque enregistrement).
+  const { isRecording, finalTranscript, interimTranscript, isSupported, error: erreurDictee, startRecording, stopRecording, reset: resetDictee } = useSpeechRecognition();
+  const baseDictee = useRef('');
+  useEffect(() => {
+    const dicte = (finalTranscript + interimTranscript).trim();
+    if (!dicte) return;
+    const base = baseDictee.current.trimEnd();
+    setNotes(base ? `${base} ${dicte}` : dicte);
+  }, [finalTranscript, interimTranscript]);
+
+  // Micro refusé, navigateur non compatible, session coupée… : sans ce message,
+  // « Dicter » semblerait ne rien faire.
+  useEffect(() => {
+    if (erreurDictee) toast.error(erreurDictee);
+  }, [erreurDictee]);
+
+  function basculerDictee() {
+    if (isRecording) { stopRecording(); return; }
+    resetDictee();
+    baseDictee.current = notes;
+    startRecording();
+  }
+
+  const notesModifiees = notes.trim() !== (participation.notes ?? '').trim();
   const modifie =
     statutPresence !== participation.statutPresence ||
     ressentiBorg !== (participation.ressentiBorg ?? null) ||
-    ressentiBienetre !== (participation.ressentiBienetre ?? null);
+    ressentiBienetre !== (participation.ressentiBienetre ?? null) ||
+    notesModifiees;
 
   async function sauvegarder() {
+    if (isRecording) stopRecording();
     setSaving(true);
-    const ok = await onSauvegarder({ statutPresence, ressentiBorg, ressentiBienetre });
+    // `notes` n'est envoyée que si elle a changé : enregistrer une présence ne
+    // doit pas dépendre de la colonne notes (migration 20260921_participations_
+    // cours_collectifs_notes.sql).
+    const ok = await onSauvegarder({
+      statutPresence, ressentiBorg, ressentiBienetre,
+      ...(notesModifiees ? { notes: notes.trim() === '' ? null : notes.trim() } : {}),
+    });
     setSaving(false);
     if (ok) toast.success(`${participant ? participant.prenom : 'Participant'} : mis à jour`);
   }
@@ -119,6 +162,35 @@ function LigneParticipant({ participation, participant, onSauvegarder }: LignePr
         </div>
       )}
 
+      {/* Note du praticien : visible de lui seul (jamais du bénéficiaire ni de la
+          structure), y compris pour un absent — la raison d'une absence s'y note. */}
+      <div className="mt-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-400">Note (visible de vous seul)</span>
+          {isSupported && (
+            <button
+              type="button"
+              onClick={basculerDictee}
+              aria-label={isRecording ? 'Arrêter la dictée' : 'Dicter la note'}
+              className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg border transition-colors ${
+                isRecording ? 'bg-red-50 border-red-200 text-red-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {isRecording ? <><MicOff size={12} /> Arrêter</> : <><Mic size={12} /> Dicter</>}
+            </button>
+          )}
+        </div>
+        <textarea
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          readOnly={isRecording}
+          rows={2}
+          placeholder={isRecording ? 'Dictée en cours…' : 'Observations, douleur signalée, exercice adapté, raison de l\'absence…'}
+          aria-label={`Note sur ${participant ? participant.prenom : 'ce participant'}`}
+          className="w-full mt-1 border border-gray-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:border-primary resize-none"
+        />
+      </div>
+
       {modifie && (
         <button
           onClick={sauvegarder} disabled={saving}
@@ -141,7 +213,7 @@ interface Props {
    *  20260917_cours_collectifs.sql). On ne distingue pas les deux cas :
    *  dans les deux, il n'y a simplement rien à afficher. */
   programmeNom?: string;
-  onMettreAJourParticipation: (participationId: string, patch: { statutPresence: StatutPresenceCours; ressentiBorg: number | null; ressentiBienetre: number | null }) => Promise<boolean>;
+  onMettreAJourParticipation: (participationId: string, patch: PatchParticipation) => Promise<boolean>;
   onModifierStatutCours: (statut: StatutCoursCollectif) => Promise<boolean>;
   onClose: () => void;
 }

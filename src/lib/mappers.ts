@@ -484,6 +484,7 @@ export function dbToParticipationCoursCollectif(row: any): ParticipationCoursCol
     programmeIndividuelId: row.programme_individuel_id ?? undefined,
     ressentiBorg: row.ressenti_borg ?? undefined,
     ressentiBienetre: row.ressenti_bienetre ?? undefined,
+    notes: row.notes ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -497,6 +498,10 @@ export function participationCoursCollectifToDb(p: Omit<ParticipationCoursCollec
     programme_individuel_id: p.programmeIndividuelId ?? null,
     ressenti_borg: p.ressentiBorg ?? null,
     ressenti_bienetre: p.ressentiBienetre ?? null,
+    // Seulement si renseignée : à la création d'un cours la colonne n'a aucune
+    // raison d'être écrite, et un INSERT ne doit pas dépendre de la migration
+    // qui l'a ajoutée.
+    ...(p.notes !== undefined ? { notes: p.notes } : {}),
   };
 }
 

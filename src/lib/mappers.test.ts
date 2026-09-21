@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { dbToBilan, bilanToDb, normaliserVisibilite } from './mappers';
+import {
+  dbToBilan, bilanToDb, normaliserVisibilite,
+  dbToParticipationCoursCollectif, participationCoursCollectifToDb,
+} from './mappers';
 import { ALL_TESTS } from '../data/profiles';
 import type { Bilan, TestKey } from '../types';
 
@@ -208,5 +211,49 @@ describe('normaliserVisibilite', () => {
     // Ceux que la ligne ne porte pas gardent le défaut.
     expect(v.rdv).toBe(true);
     expect(v.programme).toBe(true);
+  });
+});
+
+// ── Note du praticien sur une participation à un cours collectif ─────────────
+// participations_cours_collectifs.notes est INTERNE au praticien (même défaut
+// que seances.notes, PR #68). Ces tests couvrent le passage base <-> application ;
+// que la colonne ne parte jamais chez un bénéficiaire est garanti côté API, par
+// des colonnes listées explicitement.
+describe('participation à un cours collectif : notes', () => {
+  const ligne = {
+    id: 'p1', cours_id: 'c1', participant_id: 'u1', statut_presence: 'present',
+    programme_individuel_id: null, ressenti_borg: 6, ressenti_bienetre: 2,
+    created_at: '2026-09-21T10:00:00Z',
+  };
+
+  it('lit la note quand la base en porte une', () => {
+    expect(dbToParticipationCoursCollectif({ ...ligne, notes: 'Douleur épaule droite' }).notes).toBe('Douleur épaule droite');
+  });
+
+  it('null en base (ou colonne absente) : pas de note', () => {
+    expect(dbToParticipationCoursCollectif({ ...ligne, notes: null }).notes).toBeUndefined();
+    // Base où la migration n'est pas encore appliquée : la colonne n'existe pas.
+    expect(dbToParticipationCoursCollectif(ligne).notes).toBeUndefined();
+  });
+
+  it("n'écrit pas la colonne sans note (création d'un cours : un INSERT ne dépend pas de la migration)", () => {
+    const db = participationCoursCollectifToDb({
+      id: 'p1', coursId: 'c1', participantId: 'u1', statutPresence: 'present',
+    });
+    expect(Object.keys(db)).not.toContain('notes');
+  });
+
+  it('écrit la note quand elle est renseignée', () => {
+    const db = participationCoursCollectifToDb({
+      id: 'p1', coursId: 'c1', participantId: 'u1', statutPresence: 'absent', notes: 'Prévenu, kiné',
+    });
+    expect(db.notes).toBe('Prévenu, kiné');
+  });
+
+  it('ne touche ni la présence ni le ressenti', () => {
+    const p = dbToParticipationCoursCollectif({ ...ligne, notes: 'x' });
+    expect(p.statutPresence).toBe('present');
+    expect(p.ressentiBorg).toBe(6);
+    expect(p.ressentiBienetre).toBe(2);
   });
 });
