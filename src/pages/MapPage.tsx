@@ -8,7 +8,8 @@ import type { TagPatient } from '../types';
 import { MapPin, AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function MapPage() {
-  const { participants, geocodeParticipant } = useParticipants();
+  // Carte du suivi en cours : actifs uniquement (un archivé n'est plus suivi).
+  const { participantsActifs: participants, geocodeParticipant } = useParticipants();
   const [geocoding, setGeocoding] = useState<Set<string>>(new Set());
 
   async function handleGeocode(id: string) {

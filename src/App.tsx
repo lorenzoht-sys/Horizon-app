@@ -28,6 +28,7 @@ import ClientView from './pages/ClientView';
 const AssistantPage      = lazy(() => import('./pages/AssistantPage'));
 const EditBilan          = lazy(() => import('./pages/EditBilan'));
 const MapPage            = lazy(() => import('./pages/MapPage'));
+const ArchivesPage        = lazy(() => import('./pages/ArchivesPage'));
 const TourneePage        = lazy(() => import('./pages/TourneePage'));
 const AgendaV2Page       = lazy(() => import('./pages/AgendaV2Page'));
 const ZonesPage          = lazy(() => import('./pages/ZonesPage'));
@@ -114,6 +115,7 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
             <Route path="/tournee" element={<PageTransition><Suspense fallback={<MapFallback />}><TourneePage /></Suspense></PageTransition>} />
             <Route path="/agenda-v2" element={<PageTransition><Suspense fallback={<MapFallback />}><AgendaV2Page /></Suspense></PageTransition>} />
             <Route path="/map" element={<PageTransition><Suspense fallback={<MapFallback />}><MapPage /></Suspense></PageTransition>} />
+            <Route path="/archives" element={<PageTransition><Suspense fallback={<MapFallback />}><ArchivesPage /></Suspense></PageTransition>} />
           </Routes>
         </AnimatePresence>
       </div>

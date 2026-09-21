@@ -5,11 +5,12 @@ import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import { useStructures } from '../hooks/useStructures';
 import ParticipantCard from '../components/participant/ParticipantCard';
+import { filtrerParNom } from '../lib/archivage';
 import { FadeInCard } from '../components/ui/FadeInCard';
 import { motion } from 'framer-motion';
 import ImportExcelModal from '../components/import/ImportExcelModal';
 import PageWrapper from '../components/layout/PageWrapper';
-import { Plus, Search, Users, BarChart3, FileSpreadsheet, X, CalendarDays, MapPin, ChevronRight, NotebookPen, AlertCircle, Building2, Settings } from 'lucide-react';
+import { Plus, Search, Users, BarChart3, FileSpreadsheet, X, CalendarDays, MapPin, ChevronRight, NotebookPen, AlertCircle, Building2, Settings, Archive } from 'lucide-react';
 import { useJournalSeance } from '../hooks/useJournalSeance';
 import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
 import { getAllBrouillons } from '../hooks/useBrouillonBilan';
@@ -188,18 +189,34 @@ type DashTab = 'tous' | 'independants' | 'structures';
 
 export default function Dashboard() {
   // participants : liste complète, ne sert plus qu'à construire les vues
-  // ci-dessous. participantsActifs (exclut les archivés) est la vue par
-  // défaut de cet écran "du quotidien" — KPI (bilans dus, etc.) et grille
-  // en dépendent toujours, indépendamment du toggle "Afficher les
-  // archivés" (qui ne concerne que la grille, pas les KPI).
-  const { participants, participantsActifs, loading: participantsLoading, addParticipant } = useParticipants();
+  // ci-dessous. participantsActifs (exclut les archivés) est la SEULE vue de
+  // cet écran "du quotidien" : compteurs, KPI et grille. Les archivés ont
+  // leur propre page (/archives) — ils ne se mélangent jamais aux actifs ici.
+  const { participants, participantsActifs, participantsArchives, loading: participantsLoading, addParticipant, archiverParticipant } = useParticipants();
   const { seancesDuJour, patientsARelancer, seances } = useAgenda();
   const { contratsARenouveler, contratsSansJours } = useContrats();
   const { structures, creerStructure } = useStructures();
   const { notes } = useJournalSeance();
   const [search, setSearch] = useState('');
-  const [showArchives, setShowArchives] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  // Archivage depuis une carte : confirmation avant d'écrire, pour éviter un clic accidentel.
+  const [aArchiver, setAArchiver] = useState<{ id: string; nom: string } | null>(null);
+  const [archivageEnCours, setArchivageEnCours] = useState(false);
+
+  async function confirmerArchivage() {
+    if (!aArchiver || archivageEnCours) return;
+    setArchivageEnCours(true);
+    try {
+      await archiverParticipant(aArchiver.id, true);
+      toast.success(`${aArchiver.nom} archivé(e). Retrouvez-le dans « Bénéficiaires archivés » ; son dossier est conservé.`);
+      setAArchiver(null);
+    } catch (err) {
+      console.error('Erreur archivage:', err);
+      toast.error("Erreur lors de l'archivage");
+    } finally {
+      setArchivageEnCours(false);
+    }
+  }
   const [showCreateStructure, setShowCreateStructure] = useState(false);
   const [activeTab, setActiveTab] = useState<DashTab>('tous');
   const [minLoadDone, setMinLoadDone] = useState(false);
@@ -290,18 +307,13 @@ export default function Dashboard() {
     }
   }, [location.state, navigate]);
 
-  // Toggle "Afficher les archivés" : bascule la SOURCE de la grille entre la
-  // vue par défaut (participantsActifs) et la liste complète — n'affecte
-  // jamais les KPI ci-dessous (bilans dus, etc.), qui excluent toujours les
-  // archivés indépendamment de ce que la grille affiche.
-  const baseParticipants = showArchives ? participants : participantsActifs;
-  const independants = baseParticipants.filter(p => !p.structureId);
+  // Grille : actifs uniquement. Plus de bascule « Afficher les archivés » qui
+  // mélangeait les deux populations dans la même liste.
+  const independants = participantsActifs.filter(p => !p.structureId);
 
-  const filtered = independants
-    .filter(p => `${p.prenom} ${p.nom}`.toLowerCase().includes(search.toLowerCase()));
+  const filtered = filtrerParNom(independants, search);
 
-  const filteredTous = baseParticipants
-    .filter(p => `${p.prenom} ${p.nom}`.toLowerCase().includes(search.toLowerCase()));
+  const filteredTous = filtrerParNom(participantsActifs, search);
 
   const listeFiltered = activeTab === 'tous' ? filteredTous : filtered;
 
@@ -341,14 +353,15 @@ export default function Dashboard() {
             className="mt-1 m-0"
             style={{ fontFamily: 'var(--font-sans)', fontSize: 14, color: 'var(--color-ink-2)' }}
           >
-            {participants.length} bénéficiaire{participants.length !== 1 ? 's' : ''} suivi{participants.length !== 1 ? 's' : ''}
+            {participantsActifs.length} bénéficiaire{participantsActifs.length !== 1 ? 's' : ''} actuellement suivi{participantsActifs.length !== 1 ? 's' : ''}
           </p>
         </div>
 
-        {/* Onglets */}
-        <div className="flex gap-1 mb-6 bg-gray-100 rounded-xl p-1 w-fit">
+        {/* Onglets + accès à la page des archivés */}
+        <div className="flex flex-wrap items-center gap-3 mb-6">
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
           {([
-            ['tous', `👥 Tous (${participants.length})`],
+            ['tous', `👥 Bénéficiaires actifs (${participantsActifs.length})`],
             ['independants', `🏠 Indépendants (${independants.length})`],
             ['structures', `🏢 Structures (${structures.length})`],
           ] as [DashTab, string][]).map(([tab, label]) => (
@@ -362,6 +375,13 @@ export default function Dashboard() {
               {label}
             </button>
           ))}
+        </div>
+        <Link
+          to="/archives"
+          className="px-4 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-600 hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors"
+        >
+          🗄️ Bénéficiaires archivés ({participantsArchives.length})
+        </Link>
         </div>
 
         {/* Stats */}
@@ -381,13 +401,13 @@ export default function Dashboard() {
               className="font-heading font-bold"
               style={{ fontSize: 28, color: 'var(--color-ink)', lineHeight: 1.2 }}
             >
-              <AnimatedNumber value={participants.length} duration={0.8} />
+              <AnimatedNumber value={participantsActifs.length} duration={0.8} />
             </div>
             <div
               className="mt-1 font-semibold uppercase"
               style={{ fontSize: 12, color: 'var(--color-ink-2)', letterSpacing: '0.5px', fontFamily: 'var(--font-sans)' }}
             >
-              Participants
+              Bénéficiaires actifs
             </div>
           </div>
           </FadeInCard>
@@ -565,7 +585,7 @@ export default function Dashboard() {
                     <CarteStructure
                       key={s.id}
                       structure={s}
-                      nbPatients={patientsStr.length}
+                      nbPatients={patientsStr.filter(p => !p.archive).length}
                       derniereSeance={derniere}
                     />
                   );
@@ -593,15 +613,6 @@ export default function Dashboard() {
                   onBlur={e => { e.target.style.borderColor = 'var(--color-border)'; e.target.style.boxShadow = 'none'; }}
                 />
               </div>
-              <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none flex-shrink-0">
-                <input
-                  type="checkbox"
-                  checked={showArchives}
-                  onChange={e => setShowArchives(e.target.checked)}
-                  className="accent-primary rounded"
-                />
-                Afficher les archivés
-              </label>
               <motion.button
                 onClick={() => setShowImport(true)}
                 className="flex items-center gap-2 text-sm font-medium"
@@ -632,15 +643,57 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {listeFiltered.map((p, i) => (
                   <FadeInCard key={p.id} delay={0.15 + i * 0.05}>
-                    <ParticipantCard
-                      participant={p}
-                      structureNom={p.structureId ? structures.find(s => s.id === p.structureId)?.nom : undefined}
-                    />
+                    <div className="flex flex-col gap-1.5">
+                      <ParticipantCard
+                        participant={p}
+                        structureNom={p.structureId ? structures.find(s => s.id === p.structureId)?.nom : undefined}
+                      />
+                      <div className="flex justify-end px-1">
+                        <button
+                          type="button"
+                          onClick={() => setAArchiver({ id: p.id, nom: `${p.prenom} ${p.nom}` })}
+                          aria-label={`Archiver ${p.prenom} ${p.nom}`}
+                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-primary border border-gray-200 hover:border-primary/40 px-2.5 py-1 rounded-lg transition-colors"
+                        >
+                          <Archive size={12} /> Archiver
+                        </button>
+                      </div>
+                    </div>
                   </FadeInCard>
                 ))}
               </div>
             )}
           </>
+        )}
+
+        {aArchiver && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Confirmer l'archivage">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+              <h2 className="font-heading font-bold text-dark text-lg">Archiver {aArchiver.nom} ?</h2>
+              <p className="text-sm text-gray-600">
+                Cette personne quittera la liste des bénéficiaires actifs. Son dossier (bilans, séances, programmes,
+                historique, facturation) est entièrement conservé, et vous pourrez la réactiver depuis « Bénéficiaires archivés ».
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={confirmerArchivage}
+                  disabled={archivageEnCours}
+                  className="flex-1 bg-primary text-white rounded-xl py-2.5 font-semibold text-sm hover:bg-dark transition-colors disabled:opacity-60"
+                >
+                  {archivageEnCours ? 'Archivage…' : 'Archiver'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAArchiver(null)}
+                  disabled={archivageEnCours}
+                  className="px-5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors text-sm"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Widget agenda */}

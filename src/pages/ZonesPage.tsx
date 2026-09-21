@@ -114,7 +114,8 @@ function NomZoneEditable({ zone, onRename }: { zone: ZoneGeographique; onRename:
 // ── Page principale ────────────────────────────────────────────────────────────
 
 export default function ZonesPage() {
-  const { participants } = useParticipants();
+  // Zones du suivi en cours : actifs uniquement (un archivé n'est plus suivi).
+  const { participantsActifs: participants } = useParticipants();
   const { zones, calculerZones, renommerZone, assignerJours, deplacerPatient } = useZones();
   const [nbZones, setNbZones] = useState(3);
   const [calcul, setCalcul] = useState(false);

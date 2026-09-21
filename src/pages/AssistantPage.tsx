@@ -591,9 +591,12 @@ function LeftColumn({
     });
   }
 
+  // Recherche : actifs uniquement ; `participants` (tous) reste utilisé pour retrouver un
+  // bénéficiaire dans l'historique des échanges.
+  const actifsRecherche = participants.filter(p => !p.archive);
   const filteredPatients = patientQ.trim()
-    ? participants.filter(p => `${p.prenom} ${p.nom}`.toLowerCase().includes(patientQ.toLowerCase())).slice(0, 8)
-    : participants.slice(0, 8);
+    ? actifsRecherche.filter(p => `${p.prenom} ${p.nom}`.toLowerCase().includes(patientQ.toLowerCase())).slice(0, 8)
+    : actifsRecherche.slice(0, 8);
 
   const ciTexte = selectedPatient ? getContreIndications(selectedPatient).detail : null;
 
@@ -734,7 +737,9 @@ function LeftColumn({
 // ── Component principal ───────────────────────────────────────────────────────
 
 export default function AssistantPage() {
-  const { participants } = useParticipants();
+  // `participants` (tous) : retrouver un bénéficiaire par identifiant. `participantsActifs` :
+  // choix et recherche — un archivé n'est plus suivi.
+  const { participants, participantsActifs } = useParticipants();
   const { contratsDeParticipant } = useContrats();
   const { structures } = useStructures();
   const location = useLocation();
@@ -1307,7 +1312,7 @@ export default function AssistantPage() {
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           {messages.map(msg => {
             if (msg.role === 'patient_select') {
-              return <div key={msg.id} style={{ maxWidth: 520 }}><PatientChips participants={participants} onSelect={handlePatientSelected} /></div>;
+              return <div key={msg.id} style={{ maxWidth: 520 }}><PatientChips participants={participantsActifs} onSelect={handlePatientSelected} /></div>;
             }
             const lastAssistantId = messages.filter(m => m.role === 'assistant').at(-1)?.id;
             const isLastAssistant = msg.role === 'assistant' && msg.id === lastAssistantId;
