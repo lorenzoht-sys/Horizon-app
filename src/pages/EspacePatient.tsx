@@ -1423,6 +1423,9 @@ function EcranProgramme({ participant, programmes, programmesV2, historiqueSeanc
         { programme, exercices: exercicesCatalog, participant, settings: { prenom: praticien.nom, nom: '', email: '', telephone: '', societe: praticien.societe } },
         `programme-${participant.prenom.toLowerCase()}.pdf`
       );
+    } catch (err) {
+      console.error('Erreur export PDF programme:', err);
+      toast.error('Impossible de générer le PDF du programme. Réessayez.');
     } finally { setPdfLoading(false); }
   }
 

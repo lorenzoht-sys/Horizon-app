@@ -787,6 +787,9 @@ export default function ProgrammePage() {
         { programme: prog, exercices: exercicesCatalogue, participant, settings: chargerSettingsPraticien() },
         `programme-${participant.prenom.toLowerCase()}-${prog.nom.toLowerCase().replace(/\s+/g, '-')}.pdf`
       );
+    } catch (err) {
+      console.error('Erreur export PDF programme:', err);
+      toast.error('Impossible de générer le PDF du programme. Réessayez.');
     } finally { setPdfLoadingId(null); }
   }
 
