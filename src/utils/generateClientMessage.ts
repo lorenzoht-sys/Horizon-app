@@ -1,5 +1,6 @@
 import type { Bilan, TagPatient } from '../types';
 import { TAG_CONFIG, getPriorityTag } from '../data/profiles';
+import { distanceTm6 } from '../lib/tm6';
 
 interface MetricDelta {
   label: string;
@@ -29,8 +30,9 @@ function getMetricDeltas(current: Bilan, previous: Bilan): MetricDelta[] {
     if (Math.abs(d) >= 2) deltas.push({ label: 'souplesse', delta: d, unit: 'cm' });
   }
 
-  if (current.tm6.distanceMetres !== null && previous.tm6.distanceMetres !== null) {
-    const d = current.tm6.distanceMetres - previous.tm6.distanceMetres;
+  const distCourante = distanceTm6(current.tm6), distPrecedente = distanceTm6(previous.tm6);
+  if (distCourante !== null && distPrecedente !== null) {
+    const d = distCourante - distPrecedente;
     if (Math.abs(d) >= 10) deltas.push({ label: 'endurance (TM6)', delta: d, unit: 'm' });
   }
 

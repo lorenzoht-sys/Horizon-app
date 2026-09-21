@@ -1,6 +1,7 @@
 import type { Bilan } from '../../types';
 import { useBilanDelta } from '../../hooks/useBilanDelta';
 import { TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react';
+import { distanceTm6, resultatTm6 } from '../../lib/tm6';
 
 interface Props {
   current: Bilan;
@@ -26,7 +27,10 @@ export default function ComparisonTable({ current, previous }: Props) {
     { label: 'HandGrip G', unit: 'kg', current: current.handGrip.gauche, delta: d.handGripGauche },
     { label: 'TUG 3m', unit: 's', current: current.tug3m, delta: d.tug3m },
     { label: 'Souplesse', unit: 'cm', current: current.souplesse.valeur, delta: d.souplesse },
-    { label: 'TM6 Distance', unit: 'm', current: current.tm6.distanceMetres, delta: d.tm6Distance, warning: d.tm6DureeMismatch ? 'Durées de test différentes — comparaison indicative' : null },
+    // TMC en pas : ligne dédiée, avec l'unité du mode (jamais « 0 m »)
+    ...(resultatTm6(current.tm6).type === 'pas'
+      ? [{ label: `TM6 — ${resultatTm6(current.tm6).modeLabel}`, unit: 'pas', current: resultatTm6(current.tm6).valeur, delta: d.tm6Pas, warning: d.tm6DureeMismatch ? 'Durées de test différentes — comparaison indicative' : null }]
+      : [{ label: 'TM6 Distance', unit: 'm', current: distanceTm6(current.tm6), delta: d.tm6Distance, warning: d.tm6DureeMismatch ? 'Durées de test différentes — comparaison indicative' : null }]),
     { label: 'Mémoire immédiate', unit: '/5', current: current.memoire.scoreImmediat, delta: d.memoireImmediat },
     { label: 'Mémoire différée', unit: '/5', current: current.memoire.scoreDiffere, delta: d.memoireDiffere },
   ];

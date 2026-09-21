@@ -3,6 +3,7 @@ import { EXERCICES_BASE } from '../data/exercices';
 import { computeTinettiScores, tinettiRisque } from '../data/tinetti';
 import type { ChampFormulaire } from './detecterTypeTemplate';
 import { libelleAge } from '../lib/age';
+import { distanceTm6, resultatTm6 } from '../lib/tm6';
 
 function fmtDate(d: string): string {
   return new Date(d + (d.includes('T') ? '' : 'T12:00')).toLocaleDateString('fr-FR', {
@@ -19,7 +20,7 @@ function buildBilanText(bilan: Bilan): string {
   if (bilan.equilibre.droite != null)   lines.push(`Équilibre unipodal D : ${bilan.equilibre.droite}s`);
   if (bilan.equilibre.gauche != null)   lines.push(`Équilibre unipodal G : ${bilan.equilibre.gauche}s`);
   if (bilan.souplesse.valeur != null)   lines.push(`Souplesse : ${bilan.souplesse.valeur}cm`);
-  if (bilan.tm6.distanceMetres != null) lines.push(`Test de marche 6 minutes : ${bilan.tm6.distanceMetres}m`);
+  if (resultatTm6(bilan.tm6).valeur != null) lines.push(`Test de marche 6 minutes (${resultatTm6(bilan.tm6).modeLabel}) : ${resultatTm6(bilan.tm6).texte}`);
   const tinetti = computeTinettiScores(bilan.tinetti);
   if (tinetti?.complet) lines.push(`Tinetti POMA : ${tinetti.scoreTotal}/28 — ${tinettiRisque(tinetti.scoreTotal).label}`);
   if (bilan.memoire.scoreImmediat != null) lines.push(`Mémoire immédiate : ${bilan.memoire.scoreImmediat}/5`);
@@ -41,7 +42,7 @@ function buildEvolution(ancien: Bilan, recent: Bilan): string {
   cmp('HandGrip D', ancien.handGrip.droite, recent.handGrip.droite);
   cmp('Équilibre D', ancien.equilibre.droite, recent.equilibre.droite);
   cmp('Souplesse', ancien.souplesse.valeur, recent.souplesse.valeur);
-  cmp('TM6', ancien.tm6.distanceMetres, recent.tm6.distanceMetres);
+  cmp('TM6', distanceTm6(ancien.tm6), distanceTm6(recent.tm6));
   return lines.join('\n') || 'Données insuffisantes pour calculer une évolution';
 }
 

@@ -13,6 +13,7 @@ import { exportRapportEvolutionPDF } from '../utils/exportRapportEvolutionPDF';
 import { getAuthHeader } from '../lib/supabase';
 import type { Bilan, Participant } from '../types';
 import { toast } from 'sonner';
+import { distanceTm6 } from '../lib/tm6';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -67,7 +68,7 @@ const TESTS = [
   { key: 'handGripG',   label: 'HandGrip G',     getVal: (b: Bilan) => b.handGrip.gauche,        unite: ' kg',  lower: false },
   { key: 'tug',         label: 'TUG 3m',         getVal: (b: Bilan) => b.tug3m,                  unite: 's',    lower: true  },
   { key: 'souplesse',   label: 'Souplesse',      getVal: (b: Bilan) => b.souplesse.valeur,       unite: ' cm',  lower: false },
-  { key: 'tm6',         label: 'TM6',            getVal: (b: Bilan) => b.tm6.distanceMetres,     unite: ' m',   lower: false },
+  { key: 'tm6',         label: 'TM6',            getVal: (b: Bilan) => distanceTm6(b.tm6),     unite: ' m',   lower: false },
   { key: 'memoireImm',  label: 'Mémoire imm.',   getVal: (b: Bilan) => b.memoire.scoreImmediat,  unite: '/5',   lower: false },
   { key: 'memoireDif',  label: 'Mémoire dif.',   getVal: (b: Bilan) => b.memoire.scoreDiffere,   unite: '/5',   lower: false },
 ];
@@ -176,7 +177,7 @@ function GraphiqueEvolution({ bilans }: { bilans: Bilan[] }) {
       Force:     normaliser('chairStand30', b.chairStand30),
       Mobilité:  normaliser('tug3m', b.tug3m),
       Souplesse: normaliser('souplesse', b.souplesse.valeur),
-      Endurance: normaliser('tm6', b.tm6.distanceMetres),
+      Endurance: normaliser('tm6', distanceTm6(b.tm6)),
       Mémoire:   normaliser('memoire', memMoy),
     };
   });

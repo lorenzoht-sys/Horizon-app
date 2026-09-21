@@ -1,6 +1,7 @@
 import type { Bilan, DeltaResult, Direction } from '../types';
 import { computeTinettiScores } from '../data/tinetti';
 import { computeBergScore } from '../data/berg';
+import { distanceTm6, resultatTm6 } from '../lib/tm6';
 
 function calcDelta(current: number | null, previous: number | null, lowerIsBetter: boolean): DeltaResult {
   if (current === null) {
@@ -47,7 +48,13 @@ export function useBilanDelta(current: Bilan, previous: Bilan | null) {
     handGripGauche: calcDelta(current.handGrip.gauche, p?.handGrip.gauche ?? null, false),
     tug3m: calcDelta(current.tug3m, p?.tug3m ?? null, true),
     souplesse: calcDelta(current.souplesse.valeur, p?.souplesse.valeur ?? null, false),
-    tm6Distance: calcDelta(current.tm6.distanceMetres, p?.tm6.distanceMetres ?? null, false),
+    tm6Distance: calcDelta(distanceTm6(current.tm6), distanceTm6(p?.tm6), false),
+    // TMC en pas (stepper, marche sur place) : comparé seulement à un TMC précédent en pas
+    tm6Pas: calcDelta(
+      resultatTm6(current.tm6).type === 'pas' ? resultatTm6(current.tm6).valeur : null,
+      p && resultatTm6(p.tm6).type === 'pas' ? resultatTm6(p.tm6).valeur : null,
+      false,
+    ),
     tm6DureeMismatch: !!p && (current.tm6.dureeReelleSecondes ?? 360) !== (p.tm6.dureeReelleSecondes ?? 360),
     memoireImmediat: calcDelta(current.memoire.scoreImmediat, p?.memoire.scoreImmediat ?? null, false),
     memoireDiffere: calcDelta(current.memoire.scoreDiffere, p?.memoire.scoreDiffere ?? null, false),

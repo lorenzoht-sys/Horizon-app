@@ -4,6 +4,7 @@ import DeltaIndicator from '../DeltaIndicator';
 import { useBilanDelta } from '../../../hooks/useBilanDelta';
 import { TEST_LABELS } from '../../../data/profiles';
 import { Plus } from 'lucide-react';
+import { libelleAge } from '../../../lib/age';
 import ChronoWidget from '../ChronoWidget';
 import TinettiTest from '../TinettiTest';
 import BergTest from '../BergTest';
@@ -117,6 +118,9 @@ interface Props {
   previous: Bilan | null;
   testsActifs?: TestKey[];
   profilHandicap?: ProfilHandicap;
+  /** Identité du bénéficiaire, affichée pendant le handgrip (normes selon l'âge). */
+  beneficiaireNom?: string;
+  dateNaissance?: string | null;
 }
 
 function Num({ label, id, value, onChange, unit, min, max, step = 0.1 }: {
@@ -262,7 +266,7 @@ function bInv(val: number | null, pairs: [number, string, BadgeCouleur][]): Badg
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function Step2_Physical({ form, update, previous, testsActifs }: Props) {
+export default function Step2_Physical({ form, update, previous, testsActifs, beneficiaireNom, dateNaissance }: Props) {
   const d = useBilanDelta(form as Bilan, previous);
   const [extras, setExtras] = useState<TestKey[]>([]);
 
@@ -364,6 +368,16 @@ export default function Step2_Physical({ form, update, previous, testsActifs }: 
             <DeltaIndicator delta={d.handGripDroite} unit="kg" />
             <DeltaIndicator delta={d.handGripGauche} unit="kg" />
           </CardHeader>
+          {(beneficiaireNom || dateNaissance !== undefined) && (
+            <div className="flex items-center justify-between gap-3 mb-3 px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 text-sm">
+              <span className="text-gray-600 min-w-0 truncate">
+                {beneficiaireNom && <>Nom : <strong className="text-dark">{beneficiaireNom}</strong></>}
+              </span>
+              <span className="text-gray-600 flex-shrink-0" data-testid="handgrip-age">
+                Âge : <strong className="text-dark">{libelleAge(dateNaissance)}</strong>
+              </span>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Num id="handgrip-droite" label="Main droite" value={form.handGrip.droite} unit="kg" min={0} max={80}
               onChange={v => update({ handGrip: { ...form.handGrip, droite: v } })} />

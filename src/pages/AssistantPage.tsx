@@ -25,6 +25,7 @@ import {
 import { filtrerLogsHistorique, regrouperLogsParBeneficiaire } from '../utils/assistantHistorique';
 import type { Participant, Bilan, Contrat, RessentiSeance, StatutSeance, TypeStructure } from '../types';
 import { libelleAge } from '../lib/age';
+import { distanceTm6, resultatTm6 } from '../lib/tm6';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -160,7 +161,7 @@ function buildBilanText(bilan: Bilan): string {
   if (bilan.equilibre.droite != null)         lines.push(`Équilibre unipodal D : ${bilan.equilibre.droite}s`);
   if (bilan.equilibre.gauche != null)         lines.push(`Équilibre unipodal G : ${bilan.equilibre.gauche}s`);
   if (bilan.souplesse.valeur != null)         lines.push(`Souplesse : ${bilan.souplesse.valeur}cm`);
-  if (bilan.tm6.distanceMetres != null)       lines.push(`Test Marche 6min : ${bilan.tm6.distanceMetres}m`);
+  if (resultatTm6(bilan.tm6).valeur != null) lines.push(`Test Marche 6min (${resultatTm6(bilan.tm6).modeLabel}) : ${resultatTm6(bilan.tm6).texte}`);
   if (bilan.tm6.borgRPE != null)              lines.push(`Borg RPE : ${bilan.tm6.borgRPE}/20`);
   if (bilan.tm6.fcAvant != null)              lines.push(`FC avant effort : ${bilan.tm6.fcAvant} bpm`);
   if (bilan.tm6.fcApres != null)              lines.push(`FC après effort : ${bilan.tm6.fcApres} bpm`);
@@ -193,7 +194,7 @@ function buildEvolution(ancien: Bilan, recent: Bilan): string {
   cmp('HandGrip D',  ancien.handGrip.droite,     recent.handGrip.droite);
   cmp('Équilibre D', ancien.equilibre.droite,    recent.equilibre.droite);
   cmp('Souplesse',   ancien.souplesse.valeur,    recent.souplesse.valeur);
-  cmp('TM6',         ancien.tm6.distanceMetres,  recent.tm6.distanceMetres);
+  cmp('TM6',         distanceTm6(ancien.tm6),  distanceTm6(recent.tm6));
   return lines.join('\n') || 'Données insuffisantes pour calculer l\'évolution';
 }
 

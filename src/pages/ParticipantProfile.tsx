@@ -46,11 +46,14 @@ import type { Bilan, Participant, Contrat, Seance, ProfilHandicap } from '../typ
 import { getContreIndications, getTestsAutonomie, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../lib/anamnese';
 import type { CompteRenduSeance } from '../types/seance';
 import { libelleAge } from '../lib/age';
+import { distanceTm6, resultatTm6 } from '../lib/tm6';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 function tm6Extra(b: Bilan): string | null {
   const parts: string[] = [];
+  const r = resultatTm6(b.tm6);
+  if (r.type !== 'distance' && r.valeur != null) parts.push(`${r.modeLabel} : ${r.texte}`);
   if (b.tm6.nbPauses) parts.push(`${b.tm6.nbPauses} pause(s), ${b.tm6.dureePausesSecondes ?? 0}s d'arrêt`);
   const duree = b.tm6.dureeReelleSecondes;
   if (duree != null && duree !== 360) parts.push(`test ${Math.round(duree / 6) / 10} min`);
@@ -75,7 +78,7 @@ const TESTS_TABLEAU: {
   { label: 'Chair Stand', normeKey: 'chairStand30',      unite: ' rép.', lower: false, getVal: (b: Bilan) => b.chairStand30 },
   { label: 'HandGrip D',  normeKey: 'handGrip',          unite: ' kg',   lower: false, getVal: (b: Bilan) => b.handGrip.droite },
   { label: 'TUG 3m',      normeKey: 'tug3m',             unite: 's',     lower: true,  getVal: (b: Bilan) => b.tug3m },
-  { label: 'TM6',         normeKey: 'tm6Distance',        unite: ' m',    lower: false, getVal: (b: Bilan) => b.tm6.distanceMetres, getExtra: tm6Extra },
+  { label: 'TM6',         normeKey: 'tm6Distance',        unite: ' m',    lower: false, getVal: (b: Bilan) => distanceTm6(b.tm6), getExtra: tm6Extra },
   { label: 'Souplesse',   normeKey: 'souplesse',          unite: ' cm',   lower: false, getVal: (b: Bilan) => b.souplesse.valeur },
   { label: 'Mémoire',     normeKey: 'memoire',            unite: '/5',    lower: false, getVal: (b: Bilan) => b.memoire.scoreImmediat },
   { label: 'Apley Scratch', normeKey: 'apley',           unite: '/4',    lower: false, getVal: (b: Bilan) => b.apley?.score ?? null },

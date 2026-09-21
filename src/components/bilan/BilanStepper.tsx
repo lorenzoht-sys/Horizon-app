@@ -15,6 +15,7 @@ import Step_ResultsIA from './steps/Step_ResultsIA';
 import FormulaireBilanInitial, { type FormulaireFlat } from './FormulaireBilanInitial';
 import { ALL_TESTS } from '../../data/profiles';
 import { Check } from 'lucide-react';
+import { libelleAge } from '../../lib/age';
 
 type BilanForm = Omit<Bilan, 'id'>;
 
@@ -243,7 +244,7 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
                 Bilan de {participant.prenom} {participant.nom}
               </p>
               <p className="text-xs text-gray-500">
-                {Math.floor((Date.now() - new Date(participant.dateNaissance).getTime()) / 31557600000)} ans
+                {libelleAge(participant.dateNaissance)}
                 {participant.contexteClinic ? ` · ${participant.contexteClinic}` : ''}
               </p>
             </div>
@@ -257,7 +258,7 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
       );
       case 1: return (
         <div className="space-y-8">
-          <Step2_Physical form={form} update={update} previous={previous} testsActifs={testsActifsEff} profilHandicap={participant.profilHandicap} />
+          <Step2_Physical form={form} update={update} previous={previous} testsActifs={testsActifsEff} profilHandicap={participant.profilHandicap} beneficiaireNom={`${participant.prenom} ${participant.nom}`} dateNaissance={participant.dateNaissance} />
           <div className="border-t border-gray-100 pt-6">
             <Step3_EnduranceMemory form={form} update={update} previous={previous} testsActifs={testsActifsEff} profilHandicap={participant.profilHandicap} />
           </div>
@@ -271,7 +272,7 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
   function renderTrimestrielStep() {
     switch (step) {
       case 0: return <Step1_Identity form={form} update={update} nextTrimestre={nextTrimestre} />;
-      case 1: return <Step2_Physical form={form} update={update} previous={previous} testsActifs={testsActifsEff} profilHandicap={participant.profilHandicap} />;
+      case 1: return <Step2_Physical form={form} update={update} previous={previous} testsActifs={testsActifsEff} profilHandicap={participant.profilHandicap} beneficiaireNom={`${participant.prenom} ${participant.nom}`} dateNaissance={participant.dateNaissance} />;
       case 2: return <Step3_EnduranceMemory form={form} update={update} previous={previous} testsActifs={testsActifsEff} profilHandicap={participant.profilHandicap} />;
       case 3: return <Step_ResultsIA form={form} update={update} participant={participant} previous={previous} />;
       case 4: return <Step4_Notes form={form} update={update} onGenerateMessage={autoGenerateMessage} />;

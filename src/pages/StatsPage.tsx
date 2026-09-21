@@ -24,6 +24,7 @@ import { chargerTarifsContrat } from '../hooks/useTarifsContrat';
 import { trouverTarifApplicable, totalFactureSeance } from '../lib/tarifsContrats';
 import { useCoursCollectifs } from '../hooks/useCoursCollectifs';
 import { datesCoursCollectifsIndividuelFacturables } from '../lib/coursCollectifs';
+import { distanceTm6 } from '../lib/tm6';
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -1121,7 +1122,7 @@ function SectionProgression({ participants }: { participants: Participant[] }) {
         pushIf('handGrip',  calcDeltaPct(hgI, hgA));
         pushIf('mobilite',  calcDeltaPct(ini.tug3m, act.tug3m, true));
         pushIf('souplesse', calcDeltaPct(ini.souplesse?.valeur, act.souplesse?.valeur));
-        pushIf('endurance', calcDeltaPct(ini.tm6?.distanceMetres, act.tm6?.distanceMetres));
+        pushIf('endurance', calcDeltaPct(distanceTm6(ini.tm6), distanceTm6(act.tm6)));
         const memI = ini.memoire?.dubois?.scoreMIS ?? ((ini.memoire?.scoreImmediat ?? 0) + (ini.memoire?.scoreDiffere ?? 0));
         const memA = act.memoire?.dubois?.scoreMIS ?? ((act.memoire?.scoreImmediat ?? 0) + (act.memoire?.scoreDiffere ?? 0));
         pushIf('memoire', calcDeltaPct(memI, memA));

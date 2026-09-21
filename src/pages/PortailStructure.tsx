@@ -5,6 +5,7 @@ import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/ma
 import { useDevice } from '../hooks/useDevice';
 import type { Participant, Seance, Bilan } from '../types';
 import { libelleAge } from '../lib/age';
+import { distanceTm6 } from '../lib/tm6';
 
 type Praticien = { prenom: string; nom: string; titre?: string | null; email?: string | null; telephone?: string | null };
 
@@ -55,7 +56,7 @@ function scoresParDomaine(b: Bilan): Partial<Record<DomaineKey, number>> {
   if (eq != null) d.equilibre = eq;
   const force = [sousScore(b.chairStand30, 20), sousScore(b.handGrip?.droite, 35)].filter((x): x is number => x != null);
   if (force.length) d.force = Math.round(force.reduce((a, c) => a + c, 0) / force.length);
-  const end = sousScore(b.tm6?.distanceMetres, 600);
+  const end = sousScore(distanceTm6(b.tm6), 600);
   if (end != null) d.endurance = end;
   const mob = sousScore(b.tug3m, 20, true);
   if (mob != null) d.mobilite = mob;

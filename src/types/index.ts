@@ -24,7 +24,7 @@ export interface Bilan {
   };
 
   tm6: {
-    mode?: 'standard' | 'marche_sur_place';
+    mode?: 'standard' | 'marche_sur_place' | 'stepper';
     distanceMetres: number | null;
     repetitions?: number | null;
     fcAvant: number | null;
@@ -43,7 +43,11 @@ export interface Bilan {
     dureePausesSecondes: number | null;
     notesPauses: string;
     pausesDetail?: { debutSecondes: number; dureeSecondes: number }[];
-    mesuresParMinute?: { bpm: number | null; spo2: number | null }[];
+    /**
+     * Tableau chronologique unique. Ancien format (avant fusion) : 6 entrées sans
+     * `kind`, une par minute — voir lib/tm6.ts pour la lecture compatible.
+     */
+    mesuresParMinute?: { bpm: number | null; spo2: number | null; kind?: 'avant' | 'minute' | 'apres' | 'rec1' | 'rec2' | 'autre'; label?: string }[];
     nbPas?: number | null;
     nbTours?: number | null;
     varianteId?: string | null;

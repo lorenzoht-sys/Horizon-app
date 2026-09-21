@@ -11,6 +11,7 @@ import type { Bilan, TestKey } from '../../types';
 import { useNormalize } from '../../hooks/useNormalize';
 import { TEST_RADAR_LABELS, ALL_TESTS } from '../../data/profiles';
 import { computeBergScore } from '../../data/berg';
+import { distanceTm6 } from '../../lib/tm6';
 
 interface Props {
   initial: Bilan | null;
@@ -31,7 +32,7 @@ function bilanAxisValue(key: TestKey, bilan: Bilan, normalize: ReturnType<typeof
     }
     case 'tug':       return normalize.tug3m(bilan.tug3m ?? 20);
     case 'souplesse': return normalize.souplesse(bilan.souplesse.valeur ?? -20);
-    case 'tm6':       return normalize.tm6(bilan.tm6.distanceMetres ?? 0);
+    case 'tm6':       return normalize.tm6(distanceTm6(bilan.tm6) ?? 0);
     case 'memoire': {
       const mis = bilan.memoire.dubois?.scoreMIS;
       if (mis != null) return Math.round((mis / 10) * 100);

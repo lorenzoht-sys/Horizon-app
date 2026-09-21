@@ -9,6 +9,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import type { Bilan } from '../../types';
+import { distanceTm6 } from '../../lib/tm6';
 
 interface CurveConfig {
   key: string;
@@ -23,7 +24,7 @@ const CURVES: CurveConfig[] = [
   { key: 'equG', label: 'Équilibre G', unit: 's', color: 'var(--color-teal)', getValue: b => b.equilibre.gauche },
   { key: 'cs', label: 'Chair Stand', unit: 'rép.', color: '#22C55E', getValue: b => b.chairStand30 },
   { key: 'tug', label: 'TUG 3m', unit: 's', color: '#F59E0B', getValue: b => b.tug3m },
-  { key: 'tm6', label: 'TM6', unit: 'm', color: '#EF4444', getValue: b => b.tm6.distanceMetres },
+  { key: 'tm6', label: 'TM6', unit: 'm', color: '#EF4444', getValue: b => distanceTm6(b.tm6) },
   { key: 'grip', label: 'HandGrip D', unit: 'kg', color: '#8B5CF6', getValue: b => b.handGrip.droite },
 ];
 

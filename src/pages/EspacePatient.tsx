@@ -17,6 +17,7 @@ import { libelleSedentariteBeneficiaire, libelleFatigueBeneficiaire } from '../l
 import { etatSedentarite, etatFatigue, getSedProfil, getFSSProfil } from '../lib/scoresAutonomie';
 import { etatProgresBeneficiaire } from '../lib/partageBeneficiaire';
 import CarteErreurPatient from '../components/patient/CarteErreurPatient';
+import { distanceTm6, resultatTm6 } from '../lib/tm6';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -562,7 +563,7 @@ function calculerProgressions(bilanInitial: Bilan, dernierBilan: Bilan): ProgIte
   if (tug0 != null && tug1 != null)
     items.push({ key: 'tug', ...TEST_LABELS_PATIENT.tug, val0: +tug0.toFixed(1), val1: +tug1.toFixed(1), unite: 's', lowerBetter: true });
 
-  const tm0 = bilanInitial.tm6?.distanceMetres, tm1 = dernierBilan.tm6?.distanceMetres;
+  const tm0 = distanceTm6(bilanInitial.tm6), tm1 = distanceTm6(dernierBilan.tm6);
   if (tm0 != null && tm1 != null)
     items.push({ key: 'tm6', ...TEST_LABELS_PATIENT.tm6, val0: tm0, val1: tm1, unite: ' m', lowerBetter: false });
 
@@ -2227,7 +2228,7 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
                     bilan.chairStand30 != null && `Force jambes : ${bilan.chairStand30} lever${bilan.chairStand30 > 1 ? 's' : ''}`,
                     bilan.handGrip?.droite != null && `Force des mains : ${bilan.handGrip.droite.toFixed(1)} kg`,
                     bilan.tug3m != null && `Marche : ${bilan.tug3m.toFixed(1)} s`,
-                    bilan.tm6?.distanceMetres != null && `Endurance : ${bilan.tm6.distanceMetres} m`,
+                    resultatTm6(bilan.tm6).valeur != null && `Endurance : ${resultatTm6(bilan.tm6).texte}`,
                   ].filter(Boolean).map((line, j) => (
                     <div key={j} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ color: C.teal }}>·</span> {String(line)}

@@ -34,6 +34,7 @@ import { ecrireEtatSession, effacerEtatSession, lireEtatSession } from '../../li
 import { getBrouillonParticipant, sauvegarderBrouillonParticipant, supprimerBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
 import { getBrouillon, supprimerBrouillon } from '../../hooks/useBrouillonBilan';
 import { formaterDateNaissanceAffichage, masquerSaisieDateNaissance, messageErreurDateNaissance, parserDateNaissanceSaisie } from '../../utils/dateNaissance';
+import { resultatTm6 } from '../../lib/tm6';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1192,7 +1193,7 @@ function DetailBilanMobile({ bilan, onBack }: { bilan: import('../../types').Bil
     { label: 'HandGrip Gauche',  val: bilan.handGrip.gauche,        unite: ' kg' },
     { label: 'TUG 3m',           val: bilan.tug3m,                  unite: 's' },
     { label: 'Souplesse',        val: bilan.souplesse.valeur,       unite: ' cm' },
-    { label: 'TM6 Distance',     val: bilan.tm6.distanceMetres,     unite: ' m' },
+    { label: resultatTm6(bilan.tm6).type === 'distance' ? 'TM6 Distance' : 'TM6 (' + resultatTm6(bilan.tm6).modeLabel + ')', val: resultatTm6(bilan.tm6).valeur, unite: ' ' + resultatTm6(bilan.tm6).unite },
     { label: 'TM6 FC avant',     val: bilan.tm6.fcAvant,            unite: ' bpm' },
     { label: 'TM6 FC après',     val: bilan.tm6.fcApres,            unite: ' bpm' },
     { label: 'SpO2 avant',       val: bilan.tm6.spo2Avant,          unite: '%' },

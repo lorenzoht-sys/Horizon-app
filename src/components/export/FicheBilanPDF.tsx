@@ -5,6 +5,7 @@ import { PdfHeader, PdfFooter, type PdfPraticienSettings } from './PdfShared';
 import { getContreIndications } from '../../lib/anamnese';
 import { computeTinettiScores, tinettiRisque } from '../../data/tinetti';
 import { libelleAge } from '../../lib/age';
+import { distanceTm6, resultatTm6 } from '../../lib/tm6';
 
 // ─── Calcul notes ─────────────────────────────────────────────────────────────
 
@@ -18,7 +19,8 @@ export function calculerNotesAuto(bilan: Bilan): NotesBilan {
   if (hgVals.length) n.handGrip = calculerNote(hgVals.reduce((s, v) => s + v, 0) / hgVals.length, NORMES_SCORING.handGrip);
   if (tug3m !== null) n.mobilite = calculerNote(tug3m, NORMES_SCORING.tug3m);
   if (souplesse.valeur !== null) n.souplesse = calculerNote(souplesse.valeur, NORMES_SCORING.souplesse);
-  if (tm6.distanceMetres !== null) n.endurance = calculerNote(tm6.distanceMetres, NORMES_SCORING.tm6Distance);
+  const distTm6 = distanceTm6(tm6);
+  if (distTm6 !== null) n.endurance = calculerNote(distTm6, NORMES_SCORING.tm6Distance);
   const mi = memoire.scoreImmediat, md = memoire.scoreDiffere;
   if (mi !== null || md !== null) n.memoire = calculerNote((mi ?? 0) + (md ?? 0), NORMES_SCORING.memoire);
   return n;
@@ -146,7 +148,7 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
           <View style={S.cellRow}>
             <Cellule titre="Force" unite={`${cs ?? '—'} Reps`} body={`Main D : ${hg.droite ?? '—'} Kg  ·  Main G : ${hg.gauche ?? '—'} Kg`} />
             <View style={S.cellSpacer} />
-            <Cellule titre="Endurance" unite={`${tm6.distanceMetres ?? '—'} M`} body={`O2 : ${tm6.spo2Avant ?? '—'} / ${tm6.spo2Apres ?? '—'} / ${tm6.spo22min ?? '—'}  ·  FC : ${tm6.fcAvant ?? '—'} / ${tm6.fcApres ?? '—'} Bpm${tm6.borgRPE != null ? `\nRessenti effort (Borg) : ${tm6.borgRPE}/20 — ${borgRPEInterp(tm6.borgRPE)}` : ''}${tm6DureePausesTexte(tm6)}`} />
+            <Cellule titre="Endurance" unite={resultatTm6(tm6).valeur != null ? (resultatTm6(tm6).type === 'distance' ? `${resultatTm6(tm6).valeur} M` : resultatTm6(tm6).texte.toUpperCase()) : '— M'} body={`O2 : ${tm6.spo2Avant ?? '—'} / ${tm6.spo2Apres ?? '—'} / ${tm6.spo22min ?? '—'}  ·  FC : ${tm6.fcAvant ?? '—'} / ${tm6.fcApres ?? '—'} Bpm${tm6.borgRPE != null ? `\nRessenti effort (Borg) : ${tm6.borgRPE}/20 — ${borgRPEInterp(tm6.borgRPE)}` : ''}${tm6DureePausesTexte(tm6)}`} />
           </View>
           <View style={S.cellRow}>
             <Cellule titre="Souplesse" unite={`${sVal} Cm`} />

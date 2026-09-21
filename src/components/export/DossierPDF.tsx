@@ -16,6 +16,7 @@ import { TYPES_ANTECEDENT_LABELS } from '../../types';
 import { PdfFooter, LOGO_H } from './PdfShared';
 import { computeTinettiScores } from '../../data/tinetti';
 import { libelleAge } from '../../lib/age';
+import { distanceTm6 } from '../../lib/tm6';
 
 // ── Palette « Horizon » ────────────────────────────────────────────────────────
 
@@ -342,7 +343,7 @@ export default function DossierPDF({
       dernierBilan.tm6.dureeReelleSecondes != null && dernierBilan.tm6.dureeReelleSecondes !== 360
         ? `Test marche ${Math.round(dernierBilan.tm6.dureeReelleSecondes / 6) / 10} min, non standard (m)`
         : 'Test 6 minutes (m)',
-      '>= 400 m', 'tm6', dernierBilan.tm6.distanceMetres, bilanInitial?.tm6.distanceMetres ?? null, false),
+      '>= 400 m', 'tm6', distanceTm6(dernierBilan.tm6), distanceTm6(bilanInitial?.tm6), false),
     (() => {
       const tDernier = computeTinettiScores(dernierBilan.tinetti);
       const tInitial = computeTinettiScores(bilanInitial?.tinetti);
