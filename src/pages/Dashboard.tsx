@@ -5,7 +5,7 @@ import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import { useStructures } from '../hooks/useStructures';
 import ParticipantCard from '../components/participant/ParticipantCard';
-import { filtrerParNom } from '../lib/archivage';
+import { contratsDesBeneficiairesActifs, filtrerParNom } from '../lib/archivage';
 import { FadeInCard } from '../components/ui/FadeInCard';
 import { motion } from 'framer-motion';
 import ImportExcelModal from '../components/import/ImportExcelModal';
@@ -194,7 +194,11 @@ export default function Dashboard() {
   // leur propre page (/archives) — ils ne se mélangent jamais aux actifs ici.
   const { participants, participantsActifs, participantsArchives, loading: participantsLoading, addParticipant, archiverParticipant } = useParticipants();
   const { seancesDuJour, patientsARelancer, seances } = useAgenda();
-  const { contratsARenouveler, contratsSansJours } = useContrats();
+  const { contratsARenouveler: contratsARenouvelerTous, contratsSansJours: contratsSansJoursTous } = useContrats();
+  // Alertes du praticien : un bénéficiaire archivé n'est plus suivi, ses contrats n'appellent aucune
+  // action (ils ne sont pas modifiés pour autant : ni statut, ni date de fin).
+  const contratsARenouveler = contratsDesBeneficiairesActifs(contratsARenouvelerTous, participants);
+  const contratsSansJours = contratsDesBeneficiairesActifs(contratsSansJoursTous, participants);
   const { structures, creerStructure } = useStructures();
   const { notes } = useJournalSeance();
   const [search, setSearch] = useState('');
@@ -274,7 +278,10 @@ export default function Dashboard() {
     if (participantsLoading || participants.length === 0 || retoursSurvLoaded.current) return;
     retoursSurvLoaded.current = true;
     async function loadRetoursSurveillance() {
-      const ids = participants.map(p => p.id);
+      // Alerte « à surveiller » : bénéficiaires suivis uniquement (un archivé peut encore
+      // saisir des retours depuis son espace, ce n'est plus au praticien de le surveiller).
+      const ids = participants.filter(p => !p.archive).map(p => p.id);
+      if (ids.length === 0) return;
       const { data } = await supabase!
         .from('retours_seance')
         .select('participant_id, borg_rpe, bien_etre')
