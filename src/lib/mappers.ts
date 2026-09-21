@@ -249,6 +249,7 @@ export function dbToBilan(row: any): Bilan {
 }
 
 export function bilanToDb(participantId: string, b: Omit<Bilan, 'id'> & { id?: string }): Record<string, unknown> {
+  const pasAbandonnes = b.tm6?.mode === 'standard' && (b.tm6.distanceMetres ?? 0) > 0 && !b.tm6.varianteId;
   return {
     ...(b.id ? { id: b.id } : {}),
     participant_id: participantId,
@@ -264,10 +265,12 @@ export function bilanToDb(participantId: string, b: Omit<Bilan, 'id'> & { id?: s
     souplesse_methode: b.souplesse?.methode ?? null,
     souplesse_valeur: b.souplesse?.valeur ?? null,
     tm6_mode: b.tm6?.mode ?? null,
-    // Seule la valeur du mode actif est écrite en base : l'autre reste en mémoire à l'écran
-    // (changement de mode réversible) mais n'est jamais enregistrée.
+    // La distance n'est jamais enregistrée pour un test EXPLICITEMENT en pas. Les pas, eux, ne sont effacés
+    // que si le praticien a CHOISI la marche (mode « standard » écrit) ET saisi une distance : les anciens
+    // Stepper n'ont pas de mode (NULL) et sont lus comme « marche » ; les effacer au ré-enregistrement
+    // détruisait leur résultat.
     tm6_distance_metres: b.tm6 && tm6EnPas(b.tm6) ? null : (b.tm6?.distanceMetres ?? null),
-    tm6_repetitions: b.tm6 && !tm6EnPas(b.tm6) && !b.tm6.varianteId ? null : (b.tm6?.repetitions ?? null),
+    tm6_repetitions: pasAbandonnes ? null : (b.tm6?.repetitions ?? null),
     tm6_fc_avant: b.tm6?.fcAvant ?? null,
     tm6_fc_apres: b.tm6?.fcApres ?? null,
     tm6_fc_1min: b.tm6?.fc1min ?? null,
@@ -285,7 +288,7 @@ export function bilanToDb(participantId: string, b: Omit<Bilan, 'id'> & { id?: s
     tm6_notes_pauses: b.tm6?.notesPauses ?? '',
     tm6_pauses_detail: b.tm6?.pausesDetail ?? null,
     tm6_mesures_par_minute: b.tm6?.mesuresParMinute ?? null,
-    tm6_nb_pas: b.tm6 && !tm6EnPas(b.tm6) && !b.tm6.varianteId ? null : (b.tm6?.nbPas ?? null),
+    tm6_nb_pas: pasAbandonnes ? null : (b.tm6?.nbPas ?? null),
     tm6_nb_tours: b.tm6?.nbTours ?? null,
     tm6_variante_id: b.tm6?.varianteId ?? null,
     memoire_score_immediat: b.memoire?.scoreImmediat ?? null,
