@@ -57,7 +57,7 @@ function LigneParticipant({ participation, participant, onSauvegarder }: LignePr
 
   // Dictée : le texte dicté s'ajoute à ce qui était déjà écrit au moment où on
   // appuie sur « Dicter » (le hook repart de zéro à chaque enregistrement).
-  const { isRecording, finalTranscript, interimTranscript, isSupported, startRecording, stopRecording, reset: resetDictee } = useSpeechRecognition();
+  const { isRecording, finalTranscript, interimTranscript, isSupported, error: erreurDictee, startRecording, stopRecording, reset: resetDictee } = useSpeechRecognition();
   const baseDictee = useRef('');
   useEffect(() => {
     const dicte = (finalTranscript + interimTranscript).trim();
@@ -65,6 +65,12 @@ function LigneParticipant({ participation, participant, onSauvegarder }: LignePr
     const base = baseDictee.current.trimEnd();
     setNotes(base ? `${base} ${dicte}` : dicte);
   }, [finalTranscript, interimTranscript]);
+
+  // Micro refusé, navigateur non compatible, session coupée… : sans ce message,
+  // « Dicter » semblerait ne rien faire.
+  useEffect(() => {
+    if (erreurDictee) toast.error(erreurDictee);
+  }, [erreurDictee]);
 
   function basculerDictee() {
     if (isRecording) { stopRecording(); return; }
