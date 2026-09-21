@@ -9,6 +9,7 @@
 import { getServiceClient, getClientIp } from '../_lib/patientAuth.js';
 import { validateStructureToken, logStructureAccess, getStructureToken } from '../_lib/structureAuth.js';
 import { withSentry } from '../_lib/sentry.js';
+import { COLONNES_SEANCE_EXPOSEE } from '../_lib/colonnesSeancesExposees.js';
 
 export default withSentry(async function handler(req: any, res: any) {
   if (req.method !== 'GET') {
@@ -92,11 +93,11 @@ export default withSentry(async function handler(req: any, res: any) {
 
   if (ids.length > 0) {
     const [seancesRes, facturesRes, documentsRes] = await Promise.all([
-      // Colonnes explicites (pas select('*')) : motif_annulation/
-      // motif_annulation_detail sont internes au praticien, jamais exposées
-      // au portail structure.
+      // Liste commune et FERMÉE (pas select('*')) : `notes` et
+      // motif_annulation* sont internes au praticien, jamais exposés au
+      // portail structure — voir api/_lib/colonnesSeancesExposees.ts.
       supabase.from('seances')
-        .select('id, participant_id, contrat_id, date, heure_debut, heure_fin, duree_minutes, type, statut, notes, adresse, coordonnees, created_at, updated_at')
+        .select(COLONNES_SEANCE_EXPOSEE)
         .in('participant_id', ids).order('date', { ascending: false }),
       supabase.from('factures_suivi').select('*').eq('structure_id', structure.id).order('periode_annee', { ascending: false }).order('periode_mois', { ascending: false }),
       supabase.from('documents_partages').select('*').eq('structure_id', structure.id).order('partage_le', { ascending: false }),
