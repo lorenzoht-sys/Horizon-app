@@ -37,7 +37,7 @@ beforeAll(() => {
 // ce qui permet de vérifier l'idempotence en relisant l'état après coup.
 type Table = 'contrats' | 'seances' | 'participants';
 type Row = Record<string, unknown>;
-type Filtre = { field: string; kind: 'eq' | 'neq' | 'lte'; value: unknown };
+type Filtre = { field: string; kind: 'eq' | 'neq' | 'lte' | 'in'; value: unknown };
 
 function creerSupabaseFake(initial: { contrats?: Row[]; seances?: Row[]; participants?: Row[] }) {
   const store: Record<Table, Row[]> = {
@@ -51,6 +51,7 @@ function creerSupabaseFake(initial: { contrats?: Row[]; seances?: Row[]; partici
       if (f.kind === 'eq') return row[f.field] === f.value;
       if (f.kind === 'neq') return row[f.field] !== f.value;
       if (f.kind === 'lte') return (row[f.field] as string) <= (f.value as string);
+      if (f.kind === 'in') return (f.value as unknown[]).includes(row[f.field]);
       return true;
     });
   }
@@ -66,6 +67,7 @@ function creerSupabaseFake(initial: { contrats?: Row[]; seances?: Row[]; partici
       eq(field: string, value: unknown) { filtres.push({ field, kind: 'eq', value }); return builder; },
       neq(field: string, value: unknown) { filtres.push({ field, kind: 'neq', value }); return builder; },
       lte(field: string, value: unknown) { filtres.push({ field, kind: 'lte', value }); return builder; },
+      in(field: string, value: unknown[]) { filtres.push({ field, kind: 'in', value }); return builder; },
       insert(rows: Row[]) { mode = 'insert'; insertRows = rows; return builder; },
       update(patch: Row) { mode = 'update'; updatePatch = patch; return builder; },
       then(resolve: (v: { data: Row[]; error: null } | { error: null }) => void) {
@@ -343,5 +345,109 @@ describe('chargerContratsEligibles / renouvelerContratsEligibles (avec faux Supa
     const seuil = format(addDays(new Date(aujourdhui), MARGE_RENOUVELLEMENT_JOURS), 'yyyy-MM-dd');
     const resultats = await renouvelerContratsEligibles(client, seuil, aujourdhui);
     expect(resultats.length).toBe(1);
+  });
+});
+
+// ── Bénéficiaires archivés ───────────────────────────────────────────────────
+
+// L'archivage arrête le renouvellement automatique, sans toucher au contrat : il garde son
+// statut et sa date de fin, et un désarchivage reprend sans réparation. Cas réel qui a motivé
+// ce test : en production, un bénéficiaire archivé (43f24e0e) a un contrat actif à durée
+// indéterminée qui arrive à échéance le 09/12/2026 — sans exclusion, le cron l'aurait prolongé
+// d'un an et aurait créé un an de séances planifiées, en silence.
+describe('bénéficiaires archivés (avec faux Supabase)', () => {
+  // « aujourd'hui » = 05/12/2026 → seuil du cron = aujourd'hui + 5 jours = 10/12/2026 : l'échéance
+  // du 09/12 est dans la fenêtre de renouvellement.
+  const AUJOURDHUI = '2026-12-05';
+  const SEUIL = '2026-12-10';
+
+  function contratArchive() {
+    return contrat({ id: 'contrat-archive', participant_id: 'p-archive', date_fin: '2026-12-09' });
+  }
+
+  it('exclut le contrat à durée indéterminée d’un archivé, même à échéance (cas 43f24e0e)', async () => {
+    const { client } = creerSupabaseFake({
+      contrats: [
+        contratArchive(),
+        contrat({ id: 'contrat-actif', participant_id: 'p-actif', date_fin: '2026-12-09' }),
+      ],
+      participants: [participant({ id: 'p-archive', archive: true }), participant({ id: 'p-actif', archive: false })],
+    });
+    const eligibles = await chargerContratsEligibles(client, SEUIL);
+    expect(eligibles.map(c => c.id)).toEqual(['contrat-actif']);
+  });
+
+  it('le renouvellement complet ne touche pas au contrat ni aux séances d’un archivé', async () => {
+    const { client, store } = creerSupabaseFake({
+      contrats: [contratArchive()],
+      participants: [participant({ id: 'p-archive', archive: true })],
+      seances: [{ id: 's1', contrat_id: 'contrat-archive', participant_id: 'p-archive', date: '2026-12-07', statut: 'planifiee' }],
+    });
+    const resultats = await renouvelerContratsEligibles(client, SEUIL, AUJOURDHUI);
+    expect(resultats).toEqual([]);
+    const c = store.contrats[0];
+    expect(c.date_fin).toBe('2026-12-09');      // pas prolongé
+    expect(c.statut).toBe('actif');              // statut inchangé : pas de clôture forcée
+    expect(store.seances).toHaveLength(1);       // aucune séance créée, celle qui existe est intacte
+    expect(store.seances[0].statut).toBe('planifiee');
+  });
+
+  it('contre-épreuve : le même contrat, bénéficiaire NON archivé, est bien renouvelé', async () => {
+    const { client, store } = creerSupabaseFake({
+      contrats: [contratArchive()],
+      participants: [participant({ id: 'p-archive', archive: false })],
+    });
+    const resultats = await renouvelerContratsEligibles(client, SEUIL, AUJOURDHUI);
+    expect(resultats).toHaveLength(1);
+    expect('nouvelleDateFin' in resultats[0]).toBe(true);
+    expect(store.contrats[0].date_fin).toBe('2027-12-09');
+    expect(store.seances.length).toBeGreaterThan(0);
+  });
+
+  it('désarchivage : le contrat repart au passage suivant, sans réparation', async () => {
+    const { client, store } = creerSupabaseFake({
+      contrats: [contratArchive()],
+      participants: [participant({ id: 'p-archive', archive: true })],
+    });
+    expect(await renouvelerContratsEligibles(client, SEUIL, AUJOURDHUI)).toEqual([]);
+
+    // désarchivage (rien d'autre n'est modifié : ni contrat, ni séances)
+    store.participants[0].archive = false;
+
+    const resultats = await renouvelerContratsEligibles(client, SEUIL, AUJOURDHUI);
+    expect(resultats).toHaveLength(1);
+    expect(store.contrats[0].date_fin).toBe('2027-12-09');
+    expect(store.contrats[0].statut).toBe('actif');
+  });
+
+  it('mélange : seuls les contrats des archivés sont écartés', async () => {
+    const { client } = creerSupabaseFake({
+      contrats: [
+        contrat({ id: 'c1', participant_id: 'p1', date_fin: '2026-12-08' }),
+        contrat({ id: 'c2', participant_id: 'p2', date_fin: '2026-12-08' }),
+        contrat({ id: 'c3', participant_id: 'p3', date_fin: '2026-12-08' }),
+      ],
+      participants: [
+        participant({ id: 'p1', archive: false }), participant({ id: 'p2', archive: true }), participant({ id: 'p3' }),
+      ],
+    });
+    expect((await chargerContratsEligibles(client, SEUIL)).map(c => c.id).sort()).toEqual(['c1', 'c3']);
+  });
+
+  it('état d’archivage illisible : lève et ne renouvelle rien (jamais « personne n’est archivé »)', async () => {
+    const { client: base, store } = creerSupabaseFake({
+      contrats: [contratArchive()],
+      participants: [participant({ id: 'p-archive', archive: true })],
+    });
+    const client = {
+      from: (table: string) => table === 'participants'
+        ? { select: () => ({ in: () => ({ eq: () => Promise.resolve({ data: null, error: { message: 'panne' } }) }) }) }
+        : (base as unknown as { from: (t: string) => unknown }).from(table),
+    } as unknown as SupabaseClient;
+
+    await expect(chargerContratsEligibles(client, SEUIL)).rejects.toThrow(/archivage/);
+    await expect(renouvelerContratsEligibles(client, SEUIL, AUJOURDHUI)).rejects.toThrow(/archivage/);
+    expect(store.contrats[0].date_fin).toBe('2026-12-09');
+    expect(store.seances).toHaveLength(0);
   });
 });

@@ -45,6 +45,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDays, addYears, format } from 'date-fns';
 import { genererDatesSeances, addMinutes } from '../../src/utils/horaires.js';
+import { chargerIdsParticipantsArchives, exclureBeneficiairesArchives } from './participantsArchives.js';
 
 // Marge de sécurité avant l'échéance réelle : le job sélectionne les
 // contrats à durée indéterminée dont date_fin tombe dans les N prochains
@@ -175,6 +176,12 @@ export function calculerSeancesARenouveler(params: {
 // Contrats candidats : durée indéterminée, actifs, dont date_fin tombe à ou
 // avant seuilDateFin (le cron passe aujourd'hui+marge, le script de
 // remédiation passe hier — voir les deux appelants).
+//
+// Les contrats d'un bénéficiaire ARCHIVÉ sont exclus : il n'est plus suivi, donc rien à
+// prolonger ni à planifier. Le contrat lui-même n'est pas touché (il garde son statut
+// et sa date de fin) : au désarchivage, le prochain passage du cron le prend en charge
+// sans réparation. Si l'état d'archivage ne peut pas être lu, la fonction LÈVE — elle ne
+// renvoie pas la liste complète (voir participantsArchives.ts).
 export async function chargerContratsEligibles(supabase: SupabaseClient, seuilDateFin: string): Promise<ContratEligible[]> {
   const { data, error } = await supabase
     .from('contrats')
@@ -184,7 +191,11 @@ export async function chargerContratsEligibles(supabase: SupabaseClient, seuilDa
     .lte('date_fin', seuilDateFin);
 
   if (error || !data) return [];
-  return data as ContratEligible[];
+  const contrats = data as ContratEligible[];
+  if (contrats.length === 0) return [];
+
+  const archives = await chargerIdsParticipantsArchives(supabase, contrats.map(c => c.participant_id));
+  return exclureBeneficiairesArchives(contrats, archives);
 }
 
 interface AdresseParticipant {
