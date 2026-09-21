@@ -403,7 +403,7 @@ function BoutonsPresence({ cours, token, maintenantMs, sombre, onReponse }: {
     return (
       <div data-testid="presence-fermee" style={{ marginTop: 12, fontSize: 12, color: discret }}>
         {texte}
-        {erreur && <div role="alert" style={{ marginTop: 4, color: sombre ? '#FCA5A5' : '#B42318' }}>{erreur}</div>}
+        {erreur && <div role="alert" data-testid="erreur-presence" style={{ marginTop: 4, color: sombre ? '#FCA5A5' : '#B42318' }}>{erreur}</div>}
       </div>
     );
   }
@@ -488,8 +488,9 @@ function CarteAutresCoursAVenir({ cours, token, maintenantMs, onReponse }: {
         {cours.map(c => (
           <div key={c.coursId} data-testid="cours-a-venir">
             <div style={{ fontSize: 14, fontWeight: 700, color: C.dark }}>👥 {c.titre}</div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 2, textTransform: 'capitalize' }}>
-              {fmt(c.date)} · {fmtHeure(c.heureDebut)} · {c.dureeMinutes} min
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+              {/* La majuscule ne vaut que pour la date : sur toute la ligne, « min » devenait « Min ». */}
+              <span style={{ textTransform: 'capitalize' }}>{fmt(c.date)}</span> · {fmtHeure(c.heureDebut)} · {c.dureeMinutes} min
             </div>
             <BoutonsPresence cours={c} token={token} maintenantMs={maintenantMs} sombre={false} onReponse={onReponse} />
           </div>
