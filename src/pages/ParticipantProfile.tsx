@@ -15,6 +15,8 @@ import {
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
 import { useProgrammeV2 } from '../hooks/useProgrammeV2';
+import { exportProgrammePDF } from '../utils/exportPDF';
+import { loadExercicesPraticien } from '../data/exercices';
 import { useContrats } from '../hooks/useContrats';
 import { useStructures } from '../hooks/useStructures';
 import { useAgenda } from '../hooks/useAgenda';
@@ -1046,7 +1048,7 @@ export default function ParticipantProfile() {
   const { id } = useParams<{ id: string }>();
   const { participants, loading: chargementParticipants, updateParticipant, deleteParticipant, deleteBilan, geocodeParticipant, archiverParticipant } = useParticipants();
   const { programmeActif, deleteProgramme } = useProgramme(id ?? '');
-  const { programmes: programmesV2, seancesAutonomesStats } = useProgrammeV2(id ?? '');
+  const { programmes: programmesV2, seancesAutonomesStats, loading: chargementProgrammesV2 } = useProgrammeV2(id ?? '');
   const { contrats } = useContrats();
   const { structures } = useStructures();
   const { seances } = useAgenda();
@@ -1057,6 +1059,7 @@ export default function ParticipantProfile() {
   const [menuOuvert, setMenuOuvert]         = useState(false);
   const [confirmDelete, setConfirmDelete]   = useState(false);
   const [confirmDeleteProg, setConfirmDeleteProg] = useState(false);
+  const [pdfProgrammeEnCours, setPdfProgrammeEnCours] = useState(false);
   const [showDictee, setShowDictee]         = useState(false);
   const [geocoding, setGeocoding]           = useState(false);
   const [exportingDossier, setExportingDossier] = useState(false);
@@ -1159,6 +1162,28 @@ export default function ParticipantProfile() {
     .sort((a, b) => a.date.localeCompare(b.date))[0] ?? null;
   const hasAddress     = Boolean(participant.adresseRue?.trim() && participant.adresseVille?.trim());
   const brouillon      = getBrouillon(participant.id);
+
+  // PDF du programme en cours, sans passer par la page Programme. Même export que
+  // ProgrammePage / EspacePatient (exportProgrammePDF normalise V1 et V2). La version V2
+  // est préférée quand elle existe : une ligne V2 relue via useProgramme (forme V1) n'a
+  // pas ses séances, d'où le bouton désactivé tant que useProgrammeV2 charge.
+  async function handleTelechargerProgrammePDF() {
+    if (!participant || !programmeActif || pdfProgrammeEnCours) return;
+    setPdfProgrammeEnCours(true);
+    try {
+      const programme = programmesV2.find(p => p.id === programmeActif.id) ?? programmeActif;
+      const nomProgramme = 'seances' in programme ? programme.nom : programme.titre;
+      await exportProgrammePDF(
+        { programme, exercices: await loadExercicesPraticien(), participant, settings: chargerSettingsPraticien() },
+        `programme-${participant.prenom.toLowerCase()}-${nomProgramme.toLowerCase().replace(/s+/g, '-')}.pdf`,
+      );
+    } catch (err) {
+      console.error('Erreur export PDF programme:', err);
+      toast.error('Impossible de générer le PDF du programme. Réessayez, ou ouvrez la page Programme.');
+    } finally {
+      setPdfProgrammeEnCours(false);
+    }
+  }
 
   function handleAction(action: string) {
     setMenuOuvert(false);
@@ -1659,6 +1684,14 @@ export default function ParticipantProfile() {
               })()}
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleTelechargerProgrammePDF}
+                disabled={pdfProgrammeEnCours || chargementProgrammesV2}
+                aria-label="Télécharger le programme en PDF"
+                className="text-xs font-medium text-primary border border-primary/30 hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <Download size={12} /> {pdfProgrammeEnCours ? 'Génération…' : 'PDF'}
+              </button>
               <button
                 onClick={() => navigate(`/participant/${id}/programme`)}
                 className="text-xs font-medium text-primary border border-primary/30 hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-colors"
