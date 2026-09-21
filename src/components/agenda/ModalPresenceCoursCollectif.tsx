@@ -2,27 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Users, Check, Mic, MicOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
+import { NIVEAUX_EFFORT, NIVEAUX_BIEN_ETRE } from '../../lib/ressentiCours';
 import type { CoursCollectif, ParticipationCoursCollectif, Participant, StatutPresenceCours, StatutCoursCollectif } from '../../types';
-
-// Même échelle que retours_seance / EspacePatient.tsx (NIVEAUX_EFFORT,
-// NIVEAUX_BIEN_ETRE) — mêmes valeurs et libellés, mais saisie desktop par
-// le praticien plutôt que le composant mobile du bénéficiaire (styles
-// inline propres à l'app patient, non réutilisables tels quels ici).
-const NIVEAUX_EFFORT: { label: string; valeur: number; couleur: string }[] = [
-  { label: 'Très facile', valeur: 2, couleur: '#16A34A' },
-  { label: 'Facile', valeur: 4, couleur: '#65A84E' },
-  { label: 'Modéré', valeur: 6, couleur: '#CA8A04' },
-  { label: 'Difficile', valeur: 8, couleur: '#EA580C' },
-  { label: 'Très difficile', valeur: 10, couleur: '#DC2626' },
-];
-
-const NIVEAUX_BIEN_ETRE: { label: string; valeur: number; couleur: string }[] = [
-  { label: 'Très bien', valeur: 1, couleur: '#16A34A' },
-  { label: 'Bien', valeur: 2, couleur: '#65A84E' },
-  { label: 'Correct', valeur: 3, couleur: '#CA8A04' },
-  { label: 'Fatigué', valeur: 4, couleur: '#EA580C' },
-  { label: 'Épuisé', valeur: 5, couleur: '#DC2626' },
-];
 
 const LABEL_PRESENCE: Record<StatutPresenceCours, string> = {
   present: 'Présent', absent: 'Absent', excuse: 'Excusé',

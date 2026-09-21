@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { entreeAUneAlerte, type JournalEntry } from './journalAlertes';
+import { entreeAUneAlerte, cleEntree, type JournalEntry } from './journalAlertes';
 import type { CompteRenduSeance } from '../types/seance';
-import type { NoteSeance } from '../types';
+import type { NoteSeance, CoursCollectif, ParticipationCoursCollectif } from '../types';
 
 function compteRendu(overrides: Partial<CompteRenduSeance> = {}): CompteRenduSeance {
   return {
@@ -79,5 +79,28 @@ describe('entreeAUneAlerte', () => {
       data: note({ alertes: { douleurSignalee: false, fatiguePlusQueHabitude: false, progressionNotable: false, pointARevoir: true } }),
     };
     expect(entreeAUneAlerte(entry)).toBe(true);
+  });
+});
+
+describe('entrées « cours collectif » du journal', () => {
+  const cours: CoursCollectif = {
+    id: 'c1', praticienId: 'pr1', titre: 'Gym douce', date: '2026-07-10', heureDebut: '10:00',
+    dureeMinutes: 45, modeFacturation: 'individuel', statut: 'realise', createdAt: '',
+  };
+  const participation: ParticipationCoursCollectif = {
+    id: 'pc1', coursId: 'c1', participantId: 'p1', statutPresence: 'present',
+    notes: 'Douleur épaule droite', createdAt: '',
+  };
+  const entry: JournalEntry = { type: 'cours', date: cours.date, data: { cours, participation } };
+
+  it("pas de point d'alerte : une note libre ne se devine pas « à surveiller »", () => {
+    expect(entreeAUneAlerte(entry)).toBe(false);
+  });
+
+  it("a une clé propre, distincte de celle d'un compte rendu ou d'une note (même identifiant possible)", () => {
+    expect(cleEntree(entry)).toBe('cours-pc1');
+    const dictee: JournalEntry = { type: 'dictee', date: '2026-07-10', data: compteRendu({ id: 'pc1' }) };
+    expect(cleEntree(dictee)).toBe('pc1');
+    expect(cleEntree(entry)).not.toBe(cleEntree(dictee));
   });
 });

@@ -4,6 +4,8 @@ import type { CompteRenduSeance, ExerciceRealise } from '../../types/seance';
 import type { NoteSeance } from '../../types';
 import { RESSENTI_CONFIG, ALERTES_CONFIG } from './NoteSeanceModal';
 import { entreeAUneAlerte, type JournalEntry } from '../../lib/journalAlertes';
+import type { EntreeCours } from '../../lib/coursCollectifs';
+import { niveauEffort, niveauBienEtre } from '../../lib/ressentiCours';
 
 export type { JournalEntry };
 
@@ -70,8 +72,16 @@ export default function CarteJournalSeance({ entry, expanded, onToggle }: Props)
             <span className="text-[11px] text-gray-400">{entry.data.dureeMinutes} min</span>
           )}
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium whitespace-nowrap">
-            {entry.type === 'dictee' ? '🎙️ Dictée' : '✏️ Manuelle'}
+            {entry.type === 'dictee' ? '🎙️ Dictée' : entry.type === 'cours' ? '👥 Cours collectif' : '✏️ Manuelle'}
           </span>
+          {entry.type === 'cours' && (
+            <span
+              className="text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap"
+              style={{ background: PRESENCE_COURS[entry.data.participation.statutPresence].fond, color: PRESENCE_COURS[entry.data.participation.statutPresence].texte }}
+            >
+              {PRESENCE_COURS[entry.data.participation.statutPresence].label}
+            </span>
+          )}
           {entry.type === 'dictee' && entry.data.humeurPatient && (
             <span className="text-[13px]">{HUMEUR_EMOJI[entry.data.humeurPatient]}</span>
           )}
@@ -94,6 +104,10 @@ export default function CarteJournalSeance({ entry, expanded, onToggle }: Props)
         </div>
       </div>
 
+      {entry.type === 'cours' && (
+        <p className="text-[12px] text-gray-500 mt-1">👥 {entry.data.cours.titre}</p>
+      )}
+
       {entry.type === 'dictee' && entry.data.exercicesRealises.length > 0 && (
         <p className="text-[12px] text-gray-500 mt-1">
           🏋️ {entry.data.exercicesRealises.map(e => e.nom).filter(Boolean).join(' · ')}
@@ -104,9 +118,49 @@ export default function CarteJournalSeance({ entry, expanded, onToggle }: Props)
       {expanded && (
         entry.type === 'dictee' ? (
           <DetailDictee cr={entry.data} />
+        ) : entry.type === 'cours' ? (
+          <DetailCours entree={entry.data} />
         ) : (
           <DetailNote note={entry.data} />
         )
+      )}
+    </div>
+  );
+}
+
+// Couleurs de présence : uniquement des couleurs inline / plates du thème (jamais une échelle
+// numérique de rouge ou d'ambre, voir la note en tête de fichier).
+const PRESENCE_COURS = {
+  present: { label: 'Présent', fond: '#DCFCE7', texte: '#166534' },
+  absent:  { label: 'Absent',  fond: '#FEF0EF', texte: '#B42318' },
+  excuse:  { label: 'Excusé',  fond: '#FEF5E7', texte: '#92400E' },
+} as const;
+
+function DetailCours({ entree }: { entree: EntreeCours }) {
+  const { cours, participation } = entree;
+  const effort = niveauEffort(participation.ressentiBorg);
+  const bienEtre = niveauBienEtre(participation.ressentiBienetre);
+  return (
+    <div className="mt-2 pt-2 border-t border-gray-100 space-y-2">
+      <p className="text-[12px] text-gray-500">
+        {cours.titre} · {cours.heureDebut} · {cours.dureeMinutes} min
+      </p>
+      {(effort || bienEtre) && (
+        <div className="flex flex-wrap gap-1.5">
+          {effort && (
+            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full text-white" style={{ background: effort.couleur }}>
+              Effort : {effort.label}
+            </span>
+          )}
+          {bienEtre && (
+            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full text-white" style={{ background: bienEtre.couleur }}>
+              Bien-être : {bienEtre.label}
+            </span>
+          )}
+        </div>
+      )}
+      {participation.notes && (
+        <p className="text-[13px] text-gray-600 leading-relaxed whitespace-pre-wrap">{participation.notes}</p>
       )}
     </div>
   );

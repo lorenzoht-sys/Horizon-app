@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { datesCoursCollectifsIndividuelFacturables, coursCollectifsStructureFacturables } from './coursCollectifs';
+import {
+  datesCoursCollectifsIndividuelFacturables, coursCollectifsStructureFacturables,
+  etatCours, presenceConstatee, entreesCoursDuParticipant,
+} from './coursCollectifs';
 import { trouverTarifApplicable, totalFactureSeance } from './tarifsContrats';
 import type { CoursCollectif, ParticipationCoursCollectif, TarifContrat } from '../types';
 
@@ -166,5 +169,60 @@ describe('facturation cours collectifs — mode structure', () => {
   it('ignore un cours en mode individuel même rattaché à la structure', () => {
     const coursDeStructure = [cours({ id: 'cours-1', date: '2026-06-05', modeFacturation: 'individuel', structureId: 'structure-1' })];
     expect(coursCollectifsStructureFacturables(coursDeStructure, 'structure-1', '2026-06-01', '2026-06-30')).toEqual([]);
+  });
+});
+
+describe('lecture côté fiche : état du cours', () => {
+  it('un cours annulé ou réalisé garde son statut, quelle que soit la date', () => {
+    expect(etatCours(cours({ statut: 'annule', date: '2099-01-01' }), '2026-09-21')).toBe('annule');
+    expect(etatCours(cours({ statut: 'realise', date: '2099-01-01' }), '2026-09-21')).toBe('realise');
+  });
+
+  it("planifié : à venir aujourd'hui et après, à clôturer une fois la date passée", () => {
+    const c = (date: string) => cours({ statut: 'planifie', date });
+    expect(etatCours(c('2026-09-22'), '2026-09-21')).toBe('a_venir');
+    expect(etatCours(c('2026-09-21'), '2026-09-21')).toBe('a_venir');
+    expect(etatCours(c('2026-09-20'), '2026-09-21')).toBe('a_cloturer');
+  });
+});
+
+describe('lecture côté fiche : présence constatée', () => {
+  // statut_presence vaut « present » PAR DÉFAUT dès l'inscription : ce « présent »
+  // n'est constaté par personne tant que le cours n'est pas réalisé.
+  it('cours réalisé : la présence saisie par le praticien', () => {
+    expect(presenceConstatee({ cours: cours({ statut: 'realise' }), participation: participation({ statutPresence: 'absent' }) })).toBe('absent');
+    expect(presenceConstatee({ cours: cours({ statut: 'realise' }), participation: participation({ statutPresence: 'present' }) })).toBe('present');
+  });
+
+  it('cours planifié ou annulé : aucune présence, même si la base dit « present » par défaut', () => {
+    for (const statut of ['planifie', 'annule'] as const) {
+      expect(presenceConstatee({ cours: cours({ statut }), participation: participation({ statutPresence: 'present' }) }), statut).toBeNull();
+    }
+  });
+});
+
+describe("lecture côté fiche : cours d'un bénéficiaire", () => {
+  const c1 = cours({ id: 'c1', date: '2026-06-10', heureDebut: '10:00' });
+  const c2 = cours({ id: 'c2', date: '2026-06-17', heureDebut: '09:00' });
+  const c3 = cours({ id: 'c3', date: '2026-06-17', heureDebut: '14:00' });
+
+  it('ne garde que ce bénéficiaire, du plus récent au plus ancien (date puis heure)', () => {
+    const parts = [
+      participation({ id: 'p1', coursId: 'c1', participantId: 'u1' }),
+      participation({ id: 'p2', coursId: 'c2', participantId: 'u1' }),
+      participation({ id: 'p3', coursId: 'c3', participantId: 'u1' }),
+      participation({ id: 'p4', coursId: 'c1', participantId: 'autre' }),
+    ];
+    expect(entreesCoursDuParticipant([c1, c2, c3], parts, 'u1').map(e => e.cours.id)).toEqual(['c3', 'c2', 'c1']);
+    expect(entreesCoursDuParticipant([c1, c2, c3], parts, 'autre').map(e => e.cours.id)).toEqual(['c1']);
+  });
+
+  it("ignore une participation dont le cours n'est pas visible (RLS) au lieu de planter", () => {
+    const parts = [participation({ id: 'p1', coursId: 'introuvable', participantId: 'u1' })];
+    expect(entreesCoursDuParticipant([c1], parts, 'u1')).toEqual([]);
+  });
+
+  it('aucun cours : liste vide', () => {
+    expect(entreesCoursDuParticipant([], [], 'u1')).toEqual([]);
   });
 });
