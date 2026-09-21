@@ -69,6 +69,13 @@
 -- DELETE (c'est exactement ce qui avait échoué silencieusement sur
 -- tarifs_contrats à cause de la règle de privilèges par défaut Supabase).
 --
+-- ⚠️ DÉFAUT CONNU, corrigé par 20260921_cours_collectifs_fix_recursion_rls.sql
+-- (à appliquer APRÈS ce fichier) : orga_acces_cours_collectifs lit
+-- participations_cours_collectifs, dont praticien_gere_participations_cours_collectifs
+-- relit cours_collectifs — boucle de policies, « infinite recursion detected
+-- in policy » (42P17) sur TOUTE requête. Ce fichier est laissé tel qu'appliqué
+-- le 2026-09-17 ; ne pas le rejouer seul.
+--
 -- IDEMPOTENTE : CREATE TABLE IF NOT EXISTS, DROP POLICY IF EXISTS.
 -- DÉJÀ APPLIQUÉE ET VÉRIFIÉE EN STAGING ET PRODUCTION PAR L'UTILISATEUR
 -- (2026-09-17, connexion Postgres directe indisponible depuis cette

@@ -505,6 +505,61 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
     }
   });
 
+  // Test POSITIF, distinct de l'isolation ci-dessus : les tests de cloisonnement
+  // acceptent « erreur OU tableau vide » comme un refus, donc une policy en
+  // récursion infinie (42P17) y passe pour un succès. C'est exactement ce qui a
+  // laissé passer la boucle cours_collectifs ⇄ participations_cours_collectifs
+  // (20260921_cours_collectifs_fix_recursion_rls.sql). Ici, le PROPRIÉTAIRE doit
+  // pouvoir écrire et relire, sans la moindre erreur.
+  describe('Cours collectifs : le propriétaire écrit et relit (garde contre une récursion de policies)', () => {
+    it('praticien A crée un cours, y inscrit un bénéficiaire, les relit ; praticien B n\'en voit rien, sans erreur', async () => {
+      let coursId: string | undefined;
+      try {
+        const { data: cours, error: coursErr } = await clientA
+          .from('cours_collectifs')
+          .insert({
+            praticien_id: praticienAId,
+            titre: 'RLS-SPEC cours collectif',
+            date: '2099-01-01',
+            heure_debut: '10:00',
+            duree_minutes: 45,
+            mode_facturation: 'individuel',
+          })
+          .select('id')
+          .single();
+        expect(coursErr?.message ?? null, 'création du cours par son propriétaire').toBeNull();
+        coursId = cours?.id;
+        expect(coursId).toBeTruthy();
+
+        const { error: partErr } = await clientA
+          .from('participations_cours_collectifs')
+          .insert({ cours_id: coursId, participant_id: participantAId });
+        expect(partErr?.message ?? null, 'inscription d\'un bénéficiaire au cours').toBeNull();
+
+        const lectureCours = await clientA.from('cours_collectifs').select('id').eq('id', coursId as string);
+        expect(lectureCours.error?.message ?? null, 'relecture du cours par A').toBeNull();
+        expect(lectureCours.data ?? []).toHaveLength(1);
+
+        const lecturePart = await clientA.from('participations_cours_collectifs').select('id').eq('cours_id', coursId as string);
+        expect(lecturePart.error?.message ?? null, 'relecture des participations par A').toBeNull();
+        expect(lecturePart.data ?? []).toHaveLength(1);
+
+        // B : aucune erreur (une erreur ne prouve PAS l'isolation, voir plus haut) ET aucune ligne.
+        const coursB = await clientB.from('cours_collectifs').select('id').eq('id', coursId as string);
+        expect(coursB.error?.message ?? null, 'lecture du cours par B : pas d\'erreur attendue, seulement 0 ligne').toBeNull();
+        expect(coursB.data ?? []).toHaveLength(0);
+
+        const partB = await clientB.from('participations_cours_collectifs').select('id').eq('cours_id', coursId as string);
+        expect(partB.error?.message ?? null, 'lecture des participations par B : pas d\'erreur attendue, seulement 0 ligne').toBeNull();
+        expect(partB.data ?? []).toHaveLength(0);
+      } finally {
+        // authenticated n'a pas DELETE (voulu) : nettoyage en service_role. Les
+        // participations partent avec le cours (ON DELETE CASCADE).
+        if (coursId) await admin.from('cours_collectifs').delete().eq('id', coursId);
+      }
+    });
+  });
+
   it("audit_logs est append-only : aucune policy UPDATE ni DELETE, pour aucun rôle authentifié", async () => {
     const { data: existing } = await admin.from('audit_logs').select('id').limit(1);
     if (!existing || existing.length === 0) {
