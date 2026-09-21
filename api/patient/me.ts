@@ -6,6 +6,7 @@
 
 import { getServiceClient, verifyPatientToken, extractBearerToken, getClientIp, logAuditEvent } from '../_lib/patientAuth.js';
 import { withSentry } from '../_lib/sentry.js';
+import { COLONNES_SEANCE_EXPOSEE } from '../_lib/colonnesSeancesExposees.js';
 
 // Contrôle de partage bénéficiaire — voir supabase/migrations/20260713_visibilite_beneficiaire.sql
 // et src/types/index.ts (VisibiliteBeneficiaire, Bilan.visibleBeneficiaire).
@@ -91,11 +92,12 @@ export default withSentry(async function handler(req: any, res: any) {
   const [participantRes, bilansRes, seancesRes, programmesRes, docsRes, testsActifsRes, testsResultatsRes, exLibresActifsRes, exLibresValidationsRes] = await Promise.all([
     supabase.from('participants').select('*').eq('id', participantId).single(),
     supabase.from('bilans').select('*').eq('participant_id', participantId).order('date'),
-    // Colonnes explicites (pas select('*')) : motif_annulation/
-    // motif_annulation_detail sont une donnée interne au praticien et ne
-    // doivent jamais atteindre la réponse envoyée au bénéficiaire.
+    // Liste commune et FERMÉE (pas select('*')) : `notes` et
+    // motif_annulation* sont internes au praticien et ne doivent jamais
+    // atteindre la réponse envoyée au bénéficiaire — voir
+    // api/_lib/colonnesSeancesExposees.ts.
     supabase.from('seances')
-      .select('id, participant_id, contrat_id, date, heure_debut, heure_fin, duree_minutes, type, statut, notes, adresse, coordonnees, created_at, updated_at')
+      .select(COLONNES_SEANCE_EXPOSEE)
       .eq('participant_id', participantId).order('date'),
     supabase.from('programmes').select('*').eq('participant_id', participantId),
     supabase.from('documents_patient')
