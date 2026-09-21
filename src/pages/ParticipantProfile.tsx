@@ -30,6 +30,10 @@ import RadarChart from '../components/charts/RadarChart';
 import BilanEvolutionCharts from '../components/charts/BilanEvolutionCharts';
 import BilanTimeline from '../components/bilan/BilanTimeline';
 import ContratsTab from '../components/participant/ContratsTab';
+import CoursCollectifsTab from '../components/participant/CoursCollectifsTab';
+import { useCoursCollectifs } from '../hooks/useCoursCollectifs';
+import { entreesCoursDuParticipant, type EntreeCours } from '../lib/coursCollectifs';
+import { cleEntree } from '../lib/journalAlertes';
 import DicteePostSeance from '../components/DicteePostSeance';
 import ModalEspacePatient from '../components/participant/ModalEspacePatient';
 import AppliquerModeleModal from '../components/programme/AppliquerModeleModal';
@@ -585,15 +589,19 @@ function CarteProfilFonctionnel({ participant, bilans }: {
 
 // ── CarteJournalFusion ────────────────────────────────────────────────────────
 
-function CarteJournalFusion({ compteRendus, onDicter }: {
+function CarteJournalFusion({ compteRendus, coursRealises, onDicter }: {
   compteRendus: CompteRenduSeance[];
+  /** Cours collectifs RÉALISÉS de ce bénéficiaire (présent, absent ou excusé). */
+  coursRealises: EntreeCours[];
   onDicter: () => void;
 }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-  const entries: JournalEntry[] = compteRendus
-    .map(cr => ({ type: 'dictee' as const, date: cr.dateSeance, data: cr }))
-    .sort((a, b) => b.date.localeCompare(a.date));
+  // Comptes rendus dictés ET cours collectifs réalisés, dans l'ordre chronologique inverse.
+  const entries: JournalEntry[] = [
+    ...compteRendus.map(cr => ({ type: 'dictee' as const, date: cr.dateSeance, data: cr })),
+    ...coursRealises.map(e => ({ type: 'cours' as const, date: e.cours.date, data: e })),
+  ].sort((a, b) => b.date.localeCompare(a.date));
 
   function toggle(id: string) {
     setExpandedIds(prev => {
@@ -633,10 +641,10 @@ function CarteJournalFusion({ compteRendus, onDicter }: {
         <div className="space-y-2">
           {entries.slice(0, 5).map((entry) => (
             <CarteJournalSeance
-              key={entry.data.id}
+              key={cleEntree(entry)}
               entry={entry}
-              expanded={expandedIds.has(entry.data.id)}
-              onToggle={() => toggle(entry.data.id)}
+              expanded={expandedIds.has(cleEntree(entry))}
+              onToggle={() => toggle(cleEntree(entry))}
             />
           ))}
         </div>
@@ -850,7 +858,7 @@ function dateOnly(s: string): string { return s.slice(0, 10); }
 
 // ── TabsSection ───────────────────────────────────────────────────────────────
 
-type TabId = 'bilans' | 'contrats' | 'assiduite' | 'rappels';
+type TabId = 'bilans' | 'contrats' | 'cours' | 'assiduite' | 'rappels';
 
 // ── Types assiduité ───────────────────────────────────────────────────────────
 
@@ -1052,6 +1060,7 @@ export default function ParticipantProfile() {
   const { contrats } = useContrats();
   const { structures } = useStructures();
   const { seances } = useAgenda();
+  const { coursCollectifs, participations: participationsCours } = useCoursCollectifs();
   useJournalSeance(); // conservé pour ne pas casser le hook
   const navigate = useNavigate();
   const settings = chargerSettingsPraticien();
@@ -1131,6 +1140,11 @@ export default function ParticipantProfile() {
 
   const participant = participants.find(p => p.id === id);
   const { compteRendus, ajouterCompteRendu } = useCompteRenduSeance(participant?.id ?? '');
+  // Avant le retour anticipé ci-dessous : un hook ne peut pas être appelé après un `return`.
+  const entreesCours = useMemo(
+    () => entreesCoursDuParticipant(coursCollectifs, participationsCours, id ?? ''),
+    [coursCollectifs, participationsCours, id],
+  );
 
   // Fiche UNIQUE depuis le 2026-09-13 : servie telle quelle sous 768 px
   // (App.tsx, estRouteInterfaceUnique). ParticipantProfileMobile, montée ici
@@ -1281,6 +1295,7 @@ export default function ParticipantProfile() {
   const TABS: { id: TabId; label: string; count?: number }[] = [
     { id: 'bilans',    label: 'Historique bilans',   count: participant.bilans.length },
     { id: 'contrats',  label: 'Contrats de suivi',   count: contratsCount },
+    { id: 'cours',     label: '👥 Cours collectifs',  count: entreesCours.length > 0 ? entreesCours.length : undefined },
     { id: 'assiduite', label: alerteRessentis ? '📊 Assiduité ⚠' : '📊 Assiduité', count: seancesStats.length > 0 ? seancesStats.length : undefined },
     { id: 'rappels',   label: '🔔 Rappels' },
   ];
@@ -1654,7 +1669,8 @@ export default function ParticipantProfile() {
         <div className="flex flex-col gap-3">
           {latestBilan && <CarteProfilFonctionnel participant={participant} bilans={participant.bilans} />}
           <CarteJournalFusion
-            compteRendus={compteRendus.slice(0, 5)}
+            compteRendus={compteRendus}
+            coursRealises={entreesCours.filter(e => e.cours.statut === 'realise')}
             onDicter={() => setShowDictee(true)}
           />
         </div>
@@ -1778,6 +1794,9 @@ export default function ParticipantProfile() {
         )}
         {activeTab === 'contrats' && (
           <ContratsTab participantId={participant.id} />
+        )}
+        {activeTab === 'cours' && (
+          <CoursCollectifsTab entrees={entreesCours} aujourdhui={new Date().toLocaleDateString('sv-SE')} />
         )}
         {activeTab === 'assiduite' && (() => {
           if (seancesStats.length === 0) return (

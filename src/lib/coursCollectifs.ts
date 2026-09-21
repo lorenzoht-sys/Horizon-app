@@ -4,7 +4,7 @@
 // (src/lib/tarifsContrats.ts) pour le mode individuel : aucune duplication
 // de logique de tarif ici, uniquement la sélection des dates à facturer.
 
-import type { CoursCollectif, ParticipationCoursCollectif } from '../types';
+import type { CoursCollectif, ParticipationCoursCollectif, StatutPresenceCours } from '../types';
 
 /**
  * Dates des cours collectifs en mode individuel où ce participant était
@@ -58,5 +58,61 @@ export function coursCollectifsStructureFacturables(
     c.statut === 'realise' &&
     c.structureId === structureId &&
     c.date >= debut && c.date <= fin
+  );
+}
+
+// ── Lecture côté fiche du bénéficiaire ──────────────────────────────────────
+
+/** Un cours auquel un bénéficiaire est inscrit, avec SA participation. */
+export interface EntreeCours {
+  cours: CoursCollectif;
+  participation: ParticipationCoursCollectif;
+}
+
+export type EtatCours = 'a_venir' | 'a_cloturer' | 'realise' | 'annule';
+
+/**
+ * Où en est le cours. « a_cloturer » : la date est passée mais le praticien ne
+ * l'a jamais marqué « réalisé » — un cours oublié, à traiter, qui ne doit ni
+ * passer pour à venir ni pour fait.
+ * `aujourdhui` : AAAA-MM-JJ, passé par l'appelant pour rester une fonction pure.
+ */
+export function etatCours(cours: CoursCollectif, aujourdhui: string): EtatCours {
+  if (cours.statut === 'annule') return 'annule';
+  if (cours.statut === 'realise') return 'realise';
+  return cours.date >= aujourdhui ? 'a_venir' : 'a_cloturer';
+}
+
+/**
+ * Présence CONSTATÉE, ou null tant que le cours n'est pas réalisé.
+ *
+ * participations_cours_collectifs.statut_presence vaut « present » PAR DÉFAUT dès
+ * l'inscription (creerCoursCollectif) : sur un cours à venir ou annulé, ce
+ * « présent » n'a jamais été constaté par personne. Le montrer reviendrait à
+ * afficher une présence qui n'a pas eu lieu.
+ */
+export function presenceConstatee(entree: EntreeCours): StatutPresenceCours | null {
+  return entree.cours.statut === 'realise' ? entree.participation.statutPresence : null;
+}
+
+/**
+ * Les cours d'un bénéficiaire, du plus récent au plus ancien. Une participation
+ * dont le cours n'est pas (ou plus) visible est ignorée : la RLS peut masquer un
+ * cours sans masquer la participation, et rien n'est alors à afficher.
+ */
+export function entreesCoursDuParticipant(
+  cours: CoursCollectif[],
+  participations: ParticipationCoursCollectif[],
+  participantId: string,
+): EntreeCours[] {
+  const parId = new Map(cours.map(c => [c.id, c]));
+  const entrees: EntreeCours[] = [];
+  for (const p of participations) {
+    if (p.participantId !== participantId) continue;
+    const c = parId.get(p.coursId);
+    if (c) entrees.push({ cours: c, participation: p });
+  }
+  return entrees.sort((a, b) =>
+    b.cours.date.localeCompare(a.cours.date) || b.cours.heureDebut.localeCompare(a.cours.heureDebut),
   );
 }
