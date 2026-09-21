@@ -5,6 +5,7 @@
 
 export type PresenceCoursPatient = 'present' | 'absent' | 'excuse';
 export type StatutCoursPatient = 'planifie' | 'realise' | 'annule';
+export type ReponseAnnonceeCours = 'vient' | 'ne_vient_pas';
 
 /** Miroir du DTO de api/_lib/coursPatient.ts (le client n'importe pas le code serveur). */
 export interface CoursPatientRecord {
@@ -17,6 +18,8 @@ export interface CoursPatientRecord {
   presence: PresenceCoursPatient | null;
   ressentiBorg: number | null;
   ressentiBienetre: number | null;
+  /** Ce que le bénéficiaire a ANNONCÉ (distinct de `presence`, constatée par le praticien). null = pas de réponse. */
+  presenceAnnoncee: ReponseAnnonceeCours | null;
 }
 
 /** Jour local AAAA-MM-JJ (et non UTC : un cours de 00h30 ne doit pas compter pour la veille). */

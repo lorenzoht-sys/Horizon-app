@@ -7,7 +7,8 @@
 import { getServiceClient, verifyPatientToken, extractBearerToken, getClientIp, logAuditEvent } from '../_lib/patientAuth.js';
 import { withSentry } from '../_lib/sentry.js';
 import { COLONNES_SEANCE_EXPOSEE } from '../_lib/colonnesSeancesExposees.js';
-import { SELECT_COURS_PATIENT, construireCoursPatient } from '../_lib/coursPatient.js';
+import { lireLignesCoursPatient, construireCoursPatient } from '../_lib/coursPatient.js';
+import { captureMessage } from '../_lib/sentry.js';
 
 // Contrôle de partage bénéficiaire — voir supabase/migrations/20260713_visibilite_beneficiaire.sql
 // et src/types/index.ts (VisibiliteBeneficiaire, Bilan.visibleBeneficiaire).
@@ -122,10 +123,12 @@ export default withSentry(async function handler(req: any, res: any) {
     // Cours collectifs de CE bénéficiaire (participant_id du JWT), colonnes listées
     // explicitement : la note du praticien et la facturation n'en font jamais
     // partie — voir api/_lib/coursPatient.ts.
-    supabase.from('participations_cours_collectifs')
-      .select(SELECT_COURS_PATIENT)
-      .eq('participant_id', participantId)
-      .limit(500),
+    // Si la colonne presence_annoncee n'existe pas encore (migration pas appliquée), la
+    // lecture retente sans elle et le signale : le bénéficiaire ne perd pas ses cours.
+    lireLignesCoursPatient(supabase, participantId, async (erreur) => {
+      console.error('[patient/me] presence_annoncee absente — migration non appliquée ? repli sans la colonne:', erreur.message);
+      await captureMessage('[api/patient/me] colonne presence_annoncee absente : migration non appliquée', { level: 'error' });
+    }),
   ]);
 
   if (participantRes.error || !participantRes.data) {

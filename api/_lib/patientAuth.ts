@@ -75,6 +75,8 @@ export async function recordLoginAttempt(supabase: SupabaseClient, ip: string): 
 export type AuditEventType =
   | 'patient_login' | 'patient_data_access' | 'patient_seance_submit' | 'patient_retour_submit'
   | 'patient_test_etalon_submit' | 'patient_exercice_libre_submit' | 'patient_access_via_praticien'
+  // Réponse « Je viens / Je ne viens pas » à un cours collectif (metadata : coursId, réponse ou motif du refus).
+  | 'patient_cours_presence_submit'
   // Action praticien (pas patient) — même table : pas de raison de dupliquer
   // un mécanisme d'audit générique pour une différence d'origine de l'action.
   | 'praticien_seances_supprimees_fin_contrat'

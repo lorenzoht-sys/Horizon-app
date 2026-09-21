@@ -16,10 +16,18 @@
 // Aucune donnée d'un autre bénéficiaire : la requête filtre sur le
 // participant_id du JWT, et un cours n'est lu que par sa propre participation.
 
-export const COLONNES_PARTICIPATION_PATIENT = 'statut_presence, ressenti_borg, ressenti_bienetre';
+import { reponseValide, type ReponsePresence } from './presenceAnnoncee.js';
+
+// `presence_annoncee` : la propre réponse du bénéficiaire (« vient » / « ne_vient_pas » / NULL).
+// Ce n'est PAS une donnée interne — contrairement à `notes`, toujours exclue.
+// `presence_annoncee_le` reste exclue : rien à en faire côté bénéficiaire.
+export const COLONNES_PARTICIPATION_PATIENT_SANS_ANNONCE = 'statut_presence, ressenti_borg, ressenti_bienetre';
+export const COLONNES_PARTICIPATION_PATIENT = `${COLONNES_PARTICIPATION_PATIENT_SANS_ANNONCE}, presence_annoncee`;
 export const COLONNES_COURS_PATIENT = 'id, titre, date, heure_debut, duree_minutes, statut';
 /** Participation + son cours (jointure PostgREST, colonnes explicites des deux côtés). */
 export const SELECT_COURS_PATIENT = `${COLONNES_PARTICIPATION_PATIENT}, cours_collectifs(${COLONNES_COURS_PATIENT})`;
+/** Repli si la migration presence_annoncee n'est pas (encore) appliquée : voir lireLignesCoursPatient. */
+export const SELECT_COURS_PATIENT_SANS_ANNONCE = `${COLONNES_PARTICIPATION_PATIENT_SANS_ANNONCE}, cours_collectifs(${COLONNES_COURS_PATIENT})`;
 
 /** Garde-fou de volume : un groupe hebdomadaire sur plusieurs années reste bien en dessous. */
 export const LIMITE_COURS_PATIENT = 100;
@@ -38,6 +46,8 @@ export interface CoursPatient {
   presence: PresenceCoursPatient | null;
   ressentiBorg: number | null;
   ressentiBienetre: number | null;
+  /** Ce que le bénéficiaire a ANNONCÉ pour ce cours (distinct de `presence`, constatée par le praticien). null = pas de réponse. */
+  presenceAnnoncee: ReponsePresence | null;
 }
 
 const STATUTS: readonly string[] = ['planifie', 'realise', 'annule'];
@@ -92,10 +102,56 @@ export function construireCoursPatient(lignes: unknown[]): CoursPatient[] {
       presence,
       ressentiBorg: avecRessenti ? nombreOuNull(ligne.ressenti_borg) : null,
       ressentiBienetre: avecRessenti ? nombreOuNull(ligne.ressenti_bienetre) : null,
+      presenceAnnoncee: reponseValide(ligne.presence_annoncee),
     });
   }
 
   return resultat
     .sort((a, b) => b.date.localeCompare(a.date) || b.heureDebut.localeCompare(a.heureDebut))
     .slice(0, LIMITE_COURS_PATIENT);
+}
+
+// ── Lecture avec repli ──────────────────────────────────────────────────────
+
+/** Code Postgres « undefined_column » : PostgREST le renvoie tel quel (HTTP 400). */
+const CODE_COLONNE_INEXISTANTE = '42703';
+
+export interface LectureCours {
+  data: unknown[] | null;
+  error: { code?: string; message?: string } | null;
+}
+
+/**
+ * Lit les participations du bénéficiaire (colonnes listées explicitement), et NE PERD PAS
+ * ses cours si la migration presence_annoncee n'a pas encore été appliquée.
+ *
+ * Sans ce repli, le scénario est SILENCIEUX : le code lit une colonne qui n'existe pas,
+ * PostgREST répond 400 (code 42703, constaté), api/patient/me.ts traite l'erreur en
+ * renvoyant une liste vide pour ne pas faire tomber tout l'espace patient — et le
+ * bénéficiaire voit disparaître TOUS ses cours, sans le moindre message. Ici, sur ce
+ * code précis, on relit sans la colonne (le bénéficiaire garde ses cours, sans sa
+ * réponse annoncée) et `surRepli` signale l'incident pour qu'il ne passe pas inaperçu.
+ *
+ * L'ORDRE DE DÉPLOIEMENT reste : migration d'abord. Ce repli est un filet, pas une
+ * autorisation de l'inverser.
+ */
+export async function lireLignesCoursPatient(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  participantId: string,
+  surRepli?: (erreur: { code?: string; message?: string }) => void | Promise<void>,
+): Promise<LectureCours> {
+  const lire = (colonnes: string): Promise<LectureCours> =>
+    supabase
+      .from('participations_cours_collectifs')
+      .select(colonnes)
+      .eq('participant_id', participantId)
+      .limit(500);
+
+  const premiere = await lire(SELECT_COURS_PATIENT);
+  if (premiere.error?.code === CODE_COLONNE_INEXISTANTE) {
+    await surRepli?.(premiere.error);
+    return lire(SELECT_COURS_PATIENT_SANS_ANNONCE);
+  }
+  return premiere;
 }
