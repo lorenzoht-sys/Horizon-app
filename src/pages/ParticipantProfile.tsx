@@ -1237,6 +1237,8 @@ export default function ParticipantProfile() {
           contratActif,
           programmeActif,
           compteRendus,
+          // Cours RÉALISÉS de ce bénéficiaire, avec présence constatée, effort, bien-être et note.
+          coursRealises: entreesCours.filter(e => e.cours.statut === 'realise'),
           settings,
         },
         `Dossier_${participant!.nom}_${participant!.prenom}.pdf`
