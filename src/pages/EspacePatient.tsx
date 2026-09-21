@@ -5,11 +5,11 @@ import type { Participant, Seance, Bilan, Programme, ProgrammeV2, ProgrammeSeanc
 import { JOURS_PROGRAMME } from '../types';
 import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/mappers';
 import {
-  prochainCours, historiqueCours, jourLocal, LIBELLE_PRESENCE_PATIENT,
-  type CoursPatientRecord, type PresenceCoursPatient,
+  prochainsCours, historiqueCours, jourLocal, reponseEncoreOuverte, LIBELLE_PRESENCE_PATIENT,
+  type CoursPatientRecord, type PresenceCoursPatient, type ReponseAnnonceeCours,
 } from '../lib/coursPatient';
 import { niveauEffort, niveauBienEtre } from '../lib/ressentiCours';
-import { patientFetchMe, patientSauvegarderSeance, patientEnvoyerRetour, patientLogin, patientActiverRappels, patientDesactiverRappels, patientEnregistrerTestEtalon, patientMarquerExerciceLibre } from '../lib/patientApi';
+import { patientFetchMe, patientSauvegarderSeance, patientEnvoyerRetour, patientLogin, patientActiverRappels, patientDesactiverRappels, patientEnregistrerTestEtalon, patientMarquerExerciceLibre, patientAnnoncerPresence } from '../lib/patientApi';
 import { activerRappelsPush, desactiverRappelsPush, etatAbonnementPush, estIOS, estInstalleeSurEcranAccueil, pushSupporte } from '../lib/push';
 import { loadExercices } from '../data/exercices';
 import { TESTS_ETALONS, getTestEtalon } from '../data/testsEtalons';
@@ -346,7 +346,117 @@ function SectionRappels({ token }: { token: string }) {
 // Les données arrivent de /api/patient/me, déjà filtrées côté serveur : jamais de note du
 // praticien, jamais de facturation, et une présence SEULEMENT sur un cours réalisé.
 
-function CarteProchainCours({ cours }: { cours: CoursPatientRecord }) {
+// L'heure change pendant que la page est ouverte : à l'heure du cours, les boutons doivent
+// disparaître sans que le bénéficiaire ait à recharger. (Le serveur refuse de toute façon.)
+function useMaintenant(pasMs: number = 30_000): number {
+  const [maintenant, setMaintenant] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setMaintenant(Date.now()), pasMs);
+    return () => clearInterval(id);
+  }, [pasMs]);
+  return maintenant;
+}
+
+const MESSAGE_ECHEC_ANNONCE = "Votre réponse n'a pas pu être enregistrée. Réessayez.";
+
+// « Je viens » / « Je ne viens pas », modifiable jusqu'au DÉBUT du cours. Distinct de la présence
+// que constate le praticien le jour du cours. Mise à jour immédiate, retour en arrière si
+// l'enregistrement échoue ; si le serveur dit que le cours a commencé (409), les boutons
+// disparaissent. Le serveur fait foi : rien de ce qui s'affiche ici n'autorise quoi que ce soit.
+function BoutonsPresence({ cours, token, maintenantMs, sombre, onReponse }: {
+  cours: CoursPatientRecord;
+  token: string;
+  maintenantMs: number;
+  /** Fond sombre (carte « prochain cours ») ou clair. */
+  sombre: boolean;
+  onReponse: (coursId: string, reponse: ReponseAnnonceeCours | null) => void;
+}) {
+  const [envoi, setEnvoi] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [enregistre, setEnregistre] = useState(false);
+  const [verrouille, setVerrouille] = useState(false);
+  const ouverte = !verrouille && reponseEncoreOuverte(cours, maintenantMs);
+
+  async function repondre(reponse: ReponseAnnonceeCours) {
+    if (envoi || !ouverte || cours.presenceAnnoncee === reponse) return;
+    const precedente = cours.presenceAnnoncee;
+    setEnvoi(true);
+    setErreur(null);
+    setEnregistre(false);
+    onReponse(cours.coursId, reponse); // mise à jour immédiate
+    const r = await patientAnnoncerPresence(token, cours.coursId, reponse);
+    setEnvoi(false);
+    if (r.ok) { setEnregistre(true); return; }
+    onReponse(cours.coursId, precedente); // retour en arrière : ce qui est affiché doit être ce qui est enregistré
+    if (r.status === 409) setVerrouille(true);
+    setErreur(r.error ?? MESSAGE_ECHEC_ANNONCE);
+  }
+
+  const discret = sombre ? 'rgba(255,255,255,0.6)' : C.muted;
+
+  if (!ouverte) {
+    const texte = cours.presenceAnnoncee === 'vient'
+      ? 'Vous avez répondu : je viens.'
+      : cours.presenceAnnoncee === 'ne_vient_pas'
+        ? 'Vous avez répondu : je ne viens pas.'
+        : "Vous n'avez pas répondu.";
+    return (
+      <div data-testid="presence-fermee" style={{ marginTop: 12, fontSize: 12, color: discret }}>
+        {texte}
+        {erreur && <div role="alert" style={{ marginTop: 4, color: sombre ? '#FCA5A5' : '#B42318' }}>{erreur}</div>}
+      </div>
+    );
+  }
+
+  function styleBouton(reponse: ReponseAnnonceeCours): React.CSSProperties {
+    const choisi = cours.presenceAnnoncee === reponse;
+    const base: React.CSSProperties = {
+      flex: 1, minHeight: 44, padding: '10px 12px', borderRadius: 12, fontSize: 14, fontWeight: 700,
+      cursor: envoi ? 'wait' : 'pointer', opacity: envoi && !choisi ? 0.6 : 1,
+    };
+    if (choisi) {
+      const fond = reponse === 'vient' ? '#16A34A' : '#B42318';
+      return { ...base, background: fond, color: 'white', border: '1px solid ' + fond };
+    }
+    return sombre
+      ? { ...base, background: 'transparent', color: 'white', border: '1px solid rgba(255,255,255,0.35)' }
+      : { ...base, background: 'white', color: C.text, border: '1px solid ' + C.border };
+  }
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ fontSize: 12, color: discret, marginBottom: 8 }}>Serez-vous présent(e) à ce cours ?</div>
+      <div role="group" aria-label="Votre présence à ce cours" style={{ display: 'flex', gap: 8 }}>
+        <button type="button" data-testid="bouton-vient" aria-pressed={cours.presenceAnnoncee === 'vient'} disabled={envoi}
+          onClick={() => repondre('vient')} style={styleBouton('vient')}>
+          Je viens
+        </button>
+        <button type="button" data-testid="bouton-ne-vient-pas" aria-pressed={cours.presenceAnnoncee === 'ne_vient_pas'} disabled={envoi}
+          onClick={() => repondre('ne_vient_pas')} style={styleBouton('ne_vient_pas')}>
+          Je ne viens pas
+        </button>
+      </div>
+      {erreur && (
+        <div role="alert" data-testid="erreur-presence" style={{ marginTop: 8, fontSize: 12, color: sombre ? '#FCA5A5' : '#B42318' }}>{erreur}</div>
+      )}
+      {!erreur && enregistre && (
+        <div aria-live="polite" data-testid="presence-enregistree" style={{ marginTop: 8, fontSize: 12, color: sombre ? '#86EFAC' : '#166534' }}>
+          ✓ Réponse enregistrée
+        </div>
+      )}
+      {!erreur && !enregistre && (
+        <div style={{ marginTop: 8, fontSize: 11, color: discret }}>
+          {cours.presenceAnnoncee ? 'Vous pouvez encore changer d\u2019avis jusqu\u2019au début du cours.' : 'Vous pouvez répondre jusqu\u2019au début du cours.'}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CarteProchainCours({ cours, token, maintenantMs, onReponse }: {
+  cours: CoursPatientRecord; token: string; maintenantMs: number;
+  onReponse: (coursId: string, reponse: ReponseAnnonceeCours | null) => void;
+}) {
   return (
     <div style={{ background: C.dark, borderRadius: 18, padding: '18px 16px' }} data-testid="prochain-cours">
       <div style={{ fontSize: 11, fontWeight: 700, color: C.teal, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
@@ -357,6 +467,33 @@ function CarteProchainCours({ cours }: { cours: CoursPatientRecord }) {
       </div>
       <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
         {fmtHeure(cours.heureDebut)} · {cours.dureeMinutes} min · {cours.titre}
+      </div>
+      <BoutonsPresence cours={cours} token={token} maintenantMs={maintenantMs} sombre onReponse={onReponse} />
+    </div>
+  );
+}
+
+// Les cours à venir SUIVANTS (jusqu'à 3 après le prochain) : un groupe hebdomadaire peut
+// vouloir répondre plusieurs semaines à l'avance.
+function CarteAutresCoursAVenir({ cours, token, maintenantMs, onReponse }: {
+  cours: CoursPatientRecord[]; token: string; maintenantMs: number;
+  onReponse: (coursId: string, reponse: ReponseAnnonceeCours | null) => void;
+}) {
+  return (
+    <div style={{ background: 'white', border: '1px solid ' + C.border, borderRadius: 18, padding: '18px 16px' }} data-testid="autres-cours">
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+        Vos autres cours à venir
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {cours.map(c => (
+          <div key={c.coursId} data-testid="cours-a-venir">
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.dark }}>👥 {c.titre}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 2, textTransform: 'capitalize' }}>
+              {fmt(c.date)} · {fmtHeure(c.heureDebut)} · {c.dureeMinutes} min
+            </div>
+            <BoutonsPresence cours={c} token={token} maintenantMs={maintenantMs} sombre={false} onReponse={onReponse} />
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -438,11 +575,13 @@ function CarteMesCours({ cours }: { cours: CoursPatientRecord[] }) {
 // ── ÉCRAN 1 — Accueil ─────────────────────────────────────────────────────────
 
 function EcranAccueil({
-  participant, seances, coursCollectifs, bilans, programmes, programmesV2, token,
+  participant, seances, coursCollectifs, onAnnonce, bilans, programmes, programmesV2, token,
 }: {
   participant: Participant;
   seances: Seance[];
   coursCollectifs: CoursPatientRecord[];
+  /** Met à jour la réponse annoncée d'un cours (null : retour en arrière après un échec d'enregistrement). */
+  onAnnonce: (coursId: string, reponse: ReponseAnnonceeCours | null) => void;
   bilans: Bilan[];
   programmes: Programme[];
   programmesV2: ProgrammeV2[];
@@ -450,6 +589,8 @@ function EcranAccueil({
 }) {
   const praticien = loadPraticien();
   const today = new Date().toISOString().split('T')[0];
+
+  const maintenant = useMaintenant();
 
   const realisees = seances.filter(s => s.statut === 'realisee');
   const prochaine = seances
@@ -542,8 +683,14 @@ function EcranAccueil({
 
       {/* Prochain cours collectif */}
       {(() => {
-        const prochain = prochainCours(coursCollectifs, jourLocal());
-        return prochain ? <CarteProchainCours cours={prochain} /> : null;
+        // Les 4 prochains cours : le premier en grand, les suivants dans une carte à part.
+        const [prochain, ...autres] = prochainsCours(coursCollectifs, jourLocal());
+        return (
+          <>
+            {prochain && <CarteProchainCours cours={prochain} token={token} maintenantMs={maintenant} onReponse={onAnnonce} />}
+            {autres.length > 0 && <CarteAutresCoursAVenir cours={autres} token={token} maintenantMs={maintenant} onReponse={onAnnonce} />}
+          </>
+        );
       })()}
 
       {/* Historique des cours collectifs : présence, effort perçu, bien-être */}
@@ -2429,6 +2576,9 @@ export default function EspacePatient() {
   const [participant, setParticipant]   = useState<Participant | null>(null);
   const [seances, setSeances]           = useState<Seance[]>([]);
   const [coursCollectifs, setCoursCollectifs] = useState<CoursPatientRecord[]>([]);
+  function majAnnonce(coursId: string, reponse: ReponseAnnonceeCours | null) {
+    setCoursCollectifs(prev => prev.map(c => (c.coursId === coursId ? { ...c, presenceAnnoncee: reponse } : c)));
+  }
   const [bilans, setBilans]             = useState<Bilan[]>([]);
   const [programmes, setProgrammes]     = useState<Programme[]>([]);
   const [programmesV2, setProgrammesV2] = useState<ProgrammeV2[]>([]);
@@ -2698,6 +2848,7 @@ export default function EspacePatient() {
             participant={participant}
             seances={seances}
             coursCollectifs={coursCollectifs}
+            onAnnonce={majAnnonce}
             bilans={bilans}
             programmes={programmes}
             programmesV2={programmesV2}

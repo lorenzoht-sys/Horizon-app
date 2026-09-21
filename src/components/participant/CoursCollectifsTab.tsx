@@ -1,6 +1,7 @@
 import type { StatutPresenceCours } from '../../types';
 import { etatCours, presenceConstatee, type EntreeCours, type EtatCours } from '../../lib/coursCollectifs';
 import { niveauEffort, niveauBienEtre } from '../../lib/ressentiCours';
+import PastilleAnnonce from '../agenda/PastilleAnnonce';
 
 // Cours collectifs d'UN bénéficiaire, vus par le praticien : à venir, réalisés
 // (avec la présence constatée, l'effort perçu, le bien-être et SA note), annulés.
@@ -64,6 +65,12 @@ function CarteCours({ entree, aujourdhui }: { entree: EntreeCours; aujourdhui: s
               {PRESENCE[presence].label}
             </Pastille>
           )}
+          {/* Ce que le bénéficiaire avait ANNONCÉ. Un cours dont la date est passée sans avoir été
+              clôturé est traité comme un cours passé : « sans réponse » n'y dirait plus rien. */}
+          <PastilleAnnonce
+            presenceAnnoncee={participation.presenceAnnoncee}
+            statutCours={etatCours(cours, aujourdhui) === 'a_venir' ? 'planifie' : cours.statut === 'annule' ? 'annule' : 'realise'}
+          />
         </div>
       </div>
 

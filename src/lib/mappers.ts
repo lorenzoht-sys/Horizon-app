@@ -485,6 +485,8 @@ export function dbToParticipationCoursCollectif(row: any): ParticipationCoursCol
     ressentiBorg: row.ressenti_borg ?? undefined,
     ressentiBienetre: row.ressenti_bienetre ?? undefined,
     notes: row.notes ?? undefined,
+    presenceAnnoncee: row.presence_annoncee === 'vient' || row.presence_annoncee === 'ne_vient_pas' ? row.presence_annoncee : undefined,
+    presenceAnnonceeLe: row.presence_annoncee_le ?? undefined,
     createdAt: row.created_at,
   };
 }

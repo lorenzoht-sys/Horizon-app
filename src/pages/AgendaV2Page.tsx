@@ -15,6 +15,7 @@ import { useIndispos } from '../hooks/useIndispos';
 import { useEvenementsAgenda } from '../hooks/useEvenementsAgenda';
 import { useZones } from '../hooks/useZones';
 import { useCoursCollectifs } from '../hooks/useCoursCollectifs';
+import { resumeAnnonces, libelleCompactAnnonces } from '../lib/coursCollectifs';
 import { useStructures } from '../hooks/useStructures';
 import { useProgrammesModeles } from '../hooks/useProgrammesModeles';
 import { getOrganisation } from '../lib/anamnese';
@@ -1223,7 +1224,7 @@ export default function AgendaV2Page() {
   const { zones, zoneDePatient } = useZones();
   const {
     coursCollectifs, participations: participationsCoursCollectifs, creerCoursCollectif, modifierStatutCours,
-    mettreAJourParticipation, participationsDuCours,
+    mettreAJourParticipation, participationsDuCours, recharger: rechargerCoursCollectifs,
   } = useCoursCollectifs();
   const { structures } = useStructures();
   const { modeles: programmesModeles } = useProgrammesModeles();
@@ -1322,10 +1323,14 @@ export default function AgendaV2Page() {
       .filter(c => c.statut !== 'annule')
       .map(c => {
         const fin = new Date(heureToDate(c.date, c.heureDebut).getTime() + c.dureeMinutes * 60000);
-        const nbParticipants = participationsCoursCollectifs.filter(p => p.coursId === c.id).length;
+        const participantsDuCours = participationsCoursCollectifs.filter(p => p.coursId === c.id);
+        const nbParticipants = participantsDuCours.length;
+        // Cours à venir : où en sont les réponses des bénéficiaires (✓ viennent, ✗ ne viennent pas,
+        // ? sans réponse), pour anticiper sans ouvrir chaque cours.
+        const annonces = c.statut === 'planifie' ? libelleCompactAnnonces(resumeAnnonces(participantsDuCours)) : '';
         return {
           id: c.id,
-          title: `${c.titre} — ${nbParticipants} participant${nbParticipants > 1 ? 's' : ''}`,
+          title: `${c.titre} — ${nbParticipants} participant${nbParticipants > 1 ? 's' : ''}${annonces ? ` · ${annonces}` : ''}`,
           start: heureToDate(c.date, c.heureDebut),
           end: fin,
           kind: 'cours_collectif',
@@ -1888,7 +1893,13 @@ export default function AgendaV2Page() {
               }}
               onSelectEvent={(event: CalEvent) => {
                 if (event.kind === 'evenement') { setEvenementEdite(event.resource); return; }
-                if (event.kind === 'cours_collectif') { setCoursCollectifSelectionne(event.resource); return; }
+                if (event.kind === 'cours_collectif') {
+                  // Les bénéficiaires répondent depuis leur espace, pendant que l'agenda est ouvert :
+                  // on relit avant d'ouvrir le cours pour ne pas montrer des réponses périmées.
+                  void rechargerCoursCollectifs();
+                  setCoursCollectifSelectionne(event.resource);
+                  return;
+                }
                 setSeanceEditee(event.resource);
               }}
               onDropFromOutside={onDropFromOutside}
