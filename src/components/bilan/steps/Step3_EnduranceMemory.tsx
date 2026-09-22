@@ -171,9 +171,22 @@ function Num({ label, id, value, onChange, unit, min, max, step = 1 }: {
 
 const ENDO_TESTS: TestKey[] = ['tm6', 'memoire', 'moca'];
 
+/**
+ * Un test ponctuel (hors testsActifs, ajouté via le bouton +) a-t-il déjà une valeur dans CE
+ * bilan ? Même logique que Step2_Physical.tsx : sans ça, la carte MoCA disparaît à la
+ * réouverture d'un bilan qui l'avait pourtant renseignée (extras repart à `[]` à chaque
+ * montage), et reste infaisable à corriger sans recliquer "+ ajouter un test".
+ */
+function testPonctuelRenseigne(form: BilanForm, key: TestKey): boolean {
+  return key === 'moca' && form.mocaScore != null;
+}
+
 export default function Step3_EnduranceMemory({ form, update, previous, testsActifs }: Props) {
   const d = useBilanDelta(form as Bilan, previous);
-  const [extras, setExtras] = useState<TestKey[]>([]);
+  // Initialisé une fois depuis les données du bilan : un test ponctuel déjà renseigné reste
+  // visible à la réouverture, au lieu de redisparaître (cf. testPonctuelRenseigne).
+  const [extras, setExtras] = useState<TestKey[]>(() =>
+    ENDO_TESTS.filter(k => testPonctuelRenseigne(form, k)));
   const { variantes } = useTm6Variantes();
   const [showModalVariante, setShowModalVariante] = useState(false);
   const tm6 = form.tm6;
