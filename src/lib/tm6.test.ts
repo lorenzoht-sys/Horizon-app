@@ -34,6 +34,23 @@ describe('résultat du TMC selon le mode', () => {
     expect(resultatTm6(base).valeur).toBeNull();
     expect(resultatTm6(undefined).texte).toBe('—');
   });
+  it('PR B — ancien Stepper (mode NULL, pas renseignés) : jamais étiqueté "Marche"', () => {
+    const r = resultatTm6({ ...base, nbPas: 650, distanceMetres: 0 });
+    expect(r).toMatchObject({ type: 'pas', valeur: 650, texte: '650 pas', modeLabel: 'Stepper' });
+  });
+  it('PR B — ancien Stepper via repetitions (mode NULL) : jamais étiqueté "Marche"', () => {
+    const r = resultatTm6({ ...base, repetitions: 650, distanceMetres: 0 });
+    expect(r.modeLabel).toBe('Stepper');
+  });
+  it('PR B — anciens tours (mode NULL, nb_tours renseigné) : jamais étiqueté "Marche"', () => {
+    const r = resultatTm6({ ...base, nbTours: 12 });
+    expect(r).toMatchObject({ type: 'tours', valeur: 12, texte: '12 tours', modeLabel: 'Tours' });
+  });
+  it('PR B — mode explicite : le libellé du mode prime toujours', () => {
+    expect(resultatTm6({ ...base, mode: 'stepper', repetitions: 650, distanceMetres: 0 }).modeLabel).toBe('Stepper');
+    expect(resultatTm6({ ...base, mode: 'marche_sur_place', repetitions: 720, distanceMetres: 0 }).modeLabel).toBe('Marche sur place');
+    expect(resultatTm6({ ...base, mode: 'standard', distanceMetres: 420 }).modeLabel).toBe('Marche');
+  });
 });
 
 describe('tableau unique', () => {

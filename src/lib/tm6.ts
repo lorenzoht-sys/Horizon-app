@@ -101,7 +101,11 @@ export interface Tm6Resultat {
   /** null = pas de résultat saisi. */
   valeur: number | null;
   unite: 'm' | 'pas' | 'tours';
-  /** « Marche », « Stepper » ou « Marche sur place ». */
+  /**
+   * « Marche », « Stepper » ou « Marche sur place » pour un mode explicite. Un ancien TMC
+   * sans mode (NULL) mais dont les DONNÉES tranchent en pas/tours (cf. `type`) ne renvoie
+   * jamais « Marche » ici — ce serait contredire `texte` (ex. « Marche : 650 pas »).
+   */
   modeLabel: string;
   /** « 420 m », « 650 pas » ou « — ». */
   texte: string;
@@ -122,8 +126,6 @@ export function tm6EnPas(tm6: Tm6): boolean {
  * on suit les données (variantes personnalisées : pas / tours saisis, distance absente).
  */
 export function resultatTm6(tm6: Tm6 | null | undefined): Tm6Resultat {
-  const mode: Tm6Mode = tm6?.mode ?? 'standard';
-  const modeLabel = TM6_MODE_LABELS[mode] ?? 'Marche';
   const pas = tm6?.repetitions ?? tm6?.nbPas ?? null;
   const tours = tm6?.nbTours ?? null;
   const dist = tm6?.distanceMetres ?? null;
@@ -134,6 +136,16 @@ export function resultatTm6(tm6: Tm6 | null | undefined): Tm6Resultat {
     if (pas != null && pas > 0) type = 'pas';
     else if (tours != null && tours > 0) type = 'tours';
   }
+
+  // Le libellé suit le mode QUAND il est explicite. Sans mode (anciens TMC : mode NULL en
+  // base), on ne retombe jamais sur « Marche » par défaut dès que le TYPE résolu est « pas »
+  // ou « tours » — les anciens Stepper (mode NULL, pas renseignés) s'affichaient comme
+  // « Marche : 650 pas », contradiction lue par le praticien à chaque ancien bilan rouvert.
+  const modeLabel = tm6?.mode != null
+    ? (TM6_MODE_LABELS[tm6.mode] ?? 'Marche')
+    : type === 'pas' ? 'Stepper'
+    : type === 'tours' ? 'Tours'
+    : 'Marche';
 
   const valeur = type === 'pas' ? pas : type === 'tours' ? tours : dist;
   const unite = type === 'pas' ? 'pas' : type === 'tours' ? 'tours' : 'm';
