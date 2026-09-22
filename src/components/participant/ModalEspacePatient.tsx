@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import type { Participant, VisibiliteBeneficiaire } from '../../types';
-import { getAppHost } from '../../lib/config';
+import { getAppHost, getAppOrigin } from '../../lib/config';
 
 const VISIBILITE_DEFAULT: VisibiliteBeneficiaire = {
   bilans: true, rdv: true, programme: true, messagePraticien: true, messagePierre: true, carteSante: true,
@@ -27,7 +27,9 @@ interface Props {
 export default function ModalEspacePatient({ participant, onClose, onUpdate }: Props) {
   const code = participant.codeAcces ?? '';
   const hasCode = code.length > 0;
-  const patientUrl = `${window.location.origin}/patient/${participant.id}?code=${code}`;
+  // Domaine canonique, jamais dérivé de window.location.origin : ce lien (et le QR code
+  // qui l'encode) est imprimé/scanné des semaines plus tard — voir getAppOrigin().
+  const patientUrl = `${getAppOrigin()}/patient/${participant.id}?code=${code}`;
   const [visibilite, setVisibilite] = useState<VisibiliteBeneficiaire>(
     () => participant.visibiliteBeneficiaire ?? VISIBILITE_DEFAULT
   );
