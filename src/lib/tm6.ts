@@ -157,3 +157,16 @@ export function distanceTm6(tm6: Tm6 | null | undefined): number | null {
   const r = resultatTm6(tm6);
   return r.type === 'distance' ? r.valeur : null;
 }
+
+/**
+ * Vrai si ce TMC a un résultat réel mais qu'il n'est PAS comparable à une distance (pas,
+ * tours). Jamais comparer pas <-> distance (cf. useBilanDelta.ts : `tm6Pas` n'est jamais
+ * diffé avec un TMC en distance ; ComparisonTable.tsx : ligne « TM6 — {modeLabel} » séparée).
+ * Sert de garde partout où le TM6 est affiché sur une échelle en mètres (radar, profil
+ * fonctionnel, carte de chaleur), pour éviter de noter un résultat en pas comme 0 m — un
+ * défaut qui se lit comme « test non réalisé » alors qu'il l'a été, juste dans une autre unité.
+ */
+export function tm6NonComparableADistance(tm6: Tm6 | null | undefined): boolean {
+  const r = resultatTm6(tm6);
+  return r.valeur != null && r.type !== 'distance';
+}

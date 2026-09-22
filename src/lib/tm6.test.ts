@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Bilan } from '../types';
 import { bilanToDb, dbToBilan } from './mappers';
-import { lireMesures, ecrireMesures, mesuresParDefaut, resultatTm6, distanceTm6 } from './tm6';
+import { lireMesures, ecrireMesures, mesuresParDefaut, resultatTm6, distanceTm6, tm6NonComparableADistance } from './tm6';
 
 type Tm6 = Bilan['tm6'];
 const base: Tm6 = {
@@ -50,6 +50,25 @@ describe('résultat du TMC selon le mode', () => {
     expect(resultatTm6({ ...base, mode: 'stepper', repetitions: 650, distanceMetres: 0 }).modeLabel).toBe('Stepper');
     expect(resultatTm6({ ...base, mode: 'marche_sur_place', repetitions: 720, distanceMetres: 0 }).modeLabel).toBe('Marche sur place');
     expect(resultatTm6({ ...base, mode: 'standard', distanceMetres: 420 }).modeLabel).toBe('Marche');
+  });
+});
+
+describe('PR C — tm6NonComparableADistance : jamais noter un résultat en pas comme 0 m', () => {
+  it('distance : comparable, jamais signalé', () => {
+    expect(tm6NonComparableADistance({ ...base, distanceMetres: 420 })).toBe(false);
+  });
+  it('stepper récent (mode explicite) : non comparable', () => {
+    expect(tm6NonComparableADistance({ ...base, mode: 'stepper', repetitions: 650, distanceMetres: 0 })).toBe(true);
+  });
+  it('ancien Stepper (mode NULL, nb_pas renseigné) : non comparable', () => {
+    expect(tm6NonComparableADistance({ ...base, nbPas: 650, distanceMetres: 0 })).toBe(true);
+  });
+  it('anciens tours (mode NULL, nb_tours renseigné) : non comparable', () => {
+    expect(tm6NonComparableADistance({ ...base, nbTours: 12 })).toBe(true);
+  });
+  it('aucune donnée : pas signalé (ce n\'est pas "non comparable", c\'est "rien à comparer")', () => {
+    expect(tm6NonComparableADistance(base)).toBe(false);
+    expect(tm6NonComparableADistance(undefined)).toBe(false);
   });
 });
 

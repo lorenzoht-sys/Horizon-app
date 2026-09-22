@@ -479,13 +479,19 @@ function CarteProfilFonctionnel({ participant, bilans }: {
 
   const testsAvecValeur = TESTS_TABLEAU.map(test => {
     const val = test.getVal(current);
-    if (val === null || val === undefined) return null;
+    const extra = test.getExtra?.(current) ?? null;
+    if (val === null || val === undefined) {
+      // TM6 en pas/tours : pas de valeur en mètres à noter (jamais comparer pas <-> distance,
+      // cf. tm6.ts), mais pas invisible pour autant — `extra` porte le résultat réel (ex.
+      // « Stepper : 650 pas ») quand il existe, sans note ni delta (unités non comparables).
+      if (extra) return { test, val: null, note: null, progression: null, extra };
+      return null;
+    }
     const valInit = initial ? test.getVal(initial) : null;
     const norme = NORMES_SCORING[test.normeKey];
     const note = norme ? calculerNote(val, norme) : null;
     const delta = valInit !== null && valInit !== undefined ? val - valInit : null;
     const progression = delta !== null ? (test.lower ? -delta : delta) : null;
-    const extra = test.getExtra?.(current) ?? null;
     return { test, val, note, progression, extra };
   }).filter((x): x is NonNullable<typeof x> => x !== null);
 
@@ -497,16 +503,27 @@ function CarteProfilFonctionnel({ participant, bilans }: {
     const dotColor = note !== null ? noteToDot(note) : null;
     const dotLabel = note !== null ? noteToLabel(note) : '';
     const normeText = NORMES_LABEL[test.normeKey];
-    const valDisplay = `${test.label === 'Souplesse' && val > 0 ? '+' : ''}${val}${test.unite}`;
+    // val === null : résultat non comparable (TM6 en pas/tours) — extra porte alors seul le
+    // résultat réel, à la place de la valeur en mètres qui n'existe pas pour ce bilan.
+    const valDisplay = val !== null
+      ? `${test.label === 'Souplesse' && val > 0 ? '+' : ''}${val}${test.unite}`
+      : null;
     return (
       <div className="flex items-center gap-2 py-2 border-b border-gray-100 last:border-0">
         <span className="text-[12px] text-gray-400 w-[82px] flex-shrink-0 truncate">{test.label}</span>
         <div className="flex-1 min-w-0">
-          <span className="text-[13px] font-semibold text-gray-800">{valDisplay}</span>
+          {valDisplay && <span className="text-[13px] font-semibold text-gray-800">{valDisplay}</span>}
           {extra && (
-            <div className="text-[10px] text-orange-600 leading-none mt-0.5 truncate" title={extra}>{extra}</div>
+            <div
+              className={valDisplay
+                ? 'text-[10px] text-orange-600 leading-none mt-0.5 truncate'
+                : 'text-[13px] font-semibold text-gray-800 truncate'}
+              title={extra}
+            >
+              {extra}
+            </div>
           )}
-          {normeText && (
+          {normeText && val !== null && (
             <div className="text-[10px] text-gray-400 leading-none mt-0.5">{normeText}</div>
           )}
         </div>
