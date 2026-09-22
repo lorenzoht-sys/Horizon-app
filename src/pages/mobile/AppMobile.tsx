@@ -35,6 +35,7 @@ import { getBrouillonParticipant, sauvegarderBrouillonParticipant, supprimerBrou
 import { getBrouillon, supprimerBrouillon } from '../../hooks/useBrouillonBilan';
 import { formaterDateNaissanceAffichage, masquerSaisieDateNaissance, messageErreurDateNaissance, parserDateNaissanceSaisie } from '../../utils/dateNaissance';
 import { resultatTm6 } from '../../lib/tm6';
+import { contratsDesBeneficiairesActifs } from '../../lib/archivage';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -171,7 +172,10 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
   // quotidien n'utilisent que les actifs — un archivé n'est plus suivi.
   const { participants, participantsActifs } = useParticipants();
   const { seances: allSeances, seancesDuJour } = useAgenda();
-  const { contratsARenouveler } = useContrats();
+  // Alerte « contrat fin proche » (équivalent mobile du Dashboard) : un bénéficiaire archivé
+  // n'est plus suivi, son contrat n'appelle aucune action (cf. lib/archivage.ts, Dashboard.tsx).
+  const { contratsARenouveler: contratsARenouvelerTous } = useContrats();
+  const contratsARenouveler = contratsDesBeneficiairesActifs(contratsARenouvelerTous, participants);
   const { settings: praticienSettings } = usePraticienSettings();
   const today = new Date().toISOString().slice(0, 10);
   const seances = seancesDuJour(today);
