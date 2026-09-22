@@ -11,7 +11,7 @@ import type { Bilan, TestKey } from '../../types';
 import { useNormalize } from '../../hooks/useNormalize';
 import { TEST_RADAR_LABELS, ALL_TESTS } from '../../data/profiles';
 import { computeBergScore } from '../../data/berg';
-import { distanceTm6 } from '../../lib/tm6';
+import { distanceTm6, tm6NonComparableADistance } from '../../lib/tm6';
 
 interface Props {
   initial: Bilan | null;
@@ -70,7 +70,18 @@ export default function RadarChart({ initial, current, testsActifs }: Props) {
   // N'afficher que les axes des tests actifs (ou tous si non précisé, ou si
   // testsActifs est un tableau vide — voir diagnostic TM6 : [] ne veut pas
   // dire "aucun test actif" mais "aucun choix jamais fait")
-  const axes = (testsActifs?.length ? testsActifs : ALL_TESTS).filter(k => TEST_RADAR_LABELS[k]);
+  //
+  // Axe TM6 : jamais comparer pas <-> distance (cf. tm6.ts, useBilanDelta.ts). Cet axe est à
+  // l'échelle des mètres (normalize.tm6) ; un résultat en pas/tours n'y a pas de valeur
+  // comparable. Avant : bilanAxisValue plaçait le point au pire score possible (0/100) via
+  // `distanceTm6(...) ?? 0`, comme si le test n'avait jamais été fait — alors qu'il l'avait
+  // été, juste dans une autre unité. On omet l'axe plutôt que de mentir sur le score, dès que
+  // l'un des deux bilans affichés (actuel ou initial) a un résultat non comparable.
+  const tm6NonComparable =
+    tm6NonComparableADistance(current.tm6) || (initial != null && tm6NonComparableADistance(initial.tm6));
+  const axes = (testsActifs?.length ? testsActifs : ALL_TESTS)
+    .filter(k => TEST_RADAR_LABELS[k])
+    .filter(k => k !== 'tm6' || !tm6NonComparable);
 
   const data = axes.map(key => ({
     subject: TEST_RADAR_LABELS[key]!,
