@@ -143,6 +143,27 @@ function Num({ label, id, value, onChange, unit, min, max, step = 0.1 }: {
 
 const PHYSICAL_TESTS: TestKey[] = ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse', 'apley', 'tinetti', 'eva', 'berg', 'marche10m', 'adl'];
 
+/**
+ * Un test « ponctuel » (hors testsActifs, ajouté via le bouton +) a-t-il déjà une valeur
+ * dans CE bilan ? Sert à réafficher sa carte à la réouverture — sans ça, `extras` repart à
+ * `[]` à chaque montage et la carte disparaît (le résultat reste enregistré, mais invisible
+ * et donc infaisable à corriger/compléter sans recliquer "+ ajouter un test" à chaque fois).
+ */
+function testPonctuelRenseigne(form: BilanForm, key: TestKey): boolean {
+  switch (key) {
+    case 'apley': {
+      const a = form.apley;
+      return a != null && (a.haut_d != null || a.haut_g != null || a.bas_d != null || a.bas_g != null || a.score != null || !!a.notes);
+    }
+    case 'tinetti': return computeTinettiScores(form.tinetti) != null;
+    case 'eva':     return form.douleurEva != null;
+    case 'berg':    return computeBergScore(form.berg) != null;
+    case 'marche10m': return form.marche10m?.habituel != null || form.marche10m?.max != null;
+    case 'adl':     return form.adl != null || form.iadl != null;
+    default:        return false;
+  }
+}
+
 // ─── Apley's Scratch Test (corps uniquement — header géré en externe) ─────────
 const SCORE_HAUT: Record<string, number> = { shoulder: 4, neck: 3, top: 2, below: 1 };
 const SCORE_BAS:  Record<string, number> = { scapula: 4, mid_back: 3, low_back: 2, buttocks: 1 };
@@ -268,7 +289,11 @@ function bInv(val: number | null, pairs: [number, string, BadgeCouleur][]): Badg
 
 export default function Step2_Physical({ form, update, previous, testsActifs, beneficiaireNom, dateNaissance }: Props) {
   const d = useBilanDelta(form as Bilan, previous);
-  const [extras, setExtras] = useState<TestKey[]>([]);
+  // Initialisé une fois depuis les données du bilan (édition d'un bilan existant, ou
+  // brouillon repris) : un test ponctuel déjà renseigné reste visible à la réouverture,
+  // au lieu de redisparaître tant que le praticien ne clique pas de nouveau sur "+".
+  const [extras, setExtras] = useState<TestKey[]>(() =>
+    PHYSICAL_TESTS.filter(k => testPonctuelRenseigne(form, k)));
 
   const active = testsActifs
     ? [...new Set([...testsActifs.filter(k => PHYSICAL_TESTS.includes(k)), ...extras])]
