@@ -162,11 +162,6 @@ function InfoSection({ titre, children }: { titre: string; children: React.React
 // est partagée avec le cadre commun, qui la montre sous 768 px sur les écrans
 // fusionnés (la fiche bénéficiaire).
 
-// Ces écrans n'existent qu'en version desktop. Le praticien y accède en
-// tournant son téléphone : la bascule à 768 px est un usage voulu, pas un
-// défaut (voir App.tsx).
-const MESSAGE_PAYSAGE = 'Tournez votre téléphone en paysage pour afficher cet écran 🔄';
-
 // ── EcranAujourdhui ───────────────────────────────────────────────────────────
 
 function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; onNaviguerSaisie?: () => void }) {
@@ -885,9 +880,75 @@ function BilanMobile({ participantId, onTermine }: { participantId: string; onTe
 
 function EcranTournee() {
   const { participants } = useParticipants();
-  const { seancesDuJour, changerStatut } = useAgenda();
+  const { seancesDuJour, changerStatut, creerSeance, modifierSeance } = useAgenda();
   const today = new Date().toISOString().slice(0, 10);
   const seances = seancesDuJour(today);
+
+  // ── Annuler ────────────────────────────────────────────────────────────────
+  // Confirmation légère (overlay, même pattern que « Confirmer la
+  // suppression » d'EcranSettings) avant d'annuler : le desktop (TourneePage,
+  // bouton ✕) n'en demande aucune, mais un bouton pris par erreur au doigt
+  // sur un écran tactile coûte plus cher qu'un clic de souris précis. Aucune
+  // raison requise : le desktop n'en impose pas non plus (motifAnnulation
+  // reste optionnel jusque dans le formulaire complet, AgendaV2Page.tsx).
+  const [annulerSeanceId, setAnnulerSeanceId] = useState<string | null>(null);
+  const seanceAAnnuler = seances.find(s => s.id === annulerSeanceId) ?? null;
+
+  async function confirmerAnnulation() {
+    if (!seanceAAnnuler) return;
+    await changerStatut(seanceAAnnuler.id, 'annulee');
+    toast.success('Séance annulée');
+    setAnnulerSeanceId(null);
+  }
+
+  // ── Reporter ───────────────────────────────────────────────────────────────
+  // Reproduit handleReporterSeance (AgendaV2Page.tsx), le seul mécanisme de
+  // report qui existe réellement dans l'app — son entrée UI desktop est
+  // désactivée depuis 356beb6 (« gardés intacts pour un usage futur »), pas
+  // supprimée. Même heure, nouvelle date seulement (pas de champ heure : le
+  // mécanisme desktop n'en propose pas) : la séance d'origine passe
+  // "reportee" SANS changer de date (trace historique), une nouvelle séance
+  // "planifiee" est créée à la date choisie.
+  const [reporterSeanceId, setReporterSeanceId] = useState<string | null>(null);
+  const [dateReport, setDateReport] = useState('');
+  const [reportEnCours, setReportEnCours] = useState(false);
+  const seanceAReporter = seances.find(s => s.id === reporterSeanceId) ?? null;
+
+  function ouvrirReport(s: typeof seances[number]) {
+    const defaut = new Date(`${s.date}T12:00`);
+    defaut.setDate(defaut.getDate() + 7);
+    setDateReport(defaut.toISOString().slice(0, 10));
+    setReporterSeanceId(s.id);
+  }
+
+  async function confirmerReport() {
+    if (!seanceAReporter || !dateReport) return;
+    setReportEnCours(true);
+    try {
+      // modifierSeance (pas changerStatut) : il faut son retour pour ne créer
+      // la nouvelle séance que si le passage en "reportee" a bien réussi —
+      // exactement le garde-fou de handleReporterSeance.
+      const ok = await modifierSeance(seanceAReporter.id, { statut: 'reportee' });
+      if (!ok) return;
+      await creerSeance({
+        participantId: seanceAReporter.participantId,
+        contratId: seanceAReporter.contratId,
+        type: seanceAReporter.type,
+        date: dateReport,
+        heureDebut: seanceAReporter.heureDebut,
+        heureFin: seanceAReporter.heureFin,
+        dureeMinutes: seanceAReporter.dureeMinutes,
+        statut: 'planifiee',
+        notes: `Reportée depuis le ${seanceAReporter.date}`,
+        adresse: seanceAReporter.adresse,
+        coordonnees: seanceAReporter.coordonnees,
+      });
+      toast.success(`Séance reportée au ${formatDateCourt(dateReport)}`);
+      setReporterSeanceId(null);
+    } finally {
+      setReportEnCours(false);
+    }
+  }
   // Dictée ouverte conservée si l'interface est remplacée (rotation) : son
   // contenu, lui, est conservé par DicteePostSeance.
   const [dicteeParticipantId, setDicteeParticipantId] = useEtatSession<string | null>('tournee_dictee', null);
@@ -943,14 +1004,6 @@ function EcranTournee() {
             </div>
           </div>
         )}
-        {seances.filter(s => s.adresse).length > 1 && (
-          <button
-            onClick={() => toast(MESSAGE_PAYSAGE, { icon: 'ℹ️' })}
-            style={{ width: '100%', marginTop: 10, padding: '10px', background: C.dark, color: 'white', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <i className="ti ti-route" style={{ fontSize: 16 }} />
-            Optimiser l'itinéraire
-          </button>
-        )}
       </div>
 
       <div style={{ padding: '8px 16px' }}>
@@ -988,6 +1041,11 @@ function EcranTournee() {
           }
           const s = item.seance;
           const p = participants.find(x => x.id === s.participantId);
+          const peutAnnuler = s.statut !== 'annulee' && s.statut !== 'realisee';
+          // Reporter n'a de sens que depuis "planifiee" — ni handleReporterSeance
+          // (dormant) ni son sous-écran d'origine ne documentaient de garde
+          // explicite ici, ce choix est donc le nôtre, pas une valeur copiée.
+          const peutReporter = s.statut === 'planifiee';
           return (
             <div key={s.id} style={card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -998,18 +1056,47 @@ function EcranTournee() {
                     <div style={{ fontSize: 12, color: C.muted }}>{s.heureDebut} · {s.dureeMinutes} min</div>
                   </div>
                 </div>
-                {s.adresse && (
-                  <button onClick={() => ouvrirMaps(s.adresse)}
-                    style={{ background: '#E8F8F8', border: 'none', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: C.primary }}>
-                    <i className="ti ti-map-pin" style={{ fontSize: 15 }} />Maps
-                  </button>
-                )}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                  {/* Pas de badge "Annulée" : seancesDuJour (useAgenda.ts)
+                      exclut déjà les séances annulées de `seances` — une
+                      séance annulée disparaît donc de la tournée du jour,
+                      elle n'y reste jamais visible avec un badge. Même
+                      comportement, déjà en place, côté desktop
+                      (TourneePage.tsx utilise la même fonction). */}
+                  {s.statut === 'reportee' && (
+                    <span style={{ background: '#FEF3C7', color: '#92400E', borderRadius: 8, padding: '4px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                      🔄 Reportée
+                    </span>
+                  )}
+                  {s.adresse && (
+                    <button onClick={() => ouvrirMaps(s.adresse)}
+                      style={{ background: '#E8F8F8', border: 'none', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: C.primary }}>
+                      <i className="ti ti-map-pin" style={{ fontSize: 15 }} />Maps
+                    </button>
+                  )}
+                </div>
               </div>
               {s.adresse && <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>📍 {s.adresse}</div>}
               <button onClick={() => { if (s.statut !== 'realisee') { changerStatut(s.id, 'realisee'); toast.success('Séance réalisée ✅'); } }}
                 style={{ width: '100%', padding: 9, background: s.statut === 'realisee' ? '#DCFCE7' : C.primary, color: s.statut === 'realisee' ? '#166534' : 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: s.statut === 'realisee' ? 'default' : 'pointer' }}>
                 {s.statut === 'realisee' ? '✅ Réalisée' : '✓ Marquer réalisée'}
               </button>
+              {(peutReporter || peutAnnuler) && (
+                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                  {peutReporter && (
+                    <button onClick={() => ouvrirReport(s)}
+                      style={{ flex: 1, padding: 8, background: 'white', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, fontWeight: 700, color: C.text, cursor: 'pointer' }}>
+                      🔄 Reporter
+                    </button>
+                  )}
+                  {peutAnnuler && (
+                    <button onClick={() => setAnnulerSeanceId(s.id)}
+                      style={{ flex: 1, padding: 8, background: 'white', border: '1px solid #FECACA', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#DC2626', cursor: 'pointer' }}>
+                      ✕ Annuler
+                    </button>
+                  )}
+                </div>
+              )}
               {s.statut === 'realisee' && p && (
                 <button
                   onClick={() => setDicteeParticipantId(p.id)}
@@ -1040,6 +1127,65 @@ function EcranTournee() {
           onClose={() => setCoursSelectionneId(null)}
         />
       )}
+
+      {seanceAAnnuler && (() => {
+        const p = participants.find(x => x.id === seanceAAnnuler.participantId);
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24 }}>
+            <div style={{ background: 'white', borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>
+                ⚠️ Annuler cette séance ?
+              </div>
+              <p style={{ fontSize: 14, color: '#4A6080', lineHeight: 1.6, marginBottom: 20 }}>
+                {p?.prenom} {p?.nom} — {seanceAAnnuler.heureDebut}. Réversible depuis l'agenda.
+              </p>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setAnnulerSeanceId(null)}
+                  style={{ flex: 1, padding: '12px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
+                  Retour
+                </button>
+                <button onClick={confirmerAnnulation}
+                  style={{ flex: 1, padding: '12px', background: '#E85050', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer' }}>
+                  Confirmer
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {seanceAReporter && (() => {
+        const p = participants.find(x => x.id === seanceAReporter.participantId);
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24 }}>
+            <div style={{ background: 'white', borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>
+                🔄 Reporter cette séance
+              </div>
+              <p style={{ fontSize: 13, color: C.muted, marginBottom: 14, lineHeight: 1.5 }}>
+                {p?.prenom} {p?.nom} — une nouvelle séance sera créée à la même heure ({seanceAReporter.heureDebut}), à la date choisie.
+              </p>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 }}>
+                Nouvelle date
+              </label>
+              <input
+                type="date" value={dateReport} min={today} onChange={e => setDateReport(e.target.value)}
+                style={{ width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, marginBottom: 20, boxSizing: 'border-box' }}
+              />
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setReporterSeanceId(null)} disabled={reportEnCours}
+                  style={{ flex: 1, padding: '12px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, fontWeight: 600, color: C.muted, cursor: reportEnCours ? 'wait' : 'pointer' }}>
+                  Annuler
+                </button>
+                <button onClick={confirmerReport} disabled={reportEnCours || !dateReport}
+                  style={{ flex: 1, padding: '12px', background: reportEnCours || !dateReport ? '#8FA8A8' : C.primary, border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, color: 'white', cursor: reportEnCours || !dateReport ? 'not-allowed' : 'pointer' }}>
+                  {reportEnCours ? 'Report…' : 'Confirmer le report'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
