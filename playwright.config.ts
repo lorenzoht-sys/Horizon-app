@@ -26,6 +26,17 @@ import { defineConfig, devices } from '@playwright/test';
 // message explicite plutôt que de laisser douze tests expirer un par un.
 const bypassVercel = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
+// ── Projet "Mobile" (fondation, chantier fusion mobile/desktop) ──────────
+// Vise AppMobile (< 768 px, voir src/hooks/useDevice.ts) : aucun test
+// desktop n'y tourne (voir `testIgnore`/`testMatch` des projets ci-dessous),
+// seuls les tests de fumée sous e2e/mobile/ y tournent. Pour ne lancer que
+// ce projet :
+//
+//   npx playwright test --project=Mobile
+//
+// (les variables E2E_* habituelles restent nécessaires, voir e2e/README.md)
+const MOBILE_SPECS = /mobile[\\/].*\.spec\.ts$/;
+
 export default defineConfig({
   testDir: './e2e',
   globalSetup: './e2e/global-setup.ts',
@@ -61,7 +72,7 @@ export default defineConfig({
   projects: [
     {
       name: 'principal',
-      testIgnore: /09-rate-limit-connexion-patient\.spec\.ts/,
+      testIgnore: [/09-rate-limit-connexion-patient\.spec\.ts/, MOBILE_SPECS],
       use: { ...devices['Desktop Chrome'] },
     },
     {
@@ -69,6 +80,13 @@ export default defineConfig({
       testMatch: /09-rate-limit-connexion-patient\.spec\.ts/,
       dependencies: ['principal'],
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'Mobile',
+      testMatch: MOBILE_SPECS,
+      // Même moteur (Chromium) et mêmes réglages que "principal" — seul le
+      // viewport change, à la taille d'un iPhone 12/13 (390×844).
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 } },
     },
   ],
 });
