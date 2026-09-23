@@ -5,11 +5,13 @@ import { useParticipants } from '../../hooks/useParticipants';
 import { useAgenda } from '../../hooks/useAgenda';
 import { useContrats } from '../../hooks/useContrats';
 import { useCompteRenduSeance } from '../../hooks/useCompteRenduSeance';
+import { useCoursCollectifs } from '../../hooks/useCoursCollectifs';
 import BilanStepper from '../../components/bilan/BilanStepper';
 import ModalSelectionTests from '../../components/bilan/ModalSelectionTests';
+import ModalPresenceCoursCollectif from '../../components/agenda/ModalPresenceCoursCollectif';
 import DicteePostSeance from '../../components/DicteePostSeance';
 import MarkdownRendu from '../../components/ui/MarkdownRendu';
-import type { Bilan, Participant } from '../../types';
+import type { Bilan, CoursCollectif, Participant } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, getAuthHeader } from '../../lib/supabase';
 import {
@@ -177,8 +179,19 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
   const { contratsARenouveler: contratsARenouvelerTous } = useContrats();
   const contratsARenouveler = contratsDesBeneficiairesActifs(contratsARenouvelerTous, participants);
   const { settings: praticienSettings } = usePraticienSettings();
+  const {
+    coursCollectifs, participationsDuCours,
+    modifierStatutCours, mettreAJourParticipation,
+  } = useCoursCollectifs();
+  const [coursSelectionneId, setCoursSelectionneId] = useState<string | null>(null);
   const today = new Date().toISOString().slice(0, 10);
   const seances = seancesDuJour(today);
+  // Même filtre que l'agenda desktop (AgendaV2Page) : un cours annulé ne
+  // doit pas apparaître dans la timeline du jour.
+  const coursDuJour = coursCollectifs
+    .filter(c => c.date === today && c.statut !== 'annule')
+    .sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
+  const coursSelectionne = coursCollectifs.find(c => c.id === coursSelectionneId) ?? null;
   const prenom = praticienSettings.prenom || 'Praticien';
 
   const now = new Date();
@@ -199,6 +212,22 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
   const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const prochaineSeance = seances.find(s => s.statut === 'planifiee' && s.heureDebut >= currentTimeStr)
     ?? seances.find(s => s.statut === 'planifiee');
+
+  // Timeline du jour : séances individuelles et cours collectifs mêlés,
+  // triés par heure — un cours collectif n'a pas de bénéficiaire unique, il
+  // ne peut donc pas rejoindre `seances` telle quelle.
+  type ItemJour =
+    | { kind: 'seance'; heureDebut: string; seance: typeof seances[number] }
+    | { kind: 'cours'; heureDebut: string; cours: CoursCollectif; nbInscrits: number };
+  const itemsJour: ItemJour[] = [
+    ...seances.map(seance => ({ kind: 'seance' as const, heureDebut: seance.heureDebut, seance })),
+    ...coursDuJour.map(cours => ({
+      kind: 'cours' as const,
+      heureDebut: cours.heureDebut,
+      cours,
+      nbInscrits: participationsDuCours(cours.id).length,
+    })),
+  ].sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
 
   const statCard: React.CSSProperties = {
     background: 'white', borderRadius: 16, padding: '16px 20px',
@@ -308,7 +337,7 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
         })()}
 
         {/* ── TIMELINE ou ÉTAT VIDE ─────────────────────────────── */}
-        {seances.length === 0 ? (
+        {itemsJour.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '36px 20px' }}>
             <i className="ti ti-calendar-off" style={{ fontSize: 54, color: '#BDD0D0', display: 'block', marginBottom: 14 }} />
             <div style={{ fontSize: 16, fontWeight: 600, color: '#7A9A9A', marginBottom: 6 }}>Aucune séance aujourd'hui</div>
@@ -320,7 +349,27 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
               Aujourd'hui
             </div>
             <div style={{ background: 'white', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 10px rgba(13,43,43,0.07)' }}>
-              {seances.map((seance, index) => {
+              {itemsJour.map((item, index) => {
+                const isLast = index === itemsJour.length - 1;
+                if (item.kind === 'cours') {
+                  const { cours, nbInscrits } = item;
+                  return (
+                    <div key={`cours-${cours.id}`}>
+                      <div onClick={() => setCoursSelectionneId(cours.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', cursor: 'pointer', background: '#F6F0FF' }}>
+                        <span style={{ fontSize: 15, flexShrink: 0 }}>👥</span>
+                        <span style={{ fontSize: 13, color: C.muted, flexShrink: 0, width: 38 }}>{cours.heureDebut}</span>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: C.text, flex: 1, minWidth: 0 }}>
+                          {cours.titre}
+                          <span style={{ fontSize: 11, fontWeight: 500, color: '#7C3AED' }}> · {nbInscrits} inscrit{nbInscrits !== 1 ? 's' : ''}</span>
+                        </span>
+                        <i className="ti ti-chevron-right" style={{ fontSize: 15, color: '#D0DCDC' }} />
+                      </div>
+                      {!isLast && <div style={{ height: 1, background: '#F0F4F4', marginLeft: 16 }} />}
+                    </div>
+                  );
+                }
+                const seance = item.seance;
                 const p = participants.find(x => x.id === seance.participantId);
                 const estEnCours = seance.heureDebut <= currentTimeStr && seance.heureFin > currentTimeStr;
                 const icon = seance.statut === 'realisee' ? '✅'
@@ -337,7 +386,7 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
                       </span>
                       <i className="ti ti-chevron-right" style={{ fontSize: 15, color: '#D0DCDC' }} />
                     </div>
-                    {index < seances.length - 1 && <div style={{ height: 1, background: '#F0F4F4', marginLeft: 16 }} />}
+                    {!isLast && <div style={{ height: 1, background: '#F0F4F4', marginLeft: 16 }} />}
                   </div>
                 );
               })}
@@ -353,6 +402,17 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
         )}
 
       </div>
+
+      {coursSelectionne && (
+        <ModalPresenceCoursCollectif
+          cours={coursSelectionne}
+          participations={participationsDuCours(coursSelectionne.id)}
+          participants={participants}
+          onMettreAJourParticipation={(participationId, patch) => mettreAJourParticipation(participationId, patch)}
+          onModifierStatutCours={async statut => modifierStatutCours(coursSelectionne.id, statut)}
+          onClose={() => setCoursSelectionneId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -833,6 +893,30 @@ function EcranTournee() {
   const [dicteeParticipantId, setDicteeParticipantId] = useEtatSession<string | null>('tournee_dictee', null);
   const dicteeParticipant = participants.find(x => x.id === dicteeParticipantId) ?? null;
   const { ajouterCompteRendu } = useCompteRenduSeance(dicteeParticipant?.id ?? '');
+  const {
+    coursCollectifs, participationsDuCours,
+    modifierStatutCours, mettreAJourParticipation,
+  } = useCoursCollectifs();
+  const [coursSelectionneId, setCoursSelectionneId] = useState<string | null>(null);
+  const coursDuJour = coursCollectifs
+    .filter(c => c.date === today && c.statut !== 'annule')
+    .sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
+  const coursSelectionne = coursCollectifs.find(c => c.id === coursSelectionneId) ?? null;
+  // Séances + cours collectifs mêlés et triés, pour que la liste — et son
+  // état vide — reflètent bien le contenu réel de la tournée (les stats du
+  // bandeau ci-dessous, elles, restent sur les seules séances individuelles).
+  type ItemTournee =
+    | { kind: 'seance'; heureDebut: string; seance: typeof seances[number] }
+    | { kind: 'cours'; heureDebut: string; cours: CoursCollectif; nbInscrits: number };
+  const itemsTournee: ItemTournee[] = [
+    ...seances.map(seance => ({ kind: 'seance' as const, heureDebut: seance.heureDebut, seance })),
+    ...coursDuJour.map(cours => ({
+      kind: 'cours' as const,
+      heureDebut: cours.heureDebut,
+      cours,
+      nbInscrits: participationsDuCours(cours.id).length,
+    })),
+  ].sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
 
   return (
     <div>
@@ -870,12 +954,39 @@ function EcranTournee() {
       </div>
 
       <div style={{ padding: '8px 16px' }}>
-        {seances.length === 0 ? (
+        {itemsTournee.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: C.muted }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🗺️</div>
             Aucune séance aujourd'hui
           </div>
-        ) : seances.map((s, i) => {
+        ) : itemsTournee.map((item, i) => {
+          if (item.kind === 'cours') {
+            const { cours, nbInscrits } = item;
+            const badge = cours.statut === 'realise'
+              ? { label: '✅ Réalisé', bg: '#DCFCE7', color: '#166534' }
+              : { label: 'Planifié', bg: '#EDE9FE', color: '#6D28D9' };
+            return (
+              <div key={`cours-${cours.id}`} style={{ ...card, border: `1px solid #EDE9FE` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <span style={{ width: 26, height: 26, borderRadius: '50%', background: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>👥</span>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{cours.titre}</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>{cours.heureDebut} · {cours.dureeMinutes} min · {nbInscrits} inscrit{nbInscrits !== 1 ? 's' : ''}</div>
+                    </div>
+                  </div>
+                  <span style={{ background: badge.bg, color: badge.color, borderRadius: 8, padding: '4px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0, height: 'fit-content' }}>
+                    {badge.label}
+                  </span>
+                </div>
+                <button onClick={() => setCoursSelectionneId(cours.id)}
+                  style={{ width: '100%', padding: 9, background: '#7C3AED', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  👥 Gérer les présences
+                </button>
+              </div>
+            );
+          }
+          const s = item.seance;
           const p = participants.find(x => x.id === s.participantId);
           return (
             <div key={s.id} style={card}>
@@ -916,6 +1027,17 @@ function EcranTournee() {
           participant={dicteeParticipant}
           onClose={() => setDicteeParticipantId(null)}
           onSave={async (data) => { await ajouterCompteRendu(data); }}
+        />
+      )}
+
+      {coursSelectionne && (
+        <ModalPresenceCoursCollectif
+          cours={coursSelectionne}
+          participations={participationsDuCours(coursSelectionne.id)}
+          participants={participants}
+          onMettreAJourParticipation={(participationId, patch) => mettreAJourParticipation(participationId, patch)}
+          onModifierStatutCours={async statut => modifierStatutCours(coursSelectionne.id, statut)}
+          onClose={() => setCoursSelectionneId(null)}
         />
       )}
     </div>
