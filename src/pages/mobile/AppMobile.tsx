@@ -1118,6 +1118,11 @@ function EcranSettings({ onBack: retourParent }: { onBack: () => void }) {
 
 function EcranPlus({ onLogout, onNaviguer }: { onLogout: () => void; onNaviguer: (url: string) => void }) {
   const { settings } = usePraticienSettings();
+  // Seul point d'accès mobile à /archives (route fusionnée, voir
+  // routesMobile.ts) : sans lui, un bénéficiaire archivé restait invisible
+  // et « Désarchiver » n'était atteignable que depuis sa fiche, elle-même
+  // introuvable.
+  const { participantsArchives } = useParticipants();
   // Meme regle que la Sidebar : les vraies initiales, ou une silhouette.
   // Ce calcul repliait sur « P » quand le prenom manquait. Voir
   // src/lib/initiales.ts.
@@ -1157,6 +1162,15 @@ function EcranPlus({ onLogout, onNaviguer }: { onLogout: () => void; onNaviguer:
         <ItemMobile icon="ti-route" label="Tournée du jour" onClick={() => onNaviguer(URLS_MOBILE.tournee)} />
         <ItemMobile icon="ti-calendar" label="Agenda complet" onClick={() => onNaviguer('/agenda-v2')} />
         <ItemMobile icon="ti-map-pin" label="Carte bénéficiaires" onClick={() => onNaviguer('/map')} />
+      </SectionMobile>
+
+      {/* Section Bénéficiaires */}
+      <SectionMobile titre="Bénéficiaires">
+        <ItemMobile
+          icon="ti-archive"
+          label={`Bénéficiaires archivés${participantsArchives.length > 0 ? ` (${participantsArchives.length})` : ''}`}
+          onClick={() => onNaviguer(URLS_MOBILE.archives)}
+        />
       </SectionMobile>
 
       {/* Section Contenu */}

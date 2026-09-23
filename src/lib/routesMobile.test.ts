@@ -17,6 +17,11 @@ describe('estRouteInterfaceUnique', () => {
       expect(estRouteInterfaceUnique(p)).toBe(false);
     }
   });
+
+  it('sert aussi /archives (bénéficiaires archivés)', () => {
+    expect(estRouteInterfaceUnique('/archives')).toBe(true);
+    expect(estRouteInterfaceUnique('/archives/')).toBe(true);
+  });
 });
 
 describe('ecranMobileDepuisUrl', () => {
@@ -68,6 +73,7 @@ describe('ongletDepuisUrl', () => {
     expect(ongletDepuisUrl('/', '?onglet=plus')).toBe('plus');
     expect(ongletDepuisUrl('/tournee', '')).toBe('tournee');
     expect(ongletDepuisUrl('/participant/p1', '')).toBe('beneficiaires');
+    expect(ongletDepuisUrl('/archives', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/participants/nouveau', '')).toBeNull();
   });
 });

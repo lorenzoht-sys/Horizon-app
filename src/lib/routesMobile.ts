@@ -37,6 +37,7 @@ export const URLS_MOBILE = {
   tournee: '/tournee',
   assistant: '/assistant',
   parametres: '/settings',
+  archives: '/archives',
   nouveauBeneficiaire: '/participants/nouveau',
   choixBeneficiaireBilan: '/?onglet=saisie&mode=bilan',
   fiche: (id: string) => `/participant/${encodeURIComponent(id)}`,
@@ -57,7 +58,7 @@ const PREFIXES_DESKTOP_SEULEMENT = ['/agenda-v2', '/map', '/zones', '/stats', '/
  * React — une rotation n'y démonte rien.
  */
 export function estRouteInterfaceUnique(pathname: string): boolean {
-  return /^\/participant\/[^/]+\/?$/.test(pathname);
+  return /^\/participant\/[^/]+\/?$/.test(pathname) || /^\/archives\/?$/.test(pathname);
 }
 
 function segment(valeur: string): string {
