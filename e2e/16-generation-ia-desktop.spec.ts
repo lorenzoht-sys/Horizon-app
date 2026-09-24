@@ -67,4 +67,33 @@ test.describe('Génération de programme par IA (desktop)', () => {
       }
     }
   });
+
+  test('erreur réseau et validation invalide : messages clairs, pas de blocage', async ({ page }) => {
+    await page.route('**/api/claude', route => {
+      route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: "Le service d'analyse est momentanément indisponible" }) });
+    });
+
+    await loginPraticien(page);
+    await ouvrirFicheParticipant(page, `${env.patientPrenom2} ${env.patientNom2}`);
+    await page.goto(`${page.url()}/programme`);
+
+    await page.getByRole('button', { name: "Générer avec l'IA" }).click();
+    await expect(page.getByText("Générer un programme avec l'IA")).toBeVisible();
+    // Le chargement des questions échoue aussi (même mock) — non bloquant.
+    await expect(page.getByText('Aucune question complémentaire')).toBeVisible({ timeout: 10000 });
+
+    // Validation synchrone AVANT tout appel réseau (correctif : ne doit
+    // jamais faire apparaître, même brièvement, l'écran "generating" —
+    // voir genererProgrammeIA() dans ProgrammePage.tsx).
+    await page.getByRole('combobox').first().selectOption('personnalise');
+    await page.getByRole('button', { name: 'Générer le programme' }).click();
+    await expect(page.getByText("Précisez l'objectif personnalisé.")).toBeVisible();
+    await expect(page.getByText("L'IA génère le programme…")).not.toBeVisible();
+
+    // Erreur réseau (appel réel, une fois la validation satisfaite).
+    await page.getByRole('combobox').first().selectOption('equilibre');
+    await page.getByRole('button', { name: 'Générer le programme' }).click();
+    await expect(page.getByText(/Erreur API Claude|indisponible/)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: 'Générer le programme' })).toBeVisible();
+  });
 });

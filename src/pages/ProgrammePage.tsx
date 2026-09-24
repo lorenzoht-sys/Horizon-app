@@ -433,7 +433,7 @@ export default function ProgrammePage() {
     showConfigIA, configIA, generatingIA, errorIA, savingIA,
     questionsIA, reponsesIA, chargementQuestionsIA, precisionsLibresIA,
     showPreviewIA, programmePreview, setProgrammePreview, setShowPreviewIA,
-    updateConfigIA, updateReponseIA, setPrecisionsLibresIA,
+    updateConfigIA, updateReponseIA, setPrecisionsLibresIA, setErrorIA,
     ouvrirConfigIA: ouvrirConfigIABase, fermerConfigIA, genererProgramme,
     fermerPreviewIA, modifierConfigDepuisPreview, regenererIA: regenererIABase,
     handleValiderEtCreerIA: handleValiderEtCreerIABase,
@@ -460,9 +460,6 @@ export default function ProgrammePage() {
 
   async function construireProgrammeIA(): Promise<ProgrammeIA> {
     if (!participant) throw new Error('Participant introuvable');
-    if (configIA.objectif === 'personnalise' && !configIA.objectifPersonnalise.trim()) {
-      throw new Error("Précisez l'objectif personnalisé.");
-    }
 
     const bilans = (participant.bilans ?? []) as Bilan[];
     const dernierBilan = bilans.length
@@ -492,6 +489,13 @@ export default function ProgrammePage() {
   }
 
   function genererProgrammeIA() {
+    // Vérifié ici, AVANT genererProgramme() (qui passe generatingIA à true) :
+    // une validation qui échoue doit rester instantanée, sans faire
+    // apparaître même brièvement l'écran "L'IA génère le programme…".
+    if (configIA.objectif === 'personnalise' && !configIA.objectifPersonnalise.trim()) {
+      setErrorIA("Précisez l'objectif personnalisé.");
+      return;
+    }
     genererProgramme(construireProgrammeIA);
   }
 

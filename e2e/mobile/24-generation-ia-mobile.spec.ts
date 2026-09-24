@@ -170,4 +170,41 @@ test.describe('Génération de programme par IA — mobile (390×844)', () => {
       await supprimerParticipant(page, participantUrl);
     }
   });
+
+  test('réponse invalide (JSON incorrect) : message clair, pas de blocage', async ({ page }) => {
+    test.setTimeout(60000);
+    const prenomP = 'E2E';
+    const nomP = `IAInvalide${Date.now()}`;
+
+    // Distinct du test "erreur réseau" ci-dessus : ici la requête RÉUSSIT
+    // (200 OK) mais le texte renvoyé n'est pas un JSON exploitable — cas
+    // réel possible côté Anthropic (troncature, dérive du modèle), géré
+    // par un catch JSON.parse séparé dans genererProgrammeIA.ts.
+    let callCount = 0;
+    await page.route('**/api/claude', route => {
+      callCount++;
+      const text = callCount === 1 ? CANNED_QUESTIONS : "Ceci n'est pas du JSON valide {{{";
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text }) });
+    });
+
+    await loginPraticien(page);
+    const participantUrl = await creerParticipantDedie(page, prenomP, nomP);
+
+    try {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(participantUrl);
+      await page.waitForLoadState('networkidle');
+
+      await page.getByRole('button', { name: "Générer avec l'IA" }).click();
+      await expect(page.getByText('Le bénéficiaire a-t-il peur de tomber ?')).toBeVisible({ timeout: 10000 });
+
+      await page.getByRole('button', { name: 'Générer le programme' }).click();
+      await expect(page.getByText('renvoyé une réponse invalide')).toBeVisible({ timeout: 10000 });
+      // Pas de blocage : la config reste ouverte et réutilisable, pas
+      // rejetée sur l'écran de la fiche.
+      await expect(page.getByRole('button', { name: 'Générer le programme' })).toBeVisible();
+    } finally {
+      await supprimerParticipant(page, participantUrl);
+    }
+  });
 });

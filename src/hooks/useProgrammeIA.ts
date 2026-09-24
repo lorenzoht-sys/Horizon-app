@@ -120,7 +120,7 @@ export function useProgrammeIA() {
     showConfigIA, configIA, generatingIA, errorIA, savingIA,
     questionsIA, reponsesIA, chargementQuestionsIA, precisionsLibresIA,
     showPreviewIA, programmePreview, setProgrammePreview, setShowPreviewIA,
-    updateConfigIA, updateReponseIA, setPrecisionsLibresIA,
+    updateConfigIA, updateReponseIA, setPrecisionsLibresIA, setErrorIA,
     ouvrirConfigIA, fermerConfigIA, genererProgramme,
     fermerPreviewIA, modifierConfigDepuisPreview, regenererIA,
     handleValiderEtCreerIA,
