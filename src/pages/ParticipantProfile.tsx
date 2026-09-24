@@ -7,7 +7,7 @@ import {
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { differenceInDays } from 'date-fns';
 import {
-  ArrowLeft, Pencil, FileText, TrendingUp, Share2,
+  ArrowLeft, Pencil, FileText, TrendingUp,
   Download, Trash2, Dumbbell, NotebookPen, Calendar, MapPin,
   RefreshCw, ClipboardList, Mic, Save, ExternalLink, LayoutTemplate,
   Archive, ArchiveRestore, Bot, Phone, Navigation, ChevronDown,
@@ -1353,7 +1353,15 @@ export default function ParticipantProfile() {
   const MENU_ACTIONS = [
     { Icon: Pencil,     label: 'Modifier le bénéficiaire',    action: 'modifier' },
     { Icon: TrendingUp, label: "Rapport d'évolution",    action: 'evolution', disabled: participant.bilans.length < 2 },
-    { Icon: Share2,     label: 'Lien client',             action: 'lien' },
+    // "Lien client" (copyClientLink, plus bas) masqué temporairement : la
+    // colonne participants.token n'existe plus en base (confirmé sur
+    // staging, erreur 42703 "column does not exist") — tout lien généré
+    // est donc non fonctionnel pour un patient réel. Le mécanisme d'accès
+    // patient actuel et fonctionnel est code_acces, déjà utilisé par
+    // EspacePatient.tsx. Ne pas réafficher sans avoir réparé/migré ce
+    // mécanisme (voir issue de suivi). copyClientLink() et le handler
+    // 'lien' restent en place, volontairement, pour un retour rapide une
+    // fois le point tranché.
     { Icon: Download,   label: 'Mes données (JSON)',      action: 'export' },
     participant.archive
       ? { Icon: ArchiveRestore, label: 'Désarchiver', action: 'desarchiver' }
