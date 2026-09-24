@@ -113,17 +113,31 @@ test.describe('Fumée mobile (390×844)', () => {
     expect(erreurs, erreurs.join('\n')).toEqual([]);
   });
 
-  test('navigation vers l\'assistant (EcranAssistant)', async ({ page }) => {
+  // Chantier « retrait de l'Assistant de la navigation mobile » :
+  // l'assistant sort du périmètre mobile (décision produit), EcranAssistant
+  // et /assistant restent en place (retrait complet prévu séparément, plus
+  // tard) — seuls ses points d'entrée mobile disparaissent : cette barre
+  // (BarreNavigationMobile.tsx) et le bouton "Assistant" de la fiche
+  // bénéficiaire (ParticipantProfile.tsx, masqué sous 768px, pas retiré :
+  // encore utilisé par le desktop).
+  test('barre de navigation : "Assistant" retiré, 5 onglets restants', async ({ page }) => {
     const erreurs = ecouterErreursConsole(page);
     await loginPraticien(page);
 
-    await barreNav(page).getByRole('button', { name: 'Assistant' }).click();
+    await expect(barreNav(page).getByRole('button', { name: 'Assistant' })).toHaveCount(0);
+    await expect(barreNav(page).getByRole('button')).toHaveCount(5);
+    expect(erreurs, erreurs.join('\n')).toEqual([]);
+  });
 
-    await expect(page).toHaveURL(/\/assistant$/);
+  test('EcranAssistant reste accessible par lien direct (/assistant), hors barre', async ({ page }) => {
+    const erreurs = ecouterErreursConsole(page);
+    await loginPraticien(page);
+
+    await page.goto('/assistant');
+
     // `exact: true` : « Mon assistant » (sans préciser) matche aussi le titre
     // de l'état vide « Mon assistant APA » (AppMobile.tsx, EcranAssistant).
     await expect(page.getByText('🤖 Mon assistant', { exact: true })).toBeVisible();
-    await expect(barreNav(page)).toBeVisible();
     expect(erreurs, erreurs.join('\n')).toEqual([]);
   });
 });
