@@ -25,6 +25,14 @@ export function clientAdminTest(): SupabaseClient | null {
     client = null;
     return client;
   }
-  client = createClient(url, serviceKey, { auth: { persistSession: false } });
+  client = createClient(url, serviceKey, {
+    auth: { persistSession: false },
+    // Ce client ne fait que des appels REST (select/delete) pour le nettoyage,
+    // jamais de canal realtime. Sans `transport` explicite, le constructeur
+    // appelle getWebSocketConstructor(), qui LÈVE une exception sur Node < 22
+    // (pas de WebSocket natif) — c'est le cas du runner CI (Node 20). Un stub
+    // jamais instancié suffit puisqu'aucun canal n'est ouvert.
+    realtime: { transport: class {} as unknown as typeof WebSocket },
+  });
   return client;
 }
