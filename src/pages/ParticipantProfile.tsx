@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { differenceInDays } from 'date-fns';
+import { v4 as uuidv4 } from 'uuid';
 import {
   ArrowLeft, Pencil, FileText, TrendingUp,
   Download, Trash2, Dumbbell, NotebookPen, Calendar, MapPin,
@@ -16,8 +17,11 @@ import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
 import { useProgrammeV2 } from '../hooks/useProgrammeV2';
 import { useProgrammeWizard } from '../hooks/useProgrammeWizard';
+import { useProgrammeIA } from '../hooks/useProgrammeIA';
 import { useDevice } from '../hooks/useDevice';
 import { ProgrammeWizardModal } from '../components/programme/ProgrammeWizard';
+import { ConfigIAModal, PreviewIAModal, OBJECTIFS_IA } from '../components/programme/ProgrammeIA';
+import { genererProgrammeStructure, versPayloadCreateProgramme, type ProgrammeIA } from '../utils/genererProgrammeIA';
 import { exportProgrammePDF } from '../utils/exportPDF';
 import { loadExercicesPraticien } from '../data/exercices';
 import { useContrats } from '../hooks/useContrats';
@@ -1084,6 +1088,15 @@ export default function ParticipantProfile() {
     updateWizard: updateWizardCreation, openWizard: openWizardCreation,
     closeWizard: closeWizardCreation, handleSave: handleSaveWizardCreationBase,
   } = useProgrammeWizard();
+  const {
+    showConfigIA, configIA, generatingIA, errorIA, savingIA,
+    questionsIA, reponsesIA, chargementQuestionsIA, precisionsLibresIA,
+    showPreviewIA, programmePreview, setProgrammePreview,
+    updateConfigIA, updateReponseIA, setPrecisionsLibresIA,
+    ouvrirConfigIA: ouvrirConfigIABase, fermerConfigIA, genererProgramme,
+    fermerPreviewIA, modifierConfigDepuisPreview, regenererIA: regenererIABase,
+    handleValiderEtCreerIA: handleValiderEtCreerIABase,
+  } = useProgrammeIA();
   const { contrats } = useContrats();
   const { structures } = useStructures();
   const { seances } = useAgenda();
@@ -1344,6 +1357,66 @@ export default function ParticipantProfile() {
     const ok = await handleSaveWizardCreationBase(async () => {
       const created = await createProgramme(payload);
       toast[created ? 'success' : 'error'](created ? 'Programme créé et partagé avec le bénéficiaire !' : 'Erreur lors de la création du programme');
+      return created;
+    });
+    if (ok) await Promise.all([reloadProgrammeActif(), reloadProgrammesV2()]);
+  }
+
+  // Génération IA — mobile uniquement (voir handleAction, case 'programme_ia'
+  // ci-dessous), même construction que ProgrammePage.tsx (genererProgrammeIA
+  // sans réponses de clarification préexistantes puisqu'on repart d'un état
+  // vierge à chaque ouverture, comme sur desktop).
+  function ouvrirConfigIA() {
+    if (participant) ouvrirConfigIABase(participant);
+  }
+
+  async function construireProgrammeIA(): Promise<ProgrammeIA> {
+    if (!participant) throw new Error('Participant introuvable');
+    if (configIA.objectif === 'personnalise' && !configIA.objectifPersonnalise.trim()) {
+      throw new Error("Précisez l'objectif personnalisé.");
+    }
+
+    const bilans = participant.bilans ?? [];
+    const dernierBilan = bilans.length
+      ? [...bilans].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+      : null;
+
+    const objectifLabel = configIA.objectif === 'personnalise'
+      ? (configIA.objectifPersonnalise || 'objectif personnalisé du patient')
+      : OBJECTIFS_IA.find(o => o.value === configIA.objectif)?.label ?? configIA.objectif;
+
+    const reponsesTexte = questionsIA
+      .map((q, i) => (reponsesIA[i]?.trim() ? `- ${q}\n  Réponse : ${reponsesIA[i].trim()}` : null))
+      .filter(Boolean)
+      .join('\n');
+
+    const catalogue = await loadExercicesPraticien();
+
+    return genererProgrammeStructure(
+      participant,
+      { objectif: objectifLabel, frequence: configIA.frequence, duree: configIA.duree, niveau: configIA.niveau },
+      reponsesTexte,
+      catalogue,
+      dernierBilan,
+      programmesV2,
+      precisionsLibresIA,
+    );
+  }
+
+  function genererProgrammeIA() {
+    genererProgramme(construireProgrammeIA);
+  }
+
+  function regenererIA() {
+    regenererIABase(construireProgrammeIA);
+  }
+
+  async function handleValiderEtCreerIA() {
+    const ok = await handleValiderEtCreerIABase(async () => {
+      if (!programmePreview) return false;
+      const payload = versPayloadCreateProgramme(programmePreview, 'domicile', uuidv4);
+      const created = await createProgramme(payload);
+      toast[created ? 'success' : 'error'](created ? 'Programme généré et créé avec succès 🎉' : 'Erreur lors de la création du programme');
       return created;
     });
     if (ok) await Promise.all([reloadProgrammeActif(), reloadProgrammesV2()]);
@@ -1929,6 +2002,20 @@ export default function ParticipantProfile() {
             >
               <LayoutTemplate size={13} /> Utiliser un modèle
             </button>
+            {/* Mobile uniquement : sur desktop, "Générer avec l'IA" vit déjà
+                dans le header de ProgrammePage.tsx (bouton toujours visible,
+                pas seulement à l'état vide) — ajouter ce bouton ici aussi
+                changerait le rendu desktop de cette carte, hors périmètre de
+                ce chantier. isMobile gate le RENDU du bouton, pas seulement
+                son clic, pour qu'aucune différence n'existe côté desktop. */}
+            {isMobile && (
+              <button
+                onClick={ouvrirConfigIA}
+                className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <Bot size={13} /> Générer avec l'IA
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -2339,6 +2426,38 @@ export default function ParticipantProfile() {
           saving={savingWizardCreation}
           isEditing={false}
           participant={participant}
+        />
+      )}
+
+      {/* Génération IA — mobile uniquement (bouton ci-dessus, gate isMobile
+          au rendu). Desktop garde ProgrammePage.tsx inchangée. */}
+      {showConfigIA && participant && (
+        <ConfigIAModal
+          participant={participant}
+          config={configIA}
+          onChange={updateConfigIA}
+          onGenerer={genererProgrammeIA}
+          onClose={fermerConfigIA}
+          generating={generatingIA}
+          error={errorIA}
+          questions={questionsIA}
+          chargementQuestions={chargementQuestionsIA}
+          reponses={reponsesIA}
+          onReponseChange={updateReponseIA}
+          precisionsLibres={precisionsLibresIA}
+          onPrecisionsLibresChange={setPrecisionsLibresIA}
+        />
+      )}
+
+      {showPreviewIA && programmePreview && (
+        <PreviewIAModal
+          programme={programmePreview}
+          onChange={setProgrammePreview}
+          onValider={handleValiderEtCreerIA}
+          onRegenerer={regenererIA}
+          onModifierConfig={modifierConfigDepuisPreview}
+          onClose={fermerPreviewIA}
+          saving={savingIA}
         />
       )}
 
