@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import type { Participant, Structure } from '../../types';
 import { useContrats } from '../../hooks/useContrats';
 import { useProgramme } from '../../hooks/useProgramme';
+import { useProgrammeV2 } from '../../hooks/useProgrammeV2';
 import { useTemplatesStructure } from '../../hooks/useTemplatesStructure';
 import { detecterTypeTemplate, type DetectionTemplate } from '../../utils/detecterTypeTemplate';
 import { analyserDonneesDisponibles, buildChampsAcroFormPrompt } from '../../utils/buildCompteRenduStructureContext';
@@ -24,6 +25,10 @@ const RAISON_TEMPLATE_SAUVEGARDE =
 export default function GenererCompteRenduModal({ patient, structure, onClose }: Props) {
   const { contrats } = useContrats();
   const { programmes } = useProgramme(patient.id);
+  // Corrige la lecture du programme actif pour un compte-rendu : un
+  // programme créé via V2 laisse vide la colonne V1 `exercices` que lit
+  // buildProgrammeText — voir lib/programmeActifV2.ts.
+  const { programmes: programmesV2 } = useProgrammeV2(patient.id);
   const { templates, creerTemplate, supprimerTemplate } = useTemplatesStructure(structure.id);
 
   const contratActif = useMemo(
@@ -93,7 +98,7 @@ export default function GenererCompteRenduModal({ patient, structure, onClose }:
     setGenerating(true);
     setErreur(null);
     try {
-      const prompt = buildChampsAcroFormPrompt({ champs: templateDetection.champs, patient, structure, contratActif, programmeActif });
+      const prompt = buildChampsAcroFormPrompt({ champs: templateDetection.champs, patient, structure, contratActif, programmeActif, programmesV2 });
       const res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },

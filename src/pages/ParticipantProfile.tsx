@@ -1300,6 +1300,9 @@ export default function ParticipantProfile() {
           bilans: sortedBilans,
           contratActif,
           programmeActif,
+          // Corrige le compte d'exercices pour un programme créé via V2 —
+          // voir lib/programmeActifV2.ts.
+          programmesV2,
           compteRendus,
           // Cours RÉALISÉS de ce bénéficiaire, avec présence constatée, effort, bien-être et note.
           coursRealises: entreesCours.filter(e => e.cours.statut === 'realise'),

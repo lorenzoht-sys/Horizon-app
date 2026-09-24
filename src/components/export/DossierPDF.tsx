@@ -1,7 +1,8 @@
 import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
 import type { ReactNode } from 'react';
-import type { Participant, Bilan, Contrat, Programme } from '../../types';
+import type { Participant, Bilan, Contrat, Programme, ProgrammeV2 } from '../../types';
 import type { CompteRenduSeance } from '../../types/seance';
+import { programmeV2Actif } from '../../lib/programmeActifV2';
 import {
   getContreIndications,
   getObjectifsActivites,
@@ -63,6 +64,15 @@ export interface DossierPDFData {
   bilans: Bilan[];
   contratActif: Contrat | null;
   programmeActif: Programme | null;
+  /**
+   * Optionnel, pour ne pas casser un appelant qui n'en a pas besoin
+   * (exportCarteSantePatient, mode « patient » — la carte « Suivi APA »
+   * n'y est jamais affichée, voir isPraticien plus bas). Quand fourni,
+   * corrige le compte d'exercices pour un programme créé via V2 (voir
+   * lib/programmeActifV2.ts) : `programmeActif.exercices` (V1) reste vide
+   * pour ces programmes-là.
+   */
+  programmesV2?: ProgrammeV2[];
   compteRendus: CompteRenduSeance[];
   /**
    * Cours collectifs de CE bénéficiaire (une participation chacun). Optionnel : la carte santé du
@@ -295,9 +305,13 @@ function DossierHeader({
 // ── Composant principal ───────────────────────────────────────────────────────
 
 export default function DossierPDF({
-  participant, bilans, contratActif, programmeActif, compteRendus, coursRealises, settings, mode,
+  participant, bilans, contratActif, programmeActif, programmesV2, compteRendus, coursRealises, settings, mode,
 }: DossierPDFProps) {
   const isPraticien = mode === 'praticien';
+  const progV2 = programmeV2Actif(programmeActif, programmesV2 ?? []);
+  const nombreExercicesProgramme = progV2
+    ? progV2.seances.reduce((total, s) => total + s.exercices.length, 0)
+    : (programmeActif?.exercices.length ?? 0);
   const sortedBilans = [...bilans].sort((a, b) => a.date.localeCompare(b.date));
   const bilanInitial = participant.bilans.find(b => b.type === 'initial') ?? null;
   const dernierBilan = sortedBilans[sortedBilans.length - 1] ?? null;
@@ -543,7 +557,7 @@ export default function DossierPDF({
               <>
                 <Row label="Programme actif" value={programmeActif.titre} />
                 <Row label="Objectif programme" value={programmeActif.objectif} />
-                <Row label="Exercices" value={`${programmeActif.exercices.length} exercice(s)`} />
+                <Row label="Exercices" value={`${nombreExercicesProgramme} exercice(s)`} />
               </>
             )}
           </Card>
