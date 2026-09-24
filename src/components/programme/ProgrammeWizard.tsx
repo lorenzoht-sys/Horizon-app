@@ -7,6 +7,7 @@ import type { TypeProgramme, JourProgramme, Participant, Exercice } from '../../
 import { TYPE_PROGRAMME_LABELS as TPL, JOURS_PROGRAMME as JP, CATEGORIE_EXERCICE_LABELS as CEL } from '../../types';
 import { loadExercicesPraticien, saveExercicePersonnalise } from '../../data/exercices';
 import BoutonReformulation from '../ui/BoutonReformulation';
+import { useDevice } from '../../hooks/useDevice';
 
 // Wizard 4 étapes partagé entre la création/édition d'un programme réel
 // (ProgrammePage.tsx, rattaché à un bénéficiaire) et d'un modèle réutilisable
@@ -874,6 +875,27 @@ function Step4({ data }: { data: WizardData }) {
   );
 }
 
+// ── Étape 2, indisponible sur mobile ───────────────────────────────────────────
+// ExercicePickerModal (bibliothèque + création manuelle, filtres, recherche)
+// n'a pas encore de mise en page mobile — chantier séparé. Même ton que
+// EcranPaysage (AppMobile.tsx) : jamais de blocage sans issue, le praticien
+// peut revenir à l'étape 1 (bouton "Retour" du pied de page, déjà existant)
+// ou avancer sans exercice — Step3/Step4 tolèrent déjà un programme sans
+// bloc de séance.
+function Step2Indisponible({ estModele }: { estModele?: boolean }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '32px 12px' }}>
+      <div style={{ fontSize: 44, marginBottom: 12 }} aria-hidden="true">🔄</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#0D2B2B', marginBottom: 8 }}>
+        Le choix des exercices n'est pas encore disponible sur mobile
+      </div>
+      <div style={{ fontSize: 13, color: '#4A6080', lineHeight: 1.6 }}>
+        Complétez cette étape depuis un ordinateur. En attendant, vous pouvez continuer sans exercice — {estModele ? 'vous pourrez compléter le modèle' : 'vous pourrez compléter le programme'} plus tard depuis un ordinateur — ou revenir en arrière.
+      </div>
+    </div>
+  );
+}
+
 // ── Modale wizard complète ─────────────────────────────────────────────────────
 
 const STEP_LABELS = ['Informations', 'Séances', 'Planning', 'Récapitulatif'];
@@ -894,6 +916,8 @@ export interface ProgrammeWizardModalProps {
 export function ProgrammeWizardModal({
   step, onStepChange, data, onChange, onClose, onSave, saving, isEditing, participant, estModele,
 }: ProgrammeWizardModalProps) {
+  const { isMobile } = useDevice();
+
   function handleNext() {
     if (step === 1 && !data.nom.trim()) {
       toast.error(estModele ? 'Donnez un nom au modèle' : 'Donnez un nom au programme');
@@ -955,7 +979,7 @@ export function ProgrammeWizardModal({
         {/* Contenu de l'étape */}
         <div style={{ padding: '24px', maxHeight: '60vh', overflowY: 'auto' }}>
           {step === 1 && <Step1 data={data} onChange={onChange} estModele={estModele} />}
-          {step === 2 && <Step2 data={data} onChange={onChange} participant={participant} />}
+          {step === 2 && (isMobile ? <Step2Indisponible estModele={estModele} /> : <Step2 data={data} onChange={onChange} participant={participant} />)}
           {step === 3 && <Step3 data={data} onChange={onChange} />}
           {step === 4 && <Step4 data={data} />}
         </div>
