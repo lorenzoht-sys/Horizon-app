@@ -7,10 +7,10 @@ import {
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { differenceInDays } from 'date-fns';
 import {
-  ArrowLeft, Pencil, FileText, TrendingUp, Share2,
+  ArrowLeft, Pencil, FileText, TrendingUp,
   Download, Trash2, Dumbbell, NotebookPen, Calendar, MapPin,
   RefreshCw, ClipboardList, Mic, Save, ExternalLink, LayoutTemplate,
-  Archive, ArchiveRestore, Bot, Phone, Navigation,
+  Archive, ArchiveRestore, Bot, Phone, Navigation, ChevronDown,
 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
@@ -1093,6 +1093,7 @@ export default function ParticipantProfile() {
   const [showEspacePatient, setShowEspacePatient] = useState(false);
   const [ouvertureEspacePatient, setOuvertureEspacePatient] = useState(false);
   const [showModeleModal, setShowModeleModal] = useState(false);
+  const [voirTousExercices, setVoirTousExercices] = useState(false);
   const [activeTab, setActiveTab]           = useState<TabId>('bilans');
   const [seancesStats, setSeancesStats]     = useState<SeancePatientStat[]>([]);
   const [retours, setRetours]               = useState<RetourSeance[]>([]);
@@ -1194,6 +1195,52 @@ export default function ParticipantProfile() {
   const hasAddress     = Boolean(participant.adresseRue?.trim() && participant.adresseVille?.trim());
   const brouillon      = getBrouillon(participant.id);
 
+  // Programme affiché sur la fiche : programmeActif (useProgramme, V1) lit une colonne
+  // JSON `exercices` sur la table `programmes`, laissée VIDE par toute création récente
+  // (useProgrammeV2.createProgramme insère `exercices: []` — les exercices vivent dans
+  // programme_seances/programme_exercices depuis la V2, seul chemin de création restant
+  // dans ProgrammePage.tsx). Résultat avant ce chantier : la carte ci-dessous n'affichait
+  // ni compte ni liste d'exercices pour tout programme créé aujourd'hui — pas seulement
+  // "limité à 4", comme le diagnostic initial du chantier le supposait (vérifié en lisant
+  // useProgramme.ts, useProgrammeV2.ts et dbToProgramme, lib/mappers.ts).
+  // titre/dateCreation/objectif restent lisibles via programmeActif (V1) même pour une
+  // ligne V2 : createProgramme (V2) les écrit aussi sur les colonnes historiques
+  // (titre/date_creation/objectif — "backward compat", useProgrammeV2.ts) pour ne pas
+  // casser ce composant. Seuls exercices/count doivent donc être re-sourcés depuis V2.
+  const activeProgV2 = programmesV2.find(p => p.actif) ?? null;
+  type ExerciceAffiche = {
+    id: string; nom: string; series?: number; repetitions?: number;
+    dureeSecondes?: number; notes?: string; seanceNom?: string;
+  };
+  const exercicesAffiches: ExerciceAffiche[] = activeProgV2
+    ? [...activeProgV2.seances]
+        .sort((a, b) => a.ordre - b.ordre)
+        .flatMap(s => [...s.exercices]
+          .sort((a, b) => a.ordre - b.ordre)
+          .map(e => ({
+            id: e.id,
+            nom: e.nom,
+            series: e.series,
+            repetitions: e.repetitions,
+            dureeSecondes: e.dureeSecondes,
+            notes: e.description || e.conseilSecurite || undefined,
+            // Regroupement affiché seulement si le programme a plusieurs
+            // séances distinctes (ex. "Séance A" / "Séance B") — inutile de
+            // le répéter s'il n'y en a qu'une.
+            seanceNom: activeProgV2.seances.length > 1 ? s.nom : undefined,
+          })))
+    // Repli V1 : programme légacy jamais migré vers V2 (plus créé par l'UI
+    // actuelle, voir commentaire ci-dessus) — exerciceId brut faute de
+    // catalogue chargé ici, comportement inchangé par rapport à avant.
+    : (programmeActif?.exercices ?? []).map(e => ({
+        id: e.exerciceId,
+        nom: e.exerciceId.replace(/-/g, ' '),
+        series: e.series,
+        repetitions: e.repetitions,
+        dureeSecondes: e.dureeSecondes,
+        notes: e.notePersonnalisee,
+      }));
+
   // PDF du programme en cours, sans passer par la page Programme. Même export que
   // ProgrammePage / EspacePatient (exportProgrammePDF normalise V1 et V2). La version V2
   // est préférée quand elle existe : une ligne V2 relue via useProgramme (forme V1) n'a
@@ -1253,6 +1300,9 @@ export default function ParticipantProfile() {
           bilans: sortedBilans,
           contratActif,
           programmeActif,
+          // Corrige le compte d'exercices pour un programme créé via V2 —
+          // voir lib/programmeActifV2.ts.
+          programmesV2,
           compteRendus,
           // Cours RÉALISÉS de ce bénéficiaire, avec présence constatée, effort, bien-être et note.
           coursRealises: entreesCours.filter(e => e.cours.statut === 'realise'),
@@ -1303,7 +1353,15 @@ export default function ParticipantProfile() {
   const MENU_ACTIONS = [
     { Icon: Pencil,     label: 'Modifier le bénéficiaire',    action: 'modifier' },
     { Icon: TrendingUp, label: "Rapport d'évolution",    action: 'evolution', disabled: participant.bilans.length < 2 },
-    { Icon: Share2,     label: 'Lien client',             action: 'lien' },
+    // "Lien client" (copyClientLink, plus bas) masqué temporairement : la
+    // colonne participants.token n'existe plus en base (confirmé sur
+    // staging, erreur 42703 "column does not exist") — tout lien généré
+    // est donc non fonctionnel pour un patient réel. Le mécanisme d'accès
+    // patient actuel et fonctionnel est code_acces, déjà utilisé par
+    // EspacePatient.tsx. Ne pas réafficher sans avoir réparé/migré ce
+    // mécanisme (voir issue de suivi). copyClientLink() et le handler
+    // 'lien' restent en place, volontairement, pour un retour rapide une
+    // fois le point tranché.
     { Icon: Download,   label: 'Mes données (JSON)',      action: 'export' },
     participant.archive
       ? { Icon: ArchiveRestore, label: 'Désarchiver', action: 'desarchiver' }
@@ -1710,13 +1768,12 @@ export default function ParticipantProfile() {
               <div className="font-heading font-semibold text-dark text-[15px]">{programmeActif.titre}</div>
               <div className="text-[12px] text-gray-400 mt-0.5">
                 Généré le {new Date(programmeActif.dateCreation).toLocaleDateString('fr-FR')}
-                {programmeActif.exercices.length > 0 && ` · ${programmeActif.exercices.length} exercice${programmeActif.exercices.length > 1 ? 's' : ''}`}
+                {exercicesAffiches.length > 0 && ` · ${exercicesAffiches.length} exercice${exercicesAffiches.length > 1 ? 's' : ''}`}
               </div>
               {(() => {
-                const progV2Actif = programmesV2.find(p => p.id === programmeActif.id);
-                const objectif = progV2Actif?.objectifSeancesAutonomes;
+                const objectif = activeProgV2?.objectifSeancesAutonomes;
                 if (!objectif) return null;
-                const nb = seancesAutonomesStats[progV2Actif!.id]?.count ?? 0;
+                const nb = seancesAutonomesStats[activeProgV2!.id]?.count ?? 0;
                 const pct = Math.min(100, Math.round((nb / objectif) * 100));
                 return (
                   <div className="mt-2 flex items-center gap-2">
@@ -1751,19 +1808,48 @@ export default function ParticipantProfile() {
               </button>
             </div>
           </div>
-          {programmeActif.exercices.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              {programmeActif.exercices.slice(0, 4).map(ep => (
-                <div key={ep.exerciceId} className="flex items-center gap-2 text-[13px] text-gray-600">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary/50 flex-shrink-0" />
-                  <span>{ep.exerciceId.replace(/-/g, ' ')}</span>
-                </div>
-              ))}
-              {programmeActif.exercices.length > 4 && (
-                <div className="text-[12px] text-gray-400 pl-3.5">+ {programmeActif.exercices.length - 4} autre(s)</div>
-              )}
-            </div>
-          )}
+          {exercicesAffiches.length > 0 && (() => {
+            const APERCU = 4;
+            const liste = voirTousExercices ? exercicesAffiches : exercicesAffiches.slice(0, APERCU);
+            let derniereSeance: string | undefined;
+            return (
+              <div className="flex flex-col gap-2">
+                {liste.map(ex => {
+                  const enteteSeance = ex.seanceNom && ex.seanceNom !== derniereSeance;
+                  if (enteteSeance) derniereSeance = ex.seanceNom;
+                  const detail = [
+                    ex.series != null && ex.repetitions != null ? `${ex.series} × ${ex.repetitions}` : null,
+                    ex.series != null && ex.repetitions == null && ex.dureeSecondes != null ? `${ex.series} × ${ex.dureeSecondes}s` : null,
+                    ex.series == null && ex.dureeSecondes != null ? `${ex.dureeSecondes}s` : null,
+                  ].filter(Boolean).join(' · ');
+                  return (
+                    <div key={ex.id}>
+                      {enteteSeance && (
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-gray-400 mt-1.5 mb-1">{ex.seanceNom}</div>
+                      )}
+                      <div className="flex items-start gap-2 text-[13px] text-gray-600">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary/50 flex-shrink-0 mt-1.5" />
+                        <div>
+                          <span>{ex.nom}</span>
+                          {detail && <span className="text-gray-400"> · {detail}</span>}
+                          {ex.notes && <div className="text-[12px] text-gray-400 italic mt-0.5">{ex.notes}</div>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {exercicesAffiches.length > APERCU && (
+                  <button
+                    onClick={() => setVoirTousExercices(v => !v)}
+                    className="flex items-center gap-1 text-[12px] font-medium text-primary pl-3.5 mt-0.5 self-start"
+                  >
+                    <ChevronDown size={13} className={voirTousExercices ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                    {voirTousExercices ? 'Réduire' : `Voir tout (${exercicesAffiches.length})`}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
           {programmeActif.objectif && (
             <div className="mt-2 text-[12px] text-gray-500 italic">🎯 {programmeActif.objectif}</div>
           )}
