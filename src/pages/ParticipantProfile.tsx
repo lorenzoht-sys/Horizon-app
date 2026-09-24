@@ -15,6 +15,9 @@ import {
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
 import { useProgrammeV2 } from '../hooks/useProgrammeV2';
+import { useProgrammeWizard } from '../hooks/useProgrammeWizard';
+import { useDevice } from '../hooks/useDevice';
+import { ProgrammeWizardModal } from '../components/programme/ProgrammeWizard';
 import { exportProgrammePDF } from '../utils/exportPDF';
 import { loadExercicesPraticien } from '../data/exercices';
 import { useContrats } from '../hooks/useContrats';
@@ -1073,7 +1076,14 @@ export default function ParticipantProfile() {
   const { id } = useParams<{ id: string }>();
   const { participants, loading: chargementParticipants, updateParticipant, deleteParticipant, deleteBilan, geocodeParticipant, archiverParticipant } = useParticipants();
   const { programmeActif, deleteProgramme, reload: reloadProgrammeActif } = useProgramme(id ?? '');
-  const { programmes: programmesV2, seancesAutonomesStats, loading: chargementProgrammesV2, reload: reloadProgrammesV2 } = useProgrammeV2(id ?? '');
+  const { programmes: programmesV2, seancesAutonomesStats, loading: chargementProgrammesV2, reload: reloadProgrammesV2, createProgramme } = useProgrammeV2(id ?? '');
+  const { isMobile } = useDevice();
+  const {
+    showWizard: showWizardCreation, step: stepWizardCreation, setStep: setStepWizardCreation,
+    wizardData: wizardDataCreation, saving: savingWizardCreation,
+    updateWizard: updateWizardCreation, openWizard: openWizardCreation,
+    closeWizard: closeWizardCreation, handleSave: handleSaveWizardCreationBase,
+  } = useProgrammeWizard();
   const { contrats } = useContrats();
   const { structures } = useStructures();
   const { seances } = useAgenda();
@@ -1284,11 +1294,59 @@ export default function ParticipantProfile() {
           .then(() => toast.success(`${participant.prenom} ${participant.nom} est de nouveau parmi les bénéficiaires actifs.`))
           .catch(err => { console.error('Erreur désarchivage:', err); toast.error('Erreur lors du désarchivage'); });
         break;
-      case 'programme':       navigate(`/participant/${id}/programme`); break;
+      case 'programme':
+        // Desktop : inchangé, on navigue vers la page dédiée (ProgrammePage.tsx).
+        // Mobile : cette route n'a pas d'équivalent mobile (routesMobile.ts la
+        // fait retomber sur l'invitation "tournez votre téléphone") — ouvre le
+        // wizard directement ici, sur la fiche déjà affichée sous 768 px.
+        if (isMobile) openWizardCreation();
+        else navigate(`/participant/${id}/programme`);
+        break;
       case 'nouveau_bilan':   navigate(`/participant/${id}/bilan/new`); break;
       case 'nouveau_contrat': navigate(`/participant/${id}/contrat/nouveau`); break;
       case 'rgpd':            navigate(`/participants/${id}/modifier`); break;
     }
+  }
+
+  // Sauvegarde du wizard ouvert depuis le mobile (voir handleAction, case
+  // 'programme') — même construction de payload que ProgrammePage.tsx
+  // (handleSave), CREATION seulement : pas d'édition mobile pour l'instant,
+  // l'entrée mobile ne s'ouvre que quand il n'y a pas encore de programme
+  // actif (voir la carte "Programme" plus bas dans ce fichier).
+  async function handleSaveWizardCreation() {
+    const objectifSeancesAutonomes = wizardDataCreation.objectifSeancesAutonomes.trim()
+      ? Number(wizardDataCreation.objectifSeancesAutonomes)
+      : undefined;
+    const payload = {
+      nom: wizardDataCreation.nom,
+      objectif: wizardDataCreation.objectif || undefined,
+      objectifSeancesAutonomes: objectifSeancesAutonomes != null && objectifSeancesAutonomes > 0 ? objectifSeancesAutonomes : undefined,
+      messageMotivation: wizardDataCreation.messageMotivation || undefined,
+      type: wizardDataCreation.type,
+      seances: wizardDataCreation.seances.map(s => ({
+        tempId: s.tempId,
+        nom: s.nom,
+        exercices: s.exercices.map(ex => ({
+          nom: ex.nom,
+          categorie: ex.categorie || undefined,
+          description: ex.description || undefined,
+          conseilSecurite: ex.conseilSecurite || undefined,
+          series: ex.mode !== 'total' ? ex.series : undefined,
+          repetitions: ex.mode === 'reps' ? ex.repetitions : undefined,
+          dureeSecondes: (ex.mode === 'duree' || ex.mode === 'total') ? ex.dureeSecondes : undefined,
+          exerciceId: ex.exerciceId || undefined,
+          niveau: ex.niveau || undefined,
+        })),
+      })),
+      planning: wizardDataCreation.planning,
+    };
+
+    const ok = await handleSaveWizardCreationBase(async () => {
+      const created = await createProgramme(payload);
+      toast[created ? 'success' : 'error'](created ? 'Programme créé et partagé avec le bénéficiaire !' : 'Erreur lors de la création du programme');
+      return created;
+    });
+    if (ok) await Promise.all([reloadProgrammeActif(), reloadProgrammesV2()]);
   }
 
   async function handleExportDossier() {
@@ -2265,6 +2323,22 @@ export default function ParticipantProfile() {
             setShowModeleModal(false);
             await Promise.all([reloadProgrammeActif(), reloadProgrammesV2()]);
           }}
+        />
+      )}
+
+      {/* Wizard de création — mobile uniquement (voir handleAction, case
+          'programme'). Desktop garde ProgrammePage.tsx inchangée. */}
+      {showWizardCreation && (
+        <ProgrammeWizardModal
+          step={stepWizardCreation}
+          onStepChange={setStepWizardCreation}
+          data={wizardDataCreation}
+          onChange={updateWizardCreation}
+          onClose={closeWizardCreation}
+          onSave={handleSaveWizardCreation}
+          saving={savingWizardCreation}
+          isEditing={false}
+          participant={participant}
         />
       )}
 

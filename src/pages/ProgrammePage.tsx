@@ -10,6 +10,7 @@ import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
 import { useProgrammeV2 } from '../hooks/useProgrammeV2';
 import { useActivitesHorsProgramme } from '../hooks/useActivitesHorsProgramme';
+import { useProgrammeWizard } from '../hooks/useProgrammeWizard';
 import PageWrapper from '../components/layout/PageWrapper';
 import { toast } from 'sonner';
 import type { JourProgramme, ProgrammeV2, Participant, Bilan } from '../types';
@@ -25,7 +26,7 @@ import {
   type ProgrammeIA,
 } from '../utils/genererProgrammeIA';
 import {
-  ProgrammeWizardModal, EMPTY_WIZARD, inputStyle, labelStyle,
+  ProgrammeWizardModal, inputStyle, labelStyle,
   btnPrimary, btnSecondary, NIVEAU_STYLE, JOUR_COURT,
   type WizardData, type FormSeance,
 } from '../components/programme/ProgrammeWizard';
@@ -810,11 +811,10 @@ export default function ProgrammePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [showWizard, setShowWizard] = useState(false);
-  const [step, setStep] = useState(1);
-  const [wizardData, setWizardData] = useState<WizardData>(EMPTY_WIZARD);
-  const [saving, setSaving] = useState(false);
-  const [editingProgId, setEditingProgId] = useState<string | null>(null);
+  const {
+    showWizard, step, setStep, wizardData, saving, editingId: editingProgId,
+    updateWizard, openWizard, openEditWizard: openEditWizardBase, closeWizard, handleSave: handleSaveBase,
+  } = useProgrammeWizard();
 
   const [showConfigIA, setShowConfigIA] = useState(false);
   const [configIA, setConfigIA] = useState<ConfigIA>(EMPTY_CONFIG_IA);
@@ -954,80 +954,48 @@ export default function ProgrammePage() {
     }
   }
 
-  function updateWizard(patch: Partial<WizardData>) {
-    setWizardData(prev => ({ ...prev, ...patch }));
-  }
-
-  function openWizard() {
-    setWizardData(EMPTY_WIZARD);
-    setEditingProgId(null);
-    setStep(1);
-    setShowWizard(true);
-  }
-
   function openEditWizard(prog: ProgrammeV2) {
-    setWizardData(progV2ToWizard(prog));
-    setEditingProgId(prog.id);
-    setStep(1);
-    setShowWizard(true);
-  }
-
-  function closeWizard() {
-    setShowWizard(false);
-    setEditingProgId(null);
-    setStep(1);
+    openEditWizardBase(prog.id, progV2ToWizard(prog));
   }
 
   async function handleSave() {
-    setSaving(true);
-    try {
-      const objectifSeancesAutonomes = wizardData.objectifSeancesAutonomes.trim()
-        ? Number(wizardData.objectifSeancesAutonomes)
-        : undefined;
-      const payload = {
-        nom: wizardData.nom,
-        objectif: wizardData.objectif || undefined,
-        objectifSeancesAutonomes: objectifSeancesAutonomes != null && objectifSeancesAutonomes > 0 ? objectifSeancesAutonomes : undefined,
-        messageMotivation: wizardData.messageMotivation || undefined,
-        type: wizardData.type,
-        seances: wizardData.seances.map(s => ({
-          tempId: s.tempId,
-          nom: s.nom,
-          exercices: s.exercices.map(ex => ({
-            nom: ex.nom,
-            categorie: ex.categorie || undefined,
-            description: ex.description || undefined,
-            conseilSecurite: ex.conseilSecurite || undefined,
-            series: ex.mode !== 'total' ? ex.series : undefined,
-            repetitions: ex.mode === 'reps' ? ex.repetitions : undefined,
-            dureeSecondes: (ex.mode === 'duree' || ex.mode === 'total') ? ex.dureeSecondes : undefined,
-            exerciceId: ex.exerciceId || undefined,
-            niveau: ex.niveau || undefined,
-          })),
+    const objectifSeancesAutonomes = wizardData.objectifSeancesAutonomes.trim()
+      ? Number(wizardData.objectifSeancesAutonomes)
+      : undefined;
+    const payload = {
+      nom: wizardData.nom,
+      objectif: wizardData.objectif || undefined,
+      objectifSeancesAutonomes: objectifSeancesAutonomes != null && objectifSeancesAutonomes > 0 ? objectifSeancesAutonomes : undefined,
+      messageMotivation: wizardData.messageMotivation || undefined,
+      type: wizardData.type,
+      seances: wizardData.seances.map(s => ({
+        tempId: s.tempId,
+        nom: s.nom,
+        exercices: s.exercices.map(ex => ({
+          nom: ex.nom,
+          categorie: ex.categorie || undefined,
+          description: ex.description || undefined,
+          conseilSecurite: ex.conseilSecurite || undefined,
+          series: ex.mode !== 'total' ? ex.series : undefined,
+          repetitions: ex.mode === 'reps' ? ex.repetitions : undefined,
+          dureeSecondes: (ex.mode === 'duree' || ex.mode === 'total') ? ex.dureeSecondes : undefined,
+          exerciceId: ex.exerciceId || undefined,
+          niveau: ex.niveau || undefined,
         })),
-        planning: wizardData.planning,
-      };
+      })),
+      planning: wizardData.planning,
+    };
 
+    await handleSaveBase(async () => {
       if (editingProgId) {
         const ok = await updateProgramme(editingProgId, payload);
-        if (ok) {
-          toast.success('Programme mis à jour !');
-          closeWizard();
-        } else {
-          toast.error('Erreur lors de la mise à jour');
-        }
-      } else {
-        const ok = await createProgramme(payload);
-        if (ok) {
-          toast.success('Programme créé et partagé avec le bénéficiaire !');
-          closeWizard();
-        } else {
-          toast.error('Erreur lors de la création du programme');
-        }
+        toast[ok ? 'success' : 'error'](ok ? 'Programme mis à jour !' : 'Erreur lors de la mise à jour');
+        return ok;
       }
-    } finally {
-      setSaving(false);
-    }
+      const ok = await createProgramme(payload);
+      toast[ok ? 'success' : 'error'](ok ? 'Programme créé et partagé avec le bénéficiaire !' : 'Erreur lors de la création du programme');
+      return ok;
+    });
   }
 
   if (!participant) {
