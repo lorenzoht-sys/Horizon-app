@@ -1592,11 +1592,15 @@ export default function ParticipantProfile() {
             >
               <Mic size={13} style={{ color: 'var(--color-teal)' }} /> Dicter séance
             </button>
-            {/* Repris de l'ancienne fiche mobile. L'URL sert la version mobile
-                de l'assistant sous 768 px ; le state, la version desktop. */}
+            {/* Desktop seulement (chantier « retrait de l'Assistant de la
+                navigation mobile ») : l'assistant sort du périmètre mobile,
+                ce bouton était l'un de ses deux points d'entrée sur téléphone
+                (avec la barre de navigation, retiré séparément). Le state
+                {{patientId}} reste utile ici pour AssistantPage (desktop) ;
+                l'URL ne sert plus qu'à cet usage desktop désormais. */}
             <button
               onClick={() => navigate(`/assistant?beneficiaire=${encodeURIComponent(participant.id)}`, { state: { patientId: participant.id } })}
-              className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors"
+              className="hidden md:flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors"
             >
               <Bot size={13} /> Assistant
             </button>

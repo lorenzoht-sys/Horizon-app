@@ -91,7 +91,11 @@ export default function RadarChart({ initial, current, testsActifs }: Props) {
 
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <ReRadarChart data={data}>
+      {/* outerRadius réduit (défaut recharts : 80%) : à 390px de large, les
+          labels des axes de bord (« Force Mains »…) débordaient de la carte
+          — vérifié par capture d'écran réelle. Sans effet perceptible en
+          desktop, où la carte a largement la place. */}
+      <ReRadarChart data={data} outerRadius="65%">
         <PolarGrid stroke="#E5E7EB" />
         <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: '#6B7280' }} />
         <Tooltip

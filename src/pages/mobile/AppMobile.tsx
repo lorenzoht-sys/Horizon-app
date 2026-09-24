@@ -5,22 +5,22 @@ import { useParticipants } from '../../hooks/useParticipants';
 import { useAgenda } from '../../hooks/useAgenda';
 import { useContrats } from '../../hooks/useContrats';
 import { useCompteRenduSeance } from '../../hooks/useCompteRenduSeance';
+import { useCoursCollectifs } from '../../hooks/useCoursCollectifs';
 import BilanStepper from '../../components/bilan/BilanStepper';
 import ModalSelectionTests from '../../components/bilan/ModalSelectionTests';
+import ModalPresenceCoursCollectif from '../../components/agenda/ModalPresenceCoursCollectif';
 import DicteePostSeance from '../../components/DicteePostSeance';
-import MarkdownRendu from '../../components/ui/MarkdownRendu';
-import type { Bilan, Participant } from '../../types';
+import SettingsPage from '../SettingsPage';
+import type { Bilan, CoursCollectif, Participant } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, getAuthHeader } from '../../lib/supabase';
 import {
-  DEFAULTS_SETTINGS,
   EVENT_SETTINGS_PRATICIEN,
   chargerSettingsPraticien,
   enregistrerSettingsPraticien,
   hydraterSettingsPraticien,
   type SettingsPraticien,
 } from '../../lib/settingsPraticien';
-import { validerSiret } from '../../lib/siret';
 import { avecConsentement, erreurConsentementCreation, normaliserRgpd } from '../../lib/consentementRgpd';
 import type { RgpdConsent } from '../../types';
 import { initialesPraticien } from '../../lib/initiales';
@@ -30,11 +30,9 @@ import { URLS_MOBILE, ecranMobileDepuisUrl } from '../../lib/routesMobile';
 import BarreNavigationMobile from '../../components/layout/BarreNavigationMobile';
 import ModalRepriseBrouillon from '../../components/bilan/ModalRepriseBrouillon';
 import { useEtatSession } from '../../hooks/useEtatSession';
-import { ecrireEtatSession, effacerEtatSession, lireEtatSession } from '../../lib/etatSession';
 import { getBrouillonParticipant, sauvegarderBrouillonParticipant, supprimerBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
 import { getBrouillon, supprimerBrouillon } from '../../hooks/useBrouillonBilan';
 import { formaterDateNaissanceAffichage, masquerSaisieDateNaissance, messageErreurDateNaissance, parserDateNaissanceSaisie } from '../../utils/dateNaissance';
-import { resultatTm6 } from '../../lib/tm6';
 import { contratsDesBeneficiairesActifs } from '../../lib/archivage';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -145,25 +143,9 @@ function ItemMobile({ icon, label, onClick }: { icon: string; label: string; onC
   );
 }
 
-function InfoSection({ titre, children }: { titre: string; children: React.ReactNode }) {
-  return (
-    <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '14px 16px' }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: C.primary, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-        {titre}
-      </div>
-      {children}
-    </div>
-  );
-}
-
 // La barre du bas vit dans components/layout/BarreNavigationMobile.tsx : elle
 // est partagée avec le cadre commun, qui la montre sous 768 px sur les écrans
 // fusionnés (la fiche bénéficiaire).
-
-// Ces écrans n'existent qu'en version desktop. Le praticien y accède en
-// tournant son téléphone : la bascule à 768 px est un usage voulu, pas un
-// défaut (voir App.tsx).
-const MESSAGE_PAYSAGE = 'Tournez votre téléphone en paysage pour afficher cet écran 🔄';
 
 // ── EcranAujourdhui ───────────────────────────────────────────────────────────
 
@@ -177,8 +159,19 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
   const { contratsARenouveler: contratsARenouvelerTous } = useContrats();
   const contratsARenouveler = contratsDesBeneficiairesActifs(contratsARenouvelerTous, participants);
   const { settings: praticienSettings } = usePraticienSettings();
+  const {
+    coursCollectifs, participationsDuCours,
+    modifierStatutCours, mettreAJourParticipation,
+  } = useCoursCollectifs();
+  const [coursSelectionneId, setCoursSelectionneId] = useState<string | null>(null);
   const today = new Date().toISOString().slice(0, 10);
   const seances = seancesDuJour(today);
+  // Même filtre que l'agenda desktop (AgendaV2Page) : un cours annulé ne
+  // doit pas apparaître dans la timeline du jour.
+  const coursDuJour = coursCollectifs
+    .filter(c => c.date === today && c.statut !== 'annule')
+    .sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
+  const coursSelectionne = coursCollectifs.find(c => c.id === coursSelectionneId) ?? null;
   const prenom = praticienSettings.prenom || 'Praticien';
 
   const now = new Date();
@@ -199,6 +192,22 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
   const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const prochaineSeance = seances.find(s => s.statut === 'planifiee' && s.heureDebut >= currentTimeStr)
     ?? seances.find(s => s.statut === 'planifiee');
+
+  // Timeline du jour : séances individuelles et cours collectifs mêlés,
+  // triés par heure — un cours collectif n'a pas de bénéficiaire unique, il
+  // ne peut donc pas rejoindre `seances` telle quelle.
+  type ItemJour =
+    | { kind: 'seance'; heureDebut: string; seance: typeof seances[number] }
+    | { kind: 'cours'; heureDebut: string; cours: CoursCollectif; nbInscrits: number };
+  const itemsJour: ItemJour[] = [
+    ...seances.map(seance => ({ kind: 'seance' as const, heureDebut: seance.heureDebut, seance })),
+    ...coursDuJour.map(cours => ({
+      kind: 'cours' as const,
+      heureDebut: cours.heureDebut,
+      cours,
+      nbInscrits: participationsDuCours(cours.id).length,
+    })),
+  ].sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
 
   const statCard: React.CSSProperties = {
     background: 'white', borderRadius: 16, padding: '16px 20px',
@@ -308,7 +317,7 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
         })()}
 
         {/* ── TIMELINE ou ÉTAT VIDE ─────────────────────────────── */}
-        {seances.length === 0 ? (
+        {itemsJour.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '36px 20px' }}>
             <i className="ti ti-calendar-off" style={{ fontSize: 54, color: '#BDD0D0', display: 'block', marginBottom: 14 }} />
             <div style={{ fontSize: 16, fontWeight: 600, color: '#7A9A9A', marginBottom: 6 }}>Aucune séance aujourd'hui</div>
@@ -320,7 +329,27 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
               Aujourd'hui
             </div>
             <div style={{ background: 'white', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 10px rgba(13,43,43,0.07)' }}>
-              {seances.map((seance, index) => {
+              {itemsJour.map((item, index) => {
+                const isLast = index === itemsJour.length - 1;
+                if (item.kind === 'cours') {
+                  const { cours, nbInscrits } = item;
+                  return (
+                    <div key={`cours-${cours.id}`}>
+                      <div onClick={() => setCoursSelectionneId(cours.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', cursor: 'pointer', background: '#F6F0FF' }}>
+                        <span style={{ fontSize: 15, flexShrink: 0 }}>👥</span>
+                        <span style={{ fontSize: 13, color: C.muted, flexShrink: 0, width: 38 }}>{cours.heureDebut}</span>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: C.text, flex: 1, minWidth: 0 }}>
+                          {cours.titre}
+                          <span style={{ fontSize: 11, fontWeight: 500, color: '#7C3AED' }}> · {nbInscrits} inscrit{nbInscrits !== 1 ? 's' : ''}</span>
+                        </span>
+                        <i className="ti ti-chevron-right" style={{ fontSize: 15, color: '#D0DCDC' }} />
+                      </div>
+                      {!isLast && <div style={{ height: 1, background: '#F0F4F4', marginLeft: 16 }} />}
+                    </div>
+                  );
+                }
+                const seance = item.seance;
                 const p = participants.find(x => x.id === seance.participantId);
                 const estEnCours = seance.heureDebut <= currentTimeStr && seance.heureFin > currentTimeStr;
                 const icon = seance.statut === 'realisee' ? '✅'
@@ -337,7 +366,7 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
                       </span>
                       <i className="ti ti-chevron-right" style={{ fontSize: 15, color: '#D0DCDC' }} />
                     </div>
-                    {index < seances.length - 1 && <div style={{ height: 1, background: '#F0F4F4', marginLeft: 16 }} />}
+                    {!isLast && <div style={{ height: 1, background: '#F0F4F4', marginLeft: 16 }} />}
                   </div>
                 );
               })}
@@ -353,6 +382,17 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
         )}
 
       </div>
+
+      {coursSelectionne && (
+        <ModalPresenceCoursCollectif
+          cours={coursSelectionne}
+          participations={participationsDuCours(coursSelectionne.id)}
+          participants={participants}
+          onMettreAJourParticipation={(participationId, patch) => mettreAJourParticipation(participationId, patch)}
+          onModifierStatutCours={async statut => modifierStatutCours(coursSelectionne.id, statut)}
+          onClose={() => setCoursSelectionneId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -825,14 +865,104 @@ function BilanMobile({ participantId, onTermine }: { participantId: string; onTe
 
 function EcranTournee() {
   const { participants } = useParticipants();
-  const { seancesDuJour, changerStatut } = useAgenda();
+  const { seancesDuJour, changerStatut, creerSeance, modifierSeance } = useAgenda();
   const today = new Date().toISOString().slice(0, 10);
   const seances = seancesDuJour(today);
+
+  // ── Annuler ────────────────────────────────────────────────────────────────
+  // Confirmation légère (overlay, même pattern que « Confirmer la
+  // suppression » d'EcranSettings) avant d'annuler : le desktop (TourneePage,
+  // bouton ✕) n'en demande aucune, mais un bouton pris par erreur au doigt
+  // sur un écran tactile coûte plus cher qu'un clic de souris précis. Aucune
+  // raison requise : le desktop n'en impose pas non plus (motifAnnulation
+  // reste optionnel jusque dans le formulaire complet, AgendaV2Page.tsx).
+  const [annulerSeanceId, setAnnulerSeanceId] = useState<string | null>(null);
+  const seanceAAnnuler = seances.find(s => s.id === annulerSeanceId) ?? null;
+
+  async function confirmerAnnulation() {
+    if (!seanceAAnnuler) return;
+    await changerStatut(seanceAAnnuler.id, 'annulee');
+    toast.success('Séance annulée');
+    setAnnulerSeanceId(null);
+  }
+
+  // ── Reporter ───────────────────────────────────────────────────────────────
+  // Reproduit handleReporterSeance (AgendaV2Page.tsx), le seul mécanisme de
+  // report qui existe réellement dans l'app — son entrée UI desktop est
+  // désactivée depuis 356beb6 (« gardés intacts pour un usage futur »), pas
+  // supprimée. Même heure, nouvelle date seulement (pas de champ heure : le
+  // mécanisme desktop n'en propose pas) : la séance d'origine passe
+  // "reportee" SANS changer de date (trace historique), une nouvelle séance
+  // "planifiee" est créée à la date choisie.
+  const [reporterSeanceId, setReporterSeanceId] = useState<string | null>(null);
+  const [dateReport, setDateReport] = useState('');
+  const [reportEnCours, setReportEnCours] = useState(false);
+  const seanceAReporter = seances.find(s => s.id === reporterSeanceId) ?? null;
+
+  function ouvrirReport(s: typeof seances[number]) {
+    const defaut = new Date(`${s.date}T12:00`);
+    defaut.setDate(defaut.getDate() + 7);
+    setDateReport(defaut.toISOString().slice(0, 10));
+    setReporterSeanceId(s.id);
+  }
+
+  async function confirmerReport() {
+    if (!seanceAReporter || !dateReport) return;
+    setReportEnCours(true);
+    try {
+      // modifierSeance (pas changerStatut) : il faut son retour pour ne créer
+      // la nouvelle séance que si le passage en "reportee" a bien réussi —
+      // exactement le garde-fou de handleReporterSeance.
+      const ok = await modifierSeance(seanceAReporter.id, { statut: 'reportee' });
+      if (!ok) return;
+      await creerSeance({
+        participantId: seanceAReporter.participantId,
+        contratId: seanceAReporter.contratId,
+        type: seanceAReporter.type,
+        date: dateReport,
+        heureDebut: seanceAReporter.heureDebut,
+        heureFin: seanceAReporter.heureFin,
+        dureeMinutes: seanceAReporter.dureeMinutes,
+        statut: 'planifiee',
+        notes: `Reportée depuis le ${seanceAReporter.date}`,
+        adresse: seanceAReporter.adresse,
+        coordonnees: seanceAReporter.coordonnees,
+      });
+      toast.success(`Séance reportée au ${formatDateCourt(dateReport)}`);
+      setReporterSeanceId(null);
+    } finally {
+      setReportEnCours(false);
+    }
+  }
   // Dictée ouverte conservée si l'interface est remplacée (rotation) : son
   // contenu, lui, est conservé par DicteePostSeance.
   const [dicteeParticipantId, setDicteeParticipantId] = useEtatSession<string | null>('tournee_dictee', null);
   const dicteeParticipant = participants.find(x => x.id === dicteeParticipantId) ?? null;
   const { ajouterCompteRendu } = useCompteRenduSeance(dicteeParticipant?.id ?? '');
+  const {
+    coursCollectifs, participationsDuCours,
+    modifierStatutCours, mettreAJourParticipation,
+  } = useCoursCollectifs();
+  const [coursSelectionneId, setCoursSelectionneId] = useState<string | null>(null);
+  const coursDuJour = coursCollectifs
+    .filter(c => c.date === today && c.statut !== 'annule')
+    .sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
+  const coursSelectionne = coursCollectifs.find(c => c.id === coursSelectionneId) ?? null;
+  // Séances + cours collectifs mêlés et triés, pour que la liste — et son
+  // état vide — reflètent bien le contenu réel de la tournée (les stats du
+  // bandeau ci-dessous, elles, restent sur les seules séances individuelles).
+  type ItemTournee =
+    | { kind: 'seance'; heureDebut: string; seance: typeof seances[number] }
+    | { kind: 'cours'; heureDebut: string; cours: CoursCollectif; nbInscrits: number };
+  const itemsTournee: ItemTournee[] = [
+    ...seances.map(seance => ({ kind: 'seance' as const, heureDebut: seance.heureDebut, seance })),
+    ...coursDuJour.map(cours => ({
+      kind: 'cours' as const,
+      heureDebut: cours.heureDebut,
+      cours,
+      nbInscrits: participationsDuCours(cours.id).length,
+    })),
+  ].sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
 
   return (
     <div>
@@ -859,24 +989,48 @@ function EcranTournee() {
             </div>
           </div>
         )}
-        {seances.filter(s => s.adresse).length > 1 && (
-          <button
-            onClick={() => toast(MESSAGE_PAYSAGE, { icon: 'ℹ️' })}
-            style={{ width: '100%', marginTop: 10, padding: '10px', background: C.dark, color: 'white', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <i className="ti ti-route" style={{ fontSize: 16 }} />
-            Optimiser l'itinéraire
-          </button>
-        )}
       </div>
 
       <div style={{ padding: '8px 16px' }}>
-        {seances.length === 0 ? (
+        {itemsTournee.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: C.muted }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🗺️</div>
             Aucune séance aujourd'hui
           </div>
-        ) : seances.map((s, i) => {
+        ) : itemsTournee.map((item, i) => {
+          if (item.kind === 'cours') {
+            const { cours, nbInscrits } = item;
+            const badge = cours.statut === 'realise'
+              ? { label: '✅ Réalisé', bg: '#DCFCE7', color: '#166534' }
+              : { label: 'Planifié', bg: '#EDE9FE', color: '#6D28D9' };
+            return (
+              <div key={`cours-${cours.id}`} style={{ ...card, border: `1px solid #EDE9FE` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <span style={{ width: 26, height: 26, borderRadius: '50%', background: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>👥</span>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{cours.titre}</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>{cours.heureDebut} · {cours.dureeMinutes} min · {nbInscrits} inscrit{nbInscrits !== 1 ? 's' : ''}</div>
+                    </div>
+                  </div>
+                  <span style={{ background: badge.bg, color: badge.color, borderRadius: 8, padding: '4px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0, height: 'fit-content' }}>
+                    {badge.label}
+                  </span>
+                </div>
+                <button onClick={() => setCoursSelectionneId(cours.id)}
+                  style={{ width: '100%', padding: 9, background: '#7C3AED', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  👥 Gérer les présences
+                </button>
+              </div>
+            );
+          }
+          const s = item.seance;
           const p = participants.find(x => x.id === s.participantId);
+          const peutAnnuler = s.statut !== 'annulee' && s.statut !== 'realisee';
+          // Reporter n'a de sens que depuis "planifiee" — ni handleReporterSeance
+          // (dormant) ni son sous-écran d'origine ne documentaient de garde
+          // explicite ici, ce choix est donc le nôtre, pas une valeur copiée.
+          const peutReporter = s.statut === 'planifiee';
           return (
             <div key={s.id} style={card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -887,18 +1041,47 @@ function EcranTournee() {
                     <div style={{ fontSize: 12, color: C.muted }}>{s.heureDebut} · {s.dureeMinutes} min</div>
                   </div>
                 </div>
-                {s.adresse && (
-                  <button onClick={() => ouvrirMaps(s.adresse)}
-                    style={{ background: '#E8F8F8', border: 'none', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: C.primary }}>
-                    <i className="ti ti-map-pin" style={{ fontSize: 15 }} />Maps
-                  </button>
-                )}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                  {/* Pas de badge "Annulée" : seancesDuJour (useAgenda.ts)
+                      exclut déjà les séances annulées de `seances` — une
+                      séance annulée disparaît donc de la tournée du jour,
+                      elle n'y reste jamais visible avec un badge. Même
+                      comportement, déjà en place, côté desktop
+                      (TourneePage.tsx utilise la même fonction). */}
+                  {s.statut === 'reportee' && (
+                    <span style={{ background: '#FEF3C7', color: '#92400E', borderRadius: 8, padding: '4px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                      🔄 Reportée
+                    </span>
+                  )}
+                  {s.adresse && (
+                    <button onClick={() => ouvrirMaps(s.adresse)}
+                      style={{ background: '#E8F8F8', border: 'none', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: C.primary }}>
+                      <i className="ti ti-map-pin" style={{ fontSize: 15 }} />Maps
+                    </button>
+                  )}
+                </div>
               </div>
               {s.adresse && <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>📍 {s.adresse}</div>}
               <button onClick={() => { if (s.statut !== 'realisee') { changerStatut(s.id, 'realisee'); toast.success('Séance réalisée ✅'); } }}
                 style={{ width: '100%', padding: 9, background: s.statut === 'realisee' ? '#DCFCE7' : C.primary, color: s.statut === 'realisee' ? '#166534' : 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: s.statut === 'realisee' ? 'default' : 'pointer' }}>
                 {s.statut === 'realisee' ? '✅ Réalisée' : '✓ Marquer réalisée'}
               </button>
+              {(peutReporter || peutAnnuler) && (
+                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                  {peutReporter && (
+                    <button onClick={() => ouvrirReport(s)}
+                      style={{ flex: 1, padding: 8, background: 'white', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, fontWeight: 700, color: C.text, cursor: 'pointer' }}>
+                      🔄 Reporter
+                    </button>
+                  )}
+                  {peutAnnuler && (
+                    <button onClick={() => setAnnulerSeanceId(s.id)}
+                      style={{ flex: 1, padding: 8, background: 'white', border: '1px solid #FECACA', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#DC2626', cursor: 'pointer' }}>
+                      ✕ Annuler
+                    </button>
+                  )}
+                </div>
+              )}
               {s.statut === 'realisee' && p && (
                 <button
                   onClick={() => setDicteeParticipantId(p.id)}
@@ -918,198 +1101,76 @@ function EcranTournee() {
           onSave={async (data) => { await ajouterCompteRendu(data); }}
         />
       )}
-    </div>
-  );
-}
 
-// ── EcranSettings ─────────────────────────────────────────────────────────────
-
-const CLE_SESSION_PARAMETRES = 'parametres_praticien';
-
-function EcranSettings({ onBack: retourParent }: { onBack: () => void }) {
-  const inp: React.CSSProperties = { width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, outline: 'none', marginBottom: 14, boxSizing: 'border-box', background: 'white' };
-  const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
-
-  const { settings: praticienData, loading, echecChargement, sauvegarderSettings } = usePraticienSettings();
-  // Saisie en cours retrouvée après une rotation : elle prime sur le
-  // pré-remplissage depuis la base.
-  const [saisieRestauree] = useState(() => lireEtatSession<SettingsPraticien>(CLE_SESSION_PARAMETRES));
-  const [form, setForm] = useState<SettingsPraticien>(saisieRestauree ?? DEFAULTS_SETTINGS);
-  const [saving, setSaving] = useState(false);
-  const [showConfirmReset, setShowConfirmReset] = useState(false);
-
-  // Pré-remplir le formulaire dès que Supabase a répondu
-  useEffect(() => {
-    if (!loading && !saisieRestauree) setForm(praticienData);
-  }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Jamais tant que le formulaire porte encore les valeurs par défaut : elles
-  // seraient restaurées à la place des vrais réglages.
-  useEffect(() => {
-    if (saisieRestauree || form !== DEFAULTS_SETTINGS) ecrireEtatSession(CLE_SESSION_PARAMETRES, form);
-  }, [form, saisieRestauree]);
-
-  // Retour explicite ou réglages enregistrés : rien à reprendre.
-  function onBack() {
-    effacerEtatSession(CLE_SESSION_PARAMETRES);
-    retourParent();
-  }
-
-  function set(field: string, value: string) { setForm((f) => ({ ...f, [field]: value })); }
-
-  async function sauvegarder() {
-    // Le formulaire n'a pas pu etre pre-rempli : l'enregistrer ecraserait la
-    // fiche avec des champs vides. On refuse plutot que de perdre la donnee.
-    if (echecChargement) {
-      toast.error("Vos réglages n'ont pas pu être chargés. Rechargez la page avant d'enregistrer.");
-      return;
-    }
-    if (!form.prenom.trim() || !form.nom.trim()) { toast.error('Prénom et nom requis'); return; }
-
-    // Meme validation que les reglages desktop et l'onboarding. Le SIRET
-    // reste facultatif ici — un salarie de structure n'en a pas — mais s'il
-    // est saisi, il doit etre juste : c'est cet ecran, sans aucun controle,
-    // qui a laisse entrer un numero a 15 chiffres.
-    const controleSiret = validerSiret(form.siret);
-    if (form.siret.trim() && !controleSiret.valide) {
-      toast.error(controleSiret.message!);
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await sauvegarderSettings({ ...form, siret: controleSiret.siret });
-      toast.success('Paramètres enregistrés ✅');
-      onBack();
-    } catch {
-      toast.error('Erreur lors de l\'enregistrement');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function reinitialiserDonnees() {
-    localStorage.setItem('mouvtrack_demo_cleared', '1');
-    // `mouvtrack_indispos_pierre` garde son nom historique VOLONTAIREMENT :
-    // c'est une liste de purge, et plus rien n'ecrit cette cle. La renommer
-    // cesserait de nettoyer celle que les navigateurs existants portent
-    // reellement — le contraire du but recherche.
-    ['mouvtrack_participants', 'mouvtrack_seances', 'mouvtrack_contrats',
-     'mouvtrack_zones', 'notes_seances', 'mouvtrack_indispos_pierre',
-     'mouvtrack_question_templates'].forEach(k => localStorage.removeItem(k));
-    const toRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith('brouillon_bilan_') || key.startsWith('bilan_en_cours_'))) toRemove.push(key);
-    }
-    toRemove.forEach(k => localStorage.removeItem(k));
-    toast.success('Données supprimées — rechargement…');
-    setTimeout(() => window.location.reload(), 800);
-  }
-
-  return (
-    <div style={{ minHeight: '100vh', background: C.bg }}>
-      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} aria-hidden="true" />
-        </button>
-        <div style={{ fontSize: 18, fontWeight: 700, color: 'white' }}>Paramètres</div>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Profil et informations professionnelles</div>
-      </div>
-
-      <div style={{ padding: 16, paddingBottom: 40 }}>
-
-        {echecChargement && (
-          <div style={{
-            background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12,
-            padding: '12px 14px', marginBottom: 12, fontSize: 13, color: '#B91C1C', lineHeight: 1.5,
-          }}>
-            Vos réglages n'ont pas pu être chargés depuis le serveur. L'enregistrement
-            est désactivé pour ne pas écraser votre fiche — rechargez la page.
-          </div>
-        )}
-
-        <InfoSection titre="Mon profil">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 0 }}>
-            <div>
-              <label style={lbl}>Prénom *</label>
-              <input value={form.prenom} onChange={e => set('prenom', e.target.value)} placeholder="Marie" style={inp} />
-            </div>
-            <div>
-              <label style={lbl}>Nom *</label>
-              <input value={form.nom} onChange={e => set('nom', e.target.value)} placeholder="Durand" style={inp} />
-            </div>
-          </div>
-          <label style={lbl}>Titre professionnel</label>
-          <input value={form.titre} onChange={e => set('titre', e.target.value)} placeholder="Enseignant APA" style={inp} />
-          <label style={lbl}>Email</label>
-          <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="marie.durand@exemple.fr" style={inp} />
-          <label style={lbl}>Téléphone</label>
-          <input type="tel" value={form.telephone} onChange={e => set('telephone', e.target.value)} placeholder="06 12 34 56 78" style={{ ...inp, marginBottom: 0 }} />
-        </InfoSection>
-
-        <div style={{ height: 12 }} />
-
-        <InfoSection titre="Informations légales">
-          <label style={lbl}>Numéro SIRET</label>
-          <input value={form.siret} onChange={e => set('siret', e.target.value)} placeholder="XXX XXX XXX XXXXX" style={inp} />
-          <label style={lbl}>Numéro SAP</label>
-          <input value={form.numeroSAP} onChange={e => set('numeroSAP', e.target.value)} placeholder="SAP XXXXXXXXX" style={inp} />
-          <label style={lbl}>Ville de signature</label>
-          <input value={form.villeSignature} onChange={e => set('villeSignature', e.target.value)} placeholder="Paris" style={inp} />
-          <label style={lbl}>Tarif horaire (€)</label>
-          <input type="number" value={form.tarifHoraire} onChange={e => set('tarifHoraire', e.target.value)} placeholder="45" style={{ ...inp, marginBottom: 0 }} />
-        </InfoSection>
-
-        <div style={{ height: 12 }} />
-
-        <button onClick={sauvegarder} disabled={saving || loading || echecChargement}
-          style={{ width: '100%', padding: 16, background: saving || loading || echecChargement ? '#8FA8A8' : C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: saving || loading || echecChargement ? 'not-allowed' : 'pointer', marginTop: 16 }}>
-          {saving ? 'Enregistrement...' : loading ? 'Chargement...' : '💾 Enregistrer'}
-        </button>
-
-        {/* Zone danger */}
-        <div style={{ marginTop: 28, borderTop: `1px solid ${C.border}`, paddingTop: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#E85050', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-            Zone danger
-          </div>
-          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #FECACA', padding: '14px 16px' }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>
-              🗑️ Supprimer les données bénéficiaires
-            </div>
-            <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
-              Supprime tous les bénéficiaires, bilans, contrats et séances. Les exercices et paramètres sont conservés.
-            </div>
-            <button onClick={() => setShowConfirmReset(true)} style={{ padding: '10px 16px', background: 'none', border: '1px solid #E85050', borderRadius: 10, color: '#E85050', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-              Réinitialiser les données
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Modal de confirmation */}
-      {showConfirmReset && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24 }}>
-          <div style={{ background: 'white', borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>
-              ⚠️ Confirmer la suppression
-            </div>
-            <p style={{ fontSize: 14, color: '#4A6080', lineHeight: 1.6, marginBottom: 20 }}>
-              Tous les <strong>bénéficiaires, bilans, contrats et séances</strong> seront supprimés.<br />
-              Les exercices et paramètres sont conservés.<br />
-              <strong style={{ color: '#E85050' }}>Cette action est irréversible.</strong>
-            </p>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setShowConfirmReset(false)} style={{ flex: 1, padding: '12px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
-                Annuler
-              </button>
-              <button onClick={reinitialiserDonnees} style={{ flex: 1, padding: '12px', background: '#E85050', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer' }}>
-                Confirmer
-              </button>
-            </div>
-          </div>
-        </div>
+      {coursSelectionne && (
+        <ModalPresenceCoursCollectif
+          cours={coursSelectionne}
+          participations={participationsDuCours(coursSelectionne.id)}
+          participants={participants}
+          onMettreAJourParticipation={(participationId, patch) => mettreAJourParticipation(participationId, patch)}
+          onModifierStatutCours={async statut => modifierStatutCours(coursSelectionne.id, statut)}
+          onClose={() => setCoursSelectionneId(null)}
+        />
       )}
+
+      {seanceAAnnuler && (() => {
+        const p = participants.find(x => x.id === seanceAAnnuler.participantId);
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24 }}>
+            <div style={{ background: 'white', borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>
+                ⚠️ Annuler cette séance ?
+              </div>
+              <p style={{ fontSize: 14, color: '#4A6080', lineHeight: 1.6, marginBottom: 20 }}>
+                {p?.prenom} {p?.nom} — {seanceAAnnuler.heureDebut}. Réversible depuis l'agenda.
+              </p>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setAnnulerSeanceId(null)}
+                  style={{ flex: 1, padding: '12px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
+                  Retour
+                </button>
+                <button onClick={confirmerAnnulation}
+                  style={{ flex: 1, padding: '12px', background: '#E85050', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer' }}>
+                  Confirmer
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {seanceAReporter && (() => {
+        const p = participants.find(x => x.id === seanceAReporter.participantId);
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24 }}>
+            <div style={{ background: 'white', borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>
+                🔄 Reporter cette séance
+              </div>
+              <p style={{ fontSize: 13, color: C.muted, marginBottom: 14, lineHeight: 1.5 }}>
+                {p?.prenom} {p?.nom} — une nouvelle séance sera créée à la même heure ({seanceAReporter.heureDebut}), à la date choisie.
+              </p>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 }}>
+                Nouvelle date
+              </label>
+              <input
+                type="date" value={dateReport} min={today} onChange={e => setDateReport(e.target.value)}
+                style={{ width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, marginBottom: 20, boxSizing: 'border-box' }}
+              />
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setReporterSeanceId(null)} disabled={reportEnCours}
+                  style={{ flex: 1, padding: '12px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, fontWeight: 600, color: C.muted, cursor: reportEnCours ? 'wait' : 'pointer' }}>
+                  Annuler
+                </button>
+                <button onClick={confirmerReport} disabled={reportEnCours || !dateReport}
+                  style={{ flex: 1, padding: '12px', background: reportEnCours || !dateReport ? '#8FA8A8' : C.primary, border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, color: 'white', cursor: reportEnCours || !dateReport ? 'not-allowed' : 'pointer' }}>
+                  {reportEnCours ? 'Report…' : 'Confirmer le report'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -1118,6 +1179,11 @@ function EcranSettings({ onBack: retourParent }: { onBack: () => void }) {
 
 function EcranPlus({ onLogout, onNaviguer }: { onLogout: () => void; onNaviguer: (url: string) => void }) {
   const { settings } = usePraticienSettings();
+  // Seul point d'accès mobile à /archives (route fusionnée, voir
+  // routesMobile.ts) : sans lui, un bénéficiaire archivé restait invisible
+  // et « Désarchiver » n'était atteignable que depuis sa fiche, elle-même
+  // introuvable.
+  const { participantsArchives } = useParticipants();
   // Meme regle que la Sidebar : les vraies initiales, ou une silhouette.
   // Ce calcul repliait sur « P » quand le prenom manquait. Voir
   // src/lib/initiales.ts.
@@ -1159,6 +1225,15 @@ function EcranPlus({ onLogout, onNaviguer }: { onLogout: () => void; onNaviguer:
         <ItemMobile icon="ti-map-pin" label="Carte bénéficiaires" onClick={() => onNaviguer('/map')} />
       </SectionMobile>
 
+      {/* Section Bénéficiaires */}
+      <SectionMobile titre="Bénéficiaires">
+        <ItemMobile
+          icon="ti-archive"
+          label={`Bénéficiaires archivés${participantsArchives.length > 0 ? ` (${participantsArchives.length})` : ''}`}
+          onClick={() => onNaviguer(URLS_MOBILE.archives)}
+        />
+      </SectionMobile>
+
       {/* Section Contenu */}
       <SectionMobile titre="Contenu">
         <ItemMobile icon="ti-dumbbell" label="Bibliothèque exercices" onClick={() => onNaviguer('/bibliotheque')} />
@@ -1183,98 +1258,6 @@ function EcranPlus({ onLogout, onNaviguer }: { onLogout: () => void; onNaviguer:
 
       <div style={{ textAlign: 'center', marginTop: 20, fontSize: 11, color: C.muted }}>
         Horizon v1.0
-      </div>
-    </div>
-  );
-}
-
-// ── Détail bilan mobile ────────────────────────────────────────────────────────
-
-function DetailBilanMobile({ bilan, onBack }: { bilan: import('../../types').Bilan; onBack: () => void }) {
-  const TESTS = [
-    { label: 'Équilibre Droit',  val: bilan.equilibre.droite,       unite: 's' },
-    { label: 'Équilibre Gauche', val: bilan.equilibre.gauche,       unite: 's' },
-    { label: 'Chair Stand 30s',  val: bilan.chairStand30,           unite: ' rép.' },
-    { label: 'HandGrip Droit',   val: bilan.handGrip.droite,        unite: ' kg' },
-    { label: 'HandGrip Gauche',  val: bilan.handGrip.gauche,        unite: ' kg' },
-    { label: 'TUG 3m',           val: bilan.tug3m,                  unite: 's' },
-    { label: 'Souplesse',        val: bilan.souplesse.valeur,       unite: ' cm' },
-    { label: resultatTm6(bilan.tm6).type === 'distance' ? 'TM6 Distance' : 'TM6 (' + resultatTm6(bilan.tm6).modeLabel + ')', val: resultatTm6(bilan.tm6).valeur, unite: ' ' + resultatTm6(bilan.tm6).unite },
-    { label: 'TM6 FC avant',     val: bilan.tm6.fcAvant,            unite: ' bpm' },
-    { label: 'TM6 FC après',     val: bilan.tm6.fcApres,            unite: ' bpm' },
-    { label: 'SpO2 avant',       val: bilan.tm6.spo2Avant,          unite: '%' },
-    { label: 'Mémoire imm.',     val: bilan.memoire.scoreImmediat,  unite: '/5' },
-    { label: 'Mémoire dif.',     val: bilan.memoire.scoreDiffere,   unite: '/5' },
-  ].filter(t => t.val !== null && t.val !== undefined);
-
-  const dateLabel = new Date(bilan.date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-
-  return (
-    <div>
-      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} />
-        </button>
-        <div style={{ fontSize: 18, fontWeight: 700, color: 'white' }}>
-          {bilan.type === 'initial' ? 'Bilan initial' : `Bilan T${bilan.trimestre}`}
-        </div>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>{dateLabel}</div>
-      </div>
-
-      <div style={{ padding: 16 }}>
-
-        {TESTS.length > 0 && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Résultats des tests</div>
-            <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, overflow: 'hidden', marginBottom: 16 }}>
-              {TESTS.map((t, i) => (
-                <div key={t.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderBottom: i < TESTS.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                  <span style={{ fontSize: 13, color: C.muted }}>{t.label}</span>
-                  <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{t.val}{t.unite}</span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {bilan.notesProfessionnelles && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Notes professionnelles</div>
-            <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '12px 14px', marginBottom: 16, fontSize: 14, color: C.text, lineHeight: 1.6 }}>
-              {bilan.notesProfessionnelles}
-            </div>
-          </>
-        )}
-
-        {bilan.objectifsSuivants && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Objectifs suivants</div>
-            <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '12px 14px', marginBottom: 16, fontSize: 14, color: C.text, lineHeight: 1.6 }}>
-              {bilan.objectifsSuivants}
-            </div>
-          </>
-        )}
-
-        {bilan.interpretationIA && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Analyse IA</div>
-            <div style={{ background: '#E8F8F8', borderRadius: 12, border: `1px solid ${C.primary}30`, padding: '12px 14px', marginBottom: 10, fontSize: 14, color: C.text, lineHeight: 1.6 }}>
-              <MarkdownRendu>{bilan.interpretationIA.textePro}</MarkdownRendu>
-            </div>
-            {bilan.interpretationIA.pointsForts.length > 0 && (
-              <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '12px 14px', marginBottom: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#1D9E75', marginBottom: 6 }}>✅ Points forts</div>
-                {bilan.interpretationIA.pointsForts.map((p, i) => <div key={i} style={{ fontSize: 13, color: C.text, marginBottom: 3 }}>· {p}</div>)}
-              </div>
-            )}
-            {bilan.interpretationIA.pointsATravail.length > 0 && (
-              <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '12px 14px', marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#E8A020', marginBottom: 6 }}>⚡ À travailler</div>
-                {bilan.interpretationIA.pointsATravail.map((p, i) => <div key={i} style={{ fontSize: 13, color: C.text, marginBottom: 3 }}>· {p}</div>)}
-              </div>
-            )}
-          </>
-        )}
       </div>
     </div>
   );
@@ -1820,13 +1803,6 @@ function ModifierBeneficiaireMobile({ participantId, onBack }: { participantId: 
   return <EditPatientMobile participant={participant} onBack={onBack} />;
 }
 
-function DetailBilanMobileRoute({ participantId, bilanId, onBack }: { participantId: string; bilanId: string; onBack: () => void }) {
-  const { participants, loading } = useParticipants();
-  const bilan = participants.find(p => p.id === participantId)?.bilans.find(b => b.id === bilanId);
-  if (!bilan) return <EcranChargement loading={loading} texteIntrouvable="Bilan introuvable" onBack={onBack} />;
-  return <DetailBilanMobile bilan={bilan} onBack={onBack} />;
-}
-
 // ── App Mobile principal ──────────────────────────────────────────────────────
 
 interface Props { onLogout: () => void }
@@ -1871,8 +1847,16 @@ export default function AppMobile({ onLogout }: Props) {
       break;
     }
     case 'parametres':
+      // Fusion (chantier « fusion des paramètres ») : rend SettingsPage
+      // (desktop) directement, sans passer par estRouteInterfaceUnique —
+      // volontaire, pour garder avecBarre=false (EcranSettings masquait
+      // déjà la barre de navigation ici, un choix voulu pour un écran de
+      // formulaire ; passer par estRouteInterfaceUnique aurait fait
+      // réapparaître la barre via DesktopContent, qui ne permet pas de
+      // l'exclure route par route). Le lien de retour est fourni par
+      // SettingsPage lui-même (voir src/pages/SettingsPage.tsx).
       avecBarre = false;
-      contenu = <EcranSettings onBack={() => navigate(URLS_MOBILE.plus)} />;
+      contenu = <SettingsPage />;
       break;
     case 'nouveauBeneficiaire':
       avecBarre = false;
@@ -1890,12 +1874,6 @@ export default function AppMobile({ onLogout }: Props) {
       contenu = id
         ? <BilanMobile participantId={id} onTermine={() => voirFiche(id)} />
         : <ChoixBeneficiaireBilanMobile onBack={() => navigate(URLS_MOBILE.saisie)} onChoisir={pid => navigate(URLS_MOBILE.nouveauBilan(pid))} />;
-      break;
-    }
-    case 'detailBilan': {
-      const { participantId, bilanId } = ecran;
-      avecBarre = false;
-      contenu = <DetailBilanMobileRoute participantId={participantId} bilanId={bilanId} onBack={() => voirFiche(participantId)} />;
       break;
     }
   }

@@ -47,6 +47,64 @@ npx playwright install --with-deps chromium
 npm run test:e2e
 ```
 
+## ⚠️ Preview persistant de `staging` vs Preview éphémère de votre PR
+
+`.env.test.local` (utilisé pour les vérifications locales) définit un
+`E2E_BASE_URL` **statique**, qui pointe vers le Preview **persistant** de la
+branche `staging` (voir `remotes/origin/staging`). Ce Preview ne se met à
+jour que quand `staging` elle-même reçoit un push — il **n'est pas**
+automatiquement synchronisé avec la branche/PR sur laquelle vous travaillez.
+
+Si vous voulez vérifier le code réel de votre branche/PR en cours (le cas le
+plus fréquent pendant un chantier), il vous faut le Preview **éphémère**,
+propre à chaque commit poussé sur cette PR — une URL différente à chaque
+push, pas celle de `.env.test.local`.
+
+**Piège concret rencontré le 2026-09-24** (chantier « fusion des
+paramètres », PR #82) : des re-vérifications locales pointées par erreur sur
+le Preview de `staging` (valeur statique de `.env.test.local`) ont semblé
+révéler une régression — boutons « Annuler »/« Reporter » absents de la
+tournée mobile, cours collectif de test introuvable après création. Fausse
+alerte : ce Preview ne portait tout simplement pas le code de la PR (les
+chantiers mobile n'étaient jamais arrivés sur `staging`). Le vrai Preview de
+la PR, lui, passait sans problème.
+
+**Récupérer l'URL du Preview de la PR en cours** (le lien que le bot Vercel
+poste en commentaire sur la PR — alias stable pour la branche, mis à jour à
+chaque nouveau commit poussé) :
+
+```bash
+gh pr view <NUMERO_PR> --json comments --jq \
+  '.comments[] | select(.body | test("Preview")) | .body' \
+  | grep -oE 'https://[a-zA-Z0-9.-]+\.vercel\.app' | tail -1
+```
+
+Alternative — URL éphémère propre à **un commit précis** de la PR (utile
+pour tester un commit déjà dépassé, ou si le bot Vercel n'a pas encore
+commenté) :
+
+```bash
+# 1. Trouver l'id du déploiement Preview pour ce commit (sha complet ou court)
+gh api repos/<owner>/<repo>/deployments --jq \
+  '[.[] | select(.environment=="Preview" and (.sha | startswith("<SHA_COURT>")))][0].id'
+
+# 2. Récupérer son URL
+gh api repos/<owner>/<repo>/deployments/<ID>/statuses --jq '.[0].environment_url'
+```
+
+Puis surchargez `E2E_BASE_URL` **temporairement dans le shell** pour la durée
+de la vérification (ne pas éditer `.env.test.local` en permanence — il doit
+rester pointé sur `staging`, la cible par défaut voulue) :
+
+```bash
+export E2E_BASE_URL="<url-preview-de-la-PR>"
+npx playwright test --project=Mobile ...
+```
+
+(En CI, ce piège ne se pose pas : `E2E_BASE_URL` n'y est qu'un interrupteur,
+la cible réelle est résolue par commit — voir « Comment la cible est choisie
+en CI » plus bas.)
+
 ## Que couvre la suite
 
 1. `01-connexion-praticien` — connexion d'un praticien et accès au tableau de bord.
@@ -113,4 +171,7 @@ Le workflow attend que le déploiement Vercel correspondant soit `success`
 2. **Cible périmée.** L'ancienne `E2E_BASE_URL` pointait sur le Preview d'une
    branche `staging` figée, qui avait fini 46 commits derrière `main` : la CI
    validait du code vieux de cinq jours. D'où la résolution par commit
-   décrite ci-dessus.
+   décrite ci-dessus. Le même risque existe **en local** (pas seulement en
+   CI) si vous utilisez tel quel le `E2E_BASE_URL` de `.env.test.local` pour
+   vérifier une PR — voir « Preview persistant de `staging` vs Preview
+   éphémère de votre PR » plus haut.

@@ -24,7 +24,6 @@ export type EcranMobile =
   | { ecran: 'nouveauBeneficiaire' }
   | { ecran: 'modifierBeneficiaire'; participantId: string }
   | { ecran: 'nouveauBilan'; participantId: string | null }
-  | { ecran: 'detailBilan'; participantId: string; bilanId: string }
   // Écran qui n'existe qu'en version desktop : on invite à tourner le
   // téléphone, l'URL étant déjà la bonne pour la version paysage.
   | { ecran: 'paysage'; retour: string };
@@ -37,13 +36,12 @@ export const URLS_MOBILE = {
   tournee: '/tournee',
   assistant: '/assistant',
   parametres: '/settings',
+  archives: '/archives',
   nouveauBeneficiaire: '/participants/nouveau',
   choixBeneficiaireBilan: '/?onglet=saisie&mode=bilan',
   fiche: (id: string) => `/participant/${encodeURIComponent(id)}`,
   modifierBeneficiaire: (id: string) => `/participants/${encodeURIComponent(id)}/modifier`,
   nouveauBilan: (id: string) => `/participant/${encodeURIComponent(id)}/bilan/new`,
-  detailBilan: (id: string, bilanId: string) =>
-    `/participant/${encodeURIComponent(id)}/bilan/${encodeURIComponent(bilanId)}`,
   assistantAvec: (id: string) => `/assistant?beneficiaire=${encodeURIComponent(id)}`,
 } as const;
 
@@ -57,7 +55,13 @@ const PREFIXES_DESKTOP_SEULEMENT = ['/agenda-v2', '/map', '/zones', '/stats', '/
  * React — une rotation n'y démonte rien.
  */
 export function estRouteInterfaceUnique(pathname: string): boolean {
-  return /^\/participant\/[^/]+\/?$/.test(pathname);
+  return (
+    /^\/participant\/[^/]+\/?$/.test(pathname) ||
+    /^\/archives\/?$/.test(pathname) ||
+    // Détail d'un bilan existant — mais pas /bilan/new (création, restée
+    // mobile-only) : le segment final ne doit jamais valoir "new".
+    /^\/participant\/[^/]+\/bilan\/(?!new(?:\/|$))[^/]+\/?$/.test(pathname)
+  );
 }
 
 function segment(valeur: string): string {
@@ -92,10 +96,10 @@ export function ecranMobileDepuisUrl(pathname: string, search: string): EcranMob
   m = /^\/participant\/([^/]+)\/bilan\/new$/.exec(chemin);
   if (m) return { ecran: 'nouveauBilan', participantId: segment(m[1]) };
 
-  m = /^\/participant\/([^/]+)\/bilan\/([^/]+)$/.exec(chemin);
-  if (m) return { ecran: 'detailBilan', participantId: segment(m[1]), bilanId: segment(m[2]) };
-
-  // Programme, contrat, comparaison, modification de bilan…
+  // Détail d'un bilan, programme, contrat, comparaison, modification…
+  // — tous fusionnés ou desktop-only, jamais atteints ici en pratique :
+  // estRouteInterfaceUnique() intercepte /bilan/:id avant App.tsx ne monte
+  // AppMobile (voir EspacePro, App.tsx).
   m = /^\/participant\/([^/]+)\/.+$/.exec(chemin);
   if (m) return { ecran: 'paysage', retour: `/participant/${m[1]}` };
 
