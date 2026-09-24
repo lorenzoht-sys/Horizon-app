@@ -273,25 +273,51 @@ function ExerciceForm({ ex, onChange, onDelete, libExercice }: {
   }
 
   const niv = (ex.niveau ?? '2') as '1' | '2' | '3';
+  const { isMobile } = useDevice();
 
   return (
     <div style={{ background: '#F8FAFA', border: '1px solid #E0EEEE', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
-      <div style={{ display: 'flex', gap: 10, marginBottom: ex.exerciceId ? 6 : 8, alignItems: 'center' }}>
-        <input
-          value={ex.nom}
-          onChange={e => onChange({ nom: e.target.value })}
-          placeholder="Nom de l'exercice *"
-          style={{ ...inputStyle, flex: 2 }}
-        />
-        <select value={ex.categorie} onChange={e => onChange({ categorie: e.target.value })} style={{ ...inputStyle, flex: 1 }}>
-          {CEL.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        {onDelete && (
-          <button onClick={onDelete} style={btnDeleteSmall} title="Supprimer">
-            <Trash2 size={13} />
-          </button>
-        )}
-      </div>
+      {isMobile ? (
+        // Nom + catégorie + suppression tiennent à peine côte à côte sur
+        // desktop (flex:2/flex:1 + bouton) — à 390px le nom et la catégorie
+        // tronquent visiblement (ex. "Équilibre unipodal" → "Équilibre
+        // unipoc"). Empilé au lieu de côte à côte, jamais de troncature.
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: ex.exerciceId ? 6 : 8 }}>
+          <input
+            value={ex.nom}
+            onChange={e => onChange({ nom: e.target.value })}
+            placeholder="Nom de l'exercice *"
+            style={inputStyle}
+          />
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <select value={ex.categorie} onChange={e => onChange({ categorie: e.target.value })} style={{ ...inputStyle, flex: 1 }}>
+              {CEL.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            {onDelete && (
+              <button onClick={onDelete} style={btnDeleteSmall} title="Supprimer">
+                <Trash2 size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 10, marginBottom: ex.exerciceId ? 6 : 8, alignItems: 'center' }}>
+          <input
+            value={ex.nom}
+            onChange={e => onChange({ nom: e.target.value })}
+            placeholder="Nom de l'exercice *"
+            style={{ ...inputStyle, flex: 2 }}
+          />
+          <select value={ex.categorie} onChange={e => onChange({ categorie: e.target.value })} style={{ ...inputStyle, flex: 1 }}>
+            {CEL.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {onDelete && (
+            <button onClick={onDelete} style={btnDeleteSmall} title="Supprimer">
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
+      )}
       {ex.exerciceId && (
         <div style={{ display: 'flex', gap: 5, marginBottom: 8, alignItems: 'center' }}>
           <span style={{ fontSize: 10, color: '#94A3B8', marginRight: 2 }}>Niveau :</span>
@@ -875,27 +901,6 @@ function Step4({ data }: { data: WizardData }) {
   );
 }
 
-// ── Étape 2, indisponible sur mobile ───────────────────────────────────────────
-// ExercicePickerModal (bibliothèque + création manuelle, filtres, recherche)
-// n'a pas encore de mise en page mobile — chantier séparé. Même ton que
-// EcranPaysage (AppMobile.tsx) : jamais de blocage sans issue, le praticien
-// peut revenir à l'étape 1 (bouton "Retour" du pied de page, déjà existant)
-// ou avancer sans exercice — Step3/Step4 tolèrent déjà un programme sans
-// bloc de séance.
-function Step2Indisponible({ estModele }: { estModele?: boolean }) {
-  return (
-    <div style={{ textAlign: 'center', padding: '32px 12px' }}>
-      <div style={{ fontSize: 44, marginBottom: 12 }} aria-hidden="true">🔄</div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: '#0D2B2B', marginBottom: 8 }}>
-        Le choix des exercices n'est pas encore disponible sur mobile
-      </div>
-      <div style={{ fontSize: 13, color: '#4A6080', lineHeight: 1.6 }}>
-        Complétez cette étape depuis un ordinateur. En attendant, vous pouvez continuer sans exercice — {estModele ? 'vous pourrez compléter le modèle' : 'vous pourrez compléter le programme'} plus tard depuis un ordinateur — ou revenir en arrière.
-      </div>
-    </div>
-  );
-}
-
 // ── Modale wizard complète ─────────────────────────────────────────────────────
 
 const STEP_LABELS = ['Informations', 'Séances', 'Planning', 'Récapitulatif'];
@@ -916,8 +921,6 @@ export interface ProgrammeWizardModalProps {
 export function ProgrammeWizardModal({
   step, onStepChange, data, onChange, onClose, onSave, saving, isEditing, participant, estModele,
 }: ProgrammeWizardModalProps) {
-  const { isMobile } = useDevice();
-
   function handleNext() {
     if (step === 1 && !data.nom.trim()) {
       toast.error(estModele ? 'Donnez un nom au modèle' : 'Donnez un nom au programme');
@@ -979,7 +982,7 @@ export function ProgrammeWizardModal({
         {/* Contenu de l'étape */}
         <div style={{ padding: '24px', maxHeight: '60vh', overflowY: 'auto' }}>
           {step === 1 && <Step1 data={data} onChange={onChange} estModele={estModele} />}
-          {step === 2 && (isMobile ? <Step2Indisponible estModele={estModele} /> : <Step2 data={data} onChange={onChange} participant={participant} />)}
+          {step === 2 && <Step2 data={data} onChange={onChange} participant={participant} />}
           {step === 3 && <Step3 data={data} onChange={onChange} />}
           {step === 4 && <Step4 data={data} />}
         </div>
