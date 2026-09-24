@@ -105,6 +105,54 @@ npx playwright test --project=Mobile ...
 la cible réelle est résolue par commit — voir « Comment la cible est choisie
 en CI » plus bas.)
 
+## ⚠️ Vérifier contre un serveur local (`vite dev`)
+
+Attendre un déploiement Preview (persistant ou éphémère) pour chaque
+vérification est lent en plein chantier. Une alternative : lancer
+`npm run dev` en local et y pointer `E2E_BASE_URL` — mais **le même piège
+que ci-dessus se reproduit sous une forme plus silencieuse** : si vous
+oubliez de surcharger `E2E_BASE_URL`, il garde la valeur statique de
+`.env.test.local` (le Preview persistant de `staging`) et la suite teste
+ce Preview-là — pas votre serveur local, pas le code de votre branche —
+sans aucune erreur ni avertissement. Contrairement au piège Preview vs
+Preview, la sortie ressemble ici à une vérification normale et réussie :
+rien ne signale qu'elle n'a jamais touché votre code.
+
+**Piège concret rencontré le 2026-09-24** (chantier « wizard manuel
+simplifié », PR #87) : après extraction de `useProgrammeWizard()`, une
+suite de vérifications « non-régression » a tourné sans erreur — mais
+`E2E_BASE_URL` pointait encore sur le Preview persistant de `staging`, qui
+ne pouvait évidemment pas refléter un hook qui n'existait pas encore sur
+`main`. Les tests validaient silencieusement l'**ancien** code. Repéré
+seulement après coup, en testant un comportement qui ne pouvait
+fonctionner QUE avec le nouveau code (branchement mobile de
+`ParticipantProfile.tsx`) : le test passait quand même, preuve qu'il ne
+s'exécutait pas contre le code attendu.
+
+Pour vérifier réellement le serveur local, `E2E_BASE_URL` doit être
+surchargé explicitement, et le serveur démarré avec les variables
+`VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` du **même** projet Supabase
+de staging (sinon les données créées par les tests atterrissent dans le
+mauvais projet, invisibles à `SUPABASE_TEST_SERVICE_ROLE_KEY` utilisé pour
+le nettoyage) :
+
+```bash
+set -a && source .env.test.local && set +a
+export VITE_SUPABASE_URL="$SUPABASE_TEST_URL"
+export VITE_SUPABASE_ANON_KEY="$SUPABASE_TEST_ANON_KEY"
+npm run dev -- --port 5173 &
+
+export E2E_BASE_URL="http://localhost:5173"
+npx playwright test ...
+```
+
+Un serveur local reste limité aux mêmes routes que celles décrites en
+haut de ce fichier : `npm run dev` (Vite seul) n'exécute pas `/api/*`.
+Tout test touchant une route API (connexion patient, portail structure…)
+échoue en local pour cette seule raison, sans rapport avec une régression
+réelle — repasser par un Preview (persistant ou éphémère de PR) pour ces
+cas-là.
+
 ## Que couvre la suite
 
 1. `01-connexion-praticien` — connexion d'un praticien et accès au tableau de bord.
