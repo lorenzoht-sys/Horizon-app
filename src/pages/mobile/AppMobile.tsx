@@ -10,18 +10,17 @@ import BilanStepper from '../../components/bilan/BilanStepper';
 import ModalSelectionTests from '../../components/bilan/ModalSelectionTests';
 import ModalPresenceCoursCollectif from '../../components/agenda/ModalPresenceCoursCollectif';
 import DicteePostSeance from '../../components/DicteePostSeance';
+import SettingsPage from '../SettingsPage';
 import type { Bilan, CoursCollectif, Participant } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, getAuthHeader } from '../../lib/supabase';
 import {
-  DEFAULTS_SETTINGS,
   EVENT_SETTINGS_PRATICIEN,
   chargerSettingsPraticien,
   enregistrerSettingsPraticien,
   hydraterSettingsPraticien,
   type SettingsPraticien,
 } from '../../lib/settingsPraticien';
-import { validerSiret } from '../../lib/siret';
 import { avecConsentement, erreurConsentementCreation, normaliserRgpd } from '../../lib/consentementRgpd';
 import type { RgpdConsent } from '../../types';
 import { initialesPraticien } from '../../lib/initiales';
@@ -31,7 +30,6 @@ import { URLS_MOBILE, ecranMobileDepuisUrl } from '../../lib/routesMobile';
 import BarreNavigationMobile from '../../components/layout/BarreNavigationMobile';
 import ModalRepriseBrouillon from '../../components/bilan/ModalRepriseBrouillon';
 import { useEtatSession } from '../../hooks/useEtatSession';
-import { ecrireEtatSession, effacerEtatSession, lireEtatSession } from '../../lib/etatSession';
 import { getBrouillonParticipant, sauvegarderBrouillonParticipant, supprimerBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
 import { getBrouillon, supprimerBrouillon } from '../../hooks/useBrouillonBilan';
 import { formaterDateNaissanceAffichage, masquerSaisieDateNaissance, messageErreurDateNaissance, parserDateNaissanceSaisie } from '../../utils/dateNaissance';
@@ -142,17 +140,6 @@ function ItemMobile({ icon, label, onClick }: { icon: string; label: string; onC
       <span style={{ fontSize: 15, fontWeight: 500, color: C.text, flex: 1 }}>{label}</span>
       <i className="ti ti-chevron-right" style={{ fontSize: 16, color: '#D0DCDC' }} aria-hidden="true" />
     </button>
-  );
-}
-
-function InfoSection({ titre, children }: { titre: string; children: React.ReactNode }) {
-  return (
-    <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '14px 16px' }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: C.primary, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-        {titre}
-      </div>
-      {children}
-    </div>
   );
 }
 
@@ -1188,198 +1175,6 @@ function EcranTournee() {
   );
 }
 
-// ── EcranSettings ─────────────────────────────────────────────────────────────
-
-const CLE_SESSION_PARAMETRES = 'parametres_praticien';
-
-function EcranSettings({ onBack: retourParent }: { onBack: () => void }) {
-  const inp: React.CSSProperties = { width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, outline: 'none', marginBottom: 14, boxSizing: 'border-box', background: 'white' };
-  const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 };
-
-  const { settings: praticienData, loading, echecChargement, sauvegarderSettings } = usePraticienSettings();
-  // Saisie en cours retrouvée après une rotation : elle prime sur le
-  // pré-remplissage depuis la base.
-  const [saisieRestauree] = useState(() => lireEtatSession<SettingsPraticien>(CLE_SESSION_PARAMETRES));
-  const [form, setForm] = useState<SettingsPraticien>(saisieRestauree ?? DEFAULTS_SETTINGS);
-  const [saving, setSaving] = useState(false);
-  const [showConfirmReset, setShowConfirmReset] = useState(false);
-
-  // Pré-remplir le formulaire dès que Supabase a répondu
-  useEffect(() => {
-    if (!loading && !saisieRestauree) setForm(praticienData);
-  }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Jamais tant que le formulaire porte encore les valeurs par défaut : elles
-  // seraient restaurées à la place des vrais réglages.
-  useEffect(() => {
-    if (saisieRestauree || form !== DEFAULTS_SETTINGS) ecrireEtatSession(CLE_SESSION_PARAMETRES, form);
-  }, [form, saisieRestauree]);
-
-  // Retour explicite ou réglages enregistrés : rien à reprendre.
-  function onBack() {
-    effacerEtatSession(CLE_SESSION_PARAMETRES);
-    retourParent();
-  }
-
-  function set(field: string, value: string) { setForm((f) => ({ ...f, [field]: value })); }
-
-  async function sauvegarder() {
-    // Le formulaire n'a pas pu etre pre-rempli : l'enregistrer ecraserait la
-    // fiche avec des champs vides. On refuse plutot que de perdre la donnee.
-    if (echecChargement) {
-      toast.error("Vos réglages n'ont pas pu être chargés. Rechargez la page avant d'enregistrer.");
-      return;
-    }
-    if (!form.prenom.trim() || !form.nom.trim()) { toast.error('Prénom et nom requis'); return; }
-
-    // Meme validation que les reglages desktop et l'onboarding. Le SIRET
-    // reste facultatif ici — un salarie de structure n'en a pas — mais s'il
-    // est saisi, il doit etre juste : c'est cet ecran, sans aucun controle,
-    // qui a laisse entrer un numero a 15 chiffres.
-    const controleSiret = validerSiret(form.siret);
-    if (form.siret.trim() && !controleSiret.valide) {
-      toast.error(controleSiret.message!);
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await sauvegarderSettings({ ...form, siret: controleSiret.siret });
-      toast.success('Paramètres enregistrés ✅');
-      onBack();
-    } catch {
-      toast.error('Erreur lors de l\'enregistrement');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function reinitialiserDonnees() {
-    localStorage.setItem('mouvtrack_demo_cleared', '1');
-    // `mouvtrack_indispos_pierre` garde son nom historique VOLONTAIREMENT :
-    // c'est une liste de purge, et plus rien n'ecrit cette cle. La renommer
-    // cesserait de nettoyer celle que les navigateurs existants portent
-    // reellement — le contraire du but recherche.
-    ['mouvtrack_participants', 'mouvtrack_seances', 'mouvtrack_contrats',
-     'mouvtrack_zones', 'notes_seances', 'mouvtrack_indispos_pierre',
-     'mouvtrack_question_templates'].forEach(k => localStorage.removeItem(k));
-    const toRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith('brouillon_bilan_') || key.startsWith('bilan_en_cours_'))) toRemove.push(key);
-    }
-    toRemove.forEach(k => localStorage.removeItem(k));
-    toast.success('Données supprimées — rechargement…');
-    setTimeout(() => window.location.reload(), 800);
-  }
-
-  return (
-    <div style={{ minHeight: '100vh', background: C.bg }}>
-      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} aria-hidden="true" />
-        </button>
-        <div style={{ fontSize: 18, fontWeight: 700, color: 'white' }}>Paramètres</div>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Profil et informations professionnelles</div>
-      </div>
-
-      <div style={{ padding: 16, paddingBottom: 40 }}>
-
-        {echecChargement && (
-          <div style={{
-            background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12,
-            padding: '12px 14px', marginBottom: 12, fontSize: 13, color: '#B91C1C', lineHeight: 1.5,
-          }}>
-            Vos réglages n'ont pas pu être chargés depuis le serveur. L'enregistrement
-            est désactivé pour ne pas écraser votre fiche — rechargez la page.
-          </div>
-        )}
-
-        <InfoSection titre="Mon profil">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 0 }}>
-            <div>
-              <label style={lbl}>Prénom *</label>
-              <input value={form.prenom} onChange={e => set('prenom', e.target.value)} placeholder="Marie" style={inp} />
-            </div>
-            <div>
-              <label style={lbl}>Nom *</label>
-              <input value={form.nom} onChange={e => set('nom', e.target.value)} placeholder="Durand" style={inp} />
-            </div>
-          </div>
-          <label style={lbl}>Titre professionnel</label>
-          <input value={form.titre} onChange={e => set('titre', e.target.value)} placeholder="Enseignant APA" style={inp} />
-          <label style={lbl}>Email</label>
-          <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="marie.durand@exemple.fr" style={inp} />
-          <label style={lbl}>Téléphone</label>
-          <input type="tel" value={form.telephone} onChange={e => set('telephone', e.target.value)} placeholder="06 12 34 56 78" style={{ ...inp, marginBottom: 0 }} />
-        </InfoSection>
-
-        <div style={{ height: 12 }} />
-
-        <InfoSection titre="Informations légales">
-          <label style={lbl}>Numéro SIRET</label>
-          <input value={form.siret} onChange={e => set('siret', e.target.value)} placeholder="XXX XXX XXX XXXXX" style={inp} />
-          <label style={lbl}>Numéro SAP</label>
-          <input value={form.numeroSAP} onChange={e => set('numeroSAP', e.target.value)} placeholder="SAP XXXXXXXXX" style={inp} />
-          <label style={lbl}>Ville de signature</label>
-          <input value={form.villeSignature} onChange={e => set('villeSignature', e.target.value)} placeholder="Paris" style={inp} />
-          <label style={lbl}>Tarif horaire (€)</label>
-          <input type="number" value={form.tarifHoraire} onChange={e => set('tarifHoraire', e.target.value)} placeholder="45" style={{ ...inp, marginBottom: 0 }} />
-        </InfoSection>
-
-        <div style={{ height: 12 }} />
-
-        <button onClick={sauvegarder} disabled={saving || loading || echecChargement}
-          style={{ width: '100%', padding: 16, background: saving || loading || echecChargement ? '#8FA8A8' : C.primary, color: 'white', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: saving || loading || echecChargement ? 'not-allowed' : 'pointer', marginTop: 16 }}>
-          {saving ? 'Enregistrement...' : loading ? 'Chargement...' : '💾 Enregistrer'}
-        </button>
-
-        {/* Zone danger */}
-        <div style={{ marginTop: 28, borderTop: `1px solid ${C.border}`, paddingTop: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#E85050', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-            Zone danger
-          </div>
-          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #FECACA', padding: '14px 16px' }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>
-              🗑️ Supprimer les données bénéficiaires
-            </div>
-            <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
-              Supprime tous les bénéficiaires, bilans, contrats et séances. Les exercices et paramètres sont conservés.
-            </div>
-            <button onClick={() => setShowConfirmReset(true)} style={{ padding: '10px 16px', background: 'none', border: '1px solid #E85050', borderRadius: 10, color: '#E85050', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-              Réinitialiser les données
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Modal de confirmation */}
-      {showConfirmReset && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24 }}>
-          <div style={{ background: 'white', borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>
-              ⚠️ Confirmer la suppression
-            </div>
-            <p style={{ fontSize: 14, color: '#4A6080', lineHeight: 1.6, marginBottom: 20 }}>
-              Tous les <strong>bénéficiaires, bilans, contrats et séances</strong> seront supprimés.<br />
-              Les exercices et paramètres sont conservés.<br />
-              <strong style={{ color: '#E85050' }}>Cette action est irréversible.</strong>
-            </p>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setShowConfirmReset(false)} style={{ flex: 1, padding: '12px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
-                Annuler
-              </button>
-              <button onClick={reinitialiserDonnees} style={{ flex: 1, padding: '12px', background: '#E85050', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer' }}>
-                Confirmer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── EcranPlus ─────────────────────────────────────────────────────────────────
 
 function EcranPlus({ onLogout, onNaviguer }: { onLogout: () => void; onNaviguer: (url: string) => void }) {
@@ -2052,8 +1847,16 @@ export default function AppMobile({ onLogout }: Props) {
       break;
     }
     case 'parametres':
+      // Fusion (chantier « fusion des paramètres ») : rend SettingsPage
+      // (desktop) directement, sans passer par estRouteInterfaceUnique —
+      // volontaire, pour garder avecBarre=false (EcranSettings masquait
+      // déjà la barre de navigation ici, un choix voulu pour un écran de
+      // formulaire ; passer par estRouteInterfaceUnique aurait fait
+      // réapparaître la barre via DesktopContent, qui ne permet pas de
+      // l'exclure route par route). Le lien de retour est fourni par
+      // SettingsPage lui-même (voir src/pages/SettingsPage.tsx).
       avecBarre = false;
-      contenu = <EcranSettings onBack={() => navigate(URLS_MOBILE.plus)} />;
+      contenu = <SettingsPage />;
       break;
     case 'nouveauBeneficiaire':
       avecBarre = false;

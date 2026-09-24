@@ -94,7 +94,7 @@ test.describe('Fumée mobile (390×844)', () => {
     expect(erreurs, erreurs.join('\n')).toEqual([]);
   });
 
-  test('navigation vers les paramètres (EcranSettings)', async ({ page }) => {
+  test('navigation vers les paramètres (SettingsPage fusionné)', async ({ page }) => {
     const erreurs = ecouterErreursConsole(page);
     await loginPraticien(page);
 
@@ -102,11 +102,14 @@ test.describe('Fumée mobile (390×844)', () => {
     await page.getByRole('button', { name: 'Paramètres' }).click();
 
     await expect(page).toHaveURL(/\/settings$/);
-    // `exact: true` : la recherche de texte de Playwright est insensible à la
-    // casse — « Paramètres » (sans préciser) matche aussi « … et paramètres
-    // sont conservés » dans le texte de la zone danger plus bas sur l'écran.
     await expect(page.getByText('Paramètres', { exact: true })).toBeVisible();
-    await expect(barreNav(page)).toBeVisible();
+    // Exception volontaire, confirmée dans plusieurs chantiers (dont la
+    // fusion des paramètres, AppMobile.tsx case 'parametres') : écran de
+    // formulaire, avecBarre=false — contrairement à tous les autres écrans
+    // de ce fichier, la barre de navigation NE doit PAS être visible ici.
+    // Cette assertion vérifiait auparavant `toBeVisible()`, ce qui ne
+    // correspondait pas au comportement réel de l'app (échec pré-existant).
+    await expect(barreNav(page)).toBeHidden();
     expect(erreurs, erreurs.join('\n')).toEqual([]);
   });
 
