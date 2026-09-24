@@ -132,6 +132,11 @@ test.describe('Fumée mobile (390×844)', () => {
   test('EcranAssistant reste accessible par lien direct (/assistant), hors barre', async ({ page }) => {
     const erreurs = ecouterErreursConsole(page);
     await loginPraticien(page);
+    // Laisse les requêtes initiales de l'accueil se terminer avant de
+    // renaviguer : sinon page.goto() les annule en plein vol
+    // (net::ERR_ABORTED), remonté par supabase-js en "Failed to fetch" —
+    // même piège que 19-bilan-detail-mobile.spec.ts.
+    await page.waitForLoadState('networkidle');
 
     await page.goto('/assistant');
 
