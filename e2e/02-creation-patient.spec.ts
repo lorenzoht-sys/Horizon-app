@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { skipUnlessPraticien, loginPraticien } from './helpers.js';
+import { clientAdminTest } from './nettoyageTest.js';
 
 test.describe('Création d\'un participant', () => {
   test.beforeEach(() => skipUnlessPraticien());
@@ -37,18 +38,33 @@ test.describe('Création d\'un participant', () => {
     await page.getByRole('button', { name: '1 séance/semaine', exact: true }).click();
     await page.getByRole('button', { name: 'Suivant →' }).click();
 
-    // Consentement RGPD : BLOQUANT à la création depuis le 2026-09-13
-    // (src/lib/consentementRgpd.ts). Sans lui, « Créer la fiche » ne crée rien
-    // et affiche le message — vérifié avant de cocher, sinon ce test ne
-    // prouverait pas que le blocage existe.
-    await page.getByRole('button', { name: 'Créer la fiche' }).click();
-    await expect(page.getByText(/consentement RGPD du bénéficiaire est obligatoire/)).toBeVisible();
-    await expect(page).toHaveURL(/\/participants\/nouveau$/);
+    let participantId: string | null = null;
+    try {
+      // Consentement RGPD : BLOQUANT à la création depuis le 2026-09-13
+      // (src/lib/consentementRgpd.ts). Sans lui, « Créer la fiche » ne crée rien
+      // et affiche le message — vérifié avant de cocher, sinon ce test ne
+      // prouverait pas que le blocage existe.
+      await page.getByRole('button', { name: 'Créer la fiche' }).click();
+      await expect(page.getByText(/consentement RGPD du bénéficiaire est obligatoire/)).toBeVisible();
+      await expect(page).toHaveURL(/\/participants\/nouveau$/);
 
-    await page.getByLabel('Le bénéficiaire a été informé et a consenti').check();
-    await page.getByRole('button', { name: 'Créer la fiche' }).click();
+      await page.getByLabel('Le bénéficiaire a été informé et a consenti').check();
+      await page.getByRole('button', { name: 'Créer la fiche' }).click();
 
-    await expect(page.getByText(`${prenom} ${nom} ajouté(e) !`)).toBeVisible();
-    await page.waitForURL(/\/participant\/[0-9a-fA-F-]+$/);
+      await expect(page.getByText(`${prenom} ${nom} ajouté(e) !`)).toBeVisible();
+      await page.waitForURL(/\/participant\/[0-9a-fA-F-]+$/);
+      participantId = page.url().match(/\/participant\/([0-9a-fA-F-]+)$/)?.[1] ?? null;
+    } finally {
+      // Bénéficiaire dédié à ce test (pas un bénéficiaire partagé comme
+      // Camille/Julien) : suppression complète, cascade base (bilans,
+      // programmes, contrats) comme le fait deleteParticipant()
+      // (useParticipants.ts) — jamais atteinte si l'assertion RGPD ou la
+      // création elle-même échoue avant, d'où `participantId` capturé au
+      // dernier moment possible plutôt que déduit de l'URL a priori.
+      const admin = clientAdminTest();
+      if (admin && participantId) {
+        await admin.from('participants').delete().eq('id', participantId);
+      }
+    }
   });
 });
