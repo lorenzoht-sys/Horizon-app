@@ -1072,8 +1072,8 @@ function SectionRappelsPatient({ participantId }: { participantId: string }) {
 export default function ParticipantProfile() {
   const { id } = useParams<{ id: string }>();
   const { participants, loading: chargementParticipants, updateParticipant, deleteParticipant, deleteBilan, geocodeParticipant, archiverParticipant } = useParticipants();
-  const { programmeActif, deleteProgramme } = useProgramme(id ?? '');
-  const { programmes: programmesV2, seancesAutonomesStats, loading: chargementProgrammesV2 } = useProgrammeV2(id ?? '');
+  const { programmeActif, deleteProgramme, reload: reloadProgrammeActif } = useProgramme(id ?? '');
+  const { programmes: programmesV2, seancesAutonomesStats, loading: chargementProgrammesV2, reload: reloadProgrammesV2 } = useProgrammeV2(id ?? '');
   const { contrats } = useContrats();
   const { structures } = useStructures();
   const { seances } = useAgenda();
@@ -2246,9 +2246,24 @@ export default function ParticipantProfile() {
         <AppliquerModeleModal
           participantId={id!}
           onClose={() => setShowModeleModal(false)}
-          onApplied={() => {
+          onApplied={async () => {
+            // Recharge en place plutôt que de naviguer vers /programme
+            // (desktop-only : sur mobile, hors route fusionnée, retombe
+            // sur l'invitation "tournez votre téléphone" — la fiche ne
+            // reflétait donc jamais le nouveau programme sans que le
+            // praticien y revienne manuellement). ParticipantProfile.tsx
+            // est la MÊME fiche fusionnée des deux côtés : ce comportement
+            // change aussi pour le desktop, qui reste désormais sur place
+            // au lieu d'être redirigé — AppliquerModeleModal n'est appelé
+            // que d'ici, ProgrammePage.tsx ne l'utilise pas.
+            //
+            // Les deux rechargements sont nécessaires : la carte "Programme
+            // en cours" bascule sur programmeActif (V1, useProgramme) —
+            // resté périmé sans son propre reload — puis lit les exercices
+            // via programmesV2 (V2, useProgrammeV2) quand il existe (voir
+            // lib/programmeActifV2.ts).
             setShowModeleModal(false);
-            navigate(`/participant/${id}/programme`);
+            await Promise.all([reloadProgrammeActif(), reloadProgrammesV2()]);
           }}
         />
       )}
