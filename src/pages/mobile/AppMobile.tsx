@@ -10,7 +10,6 @@ import BilanStepper from '../../components/bilan/BilanStepper';
 import ModalSelectionTests from '../../components/bilan/ModalSelectionTests';
 import ModalPresenceCoursCollectif from '../../components/agenda/ModalPresenceCoursCollectif';
 import DicteePostSeance from '../../components/DicteePostSeance';
-import MarkdownRendu from '../../components/ui/MarkdownRendu';
 import type { Bilan, CoursCollectif, Participant } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, getAuthHeader } from '../../lib/supabase';
@@ -36,7 +35,6 @@ import { ecrireEtatSession, effacerEtatSession, lireEtatSession } from '../../li
 import { getBrouillonParticipant, sauvegarderBrouillonParticipant, supprimerBrouillonParticipant } from '../../hooks/useBrouillonParticipant';
 import { getBrouillon, supprimerBrouillon } from '../../hooks/useBrouillonBilan';
 import { formaterDateNaissanceAffichage, masquerSaisieDateNaissance, messageErreurDateNaissance, parserDateNaissanceSaisie } from '../../utils/dateNaissance';
-import { resultatTm6 } from '../../lib/tm6';
 import { contratsDesBeneficiairesActifs } from '../../lib/archivage';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1470,98 +1468,6 @@ function EcranPlus({ onLogout, onNaviguer }: { onLogout: () => void; onNaviguer:
   );
 }
 
-// ── Détail bilan mobile ────────────────────────────────────────────────────────
-
-function DetailBilanMobile({ bilan, onBack }: { bilan: import('../../types').Bilan; onBack: () => void }) {
-  const TESTS = [
-    { label: 'Équilibre Droit',  val: bilan.equilibre.droite,       unite: 's' },
-    { label: 'Équilibre Gauche', val: bilan.equilibre.gauche,       unite: 's' },
-    { label: 'Chair Stand 30s',  val: bilan.chairStand30,           unite: ' rép.' },
-    { label: 'HandGrip Droit',   val: bilan.handGrip.droite,        unite: ' kg' },
-    { label: 'HandGrip Gauche',  val: bilan.handGrip.gauche,        unite: ' kg' },
-    { label: 'TUG 3m',           val: bilan.tug3m,                  unite: 's' },
-    { label: 'Souplesse',        val: bilan.souplesse.valeur,       unite: ' cm' },
-    { label: resultatTm6(bilan.tm6).type === 'distance' ? 'TM6 Distance' : 'TM6 (' + resultatTm6(bilan.tm6).modeLabel + ')', val: resultatTm6(bilan.tm6).valeur, unite: ' ' + resultatTm6(bilan.tm6).unite },
-    { label: 'TM6 FC avant',     val: bilan.tm6.fcAvant,            unite: ' bpm' },
-    { label: 'TM6 FC après',     val: bilan.tm6.fcApres,            unite: ' bpm' },
-    { label: 'SpO2 avant',       val: bilan.tm6.spo2Avant,          unite: '%' },
-    { label: 'Mémoire imm.',     val: bilan.memoire.scoreImmediat,  unite: '/5' },
-    { label: 'Mémoire dif.',     val: bilan.memoire.scoreDiffere,   unite: '/5' },
-  ].filter(t => t.val !== null && t.val !== undefined);
-
-  const dateLabel = new Date(bilan.date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-
-  return (
-    <div>
-      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} />
-        </button>
-        <div style={{ fontSize: 18, fontWeight: 700, color: 'white' }}>
-          {bilan.type === 'initial' ? 'Bilan initial' : `Bilan T${bilan.trimestre}`}
-        </div>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>{dateLabel}</div>
-      </div>
-
-      <div style={{ padding: 16 }}>
-
-        {TESTS.length > 0 && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Résultats des tests</div>
-            <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, overflow: 'hidden', marginBottom: 16 }}>
-              {TESTS.map((t, i) => (
-                <div key={t.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderBottom: i < TESTS.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                  <span style={{ fontSize: 13, color: C.muted }}>{t.label}</span>
-                  <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{t.val}{t.unite}</span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {bilan.notesProfessionnelles && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Notes professionnelles</div>
-            <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '12px 14px', marginBottom: 16, fontSize: 14, color: C.text, lineHeight: 1.6 }}>
-              {bilan.notesProfessionnelles}
-            </div>
-          </>
-        )}
-
-        {bilan.objectifsSuivants && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Objectifs suivants</div>
-            <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '12px 14px', marginBottom: 16, fontSize: 14, color: C.text, lineHeight: 1.6 }}>
-              {bilan.objectifsSuivants}
-            </div>
-          </>
-        )}
-
-        {bilan.interpretationIA && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Analyse IA</div>
-            <div style={{ background: '#E8F8F8', borderRadius: 12, border: `1px solid ${C.primary}30`, padding: '12px 14px', marginBottom: 10, fontSize: 14, color: C.text, lineHeight: 1.6 }}>
-              <MarkdownRendu>{bilan.interpretationIA.textePro}</MarkdownRendu>
-            </div>
-            {bilan.interpretationIA.pointsForts.length > 0 && (
-              <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '12px 14px', marginBottom: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#1D9E75', marginBottom: 6 }}>✅ Points forts</div>
-                {bilan.interpretationIA.pointsForts.map((p, i) => <div key={i} style={{ fontSize: 13, color: C.text, marginBottom: 3 }}>· {p}</div>)}
-              </div>
-            )}
-            {bilan.interpretationIA.pointsATravail.length > 0 && (
-              <div style={{ background: 'white', borderRadius: 12, border: `1px solid ${C.border}`, padding: '12px 14px', marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#E8A020', marginBottom: 6 }}>⚡ À travailler</div>
-                {bilan.interpretationIA.pointsATravail.map((p, i) => <div key={i} style={{ fontSize: 13, color: C.text, marginBottom: 3 }}>· {p}</div>)}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── Modification fiche patient mobile ────────────────────────────────────────
 
 function EditPatientMobile({ participant, onBack: retourParent }: { participant: import('../../types').Participant; onBack: () => void }) {
@@ -2102,13 +2008,6 @@ function ModifierBeneficiaireMobile({ participantId, onBack }: { participantId: 
   return <EditPatientMobile participant={participant} onBack={onBack} />;
 }
 
-function DetailBilanMobileRoute({ participantId, bilanId, onBack }: { participantId: string; bilanId: string; onBack: () => void }) {
-  const { participants, loading } = useParticipants();
-  const bilan = participants.find(p => p.id === participantId)?.bilans.find(b => b.id === bilanId);
-  if (!bilan) return <EcranChargement loading={loading} texteIntrouvable="Bilan introuvable" onBack={onBack} />;
-  return <DetailBilanMobile bilan={bilan} onBack={onBack} />;
-}
-
 // ── App Mobile principal ──────────────────────────────────────────────────────
 
 interface Props { onLogout: () => void }
@@ -2172,12 +2071,6 @@ export default function AppMobile({ onLogout }: Props) {
       contenu = id
         ? <BilanMobile participantId={id} onTermine={() => voirFiche(id)} />
         : <ChoixBeneficiaireBilanMobile onBack={() => navigate(URLS_MOBILE.saisie)} onChoisir={pid => navigate(URLS_MOBILE.nouveauBilan(pid))} />;
-      break;
-    }
-    case 'detailBilan': {
-      const { participantId, bilanId } = ecran;
-      avecBarre = false;
-      contenu = <DetailBilanMobileRoute participantId={participantId} bilanId={bilanId} onBack={() => voirFiche(participantId)} />;
       break;
     }
   }

@@ -22,6 +22,13 @@ describe('estRouteInterfaceUnique', () => {
     expect(estRouteInterfaceUnique('/archives')).toBe(true);
     expect(estRouteInterfaceUnique('/archives/')).toBe(true);
   });
+
+  it('sert aussi le détail d’un bilan existant, mais pas sa création', () => {
+    expect(estRouteInterfaceUnique('/participant/abc/bilan/xyz')).toBe(true);
+    expect(estRouteInterfaceUnique('/participant/abc/bilan/xyz/')).toBe(true);
+    // /bilan/new (création) reste mobile-only, hors de ce chantier.
+    expect(estRouteInterfaceUnique('/participant/abc/bilan/new')).toBe(false);
+  });
 });
 
 describe('ecranMobileDepuisUrl', () => {
@@ -41,13 +48,11 @@ describe('ecranMobileDepuisUrl', () => {
     expect(ecran(URLS_MOBILE.modifierBeneficiaire('p1'))).toEqual({ ecran: 'modifierBeneficiaire', participantId: 'p1' });
     expect(ecran(URLS_MOBILE.nouveauBilan('p1'))).toEqual({ ecran: 'nouveauBilan', participantId: 'p1' });
     expect(ecran(URLS_MOBILE.choixBeneficiaireBilan)).toEqual({ ecran: 'nouveauBilan', participantId: null });
-    expect(ecran(URLS_MOBILE.detailBilan('p1', 'b9'))).toEqual({ ecran: 'detailBilan', participantId: 'p1', bilanId: 'b9' });
   });
 
   it('les URL mobiles sont celles des écrans desktop équivalents', () => {
     expect(URLS_MOBILE.fiche('p1')).toBe('/participant/p1');
     expect(URLS_MOBILE.nouveauBilan('p1')).toBe('/participant/p1/bilan/new');
-    expect(URLS_MOBILE.detailBilan('p1', 'b9')).toBe('/participant/p1/bilan/b9');
     expect(URLS_MOBILE.modifierBeneficiaire('p1')).toBe('/participants/p1/modifier');
   });
 
@@ -74,6 +79,7 @@ describe('ongletDepuisUrl', () => {
     expect(ongletDepuisUrl('/tournee', '')).toBe('tournee');
     expect(ongletDepuisUrl('/participant/p1', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/archives', '')).toBe('beneficiaires');
+    expect(ongletDepuisUrl('/participant/p1/bilan/b9', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/participants/nouveau', '')).toBeNull();
   });
 });
