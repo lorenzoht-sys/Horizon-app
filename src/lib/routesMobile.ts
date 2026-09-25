@@ -65,7 +65,11 @@ export function estRouteInterfaceUnique(pathname: string): boolean {
     /^\/participant\/[^/]+\/bilan\/(?!new(?:\/|$))[^/]+\/?$/.test(pathname) ||
     // Rapport d'évolution (comparaison de tous les bilans) — atteignable
     // depuis la fiche et le détail de bilan, déjà fusionnés.
-    /^\/participant\/[^/]+\/comparaison\/?$/.test(pathname)
+    /^\/participant\/[^/]+\/comparaison\/?$/.test(pathname) ||
+    // Création d'un contrat de suivi — atteignable depuis la fiche (carte
+    // « Aucun contrat actif », menu « ··· », onglet Contrats), déjà fusionnée.
+    // Formulaire simple, sans étapes ni génération de document.
+    /^\/participant\/[^/]+\/contrat\/nouveau\/?$/.test(pathname)
   );
 }
 
