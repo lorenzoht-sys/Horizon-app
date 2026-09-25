@@ -61,7 +61,7 @@ describe('ecranMobileDepuisUrl', () => {
     expect(URLS_MOBILE.modifierBeneficiaire('p1')).toBe('/participants/p1/modifier');
   });
 
-  it('écrans desktop seulement : invite à tourner le téléphone, avec un retour sensé', () => {
+  it('écrans desktop seulement : écran « bientôt en version mobile », avec un retour sensé', () => {
     expect(ecran('/participant/p1/programme')).toEqual({ ecran: 'paysage', retour: '/participant/p1' });
     expect(ecran('/participant/p1/contrat/nouveau')).toEqual({ ecran: 'paysage', retour: '/participant/p1' });
     expect(ecran('/participant/p1/bilan/b9/edit')).toEqual({ ecran: 'paysage', retour: '/participant/p1' });
