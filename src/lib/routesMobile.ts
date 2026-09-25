@@ -60,7 +60,10 @@ export function estRouteInterfaceUnique(pathname: string): boolean {
     /^\/archives\/?$/.test(pathname) ||
     // Détail d'un bilan existant — mais pas /bilan/new (création, restée
     // mobile-only) : le segment final ne doit jamais valoir "new".
-    /^\/participant\/[^/]+\/bilan\/(?!new(?:\/|$))[^/]+\/?$/.test(pathname)
+    /^\/participant\/[^/]+\/bilan\/(?!new(?:\/|$))[^/]+\/?$/.test(pathname) ||
+    // Rapport d'évolution (comparaison de tous les bilans) — atteignable
+    // depuis la fiche et le détail de bilan, déjà fusionnés.
+    /^\/participant\/[^/]+\/comparaison\/?$/.test(pathname)
   );
 }
 
