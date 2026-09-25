@@ -19,10 +19,16 @@ import { skipUnlessPraticien, loginPraticien, ouvrirFicheParticipant, env } from
 // Réutilise les bilans déjà présents sur le participant de test s'il y en a
 // déjà ≥ 2, pour éviter de dupliquer la création coûteuse par formulaire
 // (déjà faite dans 19-bilan-detail-mobile.spec.ts). Ne crée que ce qui
-// manque, avec un nombre de « pas » TM6 distinctif (111/222/333, jamais vu
-// dans des données réelles) pour retrouver et supprimer UNIQUEMENT les
-// bilans créés par ce test au nettoyage — jamais par date, qui pourrait
-// coïncider avec un bilan réel déjà présent sur le compte de démo.
+// manque, avec un nombre de « pas » TM6 distinctif (jamais vu dans des
+// données réelles) pour retrouver et supprimer UNIQUEMENT les bilans créés
+// par ce test au nettoyage — jamais par date, qui pourrait coïncider avec
+// un bilan réel déjà présent sur le compte de démo.
+//
+// Skip si le participant n'a AUCUN bilan : son premier bilan suit le flux
+// "initial" (questionnaire médical complet, FormulaireBilanInitial), non
+// automatisé ici — voir le commentaire dans le test. Le participant de
+// test est supposé avoir déjà ≥ 1 bilan réel, comme le suppose déjà
+// 19-bilan-detail-mobile.spec.ts.
 
 test.describe('Rapport d\'évolution sur mobile (route fusionnée /comparaison)', () => {
   test.beforeEach(() => skipUnlessPraticien());
@@ -42,16 +48,21 @@ test.describe('Rapport d\'évolution sur mobile (route fusionnée /comparaison)'
     const boutonsSupprimer = page.locator('[title="Supprimer ce bilan"]');
     const nbExistants = await boutonsSupprimer.count();
 
+    // Le tout premier bilan d'un participant (nextTrimestre === 0) utilise
+    // le flux "initial" (FormulaireBilanInitial, questionnaire médical
+    // complet, pas de champ date éditable — voir BilanStepper.tsx) — un
+    // flux différent de celui automatisé ci-dessous (Step1_Identity, flux
+    // "trimestriel"), et non couvert par 19-bilan-detail-mobile.spec.ts non
+    // plus. Le participant de test est supposé avoir déjà au moins 1 bilan
+    // réel, comme le suppose déjà ce test-là.
+    test.skip(nbExistants === 0, `${nomComplet} n'a aucun bilan : le premier bilan utilise le flux "initial", non automatisé ici (voir commentaire ci-dessus). Créer manuellement un premier bilan sur ce compte de test avant de relancer.`);
+
     const AUJOURDHUI = new Date();
-    const J_MOINS_90 = new Date();
-    J_MOINS_90.setDate(J_MOINS_90.getDate() - 90);
     const iso = (d: Date) => d.toISOString().slice(0, 10);
 
     // Bilans à créer pour atteindre au moins 2 (aucun si déjà ≥ 2).
     const aCreer: { date: Date; pas: string }[] =
-      nbExistants === 0 ? [{ date: J_MOINS_90, pas: '111' }, { date: AUJOURDHUI, pas: '222' }]
-      : nbExistants === 1 ? [{ date: AUJOURDHUI, pas: '333' }]
-      : [];
+      nbExistants === 1 ? [{ date: AUJOURDHUI, pas: '333' }] : [];
 
     async function creerBilan(date: Date, pas: string) {
       await page.goto(`${participantUrl}/bilan/new`);
