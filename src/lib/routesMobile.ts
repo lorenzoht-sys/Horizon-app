@@ -24,8 +24,10 @@ export type EcranMobile =
   | { ecran: 'nouveauBeneficiaire' }
   | { ecran: 'modifierBeneficiaire'; participantId: string }
   | { ecran: 'nouveauBilan'; participantId: string | null }
-  // Écran qui n'existe qu'en version desktop : on invite à tourner le
-  // téléphone, l'URL étant déjà la bonne pour la version paysage.
+  // Écran qui n'existe qu'en version desktop : on annonce qu'il n'a pas
+  // encore de version téléphone (voir EcranPaysage, AppMobile.tsx). Le nom
+  // 'paysage' est historique — l'écran n'invite plus à tourner le téléphone,
+  // geste sans effet une fois l'app installée (manifest verrouillé en portrait).
   | { ecran: 'paysage'; retour: string };
 
 export const URLS_MOBILE = {

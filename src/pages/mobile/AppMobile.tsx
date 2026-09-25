@@ -1218,7 +1218,7 @@ function EcranPlus({ onLogout, onNaviguer }: { onLogout: () => void; onNaviguer:
 
       {/* Section Mon activité */}
       {/* Agenda, carte, bibliothèque : leur URL desktop. Sous 768 px elle affiche
-          l'invitation à tourner le téléphone — et en paysage, l'écran lui-même. */}
+          l'écran « bientôt en version mobile » — et au-dessus, l'écran lui-même. */}
       <SectionMobile titre="Mon activité">
         <ItemMobile icon="ti-route" label="Tournée du jour" onClick={() => onNaviguer(URLS_MOBILE.tournee)} />
         <ItemMobile icon="ti-calendar" label="Agenda complet" onClick={() => onNaviguer('/agenda-v2')} />
@@ -1779,15 +1779,21 @@ function EcranChargement({ loading, texteIntrouvable, onBack }: { loading: boole
   );
 }
 
-// Écran desktop seulement. L'URL est déjà celle de la version paysage : il
-// suffit de tourner le téléphone.
+// Écran sans version téléphone (pas encore fusionné, ou desktop seulement).
+//
+// Le message invitait à tourner le téléphone. Une fois l'app installée, cette
+// invitation ne mène nulle part : le manifest verrouille l'orientation en
+// portrait (public/manifest.json et vite.config.ts, `orientation: 'portrait'`),
+// le système refuse donc la bascule. On annonce l'absence de version mobile
+// plutôt que de promettre un geste sans effet, et on nomme le seul endroit où
+// l'écran existe réellement aujourd'hui : un ordinateur.
 function EcranPaysage({ onRetour }: { onRetour: () => void }) {
   return (
     <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 48px)', paddingLeft: 24, paddingRight: 24, paddingBottom: 24, textAlign: 'center' }}>
-      <div style={{ fontSize: 52, marginBottom: 14 }} aria-hidden="true">🔄</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 8 }}>Écran disponible en mode paysage</div>
+      <div style={{ fontSize: 52, marginBottom: 14 }} aria-hidden="true">💻</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 8 }}>Bientôt en version mobile</div>
       <div style={{ fontSize: 14, color: '#4A6080', lineHeight: 1.6, marginBottom: 28 }}>
-        Cet écran n'a pas encore de version téléphone. Tournez votre téléphone : il s'affichera directement.
+        Cet écran n'a pas encore de version téléphone. En attendant, il reste accessible depuis un ordinateur.
       </div>
       <button onClick={onRetour} style={{ padding: '12px 20px', background: 'white', border: `1.5px solid ${C.primary}`, color: C.primary, borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
         ← Retour
