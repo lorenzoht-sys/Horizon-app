@@ -48,7 +48,7 @@ export const URLS_MOBILE = {
 } as const;
 
 // Écrans de l'espace pro sans version téléphone (le préfixe suffit).
-const PREFIXES_DESKTOP_SEULEMENT = ['/agenda-v2', '/map', '/zones', '/stats', '/bibliotheque', '/structures', '/admin'];
+const PREFIXES_DESKTOP_SEULEMENT = ['/agenda-v2', '/map', '/zones', '/stats', '/structures', '/admin'];
 
 /**
  * Routes servies par l'interface UNIQUE (responsive) même sous 768 px.
@@ -69,7 +69,12 @@ export function estRouteInterfaceUnique(pathname: string): boolean {
     // Création d'un contrat de suivi — atteignable depuis la fiche (carte
     // « Aucun contrat actif », menu « ··· », onglet Contrats), déjà fusionnée.
     // Formulaire simple, sans étapes ni génération de document.
-    /^\/participant\/[^/]+\/contrat\/nouveau\/?$/.test(pathname)
+    /^\/participant\/[^/]+\/contrat\/nouveau\/?$/.test(pathname) ||
+    // Bibliothèque (exercices + modèles de programme) — grille déjà
+    // responsive (1 colonne dès le mobile), glisser-déposer HTML5 (rail de
+    // dossiers) doublé d'une alternative sans drag (modale à cases à
+    // cocher), et wizard de modèle déjà mobile (chantiers #87/#88/#89).
+    /^\/bibliotheque\/?$/.test(pathname)
   );
 }
 

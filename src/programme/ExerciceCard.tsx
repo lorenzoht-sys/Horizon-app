@@ -251,9 +251,11 @@ export default function ExerciceCard({
         )}
       </div>
 
-      {/* Modal vidéo */}
+      {/* Modal vidéo — z-[1100], pas z-50 : sous 768px, BarreNavigationMobile
+          (z-index 100, App.tsx) passait par-dessus (bibliothèque d'exercices,
+          seul usage de ce composant). Même valeur que ProgrammeWizardModal. */}
       {showVideo && exercice.videoYoutubeId && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/80 z-[1100] flex items-center justify-center p-4">
           <div className="w-full max-w-2xl">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-white font-semibold">{exercice.nom}</h3>

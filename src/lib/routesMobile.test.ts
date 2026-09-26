@@ -41,6 +41,11 @@ describe('estRouteInterfaceUnique', () => {
     // Les autres sous-écrans « contrat » restent desktop seulement.
     expect(estRouteInterfaceUnique('/participant/abc/contrat/c9')).toBe(false);
   });
+
+  it('sert aussi la bibliothèque (exercices, modèles)', () => {
+    expect(estRouteInterfaceUnique('/bibliotheque')).toBe(true);
+    expect(estRouteInterfaceUnique('/bibliotheque/')).toBe(true);
+  });
 });
 
 describe('ecranMobileDepuisUrl', () => {
@@ -71,7 +76,7 @@ describe('ecranMobileDepuisUrl', () => {
   it('écrans desktop seulement : écran « bientôt en version mobile », avec un retour sensé', () => {
     expect(ecran('/participant/p1/programme')).toEqual({ ecran: 'paysage', retour: '/participant/p1' });
     expect(ecran('/participant/p1/bilan/b9/edit')).toEqual({ ecran: 'paysage', retour: '/participant/p1' });
-    for (const p of ['/agenda-v2', '/map', '/zones', '/stats', '/bibliotheque', '/structures/s1', '/admin/comptes']) {
+    for (const p of ['/agenda-v2', '/map', '/zones', '/stats', '/structures/s1', '/admin/comptes']) {
       expect(ecran(p)).toEqual({ ecran: 'paysage', retour: URLS_MOBILE.plus });
     }
   });

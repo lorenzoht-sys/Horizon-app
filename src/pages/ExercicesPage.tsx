@@ -133,7 +133,12 @@ function DossierModal({
   }), [exercices, catFilter, search]);
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    // z-[1100], pas z-50 : sous 768px, BarreNavigationMobile (z-index 100,
+    // App.tsx) passait par-dessus cette modale — le bouton « Terminé »
+    // devenait partiellement inatteignable (vérifié : elementFromPoint sur
+    // sa zone remonte la barre du bas, pas la modale). Même valeur que
+    // ProgrammeWizardModal (ProgrammeWizard.tsx), déjà mobile.
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[1100] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-gray-100 flex-shrink-0">
           <div>
@@ -646,9 +651,9 @@ export default function ExercicesPage() {
         </div>
       )}
 
-      {/* Modal ajout */}
+      {/* Modal ajout — z-[1100], même raison que DossierModal ci-dessus. */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[1100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-gray-100">
               <h2 className="font-heading font-bold text-dark">Nouvel exercice</h2>
