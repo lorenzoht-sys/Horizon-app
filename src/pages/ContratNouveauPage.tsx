@@ -531,7 +531,12 @@ export default function ContratNouveauPage() {
             <div className="text-gray-600">⏱ {dureesSeances.map(d => `${d} min`).join(', ')}</div>
           </div>
 
-          <div className="flex gap-3 pt-2">
+          {/* pb-24 sous 768 px : au défilement maximal, la barre de navigation
+              mobile (fixe, 70 px) recouvre le bas du contenu — le libellé du
+              bouton, sur deux lignes à cette largeur, y passait en partie.
+              Le bouton restait cliquable, mais à moitié lisible. Marge
+              mobile uniquement (md:pb-0) : le rendu desktop est inchangé. */}
+          <div className="flex gap-3 pt-2 pb-24 md:pb-0">
             <button
               type="submit"
               className="flex-1 flex items-center justify-center gap-2 bg-primary text-white rounded-xl py-3 font-semibold text-sm hover:bg-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"

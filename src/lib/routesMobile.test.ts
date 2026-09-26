@@ -34,6 +34,13 @@ describe('estRouteInterfaceUnique', () => {
     expect(estRouteInterfaceUnique('/participant/abc/comparaison')).toBe(true);
     expect(estRouteInterfaceUnique('/participant/abc/comparaison/')).toBe(true);
   });
+
+  it('sert aussi la création d’un contrat de suivi', () => {
+    expect(estRouteInterfaceUnique('/participant/abc/contrat/nouveau')).toBe(true);
+    expect(estRouteInterfaceUnique('/participant/abc/contrat/nouveau/')).toBe(true);
+    // Les autres sous-écrans « contrat » restent desktop seulement.
+    expect(estRouteInterfaceUnique('/participant/abc/contrat/c9')).toBe(false);
+  });
 });
 
 describe('ecranMobileDepuisUrl', () => {
@@ -63,7 +70,6 @@ describe('ecranMobileDepuisUrl', () => {
 
   it('écrans desktop seulement : écran « bientôt en version mobile », avec un retour sensé', () => {
     expect(ecran('/participant/p1/programme')).toEqual({ ecran: 'paysage', retour: '/participant/p1' });
-    expect(ecran('/participant/p1/contrat/nouveau')).toEqual({ ecran: 'paysage', retour: '/participant/p1' });
     expect(ecran('/participant/p1/bilan/b9/edit')).toEqual({ ecran: 'paysage', retour: '/participant/p1' });
     for (const p of ['/agenda-v2', '/map', '/zones', '/stats', '/bibliotheque', '/structures/s1', '/admin/comptes']) {
       expect(ecran(p)).toEqual({ ecran: 'paysage', retour: URLS_MOBILE.plus });
@@ -85,6 +91,7 @@ describe('ongletDepuisUrl', () => {
     expect(ongletDepuisUrl('/archives', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/participant/p1/bilan/b9', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/participant/p1/comparaison', '')).toBe('beneficiaires');
+    expect(ongletDepuisUrl('/participant/p1/contrat/nouveau', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/participants/nouveau', '')).toBeNull();
   });
 });
