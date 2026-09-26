@@ -12,6 +12,22 @@ test.describe('Création d\'un bilan', () => {
     await page.getByRole('button', { name: '+ Nouveau bilan' }).click();
     await page.waitForURL(/\/bilan\/new$/);
 
+    // Un brouillon d'une tentative précédente (locale — souvent la vôtre, en
+    // développement — ou cloud, voir bilans_brouillons) peut proposer un
+    // écran de reprise (ModalRepriseBrouillon) à la place du stepper : ce
+    // test crée toujours un bilan neuf, jamais une reprise — même garde que
+    // 19-bilan-detail-mobile.spec.ts et 25-comparaison-evolution-mobile.spec.ts.
+    const recommencerBtn = page.getByRole('button', { name: /Recommencer/ });
+    const dateInput = page.locator('input[type="date"]');
+    await Promise.race([
+      recommencerBtn.waitFor({ state: 'visible', timeout: 30000 }),
+      dateInput.waitFor({ state: 'visible', timeout: 30000 }),
+    ]);
+    if (await recommencerBtn.isVisible().catch(() => false)) {
+      await recommencerBtn.click();
+      await dateInput.waitFor({ timeout: 20000 });
+    }
+
     let bilanId: string | null = null;
     try {
       // Camille a déjà un bilan initial : le nouveau bilan est "trimestriel"
