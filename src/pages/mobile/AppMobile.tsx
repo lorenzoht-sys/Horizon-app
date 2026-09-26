@@ -1232,6 +1232,7 @@ function EcranPlus({ onLogout, onNaviguer }: { onLogout: () => void; onNaviguer:
           label={`Bénéficiaires archivés${participantsArchives.length > 0 ? ` (${participantsArchives.length})` : ''}`}
           onClick={() => onNaviguer(URLS_MOBILE.archives)}
         />
+        <ItemMobile icon="ti-building" label="Structures" onClick={() => onNaviguer('/structures')} />
       </SectionMobile>
 
       {/* Section Contenu */}

@@ -132,8 +132,15 @@ export default function GenererCompteRenduModal({ patient, structure, onClose }:
   }
 
   return (
+    // z-[1100], pas z-50 : même anti-motif que les modales du chantier
+    // Bibliothèque, sous BarreNavigationMobile (z-index 100, App.tsx).
+    // Correctif préventif — pas reproduit ici par un test qui échoue sans
+    // lui : à l'étape 1 (aucun template), la modale reste courte (~374px à
+    // 390×844) et n'atteint jamais la barre du bas dans ce flux. Gardé
+    // cohérent avec le reste de l'app (même valeur que
+    // ProgrammeWizardModal) plutôt que de laisser le même défaut connu.
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1100] p-4"
       onClick={e => e.target === e.currentTarget && onClose()}
     >
       <div className="bg-white rounded-2xl w-full flex flex-col" style={{ maxWidth: 640, maxHeight: '90vh' }}>
