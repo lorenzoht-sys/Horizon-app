@@ -48,7 +48,7 @@ export const URLS_MOBILE = {
 } as const;
 
 // Écrans de l'espace pro sans version téléphone (le préfixe suffit).
-const PREFIXES_DESKTOP_SEULEMENT = ['/agenda-v2', '/map', '/zones', '/stats', '/structures', '/admin'];
+const PREFIXES_DESKTOP_SEULEMENT = ['/agenda-v2', '/map', '/zones', '/stats', '/admin'];
 
 /**
  * Routes servies par l'interface UNIQUE (responsive) même sous 768 px.
@@ -74,7 +74,14 @@ export function estRouteInterfaceUnique(pathname: string): boolean {
     // responsive (1 colonne dès le mobile), glisser-déposer HTML5 (rail de
     // dossiers) doublé d'une alternative sans drag (modale à cases à
     // cocher), et wizard de modèle déjà mobile (chantiers #87/#88/#89).
-    /^\/bibliotheque\/?$/.test(pathname)
+    /^\/bibliotheque\/?$/.test(pathname) ||
+    // Structures (liste + détail) — la liste n'existait comme route nulle
+    // part avant ce chantier (simple onglet de Dashboard.tsx, jamais
+    // fusionné) : nouvelle page StructuresPage.tsx, construite responsive
+    // dès l'écriture. Détail (StructureDetail.tsx) : carte Facturation
+    // masquée sous 768px (Phase 4, hors périmètre), le reste fusionné.
+    /^\/structures\/?$/.test(pathname) ||
+    /^\/structures\/[^/]+\/?$/.test(pathname)
   );
 }
 

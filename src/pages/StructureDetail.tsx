@@ -190,8 +190,10 @@ export default function StructureDetail() {
             )}
           </div>
 
-          {/* Facturation structure */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          {/* Facturation structure — desktop seulement (Phase 4, hors périmètre
+              de la fusion mobile : génération/suivi de factures, pas encore
+              conçu pour un écran de 390px). */}
+          <div className="hidden md:block bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="text-sm font-bold text-gray-800">
                 💶 Facturation — {structure.nom}
@@ -428,9 +430,13 @@ export default function StructureDetail() {
         </div>
       </div>
 
-      {/* Modal confirmation envoi */}
+      {/* Modal confirmation envoi — z-[1100], pas z-50 : même défaut de
+          recouvrement par BarreNavigationMobile que le chantier Bibliothèque
+          (z-index 100, App.tsx). Non déclenchable sur mobile aujourd'hui
+          (bouton dans la carte Facturation, masquée sous 768px), mais gardé
+          cohérent avec le reste du fichier. */}
       {modalEnvoi && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 z-[1100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <div className="text-base font-bold text-gray-900 mb-4">Confirmer l'envoi de la facture</div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Date d'envoi</label>
