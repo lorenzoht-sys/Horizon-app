@@ -69,7 +69,12 @@ test.describe('Cours collectifs sur mobile (lecture + présence)', () => {
       expect(overflow, 'la modale de présence ne doit pas provoquer de défilement horizontal à 390px').toBe(false);
 
       // ── Marquer une présence, avec une note ────────────────────────────
-      await page.getByRole('button', { name: 'Absent' }).click();
+      // (Le correctif de z-index de cette modale, z-50 → z-[1100], est
+      // prouvé séparément ci-dessous avec 2 participants — à 1 seul, la
+      // modale reste trop courte pour atteindre la barre du bas, quel que
+      // soit son z-index, donc un test ici n'aurait rien démontré.)
+      const boutonAbsent = page.getByRole('button', { name: 'Absent' });
+      await boutonAbsent.click();
       await page.getByLabel(`Note sur ${env.patientPrenom}`).fill(note);
       await page.getByRole('button', { name: /Enregistrer/ }).click();
       await expect(page.getByText(`${env.patientPrenom} : mis à jour`)).toBeVisible({ timeout: 10000 });
@@ -123,6 +128,79 @@ test.describe('Cours collectifs sur mobile (lecture + présence)', () => {
         // termine avant que l'écriture Supabase, encore en vol, n'ait pu
         // aboutir — exactement le piège que ce filet est censé éviter.
         await page.getByRole('button', { name: 'Annuler le cours' }).waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
+      }
+    }
+  });
+
+  // Sous-chantier 2 (Agenda mobile) : ModalPresenceCoursCollectif.tsx passe
+  // de z-50 à z-[1100] — même défaut que Bibliothèque/Structures, mais déjà
+  // en production ici (EcranTournee), pas préventif. Test dédié plutôt que
+  // d'alourdir le test principal : avec 1 seul participant (ci-dessus), la
+  // modale reste trop courte pour jamais atteindre la barre du bas, quel
+  // que soit son z-index — aucune preuve possible dans ce cas. Avec 2
+  // participants, son contenu dépasse la hauteur visible et son pied de
+  // page (« Annuler le cours ») doit être défilé pour être atteint —
+  // confirmé par capture avant correctif : la barre de navigation
+  // s'affichait ALORS par-dessus la modale, pas seulement à sa frontière.
+  test('la modale de présence à 2 participants n\'est pas recouverte par la barre de navigation, à 390px', async ({ page }) => {
+    test.setTimeout(45000);
+    const titreCours = `RLS-E2E cours mobile 2p ${Date.now()}`;
+    const nomJulien = `${env.patientPrenom2} ${env.patientNom2}`;
+
+    await loginPraticien(page);
+
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await page.goto('/agenda-v2');
+    await page.getByRole('button', { name: /Nouveau cours collectif/ }).click();
+    const modaleCreation = page.locator('.rounded-2xl.shadow-xl.max-w-lg');
+    await modaleCreation.getByPlaceholder('Gym douce, Équilibre en groupe…').fill(titreCours);
+    await modaleCreation.getByPlaceholder('Rechercher…').fill(env.patientPrenom);
+    await modaleCreation.getByText(`${env.patientPrenom} ${env.patientNom}`, { exact: true }).click();
+    await modaleCreation.getByPlaceholder('Rechercher…').fill(env.patientPrenom2);
+    await modaleCreation.getByText(nomJulien, { exact: true }).click();
+    await modaleCreation.getByRole('button', { name: 'Créer le cours' }).click();
+    await expect(page.getByText('Cours collectif créé')).toBeVisible({ timeout: 10000 });
+
+    try {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto('/tournee');
+      await page.waitForLoadState('networkidle');
+      const carteCours = page.locator('div')
+        .filter({ hasText: titreCours })
+        .filter({ hasText: 'Gérer les présences' })
+        .last();
+      await carteCours.getByRole('button', { name: /Gérer les présences/ }).click();
+      await expect(page.getByRole('heading', { name: titreCours })).toBeVisible();
+
+      const boutonAnnuler = page.getByRole('button', { name: 'Annuler le cours' });
+      // Geste réel : le pied de page n'est pas visible sans défiler quand
+      // la modale dépasse la hauteur de l'écran — confirmé par capture.
+      await boutonAnnuler.scrollIntoViewIfNeeded();
+      const boite = await boutonAnnuler.boundingBox();
+      const recouvertParNav = await page.evaluate(({ x, y }) => {
+        const el = document.elementFromPoint(x, y);
+        const nav = document.querySelector('nav[aria-label="Navigation principale"]');
+        return !!nav && (el === nav || nav.contains(el));
+      }, { x: boite!.x + boite!.width / 2, y: boite!.y + boite!.height - 2 });
+      expect(recouvertParNav, 'le bouton "Annuler le cours" ne doit pas être recouvert par la barre de navigation une fois défilé en vue').toBe(false);
+
+      await boutonAnnuler.click();
+      await expect(boutonAnnuler).toBeHidden({ timeout: 10000 });
+    } finally {
+      await page.setViewportSize({ width: 390, height: 844 }).catch(() => {});
+      await page.goto('/tournee').catch(() => {});
+      await page.waitForLoadState('networkidle').catch(() => {});
+      const carteRestante = page.locator('div')
+        .filter({ hasText: titreCours })
+        .filter({ hasText: 'Gérer les présences' })
+        .last();
+      const present = await carteRestante.waitFor({ state: 'visible', timeout: 8000 }).then(() => true).catch(() => false);
+      if (present) {
+        await carteRestante.getByRole('button', { name: /Gérer les présences/ }).click().catch(() => {});
+        const boutonAnnuler = page.getByRole('button', { name: 'Annuler le cours' });
+        await boutonAnnuler.scrollIntoViewIfNeeded().catch(() => {});
+        await boutonAnnuler.click().catch(() => {});
+        await boutonAnnuler.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
       }
     }
   });
