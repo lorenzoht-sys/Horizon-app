@@ -19,6 +19,7 @@ export type EcranMobile =
   | { ecran: 'saisie' }
   | { ecran: 'plus' }
   | { ecran: 'tournee' }
+  | { ecran: 'agenda' }
   | { ecran: 'assistant'; beneficiaireId: string | null }
   | { ecran: 'parametres' }
   | { ecran: 'nouveauBeneficiaire' }
@@ -36,6 +37,10 @@ export const URLS_MOBILE = {
   saisie: '/?onglet=saisie',
   plus: '/?onglet=plus',
   tournee: '/tournee',
+  // Écran natif mobile (sous-chantier 1, Agenda) — distinct de /agenda-v2
+  // (desktop-only, react-big-calendar) : remplace l'ancien renvoi vers
+  // /agenda-v2 depuis l'écran "Plus" (Mon activité → Agenda complet).
+  agenda: '/agenda',
   assistant: '/assistant',
   parametres: '/settings',
   archives: '/archives',
@@ -107,6 +112,7 @@ export function ecranMobileDepuisUrl(pathname: string, search: string): EcranMob
     }
   }
   if (chemin === '/tournee') return { ecran: 'tournee' };
+  if (chemin === '/agenda') return { ecran: 'agenda' };
   if (chemin === '/assistant') return { ecran: 'assistant', beneficiaireId: params.get('beneficiaire') || null };
   if (chemin === '/settings') return { ecran: 'parametres' };
   if (chemin === '/participants/nouveau') return { ecran: 'nouveauBeneficiaire' };
