@@ -221,7 +221,13 @@ export default function ModalPresenceCoursCollectif({ cours, participations, par
     .map(p => `${p.prenom} ${p.nom}`);
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    // z-[1100], pas z-50 : sous 768px, BarreNavigationMobile (z-index 100,
+    // App.tsx) passe par-dessus cette modale — même défaut que les chantiers
+    // Bibliothèque et Structures. Contrairement à ModalNouveauCoursCollectif,
+    // CETTE modale est déjà utilisée en production sur mobile aujourd'hui
+    // (EcranTournee → « Gérer les présences », AppMobile.tsx) : ce n'est pas
+    // un correctif préventif, c'est un bug déjà réel qui est corrigé ici.
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1100] p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
         <div className="flex items-start justify-between mb-1">
           <h3 className="text-base font-bold text-dark flex items-center gap-2">
