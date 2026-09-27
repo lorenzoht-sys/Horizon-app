@@ -53,6 +53,8 @@ test.describe('Structures (liste + détail) sur mobile (routes fusionnées /stru
     expect(overflow, 'liste des structures : pas de défilement horizontal à 390px').toBe(false);
 
     let structureId: string | null = null;
+    let beneficiaireId: string | null = null;
+    let structureIdOriginalBeneficiaire: string | null | undefined; // undefined = jamais lu, ne pas restaurer
     const admin = clientAdminTest();
     try {
       // ── Créer une structure depuis la liste mobile ────────────────────
@@ -74,12 +76,18 @@ test.describe('Structures (liste + détail) sur mobile (routes fusionnées /stru
       expect(overflow, 'détail de structure : pas de défilement horizontal à 390px').toBe(false);
 
       // ── Rattache Julien (bénéficiaire de test partagé, sans bilan) pour
-      // tester la carte Bénéficiaires + la génération de compte rendu. ───
+      // tester la carte Bénéficiaires + la génération de compte rendu.
+      // Capture sa valeur AVANT modification pour la restaurer telle
+      // quelle ensuite — jamais un null en dur : Julien peut légitimement
+      // être rattaché à une structure de démo utilisée par d'autres tests
+      // (08-portail-structure.spec.ts), qu'un null en dur écraserait. ───
       if (admin && structureId) {
         const [prenom, ...reste] = nomBeneficiaire.split(' ');
         const { data: beneficiaire } = await admin.from('participants')
-          .select('id').eq('prenom', prenom).eq('nom', reste.join(' ')).maybeSingle();
+          .select('id, structure_id').eq('prenom', prenom).eq('nom', reste.join(' ')).maybeSingle();
         if (beneficiaire) {
+          beneficiaireId = beneficiaire.id;
+          structureIdOriginalBeneficiaire = beneficiaire.structure_id;
           await admin.from('participants').update({ structure_id: structureId }).eq('id', beneficiaire.id);
           await page.reload();
           await page.waitForLoadState('networkidle');
@@ -107,11 +115,16 @@ test.describe('Structures (liste + détail) sur mobile (routes fusionnées /stru
           }, { x: boite!.x + boite!.width / 2, y: boite!.y + boite!.height - 5 });
           expect(recouvertParNav, 'le bouton "Annuler" de la modale de compte rendu ne doit pas être recouvert par la barre de navigation').toBe(false);
           await boutonAnnuler.click();
-
-          await admin.from('participants').update({ structure_id: null }).eq('id', beneficiaire.id);
         }
       }
     } finally {
+      // ── Restaure EXACTEMENT la valeur d'origine du bénéficiaire (jamais
+      // null en dur) — avant de supprimer la structure de test, sans quoi
+      // le ON DELETE SET NULL écraserait silencieusement le suivi de ce
+      // qui a réellement été modifié ici. ─────────────────────────────────
+      if (admin && beneficiaireId && structureIdOriginalBeneficiaire !== undefined) {
+        try { await admin.from('participants').update({ structure_id: structureIdOriginalBeneficiaire }).eq('id', beneficiaireId); } catch { /* non bloquant */ }
+      }
       // ── Nettoyage via la fonctionnalité réelle de l'app ────────────────
       if (structureId) {
         await page.goto(`/structures/${structureId}`).catch(() => {});
