@@ -57,7 +57,15 @@ test.describe('Agenda desktop (/agenda-v2) — baseline avant extraction des mod
     const heureTestStr = heureTest.toTimeString().slice(0, 5);
     const heureEditeeTest = new Date(heureTest.getTime() + 37 * 60000);
     const heureEditeeStr = heureEditeeTest.toTimeString().slice(0, 5);
-    const joursOffset = 100 + (Date.now() % 200);
+    // Fenêtre volontairement courte (2-4 semaines) : un offset large (ex.
+    // jusqu'à +299 jours, testé initialement) impose une recherche par clics
+    // "Suivant" bien plus longue (jusqu'à ~45 semaines) qui a fait dépasser
+    // le budget du test sur un runner CI partagé ("Target page, context or
+    // browser has been closed", PR #98, run du 2026-09-27). Une fenêtre
+    // courte réduit la marge de recherche à quelques semaines tout en
+    // gardant assez d'aléa (14 jours × 600 minutes) pour éviter les
+    // collisions avec les séances déjà présentes en staging.
+    const joursOffset = 14 + (Date.now() % 14);
     const dateTest = new Date();
     dateTest.setDate(dateTest.getDate() + joursOffset);
     // Date locale (pas toISOString, qui convertit en UTC et peut décaler le
