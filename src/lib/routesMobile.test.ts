@@ -65,6 +65,11 @@ describe('ecranMobileDepuisUrl', () => {
     expect(ecran(URLS_MOBILE.assistant)).toEqual({ ecran: 'assistant', beneficiaireId: null });
   });
 
+  it('/agenda : écran natif mobile (sous-chantier 1), distinct de /agenda-v2 (desktop seulement)', () => {
+    expect(ecran(URLS_MOBILE.agenda)).toEqual({ ecran: 'agenda' });
+    expect(ecran('/agenda-v2')).toEqual({ ecran: 'paysage', retour: URLS_MOBILE.plus });
+  });
+
   it('les URL construites pointent vers le bon écran (aller-retour)', () => {
     expect(ecran(URLS_MOBILE.assistantAvec('p1'))).toEqual({ ecran: 'assistant', beneficiaireId: 'p1' });
     expect(ecran(URLS_MOBILE.parametres)).toEqual({ ecran: 'parametres' });
@@ -105,5 +110,8 @@ describe('ongletDepuisUrl', () => {
     expect(ongletDepuisUrl('/participant/p1/comparaison', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/participant/p1/contrat/nouveau', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/participants/nouveau', '')).toBeNull();
+    // /agenda n'est pas un onglet de la barre du bas (atteint depuis « Plus »,
+    // même situation que /assistant) : aucun onglet mis en évidence.
+    expect(ongletDepuisUrl('/agenda', '')).toBeNull();
   });
 });
