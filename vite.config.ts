@@ -26,6 +26,11 @@ export default defineConfig({
         name: "Mouv'APA Suivis",
         short_name: 'MouvAPA',
         description: "Suivi patient en Activité Physique Adaptée",
+        // Explicites (pas les défauts du plugin) : ce manifeste est celui du
+        // praticien, distinct de public/manifest-patient.webmanifest
+        // (start_url "/patient") — voir le commentaire dans index.html.
+        start_url: '/',
+        scope: '/',
         theme_color: '#032c28',
         background_color: '#ffffff',
         display: 'standalone',
