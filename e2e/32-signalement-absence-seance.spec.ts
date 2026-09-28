@@ -67,7 +67,19 @@ async function creerParticipantAvecSeance(
       .single();
     if (seanceErr || !seanceRow) throw new Error(`Création séance (fixture e2e) échouée : ${seanceErr?.message}`);
 
-    const resLogin = await request.post('/api/patient/session', { data: { code: codeAcces } });
+    // X-Forwarded-For distinct par fixture (lu tel quel par getClientIp) :
+    // 09-rate-limit-connexion-patient.spec.ts épuise DÉLIBÉRÉMENT le quota
+    // IP de connexion (5/15 min), partagé par tous les tests d'un même run
+    // CI (même IP de sortie du runner) — sans ce header, nos propres
+    // connexions de fixture se font bloquer par cet autre test, ou entre
+    // elles. N'affecte que ce test : le rate limit PAR PARTICIPANT (celui
+    // que ce chantier ajoute, api/_lib/activiteRateLimit.ts) ne dépend pas
+    // de l'IP et n'est pas contournable de cette façon.
+    const ipFictive = `203.0.113.${Math.floor(Math.random() * 254) + 1}`;
+    const resLogin = await request.post('/api/patient/session', {
+      headers: { 'X-Forwarded-For': ipFictive },
+      data: { code: codeAcces },
+    });
     const bodyLogin = await resLogin.json().catch(() => ({}));
     if (!resLogin.ok() || !bodyLogin.token) throw new Error(`Connexion patient (fixture e2e) échouée : ${JSON.stringify(bodyLogin)}`);
 
