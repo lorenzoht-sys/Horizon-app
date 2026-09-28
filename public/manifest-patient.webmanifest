@@ -1,8 +1,9 @@
 {
-  "name": "Mouv'APA Suivis",
-  "short_name": "MouvAPA",
+  "name": "Espace Patient",
+  "short_name": "Patient",
   "description": "Suivi patient en Activité Physique Adaptée",
   "start_url": "/patient",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#032c28",

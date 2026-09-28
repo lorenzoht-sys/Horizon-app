@@ -2279,9 +2279,9 @@ function EcranChargement({ loading, texteIntrouvable, onBack }: { loading: boole
 // Écran sans version téléphone (pas encore fusionné, ou desktop seulement).
 //
 // Le message invitait à tourner le téléphone. Une fois l'app installée, cette
-// invitation ne mène nulle part : le manifest verrouille l'orientation en
-// portrait (public/manifest.json et vite.config.ts, `orientation: 'portrait'`),
-// le système refuse donc la bascule. On annonce l'absence de version mobile
+// invitation ne mène nulle part : les deux manifestes PWA verrouillent
+// l'orientation en portrait (vite.config.ts et public/manifest-patient.webmanifest,
+// `orientation: 'portrait'`), le système refuse donc la bascule. On annonce l'absence de version mobile
 // plutôt que de promettre un geste sans effet, et on nomme le seul endroit où
 // l'écran existe réellement aujourd'hui : un ordinateur.
 function EcranPaysage({ onRetour }: { onRetour: () => void }) {
