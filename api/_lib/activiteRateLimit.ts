@@ -21,6 +21,11 @@ export interface SeuilRateLimit {
 // jeton compromis qui spammerait.
 export const SEUIL_PAR_DEFAUT: SeuilRateLimit = { max: 10, fenetreMinutes: 10 };
 
+// Échec ouvert (n'importe quelle panne côté table laisse passer la requête,
+// comme checkRateLimit/patientAuth.ts) — mais JAMAIS silencieux : une panne
+// PostgREST (ex. cache de schéma pas rafraîchi après la migration, constaté
+// le 2026-09-28 — voir supabase/migrations/20260928_patient_activite_rate_limit.sql)
+// désactiverait sinon le rate limit sans que rien ne le signale.
 export async function checkActiviteRateLimit(
   supabase: SupabaseClient,
   participantId: string,
@@ -28,12 +33,13 @@ export async function checkActiviteRateLimit(
   seuil: SeuilRateLimit = SEUIL_PAR_DEFAUT,
 ): Promise<boolean> {
   const since = new Date(Date.now() - seuil.fenetreMinutes * 60_000).toISOString();
-  const { count } = await supabase
+  const { count, error } = await supabase
     .from('patient_activite_rate_limit')
     .select('id', { count: 'exact', head: true })
     .eq('participant_id', participantId)
     .eq('type', type)
     .gte('created_at', since);
+  if (error) console.error('[activiteRateLimit] lecture impossible, échec ouvert :', error.code, error.message);
   return (count ?? 0) < seuil.max;
 }
 
@@ -42,5 +48,6 @@ export async function recordActiviteAttempt(
   participantId: string,
   type: string,
 ): Promise<void> {
-  await supabase.from('patient_activite_rate_limit').insert({ participant_id: participantId, type });
+  const { error } = await supabase.from('patient_activite_rate_limit').insert({ participant_id: participantId, type });
+  if (error) console.error('[activiteRateLimit] écriture impossible :', error.code, error.message);
 }

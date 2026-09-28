@@ -58,3 +58,13 @@ $migration$;
 --
 -- DELETE FROM public.patient_activite_rate_limit
 -- WHERE created_at < now() - interval '1 day';
+
+-- Sans ce NOTIFY, PostgREST peut continuer à ignorer la table nouvellement
+-- créée jusqu'à son prochain rafraîchissement de cache — et
+-- checkActiviteRateLimit()/recordActiviteAttempt() (api/_lib/activiteRateLimit.ts)
+-- n'exposent pas l'erreur PostgREST qui en résulterait : `count` reste
+-- `null`, donc `(count ?? 0) < seuil.max` reste vrai indéfiniment. Constaté
+-- en CI (PR #103, 2026-09-28) : la table existait bien, mais le rate limit
+-- ne s'est jamais déclenché (12 requêtes, 12 fois 200) tant que cette ligne
+-- manquait ici.
+NOTIFY pgrst, 'reload schema';
