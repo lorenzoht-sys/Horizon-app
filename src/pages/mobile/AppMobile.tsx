@@ -1,6 +1,9 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { format, addDays } from 'date-fns';
+import {
+  format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  eachDayOfInterval, isSameMonth, isSameDay,
+} from 'date-fns';
 import { toast } from 'sonner';
 import { useParticipants } from '../../hooks/useParticipants';
 import { useAgenda } from '../../hooks/useAgenda';
@@ -52,6 +55,10 @@ import { contratsDesBeneficiairesActifs } from '../../lib/archivage';
 
 function formatDateLong(d: Date) {
   return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+function formatMoisAnnee(d: Date) {
+  return d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
 }
 
 function formatDateCourt(d: string) {
@@ -1231,8 +1238,39 @@ function EcranAgenda() {
   } = useCoursCollectifs();
 
   const [jour, setJour] = useState(() => new Date());
+  const [vue, setVue] = useState<'jour' | 'mois'>('jour');
   const dateStr = format(jour, 'yyyy-MM-dd');
   const jourCle = CLE_JOUR_PAR_DOW[jour.getDay()];
+
+  // Grille du mois affiché (semaines complètes, lundi en premier — même
+  // convention que le calendrier desktop, AgendaV2Page.tsx).
+  const joursGrilleMois = useMemo(() => eachDayOfInterval({
+    start: startOfWeek(startOfMonth(jour), { weekStartsOn: 1 }),
+    end: endOfWeek(endOfMonth(jour), { weekStartsOn: 1 }),
+  }), [jour]);
+
+  // Compteur de charge par jour (vue Mois) : exclut les séances et cours
+  // annulés, qui restent visibles (grisés) en vue Jour via itemsJour mais ne
+  // doivent pas gonfler artificiellement la charge affichée sur une case.
+  const comptesParJour = useMemo(() => {
+    const map = new Map<string, number>();
+    const incrementer = (d: string) => map.set(d, (map.get(d) ?? 0) + 1);
+    seances.forEach(s => { if (s.statut !== 'annulee') incrementer(s.date); });
+    coursCollectifs.forEach(c => { if (c.statut !== 'annule') incrementer(c.date); });
+    evenements.forEach(e => incrementer(e.date));
+    return map;
+  }, [seances, coursCollectifs, evenements]);
+
+  // Indisponibilités : récurrentes par jour de semaine (pas de date propre,
+  // cf. Indisponibilite dans types/index.ts) — un même jour de semaine est
+  // donc indisponible ou non sur tout le mois, d'où un simple Set des 7 clés.
+  const joursSemaineIndisponibles = useMemo(() => {
+    const set = new Set<string>();
+    (['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'] as const).forEach(cle => {
+      if (indisposDuJour(cle).length > 0) set.add(cle);
+    });
+    return set;
+  }, [indisposDuJour]);
 
   const participantMap = useMemo(() => new Map(participants.map(p => [p.id, p])), [participants]);
   function nomBeneficiaireDe(s: Seance): string {
@@ -1396,19 +1434,66 @@ function EcranAgenda() {
             + Nouvelle séance
           </button>
         </div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+          <button onClick={() => setVue('jour')}
+            style={{ flex: 1, padding: '6px 0', background: vue === 'jour' ? C.primary : C.bg, color: vue === 'jour' ? 'white' : C.text, border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            Jour
+          </button>
+          <button onClick={() => setVue('mois')}
+            style={{ flex: 1, padding: '6px 0', background: vue === 'mois' ? C.primary : C.bg, color: vue === 'mois' ? 'white' : C.text, border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            Mois
+          </button>
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button onClick={() => setJour(d => addDays(d, -1))} aria-label="Jour précédent"
+          <button onClick={() => setJour(d => vue === 'jour' ? addDays(d, -1) : addMonths(d, -1))} aria-label={vue === 'jour' ? 'Jour précédent' : 'Mois précédent'}
             style={{ width: 36, height: 36, background: C.bg, border: 'none', borderRadius: 8, fontSize: 16, color: C.text, cursor: 'pointer' }}>
             ‹
           </button>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, textTransform: 'capitalize' }}>{formatDateLong(jour)}</div>
-          <button onClick={() => setJour(d => addDays(d, 1))} aria-label="Jour suivant"
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, textTransform: 'capitalize' }}>{vue === 'jour' ? formatDateLong(jour) : formatMoisAnnee(jour)}</div>
+          <button onClick={() => setJour(d => vue === 'jour' ? addDays(d, 1) : addMonths(d, 1))} aria-label={vue === 'jour' ? 'Jour suivant' : 'Mois suivant'}
             style={{ width: 36, height: 36, background: C.bg, border: 'none', borderRadius: 8, fontSize: 16, color: C.text, cursor: 'pointer' }}>
             ›
           </button>
         </div>
       </div>
 
+      {vue === 'mois' ? (
+        <div style={{ padding: '8px 16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
+            {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((lettre, i) => (
+              <div key={i} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: C.muted }}>{lettre}</div>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+            {joursGrilleMois.map(d => {
+              const dStr = format(d, 'yyyy-MM-dd');
+              const horsMois = !isSameMonth(d, jour);
+              const estAujourdhui = isSameDay(d, new Date());
+              const compte = comptesParJour.get(dStr) ?? 0;
+              const indisponible = joursSemaineIndisponibles.has(CLE_JOUR_PAR_DOW[d.getDay()]);
+              return (
+                <button key={dStr} onClick={() => { setJour(d); setVue('jour'); }} aria-label={formatDateAgenda(dStr)}
+                  style={{
+                    position: 'relative', aspectRatio: '1', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center', gap: 2, borderRadius: 8,
+                    border: estAujourdhui ? `2px solid ${C.primary}` : '1px solid transparent',
+                    background: 'white', cursor: 'pointer', opacity: horsMois ? 0.35 : 1,
+                  }}>
+                  <span style={{ fontSize: 13, fontWeight: estAujourdhui ? 700 : 500, color: C.text }}>{d.getDate()}</span>
+                  {compte > 0 && (
+                    <span data-testid="charge-jour" style={{ fontSize: 10, fontWeight: 700, color: 'white', background: C.primary, borderRadius: 8, minWidth: 16, height: 16, padding: '0 3px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {compte}
+                    </span>
+                  )}
+                  {indisponible && (
+                    <span aria-hidden="true" style={{ position: 'absolute', top: 4, right: 4, width: 6, height: 6, borderRadius: '50%', background: '#EF4444' }} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
       <div style={{ padding: '8px 16px' }}>
         {indisposJour.length > 0 && (
           <div style={{ background: '#FEF2F2', border: '1px solid #FEE2E2', borderRadius: 10, padding: '10px 12px', marginBottom: 10, fontSize: 12, color: '#991B1B' }}>
@@ -1485,6 +1570,7 @@ function EcranAgenda() {
           );
         })}
       </div>
+      )}
 
       {nouvelleSeanceOuverte && (
         <ModalCreerSeanceManuelle
