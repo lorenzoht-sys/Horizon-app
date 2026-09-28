@@ -27,20 +27,52 @@ function barreNav(page: Page) {
   return page.getByRole('navigation', { name: 'Navigation principale' });
 }
 
-async function creerSeanceDeTest(page: Page, heureDebut: string): Promise<void> {
+// Créneau dérivé de l'heure courante plutôt que fixe : un créneau fixe finit
+// tôt ou tard par tomber sur un résidu laissé par un run interrompu de CE
+// test (la séance d'origine passe "reportee" puis une copie "planifiee" est
+// créée à J+3 — si le run s'interrompt avant le filet de sécurité, les deux
+// restent actives) ou sur une vraie séance de Camille (bénéficiaire
+// partagée). Le formulaire refuse alors silencieusement (bouton "Créer la
+// séance" reste désactivé, sans message), ce qui a fait échouer ce test en
+// timeout de 30s — constaté et corrigé le 2026-09-28 (chantier « CI e2e au
+// vert »), après nettoyage ciblé par id des deux séances orphelines en
+// cause. `plageMinutes` reste petite et l'heure de base matinale, pour ne
+// pas dériver vers de vrais horaires de rendez-vous.
+function heureUniquePourRun(heureBase: number, minuteBase: number, plageMinutes: number): string {
+  const base = new Date(0, 0, 1, heureBase, minuteBase);
+  base.setMinutes(base.getMinutes() + (Date.now() % plageMinutes));
+  return base.toTimeString().slice(0, 5);
+}
+
+// Retourne l'heure EFFECTIVEMENT utilisée (peut différer de `heureSouhaitee`
+// si la boucle a dû décaler pour éviter un conflit) — l'appelant doit s'en
+// servir pour retrouver la carte créée, pas de la valeur demandée en entrée.
+async function creerSeanceDeTest(page: Page, heureSouhaitee: string): Promise<string> {
   await page.setViewportSize({ width: 1400, height: 900 });
   await page.goto('/agenda-v2');
   await page.getByRole('button', { name: /Nouvelle séance/ }).click();
   const modale = page.locator('.rounded-2xl.shadow-xl.max-w-md');
   await modale.getByRole('combobox').first().selectOption({ label: `${env.patientPrenom} ${env.patientNom}` });
-  await modale.locator('input[type="time"]').fill(heureDebut);
   // Durée réduite (15 min) : moins de risque de chevaucher une vraie
   // séance de Camille déjà planifiée aujourd'hui (le formulaire refuse un
   // conflit horaire).
   await modale.locator('input[type="number"]').fill('15');
-  await modale.getByRole('button', { name: 'Créer la séance' }).click();
+
+  const champHeure = modale.locator('input[type="time"]');
+  const boutonCreer = modale.getByRole('button', { name: 'Créer la séance' });
+  let heureDebut = heureSouhaitee;
+  for (let tentative = 0; tentative < 6; tentative++) {
+    await champHeure.fill(heureDebut);
+    if (await boutonCreer.isEnabled()) break;
+    const decalee = new Date(0, 0, 1, ...heureSouhaitee.split(':').map(Number) as [number, number]);
+    decalee.setMinutes(decalee.getMinutes() + (tentative + 1) * 7);
+    heureDebut = decalee.toTimeString().slice(0, 5);
+  }
+  await expect(boutonCreer).toBeEnabled();
+  await boutonCreer.click();
   await expect(page.getByText('Séance créée')).toBeVisible({ timeout: 10000 });
   await page.setViewportSize({ width: 390, height: 844 });
+  return heureDebut;
 }
 
 function carteSeance(page: Page, heureDebut: string) {
@@ -60,9 +92,11 @@ test.describe('Tournée mobile — annuler et reporter une séance', () => {
   test.beforeEach(() => skipUnlessPraticien());
 
   test('annuler une séance depuis mobile, avec confirmation, sans raison obligatoire', async ({ page }) => {
-    const heureDebut = '05:00';
+    // Fenêtre 04:00–05:29 : distincte de celle du test "reporter" ci-dessous
+    // (06:00–07:29), pour que les deux ne puissent jamais tomber sur le même
+    // créneau au sein d'un même run.
     await loginPraticien(page);
-    await creerSeanceDeTest(page, heureDebut);
+    const heureDebut = await creerSeanceDeTest(page, heureUniquePourRun(4, 0, 90));
 
     try {
       await page.goto('/tournee');
@@ -110,9 +144,8 @@ test.describe('Tournée mobile — annuler et reporter une séance', () => {
   });
 
   test('reporter une séance depuis mobile crée une nouvelle séance à la date choisie', async ({ page }) => {
-    const heureDebut = '05:30';
     await loginPraticien(page);
-    await creerSeanceDeTest(page, heureDebut);
+    const heureDebut = await creerSeanceDeTest(page, heureUniquePourRun(6, 0, 90));
 
     const dateReport = (() => {
       const d = new Date();
