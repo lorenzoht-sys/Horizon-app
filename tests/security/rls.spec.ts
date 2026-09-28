@@ -108,6 +108,11 @@ const EXCLUDED_TABLES: Record<string, string> = {
   // défaut, zéro policy) — pas de session anon/authenticated possible à tester.
   patient_login_attempts: 'service_role only, aucune policy, testé indirectement via rate-limit.spec.ts',
   organisation_demande_attempts: 'service_role only, aucune policy, testé indirectement via rate-limit.spec.ts',
+  // Même patron que patient_login_attempts : RLS activée, zéro policy,
+  // accès exclusivement par service_role depuis api/_lib/activiteRateLimit.ts.
+  // Créée par 20260928_patient_activite_rate_limit.sql (chantier
+  // signalement d'absence patient, lot 1).
+  patient_activite_rate_limit: 'service_role only, aucune policy, alimentée par api/_lib/activiteRateLimit.ts',
   // Même patron que patient_login_attempts : RLS activée ET forcée, zéro
   // policy, accès exclusivement par service_role depuis api/_lib/rateLimit.ts.
   // Aucune session anon/authenticated ne peut donc l'atteindre — rien à

@@ -77,6 +77,9 @@ export type AuditEventType =
   | 'patient_test_etalon_submit' | 'patient_exercice_libre_submit' | 'patient_access_via_praticien'
   // Réponse « Je viens / Je ne viens pas » à un cours collectif (metadata : coursId, réponse ou motif du refus).
   | 'patient_cours_presence_submit'
+  // Signalement (ou annulation du signalement) d'absence à la prochaine séance
+  // planifiée (metadata : seanceId, signale, ou motif du refus).
+  | 'patient_seance_absence_submit'
   // Action praticien (pas patient) — même table : pas de raison de dupliquer
   // un mécanisme d'audit générique pour une différence d'origine de l'action.
   | 'praticien_seances_supprimees_fin_contrat'

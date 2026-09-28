@@ -104,6 +104,22 @@ export function heureParisCivile(date: Date): string {
 }
 
 /**
+ * Date civile Europe/Paris (YYYY-MM-DD) de l'instant donné — gère
+ * automatiquement CET/CEST. Utilisée pour comparer à une colonne `date`
+ * (ex. api/_lib/absenceSignalee.ts) sans jamais dépendre du fuseau du
+ * serveur (UTC en production Vercel) : une séance à 23h30 Paris reste « ce
+ * soir-là » même quand il est déjà minuit passé en UTC.
+ */
+export function dateParisCivile(date: Date): string {
+  const dtf = new Intl.DateTimeFormat('fr-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  });
+  // 'fr-CA' formate nativement en YYYY-MM-DD (ISO), sans recomposer les parts.
+  return dtf.format(date);
+}
+
+/**
  * Un patient doit recevoir le rappel "veille de séance" si le rappel est
  * activé, que l'heure civile Paris actuelle a atteint l'heure configurée
  * (défaut 19h, la veille au soir d'une séance prévue demain), et qu'aucun

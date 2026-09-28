@@ -18,7 +18,10 @@ describe('colonnes de seances exposées au bénéficiaire et au portail structur
   it('garde les colonnes dont les écrans ont besoin', () => {
     // Filet contre un retrait trop large : le portail structure et l'espace
     // patient lisent ces colonnes (date, heure, statut, type…).
-    for (const attendue of ['id', 'participant_id', 'date', 'heure_debut', 'heure_fin', 'duree_minutes', 'type', 'statut']) {
+    for (const attendue of [
+      'id', 'participant_id', 'date', 'heure_debut', 'heure_fin', 'duree_minutes', 'type', 'statut',
+      'absence_signalee_par_patient_le',
+    ]) {
       expect(colonnes).toContain(attendue);
     }
   });
