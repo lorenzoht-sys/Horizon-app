@@ -18,6 +18,17 @@ import { clientAdminTest } from './nettoyageTest.js';
 // connexions pour TOUT le fichier : chaque test insère/nettoie seulement
 // SES séances, jamais un nouveau participant.
 //
+// `retries: 0` pour ce fichier (ci-dessous) : constaté en CI (PR #103,
+// 2026-09-28) qu'une reprise Playwright sur un describe.serial réexécute
+// beforeAll depuis le début — donc 2 connexions supplémentaires sur le
+// même quota déjà tendu, ce qui a fait échouer une reprise avec « Trop de
+// tentatives ». Sans confiance en un retry pour rattraper un échec
+// applicatif ici : un échec de ce fichier doit se lire tel quel, pas être
+// aplati par une seconde tentative qui consommerait le quota d'un autre
+// test du même run. Ne touche ni le seuil ni le code du rate limit de
+// connexion (api/_lib/patientAuth.ts) — seulement la politique de retry de
+// CE fichier de test.
+//
 // Fixtures e2e dédiées (jamais Camille/Julien), nettoyage par identifiant
 // précis — même discipline que 08-portail-structure.spec.ts.
 
@@ -98,6 +109,10 @@ async function creerSeance(
 }
 
 test.describe.serial('Signalement d\'absence — /api/patient/activite (type "seance-absence")', () => {
+  // Voir le commentaire d'en-tête : une reprise rejouerait beforeAll (donc
+  // 2 connexions patient de plus) sur un quota déjà partagé et tendu.
+  test.describe.configure({ retries: 0 });
+
   let admin: SupabaseClient | null = null;
   let praticienId = '';
   let participantA: FixtureParticipant | null = null;
@@ -200,7 +215,11 @@ test.describe.serial('Signalement d\'absence — /api/patient/activite (type "se
   });
 
   test('rate limit : 429 au-delà du seuil, par participant', async ({ request }) => {
-    test.setTimeout(30000);
+    // 90s (pas 30s) : 12 requêtes séquentielles vers un vrai Preview Vercel
+    // déployé (latence réseau + cold starts cumulés) ont dépassé 30s en CI
+    // (PR #103, 2026-09-28 — "Test timeout of 30000ms exceeded", sans rapport
+    // avec le rate limit testé ici).
+    test.setTimeout(90000);
     const demain = new Date();
     demain.setDate(demain.getDate() + 1);
     const dateDemain = demain.toISOString().slice(0, 10);
