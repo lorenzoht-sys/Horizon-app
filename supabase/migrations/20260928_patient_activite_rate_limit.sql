@@ -18,6 +18,19 @@
 -- ajoutée pour anon/authenticated : seul service_role (qui contourne RLS)
 -- peut y accéder.
 --
+-- ── Privilèges — REVOKE puis GRANT explicite ────────────────────────────────
+-- Règle du projet pour toute nouvelle table dans public depuis le 2026-08-29
+-- (voir docs/PLAN-BETA.md, « CHANTIER PLANIFIÉ — retirer la règle de
+-- privilèges par défaut ») : il n'y a plus de GRANT par défaut à service_role
+-- pour les tables créées après cette date. Sans le GRANT explicite ci-dessous,
+-- service_role lui-même n'a AUCUN privilège sur cette table — constaté en CI
+-- (PR #103, 2026-09-28) : "permission denied for table
+-- patient_activite_rate_limit" (code 42501) dès la première lecture, malgré
+-- une table par ailleurs correctement créée. patient_login_attempts (la
+-- table sœur, connexion patient) n'a pas ce GRANT dans sa propre migration —
+-- elle est antérieure au 2026-08-29 et a hérité de l'ancienne règle par
+-- défaut, qui ne s'applique plus aux tables nouvelles.
+--
 -- ── ROLLBACK ────────────────────────────────────────────────────────────────
 --   DROP TABLE IF EXISTS public.patient_activite_rate_limit;
 -- ============================================================================
@@ -33,6 +46,13 @@ CREATE INDEX IF NOT EXISTS idx_patient_activite_rate_limit_participant_type_crea
   ON public.patient_activite_rate_limit (participant_id, type, created_at);
 
 ALTER TABLE public.patient_activite_rate_limit ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON TABLE public.patient_activite_rate_limit FROM PUBLIC;
+REVOKE ALL ON TABLE public.patient_activite_rate_limit FROM anon;
+REVOKE ALL ON TABLE public.patient_activite_rate_limit FROM authenticated;
+REVOKE ALL ON TABLE public.patient_activite_rate_limit FROM service_role;
+
+GRANT ALL ON TABLE public.patient_activite_rate_limit TO service_role;
 
 DO $migration$
 BEGIN
@@ -50,6 +70,16 @@ BEGIN
         WHERE schemaname = 'public' AND tablename = 'patient_activite_rate_limit') <> 0 THEN
     RAISE EXCEPTION 'Echec verification : aucune policy attendue sur patient_activite_rate_limit (service_role uniquement)';
   END IF;
+
+  -- service_role doit pouvoir lire/écrire ; anon et authenticated, jamais.
+  IF NOT has_table_privilege('service_role', 'public.patient_activite_rate_limit', 'SELECT')
+     OR NOT has_table_privilege('service_role', 'public.patient_activite_rate_limit', 'INSERT') THEN
+    RAISE EXCEPTION 'Echec verification : service_role doit avoir SELECT et INSERT sur patient_activite_rate_limit';
+  END IF;
+  IF has_table_privilege('anon', 'public.patient_activite_rate_limit', 'SELECT')
+     OR has_table_privilege('authenticated', 'public.patient_activite_rate_limit', 'SELECT') THEN
+    RAISE EXCEPTION 'Echec verification : anon/authenticated ne doivent avoir aucun privilege sur patient_activite_rate_limit';
+  END IF;
 END
 $migration$;
 
@@ -59,12 +89,4 @@ $migration$;
 -- DELETE FROM public.patient_activite_rate_limit
 -- WHERE created_at < now() - interval '1 day';
 
--- Sans ce NOTIFY, PostgREST peut continuer à ignorer la table nouvellement
--- créée jusqu'à son prochain rafraîchissement de cache — et
--- checkActiviteRateLimit()/recordActiviteAttempt() (api/_lib/activiteRateLimit.ts)
--- n'exposent pas l'erreur PostgREST qui en résulterait : `count` reste
--- `null`, donc `(count ?? 0) < seuil.max` reste vrai indéfiniment. Constaté
--- en CI (PR #103, 2026-09-28) : la table existait bien, mais le rate limit
--- ne s'est jamais déclenché (12 requêtes, 12 fois 200) tant que cette ligne
--- manquait ici.
 NOTIFY pgrst, 'reload schema';
