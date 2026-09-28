@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { skipUnlessPraticien, loginPraticien, env } from '../helpers.js';
+import { clientAdminTest } from '../nettoyageTest.js';
 
 // Sous-chantier 1 (Agenda mobile, cadrage validé) : écran natif EcranAgenda
 // (AppMobile.tsx), vue Jour uniquement (MVP) — pas de fusion de route,
@@ -148,6 +149,107 @@ test.describe('Agenda mobile (écran natif, vue Jour — MVP)', () => {
           await page.locator('button.text-red').first().click().catch(() => {});
           await page.getByRole('button', { name: 'Supprimer' }).click().catch(() => {});
         }
+      }
+    }
+  });
+});
+
+// Sous-chantier 3 (Vue Mois mobile) : grille mensuelle dans EcranAgenda,
+// bascule Jour/Mois, compteur de charge par case (séances + cours collectifs
+// + événements, hors annulés), tap sur une case → vue Jour. Aucune nouvelle
+// requête réseau : useAgenda / useCoursCollectifs / useEvenementsAgenda
+// chargent déjà l'intégralité des données, sans filtre de date.
+test.describe('Agenda mobile — vue Mois', () => {
+  test.beforeEach(() => skipUnlessPraticien());
+
+  test('bascule en vue Mois, vérifie le compteur d\'une case, tape dessus pour revenir en vue Jour', async ({ page }) => {
+    test.setTimeout(45000);
+    const decalageMinutes = Date.now() % 600;
+    const heureTest = new Date(0, 0, 1, 8, 0);
+    heureTest.setMinutes(heureTest.getMinutes() + decalageMinutes);
+    let heureCreation = heureTest.toTimeString().slice(0, 5);
+    const nomComplet = `${env.patientPrenom} ${env.patientNom}`;
+    const marqueur = `E2E mobile agenda mois ${Date.now()}`;
+
+    // Date cible : décalée de 17 jours par rapport à aujourd'hui, pour ne pas
+    // se mêler aux nombreuses séances de test créées par d'autres specs à la
+    // date du jour, pour ce même bénéficiaire partagé (voir le test
+    // précédent dans ce fichier).
+    const aujourdHui = new Date();
+    const dateCible = new Date(aujourdHui);
+    dateCible.setDate(dateCible.getDate() + 17);
+    const dateCibleStr = `${dateCible.getFullYear()}-${String(dateCible.getMonth() + 1).padStart(2, '0')}-${String(dateCible.getDate()).padStart(2, '0')}`;
+    // Doit être identique au calcul de l'aria-label posé sur chaque case du
+    // mois (formatDateAgenda / lib/agendaCommun.ts), pour cibler la bonne case.
+    const libelleCase = new Date(dateCibleStr + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+    const moisADepasser = (dateCible.getFullYear() * 12 + dateCible.getMonth()) - (aujourdHui.getFullYear() * 12 + aujourdHui.getMonth());
+
+    await loginPraticien(page);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Plus', exact: true }).click();
+    await page.getByText('Agenda complet').click();
+    await expect(page.getByText('Agenda', { exact: true })).toBeVisible();
+
+    let seanceCreee = false;
+    let seanceId: string | null = null;
+    try {
+      // ── Vue Mois, navigation jusqu'au mois cible ────────────────────────
+      await page.getByRole('button', { name: 'Mois', exact: true }).click();
+      for (let i = 0; i < moisADepasser; i++) {
+        await page.getByRole('button', { name: 'Mois suivant' }).click();
+      }
+      const caseCible = page.getByRole('button', { name: libelleCase });
+      await expect(caseCible).toBeVisible();
+      const badgeCible = caseCible.getByTestId('charge-jour');
+      const avant = (await badgeCible.count()) > 0 ? Number(await badgeCible.textContent()) : 0;
+
+      // ── Créer une séance de test à la date cible (le formulaire reste
+      // accessible depuis la vue Mois — même bouton d'en-tête) ────────────
+      await page.getByRole('button', { name: '+ Nouvelle séance' }).click();
+      const formSeance = page.locator('form');
+      await formSeance.locator('select').first().selectOption({ label: nomComplet });
+      await formSeance.locator('input[type="date"]').fill(dateCibleStr);
+      await formSeance.locator('textarea').fill(marqueur);
+      const boutonCreer = formSeance.getByRole('button', { name: 'Créer la séance' });
+      const champHeureCreation = formSeance.locator('input[type="time"]');
+      for (let tentative = 0; tentative < 6; tentative++) {
+        await champHeureCreation.fill(heureCreation);
+        if (await boutonCreer.isEnabled()) break;
+        heureCreation = new Date(heureTest.getTime() + (tentative + 1) * 83 * 60000).toTimeString().slice(0, 5);
+      }
+      await expect(boutonCreer).toBeEnabled();
+      await boutonCreer.click();
+      await expect(page.getByText('Séance créée')).toBeVisible({ timeout: 10000 });
+      seanceCreee = true;
+
+      // ── Lecture directe en base : identifie LA séance créée par ce run,
+      // par son marqueur unique + sa date (script séparé de la suppression,
+      // ciblage par identifiant ensuite) ───────────────────────────────────
+      const adminLecture = clientAdminTest();
+      if (adminLecture) {
+        const { data } = await adminLecture.from('seances').select('id').eq('date', dateCibleStr).eq('notes', marqueur).limit(1);
+        seanceId = data?.[0]?.id ?? null;
+      }
+
+      // ── Compteur mis à jour sur la case ──────────────────────────────────
+      await expect(badgeCible).toHaveText(String(avant + 1));
+
+      // ── Tap sur la case → vue Jour sur cette date ───────────────────────
+      await caseCible.click();
+      const carteSeance = page.getByRole('button', { name: new RegExp(nomComplet) }).filter({ hasText: heureCreation });
+      await expect(carteSeance).toBeVisible({ timeout: 10000 });
+
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+      expect(overflow, 'Vue Mois : pas de défilement horizontal à 390px').toBe(false);
+    } finally {
+      // ── Suppression directe en base, ciblée par l'id lu ci-dessus ───────
+      // Filet de sécurité par marqueur + date si la lecture a échoué —
+      // jamais par « la plus récente » (bénéficiaire partagé entre tests).
+      const adminSuppression = clientAdminTest();
+      if (adminSuppression && seanceId) {
+        await adminSuppression.from('seances').delete().eq('id', seanceId);
+      } else if (adminSuppression && seanceCreee) {
+        await adminSuppression.from('seances').delete().eq('date', dateCibleStr).eq('notes', marqueur);
       }
     }
   });
