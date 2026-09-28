@@ -27,8 +27,13 @@
 -- Uniquement /api/patient/activite (type « seance-absence »), en service_role,
 -- après vérification du jeton patient et de la fenêtre « jusqu'au début de la
 -- séance, aucune tolérance ». Le bénéficiaire n'a aucun accès direct à la
--- table. Aucune policy RLS à modifier : la policy praticien existante
--- (praticien_id = auth.uid()) couvre déjà la ligne entière.
+-- table. Aucune policy RLS à modifier : `seances` en porte CINQ aujourd'hui,
+-- pas quatre — les 4 historiques (praticien_id = auth.uid(), une par
+-- opération) ET orga_acces_seances (mode organisation, FOR ALL, via la
+-- fonction acces_participant() — toutes deux créées par
+-- 20260714_03_mode_organisation_policies_lot_a.sql et
+-- 20260714_01_mode_organisation_fondations.sql). Les cinq couvrent déjà la
+-- ligne entière, donc la colonne aussi.
 --
 -- ── ⚠️ ORDRE DE DÉPLOIEMENT : cette migration AVANT le code ─────────────────
 -- api/_lib/colonnesSeancesExposees.ts ajoute cette colonne à la liste exposée
@@ -58,10 +63,13 @@ BEGIN
     RAISE EXCEPTION 'Echec verification : absence_signalee_par_patient_le (timestamptz) doit exister, nullable, sans défaut';
   END IF;
 
-  -- Rien de perdu ni de doublé côté policies (les 4 existantes, inchangées).
+  -- Rien de perdu côté policies : les 5 attendues existent TOUTES, par nom
+  -- (pas un simple compte — un compte à 5 passerait aussi si l'une des 5
+  -- manquait mais qu'une autre, inattendue, la remplaçait).
   IF (SELECT count(*) FROM pg_policies
-        WHERE schemaname = 'public' AND tablename = 'seances') <> 4 THEN
-    RAISE EXCEPTION 'Echec verification : 4 policies attendues sur seances (select/insert/update/delete praticien), inchangees';
+        WHERE schemaname = 'public' AND tablename = 'seances'
+          AND policyname IN ('seances_select', 'seances_insert', 'seances_update', 'seances_delete', 'orga_acces_seances')) <> 5 THEN
+    RAISE EXCEPTION 'Echec verification : les 5 policies attendues sur seances (seances_select/insert/update/delete + orga_acces_seances) doivent toutes exister, inchangees';
   END IF;
 
   -- Aucune ligne existante n'est déjà renseignée : la colonne est neuve.
