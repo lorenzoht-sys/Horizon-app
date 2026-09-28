@@ -231,3 +231,38 @@ export async function patientAnnoncerPresence(
     return { ok: false, status: 0, error: 'Connexion impossible. Vérifiez votre réseau et réessayez.' };
   }
 }
+
+export type ResultatSignalementAbsence =
+  | { ok: true; seanceId: string; absenceSignalee: boolean }
+  | {
+      ok: false;
+      /** 0 = réseau injoignable (pas une réponse du serveur). 404 = aucune séance à venir. 409 = trop tard. 429 = trop de requêtes. */
+      status: number;
+      /** Code lisible renvoyé par le serveur sur un 409 : seance_realisee, deja_commencee… */
+      code?: string;
+      error?: string;
+    };
+
+/**
+ * Signale (`signale: true`) ou annule le signalement (`signale: false`) d'une
+ * absence pour la PROCHAINE séance planifiée du bénéficiaire. Le participant
+ * vient du JETON ; aucune séance à désigner dans cette requête, elle porte
+ * toujours sur la même séance que la carte « prochain rendez-vous ».
+ */
+export async function patientSignalerAbsence(
+  token: string,
+  signale: boolean,
+): Promise<ResultatSignalementAbsence> {
+  try {
+    const res = await fetch('/api/patient/activite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ type: 'seance-absence', signale }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, status: res.status, code: data?.code, error: data?.error };
+    return { ok: true, seanceId: data?.seanceId, absenceSignalee: data?.absenceSignalee ?? signale };
+  } catch {
+    return { ok: false, status: 0, error: 'Connexion impossible. Vérifiez votre réseau et réessayez.' };
+  }
+}

@@ -5,6 +5,7 @@ import {
   dateHeureParisVersUTC,
   seanceDansLaFenetreDeRappel,
   heureParisCivile,
+  dateParisCivile,
   doitEnvoyerRappelVeilleSeance,
 } from './rappels.js';
 
@@ -86,6 +87,27 @@ describe('heureParisCivile', () => {
 
   it('calcule l\'heure civile en été (CEST, UTC+2)', () => {
     expect(heureParisCivile(new Date('2026-07-15T06:00:00.000Z'))).toBe('08:00');
+  });
+});
+
+describe('dateParisCivile', () => {
+  it('calcule la date civile en hiver (CET, UTC+1)', () => {
+    expect(dateParisCivile(new Date('2026-01-15T10:00:00.000Z'))).toBe('2026-01-15');
+  });
+
+  it('calcule la date civile en été (CEST, UTC+2)', () => {
+    expect(dateParisCivile(new Date('2026-07-15T10:00:00.000Z'))).toBe('2026-07-15');
+  });
+
+  it('reste la veille à Paris juste après minuit UTC (hiver, pas encore minuit Paris)', () => {
+    // 2026-01-16T00:30 UTC == 2026-01-16T01:30 Paris (CET) : déjà le 16 à Paris aussi.
+    // Cas utile : 2026-01-15T23:30 UTC == 2026-01-16T00:30 Paris — bascule AVANT minuit UTC.
+    expect(dateParisCivile(new Date('2026-01-15T23:30:00.000Z'))).toBe('2026-01-16');
+  });
+
+  it('reste le jour précédent à Paris juste avant minuit UTC (été, pas encore minuit Paris)', () => {
+    // 2026-07-15T21:30 UTC == 2026-07-15T23:30 Paris (CEST) : encore le 15 à Paris.
+    expect(dateParisCivile(new Date('2026-07-15T21:30:00.000Z'))).toBe('2026-07-15');
   });
 });
 

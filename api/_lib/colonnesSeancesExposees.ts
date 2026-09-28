@@ -20,4 +20,10 @@ export const COLONNES_SEANCE_EXPOSEE = [
   'id', 'participant_id', 'contrat_id', 'date', 'heure_debut', 'heure_fin',
   'duree_minutes', 'type', 'statut', 'adresse', 'coordonnees',
   'created_at', 'updated_at',
+  // Signalement d'absence par le bénéficiaire (api/_lib/absenceSignalee.ts,
+  // migration 20260928_absence_signalee_seances.sql) : NULL par défaut, un
+  // horodatage sinon. Le bénéficiaire doit pouvoir relire sa propre
+  // confirmation — distinct de notes/motif_annulation*, qui restent internes
+  // au praticien.
+  'absence_signalee_par_patient_le',
 ].join(', ');
