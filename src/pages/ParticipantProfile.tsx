@@ -6,15 +6,22 @@ import {
 } from 'recharts';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { differenceInDays } from 'date-fns';
+import { v4 as uuidv4 } from 'uuid';
 import {
-  ArrowLeft, Pencil, FileText, TrendingUp, Share2,
+  ArrowLeft, Pencil, FileText, TrendingUp,
   Download, Trash2, Dumbbell, NotebookPen, Calendar, MapPin,
   RefreshCw, ClipboardList, Mic, Save, ExternalLink, LayoutTemplate,
-  Archive, ArchiveRestore, Bot, Phone, Navigation,
+  Archive, ArchiveRestore, Bot, Phone, Navigation, ChevronDown,
 } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
 import { useProgrammeV2 } from '../hooks/useProgrammeV2';
+import { useProgrammeWizard } from '../hooks/useProgrammeWizard';
+import { useProgrammeIA } from '../hooks/useProgrammeIA';
+import { useDevice } from '../hooks/useDevice';
+import { ProgrammeWizardModal } from '../components/programme/ProgrammeWizard';
+import { ConfigIAModal, PreviewIAModal, OBJECTIFS_IA } from '../components/programme/ProgrammeIA';
+import { genererProgrammeStructure, versPayloadCreateProgramme, type ProgrammeIA } from '../utils/genererProgrammeIA';
 import { exportProgrammePDF } from '../utils/exportPDF';
 import { loadExercicesPraticien } from '../data/exercices';
 import { useContrats } from '../hooks/useContrats';
@@ -479,13 +486,19 @@ function CarteProfilFonctionnel({ participant, bilans }: {
 
   const testsAvecValeur = TESTS_TABLEAU.map(test => {
     const val = test.getVal(current);
-    if (val === null || val === undefined) return null;
+    const extra = test.getExtra?.(current) ?? null;
+    if (val === null || val === undefined) {
+      // TM6 en pas/tours : pas de valeur en mètres à noter (jamais comparer pas <-> distance,
+      // cf. tm6.ts), mais pas invisible pour autant — `extra` porte le résultat réel (ex.
+      // « Stepper : 650 pas ») quand il existe, sans note ni delta (unités non comparables).
+      if (extra) return { test, val: null, note: null, progression: null, extra };
+      return null;
+    }
     const valInit = initial ? test.getVal(initial) : null;
     const norme = NORMES_SCORING[test.normeKey];
     const note = norme ? calculerNote(val, norme) : null;
     const delta = valInit !== null && valInit !== undefined ? val - valInit : null;
     const progression = delta !== null ? (test.lower ? -delta : delta) : null;
-    const extra = test.getExtra?.(current) ?? null;
     return { test, val, note, progression, extra };
   }).filter((x): x is NonNullable<typeof x> => x !== null);
 
@@ -497,16 +510,27 @@ function CarteProfilFonctionnel({ participant, bilans }: {
     const dotColor = note !== null ? noteToDot(note) : null;
     const dotLabel = note !== null ? noteToLabel(note) : '';
     const normeText = NORMES_LABEL[test.normeKey];
-    const valDisplay = `${test.label === 'Souplesse' && val > 0 ? '+' : ''}${val}${test.unite}`;
+    // val === null : résultat non comparable (TM6 en pas/tours) — extra porte alors seul le
+    // résultat réel, à la place de la valeur en mètres qui n'existe pas pour ce bilan.
+    const valDisplay = val !== null
+      ? `${test.label === 'Souplesse' && val > 0 ? '+' : ''}${val}${test.unite}`
+      : null;
     return (
       <div className="flex items-center gap-2 py-2 border-b border-gray-100 last:border-0">
         <span className="text-[12px] text-gray-400 w-[82px] flex-shrink-0 truncate">{test.label}</span>
         <div className="flex-1 min-w-0">
-          <span className="text-[13px] font-semibold text-gray-800">{valDisplay}</span>
+          {valDisplay && <span className="text-[13px] font-semibold text-gray-800">{valDisplay}</span>}
           {extra && (
-            <div className="text-[10px] text-orange-600 leading-none mt-0.5 truncate" title={extra}>{extra}</div>
+            <div
+              className={valDisplay
+                ? 'text-[10px] text-orange-600 leading-none mt-0.5 truncate'
+                : 'text-[13px] font-semibold text-gray-800 truncate'}
+              title={extra}
+            >
+              {extra}
+            </div>
           )}
-          {normeText && (
+          {normeText && val !== null && (
             <div className="text-[10px] text-gray-400 leading-none mt-0.5">{normeText}</div>
           )}
         </div>
@@ -1055,8 +1079,24 @@ function SectionRappelsPatient({ participantId }: { participantId: string }) {
 export default function ParticipantProfile() {
   const { id } = useParams<{ id: string }>();
   const { participants, loading: chargementParticipants, updateParticipant, deleteParticipant, deleteBilan, geocodeParticipant, archiverParticipant } = useParticipants();
-  const { programmeActif, deleteProgramme } = useProgramme(id ?? '');
-  const { programmes: programmesV2, seancesAutonomesStats, loading: chargementProgrammesV2 } = useProgrammeV2(id ?? '');
+  const { programmeActif, deleteProgramme, reload: reloadProgrammeActif } = useProgramme(id ?? '');
+  const { programmes: programmesV2, seancesAutonomesStats, loading: chargementProgrammesV2, reload: reloadProgrammesV2, createProgramme } = useProgrammeV2(id ?? '');
+  const { isMobile } = useDevice();
+  const {
+    showWizard: showWizardCreation, step: stepWizardCreation, setStep: setStepWizardCreation,
+    wizardData: wizardDataCreation, saving: savingWizardCreation,
+    updateWizard: updateWizardCreation, openWizard: openWizardCreation,
+    closeWizard: closeWizardCreation, handleSave: handleSaveWizardCreationBase,
+  } = useProgrammeWizard();
+  const {
+    showConfigIA, configIA, generatingIA, errorIA, savingIA,
+    questionsIA, reponsesIA, chargementQuestionsIA, precisionsLibresIA,
+    showPreviewIA, programmePreview, setProgrammePreview,
+    updateConfigIA, updateReponseIA, setPrecisionsLibresIA, setErrorIA,
+    ouvrirConfigIA: ouvrirConfigIABase, fermerConfigIA, genererProgramme,
+    fermerPreviewIA, modifierConfigDepuisPreview, regenererIA: regenererIABase,
+    handleValiderEtCreerIA: handleValiderEtCreerIABase,
+  } = useProgrammeIA();
   const { contrats } = useContrats();
   const { structures } = useStructures();
   const { seances } = useAgenda();
@@ -1076,6 +1116,7 @@ export default function ParticipantProfile() {
   const [showEspacePatient, setShowEspacePatient] = useState(false);
   const [ouvertureEspacePatient, setOuvertureEspacePatient] = useState(false);
   const [showModeleModal, setShowModeleModal] = useState(false);
+  const [voirTousExercices, setVoirTousExercices] = useState(false);
   const [activeTab, setActiveTab]           = useState<TabId>('bilans');
   const [seancesStats, setSeancesStats]     = useState<SeancePatientStat[]>([]);
   const [retours, setRetours]               = useState<RetourSeance[]>([]);
@@ -1177,6 +1218,52 @@ export default function ParticipantProfile() {
   const hasAddress     = Boolean(participant.adresseRue?.trim() && participant.adresseVille?.trim());
   const brouillon      = getBrouillon(participant.id);
 
+  // Programme affiché sur la fiche : programmeActif (useProgramme, V1) lit une colonne
+  // JSON `exercices` sur la table `programmes`, laissée VIDE par toute création récente
+  // (useProgrammeV2.createProgramme insère `exercices: []` — les exercices vivent dans
+  // programme_seances/programme_exercices depuis la V2, seul chemin de création restant
+  // dans ProgrammePage.tsx). Résultat avant ce chantier : la carte ci-dessous n'affichait
+  // ni compte ni liste d'exercices pour tout programme créé aujourd'hui — pas seulement
+  // "limité à 4", comme le diagnostic initial du chantier le supposait (vérifié en lisant
+  // useProgramme.ts, useProgrammeV2.ts et dbToProgramme, lib/mappers.ts).
+  // titre/dateCreation/objectif restent lisibles via programmeActif (V1) même pour une
+  // ligne V2 : createProgramme (V2) les écrit aussi sur les colonnes historiques
+  // (titre/date_creation/objectif — "backward compat", useProgrammeV2.ts) pour ne pas
+  // casser ce composant. Seuls exercices/count doivent donc être re-sourcés depuis V2.
+  const activeProgV2 = programmesV2.find(p => p.actif) ?? null;
+  type ExerciceAffiche = {
+    id: string; nom: string; series?: number; repetitions?: number;
+    dureeSecondes?: number; notes?: string; seanceNom?: string;
+  };
+  const exercicesAffiches: ExerciceAffiche[] = activeProgV2
+    ? [...activeProgV2.seances]
+        .sort((a, b) => a.ordre - b.ordre)
+        .flatMap(s => [...s.exercices]
+          .sort((a, b) => a.ordre - b.ordre)
+          .map(e => ({
+            id: e.id,
+            nom: e.nom,
+            series: e.series,
+            repetitions: e.repetitions,
+            dureeSecondes: e.dureeSecondes,
+            notes: e.description || e.conseilSecurite || undefined,
+            // Regroupement affiché seulement si le programme a plusieurs
+            // séances distinctes (ex. "Séance A" / "Séance B") — inutile de
+            // le répéter s'il n'y en a qu'une.
+            seanceNom: activeProgV2.seances.length > 1 ? s.nom : undefined,
+          })))
+    // Repli V1 : programme légacy jamais migré vers V2 (plus créé par l'UI
+    // actuelle, voir commentaire ci-dessus) — exerciceId brut faute de
+    // catalogue chargé ici, comportement inchangé par rapport à avant.
+    : (programmeActif?.exercices ?? []).map(e => ({
+        id: e.exerciceId,
+        nom: e.exerciceId.replace(/-/g, ' '),
+        series: e.series,
+        repetitions: e.repetitions,
+        dureeSecondes: e.dureeSecondes,
+        notes: e.notePersonnalisee,
+      }));
+
   // PDF du programme en cours, sans passer par la page Programme. Même export que
   // ProgrammePage / EspacePatient (exportProgrammePDF normalise V1 et V2). La version V2
   // est préférée quand elle existe : une ligne V2 relue via useProgramme (forme V1) n'a
@@ -1220,11 +1307,123 @@ export default function ParticipantProfile() {
           .then(() => toast.success(`${participant.prenom} ${participant.nom} est de nouveau parmi les bénéficiaires actifs.`))
           .catch(err => { console.error('Erreur désarchivage:', err); toast.error('Erreur lors du désarchivage'); });
         break;
-      case 'programme':       navigate(`/participant/${id}/programme`); break;
+      case 'programme':
+        // Desktop : inchangé, on navigue vers la page dédiée (ProgrammePage.tsx).
+        // Mobile : cette route n'a pas d'équivalent mobile (routesMobile.ts la
+        // fait retomber sur l'invitation "tournez votre téléphone") — ouvre le
+        // wizard directement ici, sur la fiche déjà affichée sous 768 px.
+        if (isMobile) openWizardCreation();
+        else navigate(`/participant/${id}/programme`);
+        break;
       case 'nouveau_bilan':   navigate(`/participant/${id}/bilan/new`); break;
       case 'nouveau_contrat': navigate(`/participant/${id}/contrat/nouveau`); break;
       case 'rgpd':            navigate(`/participants/${id}/modifier`); break;
     }
+  }
+
+  // Sauvegarde du wizard ouvert depuis le mobile (voir handleAction, case
+  // 'programme') — même construction de payload que ProgrammePage.tsx
+  // (handleSave), CREATION seulement : pas d'édition mobile pour l'instant,
+  // l'entrée mobile ne s'ouvre que quand il n'y a pas encore de programme
+  // actif (voir la carte "Programme" plus bas dans ce fichier).
+  async function handleSaveWizardCreation() {
+    const objectifSeancesAutonomes = wizardDataCreation.objectifSeancesAutonomes.trim()
+      ? Number(wizardDataCreation.objectifSeancesAutonomes)
+      : undefined;
+    const payload = {
+      nom: wizardDataCreation.nom,
+      objectif: wizardDataCreation.objectif || undefined,
+      objectifSeancesAutonomes: objectifSeancesAutonomes != null && objectifSeancesAutonomes > 0 ? objectifSeancesAutonomes : undefined,
+      messageMotivation: wizardDataCreation.messageMotivation || undefined,
+      type: wizardDataCreation.type,
+      seances: wizardDataCreation.seances.map(s => ({
+        tempId: s.tempId,
+        nom: s.nom,
+        exercices: s.exercices.map(ex => ({
+          nom: ex.nom,
+          categorie: ex.categorie || undefined,
+          description: ex.description || undefined,
+          conseilSecurite: ex.conseilSecurite || undefined,
+          series: ex.mode !== 'total' ? ex.series : undefined,
+          repetitions: ex.mode === 'reps' ? ex.repetitions : undefined,
+          dureeSecondes: (ex.mode === 'duree' || ex.mode === 'total') ? ex.dureeSecondes : undefined,
+          exerciceId: ex.exerciceId || undefined,
+          niveau: ex.niveau || undefined,
+        })),
+      })),
+      planning: wizardDataCreation.planning,
+    };
+
+    const ok = await handleSaveWizardCreationBase(async () => {
+      const created = await createProgramme(payload);
+      toast[created ? 'success' : 'error'](created ? 'Programme créé et partagé avec le bénéficiaire !' : 'Erreur lors de la création du programme');
+      return created;
+    });
+    if (ok) await Promise.all([reloadProgrammeActif(), reloadProgrammesV2()]);
+  }
+
+  // Génération IA — mobile uniquement (voir handleAction, case 'programme_ia'
+  // ci-dessous), même construction que ProgrammePage.tsx (genererProgrammeIA
+  // sans réponses de clarification préexistantes puisqu'on repart d'un état
+  // vierge à chaque ouverture, comme sur desktop).
+  function ouvrirConfigIA() {
+    if (participant) ouvrirConfigIABase(participant);
+  }
+
+  async function construireProgrammeIA(): Promise<ProgrammeIA> {
+    if (!participant) throw new Error('Participant introuvable');
+
+    const bilans = participant.bilans ?? [];
+    const dernierBilan = bilans.length
+      ? [...bilans].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+      : null;
+
+    const objectifLabel = configIA.objectif === 'personnalise'
+      ? (configIA.objectifPersonnalise || 'objectif personnalisé du patient')
+      : OBJECTIFS_IA.find(o => o.value === configIA.objectif)?.label ?? configIA.objectif;
+
+    const reponsesTexte = questionsIA
+      .map((q, i) => (reponsesIA[i]?.trim() ? `- ${q}\n  Réponse : ${reponsesIA[i].trim()}` : null))
+      .filter(Boolean)
+      .join('\n');
+
+    const catalogue = await loadExercicesPraticien();
+
+    return genererProgrammeStructure(
+      participant,
+      { objectif: objectifLabel, frequence: configIA.frequence, duree: configIA.duree, niveau: configIA.niveau },
+      reponsesTexte,
+      catalogue,
+      dernierBilan,
+      programmesV2,
+      precisionsLibresIA,
+    );
+  }
+
+  function genererProgrammeIA() {
+    // Vérifié ici, AVANT genererProgramme() (qui passe generatingIA à true) :
+    // une validation qui échoue doit rester instantanée, sans faire
+    // apparaître même brièvement l'écran "L'IA génère le programme…".
+    if (configIA.objectif === 'personnalise' && !configIA.objectifPersonnalise.trim()) {
+      setErrorIA("Précisez l'objectif personnalisé.");
+      return;
+    }
+    genererProgramme(construireProgrammeIA);
+  }
+
+  function regenererIA() {
+    regenererIABase(construireProgrammeIA);
+  }
+
+  async function handleValiderEtCreerIA() {
+    const ok = await handleValiderEtCreerIABase(async () => {
+      if (!programmePreview) return false;
+      const payload = versPayloadCreateProgramme(programmePreview, 'domicile', uuidv4);
+      const created = await createProgramme(payload);
+      toast[created ? 'success' : 'error'](created ? 'Programme généré et créé avec succès 🎉' : 'Erreur lors de la création du programme');
+      return created;
+    });
+    if (ok) await Promise.all([reloadProgrammeActif(), reloadProgrammesV2()]);
   }
 
   async function handleExportDossier() {
@@ -1236,6 +1435,9 @@ export default function ParticipantProfile() {
           bilans: sortedBilans,
           contratActif,
           programmeActif,
+          // Corrige le compte d'exercices pour un programme créé via V2 —
+          // voir lib/programmeActifV2.ts.
+          programmesV2,
           compteRendus,
           // Cours RÉALISÉS de ce bénéficiaire, avec présence constatée, effort, bien-être et note.
           coursRealises: entreesCours.filter(e => e.cours.statut === 'realise'),
@@ -1286,7 +1488,15 @@ export default function ParticipantProfile() {
   const MENU_ACTIONS = [
     { Icon: Pencil,     label: 'Modifier le bénéficiaire',    action: 'modifier' },
     { Icon: TrendingUp, label: "Rapport d'évolution",    action: 'evolution', disabled: participant.bilans.length < 2 },
-    { Icon: Share2,     label: 'Lien client',             action: 'lien' },
+    // "Lien client" (copyClientLink, plus bas) masqué temporairement : la
+    // colonne participants.token n'existe plus en base (confirmé sur
+    // staging, erreur 42703 "column does not exist") — tout lien généré
+    // est donc non fonctionnel pour un patient réel. Le mécanisme d'accès
+    // patient actuel et fonctionnel est code_acces, déjà utilisé par
+    // EspacePatient.tsx. Ne pas réafficher sans avoir réparé/migré ce
+    // mécanisme (voir issue de suivi). copyClientLink() et le handler
+    // 'lien' restent en place, volontairement, pour un retour rapide une
+    // fois le point tranché.
     { Icon: Download,   label: 'Mes données (JSON)',      action: 'export' },
     participant.archive
       ? { Icon: ArchiveRestore, label: 'Désarchiver', action: 'desarchiver' }
@@ -1575,11 +1785,15 @@ export default function ParticipantProfile() {
             >
               <Mic size={13} style={{ color: 'var(--color-teal)' }} /> Dicter séance
             </button>
-            {/* Repris de l'ancienne fiche mobile. L'URL sert la version mobile
-                de l'assistant sous 768 px ; le state, la version desktop. */}
+            {/* Desktop seulement (chantier « retrait de l'Assistant de la
+                navigation mobile ») : l'assistant sort du périmètre mobile,
+                ce bouton était l'un de ses deux points d'entrée sur téléphone
+                (avec la barre de navigation, retiré séparément). Le state
+                {{patientId}} reste utile ici pour AssistantPage (desktop) ;
+                l'URL ne sert plus qu'à cet usage desktop désormais. */}
             <button
               onClick={() => navigate(`/assistant?beneficiaire=${encodeURIComponent(participant.id)}`, { state: { patientId: participant.id } })}
-              className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors"
+              className="hidden md:flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors"
             >
               <Bot size={13} /> Assistant
             </button>
@@ -1689,13 +1903,12 @@ export default function ParticipantProfile() {
               <div className="font-heading font-semibold text-dark text-[15px]">{programmeActif.titre}</div>
               <div className="text-[12px] text-gray-400 mt-0.5">
                 Généré le {new Date(programmeActif.dateCreation).toLocaleDateString('fr-FR')}
-                {programmeActif.exercices.length > 0 && ` · ${programmeActif.exercices.length} exercice${programmeActif.exercices.length > 1 ? 's' : ''}`}
+                {exercicesAffiches.length > 0 && ` · ${exercicesAffiches.length} exercice${exercicesAffiches.length > 1 ? 's' : ''}`}
               </div>
               {(() => {
-                const progV2Actif = programmesV2.find(p => p.id === programmeActif.id);
-                const objectif = progV2Actif?.objectifSeancesAutonomes;
+                const objectif = activeProgV2?.objectifSeancesAutonomes;
                 if (!objectif) return null;
-                const nb = seancesAutonomesStats[progV2Actif!.id]?.count ?? 0;
+                const nb = seancesAutonomesStats[activeProgV2!.id]?.count ?? 0;
                 const pct = Math.min(100, Math.round((nb / objectif) * 100));
                 return (
                   <div className="mt-2 flex items-center gap-2">
@@ -1730,19 +1943,48 @@ export default function ParticipantProfile() {
               </button>
             </div>
           </div>
-          {programmeActif.exercices.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              {programmeActif.exercices.slice(0, 4).map(ep => (
-                <div key={ep.exerciceId} className="flex items-center gap-2 text-[13px] text-gray-600">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary/50 flex-shrink-0" />
-                  <span>{ep.exerciceId.replace(/-/g, ' ')}</span>
-                </div>
-              ))}
-              {programmeActif.exercices.length > 4 && (
-                <div className="text-[12px] text-gray-400 pl-3.5">+ {programmeActif.exercices.length - 4} autre(s)</div>
-              )}
-            </div>
-          )}
+          {exercicesAffiches.length > 0 && (() => {
+            const APERCU = 4;
+            const liste = voirTousExercices ? exercicesAffiches : exercicesAffiches.slice(0, APERCU);
+            let derniereSeance: string | undefined;
+            return (
+              <div className="flex flex-col gap-2">
+                {liste.map(ex => {
+                  const enteteSeance = ex.seanceNom && ex.seanceNom !== derniereSeance;
+                  if (enteteSeance) derniereSeance = ex.seanceNom;
+                  const detail = [
+                    ex.series != null && ex.repetitions != null ? `${ex.series} × ${ex.repetitions}` : null,
+                    ex.series != null && ex.repetitions == null && ex.dureeSecondes != null ? `${ex.series} × ${ex.dureeSecondes}s` : null,
+                    ex.series == null && ex.dureeSecondes != null ? `${ex.dureeSecondes}s` : null,
+                  ].filter(Boolean).join(' · ');
+                  return (
+                    <div key={ex.id}>
+                      {enteteSeance && (
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-gray-400 mt-1.5 mb-1">{ex.seanceNom}</div>
+                      )}
+                      <div className="flex items-start gap-2 text-[13px] text-gray-600">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary/50 flex-shrink-0 mt-1.5" />
+                        <div>
+                          <span>{ex.nom}</span>
+                          {detail && <span className="text-gray-400"> · {detail}</span>}
+                          {ex.notes && <div className="text-[12px] text-gray-400 italic mt-0.5">{ex.notes}</div>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {exercicesAffiches.length > APERCU && (
+                  <button
+                    onClick={() => setVoirTousExercices(v => !v)}
+                    className="flex items-center gap-1 text-[12px] font-medium text-primary pl-3.5 mt-0.5 self-start"
+                  >
+                    <ChevronDown size={13} className={voirTousExercices ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                    {voirTousExercices ? 'Réduire' : `Voir tout (${exercicesAffiches.length})`}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
           {programmeActif.objectif && (
             <div className="mt-2 text-[12px] text-gray-500 italic">🎯 {programmeActif.objectif}</div>
           )}
@@ -1764,6 +2006,20 @@ export default function ParticipantProfile() {
             >
               <LayoutTemplate size={13} /> Utiliser un modèle
             </button>
+            {/* Mobile uniquement : sur desktop, "Générer avec l'IA" vit déjà
+                dans le header de ProgrammePage.tsx (bouton toujours visible,
+                pas seulement à l'état vide) — ajouter ce bouton ici aussi
+                changerait le rendu desktop de cette carte, hors périmètre de
+                ce chantier. isMobile gate le RENDU du bouton, pas seulement
+                son clic, pour qu'aucune différence n'existe côté desktop. */}
+            {isMobile && (
+              <button
+                onClick={ouvrirConfigIA}
+                className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <Bot size={13} /> Générer avec l'IA
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -2139,10 +2395,73 @@ export default function ParticipantProfile() {
         <AppliquerModeleModal
           participantId={id!}
           onClose={() => setShowModeleModal(false)}
-          onApplied={() => {
+          onApplied={async () => {
+            // Recharge en place plutôt que de naviguer vers /programme
+            // (desktop-only : sur mobile, hors route fusionnée, retombe
+            // sur l'invitation "tournez votre téléphone" — la fiche ne
+            // reflétait donc jamais le nouveau programme sans que le
+            // praticien y revienne manuellement). ParticipantProfile.tsx
+            // est la MÊME fiche fusionnée des deux côtés : ce comportement
+            // change aussi pour le desktop, qui reste désormais sur place
+            // au lieu d'être redirigé — AppliquerModeleModal n'est appelé
+            // que d'ici, ProgrammePage.tsx ne l'utilise pas.
+            //
+            // Les deux rechargements sont nécessaires : la carte "Programme
+            // en cours" bascule sur programmeActif (V1, useProgramme) —
+            // resté périmé sans son propre reload — puis lit les exercices
+            // via programmesV2 (V2, useProgrammeV2) quand il existe (voir
+            // lib/programmeActifV2.ts).
             setShowModeleModal(false);
-            navigate(`/participant/${id}/programme`);
+            await Promise.all([reloadProgrammeActif(), reloadProgrammesV2()]);
           }}
+        />
+      )}
+
+      {/* Wizard de création — mobile uniquement (voir handleAction, case
+          'programme'). Desktop garde ProgrammePage.tsx inchangée. */}
+      {showWizardCreation && (
+        <ProgrammeWizardModal
+          step={stepWizardCreation}
+          onStepChange={setStepWizardCreation}
+          data={wizardDataCreation}
+          onChange={updateWizardCreation}
+          onClose={closeWizardCreation}
+          onSave={handleSaveWizardCreation}
+          saving={savingWizardCreation}
+          isEditing={false}
+          participant={participant}
+        />
+      )}
+
+      {/* Génération IA — mobile uniquement (bouton ci-dessus, gate isMobile
+          au rendu). Desktop garde ProgrammePage.tsx inchangée. */}
+      {showConfigIA && participant && (
+        <ConfigIAModal
+          participant={participant}
+          config={configIA}
+          onChange={updateConfigIA}
+          onGenerer={genererProgrammeIA}
+          onClose={fermerConfigIA}
+          generating={generatingIA}
+          error={errorIA}
+          questions={questionsIA}
+          chargementQuestions={chargementQuestionsIA}
+          reponses={reponsesIA}
+          onReponseChange={updateReponseIA}
+          precisionsLibres={precisionsLibresIA}
+          onPrecisionsLibresChange={setPrecisionsLibresIA}
+        />
+      )}
+
+      {showPreviewIA && programmePreview && (
+        <PreviewIAModal
+          programme={programmePreview}
+          onChange={setProgrammePreview}
+          onValider={handleValiderEtCreerIA}
+          onRegenerer={regenererIA}
+          onModifierConfig={modifierConfigDepuisPreview}
+          onClose={fermerPreviewIA}
+          saving={savingIA}
         />
       )}
 

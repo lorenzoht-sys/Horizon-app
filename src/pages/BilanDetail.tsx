@@ -152,6 +152,33 @@ export default function BilanDetail() {
         </div>
       </div>
 
+      {/* Mesures TM6 (FC, SpO2) — ni le radar ni le tableau comparatif ne les
+          montrent (axes/lignes réservés aux scores de test). Affiché
+          seulement si au moins une valeur existe. */}
+      {(bilan.tm6.fcAvant != null || bilan.tm6.fcApres != null || bilan.tm6.spo2Avant != null || bilan.tm6.spo2Apres != null) && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6">
+          <h2 className="font-heading font-semibold text-dark mb-3">Mesures TM6</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {(bilan.tm6.fcAvant != null || bilan.tm6.fcApres != null) && (
+              <div>
+                <div className="text-xs text-gray-500 mb-1">Fréquence cardiaque (avant → après)</div>
+                <div className="text-sm font-medium text-dark">
+                  {bilan.tm6.fcAvant ?? '—'} → {bilan.tm6.fcApres ?? '—'} bpm
+                </div>
+              </div>
+            )}
+            {(bilan.tm6.spo2Avant != null || bilan.tm6.spo2Apres != null) && (
+              <div>
+                <div className="text-xs text-gray-500 mb-1">SpO₂ (avant → après)</div>
+                <div className="text-sm font-medium text-dark">
+                  {bilan.tm6.spo2Avant ?? '—'} → {bilan.tm6.spo2Apres ?? '—'} %
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Notes pro */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {bilan.notesProfessionnelles && (

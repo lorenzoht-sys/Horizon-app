@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useParticipants } from '../hooks/useParticipants';
+import { contratsDesBeneficiairesActifs } from '../lib/archivage';
 import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import PageWrapper from '../components/layout/PageWrapper';
@@ -107,13 +108,17 @@ export default function TourneePage() {
     const dans4Semaines = new Date();
     dans4Semaines.setDate(dans4Semaines.getDate() + 28);
     const dateMax = dans4Semaines.toISOString().split('T')[0];
-    const actifs = contrats.filter(c => c.statut === 'actif' && !c.exclureTournee);
+    // Contrats des bénéficiaires SUIVIS : inviter à planifier un archivé n'aurait aucun sens.
+    const actifs = contratsDesBeneficiairesActifs(
+      contrats.filter(c => c.statut === 'actif' && !c.exclureTournee),
+      participants,
+    );
     const aDesSeances = seances.some(s =>
       s.statut === 'planifiee' && s.date >= aujourd && s.date <= dateMax &&
       actifs.some(c => c.id === s.contratId)
     );
     return { afficherBandeau: actifs.length > 0 && !aDesSeances, nbContratsActifs: actifs.length };
-  }, [contrats, seances]);
+  }, [contrats, seances, participants]);
 
   const [vue, setVue] = useState<'tournee' | 'agenda'>('tournee');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));

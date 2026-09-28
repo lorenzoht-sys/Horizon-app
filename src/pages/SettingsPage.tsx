@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, type ChangeEvent } from 'react';
-import { Save, Upload, Plus, Trash2, Download, FileUp, Copy, RefreshCw, CalendarDays } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowLeft, Save, Upload, Plus, Trash2, Download, FileUp, Copy, RefreshCw, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import PageWrapper from '../components/layout/PageWrapper';
@@ -819,6 +820,16 @@ export default function SettingsPage() {
   return (
     <PageWrapper>
       <div className="max-w-2xl">
+
+        {/* Retour — la Sidebar (desktop) fait déjà office de navigation,
+            mais rien n'y remplace ce lien sous 768px : ce chantier fusionne
+            EcranSettings (mobile) vers cet écran, sans Sidebar ni barre de
+            navigation mobile (avecBarre=false, AppMobile.tsx — un choix
+            volontaire pour un écran de formulaire, pas touché ici). Même
+            patron que ArchivesPage.tsx et BilanDetail.tsx. */}
+        <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-primary mb-4 transition-colors">
+          <ArrowLeft size={14} /> Tableau de bord
+        </Link>
 
         {/* En-tête */}
         <div className="mb-8">

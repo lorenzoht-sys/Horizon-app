@@ -15,21 +15,23 @@ function getMondayISO(date: Date): string {
 export function useProgramme(participantId: string) {
   const [programmes, setProgrammes] = useState<Programme[]>([]);
 
-  useEffect(() => {
+  // Extrait en callback réutilisable (même patron que useProgrammeV2.ts) :
+  // sans `reload`, un praticien qui applique un modèle depuis la fiche
+  // fusionnée (AppliquerModeleModal) ne voyait le nouveau programme actif
+  // qu'après un rechargement complet de la page — programmeActif restait
+  // celui, périmé, de l'effet ci-dessous, exécuté une seule fois au montage.
+  const load = useCallback(async () => {
     if (!participantId || !supabase) return;
-    let cancelled = false;
-    supabase
+    const { data, error } = await supabase
       .from('programmes')
       .select('*')
       .eq('participant_id', participantId)
-      .order('date_creation', { ascending: false })
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) { console.error('Erreur chargement programmes:', error); return; }
-        setProgrammes((data ?? []).map(dbToProgramme));
-      });
-    return () => { cancelled = true; };
+      .order('date_creation', { ascending: false });
+    if (error) { console.error('Erreur chargement programmes:', error); return; }
+    setProgrammes((data ?? []).map(dbToProgramme));
   }, [participantId]);
+
+  useEffect(() => { void load(); }, [load]);
 
   const programmeActif = programmes.find(p => p.actif) ?? null;
 
@@ -185,6 +187,7 @@ export function useProgramme(participantId: string) {
   return {
     programmes,
     programmeActif,
+    reload: load,
     createProgramme,
     updateProgramme,
     deleteProgramme,

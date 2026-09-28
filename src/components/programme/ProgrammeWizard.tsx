@@ -7,6 +7,7 @@ import type { TypeProgramme, JourProgramme, Participant, Exercice } from '../../
 import { TYPE_PROGRAMME_LABELS as TPL, JOURS_PROGRAMME as JP, CATEGORIE_EXERCICE_LABELS as CEL } from '../../types';
 import { loadExercicesPraticien, saveExercicePersonnalise } from '../../data/exercices';
 import BoutonReformulation from '../ui/BoutonReformulation';
+import { useDevice } from '../../hooks/useDevice';
 
 // Wizard 4 étapes partagé entre la création/édition d'un programme réel
 // (ProgrammePage.tsx, rattaché à un bénéficiaire) et d'un modèle réutilisable
@@ -272,25 +273,51 @@ function ExerciceForm({ ex, onChange, onDelete, libExercice }: {
   }
 
   const niv = (ex.niveau ?? '2') as '1' | '2' | '3';
+  const { isMobile } = useDevice();
 
   return (
     <div style={{ background: '#F8FAFA', border: '1px solid #E0EEEE', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
-      <div style={{ display: 'flex', gap: 10, marginBottom: ex.exerciceId ? 6 : 8, alignItems: 'center' }}>
-        <input
-          value={ex.nom}
-          onChange={e => onChange({ nom: e.target.value })}
-          placeholder="Nom de l'exercice *"
-          style={{ ...inputStyle, flex: 2 }}
-        />
-        <select value={ex.categorie} onChange={e => onChange({ categorie: e.target.value })} style={{ ...inputStyle, flex: 1 }}>
-          {CEL.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        {onDelete && (
-          <button onClick={onDelete} style={btnDeleteSmall} title="Supprimer">
-            <Trash2 size={13} />
-          </button>
-        )}
-      </div>
+      {isMobile ? (
+        // Nom + catégorie + suppression tiennent à peine côte à côte sur
+        // desktop (flex:2/flex:1 + bouton) — à 390px le nom et la catégorie
+        // tronquent visiblement (ex. "Équilibre unipodal" → "Équilibre
+        // unipoc"). Empilé au lieu de côte à côte, jamais de troncature.
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: ex.exerciceId ? 6 : 8 }}>
+          <input
+            value={ex.nom}
+            onChange={e => onChange({ nom: e.target.value })}
+            placeholder="Nom de l'exercice *"
+            style={inputStyle}
+          />
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <select value={ex.categorie} onChange={e => onChange({ categorie: e.target.value })} style={{ ...inputStyle, flex: 1 }}>
+              {CEL.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            {onDelete && (
+              <button onClick={onDelete} style={btnDeleteSmall} title="Supprimer">
+                <Trash2 size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 10, marginBottom: ex.exerciceId ? 6 : 8, alignItems: 'center' }}>
+          <input
+            value={ex.nom}
+            onChange={e => onChange({ nom: e.target.value })}
+            placeholder="Nom de l'exercice *"
+            style={{ ...inputStyle, flex: 2 }}
+          />
+          <select value={ex.categorie} onChange={e => onChange({ categorie: e.target.value })} style={{ ...inputStyle, flex: 1 }}>
+            {CEL.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {onDelete && (
+            <button onClick={onDelete} style={btnDeleteSmall} title="Supprimer">
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
+      )}
       {ex.exerciceId && (
         <div style={{ display: 'flex', gap: 5, marginBottom: 8, alignItems: 'center' }}>
           <span style={{ fontSize: 10, color: '#94A3B8', marginRight: 2 }}>Niveau :</span>

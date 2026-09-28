@@ -12,6 +12,7 @@ import { TrendingUp, TrendingDown, Edit3, ChevronDown, ChevronUp, CheckCircle, R
 import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../components/layout/PageWrapper';
 import { useParticipants } from '../hooks/useParticipants';
+import { contratsDesBeneficiairesActifs, separerParArchivage } from '../lib/archivage';
 import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import { useStatsPro, type StatsPro } from '../hooks/useStatsPro';
@@ -1329,6 +1330,11 @@ export default function StatsPage() {
   const contrats = rawContrats ?? [];
   const caParMois = statsPro?.caParMois ?? {};
 
+  // Sections d'ALERTES (bilans en retard, contrats qui expirent, sans jours, sans séance) : bénéficiaires
+  // suivis uniquement. Les statistiques et la facturation, elles, gardent tout le monde.
+  const participantsSuivis = separerParArchivage(participants).actifs;
+  const contratsSuivis = contratsDesBeneficiairesActifs(contrats, participants);
+
   const now = new Date();
   const moisActuelKey = todayKey();
   const moisPrecKey   = moisPrecedentKey(moisActuelKey);
@@ -1406,9 +1412,9 @@ export default function StatsPage() {
 
       {/* ── Alertes ────────────────────────────────────────────────── */}
       <SectionAlertes
-        participants={participants}
+        participants={participantsSuivis}
         seances={seances}
-        contrats={contrats}
+        contrats={contratsSuivis}
         contratActif={contratActifDeParticipant}
       />
 
@@ -1422,9 +1428,9 @@ export default function StatsPage() {
 
       {/* ── Santé du portefeuille ──────────────────────────────────── */}
       <SectionSantePortefeuille
-        participants={participants}
+        participants={participantsSuivis}
         seances={seances}
-        contrats={contrats}
+        contrats={contratsSuivis}
         contratActif={contratActifDeParticipant}
       />
 

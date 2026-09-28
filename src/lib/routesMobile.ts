@@ -19,14 +19,16 @@ export type EcranMobile =
   | { ecran: 'saisie' }
   | { ecran: 'plus' }
   | { ecran: 'tournee' }
+  | { ecran: 'agenda' }
   | { ecran: 'assistant'; beneficiaireId: string | null }
   | { ecran: 'parametres' }
   | { ecran: 'nouveauBeneficiaire' }
   | { ecran: 'modifierBeneficiaire'; participantId: string }
   | { ecran: 'nouveauBilan'; participantId: string | null }
-  | { ecran: 'detailBilan'; participantId: string; bilanId: string }
-  // Écran qui n'existe qu'en version desktop : on invite à tourner le
-  // téléphone, l'URL étant déjà la bonne pour la version paysage.
+  // Écran qui n'existe qu'en version desktop : on annonce qu'il n'a pas
+  // encore de version téléphone (voir EcranPaysage, AppMobile.tsx). Le nom
+  // 'paysage' est historique — l'écran n'invite plus à tourner le téléphone,
+  // geste sans effet une fois l'app installée (manifest verrouillé en portrait).
   | { ecran: 'paysage'; retour: string };
 
 export const URLS_MOBILE = {
@@ -35,20 +37,23 @@ export const URLS_MOBILE = {
   saisie: '/?onglet=saisie',
   plus: '/?onglet=plus',
   tournee: '/tournee',
+  // Écran natif mobile (sous-chantier 1, Agenda) — distinct de /agenda-v2
+  // (desktop-only, react-big-calendar) : remplace l'ancien renvoi vers
+  // /agenda-v2 depuis l'écran "Plus" (Mon activité → Agenda complet).
+  agenda: '/agenda',
   assistant: '/assistant',
   parametres: '/settings',
+  archives: '/archives',
   nouveauBeneficiaire: '/participants/nouveau',
   choixBeneficiaireBilan: '/?onglet=saisie&mode=bilan',
   fiche: (id: string) => `/participant/${encodeURIComponent(id)}`,
   modifierBeneficiaire: (id: string) => `/participants/${encodeURIComponent(id)}/modifier`,
   nouveauBilan: (id: string) => `/participant/${encodeURIComponent(id)}/bilan/new`,
-  detailBilan: (id: string, bilanId: string) =>
-    `/participant/${encodeURIComponent(id)}/bilan/${encodeURIComponent(bilanId)}`,
   assistantAvec: (id: string) => `/assistant?beneficiaire=${encodeURIComponent(id)}`,
 } as const;
 
 // Écrans de l'espace pro sans version téléphone (le préfixe suffit).
-const PREFIXES_DESKTOP_SEULEMENT = ['/agenda-v2', '/map', '/zones', '/stats', '/bibliotheque', '/structures', '/admin'];
+const PREFIXES_DESKTOP_SEULEMENT = ['/agenda-v2', '/map', '/zones', '/stats', '/admin'];
 
 /**
  * Routes servies par l'interface UNIQUE (responsive) même sous 768 px.
@@ -57,7 +62,32 @@ const PREFIXES_DESKTOP_SEULEMENT = ['/agenda-v2', '/map', '/zones', '/stats', '/
  * React — une rotation n'y démonte rien.
  */
 export function estRouteInterfaceUnique(pathname: string): boolean {
-  return /^\/participant\/[^/]+\/?$/.test(pathname);
+  return (
+    /^\/participant\/[^/]+\/?$/.test(pathname) ||
+    /^\/archives\/?$/.test(pathname) ||
+    // Détail d'un bilan existant — mais pas /bilan/new (création, restée
+    // mobile-only) : le segment final ne doit jamais valoir "new".
+    /^\/participant\/[^/]+\/bilan\/(?!new(?:\/|$))[^/]+\/?$/.test(pathname) ||
+    // Rapport d'évolution (comparaison de tous les bilans) — atteignable
+    // depuis la fiche et le détail de bilan, déjà fusionnés.
+    /^\/participant\/[^/]+\/comparaison\/?$/.test(pathname) ||
+    // Création d'un contrat de suivi — atteignable depuis la fiche (carte
+    // « Aucun contrat actif », menu « ··· », onglet Contrats), déjà fusionnée.
+    // Formulaire simple, sans étapes ni génération de document.
+    /^\/participant\/[^/]+\/contrat\/nouveau\/?$/.test(pathname) ||
+    // Bibliothèque (exercices + modèles de programme) — grille déjà
+    // responsive (1 colonne dès le mobile), glisser-déposer HTML5 (rail de
+    // dossiers) doublé d'une alternative sans drag (modale à cases à
+    // cocher), et wizard de modèle déjà mobile (chantiers #87/#88/#89).
+    /^\/bibliotheque\/?$/.test(pathname) ||
+    // Structures (liste + détail) — la liste n'existait comme route nulle
+    // part avant ce chantier (simple onglet de Dashboard.tsx, jamais
+    // fusionné) : nouvelle page StructuresPage.tsx, construite responsive
+    // dès l'écriture. Détail (StructureDetail.tsx) : carte Facturation
+    // masquée sous 768px (Phase 4, hors périmètre), le reste fusionné.
+    /^\/structures\/?$/.test(pathname) ||
+    /^\/structures\/[^/]+\/?$/.test(pathname)
+  );
 }
 
 function segment(valeur: string): string {
@@ -82,6 +112,7 @@ export function ecranMobileDepuisUrl(pathname: string, search: string): EcranMob
     }
   }
   if (chemin === '/tournee') return { ecran: 'tournee' };
+  if (chemin === '/agenda') return { ecran: 'agenda' };
   if (chemin === '/assistant') return { ecran: 'assistant', beneficiaireId: params.get('beneficiaire') || null };
   if (chemin === '/settings') return { ecran: 'parametres' };
   if (chemin === '/participants/nouveau') return { ecran: 'nouveauBeneficiaire' };
@@ -92,10 +123,10 @@ export function ecranMobileDepuisUrl(pathname: string, search: string): EcranMob
   m = /^\/participant\/([^/]+)\/bilan\/new$/.exec(chemin);
   if (m) return { ecran: 'nouveauBilan', participantId: segment(m[1]) };
 
-  m = /^\/participant\/([^/]+)\/bilan\/([^/]+)$/.exec(chemin);
-  if (m) return { ecran: 'detailBilan', participantId: segment(m[1]), bilanId: segment(m[2]) };
-
-  // Programme, contrat, comparaison, modification de bilan…
+  // Détail d'un bilan, programme, contrat, comparaison, modification…
+  // — tous fusionnés ou desktop-only, jamais atteints ici en pratique :
+  // estRouteInterfaceUnique() intercepte /bilan/:id avant App.tsx ne monte
+  // AppMobile (voir EspacePro, App.tsx).
   m = /^\/participant\/([^/]+)\/.+$/.exec(chemin);
   if (m) return { ecran: 'paysage', retour: `/participant/${m[1]}` };
 

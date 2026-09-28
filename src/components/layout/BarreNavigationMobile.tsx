@@ -6,12 +6,18 @@ import { URLS_MOBILE, ongletDepuisUrl, type OngletMobile } from '../../lib/route
 // onglets, mêmes URL : passer d'un écran mobile à un écran fusionné ne se
 // voit pas.
 
+// « Assistant » retiré de la barre (chantier « retrait de l'Assistant de la
+// navigation mobile ») : l'assistant sort du périmètre mobile, retrait
+// définitif prévu dans un chantier séparé. EcranAssistant et /assistant
+// restent en place (voir AppMobile.tsx) : accessible par lien direct
+// seulement — plus depuis cette barre ni depuis EcranPlus (jamais listé
+// là), voir ParticipantProfile.tsx pour l'autre point d'entrée mobile
+// (masqué sous 768px, pas retiré : encore utilisé par le desktop).
 const ONGLETS: { id: OngletMobile; icon: string; label: string; url: string; principal?: boolean }[] = [
   { id: 'accueil',       icon: 'ti-home',   label: 'Accueil',   url: URLS_MOBILE.accueil },
   { id: 'beneficiaires', icon: 'ti-users',  label: 'Bénéfic.',  url: URLS_MOBILE.beneficiaires },
   { id: 'saisie',        icon: 'ti-plus',   label: 'Saisie',    url: URLS_MOBILE.saisie, principal: true },
   { id: 'tournee',       icon: 'ti-route',  label: 'Tournée',   url: URLS_MOBILE.tournee },
-  { id: 'assistant',     icon: 'ti-robot',  label: 'Assistant', url: URLS_MOBILE.assistant },
   { id: 'plus',          icon: 'ti-menu-2', label: 'Plus',      url: URLS_MOBILE.plus },
 ];
 

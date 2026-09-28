@@ -29,3 +29,21 @@ export function filtrerParNom<T extends { prenom: string; nom: string }>(
   if (!q) return [...liste];
   return liste.filter(p => `${p.prenom} ${p.nom}`.toLowerCase().includes(q));
 }
+
+/**
+ * Retire les contrats des bénéficiaires archivés — pour les ALERTES du praticien (contrat à
+ * renouveler, contrat sans jours, bandeau « à planifier »…) : un archivé n'est plus suivi, ces
+ * alertes ne demandent aucune action de sa part.
+ *
+ * Le contrat lui-même n'est pas modifié : il garde son statut (l'archivage et la fin de
+ * contrat sont deux décisions distinctes). Un contrat dont le bénéficiaire est introuvable
+ * (liste en cours de chargement, fiche supprimée) est conservé : on ne masque que ce que l'on
+ * SAIT archivé.
+ */
+export function contratsDesBeneficiairesActifs<C extends { participantId: string }>(
+  contrats: readonly C[],
+  participants: readonly { id: string; archive?: boolean | null }[],
+): C[] {
+  const archives = new Set(participants.filter(estArchive).map(p => p.id));
+  return contrats.filter(c => !archives.has(c.participantId));
+}

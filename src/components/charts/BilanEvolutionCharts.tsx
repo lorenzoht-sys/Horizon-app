@@ -1,5 +1,5 @@
 import type { Bilan } from '../../types';
-import { distanceTm6 } from '../../lib/tm6';
+import { distanceTm6, resultatTm6 } from '../../lib/tm6';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -26,6 +26,14 @@ interface TestCfg {
   unit: string;
   lowerBetter: boolean;
   getValue: (b: Bilan) => number | null | undefined;
+  /**
+   * Affichage SEUL quand `getValue` ne renvoie rien de comparable (jamais noté, jamais dans une
+   * barre proportionnelle, jamais moyenné dans le score global). Sert au TM6 en pas/tours : un
+   * résultat réel existe, mais pas de norme ni d'échelle commune avec les mètres pour le noter
+   * (cf. tm6.ts : tm6NonComparableADistance, useBilanDelta.ts). Sans ce champ, ce résultat était
+   * invisible (ligne "—" ou carte disparue) alors que le test avait bien été réalisé.
+   */
+  getRawDisplay?: (b: Bilan) => string | null;
   cat: (v: number) => 'g' | 'o' | 'r';
   score: (v: number) => number;
 }
@@ -64,6 +72,10 @@ const TESTS: TestCfg[] = [
   {
     key: 'tm6', label: 'TM6', unit: 'm', lowerBetter: false,
     getValue: b => distanceTm6(b.tm6),
+    getRawDisplay: b => {
+      const r = resultatTm6(b.tm6);
+      return r.type !== 'distance' && r.valeur != null ? r.texte : null;
+    },
     cat: v => v >= 400 ? 'g' : v >= 200 ? 'o' : 'r',
     score: v => clamp(v / 600 * 100),
   },
@@ -151,7 +163,7 @@ function ScoreGlobal({ bilans }: Props) {
 // ─── 2. Heatmap ───────────────────────────────────────────────────────────────
 
 function Heatmap({ bilans }: Props) {
-  const activeTests = TESTS.filter(t => bilans.some(b => t.getValue(b) != null));
+  const activeTests = TESTS.filter(t => bilans.some(b => t.getValue(b) != null || t.getRawDisplay?.(b) != null));
 
   return (
     <div>
@@ -175,11 +187,24 @@ function Heatmap({ bilans }: Props) {
                 <td className="text-gray-600 font-medium py-1 pr-3 text-[11px] whitespace-nowrap">{t.label}</td>
                 {bilans.map((b, i) => {
                   const v = t.getValue(b);
-                  if (v == null) return (
-                    <td key={i} className="text-center py-1 px-1.5">
-                      <span className="text-gray-300 text-[11px]">—</span>
-                    </td>
-                  );
+                  if (v == null) {
+                    // Résultat non comparable (TM6 en pas/tours) : affiché tel quel, jamais
+                    // noté ni coloré — pas de norme commune avec les mètres pour le classer.
+                    const raw = t.getRawDisplay?.(b);
+                    if (raw) return (
+                      <td key={i} className="text-center py-1 px-1.5">
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold text-gray-500 bg-gray-100"
+                          title="Résultat non comparable à une distance">
+                          {raw}
+                        </span>
+                      </td>
+                    );
+                    return (
+                      <td key={i} className="text-center py-1 px-1.5">
+                        <span className="text-gray-300 text-[11px]">—</span>
+                      </td>
+                    );
+                  }
                   const col = CAT[t.cat(v)];
                   return (
                     <td key={i} className="text-center py-1 px-1.5">
@@ -203,7 +228,7 @@ function Heatmap({ bilans }: Props) {
 
 function BarresComparatives({ bilans }: Props) {
   const last = bilans.length - 1;
-  const activeTests = TESTS.filter(t => bilans.some(b => t.getValue(b) != null));
+  const activeTests = TESTS.filter(t => bilans.some(b => t.getValue(b) != null || t.getRawDisplay?.(b) != null));
 
   return (
     <div>
@@ -212,13 +237,17 @@ function BarresComparatives({ bilans }: Props) {
         {activeTests.map(t => {
           const values = bilans.map(b => t.getValue(b));
           const nums = values.filter((v): v is number => v != null);
-          if (!nums.length) return null;
+          const hasRaw = bilans.some(b => t.getRawDisplay?.(b) != null);
+          if (!nums.length && !hasRaw) return null;
 
-          const maxVal = Math.max(...nums.map(Math.abs));
+          // maxVal/firstVal/lastVal/badge : calculés seulement s'il y a au moins une valeur
+          // NOTÉE (nums) — un résultat en pas/tours (getRawDisplay) n'entre jamais dans cette
+          // comparaison proportionnelle (cf. tm6NonComparableADistance : jamais pas <-> mètres).
+          const maxVal = nums.length ? Math.max(...nums.map(Math.abs)) : 0;
           const firstVal = nums[0];
           const lastVal = nums[nums.length - 1];
-          const improved = t.lowerBetter ? lastVal < firstVal : lastVal > firstVal;
-          const stable = lastVal === firstVal;
+          const improved = nums.length > 1 && (t.lowerBetter ? lastVal < firstVal : lastVal > firstVal);
+          const stable = nums.length > 1 && lastVal === firstVal;
           const badge = stable ? '➡️' : improved ? '✅' : '⚠️';
           const badgeColor = stable ? '#9CA3AF' : improved ? '#1D9E75' : '#F59E0B';
           const rawDelta = t.lowerBetter ? firstVal - lastVal : lastVal - firstVal;
@@ -230,7 +259,23 @@ function BarresComparatives({ bilans }: Props) {
               <div className="space-y-1.5">
                 {bilans.map((b, i) => {
                   const v = t.getValue(b);
-                  if (v == null) return null;
+                  if (v == null) {
+                    const raw = t.getRawDisplay?.(b);
+                    if (!raw) return null;
+                    // Pas de barre proportionnelle : un résultat en pas/tours n'a pas d'échelle
+                    // commune avec les mètres des autres bilans de cette même carte.
+                    return (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-500 flex-shrink-0 w-12 truncate">
+                          {bilanLabel(b, i, bilans.length)}
+                        </span>
+                        <span className="text-[11px] font-semibold text-gray-500 flex-1"
+                          title="Résultat non comparable à une distance">
+                          {raw}
+                        </span>
+                      </div>
+                    );
+                  }
                   const pct = maxVal > 0 ? (Math.abs(v) / maxVal) * 100 : 0;
                   return (
                     <div key={i} className="flex items-center gap-2">

@@ -17,6 +17,42 @@ describe('estRouteInterfaceUnique', () => {
       expect(estRouteInterfaceUnique(p)).toBe(false);
     }
   });
+
+  it('sert aussi /archives (bénéficiaires archivés)', () => {
+    expect(estRouteInterfaceUnique('/archives')).toBe(true);
+    expect(estRouteInterfaceUnique('/archives/')).toBe(true);
+  });
+
+  it('sert aussi le détail d’un bilan existant, mais pas sa création', () => {
+    expect(estRouteInterfaceUnique('/participant/abc/bilan/xyz')).toBe(true);
+    expect(estRouteInterfaceUnique('/participant/abc/bilan/xyz/')).toBe(true);
+    // /bilan/new (création) reste mobile-only, hors de ce chantier.
+    expect(estRouteInterfaceUnique('/participant/abc/bilan/new')).toBe(false);
+  });
+
+  it('sert aussi le rapport d’évolution (comparaison de tous les bilans)', () => {
+    expect(estRouteInterfaceUnique('/participant/abc/comparaison')).toBe(true);
+    expect(estRouteInterfaceUnique('/participant/abc/comparaison/')).toBe(true);
+  });
+
+  it('sert aussi la création d’un contrat de suivi', () => {
+    expect(estRouteInterfaceUnique('/participant/abc/contrat/nouveau')).toBe(true);
+    expect(estRouteInterfaceUnique('/participant/abc/contrat/nouveau/')).toBe(true);
+    // Les autres sous-écrans « contrat » restent desktop seulement.
+    expect(estRouteInterfaceUnique('/participant/abc/contrat/c9')).toBe(false);
+  });
+
+  it('sert aussi la bibliothèque (exercices, modèles)', () => {
+    expect(estRouteInterfaceUnique('/bibliotheque')).toBe(true);
+    expect(estRouteInterfaceUnique('/bibliotheque/')).toBe(true);
+  });
+
+  it('sert aussi les structures (liste + détail)', () => {
+    expect(estRouteInterfaceUnique('/structures')).toBe(true);
+    expect(estRouteInterfaceUnique('/structures/')).toBe(true);
+    expect(estRouteInterfaceUnique('/structures/abc-123')).toBe(true);
+    expect(estRouteInterfaceUnique('/structures/abc-123/')).toBe(true);
+  });
 });
 
 describe('ecranMobileDepuisUrl', () => {
@@ -29,6 +65,11 @@ describe('ecranMobileDepuisUrl', () => {
     expect(ecran(URLS_MOBILE.assistant)).toEqual({ ecran: 'assistant', beneficiaireId: null });
   });
 
+  it('/agenda : écran natif mobile (sous-chantier 1), distinct de /agenda-v2 (desktop seulement)', () => {
+    expect(ecran(URLS_MOBILE.agenda)).toEqual({ ecran: 'agenda' });
+    expect(ecran('/agenda-v2')).toEqual({ ecran: 'paysage', retour: URLS_MOBILE.plus });
+  });
+
   it('les URL construites pointent vers le bon écran (aller-retour)', () => {
     expect(ecran(URLS_MOBILE.assistantAvec('p1'))).toEqual({ ecran: 'assistant', beneficiaireId: 'p1' });
     expect(ecran(URLS_MOBILE.parametres)).toEqual({ ecran: 'parametres' });
@@ -36,22 +77,18 @@ describe('ecranMobileDepuisUrl', () => {
     expect(ecran(URLS_MOBILE.modifierBeneficiaire('p1'))).toEqual({ ecran: 'modifierBeneficiaire', participantId: 'p1' });
     expect(ecran(URLS_MOBILE.nouveauBilan('p1'))).toEqual({ ecran: 'nouveauBilan', participantId: 'p1' });
     expect(ecran(URLS_MOBILE.choixBeneficiaireBilan)).toEqual({ ecran: 'nouveauBilan', participantId: null });
-    expect(ecran(URLS_MOBILE.detailBilan('p1', 'b9'))).toEqual({ ecran: 'detailBilan', participantId: 'p1', bilanId: 'b9' });
   });
 
   it('les URL mobiles sont celles des écrans desktop équivalents', () => {
     expect(URLS_MOBILE.fiche('p1')).toBe('/participant/p1');
     expect(URLS_MOBILE.nouveauBilan('p1')).toBe('/participant/p1/bilan/new');
-    expect(URLS_MOBILE.detailBilan('p1', 'b9')).toBe('/participant/p1/bilan/b9');
     expect(URLS_MOBILE.modifierBeneficiaire('p1')).toBe('/participants/p1/modifier');
   });
 
-  it('écrans desktop seulement : invite à tourner le téléphone, avec un retour sensé', () => {
+  it('écrans desktop seulement : écran « bientôt en version mobile », avec un retour sensé', () => {
     expect(ecran('/participant/p1/programme')).toEqual({ ecran: 'paysage', retour: '/participant/p1' });
-    expect(ecran('/participant/p1/contrat/nouveau')).toEqual({ ecran: 'paysage', retour: '/participant/p1' });
-    expect(ecran('/participant/p1/comparaison')).toEqual({ ecran: 'paysage', retour: '/participant/p1' });
     expect(ecran('/participant/p1/bilan/b9/edit')).toEqual({ ecran: 'paysage', retour: '/participant/p1' });
-    for (const p of ['/agenda-v2', '/map', '/zones', '/stats', '/bibliotheque', '/structures/s1', '/admin/comptes']) {
+    for (const p of ['/agenda-v2', '/map', '/zones', '/stats', '/admin/comptes']) {
       expect(ecran(p)).toEqual({ ecran: 'paysage', retour: URLS_MOBILE.plus });
     }
   });
@@ -68,6 +105,13 @@ describe('ongletDepuisUrl', () => {
     expect(ongletDepuisUrl('/', '?onglet=plus')).toBe('plus');
     expect(ongletDepuisUrl('/tournee', '')).toBe('tournee');
     expect(ongletDepuisUrl('/participant/p1', '')).toBe('beneficiaires');
+    expect(ongletDepuisUrl('/archives', '')).toBe('beneficiaires');
+    expect(ongletDepuisUrl('/participant/p1/bilan/b9', '')).toBe('beneficiaires');
+    expect(ongletDepuisUrl('/participant/p1/comparaison', '')).toBe('beneficiaires');
+    expect(ongletDepuisUrl('/participant/p1/contrat/nouveau', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/participants/nouveau', '')).toBeNull();
+    // /agenda n'est pas un onglet de la barre du bas (atteint depuis « Plus »,
+    // même situation que /assistant) : aucun onglet mis en évidence.
+    expect(ongletDepuisUrl('/agenda', '')).toBeNull();
   });
 });

@@ -101,7 +101,11 @@ export interface Tm6Resultat {
   /** null = pas de résultat saisi. */
   valeur: number | null;
   unite: 'm' | 'pas' | 'tours';
-  /** « Marche », « Stepper » ou « Marche sur place ». */
+  /**
+   * « Marche », « Stepper » ou « Marche sur place » pour un mode explicite. Un ancien TMC
+   * sans mode (NULL) mais dont les DONNÉES tranchent en pas/tours (cf. `type`) ne renvoie
+   * jamais « Marche » ici — ce serait contredire `texte` (ex. « Marche : 650 pas »).
+   */
   modeLabel: string;
   /** « 420 m », « 650 pas » ou « — ». */
   texte: string;
@@ -122,8 +126,6 @@ export function tm6EnPas(tm6: Tm6): boolean {
  * on suit les données (variantes personnalisées : pas / tours saisis, distance absente).
  */
 export function resultatTm6(tm6: Tm6 | null | undefined): Tm6Resultat {
-  const mode: Tm6Mode = tm6?.mode ?? 'standard';
-  const modeLabel = TM6_MODE_LABELS[mode] ?? 'Marche';
   const pas = tm6?.repetitions ?? tm6?.nbPas ?? null;
   const tours = tm6?.nbTours ?? null;
   const dist = tm6?.distanceMetres ?? null;
@@ -135,6 +137,16 @@ export function resultatTm6(tm6: Tm6 | null | undefined): Tm6Resultat {
     else if (tours != null && tours > 0) type = 'tours';
   }
 
+  // Le libellé suit le mode QUAND il est explicite. Sans mode (anciens TMC : mode NULL en
+  // base), on ne retombe jamais sur « Marche » par défaut dès que le TYPE résolu est « pas »
+  // ou « tours » — les anciens Stepper (mode NULL, pas renseignés) s'affichaient comme
+  // « Marche : 650 pas », contradiction lue par le praticien à chaque ancien bilan rouvert.
+  const modeLabel = tm6?.mode != null
+    ? (TM6_MODE_LABELS[tm6.mode] ?? 'Marche')
+    : type === 'pas' ? 'Stepper'
+    : type === 'tours' ? 'Tours'
+    : 'Marche';
+
   const valeur = type === 'pas' ? pas : type === 'tours' ? tours : dist;
   const unite = type === 'pas' ? 'pas' : type === 'tours' ? 'tours' : 'm';
   return { type, valeur, unite, modeLabel, texte: valeur == null ? '—' : `${valeur} ${unite}` };
@@ -144,4 +156,17 @@ export function resultatTm6(tm6: Tm6 | null | undefined): Tm6Resultat {
 export function distanceTm6(tm6: Tm6 | null | undefined): number | null {
   const r = resultatTm6(tm6);
   return r.type === 'distance' ? r.valeur : null;
+}
+
+/**
+ * Vrai si ce TMC a un résultat réel mais qu'il n'est PAS comparable à une distance (pas,
+ * tours). Jamais comparer pas <-> distance (cf. useBilanDelta.ts : `tm6Pas` n'est jamais
+ * diffé avec un TMC en distance ; ComparisonTable.tsx : ligne « TM6 — {modeLabel} » séparée).
+ * Sert de garde partout où le TM6 est affiché sur une échelle en mètres (radar, profil
+ * fonctionnel, carte de chaleur), pour éviter de noter un résultat en pas comme 0 m — un
+ * défaut qui se lit comme « test non réalisé » alors qu'il l'a été, juste dans une autre unité.
+ */
+export function tm6NonComparableADistance(tm6: Tm6 | null | undefined): boolean {
+  const r = resultatTm6(tm6);
+  return r.valeur != null && r.type !== 'distance';
 }

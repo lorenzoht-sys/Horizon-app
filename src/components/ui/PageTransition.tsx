@@ -20,7 +20,18 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
       initial="initial"
       animate="animate"
       exit="exit"
-      style={{ width: '100%', height: '100%' }}
+      // `minHeight` et non `height` : un `height: 100%` fixe empêchait le
+      // conteneur défilant partagé (App.tsx, DesktopContent) de compter son
+      // propre `padding-bottom` (barre de navigation mobile) dans son
+      // scrollHeight — bug de recouvrement en bas des pages fusionnées sous
+      // 768px (chantier « barre de navigation mobile qui recouvre le bas des
+      // pages fusionnées »). Repro isolée : un enfant `height:100%` dans un
+      // parent `overflow-y:auto` fait ignorer le padding-bottom du parent
+      // dans son scrollHeight ; `min-height:100%` ne reproduit pas le bug,
+      // tout en gardant le même comportement « remplit la hauteur dispo »
+      // pour les pages qui s'appuient dessus (h-full : ParticipantProfile,
+      // SettingsPage, TourneePage, StatsPage, Dashboard).
+      style={{ width: '100%', minHeight: '100%' }}
     >
       {children}
     </motion.div>

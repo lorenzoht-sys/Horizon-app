@@ -34,6 +34,7 @@ const AgendaV2Page       = lazy(() => import('./pages/AgendaV2Page'));
 const ZonesPage          = lazy(() => import('./pages/ZonesPage'));
 const BibliothequePage   = lazy(() => import('./pages/BibliothequePage'));
 const StatsPage          = lazy(() => import('./pages/StatsPage'));
+const StructuresPage    = lazy(() => import('./pages/StructuresPage'));
 const StructureDetail    = lazy(() => import('./pages/StructureDetail'));
 const PortailStructure   = lazy(() => import('./pages/PortailStructure'));
 const ComparaisonPage    = lazy(() => import('./pages/ComparaisonPage'));
@@ -103,6 +104,7 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
             <Route path="/assistant" element={<PageTransition><Suspense fallback={<MapFallback />}><AssistantPage /></Suspense></PageTransition>} />
             <Route path="/bibliotheque" element={<PageTransition><Suspense fallback={<MapFallback />}><BibliothequePage /></Suspense></PageTransition>} />
             <Route path="/stats" element={<PageTransition><Suspense fallback={<MapFallback />}><StatsPage /></Suspense></PageTransition>} />
+            <Route path="/structures" element={<PageTransition><Suspense fallback={<MapFallback />}><StructuresPage /></Suspense></PageTransition>} />
             <Route path="/structures/:id" element={<PageTransition><Suspense fallback={<MapFallback />}><StructureDetail /></Suspense></PageTransition>} />
             <Route path="/settings" element={<PageTransition><SettingsPage /></PageTransition>} />
             {/* Administration des comptes (étape 4 des rôles). La route est

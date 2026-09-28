@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { estArchive, filtrerParNom, separerParArchivage } from './archivage';
+import { contratsDesBeneficiairesActifs, estArchive, filtrerParNom, separerParArchivage } from './archivage';
 
 const p = (id: string, archive?: boolean, prenom = 'A', nom = 'B') => ({ id, archive, prenom, nom });
 
@@ -52,5 +52,41 @@ describe('recherche par nom', () => {
   });
   it('recherche vide = tout', () => {
     expect(filtrerParNom(liste, '  ')).toHaveLength(2);
+  });
+});
+
+describe('contratsDesBeneficiairesActifs (alertes du praticien)', () => {
+  const participants = [
+    { id: 'actif', archive: false },
+    { id: 'archive', archive: true },
+    { id: 'sans-champ' },
+  ];
+  const contrats = [
+    { id: 'c1', participantId: 'actif' },
+    { id: 'c2', participantId: 'archive' },
+    { id: 'c3', participantId: 'sans-champ' },
+    { id: 'c4', participantId: 'archive' },
+  ];
+
+  it('retire les contrats des archivés et garde ceux des actifs, dans l’ordre', () => {
+    expect(contratsDesBeneficiairesActifs(contrats, participants).map(c => c.id)).toEqual(['c1', 'c3']);
+  });
+
+  it('bénéficiaire introuvable (chargement en cours) : le contrat est conservé', () => {
+    expect(contratsDesBeneficiairesActifs([{ id: 'c9', participantId: 'inconnu' }], participants)).toHaveLength(1);
+    expect(contratsDesBeneficiairesActifs(contrats, [])).toHaveLength(4);
+  });
+
+  it('ne modifie ni la liste ni les contrats (aucun changement de statut)', () => {
+    const avant = JSON.stringify(contrats);
+    contratsDesBeneficiairesActifs(contrats, participants);
+    expect(JSON.stringify(contrats)).toBe(avant);
+  });
+
+  it('un archivé désarchivé revient dans les alertes, sans réparation', () => {
+    const p = [{ id: 'archive', archive: true }];
+    const c = [{ id: 'c2', participantId: 'archive' }];
+    expect(contratsDesBeneficiairesActifs(c, p)).toHaveLength(0);
+    expect(contratsDesBeneficiairesActifs(c, [{ id: 'archive', archive: false }])).toHaveLength(1);
   });
 });

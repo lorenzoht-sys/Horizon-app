@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import type { Participant, Structure } from '../../types';
 import { useContrats } from '../../hooks/useContrats';
 import { useProgramme } from '../../hooks/useProgramme';
+import { useProgrammeV2 } from '../../hooks/useProgrammeV2';
 import { useTemplatesStructure } from '../../hooks/useTemplatesStructure';
 import { detecterTypeTemplate, type DetectionTemplate } from '../../utils/detecterTypeTemplate';
 import { analyserDonneesDisponibles, buildChampsAcroFormPrompt } from '../../utils/buildCompteRenduStructureContext';
@@ -24,6 +25,10 @@ const RAISON_TEMPLATE_SAUVEGARDE =
 export default function GenererCompteRenduModal({ patient, structure, onClose }: Props) {
   const { contrats } = useContrats();
   const { programmes } = useProgramme(patient.id);
+  // Corrige la lecture du programme actif pour un compte-rendu : un
+  // programme créé via V2 laisse vide la colonne V1 `exercices` que lit
+  // buildProgrammeText — voir lib/programmeActifV2.ts.
+  const { programmes: programmesV2 } = useProgrammeV2(patient.id);
   const { templates, creerTemplate, supprimerTemplate } = useTemplatesStructure(structure.id);
 
   const contratActif = useMemo(
@@ -93,7 +98,7 @@ export default function GenererCompteRenduModal({ patient, structure, onClose }:
     setGenerating(true);
     setErreur(null);
     try {
-      const prompt = buildChampsAcroFormPrompt({ champs: templateDetection.champs, patient, structure, contratActif, programmeActif });
+      const prompt = buildChampsAcroFormPrompt({ champs: templateDetection.champs, patient, structure, contratActif, programmeActif, programmesV2 });
       const res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
@@ -127,8 +132,15 @@ export default function GenererCompteRenduModal({ patient, structure, onClose }:
   }
 
   return (
+    // z-[1100], pas z-50 : même anti-motif que les modales du chantier
+    // Bibliothèque, sous BarreNavigationMobile (z-index 100, App.tsx).
+    // Correctif préventif — pas reproduit ici par un test qui échoue sans
+    // lui : à l'étape 1 (aucun template), la modale reste courte (~374px à
+    // 390×844) et n'atteint jamais la barre du bas dans ce flux. Gardé
+    // cohérent avec le reste de l'app (même valeur que
+    // ProgrammeWizardModal) plutôt que de laisser le même défaut connu.
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1100] p-4"
       onClick={e => e.target === e.currentTarget && onClose()}
     >
       <div className="bg-white rounded-2xl w-full flex flex-col" style={{ maxWidth: 640, maxHeight: '90vh' }}>

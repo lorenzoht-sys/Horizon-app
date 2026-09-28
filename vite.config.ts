@@ -5,6 +5,13 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   define: {
     global: 'globalThis',
+    // VERCEL_ENV est une variable système fournie par Vercel au build ('production' /
+    // 'preview' / absente en dev local) — jamais préfixée VITE_, donc invisible au bundle
+    // client par défaut. Réinjectée explicitement pour src/lib/config.ts (getAppHost/
+    // getAppOrigin) : seule la PRODUCTION réelle doit ignorer window.location pour les
+    // artefacts longue durée (QR code patient…) — Preview doit rester testable comme
+    // n'importe quel autre déploiement. Voir src/lib/config.ts pour le détail.
+    'import.meta.env.VITE_VERCEL_ENV': JSON.stringify(process.env.VERCEL_ENV ?? ''),
   },
   optimizeDeps: {
     include: ['buffer'],
@@ -19,6 +26,11 @@ export default defineConfig({
         name: "Mouv'APA Suivis",
         short_name: 'MouvAPA',
         description: "Suivi patient en Activité Physique Adaptée",
+        // Explicites (pas les défauts du plugin) : ce manifeste est celui du
+        // praticien, distinct de public/manifest-patient.webmanifest
+        // (start_url "/patient") — voir le commentaire dans index.html.
+        start_url: '/',
+        scope: '/',
         theme_color: '#032c28',
         background_color: '#ffffff',
         display: 'standalone',

@@ -4,10 +4,11 @@ import { Plus, Trash2, Activity } from 'lucide-react';
 import { toast } from 'sonner';
 import PageWrapper from '../components/layout/PageWrapper';
 import { useProgrammesModeles, type ProgrammeModeleFormData } from '../hooks/useProgrammesModeles';
+import { useProgrammeWizard } from '../hooks/useProgrammeWizard';
 import type { ProgrammeModele, JourProgramme } from '../types';
 import { JOURS_PROGRAMME as JP } from '../types';
 import {
-  ProgrammeWizardModal, EMPTY_WIZARD, JOUR_COURT, btnPrimary,
+  ProgrammeWizardModal, JOUR_COURT, btnPrimary,
   type WizardData, type FormSeance,
 } from '../components/programme/ProgrammeWizard';
 
@@ -148,62 +149,27 @@ function ModeleCard({ modele, onEdit, onDelete }: {
 
 export default function ModelesProgrammePage() {
   const { modeles, loading, createModele, updateModele, deleteModele } = useProgrammesModeles();
-
-  const [showWizard, setShowWizard] = useState(false);
-  const [step, setStep] = useState(1);
-  const [wizardData, setWizardData] = useState<WizardData>(EMPTY_WIZARD);
-  const [saving, setSaving] = useState(false);
-  const [editingModeleId, setEditingModeleId] = useState<string | null>(null);
-
-  function updateWizard(patch: Partial<WizardData>) {
-    setWizardData(prev => ({ ...prev, ...patch }));
-  }
-
-  function openWizard() {
-    setWizardData(EMPTY_WIZARD);
-    setEditingModeleId(null);
-    setStep(1);
-    setShowWizard(true);
-  }
+  const {
+    showWizard, step, setStep, wizardData, saving, editingId: editingModeleId,
+    updateWizard, openWizard, openEditWizard: openEditWizardBase, closeWizard, handleSave: handleSaveBase,
+  } = useProgrammeWizard();
 
   function openEditWizard(modele: ProgrammeModele) {
-    setWizardData(progModeleToWizard(modele));
-    setEditingModeleId(modele.id);
-    setStep(1);
-    setShowWizard(true);
-  }
-
-  function closeWizard() {
-    setShowWizard(false);
-    setEditingModeleId(null);
-    setStep(1);
+    openEditWizardBase(modele.id, progModeleToWizard(modele));
   }
 
   async function handleSave() {
-    setSaving(true);
-    try {
-      const payload = wizardToFormData(wizardData);
-
+    const payload = wizardToFormData(wizardData);
+    await handleSaveBase(async () => {
       if (editingModeleId) {
         const ok = await updateModele(editingModeleId, payload);
-        if (ok) {
-          toast.success('Modèle mis à jour !');
-          closeWizard();
-        } else {
-          toast.error('Erreur lors de la mise à jour du modèle');
-        }
-      } else {
-        const ok = await createModele(payload);
-        if (ok) {
-          toast.success('Modèle créé !');
-          closeWizard();
-        } else {
-          toast.error('Erreur lors de la création du modèle');
-        }
+        toast[ok ? 'success' : 'error'](ok ? 'Modèle mis à jour !' : 'Erreur lors de la mise à jour du modèle');
+        return ok;
       }
-    } finally {
-      setSaving(false);
-    }
+      const ok = await createModele(payload);
+      toast[ok ? 'success' : 'error'](ok ? 'Modèle créé !' : 'Erreur lors de la création du modèle');
+      return ok;
+    });
   }
 
   return (

@@ -1,5 +1,6 @@
-import type { Bilan, Contrat, Participant, Programme, Structure } from '../types';
+import type { Bilan, Contrat, Participant, Programme, ProgrammeV2, Structure } from '../types';
 import { EXERCICES_BASE } from '../data/exercices';
+import { programmeV2Actif } from '../lib/programmeActifV2';
 import { computeTinettiScores, tinettiRisque } from '../data/tinetti';
 import type { ChampFormulaire } from './detecterTypeTemplate';
 import { libelleAge } from '../lib/age';
@@ -46,11 +47,18 @@ function buildEvolution(ancien: Bilan, recent: Bilan): string {
   return lines.join('\n') || 'Données insuffisantes pour calculer une évolution';
 }
 
-function buildProgrammeText(programme: Programme | null): string {
+function buildProgrammeText(programme: Programme | null, programmesV2: ProgrammeV2[]): string {
   if (!programme) return 'Aucun programme actif';
-  const exercices = programme.exercices
-    .map(e => EXERCICES_BASE.find(ex => ex.id === e.exerciceId)?.nom)
-    .filter((nom): nom is string => !!nom);
+  // Un programme créé via V2 (ProgrammePage.tsx, seul chemin de création
+  // actuel) laisse `programme.exercices` (V1) vide — voir
+  // lib/programmeActifV2.ts. Les noms d'exercices V2 sont déjà portés par
+  // chaque exercice de séance, aucun catalogue à consulter pour eux.
+  const progV2 = programmeV2Actif(programme, programmesV2);
+  const exercices = progV2
+    ? progV2.seances.flatMap(s => s.exercices.map(e => e.nom))
+    : programme.exercices
+        .map(e => EXERCICES_BASE.find(ex => ex.id === e.exerciceId)?.nom)
+        .filter((nom): nom is string => !!nom);
   return [
     `Titre : ${programme.titre}`,
     `Objectif : ${programme.objectif || 'non renseigné'}`,
@@ -101,6 +109,7 @@ function buildDonneesPatientText(
   patient: Participant,
   contratActif: Contrat | null,
   programmeActif: Programme | null,
+  programmesV2: ProgrammeV2[],
 ): string {
   const sortedBilans = [...patient.bilans].sort((a, b) => b.date.localeCompare(a.date));
   const dernierBilan = sortedBilans[0] ?? null;
@@ -133,7 +142,7 @@ OBJECTIFS
 ${objectifs}
 
 PROGRAMME EN COURS
-${buildProgrammeText(programmeActif)}`;
+${buildProgrammeText(programmeActif, programmesV2)}`;
 }
 
 const REGLES_STRICTES = `RÈGLES STRICTES :
@@ -158,8 +167,9 @@ export function buildChampsAcroFormPrompt(opts: {
   structure: Structure;
   contratActif: Contrat | null;
   programmeActif: Programme | null;
+  programmesV2: ProgrammeV2[];
 }): string {
-  const { champs, patient, structure, contratActif, programmeActif } = opts;
+  const { champs, patient, structure, contratActif, programmeActif, programmesV2 } = opts;
   const listeChamps = champs.map(c => `- "${c.nom}" (${libelleTypeChamp(c)})`).join('\n');
 
   return `Tu es l'assistant d'un enseignant en Activité Physique Adaptée (APA) qui exerce en libéral et intervient auprès de structures (EHPAD, centres, associations).
@@ -180,5 +190,5 @@ ${listeChamps}
 ═══════════════════════════════════════
 DONNÉES DU PATIENT
 ═══════════════════════════════════════
-${buildDonneesPatientText(patient, contratActif, programmeActif)}`;
+${buildDonneesPatientText(patient, contratActif, programmeActif, programmesV2)}`;
 }

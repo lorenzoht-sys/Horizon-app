@@ -103,9 +103,15 @@ export async function loginPraticien(page: Page): Promise<void> {
     );
   }
 
-  // Signal positif : l'espace pro est réellement monté. La Sidebar n'existe
-  // ni sur /login ni sur /onboarding.
-  await expect(page.getByRole('link', { name: 'Tableau de bord' })).toBeVisible({ timeout: 20_000 });
+  // Signal positif : l'espace pro est réellement monté. Ni la Sidebar
+  // (desktop) ni la BarreNavigationMobile (< 768 px, projet Playwright
+  // "Mobile") n'existent sur /login ni sur /onboarding — l'une ou l'autre
+  // suffit donc à prouver la connexion, selon le viewport du test.
+  const enDessous768 = (page.viewportSize()?.width ?? 1400) < 768;
+  const signalEspacePro = enDessous768
+    ? page.getByRole('navigation', { name: 'Navigation principale' })
+    : page.getByRole('link', { name: 'Tableau de bord' });
+  await expect(signalEspacePro).toBeVisible({ timeout: 20_000 });
 }
 
 // Depuis le tableau de bord, ouvre la fiche d'un participant via sa carte

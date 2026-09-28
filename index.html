@@ -10,7 +10,34 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#032c28" />
     <title>Horizon</title>
-    <link rel="manifest" href="/manifest.json" />
+    <!--
+      Manifeste PWA choisi selon la route, pas un lien manifeste statique :
+      ce même domaine sert deux publics avec deux points d'entrée
+      "Sur l'écran d'accueil" différents — le praticien (start_url "/") et le
+      patient (start_url "/patient", voir EspacePatient.tsx qui documente et
+      encourage ce second usage). Un seul manifeste fixe pour les deux a déjà
+      causé un bug réel : l'icône ouvrait l'espace patient même pour un
+      praticien (voir le rapport du chantier "fix PWA manifest").
+
+      Script SYNCHRONE (ni type="module", ni defer/async) : il s'exécute
+      pendant le parsing de la section head, donc le lien manifeste existe
+      dans le DOM avant que la page finisse de charger — Safari iOS lit le
+      manifeste au moment de "Sur l'écran d'accueil", il ne doit jamais
+      trouver un DOM sans lien ou un lien pas encore posé. Le lien manifeste
+      injecté par VitePWA au build (manifest.webmanifest, praticien) est
+      retiré après coup par scripts/pwa-manifest-postbuild.mjs (voir ce
+      fichier, package.json → "build") : sans ce retrait, ce script en
+      ajouterait un second — jamais deux liens manifeste sur la même page.
+    -->
+    <script>
+      (function () {
+        var estPatient = location.pathname === '/patient' || location.pathname.indexOf('/patient/') === 0;
+        var lien = document.createElement('link');
+        lien.rel = 'manifest';
+        lien.href = estPatient ? '/manifest-patient.webmanifest' : '/manifest.webmanifest';
+        document.head.appendChild(lien);
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
