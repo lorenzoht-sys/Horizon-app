@@ -482,18 +482,23 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
       expect(lireErr).toBeNull();
       expect(lu ?? [], 'praticien A doit voir sa propre ligne').toHaveLength(1);
 
-      const { error: deleteErr, count } = await clientA
-        .from('praticien_push_subscriptions')
-        .delete()
-        .eq('endpoint', endpoint)
-        .select('*', { count: 'exact', head: true });
-      expect(deleteErr).toBeNull();
-      expect(count ?? 0, 'praticien A doit pouvoir supprimer sa propre ligne').toBe(1);
+      // Pas de `.select(..., {count, head:true})` ici : fiabilité du header
+      // Content-Range sur un DELETE non vérifiée pour cette table (contexte
+      // différent du UPDATE générique ci-dessus, déjà éprouvé lui) — une
+      // relecture après coup est sans ambiguïté.
+      const { error: deleteErr } = await clientA.from('praticien_push_subscriptions').delete().eq('endpoint', endpoint);
+      expect(deleteErr, `praticien A n'a pas pu supprimer sa propre ligne : ${deleteErr?.message}`).toBeNull();
+      const { data: apresSuppression } = await clientA.from('praticien_push_subscriptions').select('id').eq('endpoint', endpoint);
+      expect(apresSuppression ?? [], 'la ligne doit avoir disparu après suppression').toHaveLength(0);
     });
 
     it("praticien B ne peut ni lire ni écrire une ligne de praticien A", async () => {
       const endpoint = `https://rls-spec-test.example/${Date.now()}-B`;
-      const { data: ligneA, error: insertErr } = await admin
+      // Créée par clientA (praticien A, propriétaire légitime) : service_role
+      // n'a volontairement pas INSERT sur cette table (voir la migration —
+      // pas de route serverless d'abonnement dans ce lot), donc `admin` ne
+      // peut pas jouer ce rôle de fixture ici comme ailleurs dans ce fichier.
+      const { data: ligneA, error: insertErr } = await clientA
         .from('praticien_push_subscriptions')
         .insert({ praticien_id: praticienAId, endpoint, p256dh: 'p256dh-test', auth_key: 'auth-test' })
         .select('id')
@@ -507,12 +512,9 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
           .eq('praticien_id', praticienAId);
         expect(lu ?? [], `praticien B a lu ${(lu ?? []).length} ligne(s) de praticien A`).toHaveLength(0);
 
-        const { count } = await clientB
-          .from('praticien_push_subscriptions')
-          .delete()
-          .eq('praticien_id', praticienAId)
-          .select('*', { count: 'exact', head: true });
-        expect(count ?? 0, `praticien B a pu supprimer ${count ?? 0} ligne(s) de praticien A`).toBe(0);
+        await clientB.from('praticien_push_subscriptions').delete().eq('praticien_id', praticienAId);
+        const { data: intacte } = await admin.from('praticien_push_subscriptions').select('id').eq('id', ligneA!.id);
+        expect(intacte ?? [], 'la ligne de praticien A doit être intacte après la tentative de praticien B').toHaveLength(1);
       } finally {
         // Nettoyage par identifiant précis (pas un eq(praticien_id) large).
         if (ligneA?.id) await admin.from('praticien_push_subscriptions').delete().eq('id', ligneA.id);
