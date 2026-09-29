@@ -454,6 +454,72 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
     });
   });
 
+  // praticien_push_subscriptions n'a pas de colonne updated_at (create/delete
+  // seulement, jamais d'update en usage réel — un réabonnement du même
+  // appareil passe par upsert onConflict, pas par une modification en place)
+  // : le UPDATE générique du bloc ci-dessus passerait pour la mauvaise raison
+  // (42703, colonne inexistante — même piège que `praticiens` avant
+  // OWNER_COLUMN_OVERRIDES, voir plus haut). Bloc dédié, avec un contrôle
+  // positif (praticien A gère bien SA propre ligne) en plus du négatif —
+  // cette table a une RLS plus permissive que ses voisines (authenticated en
+  // écriture directe, pas seulement service_role) : un test purement négatif
+  // ne détecterait pas une policy mal écrite qui bloquerait tout le monde.
+  describe('praticien_push_subscriptions (chantier push praticien, lot 1)', () => {
+    it("praticien A peut créer, lire et supprimer directement sa propre ligne", async () => {
+      const endpoint = `https://rls-spec-test.example/${Date.now()}`;
+      const { data: inserted, error: insertErr } = await clientA
+        .from('praticien_push_subscriptions')
+        .insert({ praticien_id: praticienAId, endpoint, p256dh: 'p256dh-test', auth_key: 'auth-test' })
+        .select('id')
+        .single();
+      expect(insertErr, `praticien A n'a pas pu créer sa propre ligne : ${insertErr?.message}`).toBeNull();
+      expect(inserted?.id).toBeDefined();
+
+      const { data: lu, error: lireErr } = await clientA
+        .from('praticien_push_subscriptions')
+        .select('id')
+        .eq('endpoint', endpoint);
+      expect(lireErr).toBeNull();
+      expect(lu ?? [], 'praticien A doit voir sa propre ligne').toHaveLength(1);
+
+      const { error: deleteErr, count } = await clientA
+        .from('praticien_push_subscriptions')
+        .delete()
+        .eq('endpoint', endpoint)
+        .select('*', { count: 'exact', head: true });
+      expect(deleteErr).toBeNull();
+      expect(count ?? 0, 'praticien A doit pouvoir supprimer sa propre ligne').toBe(1);
+    });
+
+    it("praticien B ne peut ni lire ni écrire une ligne de praticien A", async () => {
+      const endpoint = `https://rls-spec-test.example/${Date.now()}-B`;
+      const { data: ligneA, error: insertErr } = await admin
+        .from('praticien_push_subscriptions')
+        .insert({ praticien_id: praticienAId, endpoint, p256dh: 'p256dh-test', auth_key: 'auth-test' })
+        .select('id')
+        .single();
+      expect(insertErr).toBeNull();
+
+      try {
+        const { data: lu } = await clientB
+          .from('praticien_push_subscriptions')
+          .select('*')
+          .eq('praticien_id', praticienAId);
+        expect(lu ?? [], `praticien B a lu ${(lu ?? []).length} ligne(s) de praticien A`).toHaveLength(0);
+
+        const { count } = await clientB
+          .from('praticien_push_subscriptions')
+          .delete()
+          .eq('praticien_id', praticienAId)
+          .select('*', { count: 'exact', head: true });
+        expect(count ?? 0, `praticien B a pu supprimer ${count ?? 0} ligne(s) de praticien A`).toBe(0);
+      } finally {
+        // Nettoyage par identifiant précis (pas un eq(praticien_id) large).
+        if (ligneA?.id) await admin.from('praticien_push_subscriptions').delete().eq('id', ligneA.id);
+      }
+    });
+  });
+
   describe('Patient A ↔ Patient B (espace /api/patient/*)', () => {
     it("un token patient A ne peut pas lire les données de patient B via /api/patient/me", async () => {
       // Ce test cible directement la RPC/la table sous-jacente utilisée par
@@ -877,7 +943,7 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
       'rappels_envoyes', 'retours_seance', 'tests_etalons_activations', 'tests_etalons_resultats',
       'exercices_libres_activations', 'exercices_libres_validations', 'organisations',
       'organisation_membres', 'organisation_invitations', 'structure_access_logs',
-      'documents_partages', 'cours_collectifs',
+      'documents_partages', 'cours_collectifs', 'praticien_push_subscriptions',
     ];
     const known = new Set([...testedDirect, ...Object.keys(TABLE_OVERRIDES), ...Object.keys(EXCLUDED_TABLES)]);
     const unknown = publicTables.filter((t) => !known.has(t) && !t.startsWith('_'));
