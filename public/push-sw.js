@@ -5,8 +5,10 @@
 // même contexte (self = ServiceWorkerGlobalScope), sans remplacer la
 // stratégie de cache générée par Workbox.
 //
-// Le contenu des notifications est toujours neutre (aucune donnée médicale)
-// — voir api/_lib/rappels.ts et api/_lib/absenceSignalee.ts.
+// Aucune donnée médicale dans les notifications. Rappels patient : message
+// neutre (api/_lib/rappels.ts). Alerte praticien : prénom seul du
+// bénéficiaire et heure de la séance, jamais le nom complet
+// (api/_lib/absenceSignalee.ts).
 
 self.addEventListener('push', (event) => {
   let data = { title: 'Horizon', body: '' };

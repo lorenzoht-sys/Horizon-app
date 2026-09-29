@@ -48,21 +48,66 @@ export const MESSAGES_REFUS_ABSENCE: Record<RefusAbsence, string> = {
 };
 
 // Alerte push au praticien (chantier « push praticien », lot E) : à la
-// SIGNALISATION uniquement, jamais à la rétractation (décidé). Message
-// neutre fixe, même convention que MESSAGE_RAPPEL_SEANCE côté patient
-// (api/_lib/rappels.ts) — pas de nom de bénéficiaire ni de date interpolés
-// dans le corps, pour rester simple et cohérent avec l'existant.
-export const MESSAGE_ABSENCE_SIGNALEE_PRATICIEN = {
-  titre: 'Horizon',
+// SIGNALISATION uniquement, jamais à la rétractation (décidé).
+//
+// Corps nominatif depuis le correctif « contenu et destination » : le
+// message neutre fixe (« Un bénéficiaire… ») obligeait à ouvrir l'agenda
+// pour savoir QUI était concerné. PRÉNOM SEUL, jamais le nom complet
+// (décidé) : la notification s'affiche sur un écran verrouillé, le prénom
+// reste utile au praticien sans identifier le bénéficiaire pour un tiers.
+// Aucune donnée médicale, aucune date (la date est portée par l'URL
+// ouverte au clic, voir urlNotificationAbsencePraticien).
+const TITRE_NOTIFICATION_PRATICIEN = 'Horizon';
+
+// Repli quand le prénom n'est pas exploitable (absent, vide) : l'ancien
+// message neutre, inchangé.
+export const MESSAGE_ABSENCE_SIGNALEE_PRATICIEN_NEUTRE = {
+  titre: TITRE_NOTIFICATION_PRATICIEN,
   corps: 'Un bénéficiaire a signalé une absence pour sa prochaine séance.',
 };
 
+/** « 09:05 » ou « 09:05:00 » (colonne time Postgres) → « 9h05 ». null si illisible. */
+function heureLisible(heureDebut: unknown): string | null {
+  if (typeof heureDebut !== 'string') return null;
+  const m = /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/.exec(heureDebut);
+  return m ? `${Number(m[1])}h${m[2]}` : null;
+}
+
+/**
+ * Message de l'alerte praticien. Avec prénom et heure : « Camille a signalé
+ * son absence pour sa séance de 14h30 ». Sans heure exploitable (colonne
+ * nullable) : « … pour sa prochaine séance ». Sans prénom exploitable :
+ * repli neutre.
+ */
+export function messageAbsenceSignaleePraticien(
+  seance: { prenom: unknown; heure_debut: unknown },
+): { titre: string; corps: string } {
+  const prenom = typeof seance.prenom === 'string' ? seance.prenom.trim() : '';
+  if (!prenom) return { ...MESSAGE_ABSENCE_SIGNALEE_PRATICIEN_NEUTRE };
+  const heure = heureLisible(seance.heure_debut);
+  return {
+    titre: TITRE_NOTIFICATION_PRATICIEN,
+    corps: heure
+      ? `${prenom} a signalé son absence pour sa séance de ${heure}`
+      : `${prenom} a signalé son absence pour sa prochaine séance`,
+  };
+}
+
 // Route ouverte au clic sur la notification (push-sw.js) : l'agenda mobile
-// natif. Choix assumé, pas parfait sur tous les appareils — voir la
-// limite documentée dans le rapport du chantier (aucune route desktop
-// « /agenda » distincte de /agenda-v2 ; sans information de type d'appareil
-// sur l'abonnement, un seul choix sert tous les appareils du praticien).
+// natif, positionné sur le jour de la séance (paramètre `date`, même format
+// AAAA-MM-JJ que seances.date et que dateStr dans EcranAgenda — lu par
+// ecranMobileDepuisUrl, src/lib/routesMobile.ts). Limite connue, inchangée :
+// aucune route desktop « /agenda » distincte de /agenda-v2 ; sans
+// information de type d'appareil sur l'abonnement, un seul choix sert tous
+// les appareils du praticien.
 export const URL_NOTIFICATION_ABSENCE_PRATICIEN = '/agenda';
+
+/** `/agenda?date=AAAA-MM-JJ`, ou `/agenda` seul si la date est illisible. */
+export function urlNotificationAbsencePraticien(date: unknown): string {
+  return typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
+    ? `${URL_NOTIFICATION_ABSENCE_PRATICIEN}?date=${date}`
+    : URL_NOTIFICATION_ABSENCE_PRATICIEN;
+}
 
 export type Evaluation = { ok: true } | { ok: false; refus: RefusAbsence };
 

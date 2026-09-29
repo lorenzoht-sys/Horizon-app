@@ -24,7 +24,7 @@ import {
 } from '../_lib/presenceAnnoncee.js';
 import {
   validerCorpsSeanceAbsence, evaluerAbsence, MESSAGES_REFUS_ABSENCE,
-  MESSAGE_ABSENCE_SIGNALEE_PRATICIEN, URL_NOTIFICATION_ABSENCE_PRATICIEN,
+  messageAbsenceSignaleePraticien, urlNotificationAbsencePraticien,
 } from '../_lib/absenceSignalee.js';
 import { checkActiviteRateLimit, recordActiviteAttempt } from '../_lib/activiteRateLimit.js';
 import { dateParisCivile } from '../_lib/rappels.js';
@@ -214,7 +214,7 @@ export default withSentry(async function handler(req: any, res: any) {
     // plus signaler une absence sur une séance qu'il ne voit pas.
     const { data: participant } = await supabase
       .from('participants')
-      .select('visibilite_beneficiaire')
+      .select('visibilite_beneficiaire, prenom')
       .eq('id', participantId)
       .maybeSingle();
     if (!participant || !rendezVousVisibles(participant.visibilite_beneficiaire)) {
@@ -281,8 +281,8 @@ export default withSentry(async function handler(req: any, res: any) {
     if (signale) {
       try {
         await envoyerAlertePraticien(supabase, seance.praticien_id, {
-          ...MESSAGE_ABSENCE_SIGNALEE_PRATICIEN,
-          url: URL_NOTIFICATION_ABSENCE_PRATICIEN,
+          ...messageAbsenceSignaleePraticien({ prenom: participant.prenom, heure_debut: seance.heure_debut }),
+          url: urlNotificationAbsencePraticien(seance.date),
         });
       } catch (err) {
         console.error('[activite/seance-absence] envoi alerte praticien échoué (non bloquant):', err);

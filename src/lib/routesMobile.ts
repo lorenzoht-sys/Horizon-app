@@ -19,7 +19,8 @@ export type EcranMobile =
   | { ecran: 'saisie' }
   | { ecran: 'plus' }
   | { ecran: 'tournee' }
-  | { ecran: 'agenda' }
+  // `date` (AAAA-MM-JJ) : jour à afficher à l'ouverture, null = aujourd'hui.
+  | { ecran: 'agenda'; date: string | null }
   | { ecran: 'assistant'; beneficiaireId: string | null }
   | { ecran: 'parametres' }
   | { ecran: 'nouveauBeneficiaire' }
@@ -41,6 +42,10 @@ export const URLS_MOBILE = {
   // (desktop-only, react-big-calendar) : remplace l'ancien renvoi vers
   // /agenda-v2 depuis l'écran "Plus" (Mon activité → Agenda complet).
   agenda: '/agenda',
+  // Ouvre l'agenda mobile sur un jour précis — utilisé par la notification
+  // push « absence signalée » (urlNotificationAbsencePraticien,
+  // api/_lib/absenceSignalee.ts, qui construit la même URL côté serveur).
+  agendaJour: (date: string) => `/agenda?date=${encodeURIComponent(date)}`,
   assistant: '/assistant',
   parametres: '/settings',
   archives: '/archives',
@@ -90,6 +95,18 @@ export function estRouteInterfaceUnique(pathname: string): boolean {
   );
 }
 
+/**
+ * `?date=` de l'agenda : AAAA-MM-JJ et jour réellement existant (rejette
+ * 2026-02-31, que `new Date` ferait silencieusement glisser en mars) ; null
+ * sinon, et l'agenda s'ouvre sur aujourd'hui comme avant.
+ */
+function dateAgendaValide(valeur: string | null): string | null {
+  if (!valeur || !/^\d{4}-\d{2}-\d{2}$/.test(valeur)) return null;
+  const [a, m, j] = valeur.split('-').map(Number);
+  const d = new Date(a, m - 1, j);
+  return d.getFullYear() === a && d.getMonth() === m - 1 && d.getDate() === j ? valeur : null;
+}
+
 function segment(valeur: string): string {
   try {
     return decodeURIComponent(valeur);
@@ -112,7 +129,7 @@ export function ecranMobileDepuisUrl(pathname: string, search: string): EcranMob
     }
   }
   if (chemin === '/tournee') return { ecran: 'tournee' };
-  if (chemin === '/agenda') return { ecran: 'agenda' };
+  if (chemin === '/agenda') return { ecran: 'agenda', date: dateAgendaValide(params.get('date')) };
   if (chemin === '/assistant') return { ecran: 'assistant', beneficiaireId: params.get('beneficiaire') || null };
   if (chemin === '/settings') return { ecran: 'parametres' };
   if (chemin === '/participants/nouveau') return { ecran: 'nouveauBeneficiaire' };
