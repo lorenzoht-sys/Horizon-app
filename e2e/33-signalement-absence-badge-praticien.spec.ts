@@ -83,7 +83,7 @@ test.describe.serial('Signalement d\'absence — badge côté praticien (agenda 
     admin = clientAdminTest();
     if (!admin) return;
     praticienId = await resoudrePraticienId(admin);
-    participantId = await creerParticipant(admin, praticienId, `badge${marqueur}`);
+    participantId = await creerParticipant(admin, praticienId, marqueur);
   });
 
   test.afterAll(async () => {
@@ -98,9 +98,16 @@ test.describe.serial('Signalement d\'absence — badge côté praticien (agenda 
 
   test('signalement → badge 🚫 visible dans l\'agenda desktop → rétractation → badge disparu', async ({ page }) => {
     test.setTimeout(60000);
+    // Date locale (pas toISOString, qui convertit en UTC) : heureToDate
+    // (AgendaV2Page.tsx) parse cette chaîne via `new Date(date)` — interprétée
+    // en UTC — puis positionne l'heure en fuseau local, ce qui peut glisser
+    // d'un jour selon le fuseau du runner. Pas la cause du 1er échec CI de ce
+    // test (un nom de fixture mal construit, corrigé ci-dessus), mais même
+    // précaution que 18-agenda-desktop.spec.ts pour ne pas introduire ce
+    // piège séparément.
     const demain = new Date();
     demain.setDate(demain.getDate() + 1);
-    const dateDemain = demain.toISOString().slice(0, 10);
+    const dateDemain = `${demain.getFullYear()}-${String(demain.getMonth() + 1).padStart(2, '0')}-${String(demain.getDate()).padStart(2, '0')}`;
 
     const { data: seanceRow, error } = await admin!
       .from('seances')
