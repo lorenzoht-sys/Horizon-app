@@ -22,9 +22,13 @@ import { withSentry } from '../_lib/sentry.js';
 import {
   validerCorpsCoursPresence, evaluerReponse, rendezVousVisibles, reponseValide, MESSAGES_REFUS,
 } from '../_lib/presenceAnnoncee.js';
-import { validerCorpsSeanceAbsence, evaluerAbsence, MESSAGES_REFUS_ABSENCE } from '../_lib/absenceSignalee.js';
+import {
+  validerCorpsSeanceAbsence, evaluerAbsence, MESSAGES_REFUS_ABSENCE,
+  MESSAGE_ABSENCE_SIGNALEE_PRATICIEN, URL_NOTIFICATION_ABSENCE_PRATICIEN,
+} from '../_lib/absenceSignalee.js';
 import { checkActiviteRateLimit, recordActiviteAttempt } from '../_lib/activiteRateLimit.js';
 import { dateParisCivile } from '../_lib/rappels.js';
+import { envoyerAlertePraticien } from '../_lib/notifications.js';
 
 const TYPES_VALIDES = ['test-etalon', 'exercice-libre', 'cours-presence', 'seance-absence'] as const;
 type TypeActivite = (typeof TYPES_VALIDES)[number];
@@ -227,7 +231,7 @@ export default withSentry(async function handler(req: any, res: any) {
     const aujourdHui = dateParisCivile(new Date());
     const { data: seance, error: lecErr } = await supabase
       .from('seances')
-      .select('id, date, heure_debut, statut, absence_signalee_par_patient_le')
+      .select('id, date, heure_debut, statut, absence_signalee_par_patient_le, praticien_id')
       .eq('participant_id', participantId)
       .eq('statut', 'planifiee')
       .gte('date', aujourdHui)
@@ -265,6 +269,24 @@ export default withSentry(async function handler(req: any, res: any) {
       console.error('[activite/seance-absence] écriture impossible:', majErr.code, majErr.message);
       await logAuditEvent(supabase, 'patient_seance_absence_submit', participantId, ip, false, { seanceId: seance.id, motif: 'ecriture' });
       return res.status(500).json({ error: 'Erreur enregistrement' });
+    }
+
+    // Alerte au praticien PROPRIÉTAIRE uniquement (seance.praticien_id —
+    // jamais aux autres membres d'une éventuelle organisation), et
+    // uniquement à la SIGNALISATION, jamais à la rétractation (décidé). Ne
+    // doit jamais faire échouer l'action elle-même : le patient doit
+    // toujours pouvoir signaler, même si l'envoi push échoue — déjà garanti
+    // par envoyerAlertePraticien (ne lève jamais), ce try/catch est une
+    // seconde ceinture, pas la protection principale.
+    if (signale) {
+      try {
+        await envoyerAlertePraticien(supabase, seance.praticien_id, {
+          ...MESSAGE_ABSENCE_SIGNALEE_PRATICIEN,
+          url: URL_NOTIFICATION_ABSENCE_PRATICIEN,
+        });
+      } catch (err) {
+        console.error('[activite/seance-absence] envoi alerte praticien échoué (non bloquant):', err);
+      }
     }
 
     await logAuditEvent(supabase, 'patient_seance_absence_submit', participantId, ip, true, { seanceId: seance.id, signale });
