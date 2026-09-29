@@ -27,7 +27,7 @@ import {
   calculerFutures, planEditerUnique, planEditerSerie, planSupprimerUnique, planSupprimerSerie,
   planActionSurSelection, executerOperations, optionsPorteePourAction, type MiseAJourSeance,
 } from '../../lib/planificationManuelle';
-import { CLE_JOUR_PAR_DOW, LABEL_TYPE_EVENEMENT, formatDate as formatDateAgenda, type ChoixSerie } from '../../lib/agendaCommun';
+import { CLE_JOUR_PAR_DOW, LABEL_TYPE_EVENEMENT, formatDate as formatDateAgenda, absenceSignaleeAffichable, type ChoixSerie } from '../../lib/agendaCommun';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, getAuthHeader } from '../../lib/supabase';
 import {
@@ -1077,8 +1077,10 @@ function EcranTournee() {
                       (api/_lib/absenceSignalee.ts) : n'implique aucune
                       action, ne change ni statut ni calcul — c'est au
                       praticien de décider (annuler, reporter, ou laisser
-                      tel quel) via les boutons déjà présents plus bas. */}
-                  {s.absenceSignaleeLe && (
+                      tel quel) via les boutons déjà présents plus bas.
+                      Affichage conditionné par absenceSignaleeAffichable
+                      (agendaCommun.ts) : voir sa doc pour la règle. */}
+                  {absenceSignaleeAffichable(s) && (
                     <span style={{ background: '#FFF1F2', color: '#BE123C', borderRadius: 8, padding: '4px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                       🚫 Absence signalée
                     </span>
@@ -1271,13 +1273,12 @@ function EcranAgenda() {
     return map;
   }, [seances, coursCollectifs, evenements]);
 
-  // Jours portant au moins une séance signalée absente par le bénéficiaire
-  // (lecture seule de absence_signalee_par_patient_le) — indépendant du
-  // statut de la séance : le signalement n'efface jamais rien, même si le
-  // praticien a depuis annulé ou reporté.
+  // Jours portant au moins une séance signalée absente par le bénéficiaire,
+  // encore actionnable (absenceSignaleeAffichable, agendaCommun.ts — voir
+  // sa doc pour la règle).
   const joursAvecAbsenceSignalee = useMemo(() => {
     const set = new Set<string>();
-    seances.forEach(s => { if (s.absenceSignaleeLe) set.add(s.date); });
+    seances.forEach(s => { if (absenceSignaleeAffichable(s)) set.add(s.date); });
     return set;
   }, [seances]);
 
@@ -1592,8 +1593,10 @@ function EcranAgenda() {
                   </div>
                 </div>
                 {/* Lecture seule (voir EcranTournee) : aucune action, aucun
-                    changement de statut. */}
-                {s.absenceSignaleeLe && (
+                    changement de statut. Affichage conditionné par
+                    absenceSignaleeAffichable (agendaCommun.ts), même
+                    fonction qu'EcranTournee. */}
+                {absenceSignaleeAffichable(s) && (
                   <span style={{ background: '#FFF1F2', color: '#BE123C', borderRadius: 8, padding: '4px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                     🚫 Absence
                   </span>
