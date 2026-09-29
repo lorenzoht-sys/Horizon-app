@@ -45,6 +45,17 @@ export function getCouleurEvenement(seance: Seance): string {
   return seance.date === TODAY ? '#1A5F9E' : '#5B9BD5';
 }
 
+// Titre d'une séance dans l'agenda desktop (AgendaV2Page). react-big-calendar
+// n'a pas de composant d'événement personnalisé ici (seul eventPropGetter
+// existe, et ne gère que le style) : le signalement d'absence patient
+// (absence_signalee_par_patient_le, lecture seule) est donc rendu comme un
+// simple préfixe textuel plutôt qu'un badge graphique séparé. Ne modifie ni
+// statut ni calcul — uniquement l'affichage.
+export function titreEvenementSeance(seance: Seance, participant: { prenom: string; nom: string } | undefined): string {
+  const titreBase = participant ? `${participant.prenom} ${participant.nom}` : LABEL_TYPE[seance.type];
+  return seance.absenceSignaleeLe ? `🚫 ${titreBase}` : titreBase;
+}
+
 // Événements d'agenda (bilan, réunion, prospect, lieu particulier, autre) —
 // couleur choisie librement par Pierre (voir ModalNouvelEvenement), jamais
 // confondue avec une vraie séance patient grâce à la bordure en tirets

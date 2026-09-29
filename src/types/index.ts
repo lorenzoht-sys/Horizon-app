@@ -618,6 +618,15 @@ export interface Seance {
   motifAnnulation?: RaisonAnnulation;
   /** Texte libre, utilisé seulement quand motifAnnulation === 'autre'. */
   motifAnnulationDetail?: string;
+  /**
+   * Le bénéficiaire a signalé (depuis son espace) qu'il ne serait pas
+   * disponible pour cette séance — horodatage ISO, ou absent si rien
+   * signalé. LECTURE SEULE côté praticien : n'écrit jamais `statut`, ne
+   * doit jamais être modifié par du code praticien (seanceToDb ne le
+   * sérialise pas exprès — voir src/lib/mappers.ts). Seule
+   * /api/patient/activite (type "seance-absence") l'écrit.
+   */
+  absenceSignaleeLe?: string;
 }
 
 // Événement d'agenda : distinct d'une séance patient. 'indisponibilite' ici

@@ -526,9 +526,15 @@ export function dbToSeance(row: any): Seance {
     coordonnees: row.coordonnees ?? undefined,
     motifAnnulation: row.motif_annulation ?? undefined,
     motifAnnulationDetail: row.motif_annulation_detail ?? undefined,
+    absenceSignaleeLe: row.absence_signalee_par_patient_le ?? undefined,
   };
 }
 
+// N'inclut PAS absence_signalee_par_patient_le : lecture seule côté
+// praticien (voir Seance.absenceSignaleeLe, types/index.ts). L'omettre ici
+// rend structurellement impossible qu'un chemin d'écriture praticien
+// (modifierSeance, report, etc.) l'efface ou le modifie par accident — seule
+// /api/patient/activite (type "seance-absence") écrit cette colonne.
 export function seanceToDb(s: Omit<Seance, 'id'> & { id?: string }): Record<string, unknown> {
   return {
     ...(s.id ? { id: s.id } : {}),
