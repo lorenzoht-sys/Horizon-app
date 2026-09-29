@@ -41,7 +41,7 @@ import {
   optionsPorteePourAction, type MiseAJourSeance,
 } from '../lib/planificationManuelle';
 import {
-  LABEL_TYPE, LABEL_TYPE_EVENEMENT, getCouleurEvenement, heureToDate, formatDate,
+  LABEL_TYPE, LABEL_TYPE_EVENEMENT, getCouleurEvenement, titreEvenementSeance, heureToDate, formatDate,
   CLE_JOUR_PAR_DOW, CLE_JOUR_CAPITALISE_PAR_DOW, windowsDispoPourJour,
   type CalEvent, type DropPendant, type ChoixSerie,
 } from '../lib/agendaCommun';
@@ -232,7 +232,7 @@ export default function AgendaV2Page() {
       const p = participantMap.get(s.participantId);
       return {
         id: s.id,
-        title: p ? `${p.prenom} ${p.nom}` : LABEL_TYPE[s.type],
+        title: titreEvenementSeance(s, p),
         start: heureToDate(s.date, s.heureDebut),
         end: heureToDate(s.date, s.heureFin),
         kind: 'seance',

@@ -27,7 +27,7 @@ import {
   calculerFutures, planEditerUnique, planEditerSerie, planSupprimerUnique, planSupprimerSerie,
   planActionSurSelection, executerOperations, optionsPorteePourAction, type MiseAJourSeance,
 } from '../../lib/planificationManuelle';
-import { CLE_JOUR_PAR_DOW, LABEL_TYPE_EVENEMENT, formatDate as formatDateAgenda, type ChoixSerie } from '../../lib/agendaCommun';
+import { CLE_JOUR_PAR_DOW, LABEL_TYPE_EVENEMENT, formatDate as formatDateAgenda, absenceSignaleeAffichable, type ChoixSerie } from '../../lib/agendaCommun';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, getAuthHeader } from '../../lib/supabase';
 import {
@@ -1073,6 +1073,18 @@ function EcranTournee() {
                       🔄 Reportée
                     </span>
                   )}
+                  {/* Lecture seule de absence_signalee_par_patient_le
+                      (api/_lib/absenceSignalee.ts) : n'implique aucune
+                      action, ne change ni statut ni calcul — c'est au
+                      praticien de décider (annuler, reporter, ou laisser
+                      tel quel) via les boutons déjà présents plus bas.
+                      Affichage conditionné par absenceSignaleeAffichable
+                      (agendaCommun.ts) : voir sa doc pour la règle. */}
+                  {absenceSignaleeAffichable(s) && (
+                    <span style={{ background: '#FFF1F2', color: '#BE123C', borderRadius: 8, padding: '4px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                      🚫 Absence signalée
+                    </span>
+                  )}
                   {s.adresse && (
                     <button onClick={() => ouvrirMaps(s.adresse)}
                       style={{ background: '#E8F8F8', border: 'none', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: C.primary }}>
@@ -1260,6 +1272,15 @@ function EcranAgenda() {
     evenements.forEach(e => incrementer(e.date));
     return map;
   }, [seances, coursCollectifs, evenements]);
+
+  // Jours portant au moins une séance signalée absente par le bénéficiaire,
+  // encore actionnable (absenceSignaleeAffichable, agendaCommun.ts — voir
+  // sa doc pour la règle).
+  const joursAvecAbsenceSignalee = useMemo(() => {
+    const set = new Set<string>();
+    seances.forEach(s => { if (absenceSignaleeAffichable(s)) set.add(s.date); });
+    return set;
+  }, [seances]);
 
   // Indisponibilités : récurrentes par jour de semaine (pas de date propre,
   // cf. Indisponibilite dans types/index.ts) — un même jour de semaine est
@@ -1471,6 +1492,7 @@ function EcranAgenda() {
               const estAujourdhui = isSameDay(d, new Date());
               const compte = comptesParJour.get(dStr) ?? 0;
               const indisponible = joursSemaineIndisponibles.has(CLE_JOUR_PAR_DOW[d.getDay()]);
+              const absenceSignalee = joursAvecAbsenceSignalee.has(dStr);
               return (
                 <button key={dStr} onClick={() => { setJour(d); setVue('jour'); }} aria-label={formatDateAgenda(dStr)}
                   style={{
@@ -1487,6 +1509,11 @@ function EcranAgenda() {
                   )}
                   {indisponible && (
                     <span aria-hidden="true" style={{ position: 'absolute', top: 4, right: 4, width: 6, height: 6, borderRadius: '50%', background: '#EF4444' }} />
+                  )}
+                  {/* Coin opposé à la pastille d'indisponibilité, couleur
+                      distincte : les deux peuvent coexister le même jour. */}
+                  {absenceSignalee && (
+                    <span aria-hidden="true" data-testid="pastille-absence-signalee" style={{ position: 'absolute', top: 4, left: 4, width: 6, height: 6, borderRadius: '50%', background: '#F59E0B' }} />
                   )}
                 </button>
               );
@@ -1565,6 +1592,15 @@ function EcranAgenda() {
                     <div style={{ fontSize: 12, color: C.muted }}>{s.heureDebut} · {s.dureeMinutes} min{estAnnulee ? ' · Annulée' : ''}</div>
                   </div>
                 </div>
+                {/* Lecture seule (voir EcranTournee) : aucune action, aucun
+                    changement de statut. Affichage conditionné par
+                    absenceSignaleeAffichable (agendaCommun.ts), même
+                    fonction qu'EcranTournee. */}
+                {absenceSignaleeAffichable(s) && (
+                  <span style={{ background: '#FFF1F2', color: '#BE123C', borderRadius: 8, padding: '4px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                    🚫 Absence
+                  </span>
+                )}
               </div>
             </button>
           );

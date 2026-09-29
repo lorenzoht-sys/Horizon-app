@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   dbToBilan, bilanToDb, normaliserVisibilite,
   dbToParticipationCoursCollectif, participationCoursCollectifToDb,
+  dbToSeance, seanceToDb,
 } from './mappers';
 import { ALL_TESTS } from '../data/profiles';
 import type { Bilan, TestKey } from '../types';
@@ -255,5 +256,40 @@ describe('participation à un cours collectif : notes', () => {
     expect(p.statutPresence).toBe('present');
     expect(p.ressentiBorg).toBe(6);
     expect(p.ressentiBienetre).toBe(2);
+  });
+});
+
+describe('dbToSeance / seanceToDb — absenceSignaleeLe (lecture seule côté praticien)', () => {
+  const ligneBase = {
+    id: 's1', participant_id: 'p1', contrat_id: null,
+    date: '2026-10-01', heure_debut: '09:00', heure_fin: '09:45', duree_minutes: 45,
+    type: 'seance', statut: 'planifiee', notes: null, adresse: '', coordonnees: null,
+    motif_annulation: null, motif_annulation_detail: null,
+  };
+
+  it('lit un horodatage renseigné', () => {
+    const s = dbToSeance({ ...ligneBase, absence_signalee_par_patient_le: '2026-09-30T10:00:00.000Z' });
+    expect(s.absenceSignaleeLe).toBe('2026-09-30T10:00:00.000Z');
+  });
+
+  it('null en base (ou colonne absente) : rien signalé', () => {
+    expect(dbToSeance({ ...ligneBase, absence_signalee_par_patient_le: null }).absenceSignaleeLe).toBeUndefined();
+    // Base où la migration n'est pas encore appliquée : la colonne n'existe pas.
+    expect(dbToSeance(ligneBase).absenceSignaleeLe).toBeUndefined();
+  });
+
+  it("seanceToDb n'écrit JAMAIS absence_signalee_par_patient_le, même si le champ est présent côté objet", () => {
+    const s = dbToSeance({ ...ligneBase, absence_signalee_par_patient_le: '2026-09-30T10:00:00.000Z' });
+    const db = seanceToDb(s);
+    expect(Object.keys(db)).not.toContain('absence_signalee_par_patient_le');
+  });
+
+  it('un aller-retour (modification praticien) ne peut pas effacer un signalement existant : la colonne est simplement absente du payload', () => {
+    // Reproduit modifierSeance (useAgenda.ts) : merge local puis seanceToDb(merged).
+    const actuelle = dbToSeance({ ...ligneBase, absence_signalee_par_patient_le: '2026-09-30T10:00:00.000Z' });
+    const fusionnee = { ...actuelle, heureDebut: '10:00' };
+    const db = seanceToDb(fusionnee);
+    expect(db.heure_debut).toBe('10:00');
+    expect(db).not.toHaveProperty('absence_signalee_par_patient_le');
   });
 });

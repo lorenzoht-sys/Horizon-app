@@ -45,6 +45,29 @@ export function getCouleurEvenement(seance: Seance): string {
   return seance.date === TODAY ? '#1A5F9E' : '#5B9BD5';
 }
 
+// Le signalement d'absence patient (absence_signalee_par_patient_le, lecture
+// seule) n'est JAMAIS effacé, même une fois la séance annulée, reportée ou
+// réalisée (voir mappers.ts : seanceToDb ne le sérialise pas, aucun code
+// praticien ne peut l'écrire). Mais une fois la séance traitée, le signal
+// n'est plus actionnable — l'afficher redeviendrait trompeur (ex. à côté du
+// badge « Reportée »). Fonction unique, réutilisée par les 4 endroits qui
+// affichent ce signalement (Tournée mobile, Agenda mobile vue Jour et
+// pastille vue Mois — AppMobile.tsx —, agenda desktop ci-dessous) pour que
+// la règle d'affichage ne diverge jamais d'une surface à l'autre.
+export function absenceSignaleeAffichable(seance: Pick<Seance, 'absenceSignaleeLe' | 'statut'>): boolean {
+  return !!seance.absenceSignaleeLe && seance.statut === 'planifiee';
+}
+
+// Titre d'une séance dans l'agenda desktop (AgendaV2Page). react-big-calendar
+// n'a pas de composant d'événement personnalisé ici (seul eventPropGetter
+// existe, et ne gère que le style) : le signalement d'absence patient est
+// donc rendu comme un simple préfixe textuel plutôt qu'un badge graphique
+// séparé. Ne modifie ni statut ni calcul — uniquement l'affichage.
+export function titreEvenementSeance(seance: Seance, participant: { prenom: string; nom: string } | undefined): string {
+  const titreBase = participant ? `${participant.prenom} ${participant.nom}` : LABEL_TYPE[seance.type];
+  return absenceSignaleeAffichable(seance) ? `🚫 ${titreBase}` : titreBase;
+}
+
 // Événements d'agenda (bilan, réunion, prospect, lieu particulier, autre) —
 // couleur choisie librement par Pierre (voir ModalNouvelEvenement), jamais
 // confondue avec une vraie séance patient grâce à la bordure en tirets

@@ -5,11 +5,11 @@ import type { Participant, Seance, Bilan, Programme, ProgrammeV2, ProgrammeSeanc
 import { JOURS_PROGRAMME } from '../types';
 import { dbToParticipant, dbToBilan, dbToSeance, dbToProgramme } from '../lib/mappers';
 import {
-  prochainsCours, historiqueCours, jourLocal, reponseEncoreOuverte, LIBELLE_PRESENCE_PATIENT,
+  prochainsCours, historiqueCours, jourLocal, reponseEncoreOuverte, debutCoursParis, LIBELLE_PRESENCE_PATIENT,
   type CoursPatientRecord, type PresenceCoursPatient, type ReponseAnnonceeCours,
 } from '../lib/coursPatient';
 import { niveauEffort, niveauBienEtre } from '../lib/ressentiCours';
-import { patientFetchMe, patientSauvegarderSeance, patientEnvoyerRetour, patientLogin, patientActiverRappels, patientDesactiverRappels, patientEnregistrerTestEtalon, patientMarquerExerciceLibre, patientAnnoncerPresence } from '../lib/patientApi';
+import { patientFetchMe, patientSauvegarderSeance, patientEnvoyerRetour, patientLogin, patientActiverRappels, patientDesactiverRappels, patientEnregistrerTestEtalon, patientMarquerExerciceLibre, patientAnnoncerPresence, patientSignalerAbsence } from '../lib/patientApi';
 import { activerRappelsPush, desactiverRappelsPush, etatAbonnementPush, estIOS, estInstalleeSurEcranAccueil, pushSupporte } from '../lib/push';
 import { loadExercices } from '../data/exercices';
 import { TESTS_ETALONS, getTestEtalon } from '../data/testsEtalons';
@@ -453,6 +453,73 @@ function BoutonsPresence({ cours, token, maintenantMs, sombre, onReponse }: {
   );
 }
 
+const MESSAGE_ECHEC_SIGNALEMENT = "Votre signalement n'a pas pu être enregistré. Réessayez.";
+const MESSAGE_TROP_DE_TENTATIVES = 'Trop de tentatives pour le moment — merci de réessayer dans quelques minutes.';
+
+// « Je ne serai pas disponible » / rétractation, pour la prochaine séance
+// individuelle planifiée — même patron que BoutonsPresence (cours
+// collectifs) : mise à jour immédiate, retour en arrière si l'enregistrement
+// échoue, bouton qui disparaît si le serveur dit que c'est trop tard (409).
+// Ne change JAMAIS `statut` : ce n'est qu'un signal pour le praticien, voir
+// api/_lib/absenceSignalee.ts.
+function BoutonSignalementAbsence({ seance, token, maintenantMs, onSignalement }: {
+  seance: Seance;
+  token: string;
+  maintenantMs: number;
+  /** Met à jour absenceSignaleeLe localement (null : retour en arrière après un échec). */
+  onSignalement: (seanceId: string, valeur: string | null) => void;
+}) {
+  const [envoi, setEnvoi] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [enregistre, setEnregistre] = useState(false);
+  const [verrouille, setVerrouille] = useState(false);
+
+  const debut = debutCoursParis(seance.date, seance.heureDebut);
+  const ouvert = !verrouille && seance.statut === 'planifiee' && debut !== null && maintenantMs < debut;
+  if (!ouvert) return null;
+
+  const signale = !!seance.absenceSignaleeLe;
+
+  async function basculer() {
+    if (envoi) return;
+    const precedent = seance.absenceSignaleeLe ?? null;
+    const nouvelleValeur = signale ? null : new Date().toISOString();
+    setEnvoi(true);
+    setErreur(null);
+    setEnregistre(false);
+    onSignalement(seance.id, nouvelleValeur); // mise à jour immédiate
+    const r = await patientSignalerAbsence(token, !signale);
+    setEnvoi(false);
+    if (r.ok) { setEnregistre(true); return; }
+    onSignalement(seance.id, precedent); // retour en arrière : ce qui est affiché doit être ce qui est enregistré
+    if (r.status === 409) { setVerrouille(true); return; }
+    if (r.status === 429) { setErreur(MESSAGE_TROP_DE_TENTATIVES); return; }
+    setErreur(r.error ?? MESSAGE_ECHEC_SIGNALEMENT);
+  }
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      <button type="button" data-testid="bouton-signalement-absence" aria-pressed={signale} disabled={envoi}
+        onClick={basculer}
+        style={{
+          width: '100%', minHeight: 44, padding: '10px 12px', borderRadius: 12, fontSize: 14, fontWeight: 700,
+          cursor: envoi ? 'wait' : 'pointer', opacity: envoi ? 0.6 : 1,
+          background: 'transparent', color: 'white', border: '1px solid rgba(255,255,255,0.35)',
+        }}>
+        {signale ? 'Annuler mon signalement' : '🚫 Je ne serai pas disponible'}
+      </button>
+      {erreur && (
+        <div role="alert" data-testid="erreur-signalement-absence" style={{ marginTop: 8, fontSize: 12, color: '#FCA5A5' }}>{erreur}</div>
+      )}
+      {!erreur && enregistre && (
+        <div aria-live="polite" data-testid="signalement-absence-enregistre" style={{ marginTop: 8, fontSize: 12, color: '#86EFAC' }}>
+          {signale ? '✓ Signalement enregistré' : '✓ Signalement annulé'}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CarteProchainCours({ cours, token, maintenantMs, onReponse }: {
   cours: CoursPatientRecord; token: string; maintenantMs: number;
   onReponse: (coursId: string, reponse: ReponseAnnonceeCours | null) => void;
@@ -576,13 +643,15 @@ function CarteMesCours({ cours }: { cours: CoursPatientRecord[] }) {
 // ── ÉCRAN 1 — Accueil ─────────────────────────────────────────────────────────
 
 function EcranAccueil({
-  participant, seances, coursCollectifs, onAnnonce, bilans, programmes, programmesV2, token,
+  participant, seances, coursCollectifs, onAnnonce, onSignalementAbsence, bilans, programmes, programmesV2, token,
 }: {
   participant: Participant;
   seances: Seance[];
   coursCollectifs: CoursPatientRecord[];
   /** Met à jour la réponse annoncée d'un cours (null : retour en arrière après un échec d'enregistrement). */
   onAnnonce: (coursId: string, reponse: ReponseAnnonceeCours | null) => void;
+  /** Met à jour absenceSignaleeLe d'une séance (null : retour en arrière après un échec). */
+  onSignalementAbsence: (seanceId: string, valeur: string | null) => void;
   bilans: Bilan[];
   programmes: Programme[];
   programmesV2: ProgrammeV2[];
@@ -679,6 +748,7 @@ function EcranAccueil({
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
             {fmtHeure(prochaine.heureDebut)} · {prochaine.dureeMinutes} min avec {praticien.nom}
           </div>
+          <BoutonSignalementAbsence seance={prochaine} token={token} maintenantMs={maintenant} onSignalement={onSignalementAbsence} />
         </div>
       )}
 
@@ -2576,6 +2646,9 @@ export default function EspacePatient() {
   const [token, setToken]               = useState<string | null>(null);
   const [participant, setParticipant]   = useState<Participant | null>(null);
   const [seances, setSeances]           = useState<Seance[]>([]);
+  function majSignalementAbsence(seanceId: string, valeur: string | null) {
+    setSeances(prev => prev.map(s => (s.id === seanceId ? { ...s, absenceSignaleeLe: valeur ?? undefined } : s)));
+  }
   const [coursCollectifs, setCoursCollectifs] = useState<CoursPatientRecord[]>([]);
   function majAnnonce(coursId: string, reponse: ReponseAnnonceeCours | null) {
     setCoursCollectifs(prev => prev.map(c => (c.coursId === coursId ? { ...c, presenceAnnoncee: reponse } : c)));
@@ -2850,6 +2923,7 @@ export default function EspacePatient() {
             seances={seances}
             coursCollectifs={coursCollectifs}
             onAnnonce={majAnnonce}
+            onSignalementAbsence={majSignalementAbsence}
             bilans={bilans}
             programmes={programmes}
             programmesV2={programmesV2}
