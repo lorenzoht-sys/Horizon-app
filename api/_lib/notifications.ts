@@ -25,6 +25,16 @@ export interface MessagePraticien {
   corps: string;
   /** Route à ouvrir au clic sur la notification — voir push-sw.js. */
   url: string;
+  /**
+   * Tag de la notification côté appareil (push-sw.js). Sans lui, le service
+   * worker applique le tag fixe 'horizon-rappel' : chaque nouvelle alerte
+   * REMPLACE silencieusement la précédente encore affichée — deux absences
+   * signalées à la suite n'en laissaient voir qu'une. Un tag par séance
+   * (`absence-<id>`) garde une notification par absence distincte, sans
+   * doublon pour une même séance (signalée, rétractée, re-signalée).
+   * Identifiant technique uniquement, jamais de donnée du bénéficiaire.
+   */
+  tag?: string;
 }
 
 export interface ResultatEnvoi {
@@ -130,7 +140,14 @@ async function envoyerPushPraticien(supabase: SupabaseClient, praticienId: strin
 
   if (!abonnements || abonnements.length === 0) return { nbEnvoyes: 0, nbEchecs: 0 };
 
-  const payload = JSON.stringify({ title: message.titre, body: message.corps, url: message.url });
+  // `tag` seulement s'il est fourni : sans lui, payload strictement
+  // identique à avant (push-sw.js retombe sur son tag par défaut).
+  const payload = JSON.stringify({
+    title: message.titre,
+    body: message.corps,
+    url: message.url,
+    ...(message.tag ? { tag: message.tag } : {}),
+  });
 
   let nbEnvoyes = 0;
   let nbEchecs = 0;

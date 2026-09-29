@@ -283,6 +283,8 @@ export default withSentry(async function handler(req: any, res: any) {
         await envoyerAlertePraticien(supabase, seance.praticien_id, {
           ...messageAbsenceSignaleePraticien({ prenom: participant.prenom, heure_debut: seance.heure_debut }),
           url: urlNotificationAbsencePraticien(seance.date),
+          // Une notification par séance sur l'appareil (voir MessagePraticien.tag).
+          tag: `absence-${seance.id}`,
         });
       } catch (err) {
         console.error('[activite/seance-absence] envoi alerte praticien échoué (non bloquant):', err);

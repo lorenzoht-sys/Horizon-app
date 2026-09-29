@@ -168,6 +168,10 @@ describe('api/patient/activite.ts — action « seance-absence » (lecture de la
     expect(bloc).toMatch(/urlNotificationAbsencePraticien\(seance\.date\)/);
   });
 
+  it('alerte praticien : tag par séance (`absence-<id>`), jamais le tag fixe partagé', () => {
+    expect(bloc).toMatch(/tag: `absence-\$\{seance\.id\}`/);
+  });
+
   it('le calcul de « aujourd\'hui » est en Europe/Paris, jamais le fuseau du serveur', () => {
     expect(bloc).toMatch(/dateParisCivile\(new Date\(\)\)/);
   });

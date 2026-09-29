@@ -113,6 +113,9 @@ describe('envoyerRappel', () => {
 
     const [, payload] = sendNotification.mock.calls[0];
     expect(JSON.parse(payload)).toEqual({ title: MESSAGE.titre, body: MESSAGE.corps, url: '/patient' });
+    // Jamais de tag explicite pour un rappel patient : push-sw.js garde son
+    // tag fixe 'horizon-rappel', comportement inchangé.
+    expect(JSON.parse(payload)).not.toHaveProperty('tag');
   });
 
   it('supprime un abonnement expiré (410) et compte un échec', async () => {
@@ -240,7 +243,27 @@ describe('envoyerAlertePraticien', () => {
     expect(sendNotification).toHaveBeenCalledTimes(2);
     expect(deleted).toEqual([]);
     const [, payload] = sendNotification.mock.calls[0];
+    // Sans tag fourni : payload identique à avant, aucune clé `tag`.
     expect(JSON.parse(payload)).toEqual({ title: MESSAGE_PRATICIEN.titre, body: MESSAGE_PRATICIEN.corps, url: '/agenda' });
+  });
+
+  it('transmet le tag fourni dans le payload (une notification par séance sur l\'appareil)', async () => {
+    Object.assign(process.env, ENV_VAPID);
+
+    const sendNotification = vi.fn().mockResolvedValue(undefined);
+    vi.doMock('web-push', () => ({ default: { setVapidDetails: vi.fn(), sendNotification } }));
+
+    const { envoyerAlertePraticien } = await import('./notifications.js');
+    const { client } = creerSupabaseFake([
+      { id: 'abo-1', endpoint: 'https://push.example/1', p256dh: 'p1', auth_key: 'a1' },
+    ], 'praticien_push_subscriptions');
+
+    await envoyerAlertePraticien(client, 'praticien-1', { ...MESSAGE_PRATICIEN, tag: 'absence-seance-42' });
+
+    const [, payload] = sendNotification.mock.calls[0];
+    expect(JSON.parse(payload)).toEqual({
+      title: MESSAGE_PRATICIEN.titre, body: MESSAGE_PRATICIEN.corps, url: '/agenda', tag: 'absence-seance-42',
+    });
   });
 
   it('journalise un récapitulatif avec le code d\'erreur et l\'id d\'abonnement, jamais l\'endpoint', async () => {
