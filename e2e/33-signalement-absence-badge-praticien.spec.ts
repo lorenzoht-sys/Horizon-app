@@ -1,14 +1,29 @@
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { skipUnlessPraticien, loginPraticien, env } from './helpers.js';
 import { clientAdminTest } from './nettoyageTest.js';
 
 // Chantier « signalement d'absence patient », lots C (bouton bénéficiaire) +
 // G (badge côté praticien) : lot 1 (32-signalement-absence-seance.spec.ts)
-// prouvait déjà l'action HTTP elle-même (écriture/lecture de
-// absence_signalee_par_patient_le, isolation, rate limit). Ce fichier prouve
-// la partie qui manquait : que le signalement devient VISIBLE côté
-// praticien, sans jamais changer statut ni calcul.
+// prouve déjà l'action HTTP elle-même (écriture/lecture de
+// absence_signalee_par_patient_le, isolation, rate limit, AVEC une vraie
+// connexion patient). Ce fichier prouve la partie qui manquait — que la
+// colonne devient VISIBLE côté praticien — et n'a donc besoin ni de rejouer
+// l'API patient ni d'une connexion patient : il écrit directement la colonne
+// via le client admin (service_role), exactement l'état qu'une vraie
+// connexion patient aurait produit. Sans statut ni calcul touchés.
+//
+// ── Pourquoi pas de connexion patient ici (leçon du premier essai) ─────────
+// Une première version de ce fichier appelait /api/patient/session (une
+// connexion patient de plus). En CI, elle s'est heurtée à « Trop de
+// tentatives » : le quota de connexion patient (5/15min, IP du runner) est
+// PARTAGÉ par tout le run — déjà tendu par 09-rate-limit-connexion-patient
+// (qui l'épuise délibérément) et par 32-signalement-absence-seance (2
+// connexions). Ajouter une 3e connexion dans ce fichier a fait déborder le
+// quota (2 workers Playwright, tests en parallèle). Le seuil ne doit pas
+// bouger (décidé) — la connexion patient est donc supprimée ici, ce qui a
+// l'avantage de séparer proprement les responsabilités : 32 prouve l'écriture
+// (API, isolation, rate limit), 33 prouve la lecture (affichage praticien).
 //
 // Scope volontairement limité à l'agenda desktop (/agenda-v2) — surface où
 // un baseline e2e existait déjà (18-agenda-desktop.spec.ts), donc un risque
@@ -19,24 +34,12 @@ import { clientAdminTest } from './nettoyageTest.js';
 // (src/lib/agendaCommun.test.ts) : les repiloter un par un ici aurait ajouté
 // du temps de CI et de la fragilité (routage/viewport mobile jamais exercé
 // par aucun test e2e existant à ce jour) sans réduire un risque déjà couvert
-// par ailleurs. Limite assumée, documentée dans le rapport du chantier — pas
-// une omission silencieuse.
-//
-// Connexion patient UNIQUE pour tout le describe (beforeAll, comme le lot 1)
-// : même discipline de quota que 32-signalement-absence-seance.spec.ts (5
-// connexions / 15 min / IP, partagé par tout le run CI). `retries: 0` pour
-// la même raison qu'au lot 1 : une reprise sur describe.serial rejouerait
-// beforeAll (connexion patient supplémentaire) sur un quota déjà tendu.
+// par ailleurs. Limite assumée, documentée ici — pas une omission silencieuse.
 //
 // Fixture dédiée (jamais Camille/Julien), nettoyage par identifiant précis :
 // la séance par son id juste après usage, le participant par son id en
 // afterAll (ON DELETE CASCADE emporte ses séances si le nettoyage précédent
 // avait échoué en cours de route).
-
-interface FixtureParticipant {
-  participantId: string;
-  token: string;
-}
 
 async function resoudrePraticienId(admin: SupabaseClient): Promise<string> {
   const { data: usersPage, error } = await admin.auth.admin.listUsers();
@@ -45,17 +48,13 @@ async function resoudrePraticienId(admin: SupabaseClient): Promise<string> {
   return praticien.id;
 }
 
-// Même helper que 32-signalement-absence-seance.spec.ts (fichiers e2e
-// autonomes par convention de ce dépôt, pas de lib de fixtures partagée).
-async function creerParticipantEtConnecter(
+async function creerParticipant(
   admin: SupabaseClient,
-  request: APIRequestContext,
   praticienId: string,
   marqueur: string,
-): Promise<FixtureParticipant> {
+): Promise<string> {
   const codeAcces = `E2E${marqueur}`.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
-
-  const { data: participant, error: participantErr } = await admin
+  const { data: participant, error } = await admin
     .from('participants')
     .insert({
       praticien_id: praticienId,
@@ -66,17 +65,8 @@ async function creerParticipantEtConnecter(
     })
     .select('id')
     .single();
-  if (participantErr || !participant) throw new Error(`Création participant (fixture e2e) échouée : ${participantErr?.message}`);
-
-  try {
-    const resLogin = await request.post('/api/patient/session', { data: { code: codeAcces } });
-    const bodyLogin = await resLogin.json().catch(() => ({}));
-    if (!resLogin.ok() || !bodyLogin.token) throw new Error(`Connexion patient (fixture e2e) échouée : ${JSON.stringify(bodyLogin)}`);
-    return { participantId: participant.id, token: bodyLogin.token };
-  } catch (err) {
-    await admin.from('participants').delete().eq('id', participant.id);
-    throw err;
-  }
+  if (error || !participant) throw new Error(`Création participant (fixture e2e) échouée : ${error?.message}`);
+  return participant.id;
 }
 
 test.describe.serial('Signalement d\'absence — badge côté praticien (agenda desktop)', () => {
@@ -84,21 +74,21 @@ test.describe.serial('Signalement d\'absence — badge côté praticien (agenda 
 
   let admin: SupabaseClient | null = null;
   let praticienId = '';
-  let participant: FixtureParticipant | null = null;
+  let participantId = '';
   const marqueur = Date.now().toString(36);
   const nomComplet = `Test E2E${marqueur}`;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeAll(async () => {
     if (!env.praticienEmail || !env.praticienPassword || !process.env.E2E_BASE_URL) return;
     admin = clientAdminTest();
     if (!admin) return;
     praticienId = await resoudrePraticienId(admin);
-    participant = await creerParticipantEtConnecter(admin, request, praticienId, `badge${marqueur}`);
+    participantId = await creerParticipant(admin, praticienId, `badge${marqueur}`);
   });
 
   test.afterAll(async () => {
-    if (!admin || !participant) return;
-    await admin.from('participants').delete().eq('id', participant.participantId);
+    if (!admin || !participantId) return;
+    await admin.from('participants').delete().eq('id', participantId);
   });
 
   test.beforeEach(() => {
@@ -106,7 +96,7 @@ test.describe.serial('Signalement d\'absence — badge côté praticien (agenda 
     test.skip(!admin, 'SUPABASE_TEST_SERVICE_ROLE_KEY non défini (voir e2e/README.md) — impossible de créer la fixture');
   });
 
-  test('signalement → badge 🚫 visible dans l\'agenda desktop → rétractation → badge disparu', async ({ page, request }) => {
+  test('signalement → badge 🚫 visible dans l\'agenda desktop → rétractation → badge disparu', async ({ page }) => {
     test.setTimeout(60000);
     const demain = new Date();
     demain.setDate(demain.getDate() + 1);
@@ -116,7 +106,7 @@ test.describe.serial('Signalement d\'absence — badge côté praticien (agenda 
       .from('seances')
       .insert({
         praticien_id: praticienId,
-        participant_id: participant!.participantId,
+        participant_id: participantId,
         date: dateDemain,
         heure_debut: '09:00',
         heure_fin: '09:45',
@@ -130,20 +120,6 @@ test.describe.serial('Signalement d\'absence — badge côté praticien (agenda 
     const seanceId: string = seanceRow.id;
 
     try {
-      // ── Signalement, côté patient (HTTP direct — déjà couvert écran par
-      // écran par le lot C, voir EspacePatient.test... non, EspacePatient n'a
-      // pas de test de rendu : ce dépôt n'a pas d'infrastructure de test par
-      // rendu React (aucune dépendance @testing-library/react), seulement des
-      // tests unitaires sur de la logique pure. Le bouton lui-même est validé
-      // par la vérification manuelle 390px du rapport du chantier.) ─────────
-      const resSignaler = await request.post('/api/patient/activite', {
-        headers: { Authorization: `Bearer ${participant!.token}` },
-        data: { type: 'seance-absence', signale: true },
-      });
-      expect(resSignaler.status()).toBe(200);
-      expect(await resSignaler.json()).toMatchObject({ ok: true, seanceId, absenceSignalee: true });
-
-      // ── Badge visible côté praticien, agenda desktop ────────────────────
       await loginPraticien(page);
       await page.goto('/agenda-v2');
       await page.waitForLoadState('networkidle');
@@ -160,18 +136,37 @@ test.describe.serial('Signalement d\'absence — badge côté praticien (agenda 
         await page.getByRole('button', { name: 'Suivant', exact: true }).click();
       }
       await expect(evenement).toBeVisible({ timeout: 8000 });
-      await expect(evenement).toContainText('🚫');
+      await expect(evenement).not.toContainText('🚫');
 
-      // ── Rétractation, côté patient ───────────────────────────────────────
-      const resAnnuler = await request.post('/api/patient/activite', {
-        headers: { Authorization: `Bearer ${participant!.token}` },
-        data: { type: 'seance-absence', signale: false },
-      });
-      expect(resAnnuler.status()).toBe(200);
-      expect(await resAnnuler.json()).toMatchObject({ ok: true, seanceId, absenceSignalee: false });
+      // ── Signalement, écrit directement (voir l'en-tête : équivalent à ce
+      // qu'une vraie connexion patient aurait produit, sans en consommer le
+      // quota partagé) ─────────────────────────────────────────────────────
+      const { error: erreurSignalement } = await admin!
+        .from('seances')
+        .update({ absence_signalee_par_patient_le: new Date().toISOString() })
+        .eq('id', seanceId);
+      if (erreurSignalement) throw new Error(`Écriture du signalement échouée : ${erreurSignalement.message}`);
 
-      // ── Badge disparu côté praticien (rechargement pour refléter la lecture
-      // seule mise à jour en base — aucun canal temps réel sur cet écran) ──
+      await page.reload();
+      await page.waitForLoadState('networkidle');
+      const evenementSignale = page.locator('.rbc-event').filter({ hasText: nomComplet });
+      await page.getByRole('button', { name: "Aujourd'hui", exact: true }).click();
+      let signaleTrouve = false;
+      for (let i = 0; i <= 2; i++) {
+        signaleTrouve = await evenementSignale.waitFor({ state: 'visible', timeout: 1000 }).then(() => true).catch(() => false);
+        if (signaleTrouve) break;
+        await page.getByRole('button', { name: 'Suivant', exact: true }).click();
+      }
+      await expect(evenementSignale).toBeVisible({ timeout: 8000 });
+      await expect(evenementSignale).toContainText('🚫');
+
+      // ── Rétractation, même mécanisme ─────────────────────────────────────
+      const { error: erreurRetractation } = await admin!
+        .from('seances')
+        .update({ absence_signalee_par_patient_le: null })
+        .eq('id', seanceId);
+      if (erreurRetractation) throw new Error(`Écriture de la rétractation échouée : ${erreurRetractation.message}`);
+
       await page.reload();
       await page.waitForLoadState('networkidle');
       const evenementApresRetractation = page.locator('.rbc-event').filter({ hasText: nomComplet });
