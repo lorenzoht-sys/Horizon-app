@@ -38,7 +38,15 @@ function configurerVapid(): boolean {
   if (vapidConfigure) return true;
   const publicKey = process.env.VITE_VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
-  if (!publicKey || !privateKey) return false;
+  if (!publicKey || !privateKey) {
+    // Cas distinct de « mal formées » ci-dessous (setVapidDetails) : ici,
+    // les variables d'environnement elles-mêmes sont absentes — jusqu'ici
+    // silencieux, ce qui rendait ce cas indiscernable d'un simple abonnement
+    // manquant dans les logs Vercel (constaté lors d'un signalement non reçu
+    // sur iPhone, aucune trace exploitable pour trancher entre les deux).
+    console.error('[push] Clés VAPID absentes (VITE_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY) — notifications push désactivées.');
+    return false;
+  }
   const contact = process.env.VAPID_CONTACT_EMAIL || 'mailto:contact@example.com';
   // setVapidDetails valide la forme des clés et lève une exception
   // synchrone si elles sont invalides (mauvaise longueur, caractères non
@@ -126,6 +134,11 @@ async function envoyerPushPraticien(supabase: SupabaseClient, praticienId: strin
 
   let nbEnvoyes = 0;
   let nbEchecs = 0;
+  // Détail par abonnement pour le log récapitulatif ci-dessous — jamais
+  // l'endpoint complet (potentiellement identifiant l'appareil/navigateur) ni
+  // aucune donnée du bénéficiaire concerné : seulement l'id interne de
+  // l'abonnement et le code renvoyé par le service de push.
+  const echecs: { abonnementId: string; statusCode: number | string }[] = [];
 
   for (const abo of abonnements) {
     try {
@@ -137,10 +150,20 @@ async function envoyerPushPraticien(supabase: SupabaseClient, praticienId: strin
     } catch (err: unknown) {
       nbEchecs++;
       const statusCode = (err as { statusCode?: number })?.statusCode;
+      echecs.push({ abonnementId: abo.id, statusCode: statusCode ?? 'reseau' });
       if (statusCode === 404 || statusCode === 410) {
         await supabase.from('praticien_push_subscriptions').delete().eq('id', abo.id);
       }
     }
+  }
+
+  // Un seul log récapitulatif par appel (pas un par abonnement), et
+  // seulement s'il y a au moins un échec — mêmes motifs que le log VAPID
+  // ci-dessus : sans lui, un envoi tenté et échoué (401/403/410/timeout)
+  // était totalement invisible dans les logs Vercel. Un envoi entièrement
+  // réussi n'a rien d'exceptionnel à signaler.
+  if (nbEchecs > 0) {
+    console.error(`[push-praticien] envoi terminé : ${nbEnvoyes} réussi(s), ${nbEchecs} échec(s)`, echecs);
   }
 
   return { nbEnvoyes, nbEchecs };
