@@ -7,6 +7,10 @@ import { clientAdminTest } from './nettoyageTest.js';
 // l'action 'seance-absence' de /api/patient/activite au niveau HTTP — pas
 // d'écran encore (lot C, hors périmètre), donc pas de test piloté par l'UI.
 //
+// Complété par le chantier « push praticien », lot E (déclenchement de
+// l'alerte) : un test dédié plus bas, réutilisant participantA déjà connecté
+// (zéro connexion supplémentaire).
+//
 // Connexion patient mutualisée sur TOUT le fichier (test.describe.serial +
 // beforeAll), pas une par test : 09-rate-limit-connexion-patient.spec.ts
 // épuise DÉLIBÉRÉMENT le quota de connexion (5 tentatives / 15 min / IP,
@@ -187,6 +191,43 @@ test.describe.serial('Signalement d\'absence — /api/patient/activite (type "se
     } finally {
       await admin!.from('seances').delete().eq('id', seanceIdA);
       await admin!.from('seances').delete().eq('id', seanceIdB);
+    }
+  });
+
+  // Chantier « push praticien », lot E : le signalement déclenche désormais
+  // une tentative d'alerte au praticien (envoyerAlertePraticien,
+  // api/_lib/notifications.ts) juste avant de répondre. Ce test dédié rend
+  // ce comportement explicite plutôt que de dépendre implicitement du test
+  // ci-dessus.
+  //
+  // ── Pourquoi pas d'abonnement praticien réel ici ────────────────────────
+  // Poser un praticien_push_subscriptions de test demanderait de l'insérer :
+  // service_role n'a QUE SELECT + DELETE sur cette table (voulu, voir
+  // 20260929_praticien_push_subscriptions.sql) — `admin` ne peut pas
+  // l'écrire, seule une session praticien authentifiée le peut (RLS). Une
+  // vraie connexion praticien ici sortirait du périmètre demandé (réutiliser
+  // l'écriture directe plutôt qu'un nouveau cycle de connexion). Ce test
+  // couvre donc le chemin « aucun abonnement » (branche déjà 100% couverte,
+  // payload et purge sur 410 compris, par les tests unitaires
+  // d'envoyerAlertePraticien, api/_lib/notifications.test.ts) : la garantie
+  // qui compte ici est que le signalement réussit toujours normalement une
+  // fois ce déclenchement ajouté au chemin de code.
+  test('signalement : le déclenchement de l\'alerte praticien ne bloque pas le signalement (aucun abonnement)', async ({ request }) => {
+    test.setTimeout(30000);
+    const demain = new Date();
+    demain.setDate(demain.getDate() + 1);
+    const dateDemain = demain.toISOString().slice(0, 10);
+
+    const seanceId = await creerSeance(admin!, praticienId, participantA!.participantId, { date: dateDemain, heureDebut: '14:00' });
+    try {
+      const res = await request.post('/api/patient/activite', {
+        headers: { Authorization: `Bearer ${participantA!.token}` },
+        data: { type: 'seance-absence', signale: true },
+      });
+      expect(res.status()).toBe(200);
+      expect(await res.json()).toMatchObject({ ok: true, seanceId, absenceSignalee: true });
+    } finally {
+      await admin!.from('seances').delete().eq('id', seanceId);
     }
   });
 

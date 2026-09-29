@@ -47,6 +47,23 @@ export const MESSAGES_REFUS_ABSENCE: Record<RefusAbsence, string> = {
   deja_commencee: 'Cette séance a déjà commencé : vous ne pouvez plus modifier votre signalement.',
 };
 
+// Alerte push au praticien (chantier « push praticien », lot E) : à la
+// SIGNALISATION uniquement, jamais à la rétractation (décidé). Message
+// neutre fixe, même convention que MESSAGE_RAPPEL_SEANCE côté patient
+// (api/_lib/rappels.ts) — pas de nom de bénéficiaire ni de date interpolés
+// dans le corps, pour rester simple et cohérent avec l'existant.
+export const MESSAGE_ABSENCE_SIGNALEE_PRATICIEN = {
+  titre: 'Horizon',
+  corps: 'Un bénéficiaire a signalé une absence pour sa prochaine séance.',
+};
+
+// Route ouverte au clic sur la notification (push-sw.js) : l'agenda mobile
+// natif. Choix assumé, pas parfait sur tous les appareils — voir la
+// limite documentée dans le rapport du chantier (aucune route desktop
+// « /agenda » distincte de /agenda-v2 ; sans information de type d'appareil
+// sur l'abonnement, un seul choix sert tous les appareils du praticien).
+export const URL_NOTIFICATION_ABSENCE_PRATICIEN = '/agenda';
+
 export type Evaluation = { ok: true } | { ok: false; refus: RefusAbsence };
 
 /**
