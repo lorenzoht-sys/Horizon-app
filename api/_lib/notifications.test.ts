@@ -185,12 +185,13 @@ describe('envoyerAlertePraticien', () => {
     process.env = { ...envInitial };
   });
 
-  it('ne fait rien si les clés VAPID ne sont pas configurées', async () => {
+  it('ne fait rien si les clés VAPID ne sont pas configurées, et journalise explicitement leur absence', async () => {
     delete process.env.VITE_VAPID_PUBLIC_KEY;
     delete process.env.VAPID_PRIVATE_KEY;
 
     const sendNotification = vi.fn();
     vi.doMock('web-push', () => ({ default: { setVapidDetails: vi.fn(), sendNotification } }));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const { envoyerAlertePraticien } = await import('./notifications.js');
     const { client } = creerSupabaseFake([], 'praticien_push_subscriptions');
@@ -199,6 +200,11 @@ describe('envoyerAlertePraticien', () => {
 
     expect(resultat).toEqual({ nbEnvoyes: 0, nbEchecs: 0 });
     expect(sendNotification).not.toHaveBeenCalled();
+    // Avant ce correctif, ce cas était totalement silencieux — indiscernable
+    // en logs d'un praticien sans abonnement (constaté lors d'un
+    // signalement non reçu sur iPhone, aucune trace exploitable).
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('Clés VAPID absentes'));
+    consoleError.mockRestore();
   });
 
   it("ne fait rien si le praticien n'a aucun appareil abonné", async () => {
@@ -235,6 +241,31 @@ describe('envoyerAlertePraticien', () => {
     expect(deleted).toEqual([]);
     const [, payload] = sendNotification.mock.calls[0];
     expect(JSON.parse(payload)).toEqual({ title: MESSAGE_PRATICIEN.titre, body: MESSAGE_PRATICIEN.corps, url: '/agenda' });
+  });
+
+  it('journalise un récapitulatif avec le code d\'erreur et l\'id d\'abonnement, jamais l\'endpoint', async () => {
+    Object.assign(process.env, ENV_VAPID);
+
+    const erreur401 = Object.assign(new Error('Unauthorized'), { statusCode: 401 });
+    const sendNotification = vi.fn().mockRejectedValue(erreur401);
+    vi.doMock('web-push', () => ({ default: { setVapidDetails: vi.fn(), sendNotification } }));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { envoyerAlertePraticien } = await import('./notifications.js');
+    const { client } = creerSupabaseFake([
+      { id: 'abo-secret-1', endpoint: 'https://push.example/endpoint-tres-specifique', p256dh: 'p1', auth_key: 'a1' },
+    ], 'praticien_push_subscriptions');
+
+    const resultat = await envoyerAlertePraticien(client, 'praticien-1', MESSAGE_PRATICIEN);
+
+    expect(resultat).toEqual({ nbEnvoyes: 0, nbEchecs: 1 });
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    const [message, detail] = consoleError.mock.calls[0];
+    expect(message).toContain('1 échec');
+    expect(detail).toEqual([{ abonnementId: 'abo-secret-1', statusCode: 401 }]);
+    // Aucune donnée sensible dans le log : ni l'endpoint, ni les clés.
+    expect(JSON.stringify(consoleError.mock.calls[0])).not.toContain('push.example/endpoint-tres-specifique');
+    consoleError.mockRestore();
   });
 
   it('supprime un abonnement expiré (410) et compte un échec', async () => {
