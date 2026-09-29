@@ -71,6 +71,10 @@ La CI (`.github/workflows/ci.yml`) enchaîne build, `typecheck:api`, `typecheck:
   par tous les tests e2e d'un même run. Ne pas le relever ; réduire plutôt
   les connexions patient consommées par les tests (retries: 0,
   écriture directe via client admin quand c'est équivalent).
+  Ne pas modifier retries au niveau global de playwright.config.ts.
+  Désactiver les retries au niveau du describe pour les fichiers de test
+  qui consomment une connexion patient
+  (test.describe.configure({ retries: 0 })).
 - Données de santé : aucun nom de bénéficiaire réel dans le dépôt, les
   logs, les migrations commitées ou les rapports. Anonymiser avant de
   committer un script de diagnostic.
