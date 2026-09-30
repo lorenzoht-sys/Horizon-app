@@ -66,8 +66,21 @@ describe('ecranMobileDepuisUrl', () => {
   });
 
   it('/agenda : écran natif mobile (sous-chantier 1), distinct de /agenda-v2 (desktop seulement)', () => {
-    expect(ecran(URLS_MOBILE.agenda)).toEqual({ ecran: 'agenda' });
+    expect(ecran(URLS_MOBILE.agenda)).toEqual({ ecran: 'agenda', date: null });
     expect(ecran('/agenda-v2')).toEqual({ ecran: 'paysage', retour: URLS_MOBILE.plus });
+  });
+
+  it('/agenda?date=AAAA-MM-JJ : jour à ouvrir (lien de la notification « absence signalée »)', () => {
+    expect(ecran(URLS_MOBILE.agendaJour('2026-10-07'))).toEqual({ ecran: 'agenda', date: '2026-10-07' });
+    expect(URLS_MOBILE.agendaJour('2026-10-07')).toBe('/agenda?date=2026-10-07');
+    expect(ongletDepuisUrl('/agenda', '?date=2026-10-07')).toBeNull();
+  });
+
+  it('/agenda?date= illisible ou inexistante : aujourd\'hui, comme sans paramètre', () => {
+    for (const d of ['', '2026-10', '07-10-2026', '2026-02-31', '2026-13-01', 'demain']) {
+      expect(ecran(`/agenda?date=${d}`)).toEqual({ ecran: 'agenda', date: null });
+    }
+    expect(ecran('/agenda?date=2028-02-29')).toEqual({ ecran: 'agenda', date: '2028-02-29' });
   });
 
   it('les URL construites pointent vers le bon écran (aller-retour)', () => {

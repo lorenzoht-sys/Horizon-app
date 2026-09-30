@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { validerCorpsSeanceAbsence, evaluerAbsence, MESSAGES_REFUS_ABSENCE } from './absenceSignalee.js';
+import {
+  validerCorpsSeanceAbsence, evaluerAbsence, MESSAGES_REFUS_ABSENCE,
+  messageAbsenceSignaleePraticien, MESSAGE_ABSENCE_SIGNALEE_PRATICIEN_NEUTRE, urlNotificationAbsencePraticien,
+} from './absenceSignalee.js';
 
 const dossierApi = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -77,6 +80,44 @@ describe('evaluerAbsence — « jusqu\'au début de la séance », aucune tolér
   });
 });
 
+describe('messageAbsenceSignaleePraticien — prénom seul, repli neutre', () => {
+  it('prénom et heure disponibles : « [Prénom] a signalé son absence pour sa séance de [heure] »', () => {
+    expect(messageAbsenceSignaleePraticien({ prenom: 'Camille', heure_debut: '14:30:00' })).toEqual({
+      titre: 'Horizon',
+      corps: 'Camille a signalé son absence pour sa séance de 14h30',
+    });
+    expect(messageAbsenceSignaleePraticien({ prenom: '  Julien ', heure_debut: '09:05' }).corps)
+      .toBe('Julien a signalé son absence pour sa séance de 9h05');
+  });
+
+  it('heure absente ou illisible : prénom conservé, « sa prochaine séance »', () => {
+    for (const heure_debut of [null, undefined, '', '25:00', '9h05']) {
+      expect(messageAbsenceSignaleePraticien({ prenom: 'Camille', heure_debut }).corps)
+        .toBe('Camille a signalé son absence pour sa prochaine séance');
+    }
+  });
+
+  it('prénom absent ou vide : repli neutre inchangé, jamais « undefined » ni « null »', () => {
+    for (const prenom of [null, undefined, '', '   ', 42]) {
+      const message = messageAbsenceSignaleePraticien({ prenom, heure_debut: '14:30' });
+      expect(message).toEqual(MESSAGE_ABSENCE_SIGNALEE_PRATICIEN_NEUTRE);
+      expect(message.corps).toBe('Un bénéficiaire a signalé une absence pour sa prochaine séance.');
+    }
+  });
+});
+
+describe('urlNotificationAbsencePraticien — agenda mobile sur le jour de la séance', () => {
+  it('date AAAA-MM-JJ : /agenda?date=…', () => {
+    expect(urlNotificationAbsencePraticien('2026-10-07')).toBe('/agenda?date=2026-10-07');
+  });
+
+  it('date illisible : /agenda seul (aujourd\'hui), comme avant', () => {
+    for (const date of [null, undefined, '', '07/10/2026', 20261007]) {
+      expect(urlNotificationAbsencePraticien(date)).toBe('/agenda');
+    }
+  });
+});
+
 describe('api/patient/activite.ts — action « seance-absence » (lecture de la source)', () => {
   // Les routes ne sont pas testées en exécution dans ce dépôt (service_role, Supabase) :
   // on verrouille ici les propriétés de sécurité qu'un remaniement pourrait casser sans
@@ -118,6 +159,17 @@ describe('api/patient/activite.ts — action « seance-absence » (lecture de la
     expect(bloc).toMatch(/rendezVousVisibles\(/);
     expect(source).toMatch(/checkActiviteRateLimit\(supabase, participantId, type\)/);
     expect(source).toMatch(/recordActiviteAttempt\(supabase, participantId, type\)/);
+  });
+
+  it('alerte praticien : prénom seul lu sur le participant, jamais le nom — date et heure de la séance', () => {
+    expect(bloc).toMatch(/\.select\('visibilite_beneficiaire, prenom'\)/);
+    expect(bloc).not.toMatch(/participant\.nom\b/);
+    expect(bloc).toMatch(/messageAbsenceSignaleePraticien\(\{ prenom: participant\.prenom, heure_debut: seance\.heure_debut \}\)/);
+    expect(bloc).toMatch(/urlNotificationAbsencePraticien\(seance\.date\)/);
+  });
+
+  it('alerte praticien : tag par séance (`absence-<id>`), jamais le tag fixe partagé', () => {
+    expect(bloc).toMatch(/tag: `absence-\$\{seance\.id\}`/);
   });
 
   it('le calcul de « aujourd\'hui » est en Europe/Paris, jamais le fuseau du serveur', () => {

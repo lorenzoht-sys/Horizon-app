@@ -1238,7 +1238,10 @@ type ItemJour =
   | { kind: 'cours'; heureDebut: string; cours: CoursCollectif; nbInscrits: number }
   | { kind: 'evenement'; heureDebut: string; evenement: EvenementAgenda };
 
-function EcranAgenda() {
+// `dateInitiale` (AAAA-MM-JJ, déjà validée par ecranMobileDepuisUrl) : jour
+// affiché à l'ouverture — lien /agenda?date=… de la notification push
+// « absence signalée ». Absente : aujourd'hui, comme avant.
+function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
   const { participants, participantsActifs } = useParticipants();
   const { contrats } = useContrats();
   const { seances, modifierSeance, supprimerSeance, creerSeance, detecterConflits } = useAgenda();
@@ -1249,7 +1252,11 @@ function EcranAgenda() {
     recharger: rechargerCoursCollectifs,
   } = useCoursCollectifs();
 
-  const [jour, setJour] = useState(() => new Date());
+  const [jour, setJour] = useState(() => {
+    if (!dateInitiale) return new Date();
+    const [a, m, j] = dateInitiale.split('-').map(Number);
+    return new Date(a, m - 1, j);
+  });
   const [vue, setVue] = useState<'jour' | 'mois'>('jour');
   const dateStr = format(jour, 'yyyy-MM-dd');
   const jourCle = CLE_JOUR_PAR_DOW[jour.getDay()];
@@ -2375,7 +2382,11 @@ export default function AppMobile({ onLogout }: Props) {
       contenu = <EcranTournee />;
       break;
     case 'agenda':
-      contenu = <EcranAgenda />;
+      // `key` : un nouveau lien daté (seconde notification, écran déjà
+      // ouvert) doit repositionner le jour — l'état initial n'est lu qu'au
+      // montage. La navigation interne (flèches, vue Mois) ne touche pas
+      // l'URL, donc ne remonte jamais l'écran.
+      contenu = <EcranAgenda key={ecran.date ?? ''} dateInitiale={ecran.date} />;
       break;
     case 'assistant':
       contenu = <EcranAssistant preSelectedPatientId={ecran.beneficiaireId} onOuvrirSettings={() => navigate(URLS_MOBILE.parametres)} />;
