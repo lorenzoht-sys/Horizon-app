@@ -456,12 +456,16 @@ function BoutonsPresence({ cours, token, maintenantMs, sombre, onReponse }: {
 const MESSAGE_ECHEC_SIGNALEMENT = "Votre signalement n'a pas pu être enregistré. Réessayez.";
 const MESSAGE_TROP_DE_TENTATIVES = 'Trop de tentatives pour le moment — merci de réessayer dans quelques minutes.';
 
-// « Je ne serai pas disponible » / rétractation, pour la prochaine séance
+// « Prévenir mon praticien de mon absence » / rétractation, pour la prochaine séance
 // individuelle planifiée — même patron que BoutonsPresence (cours
 // collectifs) : mise à jour immédiate, retour en arrière si l'enregistrement
 // échoue, bouton qui disparaît si le serveur dit que c'est trop tard (409).
 // Ne change JAMAIS `statut` : ce n'est qu'un signal pour le praticien, voir
 // api/_lib/absenceSignalee.ts.
+// Libellé : l'ancien « 🚫 Je ne serai pas disponible » a été lu par une
+// patiente comme un message du praticien annonçant qu'il ne viendrait pas
+// (retour terrain, 2026-10). Le libellé nomme désormais l'action du
+// bénéficiaire et son destinataire.
 function BoutonSignalementAbsence({ seance, token, maintenantMs, onSignalement }: {
   seance: Seance;
   token: string;
@@ -506,14 +510,14 @@ function BoutonSignalementAbsence({ seance, token, maintenantMs, onSignalement }
           cursor: envoi ? 'wait' : 'pointer', opacity: envoi ? 0.6 : 1,
           background: 'transparent', color: 'white', border: '1px solid rgba(255,255,255,0.35)',
         }}>
-        {signale ? 'Annuler mon signalement' : '🚫 Je ne serai pas disponible'}
+        {signale ? 'Annuler mon signalement d\u2019absence' : 'Prévenir mon praticien de mon absence'}
       </button>
       {erreur && (
         <div role="alert" data-testid="erreur-signalement-absence" style={{ marginTop: 8, fontSize: 12, color: '#FCA5A5' }}>{erreur}</div>
       )}
       {!erreur && enregistre && (
         <div aria-live="polite" data-testid="signalement-absence-enregistre" style={{ marginTop: 8, fontSize: 12, color: '#86EFAC' }}>
-          {signale ? '✓ Signalement enregistré' : '✓ Signalement annulé'}
+          {signale ? '✓ Votre praticien est prévenu de votre absence' : '✓ Signalement annulé'}
         </div>
       )}
     </div>
