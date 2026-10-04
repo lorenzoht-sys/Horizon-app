@@ -6,7 +6,7 @@
 // bilan_initial_data.formulaireFlat.data (lu par getTestsAutonomie() côté
 // frontend quand participant.anamnese est vide).
 import { describe, it, expect } from 'vitest';
-import { filtrerBilan } from './me.js';
+import { filtrerBilan, normaliserPrenomPraticien } from './me.js';
 
 function bilanBrut(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -102,5 +102,17 @@ describe('filtrerBilan — sédentarité / fatigue (colonnes ET repli formulaire
   it('ne plante pas si bilan_initial_data est absent', () => {
     const r = filtrerBilan(bilanBrut({ bilan_initial_data: null }), false, false);
     expect(r.sedentarite_score).toBeNull();
+  });
+});
+
+describe('normaliserPrenomPraticien', () => {
+  it('renvoie le prénom nettoyé', () => {
+    expect(normaliserPrenomPraticien(' Pierre ')).toBe('Pierre');
+  });
+  it('renvoie null pour une valeur vide ou non textuelle', () => {
+    expect(normaliserPrenomPraticien('')).toBeNull();
+    expect(normaliserPrenomPraticien('  ')).toBeNull();
+    expect(normaliserPrenomPraticien(null)).toBeNull();
+    expect(normaliserPrenomPraticien(42)).toBeNull();
   });
 });

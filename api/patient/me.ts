@@ -16,6 +16,22 @@ import { captureMessage } from '../_lib/sentry.js';
 // champ retiré ici n'atteint jamais le navigateur du bénéficiaire, contrairement
 // à un filtre purement côté affichage.
 
+export function normaliserPrenomPraticien(brut: unknown): string | null {
+  if (typeof brut !== 'string') return null;
+  const prenom = brut.trim();
+  return prenom ? prenom : null;
+}
+
+async function lirePrenomPraticien(supabase: ReturnType<typeof getServiceClient>, praticienId: unknown): Promise<string | null> {
+  if (typeof praticienId !== 'string' || !praticienId) return null;
+  const { data, error } = await supabase.from('praticiens').select('prenom').eq('id', praticienId).maybeSingle();
+  if (error) {
+    console.error('[patient/me] lecture du prénom praticien impossible:', error.message);
+    return null;
+  }
+  return normaliserPrenomPraticien(data?.prenom);
+}
+
 export const VISIBILITE_DEFAULT = {
   bilans: true, rdv: true, programme: true, messagePraticien: true, messagePierre: true, carteSante: true,
 };
@@ -138,6 +154,13 @@ export default withSentry(async function handler(req: any, res: any) {
 
   await logAuditEvent(supabase, 'patient_data_access', participantId, getClientIp(req), true);
 
+  // Prénom SEUL du praticien (ni nom, ni contact) : le bouton de signalement
+  // d'absence devient « Prévenir Pierre de mon absence » — retour terrain
+  // 2026-10, l'ancien « Je ne serai pas disponible » a été lu comme un
+  // message du praticien. Lecture non bloquante : en cas d'échec, le front
+  // retombe sur « mon praticien ».
+  const praticienPrenom = await lirePrenomPraticien(supabase, participantRes.data.praticien_id);
+
   const participant = participantRes.data;
   const brut = (participant.visibilite_beneficiaire ?? {}) as Record<string, unknown>;
   const visibilite = { ...VISIBILITE_DEFAULT, ...brut };
@@ -237,6 +260,7 @@ export default withSentry(async function handler(req: any, res: any) {
   return res.status(200).json({
     participantId,
     participant,
+    praticienPrenom,
     bilans,
     seances,
     coursCollectifs,
