@@ -9,6 +9,7 @@ import {
   type CoursPatientRecord, type PresenceCoursPatient, type ReponseAnnonceeCours,
 } from '../lib/coursPatient';
 import { niveauEffort, niveauBienEtre } from '../lib/ressentiCours';
+import { libellesSignalementAbsence } from '../lib/libellesSignalementAbsence';
 import { patientFetchMe, patientSauvegarderSeance, patientEnvoyerRetour, patientLogin, patientActiverRappels, patientDesactiverRappels, patientEnregistrerTestEtalon, patientMarquerExerciceLibre, patientAnnoncerPresence, patientSignalerAbsence } from '../lib/patientApi';
 import { activerRappelsPush, desactiverRappelsPush, etatAbonnementPush, estIOS, estInstalleeSurEcranAccueil, pushSupporte } from '../lib/push';
 import { loadExercices } from '../data/exercices';
@@ -465,11 +466,13 @@ const MESSAGE_TROP_DE_TENTATIVES = 'Trop de tentatives pour le moment — merci 
 // Libellé : l'ancien « 🚫 Je ne serai pas disponible » a été lu par une
 // patiente comme un message du praticien annonçant qu'il ne viendrait pas
 // (retour terrain, 2026-10). Le libellé nomme désormais l'action du
-// bénéficiaire et son destinataire.
-function BoutonSignalementAbsence({ seance, token, maintenantMs, onSignalement }: {
+// bénéficiaire et son destinataire, par son prénom quand on le connaît
+// (src/lib/libellesSignalementAbsence.ts).
+function BoutonSignalementAbsence({ seance, token, maintenantMs, praticienPrenom, onSignalement }: {
   seance: Seance;
   token: string;
   maintenantMs: number;
+  praticienPrenom: string | null;
   /** Met à jour absenceSignaleeLe localement (null : retour en arrière après un échec). */
   onSignalement: (seanceId: string, valeur: string | null) => void;
 }) {
@@ -483,6 +486,7 @@ function BoutonSignalementAbsence({ seance, token, maintenantMs, onSignalement }
   if (!ouvert) return null;
 
   const signale = !!seance.absenceSignaleeLe;
+  const libelles = libellesSignalementAbsence(praticienPrenom);
 
   async function basculer() {
     if (envoi) return;
@@ -510,14 +514,14 @@ function BoutonSignalementAbsence({ seance, token, maintenantMs, onSignalement }
           cursor: envoi ? 'wait' : 'pointer', opacity: envoi ? 0.6 : 1,
           background: 'transparent', color: 'white', border: '1px solid rgba(255,255,255,0.35)',
         }}>
-        {signale ? 'Annuler mon signalement d\u2019absence' : 'Prévenir mon praticien de mon absence'}
+        {signale ? libelles.annuler : libelles.bouton}
       </button>
       {erreur && (
         <div role="alert" data-testid="erreur-signalement-absence" style={{ marginTop: 8, fontSize: 12, color: '#FCA5A5' }}>{erreur}</div>
       )}
       {!erreur && enregistre && (
         <div aria-live="polite" data-testid="signalement-absence-enregistre" style={{ marginTop: 8, fontSize: 12, color: '#86EFAC' }}>
-          {signale ? '✓ Votre praticien est prévenu de votre absence' : '✓ Signalement annulé'}
+          {signale ? libelles.confirmation : '✓ Signalement annulé'}
         </div>
       )}
     </div>
@@ -647,9 +651,10 @@ function CarteMesCours({ cours }: { cours: CoursPatientRecord[] }) {
 // ── ÉCRAN 1 — Accueil ─────────────────────────────────────────────────────────
 
 function EcranAccueil({
-  participant, seances, coursCollectifs, onAnnonce, onSignalementAbsence, bilans, programmes, programmesV2, token,
+  participant, praticienPrenom, seances, coursCollectifs, onAnnonce, onSignalementAbsence, bilans, programmes, programmesV2, token,
 }: {
   participant: Participant;
+  praticienPrenom: string | null;
   seances: Seance[];
   coursCollectifs: CoursPatientRecord[];
   /** Met à jour la réponse annoncée d'un cours (null : retour en arrière après un échec d'enregistrement). */
@@ -752,7 +757,7 @@ function EcranAccueil({
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
             {fmtHeure(prochaine.heureDebut)} · {prochaine.dureeMinutes} min avec {praticien.nom}
           </div>
-          <BoutonSignalementAbsence seance={prochaine} token={token} maintenantMs={maintenant} onSignalement={onSignalementAbsence} />
+          <BoutonSignalementAbsence seance={prochaine} token={token} maintenantMs={maintenant} praticienPrenom={praticienPrenom} onSignalement={onSignalementAbsence} />
         </div>
       )}
 
@@ -2649,6 +2654,7 @@ export default function EspacePatient() {
   const [erreurChargement, setErreurChargement] = useState<{ source: 'reseau' | 'mapping'; detail?: string } | null>(null);
   const [token, setToken]               = useState<string | null>(null);
   const [participant, setParticipant]   = useState<Participant | null>(null);
+  const [praticienPrenom, setPraticienPrenom] = useState<string | null>(null);
   const [seances, setSeances]           = useState<Seance[]>([]);
   function majSignalementAbsence(seanceId: string, valeur: string | null) {
     setSeances(prev => prev.map(s => (s.id === seanceId ? { ...s, absenceSignaleeLe: valeur ?? undefined } : s)));
@@ -2716,6 +2722,7 @@ export default function EspacePatient() {
 
       try {
       setParticipant(dbToParticipant(data.participant));
+      setPraticienPrenom(data.praticienPrenom ?? null);
       setBilans(data.bilans.map(dbToBilan));
       setSeances(data.seances.map(dbToSeance));
       setCoursCollectifs(data.coursCollectifs ?? []);
@@ -2924,6 +2931,7 @@ export default function EspacePatient() {
         {tab === 'accueil' && (
           <EcranAccueil
             participant={participant}
+            praticienPrenom={praticienPrenom}
             seances={seances}
             coursCollectifs={coursCollectifs}
             onAnnonce={majAnnonce}

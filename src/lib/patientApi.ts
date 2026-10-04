@@ -8,6 +8,8 @@ import type { CoursPatientRecord, ReponseAnnonceeCours } from './coursPatient';
 export interface PatientMeResponse {
   participantId: string;
   participant: Record<string, unknown>;
+  /** Prénom du praticien (seul), null s'il n'est pas renseigné. Optionnel : absent d'une ancienne réponse. */
+  praticienPrenom?: string | null;
   bilans: Record<string, unknown>[];
   seances: Record<string, unknown>[];
   /**
