@@ -33,6 +33,9 @@ erDiagram
         text regime_tva "franchise_293B | assujetti"
         numeric taux_tva "5,5 (avec agrément) ou 10 si assujetti"
         bool agrement_sap "défaut false, requis pour 5,5"
+        date date_declaration_sap "mention SAP, facultatif"
+        text mode_intervention "prestataire | mandataire, facultatif"
+        text adresse_intervention "mention SAP, facultatif"
         int delai_paiement_jours "défaut 30, 0 à 60"
         text penalites_retard
         text iban "normalisé"
@@ -230,16 +233,35 @@ personne » ouvrent droit au crédit d'impôt de 50 %, et le numéro et la date 
 déclaration de services à la personne doivent figurer sur la facture pour justifier l'avantage fiscal
 du client.
 
+### Mentions SAP du profil du praticien
+
+La page acces-sap.com (<https://www.acces-sap.com/actualites/professionnels/facture-services-a-la-personne/>)
+liste les mentions d'une facture de services à la personne, parmi lesquelles « le numéro et la date
+d'enregistrement de la déclaration de services à la personne » de l'émetteur, le « mode d'intervention »
+(prestataire ou mandataire) et l'adresse d'exécution. Trois colonnes simples, toutes facultatives, ont donc
+été ajoutées au profil de facturation (`praticiens`), à côté de `numero_sap` :
+
+| Colonne | Type | Valeurs |
+|---|---|---|
+| `date_declaration_sap` | date | date d'enregistrement de la déclaration SAP |
+| `mode_intervention` | texte | `prestataire` ou `mandataire`, ou vide |
+| `adresse_intervention` | texte libre | adresse d'intervention |
+
+- **Pas de statut ni de date de fin pour l'instant** (décision du 2026-10-05) : « actif » reste « n° SAP
+  non vide » et **ne dépend pas** de `date_declaration_sap`. Une date seule, sans n° SAP, ne rend pas un
+  contrat éligible.
+- Les trois valeurs sont figées dans `snapshot_emetteur` à la validation, comme le reste du profil.
+- Rien ne les **rend obligatoires** à la validation : un profil sans ces mentions valide quand même.
+
 **À confirmer avec l'expert-comptable (détail d'application)** :
 1. L'activité physique adaptée figure-t-elle parmi les 26 activités ? L'éligibilité d'une prestation
    dépend de l'activité, pas seulement du praticien : le champ du contrat est la décision du
    praticien, rien ne la vérifie.
-2. **La date d'enregistrement de la déclaration SAP n'est pas stockée.** La page citée l'exige sur la
-   facture ; le modèle n'a que `numero_sap`. Il faudra l'ajouter (`date_declaration_sap`) avant la
-   première facture destinée à ouvrir droit au crédit d'impôt, et décider si « actif » doit alors
-   tenir compte d'une date de fin.
-3. Les autres mentions citées par la page et absentes du modèle actuel : le mode d'intervention
-   (prestataire ou mandataire) et l'adresse d'intervention (distincte de l'adresse de facturation).
+2. Ces trois mentions doivent-elles être **exigées** à la validation d'une facture portant sur un contrat
+   éligible (n° SAP, date de déclaration, mode d'intervention) ? Aujourd'hui, non.
+3. `adresse_intervention` est une valeur **du profil du praticien**. La source parle des adresses du client
+   (facturation et exécution) : l'adresse où la séance a lieu est celle du bénéficiaire (déjà portée par la
+   séance). À préciser si la mention attendue est celle du praticien ou celle de chaque intervention.
 4. Faut-il aussi bloquer la coche du contrat quand le praticien n'a pas de n° SAP, plutôt que de la
    laisser sans effet ? Le choix actuel évite de forcer l'ordre de saisie.
 
@@ -268,6 +290,30 @@ Dans tous les cas :
 - une facture déjà émise ne change plus, quelle que soit la valeur de `facturer_bilans` ensuite ; un
   brouillon se recalcule avec la valeur du moment ;
 - un bilan facturé est verrouillé comme une séance facturée.
+
+## Décisions de sécurité et d'interface
+
+- **L'admin lit toutes les factures, lignes de facture et paiements, en lecture seule, par la RLS.**
+  C'est une **exigence voulue** (décision du 2026-10-05 : « admin lecture seule sur tout »), **pas une
+  faille**. Trois policies `*_admin_lecture` (`FOR SELECT TO authenticated`, conditionnées à
+  `app_role_courant() = 'admin'`) la portent. L'admin n'écrit rien par ce canal.
+- Le harnais de sécurité (`tests/security/rls.spec.ts`) interdisait toute policy fondée sur le rôle,
+  en annonçant qu'il serait remplacé le jour où les rôles seraient branchés. Il est désormais une **liste
+  blanche fermée** : seules ces 3 policies sont permises, elles doivent rester en lecture seule, réservées
+  à `authenticated` et conditionnées à `admin` exactement. Toute autre policy fondée sur le rôle fait
+  échouer le test.
+- Les tables `factures`, `lignes_facture`, `paiements` et `compteurs_facture` sont déclarées dans la liste
+  d'exclusion du harnais, avec leur raison : vides en staging (aucune interface), donc le test générique
+  ferait un « skip » compté comme échec. Leur cloisonnement est testé sur une vraie base par
+  `tests/db/facturation.spec.ts`. À réintégrer au test générique quand staging contiendra de vraies factures.
+- **Ancienne ébauche de facturation (`factures_suivi`) masquée de l'interface le 2026-10-05**, sur la page
+  Stats **et** sur la fiche structure (décision confirmée : « garde la carte masquée, comme pour Stats »).
+  Le code et la table sont conservés derrière l'interrupteur `EBAUCHE_FACTURATION_VISIBLE`
+  (`src/lib/featuresFacturation.ts`). Le portail structure continue d'afficher en lecture seule les lignes
+  existantes de `factures_suivi` (la table est vide en production).
+- **L'éligibilité au crédit d'impôt et l'agrément sont figés dans la facture** à la validation
+  (`snapshot_destinataire.eligible_credit_impot`, `snapshot_emetteur.agrement_sap`) : décision du
+  2026-10-05, à garder tel quel.
 
 ## Lancer les tests
 
