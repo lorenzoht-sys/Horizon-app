@@ -98,7 +98,7 @@ async function checkAccesParticipantPour(client: Client): Promise<FunctionState>
 async function applyStatutSecurite(client: Client): Promise<void> {
   const migrationPath = path.resolve(
     __dirname,
-    '../supabase/migrations/20260714_06_mode_organisation_statut_securite.sql'
+    '../supabase/migrations_archive/20260714_06_mode_organisation_statut_securite.sql'
   );
   const sql = readFileSync(migrationPath, 'utf-8');
 

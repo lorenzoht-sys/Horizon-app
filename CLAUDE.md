@@ -38,7 +38,7 @@ La CI (`.github/workflows/ci.yml`) enchaîne build, `typecheck:api`, `typecheck:
 - `src/lib/` : logique métier pure, testée en `*.test.ts` à côté du fichier. `src/lib/routesMobile.ts` gère le routage mobile.
 - `src/components/`, `src/hooks/` (hooks Supabase `useXxx`), `src/utils/`, `src/data/` (référentiels de tests).
 - `api/patient/`, `api/structure/`, `api/cron/`, `api/planning/`, `api/seances/` : les routes. Les tests unitaires dans `api/` hors `_lib` sont préfixés `_` (ex. `api/patient/_me.test.ts`) pour ne pas devenir des fonctions Vercel.
-- `supabase/migrations/AAAAMMJJ_description.sql` : la seule voie de changement de schéma, jamais Supabase Studio. Voir `supabase/migrations/README.md`.
+- `supabase/migrations/AAAAMMJJHHMMSS_description.sql` : la seule voie de changement de schéma, jamais Supabase Studio. `20260528000000_baseline_schema_prod.sql` recrée la production ; les anciennes migrations sont dans `supabase/migrations_archive/`. Procédure : `docs/SCHEMA.md`.
 - `e2e/` : Playwright, avec les parcours mobiles dans `e2e/mobile/`. Lire `e2e/README.md`.
 - `scripts/` : scripts ponctuels, dont beaucoup ciblent staging (`staging-*.ts`, `seed-staging.sql`).
 

@@ -1,2 +1,4 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+# Migration de base : octets conservés tels quels (des corps de fonctions de production contiennent des CRLF).
+supabase/migrations/20260528000000_baseline_schema_prod.sql -text

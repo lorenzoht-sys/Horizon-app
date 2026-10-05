@@ -137,7 +137,7 @@ async function checkDefault(client: Client): Promise<string | null> {
 }
 
 async function applyMigration(client: Client): Promise<void> {
-  const migrationPath = path.resolve(__dirname, '../supabase/migrations/20260821_grant_parity_staging.sql');
+  const migrationPath = path.resolve(__dirname, '../supabase/migrations_archive/20260821_grant_parity_staging.sql');
   const sql = readFileSync(migrationPath, 'utf-8');
 
   await client.query('BEGIN');
