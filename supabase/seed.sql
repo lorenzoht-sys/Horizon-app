@@ -13,6 +13,10 @@
 --   admin@seed.test   · pro-sap@seed.test   · pro-simple@seed.test
 --   mot de passe : SeedLocal-2026!
 --
+-- Facturation (étape 1) : les deux praticiens ont un profil de facturation complet ;
+-- contrat A = à la séance (changement de tarif), B = à la séance avec un proche payeur,
+-- C = forfait mensuel de 120 € (pro sans n° SAP).
+--
 -- Les dates sont calculées à partir de current_date : les séances couvrent
 -- toujours le mois précédent et le mois en cours, quel que soit le jour du reset.
 -- ============================================================================
@@ -154,11 +158,27 @@ WHERE c.id IN (
 )
   AND (ARRAY['dim','lun','mar','mer','jeu','ven','sam'])[extract(dow FROM d)::int + 1] = ANY (c.jours_fixe);
 
+-- ---------- Profil de facturation, proche payeur, forfait ----------
+UPDATE public.praticiens SET
+  facturation_adresse_rue = adresse_rue, facturation_code_postal = adresse_code_postal, facturation_ville = adresse_ville,
+  regime_tva = 'franchise_293B', delai_paiement_jours = 30,
+  penalites_retard = 'Pénalités de retard : trois fois le taux d''intérêt légal, indemnité forfaitaire de recouvrement de 40 €.',
+  iban = 'FR7630006000011234567890189'
+WHERE email IN ('pro-sap@seed.test', 'pro-simple@seed.test');
+
+UPDATE public.contrats SET
+  payeur_type = 'proche', payeur_nom = 'Proche Test', payeur_adresse = '20 rue de l''Exemple, 00000 Villetest',
+  payeur_email = 'proche@seed.test'
+WHERE id = '00000000-0000-4000-a000-00000000000b';
+
+UPDATE public.contrats SET mode_facturation = 'forfait', montant_forfait = 120
+WHERE id = '00000000-0000-4000-a000-00000000000c';
+
 -- ---------- Contrôle ----------
 DO $controle$
 DECLARE
   v_admins int; v_pros int; v_sap int; v_benef int; v_contrats int; v_tarifs int;
-  v_seances int; v_mois int;
+  v_seances int; v_mois int; v_factu int; v_modes int;
 BEGIN
   SELECT count(*) INTO v_admins FROM public.user_roles WHERE app_role = 'admin';
   SELECT count(*) INTO v_pros   FROM public.praticiens WHERE email LIKE 'pro-%@seed.test';
@@ -168,9 +188,12 @@ BEGIN
   SELECT count(*) INTO v_tarifs   FROM public.tarifs_contrats WHERE contrat_id = '00000000-0000-4000-a000-00000000000a';
   SELECT count(*) INTO v_seances  FROM public.seances;
   SELECT count(DISTINCT date_trunc('month', date)) INTO v_mois FROM public.seances;
+  SELECT count(*) INTO v_factu FROM public.praticiens WHERE email LIKE 'pro-%@seed.test' AND regime_tva IS NOT NULL AND iban IS NOT NULL;
+  SELECT count(*) INTO v_modes FROM public.contrats WHERE (id = '00000000-0000-4000-a000-00000000000b' AND payeur_type = 'proche')
+    OR (id = '00000000-0000-4000-a000-00000000000c' AND mode_facturation = 'forfait');
 
   IF v_admins <> 1 OR v_pros <> 2 OR v_sap <> 1 OR v_benef <> 3 OR v_contrats <> 3
-     OR v_tarifs <> 2 OR v_seances = 0 OR v_mois <> 2 THEN
+     OR v_tarifs <> 2 OR v_seances = 0 OR v_mois <> 2 OR v_factu <> 2 OR v_modes <> 2 THEN
     RAISE EXCEPTION 'Seed : état inattendu (admins=%/1, pros=%/2, sap=%/1, bénéficiaires=%/3, contrats=%/3, tarifs A=%/2, séances=%, mois=%/2)',
       v_admins, v_pros, v_sap, v_benef, v_contrats, v_tarifs, v_seances, v_mois;
   END IF;
