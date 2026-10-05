@@ -29,6 +29,18 @@
 --    non renseigné) ; la migration échoue sans rien changer si une ligne existante violait la règle.
 --    Hors modèle, à confirmer : l'exonération des services à la personne (art. 261-7-1° du CGI).
 --
+-- 3. MENTIONS SAP DU PROFIL. Troisième volet, demandé le 2026-10-05 : la page acces-sap.com exige
+--    sur la facture le numéro ET la date d'enregistrement de la déclaration de services à la
+--    personne, le mode d'intervention (prestataire ou mandataire) et l'adresse d'exécution. Trois
+--    colonnes simples sur praticiens, toutes facultatives (NULL) :
+--    * date_declaration_sap (date) ;
+--    * mode_intervention ('prestataire' ou 'mandataire') ;
+--    * adresse_intervention (texte libre).
+--    Pas de statut ni de date de fin pour l'instant : « actif » reste « n° SAP non vide » et NE
+--    dépend PAS de date_declaration_sap (décision du 2026-10-05). Les trois valeurs sont figées dans
+--    snapshot_emetteur à la validation, comme le reste du profil. Rien ne les rend obligatoires à la
+--    validation : à décider (voir docs/FACTURATION.md).
+--
 -- Idempotent. Aucune nouvelle table : pas de REVOKE/GRANT de table à poser. Les droits des
 -- fonctions sont posés explicitement (EXECUTE accordé par défaut à anon en production).
 
@@ -67,7 +79,17 @@ ALTER TABLE public.factures DROP CONSTRAINT IF EXISTS factures_taux_tva_autorise
 ALTER TABLE public.factures ADD CONSTRAINT factures_taux_tva_autorises
   CHECK (taux_tva IS NULL OR taux_tva IN (0, 5.5, 10));
 
--- ---------- valider_facture : agrément et éligibilité figés dans les snapshots ----------
+-- ---------- 3. Mentions SAP du profil ----------
+ALTER TABLE public.praticiens
+  ADD COLUMN IF NOT EXISTS date_declaration_sap date,
+  ADD COLUMN IF NOT EXISTS mode_intervention    text,
+  ADD COLUMN IF NOT EXISTS adresse_intervention text;
+
+ALTER TABLE public.praticiens DROP CONSTRAINT IF EXISTS praticiens_mode_intervention_valide;
+ALTER TABLE public.praticiens ADD CONSTRAINT praticiens_mode_intervention_valide
+  CHECK (mode_intervention IS NULL OR mode_intervention IN ('prestataire', 'mandataire'));
+
+-- ---------- valider_facture : agrément, éligibilité et mentions SAP figés dans les snapshots ----------
 CREATE OR REPLACE FUNCTION public.valider_facture(p_facture_id uuid)
 RETURNS text
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -202,7 +224,9 @@ BEGIN
       'email', p.email, 'telephone', p.telephone,
       'regime_tva', p.regime_tva, 'taux_tva', v_taux,
       'delai_paiement_jours', p.delai_paiement_jours, 'penalites_retard', p.penalites_retard,
-      'iban', p.iban, 'agrement_sap', p.agrement_sap),
+      'iban', p.iban, 'agrement_sap', p.agrement_sap,
+      'date_declaration_sap', p.date_declaration_sap, 'mode_intervention', p.mode_intervention,
+      'adresse_intervention', p.adresse_intervention),
     snapshot_destinataire = v_dest
   WHERE id = f.id;
   PERFORM set_config('horizon.validation_facture', '', true);
@@ -266,6 +290,21 @@ BEGIN
   SELECT prosrc INTO v_src FROM pg_proc WHERE oid = 'public.valider_facture(uuid)'::regprocedure;
   IF v_src NOT LIKE '%''agrement_sap'', p.agrement_sap%' OR v_src NOT LIKE '%contrat_eligible_credit_impot%' THEN
     RAISE EXCEPTION 'Facturation étape 2 : valider_facture ne fige pas l''agrément et l''éligibilité';
+  END IF;
+  IF v_src NOT LIKE '%''date_declaration_sap'', p.date_declaration_sap%'
+     OR v_src NOT LIKE '%''mode_intervention'', p.mode_intervention%'
+     OR v_src NOT LIKE '%''adresse_intervention'', p.adresse_intervention%' THEN
+    RAISE EXCEPTION 'Facturation étape 2 : valider_facture ne fige pas les mentions SAP du profil';
+  END IF;
+  IF (SELECT count(*) FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'praticiens'
+        AND column_name IN ('date_declaration_sap', 'mode_intervention', 'adresse_intervention')
+        AND is_nullable = 'YES') <> 3 THEN
+    RAISE EXCEPTION 'Facturation étape 2 : colonnes de mentions SAP absentes ou non facultatives';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conrelid = 'public.praticiens'::regclass AND conname = 'praticiens_mode_intervention_valide' AND convalidated) THEN
+    RAISE EXCEPTION 'Facturation étape 2 : praticiens_mode_intervention_valide absente ou non validée';
   END IF;
 END
 $controle$;
