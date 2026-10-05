@@ -129,6 +129,23 @@ const EXCLUDED_TABLES: Record<string, string> = {
   // une assertion dédiée (voir "audit_logs est append-only" plus bas) plutôt
   // que par le test croisé générique lecture/écriture.
   audit_logs: 'append-only, couverte par un test dédié (policies UPDATE/DELETE)',
+  // Module de facturation (étape 1, migrations 20261006100100 et 20261007100000). Ces trois tables
+  // n'ont PAS leur place dans le test générique ci-dessous : il lit et écrit une ligne existante de
+  // praticien A en staging, or elles y sont vides (le module n'a encore aucune interface, aucune
+  // facture n'existe) ; le test générique ferait donc un « skip », et ce harnais compte un skip
+  // comme un échec. Leur cloisonnement est vérifié ailleurs, sur une vraie base Postgres, avec des
+  // factures validées : tests/db/facturation.spec.ts (« RLS : un praticien ne voit et ne gère que ses
+  // factures ; l'admin lit tout » — lecture croisée, insertion pour autrui, paiements, anon refusé).
+  // À réintégrer au test générique (testedDirect / TABLE_OVERRIDES) le jour où staging contiendra
+  // de vraies factures.
+  factures: 'praticien_id direct, vide en staging (aucune interface) ; cloisonnement testé sur base locale par tests/db/facturation.spec.ts',
+  lignes_facture: 'jointure vers factures, vide en staging ; cloisonnement testé sur base locale par tests/db/facturation.spec.ts',
+  paiements: 'jointure vers factures, vide en staging ; immuable par trigger, cloisonnement testé sur base locale par tests/db/facturation.spec.ts',
+  // Même patron que patient_login_attempts : RLS activée, zéro policy, aucun privilège pour anon ni
+  // authenticated ; seule la fonction attribuer_numero_facture() (service_role / SECURITY DEFINER) la
+  // touche. Rien à tester en cloisonnement ; l'absence de privilège est vérifiée par la migration et
+  // par tests/db/facturation.spec.ts.
+  compteurs_facture: 'service_role only, RLS activée sans aucune policy, alimentée par attribuer_numero_facture()',
 };
 
 // Tables protégées uniquement par jointure (pas de colonne praticien_id /
@@ -1176,22 +1193,49 @@ describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postg
     expect(p?.anon_select, '[RÔLES] anon peut lire user_roles').toBe(false);
   });
 
-  // Audit inverse, demandé même si aucun admin n'existe encore : l'étape 3
-  // est purement additive, donc AUCUNE policy existante ne doit accorder
-  // quoi que ce soit sur la base du rôle. Ce test échouera le jour où
-  // l'étape 5 branchera les rôles — c'est voulu : ce sera le moment de le
-  // remplacer par des assertions sur ce que l'admin a le droit de voir.
-  it("[RÔLES] aucune policy existante n'accorde d'accès élargi à un admin", async () => {
-    const { rows } = await pg.query<{ tablename: string; policyname: string }>(
-      `SELECT tablename, policyname FROM pg_policies
+  // Audit des policies qui s'appuient sur le rôle applicatif. Historique : à l'étape 3 des rôles,
+  // AUCUNE policy ne devait en dépendre, et ce test l'exigeait en annonçant qu'il serait « remplacé
+  // par des assertions sur ce que l'admin a le droit de voir » le jour où les rôles seraient branchés.
+  //
+  // C'est le cas depuis le module de facturation (2026-10-05) : EXIGENCE VOULUE, pas une faille.
+  // L'admin applicatif doit pouvoir LIRE toutes les factures, lignes de facture et paiements (décision
+  // du 2026-10-05 : « admin lecture seule sur tout »). Ces trois policies, et elles seules, sont donc
+  // autorisées à s'appuyer sur app_role_courant(). Le test reste un garde, plus strict qu'avant :
+  //   - la liste est FERMÉE : toute autre policy fondée sur le rôle fait échouer le test, il faut
+  //     alors l'ajouter ici EN CONNAISSANCE DE CAUSE (et dire pourquoi) ;
+  //   - chacune est en LECTURE SEULE (cmd = SELECT) : un accès admin en écriture échoue ;
+  //   - chacune est réservée au rôle authenticated et conditionnée à `admin` exactement.
+  const POLICIES_ADMIN_LECTURE_VOULUES = [
+    'factures.factures_admin_lecture',
+    'lignes_facture.lignes_facture_admin_lecture',
+    'paiements.paiements_admin_lecture',
+  ];
+
+  it("[RÔLES] seules les 3 policies de lecture admin voulues (facturation) s'appuient sur le rôle", async () => {
+    const { rows } = await pg.query<{ tablename: string; policyname: string; cmd: string; roles: string[]; qual: string | null; with_check: string | null }>(
+      `SELECT tablename, policyname, cmd, roles::text[] AS roles, qual, with_check FROM pg_policies
         WHERE schemaname = 'public'
           AND tablename <> 'user_roles'
-          AND (COALESCE(qual, '') || COALESCE(with_check, '')) ~* '(user_roles|app_role)'`
+          AND (COALESCE(qual, '') || COALESCE(with_check, '')) ~* '(user_roles|app_role)'
+        ORDER BY tablename, policyname`
     );
     expect(
       rows.map(r => `${r.tablename}.${r.policyname}`),
-      "[RÔLES] des policies s'appuient déjà sur le rôle alors que l'étape 3 devait être purement additive"
-    ).toEqual([]);
+      "[RÔLES] des policies s'appuient sur le rôle en dehors des 3 lectures admin voulues (facturation) : " +
+        'si c\'est voulu, les ajouter à POLICIES_ADMIN_LECTURE_VOULUES avec la raison'
+    ).toEqual(POLICIES_ADMIN_LECTURE_VOULUES);
+    expect(
+      rows.map(r => r.cmd),
+      '[RÔLES] une policy fondée sur le rôle admin n\'est pas en lecture seule : l\'admin ne doit rien pouvoir écrire'
+    ).toEqual(['SELECT', 'SELECT', 'SELECT']);
+    for (const r of rows) {
+      expect(r.roles, `[RÔLES] ${r.tablename}.${r.policyname} doit être réservée au rôle authenticated`).toEqual(['authenticated']);
+      expect(
+        r.qual ?? '',
+        `[RÔLES] ${r.tablename}.${r.policyname} doit être conditionnée à app_role_courant() = 'admin'`
+      ).toMatch(/app_role_courant\(\)\s*=\s*'admin'/);
+      expect(r.with_check, `[RÔLES] ${r.tablename}.${r.policyname} (lecture) ne doit pas avoir de WITH CHECK`).toBeNull();
+    }
   });
 
   it('[RÔLES] app_role_courant() a un search_path figé et n\'est pas exécutable par PUBLIC', async () => {
