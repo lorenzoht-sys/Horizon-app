@@ -17,6 +17,7 @@ import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import { useStatsPro, type StatsPro } from '../hooks/useStatsPro';
 import { useFactures } from '../hooks/useFactures';
+import { EBAUCHE_FACTURATION_VISIBLE } from '../lib/featuresFacturation';
 import type { Participant, Contrat } from '../types';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
@@ -1419,12 +1420,17 @@ export default function StatsPage() {
       />
 
       {/* ── Factures à envoyer ─────────────────────────────────────── */}
-      <SectionFactures
-        participants={participants}
-        seances={seances}
-        contrats={contrats}
-        contratActif={contratActifDeParticipant}
-      />
+      {/* Ancienne ébauche masquée le 2026-10-05 (voir lib/featuresFacturation.ts). Ne pas
+          monter SectionFactures suffit à couper aussi sa génération automatique, qui
+          écrivait dans factures_suivi à chaque ouverture de cette page. */}
+      {EBAUCHE_FACTURATION_VISIBLE && (
+        <SectionFactures
+          participants={participants}
+          seances={seances}
+          contrats={contrats}
+          contratActif={contratActifDeParticipant}
+        />
+      )}
 
       {/* ── Santé du portefeuille ──────────────────────────────────── */}
       <SectionSantePortefeuille

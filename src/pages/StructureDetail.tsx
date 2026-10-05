@@ -5,6 +5,7 @@ import { useStructures } from '../hooks/useStructures';
 import { useParticipants } from '../hooks/useParticipants';
 import { useAgenda } from '../hooks/useAgenda';
 import { useFactures } from '../hooks/useFactures';
+import { EBAUCHE_FACTURATION_VISIBLE } from '../lib/featuresFacturation';
 import { useCoursCollectifs } from '../hooks/useCoursCollectifs';
 import { coursCollectifsStructureFacturables } from '../lib/coursCollectifs';
 import { supabase } from '../lib/supabase';
@@ -192,7 +193,10 @@ export default function StructureDetail() {
 
           {/* Facturation structure — desktop seulement (Phase 4, hors périmètre
               de la fusion mobile : génération/suivi de factures, pas encore
-              conçu pour un écran de 390px). */}
+              conçu pour un écran de 390px).
+              Masquée le 2026-10-05 avec l'ancienne ébauche (voir lib/featuresFacturation.ts) :
+              même table factures_suivi, même PDF sans mentions légales. */}
+          {EBAUCHE_FACTURATION_VISIBLE && (
           <div className="hidden md:block bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="text-sm font-bold text-gray-800">
@@ -263,6 +267,7 @@ export default function StructureDetail() {
               </div>
             )}
           </div>
+          )}
         </div>
 
         {/* Colonne droite */}
