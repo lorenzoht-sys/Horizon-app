@@ -42,3 +42,6 @@ supabase/migrations/migrations/
 *.sln
 *.sw?
 .vercel
+
+# Instantanés de production (lecture seule, voir docs/SCHEMA.md) : jamais commités.
+supabase/_prod_*

@@ -97,7 +97,7 @@ async function applyMigrations(client: Client): Promise<void> {
   await client.query('BEGIN');
   try {
     for (const file of MIGRATION_FILES) {
-      const sql = readFileSync(path.resolve(__dirname, '../supabase/migrations/', file), 'utf-8');
+      const sql = readFileSync(path.resolve(__dirname, '../supabase/migrations_archive/', file), 'utf-8');
       await client.query(sql);
     }
     await client.query('COMMIT');

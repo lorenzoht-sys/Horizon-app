@@ -130,7 +130,7 @@ async function checkGrants(client: Client): Promise<GrantGap[]> {
 }
 
 async function applyMigration(client: Client): Promise<void> {
-  const migrationPath = path.resolve(__dirname, '../supabase/migrations/20260822_grant_parity_staging_v2.sql');
+  const migrationPath = path.resolve(__dirname, '../supabase/migrations_archive/20260822_grant_parity_staging_v2.sql');
   const sql = readFileSync(migrationPath, 'utf-8');
 
   await client.query('BEGIN');
