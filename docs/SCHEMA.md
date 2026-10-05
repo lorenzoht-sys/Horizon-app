@@ -162,22 +162,29 @@ supabase db dump --linked -f supabase/_prod_schema_dump.sql
   le défaut de `participants.visibilite_beneficiaire` est plus ancien. Staging
   n'a pas non plus de table d'historique de migrations.
 
-### Migrations écrites mais pas appliquées en production
+### Migrations écrites mais pas appliquées en production (reprises)
 
-Constatées en rejouant l'archive sur la migration de base. Toutes deux portent
-la mention « NE PAS EXÉCUTER SUR PROD sans validation ». Elles ne sont **pas**
-reprises dans `migrations/` : à vous de décider si elles doivent partir.
+Constatées le 2026-10-05 en rejouant l'archive sur la migration de base. Elles
+sont reprises, corrigées, dans `migrations/` (branche
+`feat/facturation-etape-0-correctifs`). **Pas encore appliquées en
+production** : à passer en `db push` après relecture, staging non aligné pour
+l'instant.
 
-| Archive | Écart avec la production |
+| Migration | Contenu |
 |---|---|
-| `20260914_retrait_visibilite_progression.sql` | La clé `progression` est encore présente (11 bénéficiaires sur 41). Attention : le `SET DEFAULT` de ce fichier réécrit le défaut **sans** `messagePraticien`, ajouté auparavant par `20260831`. À corriger avant de la rejouer. |
-| `20260911_02_jours_fixe_contrats.sql` | La contrainte `contrats_jours_fixe_non_vide` est absente (aucun contrat ne la violerait aujourd'hui). |
+| `20261005100000_factures_suivi_index` | 6 index de `factures_suivi`, dont l'unique `idx_factures_unique` (bénéficiaire, année, mois). Table vide en production. |
+| `20261005100100_assistant_logs_index` | 2 index. Pas de policy ajoutée : « praticien voit ses logs » (ALL) existe déjà en production. |
+| `20261005100200_participants_index_structure` | Index `idx_participants_structure`. |
+| `20261005100300_contrats_jours_fixe_non_vide` | Contrainte `jours_fixe` NULL ou non vide. **Corrigée** : l'ancienne (`array_length`) laissait passer `'{}'`, d'où `cardinality`. |
+| `20261005100400_visibilite_beneficiaire_retrait_progression` | Retire `progression` (11 lignes sur 41) et du défaut. **Corrigée** : le défaut conserve `messagePraticien` et `messagePierre`. |
 
-Autres écarts constatés (index et policies jamais créés, ou retirés, en
-production) : index `idx_assistant_logs_*`, `idx_factures_*` dont l'unique
-`idx_factures_unique`, `idx_participants_structure` ; policies `al_*` sur
-`assistant_logs` (table à RLS activée **sans** policy, donc accessible
-uniquement via `service_role`). `factures_suivi` est vide en production.
+La dernière modifie des données : 11 lignes de `participants` perdent la clé
+`progression` et leur `updated_at` change (trigger). Les versions d'origine
+restent dans l'archive, à titre d'historique uniquement.
+
+**Resserrement possible, non fait** : la policy de `assistant_logs` vise le rôle
+`public` et autorise aussi UPDATE. Un praticien connecté ne peut agir que sur ses
+lignes, mais un journal ne devrait pas être modifiable.
 
 ## 7. Sauvegardes : ce que je n'ai pas pu confirmer
 
