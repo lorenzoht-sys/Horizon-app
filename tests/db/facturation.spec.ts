@@ -160,12 +160,13 @@ async function creerContrat(
 async function creerSeance(
   c: Client, praticienId: string, ct: ContratFixture, date: string,
   statut: 'realisee' | 'annulee' | 'reportee' | 'planifiee' = 'realisee', heure = '10:00',
+  type: 'seance' | 'bilan' | 'bilan_initial' = 'seance',
 ): Promise<string> {
   const id = randomUUID();
   await c.query(
     `INSERT INTO public.seances (id, participant_id, praticien_id, contrat_id, date, heure_debut, heure_fin, duree_minutes, type, statut)
-     VALUES ($1, $2, $3, $4, $5, $6, '23:59', 45, 'seance', $7)`,
-    [id, ct.participantId, praticienId, ct.contratId, date, heure, statut],
+     VALUES ($1, $2, $3, $4, $5, $6, '23:59', 45, $8, $7)`,
+    [id, ct.participantId, praticienId, ct.contratId, date, heure, statut, type],
   );
   return id;
 }
@@ -941,6 +942,249 @@ decrire('Praticiens : profil de facturation', () => {
       await refus(c, `UPDATE public.praticiens SET delai_paiement_jours = 90 WHERE id = $1`, [pro], /praticiens_delai_paiement_valide/);
       await refus(c, `UPDATE public.praticiens SET delai_paiement_jours = -1 WHERE id = $1`, [pro], /praticiens_delai_paiement_valide/);
       await c.query(`UPDATE public.praticiens SET delai_paiement_jours = 45, penalites_retard = 'Taux légal majoré' WHERE id = $1`, [pro]);
+    });
+  });
+});
+
+
+// ───────────────────────────── étape 1 bis ─────────────────────────────
+
+decrire('Paiements immuables', () => {
+  const ajouter = `INSERT INTO public.paiements (facture_id, date, montant, moyen) VALUES ($1, '2026-04-01', $2, 'virement')`;
+
+  it('refuse toute modification et toute suppression, y compris pour postgres et service_role', async () => {
+    await transaction(async c => {
+      const v = await factureValidee(c);
+      await c.query(ajouter, [v.factureId, 45]);
+      const motif = /Paiement non modifiable/;
+      await refus(c, `UPDATE public.paiements SET montant = 10 WHERE facture_id = $1`, [v.factureId], motif);
+      await refus(c, `UPDATE public.paiements SET moyen = 'cheque' WHERE facture_id = $1`, [v.factureId], motif);
+      await refus(c, `DELETE FROM public.paiements WHERE facture_id = $1`, [v.factureId], motif);
+      await c.query('SET LOCAL ROLE service_role');
+      await refus(c, `UPDATE public.paiements SET montant = 10 WHERE facture_id = $1`, [v.factureId], motif);
+      await refus(c, `DELETE FROM public.paiements WHERE facture_id = $1`, [v.factureId], motif);
+      await retourPostgres(c);
+    });
+  });
+
+  it('le praticien lit et ajoute ses paiements mais n\'a plus le droit de les modifier', async () => {
+    await transaction(async c => {
+      const v = await factureValidee(c);
+      await commeUtilisateur(c, v.pro);
+      await c.query(ajouter, [v.factureId, 45]);
+      expect(await q(c, `SELECT 1 FROM public.paiements`)).toHaveLength(1);
+      await refus(c, `UPDATE public.paiements SET montant = 10 WHERE facture_id = $1`, [v.factureId], /permission denied/);
+      await refus(c, `DELETE FROM public.paiements WHERE facture_id = $1`, [v.factureId], /permission denied/);
+    });
+  });
+
+  it('une correction passe par une nouvelle ligne négative, jamais au-delà de ce qui a été encaissé', async () => {
+    await transaction(async c => {
+      const v = await factureValidee(c);
+      await c.query(ajouter, [v.factureId, 45]);
+      await c.query(ajouter, [v.factureId, -15]);                 // correction partielle
+      await refus(c, ajouter, [v.factureId, -31], /supérieure aux paiements enregistrés \(30/);
+      await c.query(ajouter, [v.factureId, -30]);                 // solde à zéro
+      const [r] = await q(c, `SELECT sum(montant)::float8 AS somme, count(*)::int AS n FROM public.paiements WHERE facture_id = $1`, [v.factureId]);
+      expect(r).toEqual({ somme: 0, n: 3 });
+      await refus(c, ajouter, [v.factureId, -0.01], /supérieure aux paiements enregistrés/);
+      await refus(c, ajouter, [v.factureId, 0], /paiements_montant_non_nul/);
+    });
+  });
+});
+
+decrire('Adresse du bénéficiaire obligatoire à la validation', () => {
+  async function brouillon(c: Client): Promise<{ f: string; ct: ContratFixture }> {
+    const pro = await creerPraticien(c);
+    const ct = await creerContrat(c, pro);
+    await creerSeance(c, pro, ct, '2026-03-10');
+    return { f: (await generer(c, ct.contratId, '2026-03-01'))!, ct };
+  }
+  const motif = /Adresse du bénéficiaire incomplète \(mention obligatoire\)/;
+
+  it('refuse sans rue, sans code postal ou sans ville, et nomme ce qui manque', async () => {
+    await transaction(async c => {
+      const { f, ct } = await brouillon(c);
+      await c.query(`UPDATE public.participants SET adresse_rue = NULL WHERE id = $1`, [ct.participantId]);
+      await refus(c, `SELECT public.valider_facture($1)`, [f], /: rue$/);
+      await c.query(`UPDATE public.participants SET adresse_rue = '10 rue Test', adresse_code_postal = '   ', adresse_ville = NULL WHERE id = $1`, [ct.participantId]);
+      await refus(c, `SELECT public.valider_facture($1)`, [f], /: code postal, ville$/);
+      await c.query(`UPDATE public.participants SET adresse_code_postal = NULL, adresse_ville = NULL, adresse_rue = NULL WHERE id = $1`, [ct.participantId]);
+      await refus(c, `SELECT public.valider_facture($1)`, [f], motif);
+      // Rien n'a été consommé : le brouillon reste, sans numéro.
+      const [r] = await q(c, `SELECT statut, numero FROM public.factures WHERE id = $1`, [f]);
+      expect(r).toEqual({ statut: 'brouillon', numero: null });
+    });
+  });
+
+  it('reste exigée quand un proche paie, et figure alors dans le snapshot', async () => {
+    await transaction(async c => {
+      const { f, ct } = await brouillon(c);
+      await c.query(
+        `UPDATE public.contrats SET payeur_type = 'proche', payeur_nom = 'Proche Test', payeur_adresse = '5 rue Proche', payeur_email = 'proche@fact.test' WHERE id = $1`,
+        [ct.contratId],
+      );
+      await c.query(`UPDATE public.participants SET adresse_ville = NULL WHERE id = $1`, [ct.participantId]);
+      await refus(c, `SELECT public.valider_facture($1)`, [f], motif);
+      await c.query(`UPDATE public.participants SET adresse_ville = 'Villetest' WHERE id = $1`, [ct.participantId]);
+      await valider(c, f);
+      const [r] = await q(c, `SELECT snapshot_destinataire AS d FROM public.factures WHERE id = $1`, [f]);
+      expect(r.d).toMatchObject({ role: 'proche', beneficiaire: { adresse: { rue: '10 rue Test', code_postal: '00000', ville: 'Villetest' } } });
+    });
+  });
+
+  it('IBAN et pénalités restent facultatifs', async () => {
+    await transaction(async c => {
+      const { f, ct } = await brouillon(c);
+      await c.query(`UPDATE public.praticiens SET iban = NULL, penalites_retard = NULL WHERE id = (SELECT praticien_id FROM public.contrats WHERE id = $1)`, [ct.contratId]);
+      expect(await valider(c, f)).toMatch(/^\d{4}-0001$/);
+    });
+  });
+});
+
+decrire('TVA : prix HT, TVA ajoutée (hypothèse à confirmer)', () => {
+  async function cas(c: Client, opts: { taux?: number | null; tarif?: number; dates?: string[] } = {}) {
+    const pro = await creerPraticien(c);
+    if (opts.taux !== undefined && opts.taux !== null) {
+      await c.query(`UPDATE public.praticiens SET regime_tva = 'assujetti', taux_tva = $2 WHERE id = $1`, [pro, opts.taux]);
+    }
+    const ct = await creerContrat(c, pro, { tarifs: [{ debut: '2026-01-01', tarif: opts.tarif ?? 45 }] });
+    for (const d of opts.dates ?? ['2026-03-03', '2026-03-10']) await creerSeance(c, pro, ct, d);
+    return { pro, ct };
+  }
+  const montants = (c: Client, id: string) =>
+    q(c, `SELECT total_ht::float8 AS ht, montant_tva::float8 AS tva, total::float8 AS ttc, part_client::float8 AS client, part_urssaf::float8 AS urssaf, taux_tva::float8 AS taux FROM public.factures WHERE id = $1`, [id]).then(r => r[0]);
+
+  it('assujetti 20 % : lignes en HT, TVA ajoutée, total TTC, taux figé', async () => {
+    await transaction(async c => {
+      const { ct } = await cas(c, { taux: 20 });
+      const f = (await generer(c, ct.contratId, '2026-03-01'))!;
+      expect((await lignes(c, f)).map(l => l.montant)).toEqual([45, 45]);           // HT
+      // Le brouillon annonce déjà le TTC ; le taux n'est figé qu'à la validation.
+      expect(await montants(c, f)).toEqual({ ht: 90, tva: 18, ttc: 108, client: 108, urssaf: 0, taux: null });
+      await valider(c, f);
+      expect(await montants(c, f)).toEqual({ ht: 90, tva: 18, ttc: 108, client: 108, urssaf: 0, taux: 20 });
+      const [s] = await q(c, `SELECT snapshot_emetteur->>'taux_tva' AS taux, snapshot_emetteur->>'regime_tva' AS regime FROM public.factures WHERE id = $1`, [f]);
+      expect(s).toEqual({ taux: '20.00', regime: 'assujetti' });
+    });
+  });
+
+  it('franchise 293 B : pas de TVA, total = HT', async () => {
+    await transaction(async c => {
+      const { ct } = await cas(c);
+      const f = (await generer(c, ct.contratId, '2026-03-01'))!;
+      await valider(c, f);
+      expect(await montants(c, f)).toEqual({ ht: 90, tva: 0, ttc: 90, client: 90, urssaf: 0, taux: 0 });
+    });
+  });
+
+  it('calcule la TVA une fois sur le total HT, arrondie au centime', async () => {
+    await transaction(async c => {
+      // 3 × 33,33 = 99,99 HT ; 20 % = 19,998 → 20,00 (par ligne : 6,67 × 3 = 20,01).
+      const { ct } = await cas(c, { taux: 20, tarif: 33.33, dates: ['2026-03-03', '2026-03-10', '2026-03-17'] });
+      const f = (await generer(c, ct.contratId, '2026-03-01'))!;
+      await valider(c, f);
+      expect(await montants(c, f)).toMatchObject({ ht: 99.99, tva: 20, ttc: 119.99 });
+    });
+  });
+
+  it('la validation recalcule avec le régime du moment (changement entre brouillon et validation)', async () => {
+    await transaction(async c => {
+      const { pro, ct } = await cas(c, { taux: 20 });
+      const f = (await generer(c, ct.contratId, '2026-03-01'))!;
+      expect((await montants(c, f)).ttc).toBe(108);
+      await c.query(`UPDATE public.praticiens SET regime_tva = 'franchise_293B', taux_tva = NULL WHERE id = $1`, [pro]);
+      await valider(c, f);
+      expect(await montants(c, f)).toMatchObject({ ht: 90, tva: 0, ttc: 90, taux: 0 });
+    });
+  });
+
+  it('les montants de TVA sont figés après validation, et la cohérence HT + TVA = TTC est imposée', async () => {
+    await transaction(async c => {
+      const { pro, ct } = await cas(c, { taux: 20 });
+      const f = (await generer(c, ct.contratId, '2026-03-01'))!;
+      await valider(c, f);
+      const motif = /validée : seuls statut et pdf_path/;
+      await refus(c, `UPDATE public.factures SET montant_tva = 0, total = total_ht WHERE id = $1`, [f], motif);
+      await refus(c, `UPDATE public.factures SET taux_tva = 5.5 WHERE id = $1`, [f], motif);
+      await refus(c, `UPDATE public.factures SET total_ht = 1 WHERE id = $1`, [f], motif);
+      const ct2 = await creerContrat(c, pro);
+      await refus(c,
+        `INSERT INTO public.factures (praticien_id, contrat_id, participant_id, periode, total_ht, montant_tva, total, part_client) VALUES ($1, $2, $3, '2026-05-01', 100, 20, 130, 130)`,
+        [pro, ct2.contratId, ct2.participantId], /factures_tva_coherente/);
+    });
+  });
+
+  it('un avoir reprend le taux de la facture d\'origine, même si le régime a changé depuis', async () => {
+    await transaction(async c => {
+      const { pro, ct } = await cas(c, { taux: 20 });
+      const f = (await generer(c, ct.contratId, '2026-03-01'))!;
+      await valider(c, f);                                                       // 90 HT, 108 TTC
+      await c.query(`UPDATE public.praticiens SET regime_tva = 'franchise_293B', taux_tva = NULL WHERE id = $1`, [pro]);
+      const nouvelAvoir = async (ht: number): Promise<string> => {
+        const id = randomUUID();
+        await c.query(
+          `INSERT INTO public.factures (id, praticien_id, contrat_id, participant_id, periode, type, facture_origine_id) VALUES ($1, $2, $3, $4, '2026-03-01', 'avoir', $5)`,
+          [id, pro, ct.contratId, ct.participantId, f],
+        );
+        await c.query(`INSERT INTO public.lignes_facture (facture_id, libelle, quantite, prix_unitaire, montant) VALUES ($1, 'Avoir', 1, $2, $2)`, [id, ht]);
+        return id;
+      };
+      await refus(c, `SELECT public.valider_facture($1)`, [await nouvelAvoir(91)], /dépasse la facture d'origine \(108/);   // 91 × 1,2 = 109,20 TTC
+      const avoir = await nouvelAvoir(90);
+      await valider(c, avoir);
+      expect(await montants(c, avoir)).toMatchObject({ ht: 90, tva: 18, ttc: 108, taux: 20 });
+      expect((await q(c, `SELECT statut FROM public.factures WHERE id = $1`, [f]))[0].statut).toBe('annulee');   // avoir total
+    });
+  });
+});
+
+decrire('Bilans exclus de la facturation', () => {
+  it('ne facture que les séances de type soin, pas bilan ni bilan_initial', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro);
+      const soin = await creerSeance(c, pro, ct, '2026-03-03', 'realisee', '10:00', 'seance');
+      await creerSeance(c, pro, ct, '2026-03-04', 'realisee', '10:00', 'bilan');
+      await creerSeance(c, pro, ct, '2026-03-05', 'realisee', '10:00', 'bilan_initial');
+      const ls = await lignes(c, (await generer(c, ct.contratId, '2026-03-01'))!);
+      expect(ls.map(l => l.seance_id)).toEqual([soin]);
+      expect(ls[0].montant).toBe(45);
+    });
+  });
+
+  it('un mois sans soin réalisé, même avec des bilans réalisés, ne produit aucun brouillon', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro);
+      await creerSeance(c, pro, ct, '2026-03-04', 'realisee', '10:00', 'bilan');
+      await creerSeance(c, pro, ct, '2026-03-05', 'realisee', '10:00', 'bilan_initial');
+      expect(await generer(c, ct.contratId, '2026-03-01')).toBeNull();
+    });
+  });
+
+  it('un bilan sans tarif applicable ne bloque pas la génération', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro, { tarifs: [{ debut: '2026-03-15', tarif: 50 }] });
+      await creerSeance(c, pro, ct, '2026-03-02', 'realisee', '10:00', 'bilan_initial');   // avant toute version de tarif
+      await creerSeance(c, pro, ct, '2026-03-20');
+      const ls = await lignes(c, (await generer(c, ct.contratId, '2026-03-01'))!);
+      expect(ls.map(l => [l.date, l.montant])).toEqual([['2026-03-20', 50]]);
+    });
+  });
+
+  it('le brouillon se recalcule sans le bilan si une séance change de type', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro);
+      const s = await creerSeance(c, pro, ct, '2026-03-03');
+      await creerSeance(c, pro, ct, '2026-03-10');
+      const f = (await generer(c, ct.contratId, '2026-03-01'))!;
+      expect(await lignes(c, f)).toHaveLength(2);
+      await c.query(`UPDATE public.seances SET type = 'bilan' WHERE id = $1`, [s]);
+      expect(await generer(c, ct.contratId, '2026-03-01')).toBe(f);
+      expect((await lignes(c, f)).map(l => l.date)).toEqual(['2026-03-10']);
     });
   });
 });
