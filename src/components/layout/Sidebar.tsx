@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import {
   Home, Calendar, Route, Layers, Settings,
-  LogOut, Map, BarChart2, Bot, Library, ShieldCheck, User,
+  LogOut, Map, BarChart2, Bot, Library, ShieldCheck, User, Receipt,
 } from 'lucide-react';
 import { initialesPraticien } from '../../lib/initiales';
 import { IndicateurConnexion, BoutonInstallerApp } from '../pwa/PWAComponents';
@@ -22,7 +22,9 @@ interface PraticienInfo {
   numero_sap: string | null;
 }
 
-const NAV_ITEMS = [
+interface ItemNav { path: string; icon: typeof Home; label: string; end: boolean; /** Préfixe d'URL qui garde l'entrée active sur les écrans voisins. */ prefixe?: string }
+
+const NAV_ITEMS: ItemNav[] = [
   { path: '/',          icon: Home,      label: 'Tableau de bord', end: true  },
   { path: '/agenda-v2', icon: Calendar,  label: 'Agenda',          end: false },
   { path: '/tournee',   icon: Route,     label: 'Tournée',         end: false },
@@ -31,11 +33,15 @@ const NAV_ITEMS = [
   { path: '/zones',      icon: Layers,    label: 'Zones',           end: false },
   { path: '/map',       icon: Map,       label: 'Carte',           end: false },
   { path: '/stats',     icon: BarChart2, label: 'Mes stats',       end: false },
+  // Facturation : on arrive sur « à valider » (l'écran actionnable) ; l'entrée reste active sur la
+  // liste des factures validées (/factures).
+  { path: '/factures/a-valider', prefixe: '/factures', icon: Receipt, label: 'Factures', end: false },
 ];
 
 export default function Sidebar({ onLogout }: Props) {
   const [praticien, setPraticien] = useState<PraticienInfo | null>(null);
   const { estAdmin } = useAppRole();
+  const { pathname } = useLocation();
 
   async function fetchPraticien() {
     if (!supabase) return;
@@ -102,7 +108,7 @@ export default function Sidebar({ onLogout }: Props) {
               to={item.path}
               end={item.end}
               className={({ isActive }) =>
-                `sidebar-nav-item no-underline${isActive ? ' sidebar-nav-active' : ''}`
+                `sidebar-nav-item no-underline${isActive || (item.prefixe && pathname.startsWith(item.prefixe)) ? ' sidebar-nav-active' : ''}`
               }
             >
               <item.icon size={16} className="flex-shrink-0" />

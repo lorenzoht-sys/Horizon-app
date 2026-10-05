@@ -8,8 +8,11 @@
 // que ça n'arrive pas.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
+  dateCivileParis,
+  doitGenererFacturationMaintenant,
   doitRenouvelerMaintenant,
   executerTachesCron,
+  HEURE_FACTURATION_UTC,
   HEURE_RENOUVELLEMENT_UTC,
   type Tache,
 } from './cronTaches.js';
@@ -182,5 +185,46 @@ describe('executerTachesCron — exécution séquentielle et isolation', () => {
     const bilan = await executerTachesCron([]);
     expect(bilan.ordre).toEqual([]);
     expect(bilan.resultats).toEqual({});
+  });
+});
+
+describe('doitGenererFacturationMaintenant : une vérification par jour, à heure fixe', () => {
+  it(`vérifie à ${HEURE_FACTURATION_UTC}h UTC, le 1er comme les autres jours (rattrapage d'un cron manqué)`, () => {
+    for (const jour of ['2026-10-01', '2026-10-02', '2026-10-15', '2026-10-31', '2026-09-30']) {
+      expect(doitGenererFacturationMaintenant(new Date(`${jour}T05:15:00Z`)), jour).toBe(true);
+    }
+  });
+
+  it('ne vérifie pas aux autres heures', () => {
+    for (const h of ['00', '03', '04', '06', '12', '23']) {
+      expect(doitGenererFacturationMaintenant(new Date(`2026-10-01T${h}:15:00Z`)), `${h}h`).toBe(false);
+    }
+  });
+
+  it('une seule exécution sur les 24 du cron horaire d\'une journée', () => {
+    const executions = Array.from({ length: 24 }, (_, h) =>
+      doitGenererFacturationMaintenant(new Date(Date.UTC(2026, 9, 1, h, 15))),
+    ).filter(Boolean);
+    expect(executions).toHaveLength(1);
+  });
+
+  it('exactement une exécution par jour, 365 par an, été comme hiver', () => {
+    let nb = 0;
+    for (let jour = 0; jour < 365; jour++) {
+      for (let h = 0; h < 24; h++) {
+        if (doitGenererFacturationMaintenant(new Date(Date.UTC(2026, 0, 1 + jour, h, 15)))) nb++;
+      }
+    }
+    expect(nb).toBe(365);
+  });
+
+  it('suit la date civile de Paris : à 05h UTC, c\'est déjà le jour UTC et le jour de Paris, hiver comme été', () => {
+    expect(dateCivileParis(new Date('2027-01-01T05:15:00Z'))).toBe('2027-01-01');   // heure d'hiver, UTC+1
+    expect(dateCivileParis(new Date('2026-10-01T05:15:00Z'))).toBe('2026-10-01');   // heure d'été, UTC+2
+    expect(doitGenererFacturationMaintenant(new Date('2027-01-01T05:15:00Z'))).toBe(true);
+  });
+
+  it('ne tombe pas sur la même heure que le renouvellement des contrats', () => {
+    expect(HEURE_FACTURATION_UTC).not.toBe(HEURE_RENOUVELLEMENT_UTC);
   });
 });

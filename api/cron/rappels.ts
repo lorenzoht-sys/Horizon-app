@@ -4,11 +4,14 @@
 // les heures par un job pg_cron (Supabase, via pg_net).
 //
 // ⚠️ Le nom du fichier ne dit plus tout ce qu'il fait. Cet endpoint porte
-// désormais DEUX traitements sans rapport l'un avec l'autre :
+// désormais TROIS traitements sans rapport les uns avec les autres :
 //
 //   - les rappels patients, à chaque exécution (toutes les heures) ;
 //   - le renouvellement des contrats à durée indéterminée, une seule fois
-//     par jour, à HEURE_RENOUVELLEMENT_UTC (voir api/_lib/cronTaches.ts).
+//     par jour, à HEURE_RENOUVELLEMENT_UTC (voir api/_lib/cronTaches.ts) ;
+//   - la vérification quotidienne de la facturation : à HEURE_FACTURATION_UTC,
+//     génère les brouillons manquants du mois écoulé (voir
+//     api/_lib/facturationMensuelle.ts).
 //
 // Le nom `rappels` est conservé volontairement : l'URL /api/cron/rappels est
 // déjà câblée dans les jobs pg_cron de production ET de staging. La renommer
@@ -25,7 +28,7 @@
 // valeur de la variable d'environnement CRON_SECRET (jamais exposée au
 // client, configurée uniquement sur Vercel).
 //
-// Les deux traitements s'exécutent l'un après l'autre et sont ISOLÉS : un
+// Les traitements s'exécutent l'un après l'autre et sont ISOLÉS : un
 // contrat mal formé qui fait lever le renouvellement n'empêche pas l'envoi
 // des rappels du jour, et inversement (voir api/_lib/cronTaches.ts). La
 // réponse HTTP est 207 dès qu'au moins un des deux a échoué, 200 sinon — un
@@ -51,6 +54,13 @@
 // des séances de la nouvelle période, d'après le motif déclaré sur le contrat
 // — jamais d'après les séances déjà générées. Toute la logique est dans
 // api/_lib/renouvellementContrats.ts, inchangée par la fusion.
+//
+// ── Facturation mensuelle ───────────────────────────────────────────────────
+// Chaque jour à 05h UTC : génère les BROUILLONS de facture du mois qui vient de se terminer pour
+// les contrats facturables qui n'en ont pas encore (un cron manqué le 1er est rattrapé le jour
+// suivant), puis notifie chaque praticien concerné (push existant, un message par praticien). Ne valide rien : la validation est un
+// geste du praticien sur l'écran « Factures à valider ». Idempotente : un contrat déjà facturé
+// pour le mois n'est pas retouché. Voir api/_lib/facturationMensuelle.ts.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDays, format } from 'date-fns';
@@ -59,13 +69,16 @@ import { withSentry } from '../_lib/sentry.js';
 import { secretsIdentiques } from '../_lib/secrets.js';
 import { envoyerRappel } from '../_lib/notifications.js';
 import {
+  doitGenererFacturationMaintenant,
   doitRenouvelerMaintenant,
   executerTachesCron,
+  HEURE_FACTURATION_UTC,
   HEURE_RENOUVELLEMENT_UTC,
   type ResultatTache,
   type Tache,
 } from '../_lib/cronTaches.js';
 import { MARGE_RENOUVELLEMENT_JOURS, renouvelerContratsEligibles } from '../_lib/renouvellementContrats.js';
+import { executerFacturationMensuelle } from '../_lib/facturationMensuelle.js';
 import { chargerIdsParticipantsArchives, exclureBeneficiairesArchives } from '../_lib/participantsArchives.js';
 import {
   resoudrePrefs,
@@ -117,6 +130,14 @@ export default withSentry(async function handler(req: any, res: any) {
     };
   }
 
+  // Même principe pour la facturation : absente de la plupart des exécutions, on le dit.
+  if (!doitGenererFacturationMaintenant(maintenant)) {
+    resultats.facturation = {
+      statut: 'ignoree',
+      raison: `hors fenêtre — vérification quotidienne de la facturation à ${HEURE_FACTURATION_UTC}h UTC`,
+    };
+  }
+
   const enEchec = Object.values(resultats).some((r: ResultatTache) => r.statut === 'erreur');
   return res.status(enEchec ? 207 : 200).json(resultats);
 });
@@ -145,6 +166,13 @@ function construireTaches(supabase: SupabaseClient, maintenant: Date): Tache[] {
     taches.push({
       nom: 'renouvellement',
       executer: () => traiterRenouvellementContrats(supabase, maintenant),
+    });
+  }
+
+  if (doitGenererFacturationMaintenant(maintenant)) {
+    taches.push({
+      nom: 'facturation',
+      executer: () => executerFacturationMensuelle(supabase, maintenant),
     });
   }
 

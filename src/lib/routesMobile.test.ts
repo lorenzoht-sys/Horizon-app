@@ -53,6 +53,20 @@ describe('estRouteInterfaceUnique', () => {
     expect(estRouteInterfaceUnique('/structures/abc-123')).toBe(true);
     expect(estRouteInterfaceUnique('/structures/abc-123/')).toBe(true);
   });
+
+  it('sert aussi la facturation (à valider + validées), cible de la notification du 1er du mois', () => {
+    expect(estRouteInterfaceUnique('/factures')).toBe(true);
+    expect(estRouteInterfaceUnique('/factures/')).toBe(true);
+    expect(estRouteInterfaceUnique('/factures/a-valider')).toBe(true);
+    expect(estRouteInterfaceUnique('/factures/a-valider/')).toBe(true);
+  });
+
+  it('ne sert que ces deux écrans de facturation, pas des routes voisines', () => {
+    expect(estRouteInterfaceUnique('/factures/abc-123')).toBe(false);
+    expect(estRouteInterfaceUnique('/factures/a-valider/x')).toBe(false);
+    expect(estRouteInterfaceUnique('/facturation')).toBe(false);
+    expect(estRouteInterfaceUnique('/facturesx')).toBe(false);
+  });
 });
 
 describe('ecranMobileDepuisUrl', () => {

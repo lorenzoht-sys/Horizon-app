@@ -36,6 +36,8 @@ const BibliothequePage   = lazy(() => import('./pages/BibliothequePage'));
 const StatsPage          = lazy(() => import('./pages/StatsPage'));
 const StructuresPage    = lazy(() => import('./pages/StructuresPage'));
 const StructureDetail    = lazy(() => import('./pages/StructureDetail'));
+const FacturesAValiderPage = lazy(() => import('./pages/FacturesAValiderPage'));
+const FacturesPage       = lazy(() => import('./pages/FacturesPage'));
 const PortailStructure   = lazy(() => import('./pages/PortailStructure'));
 const ComparaisonPage    = lazy(() => import('./pages/ComparaisonPage'));
 const ContratNouveauPage = lazy(() => import('./pages/ContratNouveauPage'));
@@ -104,6 +106,11 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
             <Route path="/assistant" element={<PageTransition><Suspense fallback={<MapFallback />}><AssistantPage /></Suspense></PageTransition>} />
             <Route path="/bibliotheque" element={<PageTransition><Suspense fallback={<MapFallback />}><BibliothequePage /></Suspense></PageTransition>} />
             <Route path="/stats" element={<PageTransition><Suspense fallback={<MapFallback />}><StatsPage /></Suspense></PageTransition>} />
+            {/* Facturation (étape 3) : brouillons générés le 1er du mois à valider, puis factures
+                validées. La route est ouverte à tout praticien connecté ; la RLS n'y montre que
+                SES factures. */}
+            <Route path="/factures/a-valider" element={<PageTransition><Suspense fallback={<MapFallback />}><FacturesAValiderPage /></Suspense></PageTransition>} />
+            <Route path="/factures" element={<PageTransition><Suspense fallback={<MapFallback />}><FacturesPage /></Suspense></PageTransition>} />
             <Route path="/structures" element={<PageTransition><Suspense fallback={<MapFallback />}><StructuresPage /></Suspense></PageTransition>} />
             <Route path="/structures/:id" element={<PageTransition><Suspense fallback={<MapFallback />}><StructureDetail /></Suspense></PageTransition>} />
             <Route path="/settings" element={<PageTransition><SettingsPage /></PageTransition>} />
