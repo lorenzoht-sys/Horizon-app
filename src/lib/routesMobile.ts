@@ -91,7 +91,12 @@ export function estRouteInterfaceUnique(pathname: string): boolean {
     // dès l'écriture. Détail (StructureDetail.tsx) : carte Facturation
     // masquée sous 768px (Phase 4, hors périmètre), le reste fusionné.
     /^\/structures\/?$/.test(pathname) ||
-    /^\/structures\/[^/]+\/?$/.test(pathname)
+    /^\/structures\/[^/]+\/?$/.test(pathname) ||
+    // Facturation (étape 3) : « Factures à valider » et « Factures validées », construites
+    // responsive dès l'écriture (une colonne, aucune barre fixe en bas). C'est aussi la cible de
+    // la notification push du 1er du mois (api/_lib/facturationMensuelle.ts) : sans cette entrée,
+    // un téléphone ouvrirait l'accueil au clic.
+    /^\/factures(\/a-valider)?\/?$/.test(pathname)
   );
 }
 
