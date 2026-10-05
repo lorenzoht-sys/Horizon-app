@@ -2,8 +2,13 @@
 //
 // Génération automatique des brouillons de facture du mois ÉCOULÉ, greffée sur le point d'entrée
 // cron unique (api/cron/rappels.ts) : le plan Vercel plafonne le nombre de fonctions, aucune
-// route n'est ajoutée. Déclenchée une fois par jour, le 1er du mois seulement (voir
-// doitGenererFacturationMaintenant, api/_lib/cronTaches.ts).
+// route n'est ajoutée. Déclenchée une fois par jour (voir doitGenererFacturationMaintenant,
+// api/_lib/cronTaches.ts) : chaque passage ne génère que ce qui manque pour le mois précédent,
+// donc un cron manqué le 1er est rattrapé le lendemain sans doublon (décision du 2026-10-05).
+// Conséquences assumées : un brouillon supprimé ou annulé par le praticien est régénéré au passage
+// suivant ; un contrat dont une séance n'a pas de tarif reste en erreur (et journalisé) chaque
+// jour jusqu'à correction ; une séance passée « réalisée » après le 1er peut faire apparaître un
+// brouillon tardif (et sa notification).
 //
 // Pour chaque contrat facturable, appelle generer_brouillon_facture(contrat, mois précédent)
 // (supabase/migrations/20261006100400_facturation_calcul.sql). On facture le mois qui vient de

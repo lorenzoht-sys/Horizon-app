@@ -325,6 +325,55 @@ describe('notification du praticien', () => {
 
 // ── Journalisation ────────────────────────────────────────────────────────────────────────────
 
+describe('executerFacturationMensuelle : rattrapage d\'un cron manqué le 1er', () => {
+  it('le cron absent le 1er génère quand même les brouillons à son prochain passage, une seule fois', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const factures: Ligne[] = [];
+    const alerte = vi.fn(async () => ({ nbEnvoyes: 1, nbEchecs: 0 }));
+    const { client, appelsRpc } = fauxClient({
+      contrats: [contrat('c1'), contrat('c2')],
+      factures,
+      rpc: async a => {
+        const id = `facture-${a.p_contrat_id}`;
+        factures.push({ id, contrat_id: a.p_contrat_id, periode: a.p_periode, type: 'facture', statut: 'brouillon', praticien_id: 'pra-1' });
+        return { data: id, error: null };
+      },
+    });
+    const opts = { envoyerAlerte: alerte };
+
+    // Le 1er (2026-10-01) : le cron n'a pas tourné, rien n'a été appelé. Premier passage : le 3.
+    expect(appelsRpc).toHaveLength(0);
+    const rattrapage = await executerFacturationMensuelle(client, new Date('2026-10-03T05:15:00Z'), opts);
+    expect(rattrapage).toMatchObject({ mois: '2026-09', brouillonsCrees: 2, erreurs: [] });
+    expect(appelsRpc.every(a => a.args.p_periode === '2026-09-01')).toBe(true);   // toujours septembre, pas octobre
+    expect(alerte).toHaveBeenCalledTimes(1);
+
+    // Passages suivants (jours suivants, y compris en fin de mois) : rien de plus.
+    for (const jour of ['2026-10-04', '2026-10-17', '2026-10-31']) {
+      const bilan = await executerFacturationMensuelle(client, new Date(`${jour}T05:15:00Z`), opts);
+      expect(bilan, jour).toMatchObject({ mois: '2026-09', brouillonsCrees: 0, dejaExistants: 2 });
+    }
+    expect(appelsRpc).toHaveLength(2);        // aucun appel de plus : pas de doublon, pas de réécriture
+    expect(alerte).toHaveBeenCalledTimes(1);  // une seule notification
+    expect(factures).toHaveLength(2);
+
+    // Le 1er novembre, on passe à octobre : le mois facturé change.
+    const suivant = await executerFacturationMensuelle(client, new Date('2026-11-01T05:15:00Z'), opts);
+    expect(suivant.mois).toBe('2026-10');
+  });
+
+  it('un contrat sans séance est réexaminé chaque jour sans rien créer ni notifier', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const alerte = vi.fn(async () => ({ nbEnvoyes: 1, nbEchecs: 0 }));
+    const { client } = fauxClient({ contrats: [contrat('c1')], rpc: async () => ({ data: null, error: null }) });
+    for (const jour of ['2026-10-01', '2026-10-02', '2026-10-20']) {
+      const bilan = await executerFacturationMensuelle(client, new Date(`${jour}T05:15:00Z`), { envoyerAlerte: alerte });
+      expect(bilan).toMatchObject({ brouillonsCrees: 0, sansSeance: 1, erreurs: [] });
+    }
+    expect(alerte).not.toHaveBeenCalled();
+  });
+});
+
 describe('executerFacturationMensuelle : bilan journalisé', () => {
   it('journalise une ligne JSON exploitable et une ligne par contrat en échec, sans nom de bénéficiaire', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});

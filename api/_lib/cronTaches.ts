@@ -49,13 +49,13 @@ export function doitRenouvelerMaintenant(maintenant: Date): boolean {
 
 /**
  * Heure UTC à laquelle la génération mensuelle des brouillons de facture
- * s'exécute, le 1er du mois seulement (voir api/_lib/facturationMensuelle.ts).
+ * s'exécute, une fois par jour (voir api/_lib/facturationMensuelle.ts).
  *
  * 05h UTC = 06h ou 07h à Paris selon la saison : le mois facturé est bien
  * terminé, et la tâche tombe deux heures après le renouvellement des contrats
  * (03h UTC), jamais en même temps. Comme le renouvellement, la fenêtre est
  * portée par le code et non par pg_cron : le point d'entrée tourne toutes les
- * heures, donc 24 fois le 1er du mois, dont UNE SEULE dans cette fenêtre.
+ * heures, donc 24 fois par jour, dont UNE SEULE dans cette fenêtre.
  */
 export const HEURE_FACTURATION_UTC = 5;
 
@@ -70,10 +70,12 @@ export function dateCivileParis(instant: Date): string {
 }
 
 /**
- * Vrai si l'exécution courante est celle qui doit générer les brouillons du
- * mois écoulé : le 1er du mois (date civile Paris) ET dans la fenêtre horaire
- * quotidienne. Les 23 autres exécutions du 1er, et toutes celles des autres
- * jours, l'ignorent.
+ * Vrai si l'exécution courante doit vérifier la facturation du mois écoulé :
+ * une fois par jour, dans la fenêtre horaire quotidienne, TOUS les jours (et
+ * non plus le 1er seulement). Chaque passage ne crée que les brouillons du mois
+ * précédent qui manquent encore : un cron manqué le 1er est donc rattrapé au
+ * passage suivant, sans logique de rattrapage séparée (décision du 2026-10-05,
+ * PR #121). Les 23 autres exécutions horaires de la journée l'ignorent.
  *
  * La fenêtre ne garantit pas à elle seule « une seule fois » (un cron relancé
  * dans la même heure passerait deux fois) : l'idempotence est portée par la
@@ -82,8 +84,7 @@ export function dateCivileParis(instant: Date): string {
  */
 export function doitGenererFacturationMaintenant(maintenant: Date): boolean {
   return (
-    maintenant.getUTCHours() === HEURE_FACTURATION_UTC &&
-    dateCivileParis(maintenant).endsWith('-01')
+    maintenant.getUTCHours() === HEURE_FACTURATION_UTC
   );
 }
 

@@ -26,7 +26,7 @@ import { execFileSync } from 'node:child_process';
 import { Client } from 'pg';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { describe, it, expect, vi } from 'vitest';
-import { genererBrouillonsDuMois } from '../../api/_lib/facturationMensuelle.js';
+import { executerFacturationMensuelle, genererBrouillonsDuMois } from '../../api/_lib/facturationMensuelle.js';
 import { lireBrouillon, SELECT_BROUILLON, SELECT_PROFIL, lireProfil, profilFacturationManquant } from '../../src/lib/facturesAValider.js';
 
 const DB_URL = process.env.FACTURATION_TEST_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
@@ -209,6 +209,29 @@ decrire('Génération mensuelle contre la vraie base (RPC service_role via Postg
     expect(apres.lignes).toEqual(premier.lignes);                  // brouillon intact : la 3e séance n'y est pas entrée
     expect(second.dejaExistants).toBeGreaterThanOrEqual(1);
     expect(appelsPourCePraticien()).toHaveLength(1);               // aucune notification de plus
+  });
+
+  it('le cron manqué le 1er génère les brouillons au passage suivant, une seule fois (base réelle)', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const mois = moisDuTest();
+    const pro = await creerPraticien(serviceClient, anon);
+    const c = await creerContrat(pro, mois, { seances: [{ jour: 3 }, { jour: 10 }] });
+    const alerte = vi.fn(sansAlerte);
+    const [a, m] = mois.periode.split('-').map(Number);
+    const jourSuivant = (j: number) => new Date(Date.UTC(a, m, j, 5, 15));   // le mois d'après, à 05h15 UTC
+
+    expect((await lignesDe(c.contratId, mois.periode)).factures).toHaveLength(0);   // le 1er : rien n'a tourné
+    const bilan3 = await executerFacturationMensuelle(serviceClient, jourSuivant(3), { envoyerAlerte: alerte });
+    expect(bilan3.mois).toBe(mois.periode.slice(0, 7));
+    const premier = await lignesDe(c.contratId, mois.periode);
+    expect(premier.factures).toHaveLength(1);
+    expect(premier.factures[0]).toMatchObject({ statut: 'brouillon', total: 90 });
+
+    for (const j of [4, 15, 28]) await executerFacturationMensuelle(serviceClient, jourSuivant(j), { envoyerAlerte: alerte });
+    const apres = await lignesDe(c.contratId, mois.periode);
+    expect(apres.factures.map(f => f.id)).toEqual([premier.factures[0].id]);       // toujours un seul brouillon, le même
+    expect(apres.lignes).toEqual(premier.lignes);
+    expect(alerte.mock.calls.filter(x => x[1] === pro.id)).toHaveLength(1);        // une seule notification
   });
 
   it('un contrat en échec (séance sans tarif) n\'empêche pas les autres, et l\'erreur reste visible', async () => {

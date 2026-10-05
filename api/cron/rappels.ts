@@ -9,8 +9,9 @@
 //   - les rappels patients, à chaque exécution (toutes les heures) ;
 //   - le renouvellement des contrats à durée indéterminée, une seule fois
 //     par jour, à HEURE_RENOUVELLEMENT_UTC (voir api/_lib/cronTaches.ts) ;
-//   - la génération des brouillons de facture du mois écoulé, le 1er du mois
-//     seulement, à HEURE_FACTURATION_UTC (voir api/_lib/facturationMensuelle.ts).
+//   - la vérification quotidienne de la facturation : à HEURE_FACTURATION_UTC,
+//     génère les brouillons manquants du mois écoulé (voir
+//     api/_lib/facturationMensuelle.ts).
 //
 // Le nom `rappels` est conservé volontairement : l'URL /api/cron/rappels est
 // déjà câblée dans les jobs pg_cron de production ET de staging. La renommer
@@ -55,9 +56,9 @@
 // api/_lib/renouvellementContrats.ts, inchangée par la fusion.
 //
 // ── Facturation mensuelle ───────────────────────────────────────────────────
-// Le 1er du mois (date civile Paris), une fois, à 05h UTC : génère les BROUILLONS de facture du
-// mois qui vient de se terminer, un par contrat facturable, puis notifie chaque praticien
-// concerné (push existant, un message par praticien). Ne valide rien : la validation est un
+// Chaque jour à 05h UTC : génère les BROUILLONS de facture du mois qui vient de se terminer pour
+// les contrats facturables qui n'en ont pas encore (un cron manqué le 1er est rattrapé le jour
+// suivant), puis notifie chaque praticien concerné (push existant, un message par praticien). Ne valide rien : la validation est un
 // geste du praticien sur l'écran « Factures à valider ». Idempotente : un contrat déjà facturé
 // pour le mois n'est pas retouché. Voir api/_lib/facturationMensuelle.ts.
 
@@ -133,7 +134,7 @@ export default withSentry(async function handler(req: any, res: any) {
   if (!doitGenererFacturationMaintenant(maintenant)) {
     resultats.facturation = {
       statut: 'ignoree',
-      raison: `hors fenêtre — génération le 1er du mois à ${HEURE_FACTURATION_UTC}h UTC`,
+      raison: `hors fenêtre — vérification quotidienne de la facturation à ${HEURE_FACTURATION_UTC}h UTC`,
     };
   }
 
