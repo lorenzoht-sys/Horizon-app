@@ -1603,3 +1603,83 @@ decrire('TVA assujetti : 5,5 % (agrément requis) ou 10 %, jamais un taux libre'
     });
   });
 });
+
+decrire('Mentions SAP du profil : date de déclaration, mode et adresse d\'intervention', () => {
+  const profil = (c: Client, pro: string) =>
+    q(c, `SELECT date_declaration_sap::text AS d, mode_intervention AS m, adresse_intervention AS a FROM public.praticiens WHERE id = $1`, [pro]).then(r => r[0]);
+
+  it('sont facultatives : NULL par défaut, et sans effet sur le reste du profil', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      expect(await profil(c, pro)).toEqual({ d: null, m: null, a: null });
+      const cols = await q(c, `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'praticiens' AND column_name IN ('date_declaration_sap','mode_intervention','adresse_intervention') ORDER BY column_name`);
+      expect(cols).toEqual([
+        { column_name: 'adresse_intervention', data_type: 'text', is_nullable: 'YES' },
+        { column_name: 'date_declaration_sap', data_type: 'date', is_nullable: 'YES' },
+        { column_name: 'mode_intervention', data_type: 'text', is_nullable: 'YES' },
+      ]);
+    });
+  });
+
+  it('enregistrent une date, un mode et une adresse', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      await c.query(`UPDATE public.praticiens SET date_declaration_sap = '2024-03-15', mode_intervention = 'prestataire', adresse_intervention = '12 rue des Lilas, 00000 Villetest' WHERE id = $1`, [pro]);
+      expect(await profil(c, pro)).toEqual({ d: '2024-03-15', m: 'prestataire', a: '12 rue des Lilas, 00000 Villetest' });
+      await c.query(`UPDATE public.praticiens SET mode_intervention = 'mandataire' WHERE id = $1`, [pro]);
+      expect((await profil(c, pro)).m).toBe('mandataire');
+      await c.query(`UPDATE public.praticiens SET mode_intervention = NULL WHERE id = $1`, [pro]);   // on peut revenir à « non renseigné »
+      expect((await profil(c, pro)).m).toBeNull();
+    });
+  });
+
+  it('le mode d\'intervention n\'accepte que prestataire ou mandataire', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      for (const valeur of ['mandant', 'Prestataire', 'les deux', '', 'direct']) {
+        await refus(c, `UPDATE public.praticiens SET mode_intervention = $2 WHERE id = $1`, [pro, valeur], /praticiens_mode_intervention_valide/);
+      }
+    });
+  });
+
+  it('« actif » ne change pas : un n° SAP non vide suffit, sans date de déclaration', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      await c.query(`UPDATE public.praticiens SET numero_sap = 'SAP000000010' WHERE id = $1`, [pro]);
+      const ct = await creerContrat(c, pro);
+      await c.query(`UPDATE public.contrats SET eligible_credit_impot = true WHERE id = $1`, [ct.contratId]);
+      expect((await profil(c, pro)).d).toBeNull();                                          // aucune date saisie
+      expect((await q(c, `SELECT public.contrat_eligible_credit_impot($1) AS e`, [ct.contratId]))[0].e).toBe(true);
+      await c.query(`UPDATE public.praticiens SET date_declaration_sap = '2020-01-01', mode_intervention = 'mandataire' WHERE id = $1`, [pro]);
+      expect((await q(c, `SELECT public.contrat_eligible_credit_impot($1) AS e`, [ct.contratId]))[0].e).toBe(true);   // et une date n'y change rien
+      // Une date sans n° SAP ne rend pas éligible.
+      await c.query(`UPDATE public.praticiens SET numero_sap = NULL WHERE id = $1`, [pro]);
+      expect((await q(c, `SELECT public.contrat_eligible_credit_impot($1) AS e`, [ct.contratId]))[0].e).toBe(false);
+    });
+  });
+
+  it('sont figées dans le snapshot de l\'émetteur à la validation, et ne bougent plus ensuite', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      await c.query(`UPDATE public.praticiens SET numero_sap = 'SAP000000011', date_declaration_sap = '2024-03-15', mode_intervention = 'prestataire', adresse_intervention = '12 rue des Lilas, 00000 Villetest' WHERE id = $1`, [pro]);
+      const ct = await creerContrat(c, pro);
+      await creerSeance(c, pro, ct, '2026-03-10');
+      const f = (await generer(c, ct.contratId, '2026-03-01'))!;
+      await valider(c, f);
+      const lire = async () => (await q(c, `SELECT snapshot_emetteur->>'numero_sap' AS n, snapshot_emetteur->>'date_declaration_sap' AS d, snapshot_emetteur->>'mode_intervention' AS m, snapshot_emetteur->>'adresse_intervention' AS a FROM public.factures WHERE id = $1`, [f]))[0];
+      const attendu = { n: 'SAP000000011', d: '2024-03-15', m: 'prestataire', a: '12 rue des Lilas, 00000 Villetest' };
+      expect(await lire()).toEqual(attendu);
+      // Le profil change après l'émission : la facture garde ce qui a été déclaré.
+      await c.query(`UPDATE public.praticiens SET date_declaration_sap = '2025-01-01', mode_intervention = 'mandataire', adresse_intervention = 'ailleurs' WHERE id = $1`, [pro]);
+      expect(await lire()).toEqual(attendu);
+    });
+  });
+
+  it('un profil sans ces mentions valide quand même (rien ne les rend obligatoires pour l\'instant)', async () => {
+    await transaction(async c => {
+      const v = await factureValidee(c);
+      const [s] = await q(c, `SELECT snapshot_emetteur->'date_declaration_sap' AS d, snapshot_emetteur->'mode_intervention' AS m, snapshot_emetteur->'adresse_intervention' AS a FROM public.factures WHERE id = $1`, [v.factureId]);
+      expect(s).toEqual({ d: null, m: null, a: null });
+    });
+  });
+});
