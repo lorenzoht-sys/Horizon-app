@@ -154,9 +154,21 @@ contrat (tarif de séance, frais de déplacement, forfait) est **HT**, et la TVA
 - Le taux est figé à la validation (`taux_tva`, et dans le snapshot de l'émetteur). Un brouillon
   annonce le TTC selon le régime du moment ; la validation recalcule avec le régime d'alors.
 - Un avoir reprend le taux de sa facture d'origine, même si le régime a changé depuis.
-- À faire valider : l'arrondi sur le total, le taux unique par facture, et le cas des services à la
-  personne exonérés (art. 261-7-1° du CGI), qui n'a pas de régime propre dans le modèle (seuls
-  `franchise_293B` et `assujetti` existent).
+- **À faire valider par l'expert-comptable, en une seule vérification avec le HT/TTC** : l'arrondi
+  sur le total, le taux unique par facture, et le cas des services à la personne exonérés
+  (art. 261-7-1° du CGI).
+- **Décision du 2026-10-07 : pas de troisième régime de TVA pour l'instant.** Le modèle ne connaît
+  que `franchise_293B` et `assujetti`. Si l'expert-comptable confirme qu'un praticien SAP relève de
+  l'exonération 261-7-1°, il faudra un régime `exonere_sap` (migration + mention sur la facture) :
+  d'ici là, ne pas émettre de facture pour un tel praticien en choisissant un des deux régimes
+  existants « faute de mieux ».
+
+## Bilans : décision en attente
+
+`bilan` et `bilan_initial` sont exclus de la facturation. Deux points restent à trancher par le
+praticien référent, avant tout développement : l'éligibilité SAP de ces actes, et le tarif à
+appliquer (le même qu'une séance, ou un tarif propre). Tant qu'il n'a pas répondu, rien n'est à
+coder : le filtre `s.type = 'seance'` de `generer_brouillon_facture()` fait foi.
 
 ## Lancer les tests
 
