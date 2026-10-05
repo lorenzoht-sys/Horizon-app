@@ -31,7 +31,11 @@ erDiagram
     PRATICIENS {
         text facturation_adresse_rue
         text regime_tva "franchise_293B | assujetti"
-        numeric taux_tva
+        numeric taux_tva "5,5 (avec agrément) ou 10 si assujetti"
+        bool agrement_sap "défaut false, requis pour 5,5"
+        date date_declaration_sap "mention SAP, facultatif"
+        text mode_intervention "prestataire | mandataire, facultatif"
+        text adresse_intervention "mention SAP, facultatif"
         int delai_paiement_jours "défaut 30, 0 à 60"
         text penalites_retard
         text iban "normalisé"
@@ -39,6 +43,7 @@ erDiagram
     CONTRATS {
         text mode_facturation "seance | forfait"
         bool facturer_bilans "défaut false"
+        bool eligible_credit_impot "défaut false, voir Crédit d'impôt"
         numeric montant_forfait "requis si forfait"
         text payeur_type "beneficiaire | proche"
         text payeur_nom "requis si proche"
@@ -142,13 +147,15 @@ erDiagram
 
 ## TVA — hypothèse à confirmer avec l'expert-comptable
 
+> Taux autorisés, agrément et sources : voir « Taux de TVA autorisés » plus bas.
+
 **À valider avant la première facture en régime `assujetti`.** Hypothèse retenue : le prix du
 contrat (tarif de séance, frais de déplacement, forfait) est **HT**, et la TVA s'ajoute dessus.
 
 - Les lignes sont en HT. `total_ht` = somme des lignes ; `montant_tva` = `total_ht × taux / 100` ;
   `total` = TTC = `total_ht + montant_tva` ; `part_client + part_urssaf = total` (TTC).
 - La TVA est calculée **une fois sur le total HT**, arrondie au centime (pas ligne par ligne :
-  3 × 33,33 € HT à 20 % donnent 20,00 € de TVA, contre 20,01 € ligne par ligne).
+  3 × 33,33 € HT à 10 % donnent 10,00 € de TVA, contre 9,99 € ligne par ligne).
 - `franchise_293B` : taux 0, `total = total_ht`.
 - Le taux est figé à la validation (`taux_tva`, et dans le snapshot de l'émetteur). Un brouillon
   annonce le TTC selon le régime du moment ; la validation recalcule avec le régime d'alors.
@@ -161,6 +168,102 @@ contrat (tarif de séance, frais de déplacement, forfait) est **HT**, et la TVA
   l'exonération 261-7-1°, il faudra un régime `exonere_sap` (migration + mention sur la facture) :
   d'ici là, ne pas émettre de facture pour un tel praticien en choisissant un des deux régimes
   existants « faute de mieux ».
+
+## Taux de TVA autorisés en régime assujetti
+
+**Règle (étape 2) :** un praticien `assujetti` ne peut avoir que **5,5 %** ou **10 %**, jamais un
+taux libre.
+
+| Taux | Cas | Condition dans le modèle |
+|---|---|---|
+| **5,5 %** | aide essentielle à la vie quotidienne, agrément requis | `praticiens.agrement_sap = true` |
+| **10 %** | autres services déclarés | aucune |
+
+- `praticiens.agrement_sap` (booléen, `false` par défaut) est la case du profil de facturation qui
+  autorise le 5,5 %. Retirer l'agrément d'un praticien à 5,5 % est refusé tant que son taux n'est pas
+  changé.
+- `franchise_293B` reste sans taux (vide ou 0). Un `assujetti` sans taux est refusé.
+- La même liste fermée (0, 5,5, 10) s'applique à `factures.taux_tva`, et l'agrément du praticien est
+  figé dans le snapshot de l'émetteur (`agrement_sap`) au moment de la validation.
+- Aucun praticien n'est en régime assujetti aujourd'hui (production et staging : `regime_tva` non
+  renseigné) ; la migration échouerait sans rien changer si une ligne existante violait la règle.
+
+**Sources :**
+- BOFiP, TVA des services à la personne : <https://bofip.impots.gouv.fr/node/10629>. D'après cette page,
+  le taux de 5,5 % vise les services liés aux gestes essentiels de la vie quotidienne de personnes
+  handicapées ou âgées dépendantes, avec agrément ; le taux de 10 % vise les autres services listés,
+  soumis à déclaration (ou agrément selon l'activité). La page ne mentionne pas le taux de 20 %.
+- Mentions de la facture : <https://www.acces-sap.com/actualites/professionnels/facture-services-a-la-personne/>.
+
+**À confirmer avec l'expert-comptable (détail d'application)** :
+1. À quel taux relève une séance d'activité physique adaptée à domicile : l'APA relève-t-elle des
+   « gestes essentiels de la vie quotidienne » (5,5 %) ou des autres services (10 %) ? Le modèle
+   n'en décide pas : il autorise les deux taux, le praticien choisit le sien.
+2. Le taux de TVA s'applique-t-il à toute la facture d'un praticien (taux unique par profil), ou
+   dépend-il de la prestation ? Le modèle retient un taux unique par facture, celui du profil.
+3. L'agrément seul suffit-il pour le 5,5 %, ou faut-il aussi un type d'agrément précis ?
+   `agrement_sap` est un simple booléen, sans numéro ni date.
+4. L'exonération des services à la personne (art. 261-7-1° du CGI), toujours hors modèle (voir
+   « TVA — hypothèse à confirmer »).
+
+## Crédit d'impôt : éligibilité d'un contrat
+
+**Règle générale, pour tous les praticiens de la plateforme (pas propre à un seul) :** un contrat
+n'est éligible au crédit d'impôt que si
+
+1. `contrats.eligible_credit_impot = true` (booléen, `false` par défaut), **et**
+2. le praticien du contrat a un **n° SAP actif**.
+
+Le champ du contrat est indépendant du statut SAP du praticien : on peut le cocher avant d'obtenir le
+n° SAP, il est alors sans effet tant que le n° SAP manque.
+
+- La seule référence est la fonction `contrat_eligible_credit_impot(contrat)` : ne jamais relire
+  `eligible_credit_impot` seul. Elle s'exécute avec les droits de l'appelant (la RLS fait foi) et
+  renvoie `false` pour un contrat introuvable ou non visible. Le praticien du contrat est celui du
+  contrat, à défaut celui du bénéficiaire.
+- **« Actif » = un n° SAP renseigné** (non vide, espaces ignorés) sur le profil du praticien : le modèle
+  n'a ni date de validité ni statut.
+- À la **validation d'une facture**, le résultat est figé dans `snapshot_destinataire`
+  (`eligible_credit_impot`). Une facture émise ne se modifie plus : changer ensuite le contrat ou le
+  n° SAP ne réécrit pas ce qui a été déclaré.
+
+**Source :** <https://www.acces-sap.com/actualites/professionnels/facture-services-a-la-personne/>.
+D'après cette page, seules les prestations figurant parmi les « 26 activités de services à la
+personne » ouvrent droit au crédit d'impôt de 50 %, et le numéro et la date d'enregistrement de la
+déclaration de services à la personne doivent figurer sur la facture pour justifier l'avantage fiscal
+du client.
+
+### Mentions SAP du profil du praticien
+
+La page acces-sap.com (<https://www.acces-sap.com/actualites/professionnels/facture-services-a-la-personne/>)
+liste les mentions d'une facture de services à la personne, parmi lesquelles « le numéro et la date
+d'enregistrement de la déclaration de services à la personne » de l'émetteur, le « mode d'intervention »
+(prestataire ou mandataire) et l'adresse d'exécution. Trois colonnes simples, toutes facultatives, ont donc
+été ajoutées au profil de facturation (`praticiens`), à côté de `numero_sap` :
+
+| Colonne | Type | Valeurs |
+|---|---|---|
+| `date_declaration_sap` | date | date d'enregistrement de la déclaration SAP |
+| `mode_intervention` | texte | `prestataire` ou `mandataire`, ou vide |
+| `adresse_intervention` | texte libre | adresse d'intervention |
+
+- **Pas de statut ni de date de fin pour l'instant** (décision du 2026-10-05) : « actif » reste « n° SAP
+  non vide » et **ne dépend pas** de `date_declaration_sap`. Une date seule, sans n° SAP, ne rend pas un
+  contrat éligible.
+- Les trois valeurs sont figées dans `snapshot_emetteur` à la validation, comme le reste du profil.
+- Rien ne les **rend obligatoires** à la validation : un profil sans ces mentions valide quand même.
+
+**À confirmer avec l'expert-comptable (détail d'application)** :
+1. L'activité physique adaptée figure-t-elle parmi les 26 activités ? L'éligibilité d'une prestation
+   dépend de l'activité, pas seulement du praticien : le champ du contrat est la décision du
+   praticien, rien ne la vérifie.
+2. Ces trois mentions doivent-elles être **exigées** à la validation d'une facture portant sur un contrat
+   éligible (n° SAP, date de déclaration, mode d'intervention) ? Aujourd'hui, non.
+3. `adresse_intervention` est une valeur **du profil du praticien**. La source parle des adresses du client
+   (facturation et exécution) : l'adresse où la séance a lieu est celle du bénéficiaire (déjà portée par la
+   séance). À préciser si la mention attendue est celle du praticien ou celle de chaque intervention.
+4. Faut-il aussi bloquer la coche du contrat quand le praticien n'a pas de n° SAP, plutôt que de la
+   laisser sans effet ? Le choix actuel évite de forcer l'ordre de saisie.
 
 ## Bilans : une règle par contrat
 
@@ -187,6 +290,30 @@ Dans tous les cas :
 - une facture déjà émise ne change plus, quelle que soit la valeur de `facturer_bilans` ensuite ; un
   brouillon se recalcule avec la valeur du moment ;
 - un bilan facturé est verrouillé comme une séance facturée.
+
+## Décisions de sécurité et d'interface
+
+- **L'admin lit toutes les factures, lignes de facture et paiements, en lecture seule, par la RLS.**
+  C'est une **exigence voulue** (décision du 2026-10-05 : « admin lecture seule sur tout »), **pas une
+  faille**. Trois policies `*_admin_lecture` (`FOR SELECT TO authenticated`, conditionnées à
+  `app_role_courant() = 'admin'`) la portent. L'admin n'écrit rien par ce canal.
+- Le harnais de sécurité (`tests/security/rls.spec.ts`) interdisait toute policy fondée sur le rôle,
+  en annonçant qu'il serait remplacé le jour où les rôles seraient branchés. Il est désormais une **liste
+  blanche fermée** : seules ces 3 policies sont permises, elles doivent rester en lecture seule, réservées
+  à `authenticated` et conditionnées à `admin` exactement. Toute autre policy fondée sur le rôle fait
+  échouer le test.
+- Les tables `factures`, `lignes_facture`, `paiements` et `compteurs_facture` sont déclarées dans la liste
+  d'exclusion du harnais, avec leur raison : vides en staging (aucune interface), donc le test générique
+  ferait un « skip » compté comme échec. Leur cloisonnement est testé sur une vraie base par
+  `tests/db/facturation.spec.ts`. À réintégrer au test générique quand staging contiendra de vraies factures.
+- **Ancienne ébauche de facturation (`factures_suivi`) masquée de l'interface le 2026-10-05**, sur la page
+  Stats **et** sur la fiche structure (décision confirmée : « garde la carte masquée, comme pour Stats »).
+  Le code et la table sont conservés derrière l'interrupteur `EBAUCHE_FACTURATION_VISIBLE`
+  (`src/lib/featuresFacturation.ts`). Le portail structure continue d'afficher en lecture seule les lignes
+  existantes de `factures_suivi` (la table est vide en production).
+- **L'éligibilité au crédit d'impôt et l'agrément sont figés dans la facture** à la validation
+  (`snapshot_destinataire.eligible_credit_impot`, `snapshot_emetteur.agrement_sap`) : décision du
+  2026-10-05, à garder tel quel.
 
 ## Lancer les tests
 
