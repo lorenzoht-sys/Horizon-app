@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { skipUnlessPraticien, loginPraticien, env } from './helpers.js';
+import { clientAdminTest } from './nettoyageTest.js';
 
 // Sous-chantier 0 (Agenda mobile, cadrage validé) : extraction hors
 // AgendaV2Page.tsx des 6 modales locales (ModalEditSeance,
@@ -38,8 +40,70 @@ import { skipUnlessPraticien, loginPraticien, env } from './helpers.js';
 // est donc best-effort (log, pas d'échec du test) : voir le rapport du
 // chantier pour le taux de succès observé.
 
+// 2026-10-05 — isolation du bénéficiaire. Ce test cherchait l'événement créé par le seul nom
+// « Camille Martin », bénéficiaire PARTAGÉ par une quinzaine de specs. Staging en accumulait
+// des séances résiduelles dans la fenêtre de recherche (+14 à +27 jours) ; dès qu'une semaine
+// en contenait deux, `Locator.waitFor` (strict) levait « strict mode violation », que la boucle
+// de recherche avalait comme un simple « pas trouvé » : elle dépassait la bonne semaine et le
+// test échouait sur « élément introuvable ». Le test passait ou échouait selon les résidus déjà
+// présents, et en laissait lui-même (nettoyage par l'interface, impossible si l'événement
+// restait introuvable). Désormais : bénéficiaire DÉDIÉ à chaque exécution (nom unique, donc
+// titre d'événement unique, quelle que soit l'heure après édition ou glisser), séance et
+// événement nettoyés par identifiant via le client admin (même modèle que
+// mobile/34-agenda-lien-date-mobile.spec.ts), et une ambiguïté réelle fait échouer le test au
+// lieu d'être avalée.
+async function resoudrePraticienId(admin: SupabaseClient): Promise<string> {
+  const { data: usersPage, error } = await admin.auth.admin.listUsers();
+  const praticien = error ? undefined : usersPage.users.find(u => u.email === env.praticienEmail);
+  if (!praticien) throw new Error(`Praticien e2e introuvable (${env.praticienEmail}) : ${error?.message ?? 'aucune correspondance'}`);
+  return praticien.id;
+}
+
+// Seule l'absence (délai dépassé) signifie « pas dans cette semaine » : toute autre erreur,
+// en particulier plusieurs événements correspondants, doit faire échouer le test.
+const absentSeulement = (e: Error): boolean => {
+  if (/strict mode violation/i.test(e.message)) throw e;
+  return false;
+};
+
 test.describe('Agenda desktop (/agenda-v2) — baseline avant extraction des modales/logique', () => {
-  test.beforeEach(() => skipUnlessPraticien());
+  let admin: SupabaseClient | null = null;
+  let praticienId = '';
+  let participantId = '';
+  const marqueur = Date.now().toString(36);
+  const nomComplet = `Test E2EAgenda${marqueur}`;
+
+  test.beforeAll(async () => {
+    if (!env.praticienEmail || !env.praticienPassword || !process.env.E2E_BASE_URL) return;
+    admin = clientAdminTest();
+    if (!admin) return;
+    praticienId = await resoudrePraticienId(admin);
+    const codeAcces = `E2E${marqueur}`.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+    const { data: participant, error } = await admin
+      .from('participants')
+      .insert({
+        praticien_id: praticienId,
+        prenom: 'Test',
+        nom: `E2EAgenda${marqueur}`,
+        code_acces: codeAcces,
+        rgpd: { consentementObtenu: true, consentementDate: new Date().toISOString().slice(0, 10), methodeConsentement: 'numerique' },
+      })
+      .select('id')
+      .single();
+    if (error || !participant) throw new Error(`Création participant (fixture e2e) échouée : ${error?.message}`);
+    participantId = participant.id;
+  });
+
+  // Les séances du bénéficiaire dédié partent avec lui (ON DELETE CASCADE).
+  test.afterAll(async () => {
+    if (!admin || !participantId) return;
+    await admin.from('participants').delete().eq('id', participantId);
+  });
+
+  test.beforeEach(() => {
+    skipUnlessPraticien();
+    test.skip(!admin, 'SUPABASE_TEST_SERVICE_ROLE_KEY non défini (voir e2e/README.md) — impossible de créer le bénéficiaire dédié');
+  });
 
   test('changer de vue, créer/éditer/déplacer/supprimer une séance manuelle, créer/consulter/supprimer un événement', async ({ page }) => {
     test.setTimeout(60000);
@@ -78,7 +142,6 @@ test.describe('Agenda desktop (/agenda-v2) — baseline avant extraction des mod
     // sur la semaine adjacente. On recherche plutôt que de viser une semaine
     // exacte : voir la boucle de recherche après la création.
     const semainesAAvancerMax = Math.floor(joursOffset / 7) + 2;
-    const nomComplet = `${env.patientPrenom} ${env.patientNom}`;
     const titreEvenement = `E2E Agenda desktop ${Date.now()}`;
 
     await loginPraticien(page);
@@ -95,6 +158,8 @@ test.describe('Agenda desktop (/agenda-v2) — baseline avant extraction des mod
 
     let evenementCree = false;
     let seanceCreee = false;
+    let seanceId: string | null = null;
+    let evenementId: string | null = null;
     try {
       // ── Créer une séance manuelle (ModalCreerSeanceManuelle) ────────────
       await page.getByRole('button', { name: '+ Nouvelle séance' }).click();
@@ -102,9 +167,16 @@ test.describe('Agenda desktop (/agenda-v2) — baseline avant extraction des mod
       await formSeance.locator('select').first().selectOption({ label: nomComplet });
       await formSeance.locator('input[type="date"]').fill(dateStr);
       await formSeance.locator('input[type="time"]').fill(heureTestStr);
+      await formSeance.locator('textarea').fill(`E2E agenda desktop ${marqueur}`);
       await formSeance.getByRole('button', { name: 'Créer la séance' }).click();
       await expect(page.getByText('Séance créée')).toBeVisible({ timeout: 10000 });
       seanceCreee = true;
+
+      // Identifiant de LA séance créée par ce run : bénéficiaire dédié + date, donc une seule ligne.
+      // Lecture en base séparée du nettoyage (ciblage par identifiant ensuite, voir `finally`).
+      const { data: lues } = await admin!.from('seances').select('id').eq('participant_id', participantId).eq('date', dateStr);
+      expect(lues, 'une seule séance pour le bénéficiaire dédié à cette date').toHaveLength(1);
+      seanceId = lues![0].id;
 
       // react-big-calendar ne rend que les événements de la semaine affichée
       // — on avance depuis "aujourd'hui" jusqu'à trouver la séance créée,
@@ -118,7 +190,7 @@ test.describe('Agenda desktop (/agenda-v2) — baseline avant extraction des mod
       await page.getByRole('button', { name: "Aujourd'hui", exact: true }).click();
       let trouve = false;
       for (let i = 0; i <= semainesAAvancerMax; i++) {
-        trouve = await evenementSeance.waitFor({ state: 'visible', timeout: 700 }).then(() => true).catch(() => false);
+        trouve = await evenementSeance.waitFor({ state: 'visible', timeout: 700 }).then(() => true, absentSeulement);
         if (trouve) break;
         await page.getByRole('button', { name: 'Suivant', exact: true }).click();
       }
@@ -248,6 +320,8 @@ test.describe('Agenda desktop (/agenda-v2) — baseline avant extraction des mod
       await modaleEvenement.getByRole('button', { name: 'Créer' }).click();
       await expect(page.getByText("Événement ajouté à l'agenda")).toBeVisible({ timeout: 10000 });
       evenementCree = true;
+      const { data: evenements } = await admin!.from('evenements_agenda').select('id').eq('praticien_id', praticienId).eq('titre', titreEvenement);
+      evenementId = evenements?.[0]?.id ?? null;
 
       // Même recherche que pour la séance : la suppression précédente a pu
       // faire revenir la vue à "aujourd'hui" (rechargement des données).
@@ -255,7 +329,7 @@ test.describe('Agenda desktop (/agenda-v2) — baseline avant extraction des mod
       await page.getByRole('button', { name: "Aujourd'hui", exact: true }).click();
       let evenementTrouve = false;
       for (let i = 0; i <= semainesAAvancerMax; i++) {
-        evenementTrouve = await evenementCarte.waitFor({ state: 'visible', timeout: 700 }).then(() => true).catch(() => false);
+        evenementTrouve = await evenementCarte.waitFor({ state: 'visible', timeout: 700 }).then(() => true, absentSeulement);
         if (evenementTrouve) break;
         await page.getByRole('button', { name: 'Suivant', exact: true }).click();
       }
@@ -272,24 +346,20 @@ test.describe('Agenda desktop (/agenda-v2) — baseline avant extraction des mod
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
       expect(overflow, '/agenda-v2 desktop : pas de défilement horizontal').toBe(false);
     } finally {
-      // Filet de sécurité : si une assertion échoue avant le nettoyage normal
-      // ci-dessus, ne pas laisser de séance/événement de test orphelin.
-      if (seanceCreee) {
-        const residu = page.locator('.rbc-event').filter({ hasText: nomComplet }).first();
-        const present = await residu.isVisible().catch(() => false);
-        if (present) {
-          await residu.click().catch(() => {});
-          await page.locator('button.text-red').first().click().catch(() => {});
-          await page.getByRole('button', { name: 'Supprimer' }).click().catch(() => {});
+      // Nettoyage direct en base, ciblé par identifiant (jamais par nom, date ou « la plus
+      // récente »). Les identifiants sont lus plus haut ; si leur lecture a échoué, repli sur
+      // un repère unique à ce run : le bénéficiaire dédié pour la séance (en plus du
+      // ON DELETE CASCADE de l'afterAll), le titre horodaté pour l'événement.
+      if (admin) {
+        if (seanceId) {
+          await admin.from('seances').delete().eq('id', seanceId);
+        } else if (seanceCreee) {
+          await admin.from('seances').delete().eq('participant_id', participantId).eq('date', dateStr);
         }
-      }
-      if (evenementCree) {
-        const residu = page.locator('.rbc-event').filter({ hasText: titreEvenement }).first();
-        const present = await residu.isVisible().catch(() => false);
-        if (present) {
-          await residu.click().catch(() => {});
-          await page.locator('button.text-red').first().click().catch(() => {});
-          await page.getByRole('button', { name: 'Supprimer' }).click().catch(() => {});
+        if (evenementId) {
+          await admin.from('evenements_agenda').delete().eq('id', evenementId);
+        } else if (evenementCree) {
+          await admin.from('evenements_agenda').delete().eq('praticien_id', praticienId).eq('titre', titreEvenement);
         }
       }
     }
