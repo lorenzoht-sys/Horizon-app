@@ -6,12 +6,9 @@ Aucune route `/api`, aucune interface : uniquement la base et ses garanties.
 ## Décisions de cadrage
 
 - Le payeur est le bénéficiaire ou un proche, jamais une structure.
-- Seules les séances au statut `realisee` **et de type soin (`seance`)** sont facturées.
-  Annulées, reportées, planifiées : jamais. Pas de statut « absent », pas de règle
-  d'annulation.
-- **Bilans exclus pour l'instant** : `bilan` et `bilan_initial` ne sont pas facturés, en
-  attente de la confirmation du praticien référent sur leur éligibilité SAP. Réversible :
-  retirer le filtre `s.type = 'seance'` de `generer_brouillon_facture()`.
+- Seules les séances au statut `realisee` sont facturées. Annulées, reportées, planifiées :
+  jamais. Pas de statut « absent », pas de règle d'annulation.
+- **Les bilans se facturent selon le contrat** (voir « Bilans » plus bas) : par défaut non.
 - Chaque praticien émet en son nom, avec sa propre numérotation.
 - Une facture émise ne se corrige que par un avoir.
 
@@ -41,6 +38,7 @@ erDiagram
     }
     CONTRATS {
         text mode_facturation "seance | forfait"
+        bool facturer_bilans "défaut false"
         numeric montant_forfait "requis si forfait"
         text payeur_type "beneficiaire | proche"
         text payeur_nom "requis si proche"
@@ -130,7 +128,8 @@ erDiagram
 
 ## Calcul du brouillon
 
-- **Mode séance** : une ligne par séance de soin (`type = 'seance'`) `realisee` du mois et du contrat, au tarif
+- **Mode séance** : une ligne par séance `realisee` du mois et du contrat (type `seance`, plus
+  `bilan` si `contrats.facturer_bilans`, voir « Bilans »), au tarif
   applicable **à la date de la séance**, montant = `tarif_seance + frais_deplacement`.
   Même règle que `trouverTarifApplicable()` / `totalFactureSeance()`
   (`src/lib/tarifsContrats.ts`) ; un test compare les deux. Aucun repli silencieux : une
@@ -163,12 +162,31 @@ contrat (tarif de séance, frais de déplacement, forfait) est **HT**, et la TVA
   d'ici là, ne pas émettre de facture pour un tel praticien en choisissant un des deux régimes
   existants « faute de mieux ».
 
-## Bilans : décision en attente
+## Bilans : une règle par contrat
 
-`bilan` et `bilan_initial` sont exclus de la facturation. Deux points restent à trancher par le
-praticien référent, avant tout développement : l'éligibilité SAP de ces actes, et le tarif à
-appliquer (le même qu'une séance, ou un tarif propre). Tant qu'il n'a pas répondu, rien n'est à
-coder : le filtre `s.type = 'seance'` de `generer_brouillon_facture()` fait foi.
+Décision du praticien référent (2026-10-08) : facturer ou non un bilan dépend du praticien. Certains
+le facturent comme une séance normale, d'autres non. La règle se porte donc sur le contrat :
+`contrats.facturer_bilans` (booléen, `false` par défaut, aucun contrat existant ne change).
+
+| `facturer_bilans` | Séances facturées par `generer_brouillon_facture()` |
+|---|---|
+| `false` (défaut) | type `seance` uniquement |
+| `true` | type `seance` **et** type `bilan` |
+
+Quand il est vrai, un bilan réalisé est facturé **au même tarif que les séances** : tarif applicable
+à sa date dans `tarifs_contrats`, sans distinction de durée ni tarif séparé. Sa ligne se libelle
+« Bilan du … » au lieu de « Séance du … » pour que la facture dise ce qu'elle facture ; le montant est
+celui d'une séance.
+
+Dans tous les cas :
+
+- seul le statut `realisee` compte : un bilan annulé, reporté ou planifié n'est jamais facturé ;
+- **`bilan_initial` reste exclu** : la décision ne vise que le type `bilan`. À confirmer avec le
+  praticien référent si le bilan initial doit suivre la même règle ;
+- une séance sans tarif applicable fait échouer la génération, bilan compris quand il est facturé ;
+- une facture déjà émise ne change plus, quelle que soit la valeur de `facturer_bilans` ensuite ; un
+  brouillon se recalcule avec la valeur du moment ;
+- un bilan facturé est verrouillé comme une séance facturée.
 
 ## Lancer les tests
 
