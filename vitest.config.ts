@@ -12,6 +12,9 @@ export default defineConfig({
       'src/lib/**/*.test.ts',
       'src/utils/**/*.test.ts',
       'tests/security/*.spec.ts',
+      // Base de facturation : exige une base Postgres LOCALE (supabase start). Ignorée
+      // avec un message si elle est absente ; voir tests/db/facturation.spec.ts.
+      'tests/db/*.spec.ts',
       // Edge Functions Supabase : seuls les modules PURS sont testés ici
       // (supabase/functions/*/garde-prompt.ts). `index.ts` importe deno.land
       // et ne peut pas être chargé par Vitest — il n'est pas dans le motif.
