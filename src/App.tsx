@@ -38,6 +38,7 @@ const StructuresPage    = lazy(() => import('./pages/StructuresPage'));
 const StructureDetail    = lazy(() => import('./pages/StructureDetail'));
 const FacturesAValiderPage = lazy(() => import('./pages/FacturesAValiderPage'));
 const FacturesPage       = lazy(() => import('./pages/FacturesPage'));
+const ProfilFacturationPage = lazy(() => import('./pages/ProfilFacturationPage'));
 const PortailStructure   = lazy(() => import('./pages/PortailStructure'));
 const ComparaisonPage    = lazy(() => import('./pages/ComparaisonPage'));
 const ContratNouveauPage = lazy(() => import('./pages/ContratNouveauPage'));
@@ -114,6 +115,9 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
             <Route path="/structures" element={<PageTransition><Suspense fallback={<MapFallback />}><StructuresPage /></Suspense></PageTransition>} />
             <Route path="/structures/:id" element={<PageTransition><Suspense fallback={<MapFallback />}><StructureDetail /></Suspense></PageTransition>} />
             <Route path="/settings" element={<PageTransition><SettingsPage /></PageTransition>} />
+            {/* Facturation (étape 4) : profil de facturation, atteint depuis Paramètres. Écrit
+                sous la RLS de `praticiens` : un praticien ne modifie que SON profil. */}
+            <Route path="/settings/facturation" element={<PageTransition><Suspense fallback={<MapFallback />}><ProfilFacturationPage /></Suspense></PageTransition>} />
             {/* Administration des comptes (étape 4 des rôles). La route est
                 déclarée pour tous : c'est la PAGE qui affiche « réservée aux
                 administrateurs » à un non-admin, et surtout le SERVEUR qui
