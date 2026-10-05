@@ -14,7 +14,7 @@ import { skipUnlessPraticien, loginPraticien } from './helpers.js';
 test.describe('Structures — onglet desktop de Dashboard.tsx (extraction CarteStructure/ModalCreationStructure)', () => {
   test.beforeEach(() => skipUnlessPraticien());
 
-  test('créer une structure depuis l\'onglet Structures, la retrouver après retour au tableau de bord, avec facturation visible', async ({ page }) => {
+  test('créer une structure depuis l\'onglet Structures, la retrouver après retour au tableau de bord, sans carte de facturation', async ({ page }) => {
     const nomStructure = `E2E Structure desktop ${Date.now()}`;
     await loginPraticien(page);
 
@@ -32,10 +32,11 @@ test.describe('Structures — onglet desktop de Dashboard.tsx (extraction CarteS
       await page.waitForURL(/\/structures\/[0-9a-fA-F-]+$/);
       structureUrl = page.url();
 
-      // Détail : carte Facturation visible sur desktop (frontière
-      // structures/facturation — Phase 4 reste accessible ici, seul le
-      // mobile la masque).
-      await expect(page.getByText('💶 Facturation')).toBeVisible();
+      // Détail : la carte Facturation est MASQUÉE sur desktop depuis le 2026-10-05 (ancienne
+      // ébauche factures_suivi, sans mentions légales — voir lib/featuresFacturation.ts). Elle
+      // était visible ici auparavant ; mobile/29 attend déjà son absence sous 768px. Ce test
+      // garde le masquage : il échoue si la carte réapparaît sans décision explicite.
+      await expect(page.getByText('💶 Facturation')).toHaveCount(0);
       await expect(page.getByText('⚙️ Informations')).toBeVisible();
 
       // ── Preuve de non-régression de l'extraction : retour au tableau de
