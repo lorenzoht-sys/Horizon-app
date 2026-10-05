@@ -193,6 +193,9 @@ async function anneeEmission(c: Client): Promise<number> {
   return r.a;
 }
 
+const montants = (c: Client, id: string) =>
+  q(c, `SELECT total_ht::float8 AS ht, montant_tva::float8 AS tva, total::float8 AS ttc, part_client::float8 AS client, part_urssaf::float8 AS urssaf, taux_tva::float8 AS taux FROM public.factures WHERE id = $1`, [id]).then(r => r[0]);
+
 interface Validee { pro: string; ct: ContratFixture; seanceId: string; factureId: string; numero: string }
 /** Praticien neuf + contrat à 45 € + une séance réalisée en mars 2026, facture générée puis validée. */
 async function factureValidee(c: Client): Promise<Validee> {
@@ -1052,8 +1055,6 @@ decrire('TVA : prix HT, TVA ajoutée (hypothèse à confirmer)', () => {
     for (const d of opts.dates ?? ['2026-03-03', '2026-03-10']) await creerSeance(c, pro, ct, d);
     return { pro, ct };
   }
-  const montants = (c: Client, id: string) =>
-    q(c, `SELECT total_ht::float8 AS ht, montant_tva::float8 AS tva, total::float8 AS ttc, part_client::float8 AS client, part_urssaf::float8 AS urssaf, taux_tva::float8 AS taux FROM public.factures WHERE id = $1`, [id]).then(r => r[0]);
 
   it('assujetti 20 % : lignes en HT, TVA ajoutée, total TTC, taux figé', async () => {
     await transaction(async c => {
@@ -1185,6 +1186,175 @@ decrire('Bilans exclus de la facturation', () => {
       await c.query(`UPDATE public.seances SET type = 'bilan' WHERE id = $1`, [s]);
       expect(await generer(c, ct.contratId, '2026-03-01')).toBe(f);
       expect((await lignes(c, f)).map(l => l.date)).toEqual(['2026-03-10']);
+    });
+  });
+});
+
+// ───────────────────────────── bilans selon le contrat ─────────────────────────────
+
+decrire('Bilans : facturés selon le contrat (facturer_bilans)', () => {
+  const avecBilans = (c: Client, contratId: string) =>
+    c.query(`UPDATE public.contrats SET facturer_bilans = true WHERE id = $1`, [contratId]);
+
+  it('est faux par défaut', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro);
+      const [r] = await q(c, `SELECT facturer_bilans FROM public.contrats WHERE id = $1`, [ct.contratId]);
+      expect(r.facturer_bilans).toBe(false);
+      const [col] = await q(c, `SELECT is_nullable, column_default FROM information_schema.columns WHERE table_name = 'contrats' AND column_name = 'facturer_bilans'`);
+      expect(col).toEqual({ is_nullable: 'NO', column_default: 'false' });
+    });
+  });
+
+  it('vrai : un bilan réalisé apparaît au tarif applicable à sa date, comme une séance', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro, {
+        tarifs: [{ debut: '2026-01-01', fin: '2026-03-14', tarif: 45 }, { debut: '2026-03-15', tarif: 50, frais: 5 }],
+      });
+      await avecBilans(c, ct.contratId);
+      const soin = await creerSeance(c, pro, ct, '2026-03-10');
+      const bilanAvant = await creerSeance(c, pro, ct, '2026-03-05', 'realisee', '09:00', 'bilan');
+      const bilanApres = await creerSeance(c, pro, ct, '2026-03-20', 'realisee', '09:00', 'bilan');
+      const id = (await generer(c, ct.contratId, '2026-03-01'))!;
+      const ls = await lignes(c, id);
+      expect(ls.map(l => [l.date, l.seance_id, l.montant])).toEqual([
+        ['2026-03-05', bilanAvant, 45],   // tarif en vigueur le 05/03
+        ['2026-03-10', soin, 45],
+        ['2026-03-20', bilanApres, 55],   // nouveau tarif + déplacement le 20/03
+      ]);
+      expect(ls[0].tarif_contrat_id).toBe(ct.tarifIds[0]);
+      expect(ls[2].tarif_contrat_id).toBe(ct.tarifIds[1]);
+      expect(ls[0].libelle).toMatch(/^Bilan du 05\/03\/2026/);
+      expect(ls[1].libelle).toMatch(/^Séance du 10\/03\/2026/);
+      expect((await montants(c, id)).ttc).toBe(145);
+    });
+  });
+
+  it('vrai : le bilan coûte le prix d\'une séance, quelle que soit sa durée', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro);
+      await avecBilans(c, ct.contratId);
+      await creerSeance(c, pro, ct, '2026-03-03');
+      const bilan = await creerSeance(c, pro, ct, '2026-03-04', 'realisee', '09:00', 'bilan');
+      await c.query(`UPDATE public.seances SET duree_minutes = 120 WHERE id = $1`, [bilan]);
+      const ls = await lignes(c, (await generer(c, ct.contratId, '2026-03-01'))!);
+      expect(ls.map(l => l.montant)).toEqual([45, 45]);
+    });
+  });
+
+  it('vrai : un mois n\'ayant que des bilans réalisés produit un brouillon', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro);
+      await avecBilans(c, ct.contratId);
+      await creerSeance(c, pro, ct, '2026-03-04', 'realisee', '09:00', 'bilan');
+      const ls = await lignes(c, (await generer(c, ct.contratId, '2026-03-01'))!);
+      expect(ls.map(l => l.montant)).toEqual([45]);
+    });
+  });
+
+  it('faux (défaut) : aucun bilan dans le brouillon, comportement inchangé', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro);
+      const soin = await creerSeance(c, pro, ct, '2026-03-10');
+      await creerSeance(c, pro, ct, '2026-03-05', 'realisee', '09:00', 'bilan');
+      await creerSeance(c, pro, ct, '2026-03-06', 'realisee', '09:00', 'bilan_initial');
+      const ls = await lignes(c, (await generer(c, ct.contratId, '2026-03-01'))!);
+      expect(ls.map(l => l.seance_id)).toEqual([soin]);
+      expect(ls[0].libelle).toMatch(/^Séance du/);
+    });
+  });
+
+  it('faux : un mois n\'ayant que des bilans ne produit aucun brouillon', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro);
+      await creerSeance(c, pro, ct, '2026-03-04', 'realisee', '09:00', 'bilan');
+      expect(await generer(c, ct.contratId, '2026-03-01')).toBeNull();
+    });
+  });
+
+  it('un bilan annulé, reporté ou planifié n\'est jamais facturé, même avec facturer_bilans = true', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro);
+      await avecBilans(c, ct.contratId);
+      const realise = await creerSeance(c, pro, ct, '2026-03-02', 'realisee', '09:00', 'bilan');
+      await creerSeance(c, pro, ct, '2026-03-03', 'annulee', '09:00', 'bilan');
+      await creerSeance(c, pro, ct, '2026-03-04', 'reportee', '09:00', 'bilan');
+      await creerSeance(c, pro, ct, '2026-03-05', 'planifiee', '09:00', 'bilan');
+      const ls = await lignes(c, (await generer(c, ct.contratId, '2026-03-01'))!);
+      expect(ls.map(l => l.seance_id)).toEqual([realise]);
+    });
+  });
+
+  it('seul un bilan annulé : rien à facturer, même avec facturer_bilans = true', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro);
+      await avecBilans(c, ct.contratId);
+      await creerSeance(c, pro, ct, '2026-03-03', 'annulee', '09:00', 'bilan');
+      await creerSeance(c, pro, ct, '2026-03-04', 'reportee', '09:00', 'bilan');
+      expect(await generer(c, ct.contratId, '2026-03-01')).toBeNull();
+    });
+  });
+
+  it('vrai : « bilan_initial » reste exclu (la règle ne vise que le type bilan)', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro);
+      await avecBilans(c, ct.contratId);
+      const bilan = await creerSeance(c, pro, ct, '2026-03-04', 'realisee', '09:00', 'bilan');
+      await creerSeance(c, pro, ct, '2026-03-05', 'realisee', '09:00', 'bilan_initial');
+      const ls = await lignes(c, (await generer(c, ct.contratId, '2026-03-01'))!);
+      expect(ls.map(l => l.seance_id)).toEqual([bilan]);
+    });
+  });
+
+  it('vrai : un bilan sans tarif applicable fait échouer la génération, comme une séance', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro, { tarifs: [{ debut: '2026-03-15', tarif: 50 }] });
+      await creerSeance(c, pro, ct, '2026-03-02', 'realisee', '09:00', 'bilan');
+      await creerSeance(c, pro, ct, '2026-03-20');
+      // Défaut (faux) : le bilan est ignoré, la génération passe.
+      expect((await lignes(c, (await generer(c, ct.contratId, '2026-03-01'))!)).map(l => l.date)).toEqual(['2026-03-20']);
+      await avecBilans(c, ct.contratId);
+      await refus(c, `SELECT public.generer_brouillon_facture($1, '2026-03-01')`, [ct.contratId], /Aucun tarif applicable pour la ou les séances du 02\/03\/2026/);
+    });
+  });
+
+  it('le brouillon suit la valeur du moment ; une facture émise ne bouge plus', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro);
+      await creerSeance(c, pro, ct, '2026-03-10');
+      await creerSeance(c, pro, ct, '2026-03-05', 'realisee', '09:00', 'bilan');
+      const f = (await generer(c, ct.contratId, '2026-03-01'))!;
+      expect(await lignes(c, f)).toHaveLength(1);
+      await avecBilans(c, ct.contratId);
+      expect(await generer(c, ct.contratId, '2026-03-01')).toBe(f);               // même brouillon, recalculé
+      expect(await lignes(c, f)).toHaveLength(2);
+      await valider(c, f);
+      await c.query(`UPDATE public.contrats SET facturer_bilans = false WHERE id = $1`, [ct.contratId]);
+      expect(await generer(c, ct.contratId, '2026-03-01')).toBe(f);               // émise : intacte
+      expect(await lignes(c, f)).toHaveLength(2);
+    });
+  });
+
+  it('un bilan facturé est verrouillé comme une séance facturée', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro);
+      await avecBilans(c, ct.contratId);
+      const bilan = await creerSeance(c, pro, ct, '2026-03-05', 'realisee', '09:00', 'bilan');
+      await valider(c, (await generer(c, ct.contratId, '2026-03-01'))!);
+      await refus(c, `UPDATE public.seances SET statut = 'annulee' WHERE id = $1`, [bilan], /déjà facturée/);
+      await refus(c, `DELETE FROM public.seances WHERE id = $1`, [bilan], /déjà facturée/);
     });
   });
 });
