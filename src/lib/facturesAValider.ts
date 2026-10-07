@@ -41,6 +41,8 @@ export interface FactureValidee {
   statut: string;
   total: number;
   beneficiaire: { prenom: string; nom: string };
+  /** Chemin du PDF dans le bucket privé `factures`, NULL tant qu'il n'est pas généré (étape 5). */
+  pdfPath: string | null;
 }
 
 /** Champs du profil du praticien qui conditionnent la validation (valider_facture, étape 1). */
@@ -71,7 +73,7 @@ export const SELECT_PROFIL =
   'nom, siret, regime_tva, taux_tva, adresse_rue, adresse_code_postal, adresse_ville, ' +
   'facturation_adresse_rue, facturation_code_postal, facturation_ville';
 
-export const SELECT_FACTURE_VALIDEE = 'id, numero, periode, date_emission, statut, total, participants(prenom, nom)';
+export const SELECT_FACTURE_VALIDEE = 'id, numero, periode, date_emission, statut, total, pdf_path, participants(prenom, nom)';
 
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
@@ -212,7 +214,13 @@ export function lireFactureValidee(row: Brut): FactureValidee {
     statut: row.statut,
     total: nombre(row.total),
     beneficiaire: { prenom: p.prenom ?? '', nom: p.nom ?? '' },
+    pdfPath: row.pdf_path ?? null,
   };
+}
+
+/** Nom proposé au téléchargement : le numéro de facture, sans rien de nominatif. */
+export function nomFichierFacture(numero: string): string {
+  return `facture-${numero.replace(/[^0-9A-Za-z-]/g, '')}.pdf`;
 }
 
 export function lireProfil(row: Brut | null): ProfilFacturation | null {

@@ -8,6 +8,7 @@ import {
   libelleTva,
   lireBrouillon,
   lireFactureValidee,
+  nomFichierFacture,
   lireProfil,
   messageValidationLisible,
   profilFacturationManquant,
@@ -113,7 +114,8 @@ describe('lecture des réponses PostgREST', () => {
   });
   it('lit une facture validée et un profil', () => {
     expect(lireFactureValidee({ id: 'f', numero: '2026-0001', periode: '2026-09-01', date_emission: '2026-10-02', statut: 'validee', total: '99.00', participants: { prenom: 'A', nom: 'B' } }))
-      .toEqual({ id: 'f', numero: '2026-0001', periode: '2026-09-01', dateEmission: '2026-10-02', statut: 'validee', total: 99, beneficiaire: { prenom: 'A', nom: 'B' } });
+      .toEqual({ id: 'f', numero: '2026-0001', periode: '2026-09-01', dateEmission: '2026-10-02', statut: 'validee', total: 99, beneficiaire: { prenom: 'A', nom: 'B' }, pdfPath: null });
+    expect(lireFactureValidee({ id: 'f', numero: '2026-0001', periode: '2026-09-01', date_emission: '2026-10-02', statut: 'validee', total: '99.00', pdf_path: 'p/2026-0001.pdf', participants: null }).pdfPath).toBe('p/2026-0001.pdf');
     expect(lireProfil({ nom: 'D', siret: 'S', regime_tva: 'assujetti', taux_tva: '10.00', adresse_rue: 'r' }))
       .toMatchObject({ nom: 'D', regimeTva: 'assujetti', tauxTva: 10, adresseRue: 'r', adresseVille: null });
     expect(lireProfil(null)).toBeNull();
@@ -189,5 +191,12 @@ describe('validerEnSerie', () => {
 
   it('un lot vide ne fait rien', async () => {
     expect(await validerEnSerie([], async () => ok('x'))).toEqual({ validees: [], erreurs: [], interrompue: false, nonTraitees: [] });
+  });
+});
+
+describe('nomFichierFacture', () => {
+  it('nomme le fichier par le numéro, sans aucun nom de personne, et neutralise les caractères inattendus', () => {
+    expect(nomFichierFacture('2026-0007')).toBe('facture-2026-0007.pdf');
+    expect(nomFichierFacture('../2026-0007 \\x')).toBe('facture-2026-0007x.pdf');
   });
 });
