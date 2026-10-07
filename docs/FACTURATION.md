@@ -315,6 +315,35 @@ Dans tous les cas :
   (`snapshot_destinataire.eligible_credit_impot`, `snapshot_emetteur.agrement_sap`) : décision du
   2026-10-05, à garder tel quel.
 
+## Génération et écrans praticien (étapes 3 et 4)
+
+- **Génération** : la tâche `facturation` de `/api/cron/rappels` s'exécute chaque jour à 5h UTC et
+  ne crée que les brouillons du mois précédent qui manquent (un contrat déjà facturé, hors
+  annulée, est ignoré). Un cron manqué le 1er est donc rattrapé le lendemain. Un brouillon supprimé
+  ou une facture annulée est régénéré au passage suivant. Code : `api/_lib/facturationMensuelle.ts`.
+- **« Factures à valider »** (`/factures/a-valider`) puis **« Factures validées »** (`/factures`) :
+  validation par `supabase.rpc('valider_facture')` sous la RLS, aucune route `/api`.
+- **Profil de facturation** (`/settings/facturation`, lien depuis Paramètres) : formulaire lu et
+  écrit directement sur `praticiens` sous la RLS (`id = auth.uid()`). Il n'écrit que les colonnes de
+  facturation : régime de TVA et taux, agrément SAP, date de déclaration, mode et adresse
+  d'intervention, adresse de facturation, IBAN, délai de paiement, pénalités. L'identité (SIRET,
+  nom, n° SAP, n° TVA, adresse professionnelle) reste éditée dans Paramètres et n'est que rappelée.
+  Logique pure : `src/lib/profilFacturation.ts`.
+
+**Obligatoire pour valider une facture** (lu dans `valider_facture`, pas supposé) : SIRET, nom,
+régime de TVA, et une adresse complète prise dans `facturation_*` champ par champ, à défaut dans
+`adresse_*`. Tout le reste (IBAN, pénalités, agrément, mentions SAP) est facultatif. L'écran affiche
+ce qui manque AVANT l'enregistrement, et un test de base réelle vérifie que ce bandeau annonce
+exactement les manques que le serveur signalerait.
+
+**Piège d'adresse** : le serveur fait `coalesce(facturation_x, adresse_x)`, donc ne retombe sur
+l'adresse du profil que si la valeur de facturation est NULL, pas si elle est vide. Le formulaire
+enregistre toujours NULL pour un champ vide, jamais `''`.
+
+Contraintes de TVA reproduites par l'interface (la base reste seule juge) : assujetti = 10 %, ou
+5,5 % avec agrément ; franchise = pas de taux. Retirer l'agrément alors que 5,5 % est choisi remet
+le taux à choisir.
+
 ## Lancer les tests
 
 ```bash

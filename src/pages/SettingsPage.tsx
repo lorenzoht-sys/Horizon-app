@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type ChangeEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Save, Upload, Plus, Trash2, Download, FileUp, Copy, RefreshCw, CalendarDays } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Save, Upload, Plus, Trash2, Download, FileUp, Copy, RefreshCw, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import PageWrapper from '../components/layout/PageWrapper';
@@ -1166,6 +1166,21 @@ export default function SettingsPage() {
                   placeholder="0.50" className={inputClass(errors.fraisKmDefaut)} />
               </Field>
             </div>
+          </section>
+
+          {/* ── Facturation (étape 4) : les informations sans lesquelles une facture ne peut pas
+              être validée (régime de TVA, agrément, IBAN…) vivent sur leur propre écran. Le lien
+              est ici, pas dans la barre principale. ── */}
+          <section>
+            <SectionTitle title="Facturation" />
+            <Link to="/settings/facturation" data-testid="lien-profil-facturation"
+              className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 px-4 py-3 text-sm hover:border-primary/40 hover:bg-primary/5 transition-colors no-underline">
+              <span>
+                <span className="block font-semibold text-dark">Profil de facturation</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Régime de TVA, agrément SAP, adresse de facturation, IBAN, conditions de paiement</span>
+              </span>
+              <ArrowRight size={16} className="text-gray-400 flex-shrink-0" />
+            </Link>
           </section>
 
           {/* ── Application (PWA) ── */}

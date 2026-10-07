@@ -105,10 +105,11 @@ export default function FacturesAValiderPage() {
           <div>
             <div className="font-semibold">Profil de facturation incomplet : {profilManquant.join(', ')}</div>
             <p className="mt-0.5">
-              La validation sera refusée tant que ces éléments ne sont pas renseignés. Le SIRET et l'adresse se
-              complètent dans Paramètres ; le régime de TVA n'est pas encore modifiable depuis l'application
-              (écran à venir) : contactez l'administrateur.
+              La validation sera refusée tant que ces éléments ne sont pas renseignés.
             </p>
+            <Link to="/settings/facturation" data-testid="lien-profil-facturation" className="inline-flex items-center gap-1 mt-1 font-medium underline">
+              Compléter mon profil de facturation <ArrowRight size={13} />
+            </Link>
           </div>
         </div>
       )}

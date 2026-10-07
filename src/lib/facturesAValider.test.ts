@@ -46,9 +46,11 @@ describe('profilFacturationManquant : mêmes exigences que valider_facture', () 
     const p = { ...profilComplet, adresseRue: null, adresseCodePostal: null, adresseVille: null };
     expect(profilFacturationManquant(p)).toEqual(['adresse']);
     expect(profilFacturationManquant({ ...p, facturationAdresseRue: '2 rue B', facturationCodePostal: '00001', facturationVille: 'Ailleurs' })).toEqual([]);
-    // Une adresse de facturation incomplète ne se mélange pas avec celle du profil, champ par champ :
-    // chaque champ retombe sur le profil s'il est vide (même coalesce que le serveur).
+    // Même coalesce que le serveur, champ par champ, sur NULL seulement : un champ de facturation
+    // NULL retombe sur le profil, un champ de facturation VIDE ('') le masque et fait refuser.
     expect(profilFacturationManquant({ ...profilComplet, facturationAdresseRue: '2 rue B' })).toEqual([]);
+    expect(profilFacturationManquant({ ...profilComplet, facturationAdresseRue: '' })).toEqual(['adresse']);
+    expect(profilFacturationManquant({ ...profilComplet, facturationVille: '  ' })).toEqual(['adresse']);
   });
   it('profil illisible', () => {
     expect(profilFacturationManquant(null)).toEqual(['profil introuvable']);

@@ -105,9 +105,13 @@ export function profilFacturationManquant(profil: ProfilFacturation | null): str
   if (vide(profil.siret)) manquants.push('SIRET');
   if (vide(profil.nom)) manquants.push('nom');
   if (vide(profil.regimeTva)) manquants.push('régime de TVA');
-  const rue = !vide(profil.facturationAdresseRue) ? profil.facturationAdresseRue : profil.adresseRue;
-  const cp = !vide(profil.facturationCodePostal) ? profil.facturationCodePostal : profil.adresseCodePostal;
-  const ville = !vide(profil.facturationVille) ? profil.facturationVille : profil.adresseVille;
+  // Même sémantique que le SQL : coalesce(facturation_x, adresse_x) ne retombe sur l'adresse du
+  // profil que si la valeur de facturation est NULL, PAS si elle est vide. Une chaîne vide dans
+  // facturation_* masque donc l'adresse du profil et fait refuser la validation (étape 4 : le
+  // formulaire enregistre NULL, jamais ''). Un test de base réelle verrouille cette parité.
+  const rue = profil.facturationAdresseRue ?? profil.adresseRue;
+  const cp = profil.facturationCodePostal ?? profil.adresseCodePostal;
+  const ville = profil.facturationVille ?? profil.adresseVille;
   if (vide(rue) || vide(cp) || vide(ville)) manquants.push('adresse');
   return manquants;
 }
