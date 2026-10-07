@@ -1199,8 +1199,10 @@ describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postg
   //
   // C'est le cas depuis le module de facturation (2026-10-05) : EXIGENCE VOULUE, pas une faille.
   // L'admin applicatif doit pouvoir LIRE toutes les factures, lignes de facture et paiements (décision
-  // du 2026-10-05 : « admin lecture seule sur tout »). Ces trois policies, et elles seules, sont donc
-  // autorisées à s'appuyer sur app_role_courant(). Le test reste un garde, plus strict qu'avant :
+  // du 2026-10-05 : « admin lecture seule sur tout »), et, depuis l'étape 5 (décision du 2026-10-08,
+  // même principe), leurs PDF dans le bucket privé `factures` (policy sur storage.objects). Ces quatre
+  // policies, et elles seules, sont donc autorisées à s'appuyer sur app_role_courant(). Le test reste
+  // un garde, plus strict qu'avant :
   //   - la liste est FERMÉE : toute autre policy fondée sur le rôle fait échouer le test, il faut
   //     alors l'ajouter ici EN CONNAISSANCE DE CAUSE (et dire pourquoi) ;
   //   - chacune est en LECTURE SEULE (cmd = SELECT) : un accès admin en écriture échoue ;
@@ -1208,26 +1210,28 @@ describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postg
   const POLICIES_ADMIN_LECTURE_VOULUES = [
     'factures.factures_admin_lecture',
     'lignes_facture.lignes_facture_admin_lecture',
+    // schéma storage : table objects, bucket `factures` (migration 20261010100000)
+    'objects.factures_pdf_admin_lecture',
     'paiements.paiements_admin_lecture',
   ];
 
-  it("[RÔLES] seules les 3 policies de lecture admin voulues (facturation) s'appuient sur le rôle", async () => {
+  it("[RÔLES] seules les 4 policies de lecture admin voulues (facturation) s'appuient sur le rôle", async () => {
     const { rows } = await pg.query<{ tablename: string; policyname: string; cmd: string; roles: string[]; qual: string | null; with_check: string | null }>(
       `SELECT tablename, policyname, cmd, roles::text[] AS roles, qual, with_check FROM pg_policies
-        WHERE schemaname = 'public'
+        WHERE schemaname IN ('public', 'storage')
           AND tablename <> 'user_roles'
           AND (COALESCE(qual, '') || COALESCE(with_check, '')) ~* '(user_roles|app_role)'
         ORDER BY tablename, policyname`
     );
     expect(
       rows.map(r => `${r.tablename}.${r.policyname}`),
-      "[RÔLES] des policies s'appuient sur le rôle en dehors des 3 lectures admin voulues (facturation) : " +
+      "[RÔLES] des policies s'appuient sur le rôle en dehors des 4 lectures admin voulues (facturation) : " +
         'si c\'est voulu, les ajouter à POLICIES_ADMIN_LECTURE_VOULUES avec la raison'
     ).toEqual(POLICIES_ADMIN_LECTURE_VOULUES);
     expect(
       rows.map(r => r.cmd),
       '[RÔLES] une policy fondée sur le rôle admin n\'est pas en lecture seule : l\'admin ne doit rien pouvoir écrire'
-    ).toEqual(['SELECT', 'SELECT', 'SELECT']);
+    ).toEqual(['SELECT', 'SELECT', 'SELECT', 'SELECT']);
     for (const r of rows) {
       expect(r.roles, `[RÔLES] ${r.tablename}.${r.policyname} doit être réservée au rôle authenticated`).toEqual(['authenticated']);
       expect(

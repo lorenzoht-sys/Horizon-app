@@ -8,6 +8,7 @@ import {
   lireFactureValidee,
   lireProfil,
   messageValidationLisible,
+  nomFichierFacture,
   validerEnSerie,
   type BilanValidation,
   type FactureBrouillon,
@@ -85,7 +86,27 @@ export function useFacturesAValider() {
   return { brouillons, profil, chargement, erreur, enCours, validerPlusieurs, rafraichir: charger };
 }
 
-/** Factures déjà validées (numérotées, verrouillées) : liste minimale, sans PDF à cette étape. */
+/**
+ * Télécharge le PDF d'une facture validée depuis le bucket privé `factures`, sous la session du
+ * praticien (la RLS de storage.objects ne lui laisse lire que son dossier) : aucune route /api,
+ * aucun lien durable. Ne lève jamais.
+ */
+export async function telechargerPdfFacture(pdfPath: string, numero: string): Promise<{ ok: true } | { erreur: string }> {
+  if (!supabase) return { erreur: 'Base de données indisponible' };
+  const { data, error } = await supabase.storage.from('factures').download(pdfPath);
+  if (error || !data) return { erreur: 'Le PDF est introuvable ou inaccessible' };
+  const url = URL.createObjectURL(data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nomFichierFacture(numero);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return { ok: true };
+}
+
+/** Factures déjà validées (numérotées, verrouillées). */
 export function useFacturesValidees() {
   const [factures, setFactures] = useState<FactureValidee[]>([]);
   const [chargement, setChargement] = useState(true);

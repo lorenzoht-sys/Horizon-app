@@ -426,3 +426,9 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # ressource, la fonction établit qui appelle.
 [functions.analyser-seance]
 verify_jwt = true
+
+# Génération du PDF des factures validées (étape 5). Appelée par un trigger de base via pg_net, pas
+# par un navigateur : aucun JWT utilisateur à vérifier. La barrière est le secret partagé
+# FACTURATION_WEBHOOK_SECRET contrôlé dans index.ts.
+[functions.facturation-pdf]
+verify_jwt = false

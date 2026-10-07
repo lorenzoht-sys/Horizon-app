@@ -299,7 +299,8 @@ Dans tous les cas :
   `app_role_courant() = 'admin'`) la portent. L'admin n'écrit rien par ce canal.
 - Le harnais de sécurité (`tests/security/rls.spec.ts`) interdisait toute policy fondée sur le rôle,
   en annonçant qu'il serait remplacé le jour où les rôles seraient branchés. Il est désormais une **liste
-  blanche fermée** : seules ces 3 policies sont permises, elles doivent rester en lecture seule, réservées
+  blanche fermée** : seules ces 3 policies (plus, depuis l'étape 5, la lecture admin des PDF sur
+  `storage.objects`, soit 4 au total) sont permises, elles doivent rester en lecture seule, réservées
   à `authenticated` et conditionnées à `admin` exactement. Toute autre policy fondée sur le rôle fait
   échouer le test.
 - Les tables `factures`, `lignes_facture`, `paiements` et `compteurs_facture` sont déclarées dans la liste
@@ -343,6 +344,54 @@ enregistre toujours NULL pour un champ vide, jamais `''`.
 Contraintes de TVA reproduites par l'interface (la base reste seule juge) : assujetti = 10 %, ou
 5,5 % avec agrément ; franchise = pas de taux. Retirer l'agrément alors que 5,5 % est choisi remet
 le taux à choisir.
+
+## PDF et stockage (étape 5, PR A)
+
+Une facture validée reçoit son PDF automatiquement. L'envoi par e-mail (pièce jointe, journal, reprise)
+est la PR B.
+
+```
+valider_facture()  ->  trigger AFTER UPDATE (brouillon -> validee)
+                       -> pg_net (au COMMIT, asynchrone)
+                       -> Edge Function `facturation-pdf`
+                       -> bucket privé `factures` : {praticien_id}/{numero}.pdf
+                       -> factures.pdf_path
+```
+
+- **Contenu figé** : le PDF est composé uniquement depuis `factures`, `lignes_facture` et les deux
+  snapshots. Rien n'est relu dans le profil, rien n'est recalculé (la TVA reste arrondie une fois sur le
+  total HT). Code pur et testé : `supabase/functions/facturation-pdf/composer.ts` (`pdf-lib`).
+- **Reproductible** : métadonnées fixées sur la date d'émission, pas d'object streams ; le spike du
+  2026-10-08 sur l'Edge runtime de staging a donné le même sha256 d'un appel à l'autre. La régénération
+  « à l'identique » est donc possible, et ne se fait que si `pdf_path` est vide. Un fichier existant n'est
+  **jamais écrasé** : s'il diffère de la recomposition, la fonction le journalise et garde l'existant.
+- **Mentions** : identité et SIRET du praticien, n° et date de déclaration SAP, mode et adresse
+  d'intervention (s'ils sont renseignés), payeur et, si c'est un proche, rappel du bénéficiaire avec
+  son adresse, lignes, HT / TVA / TTC (ou « TVA non applicable, art. 293 B du CGI » en franchise),
+  échéance, virement et IBAN. Un avoir est titré « Avoir » et cite la facture d'origine (structure
+  seulement : la création d'avoirs n'est pas dans l'étape 5).
+- **Volontairement absent** : toute répartition client / URSSAF (V1 : 100 % au payeur, circuit URSSAF
+  hors périmètre) ; les pénalités de retard (payeurs particuliers uniquement, aucune facture B2B) ; la
+  phrase sur l'avantage fiscal, tant que l'expert-comptable n'a pas confirmé l'éligibilité des activités
+  (voir « Crédit d'impôt »).
+- **Stockage** : bucket `factures` privé, PDF seul, 5 Mo. Lecture par RLS sur `storage.objects` : le
+  praticien lit son dossier, l'admin lit tout (décision du 2026-10-08, même principe que les factures).
+  **Aucune policy d'écriture** : seul `service_role` (l'Edge Function) crée un fichier ; personne ne le
+  remplace ni ne le supprime par l'API. Téléchargement depuis « Factures validées » sous la session du
+  praticien, sans route `/api` ni lien durable.
+- **La validation ne dépend jamais du PDF** : pg_net n'émet qu'au commit, et le trigger avale toute
+  erreur. Sans PDF, la liste affiche « PDF en préparation ».
+
+### Mise en service d'un environnement (à faire à la main, jamais dans une migration)
+
+1. `supabase secrets set FACTURATION_WEBHOOK_SECRET=<aléatoire long> --project-ref <ref>`.
+2. `supabase functions deploy facturation-pdf --project-ref <ref>` : **toujours avec `--project-ref`
+   explicite**, le dépôt est lié à la production.
+3. Dans Vault de la base du même projet :
+   `select vault.create_secret('https://<ref>.supabase.co/functions/v1/facturation-pdf', 'facturation_pdf_url');`
+   et `select vault.create_secret('<le même secret>', 'facturation_webhook_secret');`.
+
+Tant que les deux secrets Vault manquent, le trigger ne fait rien.
 
 ## Lancer les tests
 
