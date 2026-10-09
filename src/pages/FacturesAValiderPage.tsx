@@ -163,6 +163,13 @@ export default function FacturesAValiderPage() {
           >
             Factures validées <ArrowRight size={14} />
           </Link>
+          <Link
+            to="/factures/ca"
+            data-testid="lien-chiffre-affaires"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary border border-primary/30 hover:bg-primary/5 px-3 py-2 rounded-xl"
+          >
+            Chiffre d'affaires <ArrowRight size={14} />
+          </Link>
           {validables.length > 1 && (
             <button
               type="button"
