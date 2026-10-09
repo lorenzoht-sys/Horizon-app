@@ -38,6 +38,7 @@ const StructuresPage    = lazy(() => import('./pages/StructuresPage'));
 const StructureDetail    = lazy(() => import('./pages/StructureDetail'));
 const FacturesAValiderPage = lazy(() => import('./pages/FacturesAValiderPage'));
 const FacturesPage       = lazy(() => import('./pages/FacturesPage'));
+const ChiffreAffairesPage = lazy(() => import('./pages/ChiffreAffairesPage'));
 const ProfilFacturationPage = lazy(() => import('./pages/ProfilFacturationPage'));
 const PortailStructure   = lazy(() => import('./pages/PortailStructure'));
 const ComparaisonPage    = lazy(() => import('./pages/ComparaisonPage'));
@@ -112,6 +113,8 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
                 SES factures. */}
             <Route path="/factures/a-valider" element={<PageTransition><Suspense fallback={<MapFallback />}><FacturesAValiderPage /></Suspense></PageTransition>} />
             <Route path="/factures" element={<PageTransition><Suspense fallback={<MapFallback />}><FacturesPage /></Suspense></PageTransition>} />
+            {/* Suivi du chiffre d'affaires mensuel : CA facturé (HT) + CA externe saisi. */}
+            <Route path="/factures/ca" element={<PageTransition><Suspense fallback={<MapFallback />}><ChiffreAffairesPage /></Suspense></PageTransition>} />
             <Route path="/structures" element={<PageTransition><Suspense fallback={<MapFallback />}><StructuresPage /></Suspense></PageTransition>} />
             <Route path="/structures/:id" element={<PageTransition><Suspense fallback={<MapFallback />}><StructureDetail /></Suspense></PageTransition>} />
             <Route path="/settings" element={<PageTransition><SettingsPage /></PageTransition>} />

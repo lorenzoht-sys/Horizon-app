@@ -75,7 +75,11 @@ test.describe('Programme — "Voir tout" depuis la fiche mobile (390×844)', () 
     await page.getByRole('button', { name: /Suivant/ }).click(); // 2 → 3
     await page.getByRole('button', { name: /Suivant/ }).click(); // 3 → 4
     await page.getByRole('button', { name: '✅ Sauvegarder et partager' }).click();
-    await expect(page.getByText('Programme créé et partagé avec le bénéficiaire !')).toBeVisible();
+    // 15 s et non les 5 s par défaut : la sauvegarde enchaîne ~8 appels Supabase SÉQUENTIELS (programme, séance,
+    // 5 exercices, planning) et le message n'apparaît qu'à la fin. Depuis un runner GitHub, la somme dépasse
+    // parfois 5 s : le test échouait alors que le programme était bien créé (17 programmes résiduels sur staging
+    // les 24/09, 05/10 et 09/10/2026, tous complets), puis son nettoyage ne s'exécutait pas.
+    await expect(page.getByText('Programme créé et partagé avec le bénéficiaire !')).toBeVisible({ timeout: 15000 });
 
     try {
       // ── Vérification mobile (390×844), fiche fusionnée ────────────────

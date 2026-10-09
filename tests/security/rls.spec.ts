@@ -146,6 +146,12 @@ const EXCLUDED_TABLES: Record<string, string> = {
   // touche. Rien à tester en cloisonnement ; l'absence de privilège est vérifiée par la migration et
   // par tests/db/facturation.spec.ts.
   compteurs_facture: 'service_role only, RLS activée sans aucune policy, alimentée par attribuer_numero_facture()',
+  // Saisies manuelles de CA externe (migration 20261012100000). Une seule policy (authenticated,
+  // praticien_id = auth.uid() ET bénéficiaire du praticien), AUCUNE lecture admin (décision du 2026-10-09,
+  // contrôlée par la migration). Absente de staging jusqu'à son application, donc vide ensuite : le test
+  // générique ferait un « skip » compté comme échec. Cloisonnement lecture / écriture / bénéficiaire testé
+  // sur une vraie base par tests/db/ca-mensuel.spec.ts.
+  ca_externe: 'praticien_id direct, vide en staging ; cloisonnement, écriture et absence de lecture admin testés sur base locale par tests/db/ca-mensuel.spec.ts',
 };
 
 // Tables protégées uniquement par jointure (pas de colonne praticien_id /

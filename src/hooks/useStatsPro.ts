@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react';
 
+// Objectifs de CA du tableau de bord « Mes stats », conservés dans le navigateur (localStorage).
+//
+// Le CA lui-même n'est PLUS stocké ici : l'ancienne saisie mensuelle (`caParMois`) a été supprimée le
+// 2026-10-09. C'était une saisie locale, non synchronisée, sans lien avec les bénéficiaires. Le CA vient
+// maintenant de la facturation (factures validées, HT) et des saisies de CA externe (page /factures/ca),
+// voir useCaAnneeEnCours (src/hooks/useChiffreAffaires.ts). Aucune migration de l'ancienne valeur : une
+// clé `caParMois` éventuellement présente dans le navigateur est ignorée, puis effacée à la prochaine
+// sauvegarde.
+
 export interface StatsPro {
-  caParMois: Record<string, number>;   // "2026-01": 1350
   objectifMensuel: number;
   objectifAnnuel: number;
 }
@@ -9,7 +17,6 @@ export interface StatsPro {
 const STORAGE_KEY = 'stats_pro';
 
 const DEFAULT: StatsPro = {
-  caParMois: {},
   objectifMensuel: 2000,
   objectifAnnuel: 20000,
 };
@@ -20,12 +27,6 @@ function load(): StatsPro {
     if (!raw) return { ...DEFAULT };
     const parsed = JSON.parse(raw);
     return {
-      caParMois:
-        parsed?.caParMois !== null &&
-        typeof parsed?.caParMois === 'object' &&
-        !Array.isArray(parsed?.caParMois)
-          ? parsed.caParMois
-          : {},
       objectifMensuel:
         typeof parsed?.objectifMensuel === 'number'
           ? parsed.objectifMensuel
@@ -44,31 +45,14 @@ export function useStatsPro() {
   const [statsPro, setStatsPro] = useState<StatsPro>(load);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(statsPro));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(statsPro));
+    } catch { /* stockage indisponible : les objectifs ne sont simplement pas conservés */ }
   }, [statsPro]);
-
-  function mettreAJourCA(moisKey: string, montant: number) {
-    setStatsPro(prev => ({
-      ...prev,
-      caParMois: { ...prev.caParMois, [moisKey]: montant },
-    }));
-  }
 
   function sauvegarder(data: StatsPro) {
     setStatsPro(data);
   }
 
-  function getCAMoisActuel(): number {
-    const key = new Date().toISOString().slice(0, 7);
-    return statsPro.caParMois[key] ?? 0;
-  }
-
-  function getCAAnneActuelle(): number {
-    const annee = new Date().getFullYear().toString();
-    return Object.entries(statsPro.caParMois)
-      .filter(([k]) => k.startsWith(annee))
-      .reduce((sum, [, v]) => sum + v, 0);
-  }
-
-  return { statsPro, mettreAJourCA, sauvegarder, getCAMoisActuel, getCAAnneActuelle };
+  return { statsPro, sauvegarder };
 }

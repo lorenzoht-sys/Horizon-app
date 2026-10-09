@@ -59,6 +59,8 @@ describe('estRouteInterfaceUnique', () => {
     expect(estRouteInterfaceUnique('/factures/')).toBe(true);
     expect(estRouteInterfaceUnique('/factures/a-valider')).toBe(true);
     expect(estRouteInterfaceUnique('/factures/a-valider/')).toBe(true);
+    expect(estRouteInterfaceUnique('/factures/ca')).toBe(true);
+    expect(estRouteInterfaceUnique('/factures/ca/')).toBe(true);
   });
 
   it('sert le profil de facturation, sous-page de Paramètres, sans changer /settings', () => {
@@ -72,6 +74,7 @@ describe('estRouteInterfaceUnique', () => {
   it('ne sert que ces deux écrans de facturation, pas des routes voisines', () => {
     expect(estRouteInterfaceUnique('/factures/abc-123')).toBe(false);
     expect(estRouteInterfaceUnique('/factures/a-valider/x')).toBe(false);
+    expect(estRouteInterfaceUnique('/factures/ca/x')).toBe(false);
     expect(estRouteInterfaceUnique('/facturation')).toBe(false);
     expect(estRouteInterfaceUnique('/facturesx')).toBe(false);
   });
