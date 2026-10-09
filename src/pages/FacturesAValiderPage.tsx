@@ -11,6 +11,7 @@ import {
   formaterEuro,
   libellePeriode,
   libelleTva,
+  messageAdresseIncomplete,
   profilFacturationManquant,
   separerBrouillons,
   type BilanValidation,
@@ -96,7 +97,7 @@ export default function FacturesAValiderPage() {
 
         {validable && adresse.length > 0 && (
           <p className="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-            Adresse du bénéficiaire incomplète ({adresse.join(', ')}) : mention obligatoire, la validation sera refusée.
+            {messageAdresseIncomplete(adresse)} Mention obligatoire : la validation sera refusée tant qu'elle n'est pas complétée.
           </p>
         )}
 

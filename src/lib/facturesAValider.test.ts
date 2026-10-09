@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   adresseBeneficiaireManquante,
+  messageAdresseIncomplete,
   erreurSystemique,
   formaterDate,
   formaterEuro,
@@ -134,7 +135,6 @@ describe('messageValidationLisible', () => {
     expect(messageValidationLisible('Profil de facturation incomplet : adresse')).toBe('Profil de facturation incomplet : adresse');
   });
   it('laisse passer les autres messages tels quels', () => {
-    expect(messageValidationLisible('Adresse du bénéficiaire incomplète (mention obligatoire) : rue')).toBe('Adresse du bénéficiaire incomplète (mention obligatoire) : rue');
     expect(messageValidationLisible('Accès refusé à cette facture')).toBe('Accès refusé à cette facture');
   });
 });
@@ -232,5 +232,38 @@ describe('validation à partir du 1er du mois suivant (facture progressive)', ()
     const { validables, enCours } = separerBrouillons([f('a', '2026-09-01'), f('b', '2026-10-01'), f('c', '2026-08-01')], '2026-10-09');
     expect(validables.map(x => x.id)).toEqual(['a', 'c']);
     expect(enCours.map(x => x.id)).toEqual(['b']);
+  });
+});
+
+describe('messageAdresseIncomplete : seulement ce qui manque, avec son article', () => {
+  it('un champ : singulier', () => {
+    expect(messageAdresseIncomplete(['code postal'])).toBe('Adresse du bénéficiaire incomplète : il manque le code postal.');
+    expect(messageAdresseIncomplete(['rue'])).toBe('Adresse du bénéficiaire incomplète : il manque la rue.');
+    expect(messageAdresseIncomplete(['ville'])).toBe('Adresse du bénéficiaire incomplète : il manque la ville.');
+  });
+  it('plusieurs champs : énumération française', () => {
+    expect(messageAdresseIncomplete(['rue', 'code postal'])).toBe('Adresse du bénéficiaire incomplète : il manque la rue et le code postal.');
+    expect(messageAdresseIncomplete(['code postal', 'ville'])).toBe('Adresse du bénéficiaire incomplète : il manque le code postal et la ville.');
+    expect(messageAdresseIncomplete(['rue', 'code postal', 'ville'])).toBe('Adresse du bénéficiaire incomplète : il manque la rue, le code postal et la ville.');
+  });
+  it('de bout en bout avec le calcul des champs vides (null, chaîne vide, espaces)', () => {
+    const b = { prenom: 'A', nom: 'B', adresseRue: '  ', adresseCodePostal: '69000', adresseVille: null };
+    expect(messageAdresseIncomplete(adresseBeneficiaireManquante(b))).toBe('Adresse du bénéficiaire incomplète : il manque la rue et la ville.');
+    expect(messageAdresseIncomplete(adresseBeneficiaireManquante({ ...b, adresseRue: 'x', adresseVille: 'y' }))).toBe('Adresse du bénéficiaire incomplète.');
+  });
+  it('un champ inconnu garde son nom plutôt que de disparaître', () => {
+    expect(messageAdresseIncomplete(['pays'])).toBe('Adresse du bénéficiaire incomplète : il manque pays.');
+  });
+});
+
+describe('messageValidationLisible : refus de l\'adresse du bénéficiaire par le serveur', () => {
+  it('reprend la même phrase précise que le bandeau', () => {
+    expect(messageValidationLisible('Adresse du bénéficiaire incomplète (mention obligatoire) : code postal')).toBe('Adresse du bénéficiaire incomplète : il manque le code postal.');
+    expect(messageValidationLisible('Adresse du bénéficiaire incomplète (mention obligatoire) : rue, code postal')).toBe('Adresse du bénéficiaire incomplète : il manque la rue et le code postal.');
+    expect(messageValidationLisible('Adresse du bénéficiaire incomplète (mention obligatoire) : rue, code postal, ville')).toBe('Adresse du bénéficiaire incomplète : il manque la rue, le code postal et la ville.');
+  });
+  it('ne touche pas aux autres refus', () => {
+    expect(messageValidationLisible('Accès refusé à cette facture')).toBe('Accès refusé à cette facture');
+    expect(messageValidationLisible('Profil de facturation incomplet : siret')).toBe('Profil de facturation incomplet : SIRET');
   });
 });

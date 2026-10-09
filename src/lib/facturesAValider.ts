@@ -164,6 +164,21 @@ export function adresseBeneficiaireManquante(b: BeneficiaireBrouillon): string[]
   return manquants;
 }
 
+const CHAMPS_ADRESSE: Record<string, string> = { rue: 'la rue', 'code postal': 'le code postal', ville: 'la ville' };
+
+/**
+ * Phrase précise pour un bénéficiaire dont l'adresse est incomplète : seuls les champs qui manquent réellement,
+ * avec leur article. « il manque le code postal. », « il manque la rue et le code postal. »,
+ * « il manque la rue, le code postal et la ville. ». Ne change PAS ce qui est obligatoire (voir
+ * adresseBeneficiaireManquante et valider_facture) : uniquement ce qui s'affiche.
+ */
+export function messageAdresseIncomplete(manquants: string[]): string {
+  const champs = manquants.map(c => CHAMPS_ADRESSE[c] ?? c);
+  if (champs.length === 0) return 'Adresse du bénéficiaire incomplète.';
+  const liste = champs.length === 1 ? champs[0] : `${champs.slice(0, -1).join(', ')} et ${champs[champs.length - 1]}`;
+  return `Adresse du bénéficiaire incomplète : il manque ${liste}.`;
+}
+
 const LIBELLES_PROFIL: Record<string, string> = {
   siret: 'SIRET',
   nom: 'nom',
@@ -177,6 +192,9 @@ const LIBELLES_PROFIL: Record<string, string> = {
  * messages sont déjà en français et passent tels quels.
  */
 export function messageValidationLisible(message: string): string {
+  // Refus du serveur pour l'adresse du bénéficiaire : même phrase précise que le bandeau de l'écran.
+  const adresse = /^Adresse du bénéficiaire incomplète \(mention obligatoire\) : (.+)$/.exec(message);
+  if (adresse) return messageAdresseIncomplete(adresse[1].split(',').map(c => c.trim()).filter(Boolean));
   const m = /^(Profil de facturation incomplet) : (.+)$/.exec(message);
   if (!m) return message;
   const elements = m[2].split(',').map(e => LIBELLES_PROFIL[e.trim()] ?? e.trim());
