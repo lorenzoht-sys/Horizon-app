@@ -75,6 +75,43 @@ export const SELECT_PROFIL =
 
 export const SELECT_FACTURE_VALIDEE = 'id, numero, periode, date_emission, statut, total, pdf_path, participants(prenom, nom)';
 
+/** Date civile Paris (AAAA-MM-JJ) : la règle de validation de la base se règle sur Paris, pas sur le poste. */
+export function dateCivileParis(instant: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(instant);
+}
+
+/** Premier jour du mois suivant `periode` (AAAA-MM-01) : le jour où une facture de ce mois devient validable. */
+export function premierJourMoisSuivant(periode: string): string {
+  const [annee, mois] = periode.split('-').map(Number);
+  const [a, m] = mois === 12 ? [annee + 1, 1] : [annee, mois + 1];
+  return `${a}-${String(m).padStart(2, '0')}-01`;
+}
+
+/**
+ * Un brouillon se valide à partir du 1er du mois SUIVANT son mois de prestation (facture progressive,
+ * 2026-10-09) : il n'existe qu'une facture par contrat et par mois, valider avant la fin du mois
+ * ferait perdre les séances suivantes. Même règle que le trigger de base
+ * factures_validation_apres_le_mois, qui reste seul juge ; ici on évite de proposer un bouton voué
+ * au refus.
+ */
+export function estValidable(periode: string, aujourdhui: string): boolean {
+  return aujourdhui >= premierJourMoisSuivant(periode);
+}
+
+/** « 01/11/2026 » pour un brouillon d'octobre : le jour où il pourra être validé. */
+export function dateOuvertureValidation(periode: string): string {
+  const [a, m, j] = premierJourMoisSuivant(periode).split('-');
+  return `${j}/${m}/${a}`;
+}
+
+/** Sépare les brouillons validables des brouillons « en cours » (mois pas encore terminé). */
+export function separerBrouillons(brouillons: FactureBrouillon[], aujourdhui: string): { validables: FactureBrouillon[]; enCours: FactureBrouillon[] } {
+  return {
+    validables: brouillons.filter(f => estValidable(f.periode, aujourdhui)),
+    enCours: brouillons.filter(f => !estValidable(f.periode, aujourdhui)),
+  };
+}
+
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
 /** « septembre 2026 » pour 2026-09-01. */

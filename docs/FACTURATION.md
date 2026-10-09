@@ -316,12 +316,51 @@ Dans tous les cas :
   (`snapshot_destinataire.eligible_credit_impot`, `snapshot_emetteur.agrement_sap`) : décision du
   2026-10-05, à garder tel quel.
 
+## Facture progressive (2026-10-09)
+
+Le brouillon du mois se construit **au fil des séances réalisées** : au 1er du mois, Pierre ouvre un
+brouillon déjà complet, le relit, puis le valide. Migration `20261011100000_facturation_progressive.sql`,
+tests `tests/db/facturation-progressive.spec.ts`.
+
+- **Trigger sur `seances`** (`seances_recalcul_brouillon`, 3 triggers INSERT / UPDATE / DELETE) : une séance
+  qui entre dans « réalisée », en sort, change de contrat, de date, d'heure ou de type rappelle
+  `generer_brouillon_facture` pour l'ancien et le nouveau (contrat, mois). Même logique que le cron :
+  contrat à la séance, statut actif / terminé / suspendu, dates recouvrant le mois. Pas de brouillon pour un
+  mois futur, ni pour un forfait. `SECURITY DEFINER` : le praticien, une route `service_role` ou le cron
+  produisent le même résultat.
+- **Trigger sur `tarifs_contrats`** (`tarifs_recalcul_brouillons`) : créer, modifier ou supprimer une version de
+  tarif recalcule tous les mois où le contrat a des séances réalisées dans la plage de validité. C'est ce qui
+  fait de « corriger le tarif » le bon geste, et ce qui rattrape une séance saisie avant son tarif.
+- **Les erreurs sont avalées** : une séance sans tarif applicable ne doit jamais empêcher la saisie. Le
+  brouillon reste alors tel quel (périmé), la séance est enregistrée, et le cron du 1er recalcule et journalise
+  l'erreur (`[facturation] contrat … : Aucun tarif applicable…`).
+- **Le brouillon est le reflet automatique des séances.** Un recalcul reconstruit ses lignes : il n'existe donc
+  aucun champ montant libre. On corrige en éditant **la séance ou le tarif**, jamais la facture.
+- **Une facture émise n'est jamais touchée** : `generer_brouillon_facture` la renvoie telle quelle. Limite
+  connue, antérieure : une séance réalisée APRÈS la validation de la facture du mois n'est facturée nulle part
+  (une seule facture vivante par contrat et par mois).
+- **Validation à partir du 1er du mois suivant** : le trigger `factures_validation_apres_le_mois` refuse le
+  passage brouillon → validée d'une facture avant le 1er du mois suivant son mois de prestation (date civile
+  Paris), avec le message « Facture de MM/AAAA : validation possible à partir du JJ/MM/AAAA ». Il refuse aussi le
+  `service_role` et ne consomme aucun numéro (l'exception annule la transaction). Les avoirs en sont exclus. La
+  règle est un trigger et non un test dans `valider_facture` : cette fonction a été redéfinie en entier à chaque
+  étape, et une garde copiée dans son corps se perdrait à la prochaine redéfinition.
+- **Cron du 1er** : recalcule les brouillons du mois écoulé, puis notifie. « N factures à valider » part pour les
+  brouillons créés par l'exécution, et le 1er du mois (date Paris) pour tous les brouillons du mois écoulé. Les
+  autres jours, le recalcul ne renvoie pas le même push. Si le cron saute le 1er, seuls les brouillons créés sont
+  notifiés : l'écran reste la source de vérité.
+- **Écran « Factures à valider »** : les brouillons dont le mois est terminé restent validables (une à une ou
+  « Tout valider »). Une section « En cours » montre, en lecture seule, le brouillon du mois courant avec son total
+  « à ce jour » et la date d'ouverture de la validation. Même règle côté interface (`estValidable`,
+  `src/lib/facturesAValider.ts`), mais la base reste seule juge.
+
 ## Génération et écrans praticien (étapes 3 et 4)
 
-- **Génération** : la tâche `facturation` de `/api/cron/rappels` s'exécute chaque jour à 5h UTC et
-  ne crée que les brouillons du mois précédent qui manquent (un contrat déjà facturé, hors
-  annulée, est ignoré). Un cron manqué le 1er est donc rattrapé le lendemain. Un brouillon supprimé
-  ou une facture annulée est régénéré au passage suivant. Code : `api/_lib/facturationMensuelle.ts`.
+- **Génération** : voir « Facture progressive » ci-dessous. La tâche `facturation` de `/api/cron/rappels`
+  s'exécute chaque jour à 5h UTC, ne traite que le mois précédent, crée les brouillons qui manquent et
+  recalcule ceux qui existent (une facture émise n'est jamais touchée). Un cron manqué le 1er est donc
+  rattrapé le lendemain. Un brouillon supprimé ou une facture annulée est régénéré au passage suivant.
+  Code : `api/_lib/facturationMensuelle.ts`.
 - **« Factures à valider »** (`/factures/a-valider`) puis **« Factures validées »** (`/factures`) :
   validation par `supabase.rpc('valider_facture')` sous la RLS, aucune route `/api`.
 - **Profil de facturation** (`/settings/facturation`, lien depuis Paramètres) : formulaire lu et
