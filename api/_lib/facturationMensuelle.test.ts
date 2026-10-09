@@ -162,17 +162,48 @@ describe('genererBrouillonsDuMois', () => {
     expect(bilan).toMatchObject({ brouillonsCrees: 1, sansSeance: 1, erreurs: [] });
   });
 
-  it('ne retouche jamais un contrat déjà facturé ce mois-là (brouillon ou émise) : aucun appel, rien à réécrire', async () => {
+  it('recalcule un brouillon existant (facture progressive) mais ne retouche JAMAIS une facture émise', async () => {
     const { client, appelsRpc } = fauxClient({
       contrats: [contrat('deja-brouillon'), contrat('deja-emise'), contrat('nouveau')],
       factures: [
         { id: 'f1', contrat_id: 'deja-brouillon', periode: SEPT, type: 'facture', statut: 'brouillon', praticien_id: 'pra-1' },
         { id: 'f2', contrat_id: 'deja-emise', periode: SEPT, type: 'facture', statut: 'validee', praticien_id: 'pra-1' },
       ],
+      rpc: async a => ({ data: a.p_contrat_id === 'deja-brouillon' ? 'f1' : `facture-${a.p_contrat_id}`, error: null }),
     });
     const bilan = await genererBrouillonsDuMois(client, SEPT, { envoyerAlerte: async () => ({ nbEnvoyes: 0, nbEchecs: 0 }) });
-    expect(appelsRpc.map(a => a.args.p_contrat_id)).toEqual(['nouveau']);
-    expect(bilan).toMatchObject({ contratsExamines: 3, dejaExistants: 2, brouillonsCrees: 1 });
+    expect(appelsRpc.map(a => a.args.p_contrat_id).sort()).toEqual(['deja-brouillon', 'nouveau']);   // jamais « deja-emise »
+    expect(bilan).toMatchObject({ contratsExamines: 3, dejaExistants: 1, brouillonsRecalcules: 1, brouillonsCrees: 1, brouillonsSupprimes: 0 });
+  });
+
+  it('une facture payée, envoyée ou en retard est aussi intouchable : seul le statut brouillon est recalculé', async () => {
+    const { client, appelsRpc } = fauxClient({
+      contrats: [contrat('c-envoyee'), contrat('c-payee'), contrat('c-retard')],
+      factures: [
+        { id: 'f1', contrat_id: 'c-envoyee', periode: SEPT, type: 'facture', statut: 'envoyee', praticien_id: 'pra-1' },
+        { id: 'f2', contrat_id: 'c-payee', periode: SEPT, type: 'facture', statut: 'payee', praticien_id: 'pra-1' },
+        { id: 'f3', contrat_id: 'c-retard', periode: SEPT, type: 'facture', statut: 'en_retard', praticien_id: 'pra-1' },
+      ],
+    });
+    const bilan = await genererBrouillonsDuMois(client, SEPT, { envoyerAlerte: async () => ({ nbEnvoyes: 0, nbEchecs: 0 }) });
+    expect(appelsRpc).toHaveLength(0);
+    expect(bilan).toMatchObject({ dejaExistants: 3, brouillonsRecalcules: 0, brouillonsCrees: 0 });
+  });
+
+  it('un brouillon recalculé qui n\'a plus aucune séance est signalé comme supprimé, une erreur de recalcul reste visible', async () => {
+    const { client } = fauxClient({
+      contrats: [contrat('vide'), contrat('sans-tarif')],
+      factures: [
+        { id: 'f1', contrat_id: 'vide', periode: SEPT, type: 'facture', statut: 'brouillon', praticien_id: 'pra-1' },
+        { id: 'f2', contrat_id: 'sans-tarif', periode: SEPT, type: 'facture', statut: 'brouillon', praticien_id: 'pra-1' },
+      ],
+      rpc: async a => (a.p_contrat_id === 'vide'
+        ? { data: null, error: null }
+        : { data: null, error: { message: 'Aucun tarif applicable pour la ou les séances du 10/09/2026' } }),
+    });
+    const bilan = await genererBrouillonsDuMois(client, SEPT, { envoyerAlerte: async () => ({ nbEnvoyes: 0, nbEchecs: 0 }) });
+    expect(bilan).toMatchObject({ brouillonsSupprimes: 1, sansSeance: 0, brouillonsRecalcules: 0 });
+    expect(bilan.erreurs).toEqual([{ contratId: 'sans-tarif', erreur: expect.stringContaining('Aucun tarif applicable') }]);
   });
 
   it('une facture ANNULÉE ou celle d\'un autre mois n\'empêche pas la génération', async () => {
@@ -187,7 +218,7 @@ describe('genererBrouillonsDuMois', () => {
     expect(appelsRpc.map(a => a.args.p_contrat_id).sort()).toEqual(['c1', 'c2']);
   });
 
-  it('relancer la génération ne crée, ne réécrit et ne notifie rien', async () => {
+  it('relancer la génération ne crée aucun doublon, recalcule les mêmes brouillons et ne renotifie pas', async () => {
     const factures: Ligne[] = [];
     const alerte = vi.fn(async () => ({ nbEnvoyes: 1, nbEchecs: 0 }));
     const { client, appelsRpc } = fauxClient({
@@ -195,7 +226,7 @@ describe('genererBrouillonsDuMois', () => {
       factures,
       rpc: async a => {
         const id = `facture-${a.p_contrat_id}`;
-        factures.push({ id, contrat_id: a.p_contrat_id, periode: a.p_periode, type: 'facture', statut: 'brouillon', praticien_id: 'pra-1' });
+        if (!factures.some(f => f.id === id)) factures.push({ id, contrat_id: a.p_contrat_id, periode: a.p_periode, type: 'facture', statut: 'brouillon', praticien_id: 'pra-1' });
         return { data: id, error: null };
       },
     });
@@ -204,9 +235,29 @@ describe('genererBrouillonsDuMois', () => {
     expect(alerte).toHaveBeenCalledTimes(1);
 
     const second = await genererBrouillonsDuMois(client, SEPT, { envoyerAlerte: alerte });
-    expect(second).toMatchObject({ brouillonsCrees: 0, dejaExistants: 2, erreurs: [] });
-    expect(appelsRpc).toHaveLength(2);            // aucun appel de plus
+    expect(second).toMatchObject({ brouillonsCrees: 0, brouillonsRecalcules: 2, dejaExistants: 0, erreurs: [] });
+    expect(factures).toHaveLength(2);             // aucun doublon
+    expect(appelsRpc).toHaveLength(4);            // le recalcul rappelle le même RPC, sur les mêmes brouillons
     expect(alerte).toHaveBeenCalledTimes(1);      // aucune notification de plus
+  });
+
+  it('notifie les brouillons existants seulement si on le demande (le 1er du mois)', async () => {
+    const factures: Ligne[] = [
+      { id: 'f1', contrat_id: 'c1', periode: SEPT, type: 'facture', statut: 'brouillon', praticien_id: 'pra-1' },
+      { id: 'f2', contrat_id: 'c2', periode: SEPT, type: 'facture', statut: 'brouillon', praticien_id: 'pra-1' },
+    ];
+    const rpc = async (a: { p_contrat_id: string }) => ({ data: a.p_contrat_id === 'c1' ? 'f1' : 'f2', error: null });
+    const alerte = vi.fn(async () => ({ nbEnvoyes: 1, nbEchecs: 0 }));
+    const { client } = fauxClient({ contrats: [contrat('c1'), contrat('c2')], factures, rpc });
+
+    const sans = await genererBrouillonsDuMois(client, SEPT, { envoyerAlerte: alerte });
+    expect(sans.brouillonsRecalcules).toBe(2);
+    expect(alerte).not.toHaveBeenCalled();
+
+    const avec = await genererBrouillonsDuMois(client, SEPT, { envoyerAlerte: alerte, notifierBrouillonsExistants: true });
+    expect(alerte).toHaveBeenCalledTimes(1);
+    expect((alerte.mock.calls[0] as unknown[])[2]).toMatchObject({ corps: '2 factures à valider pour septembre 2026' });
+    expect(avec.notifications).toMatchObject({ praticiens: 1, envoyes: 1 });
   });
 
   it('l\'échec d\'un contrat (rejet ou erreur SQL) n\'empêche pas les autres, et reste visible dans le bilan', async () => {
@@ -335,7 +386,8 @@ describe('executerFacturationMensuelle : rattrapage d\'un cron manqué le 1er', 
       factures,
       rpc: async a => {
         const id = `facture-${a.p_contrat_id}`;
-        factures.push({ id, contrat_id: a.p_contrat_id, periode: a.p_periode, type: 'facture', statut: 'brouillon', praticien_id: 'pra-1' });
+        // Comme le vrai RPC : un brouillon existant est recalculé, jamais dupliqué.
+        if (!factures.some(f => f.id === id)) factures.push({ id, contrat_id: a.p_contrat_id, periode: a.p_periode, type: 'facture', statut: 'brouillon', praticien_id: 'pra-1' });
         return { data: id, error: null };
       },
     });
@@ -348,14 +400,15 @@ describe('executerFacturationMensuelle : rattrapage d\'un cron manqué le 1er', 
     expect(appelsRpc.every(a => a.args.p_periode === '2026-09-01')).toBe(true);   // toujours septembre, pas octobre
     expect(alerte).toHaveBeenCalledTimes(1);
 
-    // Passages suivants (jours suivants, y compris en fin de mois) : rien de plus.
+    // Passages suivants (jours suivants, y compris en fin de mois) : les brouillons sont recalculés
+    // (facture progressive), mais rien n'est créé en double et rien n'est renotifié.
     for (const jour of ['2026-10-04', '2026-10-17', '2026-10-31']) {
       const bilan = await executerFacturationMensuelle(client, new Date(`${jour}T05:15:00Z`), opts);
-      expect(bilan, jour).toMatchObject({ mois: '2026-09', brouillonsCrees: 0, dejaExistants: 2 });
+      expect(bilan, jour).toMatchObject({ mois: '2026-09', brouillonsCrees: 0, brouillonsRecalcules: 2, dejaExistants: 0 });
     }
-    expect(appelsRpc).toHaveLength(2);        // aucun appel de plus : pas de doublon, pas de réécriture
-    expect(alerte).toHaveBeenCalledTimes(1);  // une seule notification
-    expect(factures).toHaveLength(2);
+    expect(appelsRpc).toHaveLength(2 + 3 * 2);   // 2 créations, puis 2 recalculs par passage
+    expect(alerte).toHaveBeenCalledTimes(1);     // une seule notification
+    expect(factures).toHaveLength(2);            // jamais de doublon
 
     // Le 1er novembre, on passe à octobre : le mois facturé change.
     const suivant = await executerFacturationMensuelle(client, new Date('2026-11-01T05:15:00Z'), opts);
@@ -371,6 +424,39 @@ describe('executerFacturationMensuelle : rattrapage d\'un cron manqué le 1er', 
       expect(bilan).toMatchObject({ brouillonsCrees: 0, sansSeance: 1, erreurs: [] });
     }
     expect(alerte).not.toHaveBeenCalled();
+  });
+});
+
+describe('executerFacturationMensuelle : notification du 1er du mois', () => {
+  function jeuExistant() {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const factures: Ligne[] = ['c1', 'c2'].map((c, i) => ({ id: `f${i}`, contrat_id: c, periode: SEPT, type: 'facture', statut: 'brouillon', praticien_id: 'pra-1' }));
+    return fauxClient({ contrats: [contrat('c1'), contrat('c2')], factures, rpc: async a => ({ data: a.p_contrat_id === 'c1' ? 'f0' : 'f1', error: null }) });
+  }
+
+  it('le 1er, le mois devient validable : les brouillons déjà construits au fil des séances sont notifiés', async () => {
+    const { client } = jeuExistant();
+    const alerte = vi.fn(async () => ({ nbEnvoyes: 1, nbEchecs: 0 }));
+    const bilan = await executerFacturationMensuelle(client, new Date('2026-10-01T05:15:00Z'), { envoyerAlerte: alerte });
+    expect(bilan).toMatchObject({ mois: '2026-09', brouillonsCrees: 0, brouillonsRecalcules: 2 });
+    expect(alerte).toHaveBeenCalledTimes(1);
+    expect((alerte.mock.calls[0] as unknown[])[2]).toMatchObject({ corps: '2 factures à valider pour septembre 2026' });
+  });
+
+  it('les autres jours, le recalcul ne renvoie pas le même push', async () => {
+    const { client } = jeuExistant();
+    const alerte = vi.fn(async () => ({ nbEnvoyes: 1, nbEchecs: 0 }));
+    for (const jour of ['2026-10-02', '2026-10-15', '2026-10-30']) {
+      await executerFacturationMensuelle(client, new Date(`${jour}T05:15:00Z`), { envoyerAlerte: alerte });
+    }
+    expect(alerte).not.toHaveBeenCalled();
+  });
+
+  it('se règle sur la date de Paris : à 00h30 Paris le 1er (22h30 UTC la veille), c\'est déjà le 1er', async () => {
+    const { client } = jeuExistant();
+    const alerte = vi.fn(async () => ({ nbEnvoyes: 1, nbEchecs: 0 }));
+    await executerFacturationMensuelle(client, new Date('2026-09-30T22:30:00Z'), { envoyerAlerte: alerte });
+    expect(alerte).toHaveBeenCalledTimes(1);
   });
 });
 

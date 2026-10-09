@@ -9,6 +9,12 @@ import {
   lireBrouillon,
   lireFactureValidee,
   nomFichierFacture,
+  dateCivileParis,
+  dateOuvertureValidation,
+  estValidable,
+  premierJourMoisSuivant,
+  separerBrouillons,
+  type FactureBrouillon,
   lireProfil,
   messageValidationLisible,
   profilFacturationManquant,
@@ -198,5 +204,33 @@ describe('nomFichierFacture', () => {
   it('nomme le fichier par le numéro, sans aucun nom de personne, et neutralise les caractères inattendus', () => {
     expect(nomFichierFacture('2026-0007')).toBe('facture-2026-0007.pdf');
     expect(nomFichierFacture('../2026-0007 \\x')).toBe('facture-2026-0007x.pdf');
+  });
+});
+
+describe('validation à partir du 1er du mois suivant (facture progressive)', () => {
+  it('premier jour du mois suivant, y compris en décembre', () => {
+    expect(premierJourMoisSuivant('2026-10-01')).toBe('2026-11-01');
+    expect(premierJourMoisSuivant('2026-12-01')).toBe('2027-01-01');
+  });
+  it('un brouillon d\'octobre n\'est pas validable le 31 octobre, il l\'est le 1er novembre', () => {
+    expect(estValidable('2026-10-01', '2026-10-09')).toBe(false);
+    expect(estValidable('2026-10-01', '2026-10-31')).toBe(false);
+    expect(estValidable('2026-10-01', '2026-11-01')).toBe(true);
+    expect(estValidable('2026-10-01', '2027-03-15')).toBe(true);
+    expect(estValidable('2026-12-01', '2026-12-31')).toBe(false);
+    expect(estValidable('2026-12-01', '2027-01-01')).toBe(true);
+  });
+  it('affiche la date d\'ouverture de la validation', () => {
+    expect(dateOuvertureValidation('2026-10-01')).toBe('01/11/2026');
+  });
+  it('se règle sur la date de Paris : à 23h30 UTC le 31 octobre, il est déjà le 1er novembre à Paris', () => {
+    expect(dateCivileParis(new Date('2026-10-31T23:30:00Z'))).toBe('2026-11-01');
+    expect(dateCivileParis(new Date('2026-10-31T22:30:00Z'))).toBe('2026-10-31');
+  });
+  it('sépare les brouillons validables de ceux « en cours »', () => {
+    const f = (id: string, periode: string) => ({ id, periode } as FactureBrouillon);
+    const { validables, enCours } = separerBrouillons([f('a', '2026-09-01'), f('b', '2026-10-01'), f('c', '2026-08-01')], '2026-10-09');
+    expect(validables.map(x => x.id)).toEqual(['a', 'c']);
+    expect(enCours.map(x => x.id)).toEqual(['b']);
   });
 });

@@ -35,7 +35,7 @@ decrire('Facturation 5A : PDF, stockage privé et déclenchement', () => {
 
   afterAll(async () => {
     if (fichiersCrees.length) await serviceClient.storage.from('factures').remove(fichiersCrees);
-    for (const id of rolesCrees) await pg(c => c.query(`DELETE FROM public.user_roles WHERE user_id = $1`, [id]));
+    for (const id of rolesCrees) await pg(c => c.query(`UPDATE public.user_roles SET app_role = 'praticien' WHERE user_id = $1 AND app_role = 'admin'`, [id]));
     await pg(c => c.query(`DELETE FROM vault.secrets WHERE name = ANY($1)`, [SECRETS_VAULT]));
   });
 
@@ -49,7 +49,8 @@ decrire('Facturation 5A : PDF, stockage privé et déclenchement', () => {
 
   it('le bucket est privé, limité au PDF et à 5 Mo', async () => {
     const r = await pg(c => c.query(`SELECT public, file_size_limit, allowed_mime_types FROM storage.buckets WHERE id = 'factures'`));
-    expect(r.rows).toEqual([{ public: false, file_size_limit: 5242880, allowed_mime_types: ['application/pdf'] }]);
+    // file_size_limit est un bigint : node-postgres le rend en chaîne.
+    expect(r.rows).toEqual([{ public: false, file_size_limit: '5242880', allowed_mime_types: ['application/pdf'] }]);
   });
 
   it('un praticien lit ses PDF, pas ceux d\'un autre ; un visiteur sans session ne lit rien', async () => {
@@ -88,7 +89,9 @@ decrire('Facturation 5A : PDF, stockage privé et déclenchement', () => {
   it('un admin lit les PDF de tous, sans pouvoir écrire ; un praticien sans rôle admin non', async () => {
     const a = await pro();
     const admin = await pro();
-    await pg(c => c.query(`INSERT INTO public.user_roles (user_id, app_role) VALUES ($1, 'admin')`, [admin.id]));
+    // Une ligne user_roles (« praticien ») existe déjà pour tout nouveau compte : on la promeut, puis on la
+    // remet en place dans afterAll (filtrée sur l'identifiant exact du compte de test).
+    await pg(c => c.query(`UPDATE public.user_roles SET app_role = 'admin' WHERE user_id = $1 AND app_role = 'praticien'`, [admin.id]));
     rolesCrees.push(admin.id);
     const chemin = await deposer(a.id);
 

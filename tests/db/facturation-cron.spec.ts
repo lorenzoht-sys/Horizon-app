@@ -52,48 +52,68 @@ decrire('Génération mensuelle contre la vraie base (RPC service_role via Postg
     expect((await lignesDe(sans.contratId, mois.periode)).factures).toHaveLength(0);
   });
 
-  it('relancer la génération ne duplique rien, ne réécrit rien et ne notifie pas une seconde fois', async () => {
+  it('relancer la génération ne duplique rien, recalcule le brouillon progressif et ne notifie pas une seconde fois', async () => {
     const mois = moisDuTest();
     const pro = await creerPraticien(serviceClient, anon);
     const c = await creerContrat(pro, mois, { seances: [{ jour: 3 }, { jour: 10 }] });
     const alerte = vi.fn(sansAlerte);
-
-    await genererBrouillonsDuMois(serviceClient, mois.periode, { envoyerAlerte: alerte });
-    const premier = await lignesDe(c.contratId, mois.periode);
-    expect(premier.factures).toHaveLength(1);
     const appelsPourCePraticien = () => alerte.mock.calls.filter(a => a[1] === pro.id);
-    expect(appelsPourCePraticien()).toHaveLength(1);
-    expect(appelsPourCePraticien()[0][2]).toMatchObject({ corps: expect.stringMatching(/^1 facture à valider pour /), url: '/factures/a-valider' });
 
-    // Une séance de plus devient « réalisée » après la génération : une relance ne doit PAS réécrire le brouillon.
+    // Facture progressive : le brouillon existe DÉJÀ, construit par le trigger à la saisie des séances.
+    const avantCron = await lignesDe(c.contratId, mois.periode);
+    expect(avantCron.factures).toHaveLength(1);
+    expect(avantCron.factures[0]).toMatchObject({ statut: 'brouillon', total: 90 });
+
+    // Une séance de plus devient « réalisée » : le trigger l'ajoute tout de suite au MÊME brouillon.
     await pg(c2 => c2.query(
       `INSERT INTO public.seances (participant_id, praticien_id, contrat_id, date, heure_debut, heure_fin, duree_minutes, type, statut)
        VALUES ($1, $2, $3, $4, '15:00', '15:45', 45, 'seance', 'realisee')`, [c.participantId, pro.id, c.contratId, mois.jour(25)]));
-    const second = await genererBrouillonsDuMois(serviceClient, mois.periode, { envoyerAlerte: alerte });
+    const progressif = await lignesDe(c.contratId, mois.periode);
+    expect(progressif.factures.map(f => f.id)).toEqual([avantCron.factures[0].id]);
+    expect(progressif.factures[0].total).toBe(135);
+    expect(progressif.lignes).toHaveLength(3);
 
+    // Le cron recalcule ce brouillon sans le dupliquer ; hors du 1er du mois, il ne notifie pas.
+    const bilan = await genererBrouillonsDuMois(serviceClient, mois.periode, { envoyerAlerte: alerte });
+    expect(bilan.brouillonsRecalcules).toBeGreaterThanOrEqual(1);
     const apres = await lignesDe(c.contratId, mois.periode);
-    expect(apres.factures).toHaveLength(1);
-    expect(apres.factures[0].id).toBe(premier.factures[0].id);
-    expect(apres.lignes).toEqual(premier.lignes);                  // brouillon intact : la 3e séance n'y est pas entrée
-    expect(second.dejaExistants).toBeGreaterThanOrEqual(1);
-    expect(appelsPourCePraticien()).toHaveLength(1);               // aucune notification de plus
+    expect(apres.factures.map(f => f.id)).toEqual([avantCron.factures[0].id]);
+    expect(apres.lignes).toEqual(progressif.lignes);
+    expect(appelsPourCePraticien()).toHaveLength(0);
+
+    // Le 1er du mois (le mois devient validable), il notifie une fois pour ce brouillon existant.
+    await genererBrouillonsDuMois(serviceClient, mois.periode, { envoyerAlerte: alerte, notifierBrouillonsExistants: true });
+    expect(appelsPourCePraticien()).toHaveLength(1);
+    expect(appelsPourCePraticien()[0][2]).toMatchObject({ corps: expect.stringMatching(/^1 facture à valider pour /), url: '/factures/a-valider' });
   });
 
-  it('le cron manqué le 1er génère les brouillons au passage suivant, une seule fois (base réelle)', async () => {
+  it('filet de sécurité : des séances qui ont contourné le trigger (import en masse) → le cron crée le brouillon, une seule fois (base réelle)', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const mois = moisDuTest();
     const pro = await creerPraticien(serviceClient, anon);
-    const c = await creerContrat(pro, mois, { seances: [{ jour: 3 }, { jour: 10 }] });
+    const c = await creerContrat(pro, mois, { seances: [] });
+    // `session_replication_role = replica` désactive les triggers utilisateur le temps de la session : c'est
+    // ce que fait un import en masse, et le cas que le cron du 1er est là pour rattraper.
+    await pg(async cl => {
+      await cl.query(`SET session_replication_role = replica`);
+      for (const j of [3, 10]) {
+        await cl.query(
+          `INSERT INTO public.seances (participant_id, praticien_id, contrat_id, date, heure_debut, heure_fin, duree_minutes, type, statut)
+           VALUES ($1, $2, $3, $4, '10:00', '10:45', 45, 'seance', 'realisee')`, [c.participantId, pro.id, c.contratId, mois.jour(j)]);
+      }
+    });
+    expect((await lignesDe(c.contratId, mois.periode)).factures).toHaveLength(0);   // le trigger n'a pas tourné
+
     const alerte = vi.fn(sansAlerte);
     const [a, m] = mois.periode.split('-').map(Number);
     const jourSuivant = (j: number) => new Date(Date.UTC(a, m, j, 5, 15));   // le mois d'après, à 05h15 UTC
 
-    expect((await lignesDe(c.contratId, mois.periode)).factures).toHaveLength(0);   // le 1er : rien n'a tourné
     const bilan3 = await executerFacturationMensuelle(serviceClient, jourSuivant(3), { envoyerAlerte: alerte });
     expect(bilan3.mois).toBe(mois.periode.slice(0, 7));
     const premier = await lignesDe(c.contratId, mois.periode);
     expect(premier.factures).toHaveLength(1);
     expect(premier.factures[0]).toMatchObject({ statut: 'brouillon', total: 90 });
+    expect(alerte.mock.calls.filter(x => x[1] === pro.id)).toHaveLength(1);        // créé par le cron : notifié
 
     for (const j of [4, 15, 28]) await executerFacturationMensuelle(serviceClient, jourSuivant(j), { envoyerAlerte: alerte });
     const apres = await lignesDe(c.contratId, mois.periode);
@@ -114,7 +134,7 @@ decrire('Génération mensuelle contre la vraie base (RPC service_role via Postg
     expect((await lignesDe(bon.contratId, mois.periode)).factures).toHaveLength(1);
   });
 
-  it('notifie chaque praticien avec le nombre de ses propres brouillons créés', async () => {
+  it('le 1er du mois, notifie chaque praticien avec le nombre de ses propres brouillons', async () => {
     const mois = moisDuTest();
     const a = await creerPraticien(serviceClient, anon);
     const b = await creerPraticien(serviceClient, anon);
@@ -122,7 +142,7 @@ decrire('Génération mensuelle contre la vraie base (RPC service_role via Postg
     await creerContrat(a, mois, { seances: [{ jour: 4 }] });
     await creerContrat(b, mois, { seances: [{ jour: 5 }] });
     const alerte = vi.fn(sansAlerte);
-    await genererBrouillonsDuMois(serviceClient, mois.periode, { envoyerAlerte: alerte });
+    await genererBrouillonsDuMois(serviceClient, mois.periode, { envoyerAlerte: alerte, notifierBrouillonsExistants: true });
     const corps = (id: string) => alerte.mock.calls.filter(c => c[1] === id).map(c => c[2].corps);
     expect(corps(a.id)).toEqual([expect.stringMatching(/^2 factures à valider pour /)]);
     expect(corps(b.id)).toEqual([expect.stringMatching(/^1 facture à valider pour /)]);
