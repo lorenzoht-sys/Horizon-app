@@ -9,13 +9,14 @@ import {
 } from 'chart.js';
 import { Chart, Line, Doughnut } from 'react-chartjs-2';
 import { TrendingUp, TrendingDown, Edit3, ChevronDown, ChevronUp, CheckCircle, RefreshCw } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import PageWrapper from '../components/layout/PageWrapper';
 import { useParticipants } from '../hooks/useParticipants';
 import { contratsDesBeneficiairesActifs, separerParArchivage } from '../lib/archivage';
 import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import { useStatsPro, type StatsPro } from '../hooks/useStatsPro';
+import { useCaAnneeEnCours } from '../hooks/useChiffreAffaires';
 import { useFactures } from '../hooks/useFactures';
 import { EBAUCHE_FACTURATION_VISIBLE } from '../lib/featuresFacturation';
 import type { Participant, Contrat } from '../types';
@@ -230,20 +231,21 @@ function MetricCard({ label, valeur, delta, deltaPositif }: {
   );
 }
 
-// ─── Formulaire saisie CA ─────────────────────────────────────────────────────
+// ─── Objectifs ────────────────────────────────────────────────────────────────
+//
+// Le CA n'est plus saisi ici (champ « Saisir mon CA » supprimé le 2026-10-09 : c'était une saisie locale,
+// dans le navigateur, sans lien avec les bénéficiaires ni les factures). Il vient de la facturation (factures
+// validées, HT) et des saisies de CA externe de la page /factures/ca. Ne reste ici que les objectifs.
 
-function FormulaireSaisieCA({ statsPro, onSave }: {
+function FormulaireObjectifs({ statsPro, onSave }: {
   statsPro: StatsPro;
   onSave: (s: StatsPro) => void;
 }) {
   const [ouvert, setOuvert] = useState(false);
-  const annee = new Date().getFullYear();
-  const [valeurs, setValeurs] = useState<Record<string, number>>({ ...(statsPro.caParMois ?? {}) });
   const [objMensuel, setObjMensuel] = useState(statsPro.objectifMensuel ?? 0);
   const [objAnnuel, setObjAnnuel] = useState(statsPro.objectifAnnuel ?? 0);
 
   useEffect(() => {
-    setValeurs({ ...(statsPro.caParMois ?? {}) });
     setObjMensuel(statsPro.objectifMensuel);
     setObjAnnuel(statsPro.objectifAnnuel);
   }, [statsPro]);
@@ -255,38 +257,14 @@ function FormulaireSaisieCA({ statsPro, onSave }: {
         className="flex items-center gap-2 text-sm font-medium text-primary border border-primary/30 hover:bg-primary/5 px-3 py-2 rounded-xl transition-colors"
       >
         <Edit3 size={14} />
-        Saisir mon CA
+        Mes objectifs
         {ouvert ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
 
       {ouvert && (
         <div className="mt-3 bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-3">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">CA mensuel {annee}</p>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-            {Array.from({ length: 12 }, (_, i) => {
-              const key = moisKey(annee, i);
-              return (
-                <div key={key} className="flex items-center gap-2">
-                  <label className="text-xs text-gray-500 w-20 flex-shrink-0">{MOIS_LONGS[i]}</label>
-                  <input
-                    type="number"
-                    value={valeurs[key] ?? ''}
-                    placeholder="0"
-                    min={0}
-                    onChange={e => setValeurs(v => ({
-                      ...v,
-                      [key]: parseInt(e.target.value) || 0,
-                    }))}
-                    className="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-primary"
-                  />
-                  <span className="text-xs text-gray-400">€</span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="border-t border-gray-200 pt-3 space-y-2">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Objectifs</p>
+          <div className="space-y-2">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Objectifs (HT)</p>
             {[
               { label: 'Objectif mensuel', val: objMensuel, set: setObjMensuel },
               { label: 'Objectif annuel',  val: objAnnuel,  set: setObjAnnuel  },
@@ -302,10 +280,13 @@ function FormulaireSaisieCA({ statsPro, onSave }: {
               </div>
             ))}
           </div>
-
+          <p className="text-xs text-gray-500">
+            Le CA affiché vient de vos factures validées et de votre CA externe :{' '}
+            <Link to="/factures/ca" className="text-primary font-medium hover:underline">suivre mon chiffre d'affaires</Link>.
+          </p>
           <button
             onClick={() => {
-              onSave({ caParMois: valeurs, objectifMensuel: objMensuel, objectifAnnuel: objAnnuel });
+              onSave({ objectifMensuel: objMensuel, objectifAnnuel: objAnnuel });
               setOuvert(false);
             }}
             className="w-full py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors mt-1"
@@ -320,14 +301,14 @@ function FormulaireSaisieCA({ statsPro, onSave }: {
 
 // ─── Graphique CA mensuel ─────────────────────────────────────────────────────
 
-function GraphiqueCA({ statsPro }: { statsPro: StatsPro }) {
+function GraphiqueCA({ statsPro, caParMois }: { statsPro: StatsPro; caParMois: Record<string, number> }) {
   const annee = new Date().getFullYear();
   const moisActuel = new Date().getMonth();
 
   let caData: (number | null)[] = Array(12).fill(null);
   try {
     caData = Array.from({ length: 12 }, (_, i) => {
-      const v = (statsPro.caParMois ?? {})[moisKey(annee, i)];
+      const v = caParMois[moisKey(annee, i)];
       return v !== undefined ? v : null;
     });
   } catch {
@@ -1325,11 +1306,12 @@ export default function StatsPage() {
   const { seances: rawSeances } = useAgenda();
   const { contratActifDeParticipant, contrats: rawContrats } = useContrats();
   const { statsPro, sauvegarder } = useStatsPro();
+  // CA réel (factures validées + CA externe saisi), en HT : remplace l'ancienne saisie locale.
+  const caParMois = useCaAnneeEnCours();
 
   const participants = rawParticipants ?? [];
   const seances = rawSeances ?? [];
   const contrats = rawContrats ?? [];
-  const caParMois = statsPro?.caParMois ?? {};
 
   // Sections d'ALERTES (bilans en retard, contrats qui expirent, sans jours, sans séance) : bénéficiaires
   // suivis uniquement. Les statistiques et la facturation, elles, gardent tout le monde.
@@ -1372,7 +1354,7 @@ export default function StatsPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <FormulaireSaisieCA statsPro={statsPro} onSave={sauvegarder} />
+          <FormulaireObjectifs statsPro={statsPro} onSave={sauvegarder} />
           <div className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full"
             style={{ background: badgeColor.bg, color: badgeColor.text }}>
             {pct >= 50
@@ -1457,7 +1439,7 @@ export default function StatsPage() {
             </div>
           </div>
           <ErrorBoundary>
-            <GraphiqueCA statsPro={statsPro} />
+            <GraphiqueCA statsPro={statsPro} caParMois={caParMois} />
           </ErrorBoundary>
         </div>
 

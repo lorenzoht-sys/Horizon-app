@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import PageWrapper from '../components/layout/PageWrapper';
 import { telechargerPdfFacture, useFacturesValidees } from '../hooks/useFacturesAValider';
@@ -35,7 +35,16 @@ export default function FacturesPage() {
         <Link to="/factures/a-valider" className="inline-flex items-center gap-1.5 text-gray-400 hover:text-gray-700 text-sm font-medium mb-2">
           <ArrowLeft size={16} /> Factures à valider
         </Link>
-        <h1 className="text-xl font-semibold text-gray-900">Factures validées</h1>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-xl font-semibold text-gray-900">Factures validées</h1>
+          <Link
+            to="/factures/ca"
+            data-testid="lien-chiffre-affaires"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary border border-primary/30 hover:bg-primary/5 px-3 py-2 rounded-xl"
+          >
+            Chiffre d'affaires <ArrowRight size={14} />
+          </Link>
+        </div>
         <p className="text-sm text-gray-500 mt-0.5">
           {chargement ? 'Chargement…' : `${factures.length} facture${factures.length > 1 ? 's' : ''}`}
           {' '}· l'envoi par e-mail arrive à l'étape suivante
