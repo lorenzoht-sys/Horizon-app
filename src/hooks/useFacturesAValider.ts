@@ -21,9 +21,14 @@ import {
 // (migration 20261006100200) est déjà un appel RPC qui contrôle l'appelant lui-même
 // (propriétaire de la facture, ou service_role).
 //
-// Un praticien ne lit que ses factures (policy factures_praticien) : la requête ci-dessous n'a
-// donc AUCUN filtre sur le praticien, et ne doit jamais en avoir besoin pour être sûre. Les
-// brouillons d'un autre praticien ne sont ni visibles ni validables (tests/db/facturation-cron.spec.ts).
+// Un praticien ne lit que ses factures (policy factures_praticien), et la RLS reste la seule
+// garantie de sécurité. Les requêtes ci-dessous filtrent pourtant EXPLICITEMENT sur le praticien
+// connecté : un compte ADMIN lit toutes les factures par la RLS (lecture seule voulue, policy
+// factures_admin_lecture) mais PAS les bénéficiaires des autres praticiens. Sans ce filtre, l'admin
+// voyait ici les brouillons de toute la plateforme, titrés « Bénéficiaire » et tous signalés
+// « il manque la rue, le code postal et la ville » faute de pouvoir lire le bénéficiaire (constaté en
+// prod le 2026-10-18), sans pouvoir les valider pour autant (valider_facture refuse un autre
+// praticien). Ces écrans sont ceux du praticien : on n'y montre que SES factures.
 
 export function useFacturesAValider() {
   const [brouillons, setBrouillons] = useState<FactureBrouillon[]>([]);
@@ -35,10 +40,12 @@ export function useFacturesAValider() {
   const charger = useCallback(async () => {
     if (!supabase) { setChargement(false); return; }
     const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setBrouillons([]); setProfil(null); setChargement(false); return; }
     const [fb, pr] = await Promise.all([
       supabase
         .from('factures')
         .select(SELECT_BROUILLON)
+        .eq('praticien_id', user.id)
         .eq('statut', 'brouillon')
         .eq('type', 'facture')
         .order('periode', { ascending: false }),
@@ -116,9 +123,14 @@ export function useFacturesValidees() {
     let annule = false;
     (async () => {
       if (!supabase) { setChargement(false); return; }
+      // Mêmes raisons que pour les brouillons (voir l'en-tête) : seulement les factures du praticien connecté.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (annule) return;
+      if (!user) { setFactures([]); setChargement(false); return; }
       const { data, error } = await supabase
         .from('factures')
         .select(SELECT_FACTURE_VALIDEE)
+        .eq('praticien_id', user.id)
         .neq('statut', 'brouillon')
         .order('date_emission', { ascending: false })
         .order('numero', { ascending: false })
