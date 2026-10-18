@@ -1,0 +1,56 @@
+name: Réveil de staging
+
+# Le plan gratuit de Supabase met en PAUSE un projet sans activité pendant 7 jours. horizon-staging s'est
+# ainsi arrêté deux fois en octobre 2026 (dont le 2026-10-18), et toute la CI tombait : l'e2e (« fetch
+# failed » à la remise en état du jeu de démo) et le harnais RLS (70 tests sur 70 ignorés, donc en échec).
+#
+# Ce workflow maintient le projet actif par une VRAIE lecture en base (une ligne de `praticiens`, sans rien
+# écrire), deux fois par semaine : lundi et jeudi. Pas une seule fois par semaine : un réveil tous les 7 jours
+# pile serait à la limite du seuil, et GitHub retarde parfois les tâches planifiées. Aucun changement de plan.
+#
+# Clé service_role (secret déjà utilisé par la CI) : la clé anon n'a pas le droit de lire ces tables (401),
+# et une requête refusée ne prouverait pas que la base répond. Requête en lecture seule, rien n'est modifié.
+#
+# Si staging est déjà en pause, ce job échoue avec un message explicite : il sert aussi d'alerte.
+# À savoir : GitHub désactive les tâches planifiées d'un dépôt sans aucune activité pendant 60 jours.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1,4'   # lundi et jeudi, 06:17 UTC
+  workflow_dispatch:
+  # Pour vérifier le workflow lui-même quand il est modifié.
+  pull_request:
+    paths:
+      - '.github/workflows/reveil-staging.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reveil-staging
+  cancel-in-progress: false
+
+jobs:
+  reveil:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Lecture d'une ligne dans la base de staging
+        env:
+          SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
+          SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_TEST_URL" ] || [ -z "$SUPABASE_TEST_SERVICE_ROLE_KEY" ]; then
+            echo "::error::Secrets SUPABASE_TEST_URL / SUPABASE_TEST_SERVICE_ROLE_KEY absents."
+            exit 1
+          fi
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 15 --retry-all-errors --max-time 30 \
+            "$SUPABASE_TEST_URL/rest/v1/praticiens?select=id&limit=1" \
+            -H "apikey: $SUPABASE_TEST_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_TEST_SERVICE_ROLE_KEY") || code="000"
+          echo "Réponse de staging : HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::Staging ne répond pas (HTTP $code). Projet Supabase en pause ? Le réactiver : dashboard Supabase > horizon-staging > Restore project."
+            exit 1
+          fi
+          echo "Staging actif."
