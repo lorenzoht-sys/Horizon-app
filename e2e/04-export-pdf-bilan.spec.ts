@@ -15,7 +15,11 @@ test.describe('Export PDF d\'un bilan', () => {
     // `:not([href$="new"])` exclut le lien « nouveau bilan »
     // (/participant/<id>/bilan/new), qui partage le même préfixe d'URL.
     const lienBilan = page.locator('a[href*="/bilan/"]:not([href$="new"])').first();
-    await expect(lienBilan).toBeVisible();
+    // 15 s et non les 5 s par défaut : la fiche du bénéficiaire enchaîne de nombreux appels Supabase avant
+    // d'afficher ses bilans (49 sur le parcours, dont 5 lectures participants + bilans + programmes à 0,72-0,77 s
+    // chacune, mesuré le 2026-10-18 dans une trace CI). Au premier essai, la page restait sur « Chargement… »
+    // au bout de 5 s (capture CI du 2026-10-18) : le lien n'était pas encore rendu, ce n'était pas un défaut.
+    await expect(lienBilan).toBeVisible({ timeout: 15000 });
     await lienBilan.click();
 
     // `toHaveURL` plutôt que `waitForURL` : la navigation est côté client
