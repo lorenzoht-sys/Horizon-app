@@ -220,7 +220,10 @@ test.describe('Agenda mobile — vue Mois', () => {
       for (let i = 0; i < moisADepasser; i++) {
         await page.getByRole('button', { name: 'Mois suivant' }).click();
       }
-      const caseCible = page.getByRole('button', { name: libelleCase });
+      // `exact: true` : sans lui, le nom accessible est cherché comme sous-chaîne, et « 2 déc. 2026 » trouvait
+      // aussi « 12 déc. 2026 » et « 22 déc. 2026 » (violation du mode strict). Le test échouait donc chaque
+      // fois que la date cible tombait un jour à un chiffre (constaté le 2026-10-18, cible le 2 décembre).
+      const caseCible = page.getByRole('button', { name: libelleCase, exact: true });
       await expect(caseCible).toBeVisible();
       const badgeCible = caseCible.getByTestId('charge-jour');
       const avant = await lireCompteStable(page, badgeCible);
