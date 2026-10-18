@@ -175,3 +175,15 @@ jobs:
 
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+
+      # Diagnostic : conserve captures, traces (prises à la reprise) et contextes d'erreur Playwright,
+      # y compris quand un test n'échoue qu'au premier essai puis passe à la reprise (job vert).
+      # Sans cela, tout disparaît avec le runner.
+      - name: Conserver les résultats Playwright
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-resultats
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
