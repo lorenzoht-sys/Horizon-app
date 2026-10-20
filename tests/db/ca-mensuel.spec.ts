@@ -168,17 +168,20 @@ decrire('Chiffre d\'affaires mensuel : agrégation et saisies externes', () => {
     expect((await saisie(p, c.participantId, mois.jour(15), 'x', 10)).error?.message).toMatch(/ca_externe_mois_premier_du_mois/);
   });
 
-  it('la suppression d\'un bénéficiaire emporte ses saisies (CASCADE)', async () => {
+  it('un bénéficiaire qui a des saisies de CA externe ne peut plus être supprimé (décision du 2026-10-20)', async () => {
+    // Jusqu'au 2026-10-20, ces saisies partaient en cascade avec le bénéficiaire. Elles font partie de
+    // l'historique financier : la suppression est désormais refusée (migration 20261020100000).
     const p = await pro();
     const mois = M;
     const c = await creerContrat(p, mois, { seances: [] });
     await saisie(p, c.participantId, mois.periode, 'SAP externe', 100);
-    await pg(async cl => {
+    const refus = await pg(async cl => {
       await cl.query(`DELETE FROM public.contrats WHERE participant_id = $1`, [c.participantId]);
-      await cl.query(`DELETE FROM public.participants WHERE id = $1`, [c.participantId]);
+      return cl.query(`DELETE FROM public.participants WHERE id = $1`, [c.participantId]).then(() => null, (e: Error) => e.message);
     });
+    expect(refus).toMatch(/historique financier/);
     const restant = await pg(cl => cl.query(`SELECT count(*)::int AS n FROM public.ca_externe WHERE participant_id = $1`, [c.participantId]));
-    expect(restant.rows[0].n).toBe(0);
+    expect(restant.rows[0].n).toBe(1);
   });
 
   // ── Cloisonnement ─────────────────────────────────────────────────────────────────────────────

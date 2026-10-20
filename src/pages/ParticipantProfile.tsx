@@ -2361,8 +2361,12 @@ export default function ParticipantProfile() {
                 Annuler
               </button>
               <button
-                onClick={() => {
-                  deleteParticipant(participant.id);
+                onClick={async () => {
+                  // On n'annonce la suppression et on ne quitte la fiche qu'une fois la base d'accord : un
+                  // bénéficiaire avec un historique financier ne se supprime pas (il s'archive).
+                  const r = await deleteParticipant(participant.id);
+                  setConfirmDelete(false);
+                  if ('erreur' in r) { toast.error(r.erreur, { duration: 10000 }); return; }
                   toast.success(`${participant.prenom} ${participant.nom} supprimé(e).`);
                   navigate('/');
                 }}
