@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useTarifsContrat } from '../../hooks/useTarifsContrat';
-import { totalFactureSeance } from '../../lib/tarifsContrats';
+import { dateCivileParis, totalFactureSeance } from '../../lib/tarifsContrats';
 
 function formatDateCourt(date: string): string {
   return new Date(date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -12,10 +12,12 @@ function formatDateCourt(date: string): string {
  * même réserve que les contacts professionnels (bug 06) : rien ici côté
  * mobile ni espace bénéficiaire.
  *
- * Affiche la version en vigueur et permet d'en ouvrir une nouvelle à partir
- * d'aujourd'hui (jamais de modification d'une ligne existante — voir
- * fermerEtCreerNouvelleVersion, src/hooks/useTarifsContrat.ts), plus un
- * historique consultable des versions closes.
+ * Affiche la version en vigueur et permet d'en ouvrir une nouvelle à une date
+ * d'effet choisie, par défaut aujourd'hui en heure de Paris (jamais de
+ * modification d'une ligne existante — voir fermerEtCreerNouvelleVersion,
+ * src/hooks/useTarifsContrat.ts), plus un historique consultable des versions
+ * closes. Les séances à partir de la date d'effet sont recalculées dans les
+ * brouillons de facture (trigger de base) ; une facture validée ne change pas.
  */
 export default function SectionTarifContrat({ contratId }: { contratId: string }) {
   const { versionActuelle, historique, loading, modifierTarif } = useTarifsContrat(contratId);
@@ -23,11 +25,13 @@ export default function SectionTarifContrat({ contratId }: { contratId: string }
   const [showHistorique, setShowHistorique] = useState(false);
   const [tarifSeance, setTarifSeance] = useState('');
   const [fraisDeplacement, setFraisDeplacement] = useState('');
+  const [dateEffet, setDateEffet] = useState('');
   const [saving, setSaving] = useState(false);
 
   function ouvrirEdition() {
     setTarifSeance(versionActuelle ? String(versionActuelle.tarifSeance) : '');
     setFraisDeplacement(versionActuelle ? String(versionActuelle.fraisDeplacement) : '0');
+    setDateEffet(dateCivileParis());
     setEditing(true);
   }
 
@@ -36,10 +40,11 @@ export default function SectionTarifContrat({ contratId }: { contratId: string }
     const f = fraisDeplacement.trim() === '' ? 0 : parseFloat(fraisDeplacement);
     if (!Number.isFinite(t) || t < 0) { toast.error('Tarif par séance invalide'); return; }
     if (!Number.isFinite(f) || f < 0) { toast.error('Frais de déplacement invalides'); return; }
+    if (!dateEffet) { toast.error('Choisissez une date d\'effet'); return; }
     setSaving(true);
-    const ok = await modifierTarif(t, f);
+    const ok = await modifierTarif(t, f, dateEffet);
     setSaving(false);
-    if (ok) { setEditing(false); toast.success('Tarif mis à jour à partir d\'aujourd\'hui'); }
+    if (ok) { setEditing(false); toast.success(`Tarif mis à jour à partir du ${formatDateCourt(dateEffet)}`); }
   }
 
   if (loading) return null;
@@ -119,7 +124,20 @@ export default function SectionTarifContrat({ contratId }: { contratId: string }
               />
             </label>
           </div>
-          <div className="text-xs text-gray-400">S'applique aux séances à partir d'aujourd'hui — l'historique passé n'est pas modifié.</div>
+          <label className="block">
+            <span className="text-xs text-gray-500">À partir du</span>
+            <input
+              type="date"
+              data-testid="tarif-date-effet"
+              value={dateEffet}
+              min={versionActuelle?.dateDebutValidite}
+              onChange={e => setDateEffet(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm mt-0.5 focus:outline-none focus:border-primary"
+            />
+          </label>
+          <div className="text-xs text-gray-400">
+            S'applique aux séances à partir de cette date. Les séances antérieures gardent l'ancien tarif, et une facture déjà validée n'est jamais modifiée.
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={valider}
