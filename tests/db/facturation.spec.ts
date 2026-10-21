@@ -603,13 +603,16 @@ decrire('Calcul du brouillon', () => {
       const s4 = await creerSeance(c, pro, ct, '2026-03-24');
       const id = (await generer(c, ct.contratId, '2026-03-17'))!;   // n'importe quel jour du mois
       const ls = await lignes(c, id);
+      // Depuis la PR 4 (2026-10-21) : la ligne de séance porte le tarif seul ; les frais de déplacement
+      // forment une ligne distincte « Frais de déplacement : N × 5 € », sans séance (total inchangé).
       expect(ls.map(l => [l.date, l.montant])).toEqual([
-        ['2026-03-10', 45], ['2026-03-14', 45], ['2026-03-15', 55], ['2026-03-24', 55],
+        ['2026-03-10', 45], ['2026-03-14', 45], ['2026-03-15', 50], ['2026-03-24', 50], [null, 10],
       ]);
-      expect(ls.map(l => l.seance_id)).toEqual([s1, s2, s3, s4]);
+      expect(ls.map(l => l.seance_id)).toEqual([s1, s2, s3, s4, null]);
       expect(ls[0].tarif_contrat_id).toBe(ct.tarifIds[0]);
       expect(ls[3].tarif_contrat_id).toBe(ct.tarifIds[1]);
-      expect(ls[2].libelle).toContain('dont déplacement 5.00 €');
+      expect(ls[2].libelle).not.toContain('déplacement');
+      expect(ls[4]).toMatchObject({ libelle: 'Frais de déplacement : 2 × 5 €', tarif_contrat_id: null });
       const [f] = await q(c, `SELECT periode::text AS periode, total::float8 AS total, part_client::float8 AS part_client, part_urssaf::float8 AS part_urssaf, statut, numero, circuit FROM public.factures WHERE id = $1`, [id]);
       expect(f).toEqual({ periode: '2026-03-01', total: 200, part_client: 200, part_urssaf: 0, statut: 'brouillon', numero: null, circuit: 'classique' });
     });
@@ -632,7 +635,10 @@ decrire('Calcul du brouillon', () => {
       }));
       const attendu = dates.map(d => totalFactureSeance(trouverTarifApplicable(versions, d)!));
       const ls = await lignes(c, (await generer(c, ct.contratId, '2026-03-01'))!);
-      expect(ls.map(l => l.montant)).toEqual(attendu);
+      // Depuis la PR 4 (2026-10-21), les frais de déplacement forment une ligne distincte : la ligne de
+      // séance porte le tarif seul, et le TOTAL reste celui du calcul TypeScript (tarif + frais par séance).
+      expect(ls.filter(l => l.seance_id).map(l => l.montant)).toEqual(dates.map(d => trouverTarifApplicable(versions, d)!.tarifSeance));
+      expect(ls.reduce((t, l) => t + l.montant, 0)).toBeCloseTo(attendu.reduce((t, m) => t + m, 0), 2);
     });
   });
 
@@ -1223,7 +1229,8 @@ decrire('Bilans : facturés selon le contrat (facturer_bilans)', () => {
       expect(ls.map(l => [l.date, l.seance_id, l.montant])).toEqual([
         ['2026-03-05', bilanAvant, 45],   // tarif en vigueur le 05/03
         ['2026-03-10', soin, 45],
-        ['2026-03-20', bilanApres, 55],   // nouveau tarif + déplacement le 20/03
+        ['2026-03-20', bilanApres, 50],   // nouveau tarif le 20/03…
+        [null, null, 5],                  // … et son déplacement en ligne distincte (PR 4)
       ]);
       expect(ls[0].tarif_contrat_id).toBe(ct.tarifIds[0]);
       expect(ls[2].tarif_contrat_id).toBe(ct.tarifIds[1]);

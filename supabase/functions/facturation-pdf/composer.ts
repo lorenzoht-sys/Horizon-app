@@ -61,6 +61,8 @@ export interface LignePdf {
   /** Séance liée (absente pour un forfait) : sert uniquement à ordonner les lignes. */
   seanceDate?: string | null;
   seanceHeure?: string | null;
+  /** Type de la séance liée (« seance » ou « bilan ») : sert au récapitulatif. */
+  seanceType?: string | null;
 }
 
 export interface FacturePdf {
@@ -92,6 +94,38 @@ export function formaterMontant(valeur: number): string {
   const [entier, decimales] = Math.abs(valeur).toFixed(2).split('.');
   const groupe = entier.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   return `${valeur < 0 ? '-' : ''}${groupe},${decimales} €`;
+}
+
+/**
+ * Récapitulatif imprimé sous le tableau (plan facturation PR 4, exemple de Pierre du 2026-10-19) :
+ * « 4 séances × 50,00 € = 200,00 € », « 1 bilan × 60,00 € = 60,00 € », puis la ligne des frais de
+ * déplacement « Frais de déplacement : 4 × 5,00 € = 20,00 € ». Calculé depuis les lignes, sans rien
+ * stocker : les séances (ou bilans) sont regroupées par prix unitaire. Vide quand la facture n'a aucune
+ * ligne de séance (forfait, avoir) : le tableau suffit.
+ */
+export function recapitulatif(lignes: LignePdf[]): string[] {
+  const seances = lignes.filter(l => l.seanceDate);
+  if (seances.length === 0) return [];
+  const groupes = new Map<string, { bilan: boolean; prix: number; nombre: number; montant: number }>();
+  for (const l of seances) {
+    const bilan = l.seanceType === 'bilan';
+    const cle = `${bilan ? 1 : 0}|${l.prixUnitaire.toFixed(2).padStart(12, '0')}`;
+    const g = groupes.get(cle) ?? { bilan, prix: l.prixUnitaire, nombre: 0, montant: 0 };
+    g.nombre += l.quantite;
+    g.montant += l.montant;
+    groupes.set(cle, g);
+  }
+  const lignesRecap = [...groupes.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, g]) => {
+      const nom = g.bilan ? (g.nombre > 1 ? 'bilans' : 'bilan') : (g.nombre > 1 ? 'séances' : 'séance');
+      return `${formaterQuantite(g.nombre)} ${nom} × ${formaterMontant(g.prix)} = ${formaterMontant(Math.round(g.montant * 100) / 100)}`;
+    });
+  const frais = lignes
+    .filter(l => !l.seanceDate && /^Frais de déplacement\b/.test(l.libelle))
+    .sort((a, b) => a.prixUnitaire - b.prixUnitaire)
+    .map(l => `Frais de déplacement : ${formaterQuantite(l.quantite)} × ${formaterMontant(l.prixUnitaire)} = ${formaterMontant(l.montant)}`);
+  return [...lignesRecap, ...frais];
 }
 
 export function formaterDate(iso: string): string {
@@ -354,6 +388,14 @@ export async function composerFacturePdf(f: FacturePdf): Promise<Uint8Array> {
   }
   c.page.drawLine({ start: { x: MARGE, y: c.y }, end: { x: xMontant, y: c.y }, thickness: 0.6, color: FILET });
   c.y -= 12;
+
+  const recap = recapitulatif(f.lignes);
+  if (recap.length) {
+    assurerPlace(c, 14 * (recap.length + 1) + 6);
+    ecrire(c, 'Récapitulatif', { gras: true, taille: 9, couleur: GRIS });
+    for (const l of recap) ecrire(c, l);
+    c.y -= 10;
+  }
 
   // Totaux : repris de la base, jamais recalculés ici (la TVA est arrondie UNE fois sur le total HT).
   assurerPlace(c, 70);
