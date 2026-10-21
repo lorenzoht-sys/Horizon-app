@@ -3,15 +3,17 @@ import { LIBELLES_MOTIF, dateCourte, lireLigneSuivi, regrouper } from './suiviSe
 
 const brut = (surcharge: Record<string, unknown> = {}) => ({
   seance_id: 's1', date: '2026-09-03', heure_debut: '10:00', type: 'seance', participant_id: 'p1', contrat_id: 'c1',
-  etat: 'facturee', motif: null, facture_id: 'f1', numero: '2026-0001', ...surcharge,
+  etat: 'facturee', motif: null, facture_id: 'f1', numero: '2026-0001', avant_debut_contrat: false, ...surcharge,
 });
 
 describe('suivi des séances', () => {
   it('lit une ligne de suivi_facturation_seances', () => {
     expect(lireLigneSuivi(brut())).toEqual({
       seanceId: 's1', date: '2026-09-03', heure: '10:00', type: 'seance', participantId: 'p1', contratId: 'c1',
-      etat: 'facturee', motif: null, factureId: 'f1', numero: '2026-0001',
+      etat: 'facturee', motif: null, factureId: 'f1', numero: '2026-0001', avantDebutContrat: false,
     });
+    expect(lireLigneSuivi(brut({ avant_debut_contrat: true })).avantDebutContrat).toBe(true);
+    expect(lireLigneSuivi(brut({ avant_debut_contrat: null })).avantDebutContrat).toBe(false);
   });
   it('un état inconnu est traité comme « à corriger », un motif inconnu est ignoré', () => {
     const l = lireLigneSuivi(brut({ etat: 'bizarre', motif: 'inconnu', facture_id: null, numero: null }));

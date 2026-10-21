@@ -23,7 +23,7 @@ decrire('Suivi de la facturation des séances : états et motifs', () => {
   const suivi = async (p: Praticien, periode: string) => {
     const r = await p.client.rpc('suivi_facturation_seances', { p_mois: periode });
     expect(r.error).toBeNull();
-    return (r.data ?? []) as { seance_id: string; etat: string; motif: string | null; numero: string | null; contrat_id: string | null }[];
+    return (r.data ?? []) as { seance_id: string; etat: string; motif: string | null; numero: string | null; contrat_id: string | null; avant_debut_contrat: boolean }[];
   };
   const de = (lignes: Awaited<ReturnType<typeof suivi>>, seanceId: string) => lignes.find(l => l.seance_id === seanceId);
   const seance = async (p: Praticien, participantId: string, contratId: string | null, date: string, type = 'seance') => {
@@ -116,6 +116,18 @@ decrire('Suivi de la facturation des séances : états et motifs', () => {
     // Concordance : aucun brouillon à la séance pour ces deux contrats.
     expect(await generer(sap.contratId, M.periode)).toBeNull();
     expect(await generer(b.contratId, M.periode)).toBeNull();
+  });
+
+  it('signal « avant le début du contrat » : la séance reste facturée (règle inchangée), seulement signalée', async () => {
+    const p = await pro();
+    const M = moisDuTest();
+    const c = await creerContrat(p, M, { seances: [] });
+    await pg(cl => cl.query(`UPDATE public.contrats SET date_debut = $2 WHERE id = $1`, [c.contratId, M.jour(15)]));
+    const avant = await seance(p, c.participantId, c.contratId, M.jour(8));
+    const apres = await seance(p, c.participantId, c.contratId, M.jour(20));
+    const l = await suivi(p, M.periode);
+    expect(de(l, avant)).toMatchObject({ etat: 'en_preparation', avant_debut_contrat: true });
+    expect(de(l, apres)).toMatchObject({ etat: 'en_preparation', avant_debut_contrat: false });
   });
 
   it('seulement les séances RÉALISÉES du mois demandé', async () => {

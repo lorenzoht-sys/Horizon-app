@@ -16,13 +16,19 @@
 --                   couvre pas le mois, aucun tarif à cette date, mois déjà facturé (séance réalisée après
 --                   la validation : facture complémentaire, décision 5, PR à venir), sinon « en attente »
 --                   (le prochain recalcul ou la tâche du 1er la reprendra)
+-- Signal en plus de l'état (décision du 2026-10-21) : avant_debut_contrat, vrai pour une séance datée avant le
+-- début de son contrat. Une telle séance EST facturée quand le contrat couvre le mois (règle existante,
+-- inchangée) : on la signale seulement, pour vérification.
+--
 -- Ces règles reprennent celles de generer_brouillon_facture (dernière définition : 20261022100000) et de
 -- recalculer_brouillon_mois (20261011100000) ; les tests de base vérifient qu'elles concordent.
 
-CREATE OR REPLACE FUNCTION public.suivi_facturation_seances(p_mois date)
+-- DROP d'abord : CREATE OR REPLACE ne sait pas changer les colonnes renvoyées (idempotence).
+DROP FUNCTION IF EXISTS public.suivi_facturation_seances(date);
+CREATE FUNCTION public.suivi_facturation_seances(p_mois date)
 RETURNS TABLE (
   seance_id uuid, date date, heure_debut text, type text, participant_id uuid, contrat_id uuid,
-  etat text, motif text, facture_id uuid, numero text
+  etat text, motif text, facture_id uuid, numero text, avant_debut_contrat boolean
 )
 LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
   WITH bornes AS (
@@ -69,7 +75,8 @@ LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
                            AND fm.statut NOT IN ('brouillon', 'annulee')) THEN 'mois_deja_facture'
            ELSE 'en_attente'
          END,
-         li.facture_id, li.numero
+         li.facture_id, li.numero,
+         coalesce(s.date < c.date_debut, false)
     FROM s
     LEFT JOIN liee li ON li.seance_id = s.id
     LEFT JOIN public.contrats c ON c.id = s.contrat_id

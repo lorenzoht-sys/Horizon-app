@@ -22,6 +22,8 @@ export interface LigneSuivi {
   motif: MotifSeance | null;
   factureId: string | null;
   numero: string | null;
+  /** Séance datée avant le début de son contrat : facturée quand même si le contrat couvre le mois, signalée. */
+  avantDebutContrat: boolean;
 }
 
 const ETATS: EtatSeance[] = ['a_facturer', 'en_preparation', 'facturee', 'non_facturable'];
@@ -63,6 +65,7 @@ export function lireLigneSuivi(row: Record<string, unknown>): LigneSuivi {
     motif: motif && motif in LIBELLES_MOTIF ? (motif as MotifSeance) : null,
     factureId: texte(row.facture_id),
     numero: texte(row.numero),
+    avantDebutContrat: row.avant_debut_contrat === true,
   };
 }
 

@@ -69,6 +69,7 @@ export default function SuiviSeancesPage() {
                             : <span className="font-medium text-gray-800">Bénéficiaire</span>}
                           <span className="text-gray-500"> · {l.type === 'seance' ? 'séance' : 'bilan'} du {dateCourte(l)}</span>
                           {l.motif && <div className="text-xs text-gray-500 mt-0.5">{LIBELLES_MOTIF[l.motif]}</div>}
+                          {l.avantDebutContrat && <div className="text-xs text-amber-700 mt-0.5" data-testid="avant-debut-contrat">Avant le début du contrat</div>}
                         </div>
                         {l.numero && <span className="text-xs text-gray-500">Facture {l.numero}</span>}
                       </li>
