@@ -83,6 +83,8 @@ export interface FacturePdf {
   emetteur: EmetteurPdf;
   destinataire: DestinatairePdf;
   lignes: LignePdf[];
+  /** Logo figé à la validation (logos_factures, clé snapshot_emetteur.logo_sha256), PR 5. */
+  logo?: { type: 'png' | 'jpg'; octets: Uint8Array } | null;
 }
 
 // ---------- formats ----------
@@ -254,6 +256,8 @@ export function construireBlocs(f: FacturePdf): BlocsFacture {
 
 const A4: [number, number] = [595.28, 841.89];
 const MARGE = 50;
+const LOGO_LARGEUR = 140;
+const LOGO_HAUTEUR = 56;
 const NOIR = rgb(0.1, 0.1, 0.1);
 const GRIS = rgb(0.4, 0.4, 0.4);
 const FILET = rgb(0.8, 0.8, 0.8);
@@ -336,7 +340,22 @@ export async function composerFacturePdf(f: FacturePdf): Promise<Uint8Array> {
   const premiere = doc.addPage(A4);
   const c: Contexte = { doc, page: premiere, y: A4[1] - MARGE, normal, gras, pied: blocs.titre, pages: [premiere] };
 
-  ecrire(c, blocs.titre, { taille: 20, gras: true });
+  // Logo en haut à droite, dans une boîte de 140 × 56 points, jamais agrandi. Une image que pdf-lib ne
+  // sait pas lire (PNG exotique, JPEG tronqué) est ignorée : le résultat reste le même à chaque
+  // composition, ce qui garde la régénération à l'identique.
+  if (f.logo) {
+    try {
+      const image = f.logo.type === 'png' ? await doc.embedPng(f.logo.octets) : await doc.embedJpg(f.logo.octets);
+      const k = Math.min(LOGO_LARGEUR / image.width, LOGO_HAUTEUR / image.height, 1);
+      const largeur = image.width * k;
+      const hauteur = image.height * k;
+      premiere.drawImage(image, { x: A4[0] - MARGE - largeur, y: A4[1] - MARGE - hauteur, width: largeur, height: hauteur });
+    } catch {
+      console.warn('[facturation-pdf] logo illisible, facture composée sans logo', f.numero);
+    }
+  }
+
+  ecrire(c, blocs.titre, { taille: 20, gras: true, largeur: A4[0] - 2 * MARGE - (f.logo ? LOGO_LARGEUR + 12 : 0) });
   c.y -= 6;
   for (const l of blocs.references) ecrire(c, l, { couleur: GRIS });
   c.y -= 10;

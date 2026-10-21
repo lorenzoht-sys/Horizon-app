@@ -17,7 +17,7 @@ import {
 
 const identite: IdentiteProfil = {
   nom: 'Dupont', siret: '73282932000074', numeroSap: 'SAP000000000', numeroTva: '',
-  adresseRue: '1 rue Test', adresseCodePostal: '00000', adresseVille: 'Villetest',
+  adresseRue: '1 rue Test', adresseCodePostal: '00000', adresseVille: 'Villetest', logo: '',
 };
 const franchise: FormulaireFacturation = { ...FORMULAIRE_VIDE, regimeTva: 'franchise_293B' };
 const assujetti = (taux: string, agrement = false): FormulaireFacturation =>
@@ -47,8 +47,14 @@ describe('lecture de la ligne praticiens', () => {
   });
   it('lit le rappel d\'identité', () => {
     expect(lireIdentite({ nom: 'D', siret: 'S', numero_sap: 'SAP', numero_tva: 'FR1', adresse_rue: 'r', adresse_code_postal: 'c', adresse_ville: 'v' }))
-      .toEqual({ nom: 'D', siret: 'S', numeroSap: 'SAP', numeroTva: 'FR1', adresseRue: 'r', adresseCodePostal: 'c', adresseVille: 'v' });
+      .toEqual({ nom: 'D', siret: 'S', numeroSap: 'SAP', numeroTva: 'FR1', adresseRue: 'r', adresseCodePostal: 'c', adresseVille: 'v', logo: '' });
     expect(lireIdentite(null).siret).toBe('');
+  });
+  it('lit le logo de Paramètres, seulement s\'il est une image PNG ou JPEG (PR 5)', () => {
+    expect(lireIdentite({ logo_praticien: 'data:image/png;base64,iVBORw0K' }).logo).toBe('data:image/png;base64,iVBORw0K');
+    expect(lireIdentite({ logo_praticien: 'data:image/jpeg;base64,/9j/4AAQ' }).logo).toBe('data:image/jpeg;base64,/9j/4AAQ');
+    expect(lireIdentite({ logo_praticien: 'data:image/svg+xml;base64,PHN2Zz4=' }).logo).toBe('');
+    expect(lireIdentite({ logo_praticien: 'https://exemple.test/logo.png' }).logo).toBe('');
   });
 });
 

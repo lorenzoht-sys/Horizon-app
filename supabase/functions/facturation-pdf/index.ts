@@ -35,6 +35,15 @@ function egalTempsConstant(a: string, b: string): boolean {
   return diff === 0;
 }
 
+/** bytea renvoyé par PostgREST : « \\x89504e47… » (hexadécimal). */
+function octetsDepuisBytea(valeur: string): Uint8Array | null {
+  const hex = valeur.startsWith("\\x") ? valeur.slice(2) : null;
+  if (!hex || hex.length % 2 !== 0 || /[^0-9a-f]/i.test(hex)) return null;
+  const octets = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < octets.length; i++) octets[i] = parseInt(hex.slice(2 * i, 2 * i + 2), 16);
+  return octets;
+}
+
 async function sha256(octets: Uint8Array): Promise<string> {
   const h = await crypto.subtle.digest("SHA-256", octets);
   return [...new Uint8Array(h)].map((x) => x.toString(16).padStart(2, "0")).join("");
@@ -85,6 +94,21 @@ Deno.serve(async (req) => {
     numeroOrigine = o?.numero ?? null;
   }
 
+  // Logo figé à la validation (migration 20261023100000) : on relit EXACTEMENT les octets de la clé du
+  // snapshot, et on vérifie leur empreinte. Introuvable ou altéré : on ne compose pas un PDF différent
+  // de celui attendu, on échoue (la table est inaltérable : ce cas ne devrait jamais arriver).
+  let logo: FacturePdf["logo"] = null;
+  const cleLogo = (f.snapshot_emetteur as Record<string, unknown> | null)?.logo_sha256;
+  if (typeof cleLogo === "string" && cleLogo) {
+    const { data: l, error: errLogo } = await admin.from("logos_factures").select("type, octets").eq("sha256", cleLogo).maybeSingle();
+    const octets = l ? octetsDepuisBytea(String(l.octets)) : null;
+    if (errLogo || !l || !octets || (await sha256(octets)) !== cleLogo) {
+      console.error("[facturation-pdf] logo figé introuvable ou altéré", f.numero, errLogo?.message ?? "");
+      return json({ erreur: "Logo introuvable" }, 500);
+    }
+    logo = { type: l.type === "jpg" ? "jpg" : "png", octets };
+  }
+
   const un = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? v[0] ?? null : v ?? null);
   const donnees: FacturePdf = {
     numero: f.numero,
@@ -111,6 +135,7 @@ Deno.serve(async (req) => {
         seanceType: s?.type ?? null,
       };
     }),
+    logo,
   };
 
   const octets = await composerFacturePdf(donnees);

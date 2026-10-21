@@ -1099,6 +1099,7 @@ export default function SettingsPage() {
             <SectionTitle title="Logo de ma société (PDFs)" />
             <p className="text-xs text-gray-400 mb-4">
               Affiché dans l'en-tête de tous vos PDFs à la place du logo Horizon. Laissez vide pour garder le logo Horizon.
+              Sur les factures, il est figé à la validation : le changer ne modifie pas les factures déjà validées.
             </p>
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
