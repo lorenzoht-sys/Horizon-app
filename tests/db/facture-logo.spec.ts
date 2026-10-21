@@ -108,6 +108,45 @@ decrire('Logo du praticien figé sur la facture à sa validation', () => {
     expect(await refus(`DELETE FROM public.logos_factures WHERE sha256 = $1`)).toMatch(/Logo figé/);
   });
 
+  it('ordre des déclencheurs : le logo est figé (BEFORE) avant tout déclencheur AFTER, y compris la demande de PDF', async () => {
+    // Postgres exécute TOUS les déclencheurs BEFORE d'une ligne avant de l'écrire, puis les AFTER : l'ordre
+    // alphabétique ne joue qu'à l'intérieur d'un même moment. factures_pdf_apres_validation est AFTER ;
+    // factures_snapshot_logo est BEFORE et passe après factures_inalterables (ordre alphabétique).
+    const moments = await pg(c => c.query(
+      `SELECT tgname, (tgtype & 2) <> 0 AS before FROM pg_trigger
+        WHERE tgrelid = 'public.factures'::regclass AND tgname IN ('factures_inalterables', 'factures_snapshot_logo', 'factures_pdf_apres_validation')
+        ORDER BY tgname`));
+    expect(moments.rows).toEqual([
+      { tgname: 'factures_inalterables', before: true },
+      { tgname: 'factures_pdf_apres_validation', before: false },
+      { tgname: 'factures_snapshot_logo', before: true },
+    ]);
+
+    // Preuve par l'exécution : un déclencheur AFTER témoin, nommé pour passer AVANT tous les autres dans
+    // l'ordre alphabétique, voit déjà la clé du logo dans la ligne validée. Transaction annulée ensuite.
+    const p = await pro();
+    await poserLogo(p, `data:image/png;base64,${PNG_A}`);
+    const M = moisDuTest();
+    const c = await creerContrat(p, M, { seances: [{ jour: 3 }] });
+    await genererBrouillonsDuMois(serviceClient, M.periode, { envoyerAlerte: sansAlerte });
+    const f = (await lignesDe(c.contratId, M.periode)).factures[0];
+    const vu = await pg(async cl => {
+      await cl.query('BEGIN');
+      try {
+        await cl.query(`CREATE TEMP TABLE temoin_logo (cle text) ON COMMIT DROP`);
+        await cl.query(`CREATE FUNCTION pg_temp.temoin_logo() RETURNS trigger LANGUAGE plpgsql AS $$
+                        BEGIN INSERT INTO temoin_logo VALUES (NEW.snapshot_emetteur ->> 'logo_sha256'); RETURN NULL; END; $$`);
+        await cl.query(`CREATE TRIGGER aaa_temoin_logo AFTER UPDATE OF statut ON public.factures
+                        FOR EACH ROW WHEN (OLD.statut = 'brouillon' AND NEW.statut = 'validee') EXECUTE FUNCTION pg_temp.temoin_logo()`);
+        await cl.query(`SELECT public.valider_facture($1)`, [f.id]);
+        return (await cl.query(`SELECT cle FROM temoin_logo`)).rows;
+      } finally {
+        await cl.query('ROLLBACK');
+      }
+    });
+    expect(vu).toEqual([{ cle: sha(PNG_A) }]);
+  });
+
   it('une facture validée reste inaltérable : la clé du logo ne peut pas être modifiée après coup', async () => {
     const p = await pro();
     await poserLogo(p, `data:image/png;base64,${PNG_A}`);
