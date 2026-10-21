@@ -1211,6 +1211,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
   // recueil pour un consentement jamais recueilli. Voir src/lib/consentementRgpd.ts.
   const [rgpd, setRgpd] = useState<RgpdConsent>(() => normaliserRgpd(seed.rgpd));
   const [droitImage, setDroitImage] = useState<boolean>(seed.droitImage ?? false);
+  const [beneficiaireSap, setBeneficiaireSap] = useState<boolean>(seed.beneficiaireSap ?? false);
 
   // Pathologie saisie ailleurs (bilan initial, ou formulaire mobile dont le
   // brouillon est partagé sous la même clé) : ce formulaire n'a pas de champ
@@ -1339,6 +1340,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
       objectifsPatient:        profilActivite.objectifsPatient.length > 0 ? profilActivite.objectifsPatient : undefined,
       disponibilites:          initial?.disponibilites,
       droitImage,
+      beneficiaireSap,
       tags, testsActifs, rgpd,
       traitements: traitements.length > 0 ? traitements : undefined,
       antecedentsMedicauxStructures: antecedents.length > 0 ? antecedents : undefined,
@@ -1407,13 +1409,13 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
     taille: form.taille ? Number(form.taille) : undefined,
     poids:  form.poids  ? Number(form.poids)  : undefined,
     anamnese, traitements, antecedentsMedicauxStructures: antecedents,
-    rgpd, droitImage, structureId,
+    rgpd, droitImage, beneficiaireSap, structureId,
     pathologie: pathologieBrouillon,
     modeDeplacementHabituel: profilActivite.modeDeplacementHabituel,
     modeDeplacementDetail:   profilActivite.modeDeplacementDetail || undefined,
     activitesSouhaitees:     profilActivite.activitesSouhaitees,
     objectifsPatient:        profilActivite.objectifsPatient,
-  }), [form, anamnese, traitements, antecedents, rgpd, droitImage, structureId, profilActivite, pathologieBrouillon]);
+  }), [form, anamnese, traitements, antecedents, rgpd, droitImage, beneficiaireSap, structureId, profilActivite, pathologieBrouillon]);
 
   const enAttenteRef = useRef(false);
   const derniereEtapeRef = useRef(step ?? 0);
@@ -1608,6 +1610,25 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
           </div>
         </div>
         <div className="p-4 space-y-4">
+          {/* Décision 3 du 2026-10-20 : un bénéficiaire SAP n'a aucune facture générée automatiquement. */}
+          <div>
+            <div className={CLS_LABEL}>Facturation</div>
+            <div className="flex gap-2" role="radiogroup" aria-label="Facturation Hors SAP ou SAP">
+              {([[false, 'Hors SAP'], [true, 'SAP']] as const).map(([valeur, libelle]) => (
+                <button key={libelle} type="button" role="radio" aria-checked={beneficiaireSap === valeur}
+                  data-testid={valeur ? 'beneficiaire-sap' : 'beneficiaire-hors-sap'}
+                  onClick={() => setBeneficiaireSap(valeur)}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${
+                    beneficiaireSap === valeur ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary/40'
+                  }`}>
+                  {libelle}
+                </button>
+              ))}
+            </div>
+            {beneficiaireSap && (
+              <p className="text-xs text-gray-500 mt-1.5">Aucune facture n'est générée automatiquement pour un bénéficiaire SAP (ses brouillons en cours sont retirés).</p>
+            )}
+          </div>
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
             ⚠️ Ces informations sont nécessaires pour établir les attestations fiscales SAP. Elles sont stockées uniquement sur votre appareil.
           </div>
