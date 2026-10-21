@@ -164,6 +164,29 @@ describe('récapitulatif (PR 4, exemple de Pierre)', () => {
   });
 });
 
+// PNG 1 × 1 valide et JPEG tronqué (illisible) : données de test, aucun logo réel.
+const PNG_1PX = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64'));
+const JPEG_TRONQUE = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+
+describe('logo (PR 5)', () => {
+  it('un logo PNG est intégré au PDF, de façon déterministe, et change le PDF', async () => {
+    const avec = await composerFacturePdf(facture({ logo: { type: 'png', octets: PNG_1PX } }));
+    const encore = await composerFacturePdf(facture({ logo: { type: 'png', octets: PNG_1PX } }));
+    const sans = await composerFacturePdf(facture());
+    expect(Buffer.from(avec).equals(Buffer.from(encore))).toBe(true);
+    expect(Buffer.from(avec).equals(Buffer.from(sans))).toBe(false);
+    const doc = await PDFDocument.load(avec);
+    expect(doc.getPageCount()).toBe(1);
+    expect(Buffer.from(avec).includes(Buffer.from('/Subtype /Image'))).toBe(true);
+  });
+  it('une image illisible est ignorée : PDF produit, identique à chaque composition', async () => {
+    const a = await composerFacturePdf(facture({ logo: { type: 'jpg', octets: JPEG_TRONQUE } }));
+    const b = await composerFacturePdf(facture({ logo: { type: 'jpg', octets: JPEG_TRONQUE } }));
+    expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
+    expect(Buffer.from(a).includes(Buffer.from('/Subtype /Image'))).toBe(false);
+  });
+});
+
 describe('composerFacturePdf', () => {
   it('produit un vrai PDF lisible, une page pour une facture courte', async () => {
     const octets = await composerFacturePdf(facture());

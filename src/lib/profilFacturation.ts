@@ -28,7 +28,8 @@ export type ModeIntervention = '' | 'prestataire' | 'mandataire';
 export const SELECT_PROFIL_FACTURATION =
   'nom, siret, numero_sap, numero_tva, adresse_rue, adresse_code_postal, adresse_ville, ' +
   'regime_tva, taux_tva, agrement_sap, date_declaration_sap, mode_intervention, adresse_intervention, ' +
-  'facturation_adresse_rue, facturation_code_postal, facturation_ville, iban, delai_paiement_jours, penalites_retard';
+  'facturation_adresse_rue, facturation_code_postal, facturation_ville, iban, delai_paiement_jours, penalites_retard, ' +
+  'logo_praticien';
 
 /** Rappel d'identité, édité dans Paramètres. */
 export interface IdentiteProfil {
@@ -39,6 +40,8 @@ export interface IdentiteProfil {
   adresseRue: string;
   adresseCodePostal: string;
   adresseVille: string;
+  /** Logo de Paramètres (data URL PNG/JPEG, '' si aucun) : figé sur la facture à sa validation (PR 5). */
+  logo: string;
 }
 
 /** Valeurs du formulaire : toujours des chaînes (ou un booléen), « vide » = ''. */
@@ -77,6 +80,7 @@ export function lireIdentite(row: Brut | null): IdentiteProfil {
     nom: texte(row?.nom), siret: texte(row?.siret), numeroSap: texte(row?.numero_sap),
     numeroTva: texte(row?.numero_tva), adresseRue: texte(row?.adresse_rue),
     adresseCodePostal: texte(row?.adresse_code_postal), adresseVille: texte(row?.adresse_ville),
+    logo: /^data:image\/(png|jpe?g);base64,/.test(texte(row?.logo_praticien)) ? texte(row?.logo_praticien) : '',
   };
 }
 

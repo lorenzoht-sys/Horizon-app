@@ -201,6 +201,17 @@ function Formulaire({ identite, initial, enregistrer }: {
             </ul>
           </Section>
 
+          <Section titre="Logo (lecture)" aide={<>Le logo de vos PDF, modifiable dans <Link to="/settings" className="text-primary underline">Paramètres</Link>. Il est figé sur chaque facture au moment de sa validation : le changer ensuite ne modifie pas les factures déjà validées.</>}>
+            <div className="flex items-center gap-4" data-testid="logo-facture">
+              <div className="w-28 h-14 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                {identite.logo
+                  ? <img src={identite.logo} alt="Logo figurant sur les factures" className="w-full h-full object-contain p-1" />
+                  : <span className="text-xs text-gray-300">Aucun logo</span>}
+              </div>
+              <p className="text-sm text-gray-600">{identite.logo ? 'Ce logo figurera en haut à droite de vos prochaines factures.' : 'Vos factures sont émises sans logo.'}</p>
+            </div>
+          </Section>
+
           <Section titre="TVA">
             <Champ etiquette="Régime de TVA" requis erreur={erreurs.regimeTva}>
               <select name="profil-regimeTva" data-testid="regime-tva" value={f.regimeTva}
