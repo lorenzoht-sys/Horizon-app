@@ -791,9 +791,10 @@ decrire('Unicité contrat / période', () => {
   it('refuse la suppression d\'un contrat ou d\'un bénéficiaire qui a des factures', async () => {
     await transaction(async c => {
       const v = await factureValidee(c);
-      // Deux protections se complètent : la clé étrangère RESTRICT de factures et le verrou des
-      // séances facturées (l'action SET NULL / CASCADE passerait par un UPDATE ou DELETE de séance).
-      const motif = /foreign key|viole|violates|déjà facturée/i;
+      // Trois protections se complètent : la clé étrangère RESTRICT de factures, le verrou des séances
+      // facturées (l'action SET NULL / CASCADE passerait par un UPDATE ou DELETE de séance) et, depuis le
+      // 2026-10-20, le refus explicite de supprimer un bénéficiaire qui a un historique financier.
+      const motif = /foreign key|viole|violates|déjà facturée|historique financier/i;
       await refus(c, `DELETE FROM public.contrats WHERE id = $1`, [v.ct.contratId], motif);
       await refus(c, `DELETE FROM public.participants WHERE id = $1`, [v.ct.participantId], motif);
     });

@@ -7,6 +7,7 @@ import { geocodeAdresse } from '../utils/geocodeAdresse';
 import { supabase } from '../lib/supabase';
 import { dbToParticipant, participantToDb, bilanToDb } from '../lib/mappers';
 import { separerParArchivage } from '../lib/archivage';
+import { messageSuppressionBeneficiaire } from '../lib/suppressionBeneficiaire';
 
 const DEMO_PATIENTS: Participant[] = [
   {
@@ -197,9 +198,17 @@ export function useParticipants() {
     runGeocode(id, p.adresseRue!, p.adresseCodePostal ?? '', p.adresseVille!);
   }, []);
 
-  const deleteParticipant = useCallback(async (id: string) => {
-    if (supabase) await supabase.from('participants').delete().eq('id', id);
+  // Ne retire le bénéficiaire de la liste QUE si la base a réellement supprimé la ligne. Avant le
+  // 2026-10-20, l'erreur était ignorée : une suppression refusée (historique financier) faisait quand même
+  // disparaître la fiche jusqu'au rechargement. `select('id')` : sans lui, une suppression qui ne touche
+  // aucune ligne (RLS) passerait pour un succès.
+  const deleteParticipant = useCallback(async (id: string): Promise<{ ok: true } | { erreur: string }> => {
+    if (!supabase) return { erreur: 'Base de données indisponible' };
+    const { data, error } = await supabase.from('participants').delete().eq('id', id).select('id');
+    if (error) return { erreur: messageSuppressionBeneficiaire(error) };
+    if (!data || data.length === 0) return { erreur: 'Suppression impossible : ce bénéficiaire n\'a pas été trouvé.' };
     setParticipants(prev => prev.filter(p => p.id !== id));
+    return { ok: true };
   }, []);
 
   const addBilan = useCallback(async (participantId: string, bilan: Omit<Bilan, 'id'>) => {
