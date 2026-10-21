@@ -96,8 +96,8 @@ export function estRouteInterfaceUnique(pathname: string): boolean {
     // responsive dès l'écriture (une colonne, aucune barre fixe en bas). C'est aussi la cible de
     // la notification push du 1er du mois (api/_lib/facturationMensuelle.ts) : sans cette entrée,
     // un téléphone ouvrirait l'accueil au clic.
-    // Suivi du chiffre d'affaires (/factures/ca) : même construction responsive.
-    /^\/factures(\/a-valider|\/ca)?\/?$/.test(pathname) ||
+    // Suivi du chiffre d'affaires (/factures/ca) et des séances (/factures/seances) : même construction.
+    /^\/factures(\/a-valider|\/ca|\/seances)?\/?$/.test(pathname) ||
     // Profil de facturation (étape 4), atteint depuis Paramètres : formulaire d'une colonne,
     // construit responsive, sans barre fixe en bas. /settings lui-même reste géré par
     // l'écran 'parametres' (SettingsPage sans barre), seule cette sous-page passe ici.
