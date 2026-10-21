@@ -6,6 +6,7 @@ import {
   formaterDate,
   formaterMontant,
   formaterPeriode,
+  recapitulatif,
   trierLignes,
   type FacturePdf,
 } from './composer';
@@ -129,6 +130,37 @@ describe('ordre des lignes', () => {
     const attendu = ['S1bis', 'S1', 'S2', 'Forfait A', 'Forfait B'];
     expect(trierLignes(a).map(x => x.libelle)).toEqual(attendu);
     expect(trierLignes([...a].reverse()).map(x => x.libelle)).toEqual(attendu);
+  });
+});
+
+describe('récapitulatif (PR 4, exemple de Pierre)', () => {
+  const seance = (date: string, prix: number, type = 'seance') =>
+    ({ libelle: `Séance du ${date}`, quantite: 1, prixUnitaire: prix, montant: prix, seanceDate: date, seanceHeure: '10:00', seanceType: type });
+  it("4 séances à 50 € et leurs frais : « 4 séances × 50 € » puis « Frais de déplacement : 4 × 5 € »", () => {
+    const lignes = [seance('2026-09-03', 50), seance('2026-09-10', 50), seance('2026-09-17', 50), seance('2026-09-24', 50),
+      { libelle: 'Frais de déplacement : 4 × 5 €', quantite: 4, prixUnitaire: 5, montant: 20 }];
+    expect(recapitulatif(lignes)).toEqual([
+      '4 séances × 50,00 € = 200,00 €',
+      'Frais de déplacement : 4 × 5,00 € = 20,00 €',
+    ]);
+  });
+  it('regroupe par prix (changement de tarif dans le mois) et sépare les bilans, au singulier comme au pluriel', () => {
+    const lignes = [seance('2026-09-20', 55), seance('2026-09-03', 50), seance('2026-09-10', 50), seance('2026-09-05', 60, 'bilan')];
+    expect(recapitulatif(lignes)).toEqual([
+      '2 séances × 50,00 € = 100,00 €',
+      '1 séance × 55,00 € = 55,00 €',
+      '1 bilan × 60,00 € = 60,00 €',
+    ]);
+  });
+  it('vide pour un forfait ou un avoir (aucune ligne de séance)', () => {
+    expect(recapitulatif([{ libelle: 'Forfait mensuel — septembre 2026', quantite: 1, prixUnitaire: 200, montant: 200 }])).toEqual([]);
+  });
+  it("le PDF qui porte un récapitulatif reste une page et diffère de celui sans", async () => {
+    const lignes = [seance('2026-09-03', 50), { libelle: 'Frais de déplacement : 1 × 5 €', quantite: 1, prixUnitaire: 5, montant: 5 }];
+    const avec = await composerFacturePdf(facture({ lignes, totalHt: 55, montantTva: 5.5, total: 60.5 }));
+    const sans = await composerFacturePdf(facture({ lignes: lignes.map(l => ({ ...l, seanceDate: null })), totalHt: 55, montantTva: 5.5, total: 60.5 }));
+    expect((await PDFDocument.load(avec)).getPageCount()).toBe(1);
+    expect(Buffer.from(avec).equals(Buffer.from(sans))).toBe(false);
   });
 });
 

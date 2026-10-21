@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
 
   const { data: lignes, error: errL } = await admin
     .from("lignes_facture")
-    .select("libelle, quantite, prix_unitaire, montant, seances(date, heure_debut)")
+    .select("libelle, quantite, prix_unitaire, montant, seances(date, heure_debut, type)")
     .eq("facture_id", factureId);
   if (errL) { console.error("[facturation-pdf] lecture lignes", factureId, errL.message); return json({ erreur: "Lecture impossible" }, 500); }
 
@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
     emetteur: f.snapshot_emetteur ?? {},
     destinataire: f.snapshot_destinataire ?? {},
     lignes: (lignes ?? []).map((l: Record<string, unknown>) => {
-      const s = un<{ date?: string; heure_debut?: string }>(l.seances as never);
+      const s = un<{ date?: string; heure_debut?: string; type?: string }>(l.seances as never);
       return {
         libelle: String(l.libelle),
         quantite: Number(l.quantite),
@@ -108,6 +108,7 @@ Deno.serve(async (req) => {
         montant: Number(l.montant),
         seanceDate: s?.date ?? null,
         seanceHeure: s?.heure_debut ?? null,
+        seanceType: s?.type ?? null,
       };
     }),
   };
