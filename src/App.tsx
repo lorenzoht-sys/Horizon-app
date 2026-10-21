@@ -39,6 +39,7 @@ const StructureDetail    = lazy(() => import('./pages/StructureDetail'));
 const FacturesAValiderPage = lazy(() => import('./pages/FacturesAValiderPage'));
 const FacturesPage       = lazy(() => import('./pages/FacturesPage'));
 const ChiffreAffairesPage = lazy(() => import('./pages/ChiffreAffairesPage'));
+const SuiviSeancesPage = lazy(() => import('./pages/SuiviSeancesPage'));
 const ProfilFacturationPage = lazy(() => import('./pages/ProfilFacturationPage'));
 const PortailStructure   = lazy(() => import('./pages/PortailStructure'));
 const ComparaisonPage    = lazy(() => import('./pages/ComparaisonPage'));
@@ -115,6 +116,8 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
             <Route path="/factures" element={<PageTransition><Suspense fallback={<MapFallback />}><FacturesPage /></Suspense></PageTransition>} />
             {/* Suivi du chiffre d'affaires mensuel : CA facturé (HT) + CA externe saisi. */}
             <Route path="/factures/ca" element={<PageTransition><Suspense fallback={<MapFallback />}><ChiffreAffairesPage /></Suspense></PageTransition>} />
+            {/* Suivi de la facturation des séances du mois (PR 6) : facturées, en préparation, à corriger. */}
+            <Route path="/factures/seances" element={<PageTransition><Suspense fallback={<MapFallback />}><SuiviSeancesPage /></Suspense></PageTransition>} />
             <Route path="/structures" element={<PageTransition><Suspense fallback={<MapFallback />}><StructuresPage /></Suspense></PageTransition>} />
             <Route path="/structures/:id" element={<PageTransition><Suspense fallback={<MapFallback />}><StructureDetail /></Suspense></PageTransition>} />
             <Route path="/settings" element={<PageTransition><SettingsPage /></PageTransition>} />

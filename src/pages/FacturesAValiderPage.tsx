@@ -171,6 +171,13 @@ export default function FacturesAValiderPage() {
           >
             Chiffre d'affaires <ArrowRight size={14} />
           </Link>
+          <Link
+            to="/factures/seances"
+            data-testid="lien-suivi-seances"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary border border-primary/30 hover:bg-primary/5 px-3 py-2 rounded-xl"
+          >
+            Suivi des séances <ArrowRight size={14} />
+          </Link>
           {validables.length > 1 && (
             <button
               type="button"

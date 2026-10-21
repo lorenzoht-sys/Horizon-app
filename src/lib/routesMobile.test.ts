@@ -60,6 +60,7 @@ describe('estRouteInterfaceUnique', () => {
     expect(estRouteInterfaceUnique('/factures/a-valider')).toBe(true);
     expect(estRouteInterfaceUnique('/factures/a-valider/')).toBe(true);
     expect(estRouteInterfaceUnique('/factures/ca')).toBe(true);
+    expect(estRouteInterfaceUnique('/factures/seances')).toBe(true);
     expect(estRouteInterfaceUnique('/factures/ca/')).toBe(true);
   });
 
