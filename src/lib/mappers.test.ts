@@ -3,6 +3,7 @@ import {
   dbToBilan, bilanToDb, normaliserVisibilite,
   dbToParticipationCoursCollectif, participationCoursCollectifToDb,
   dbToSeance, seanceToDb,
+  dbToParticipant, participantToDb,
 } from './mappers';
 import { ALL_TESTS } from '../data/profiles';
 import type { Bilan, TestKey } from '../types';
@@ -291,5 +292,16 @@ describe('dbToSeance / seanceToDb — absenceSignaleeLe (lecture seule côté pr
     const db = seanceToDb(fusionnee);
     expect(db.heure_debut).toBe('10:00');
     expect(db).not.toHaveProperty('absence_signalee_par_patient_le');
+  });
+});
+
+describe('dbToParticipant / participantToDb — beneficiaireSap (décision 3 du 2026-10-20)', () => {
+  it('lit et écrit la colonne beneficiaire_sap', () => {
+    expect(dbToParticipant({ id: 'p1', nom: 'X', prenom: 'Y', beneficiaire_sap: true }).beneficiaireSap).toBe(true);
+    expect(participantToDb({ id: 'p1', nom: 'X', prenom: 'Y', beneficiaireSap: true } as never).beneficiaire_sap).toBe(true);
+  });
+  it('« Hors SAP » par défaut : ligne sans la colonne, fiche sans le champ (restauration d\'une ancienne sauvegarde)', () => {
+    expect(dbToParticipant({ id: 'p1', nom: 'X', prenom: 'Y' }).beneficiaireSap).toBe(false);
+    expect(participantToDb({ id: 'p1', nom: 'X', prenom: 'Y' } as never).beneficiaire_sap).toBe(false);
   });
 });

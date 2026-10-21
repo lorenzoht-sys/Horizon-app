@@ -751,6 +751,10 @@ export interface Participant {
   dateArchivage?: string;
   activitesSouhaitees?: string[];
   objectifsPatient?: string | string[];
+  /** Bénéficiaire facturé en Service à la Personne (décision 3 du 2026-10-20) : exclu de la
+   * génération automatique des factures (la base n'en crée aucun brouillon, migration
+   * 20261021100000). Faux par défaut (« Hors SAP »). */
+  beneficiaireSap?: boolean;
   // Coordonnées bancaires (SAP)
   iban?: string;
   bic?: string;
