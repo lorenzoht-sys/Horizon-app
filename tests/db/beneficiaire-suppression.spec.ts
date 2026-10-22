@@ -51,7 +51,7 @@ decrire('Suppression d\'un bénéficiaire : bloquée par un historique financier
     expect((await p.client.rpc('valider_facture', { p_facture_id: f.id })).error).toBeNull();
     const avoirId = randomUUID();
     await pg(async cl => {
-      await cl.query(`INSERT INTO public.factures (id, praticien_id, contrat_id, participant_id, periode, type, facture_origine_id) VALUES ($1, $2, $3, $4, $5, 'avoir', $6)`, [avoirId, p.id, c.contratId, c.participantId, M.periode, f.id]);
+      await cl.query(`INSERT INTO public.factures (id, praticien_id, contrat_id, participant_id, periode, type, facture_origine_id, motif) VALUES ($1, $2, $3, $4, $5, 'avoir', $6, 'Motif de test')`, [avoirId, p.id, c.contratId, c.participantId, M.periode, f.id]);
       await cl.query(`INSERT INTO public.lignes_facture (facture_id, libelle, quantite, prix_unitaire, montant) VALUES ($1, 'Avoir', 1, 10, 10)`, [avoirId]);
     });
     expect((await p.client.rpc('valider_facture', { p_facture_id: avoirId })).error).toBeNull();

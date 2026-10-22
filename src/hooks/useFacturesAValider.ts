@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import type { Choix, Credit, LigneOrigine } from '../lib/avoirs';
 import {
   SELECT_BROUILLON,
   SELECT_FACTURE_VALIDEE,
@@ -98,6 +99,34 @@ export function useFacturesAValider() {
  * praticien (la RLS de storage.objects ne lui laisse lire que son dossier) : aucune route /api,
  * aucun lien durable. Ne lève jamais.
  */
+/**
+ * Fenêtre « Créer un avoir » (PR 9) : lignes de la facture d'origine et ce que ses avoirs émis en ont déjà
+ * crédité (lignes_facture.ligne_origine_id). Lecture sous la RLS du praticien.
+ */
+export async function chargerLignesAvoir(factureId: string, avoirIds: string[]): Promise<{ lignes: LigneOrigine[]; credits: Credit[] } | { erreur: string }> {
+  if (!supabase) return { erreur: 'Base de données indisponible' };
+  const { data, error } = await supabase.from('lignes_facture')
+    .select('id, libelle, quantite, prix_unitaire, montant, seance_id, seances(date, heure_debut)')
+    .eq('facture_id', factureId);
+  if (error) return { erreur: error.message };
+  let credits: Credit[] = [];
+  if (avoirIds.length > 0) {
+    const c = await supabase.from('lignes_facture').select('ligne_origine_id, quantite').in('facture_id', avoirIds).not('ligne_origine_id', 'is', null);
+    if (c.error) return { erreur: c.error.message };
+    credits = (c.data ?? []).map(r => ({ ligneOrigineId: String(r.ligne_origine_id), quantite: Number(r.quantite) }));
+  }
+  type Brute = { id: string; libelle: string; quantite: unknown; prix_unitaire: unknown; montant: unknown; seance_id: string | null; seances: unknown };
+  const cle = (r: Brute) => {
+    const s = (Array.isArray(r.seances) ? r.seances[0] : r.seances) as { date?: string; heure_debut?: string } | null;
+    // Même ordre que le PDF : séances par date et heure, puis lignes sans séance par libellé.
+    return s?.date ? `0${s.date}${s.heure_debut ?? ''}` : `1${r.libelle}`;
+  };
+  const lignes = ((data ?? []) as unknown as Brute[]).sort((a, b) => cle(a).localeCompare(cle(b))).map(r => ({
+    id: r.id, libelle: r.libelle, quantite: Number(r.quantite), prixUnitaire: Number(r.prix_unitaire), montant: Number(r.montant), seanceId: r.seance_id,
+  }));
+  return { lignes, credits };
+}
+
 export async function telechargerPdfFacture(pdfPath: string, numero: string): Promise<{ ok: true } | { erreur: string }> {
   if (!supabase) return { erreur: 'Base de données indisponible' };
   const { data, error } = await supabase.storage.from('factures').download(pdfPath);
@@ -179,5 +208,34 @@ export function useFacturesValidees() {
     return { ok: true, destinataire: String(data?.destinataire ?? ''), enregistree: data?.enregistree === true };
   }, []);
 
-  return { factures, chargement, erreur, marquerPayee, envoyer };
+  /**
+   * « Créer un avoir » (PR 9) : creer_avoir crée l'avoir, le valide (numéro définitif) et met à jour la
+   * facture d'origine en une transaction. `totalAttendu` est le montant affiché : la base refuse tout écart.
+   */
+  const creerAvoir = useCallback(async (factureId: string, lignes: Choix[], geste: number, motif: string, totalAttendu: number):
+    Promise<{ ok: true; numero: string; total: number; origineAnnulee: boolean; aRembourser: number } | { erreur: string }> => {
+    if (!supabase) return { erreur: 'Base de données indisponible' };
+    const { data, error } = await supabase.rpc('creer_avoir', {
+      p_facture_id: factureId,
+      p_lignes: lignes.map(l => ({ ligne_id: l.ligneId, quantite: l.quantite })),
+      p_geste: geste > 0 ? geste : null,
+      p_motif: motif.trim(),
+      p_total_attendu: totalAttendu,
+    });
+    if (error) return { erreur: error.message };
+    setVersion(v => v + 1);
+    const r = (data ?? {}) as Record<string, unknown>;
+    return { ok: true, numero: String(r.numero ?? ''), total: Number(r.total ?? 0), origineAnnulee: r.origine_annulee === true, aRembourser: Number(r.a_rembourser ?? 0) };
+  }, []);
+
+  /** « Refaire la facture du mois » (PR 9) : après une annulation totale, recrée le brouillon depuis les séances libérées. */
+  const refaireFacture = useCallback(async (contratId: string, periode: string): Promise<{ ok: true; cree: boolean } | { erreur: string }> => {
+    if (!supabase) return { erreur: 'Base de données indisponible' };
+    const { data, error } = await supabase.rpc('generer_brouillon_facture', { p_contrat_id: contratId, p_periode: periode });
+    if (error) return { erreur: error.message };
+    setVersion(v => v + 1);
+    return { ok: true, cree: data != null };
+  }, []);
+
+  return { factures, chargement, erreur, marquerPayee, envoyer, creerAvoir, refaireFacture };
 }

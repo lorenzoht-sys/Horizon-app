@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
     .from("factures")
     .select(
       "id, numero, type, statut, periode, date_emission, echeance, total_ht, montant_tva, taux_tva, total, " +
-        "snapshot_emetteur, snapshot_destinataire, pdf_path, praticien_id, facture_origine_id",
+        "snapshot_emetteur, snapshot_destinataire, pdf_path, praticien_id, facture_origine_id, motif",
     )
     .eq("id", factureId)
     .maybeSingle();
@@ -117,6 +117,7 @@ Deno.serve(async (req) => {
     echeance: f.echeance,
     periode: f.periode,
     numeroOrigine,
+    motif: f.motif ?? null,
     totalHt: Number(f.total_ht),
     montantTva: Number(f.montant_tva),
     tauxTva: Number(f.taux_tva),

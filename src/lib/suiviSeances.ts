@@ -1,11 +1,12 @@
 // Suivi de la facturation des séances (plan facturation PR 6) : lecture et présentation du résultat de
 // suivi_facturation_seances(mois) (migration 20261024100000). Logique pure, testée à côté.
 //
-// Quatre états : facturée, en préparation (brouillon du mois), à facturer (anomalie à corriger, avec son
-// motif) et non facturable (voulu : SAP, forfait, bilans non facturés). Les règles vivent en base ; ce
-// fichier ne fait que les nommer et les regrouper.
+// Cinq états : facturée, créditée (séance d'une facture émise, créditée par un avoir partiel : elle reste
+// rattachée à sa facture et n'est pas refacturée, PR 9), en préparation (brouillon du mois), à facturer
+// (anomalie à corriger, avec son motif) et non facturable (voulu : SAP, forfait, bilans non facturés). Les
+// règles vivent en base ; ce fichier ne fait que les nommer et les regrouper.
 
-export type EtatSeance = 'facturee' | 'en_preparation' | 'a_facturer' | 'non_facturable';
+export type EtatSeance = 'facturee' | 'creditee' | 'en_preparation' | 'a_facturer' | 'non_facturable';
 
 export type MotifSeance =
   | 'beneficiaire_sap' | 'forfait' | 'bilan_initial' | 'bilan_non_facture'
@@ -24,14 +25,18 @@ export interface LigneSuivi {
   numero: string | null;
   /** Séance datée avant le début de son contrat : facturée quand même si le contrat couvre le mois, signalée. */
   avantDebutContrat: boolean;
+  /** Avoir émis qui crédite la séance (état « créditée »). */
+  avoirId: string | null;
+  numeroAvoir: string | null;
 }
 
-const ETATS: EtatSeance[] = ['a_facturer', 'en_preparation', 'facturee', 'non_facturable'];
+const ETATS: EtatSeance[] = ['a_facturer', 'en_preparation', 'facturee', 'creditee', 'non_facturable'];
 
 export const LIBELLES_ETAT: Record<EtatSeance, string> = {
   a_facturer: 'À corriger',
   en_preparation: 'En préparation',
   facturee: 'Facturées',
+  creditee: 'Créditées (avoir)',
   non_facturable: 'Non facturables',
 };
 
@@ -66,6 +71,8 @@ export function lireLigneSuivi(row: Record<string, unknown>): LigneSuivi {
     factureId: texte(row.facture_id),
     numero: texte(row.numero),
     avantDebutContrat: row.avant_debut_contrat === true,
+    avoirId: texte(row.avoir_id),
+    numeroAvoir: texte(row.numero_avoir),
   };
 }
 

@@ -50,6 +50,15 @@ export interface FactureValidee {
   datePaiement: string | null;
   /** Dernier envoi RÉUSSI par e-mail (journal envois_factures, PR 8), NULL s'il n'y en a aucun. */
   dernierEnvoi: { date: string; destinataire: string } | null;
+  /** Avoirs (PR 9) : facture corrigée par cet avoir, son motif ; contrat (« Refaire la facture du mois »). */
+  factureOrigineId: string | null;
+  motif: string | null;
+  contratId: string;
+  totalHt: number;
+  montantTva: number;
+  tauxTva: number;
+  /** Somme des paiements enregistrés. */
+  paye: number;
 }
 
 /** Champs du profil du praticien qui conditionnent la validation (valider_facture, étape 1). */
@@ -80,7 +89,10 @@ export const SELECT_PROFIL =
   'nom, siret, regime_tva, taux_tva, adresse_rue, adresse_code_postal, adresse_ville, ' +
   'facturation_adresse_rue, facturation_code_postal, facturation_ville';
 
-export const SELECT_FACTURE_VALIDEE = 'id, numero, type, periode, date_emission, echeance, statut, total, pdf_path, participants(prenom, nom), paiements(date), envois_factures(created_at, destinataire, resultat)';
+export const SELECT_FACTURE_VALIDEE =
+  'id, numero, type, periode, date_emission, echeance, statut, total, total_ht, montant_tva, taux_tva, pdf_path, ' +
+  'contrat_id, facture_origine_id, motif, participants(prenom, nom), paiements(date, montant), ' +
+  'envois_factures(created_at, destinataire, resultat)';
 
 /** Date civile Paris (AAAA-MM-JJ) : la règle de validation de la base se règle sur Paris, pas sur le poste. */
 export function dateCivileParis(instant: Date = new Date()): string {
@@ -284,7 +296,24 @@ export function lireFactureValidee(row: Brut): FactureValidee {
       .filter(e => e.resultat === 'envoye')
       .map(e => ({ date: String(e.created_at), destinataire: String(e.destinataire) }))
       .sort((a, b) => a.date.localeCompare(b.date)).at(-1) ?? null,
+    factureOrigineId: row.facture_origine_id ?? null,
+    motif: row.motif ?? null,
+    contratId: row.contrat_id,
+    totalHt: nombre(row.total_ht),
+    montantTva: nombre(row.montant_tva),
+    tauxTva: nombre(row.taux_tva),
+    paye: Math.round(((row.paiements ?? []) as Brut[]).reduce((t, p) => t + nombre(p.montant) * 100, 0)) / 100,
   };
+}
+
+/** « Créer un avoir » (PR 9) : une facture émise non annulée (pas un avoir). */
+export function peutCreerAvoir(f: Pick<FactureValidee, 'type' | 'statut'>): boolean {
+  return f.type === 'facture' && ['validee', 'envoyee', 'payee', 'en_retard'].includes(f.statut);
+}
+
+/** Avoirs émis d'une facture, lus dans la liste déjà chargée (les avoirs y figurent comme les factures). */
+export function avoirsDe(factureId: string, liste: FactureValidee[]): FactureValidee[] {
+  return liste.filter(a => a.type === 'avoir' && a.factureOrigineId === factureId);
 }
 
 /** « Envoyer » / « Renvoyer » par e-mail (PR 8) : toute facture ou tout avoir émis, sauf annulé. */

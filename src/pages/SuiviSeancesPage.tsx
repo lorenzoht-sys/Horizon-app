@@ -7,13 +7,15 @@ import { ajouterMois, libelleMois, moisCourantParis } from '../lib/chiffreAffair
 import { LIBELLES_ETAT, LIBELLES_MOTIF, dateCourte, regrouper, type EtatSeance } from '../lib/suiviSeances';
 
 // Suivi de la facturation des séances (/factures/seances, plan facturation PR 6) : pour un mois, chaque
-// séance réalisée est facturée, en préparation, à corriger (avec le motif) ou non facturable (voulu).
+// séance réalisée est facturée, créditée par un avoir (PR 9), en préparation, à corriger (avec le motif) ou
+// non facturable (voulu).
 // Lecture seule. Responsive d'emblée (une colonne, aucune barre fixe en bas), voir routesMobile.ts.
 
 const COULEUR: Record<EtatSeance, string> = {
   a_facturer: 'bg-amber-50 text-amber-900 border-amber-200',
   en_preparation: 'bg-sky-50 text-sky-900 border-sky-200',
   facturee: 'bg-emerald-50 text-emerald-900 border-emerald-200',
+  creditee: 'bg-purple-50 text-purple-900 border-purple-200',
   non_facturable: 'bg-gray-50 text-gray-700 border-gray-200',
 };
 
@@ -45,7 +47,7 @@ export default function SuiviSeancesPage() {
 
         {!chargement && !erreur && (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-4">
               {groupes.map(g => (
                 <div key={g.etat} className={`rounded-xl border px-3 py-2 ${COULEUR[g.etat]}`} data-testid={`compte-${g.etat}`}>
                   <div className="text-lg font-semibold">{g.lignes.length}</div>
@@ -71,7 +73,12 @@ export default function SuiviSeancesPage() {
                           {l.motif && <div className="text-xs text-gray-500 mt-0.5">{LIBELLES_MOTIF[l.motif]}</div>}
                           {l.avantDebutContrat && <div className="text-xs text-amber-700 mt-0.5" data-testid="avant-debut-contrat">Avant le début du contrat</div>}
                         </div>
-                        {l.numero && <span className="text-xs text-gray-500">Facture {l.numero}</span>}
+                        {l.numero && (
+                          <span className="text-xs text-gray-500">
+                            Facture {l.numero}
+                            {l.numeroAvoir && <span className="text-purple-700" data-testid="numero-avoir"> · avoir {l.numeroAvoir}</span>}
+                          </span>
+                        )}
                       </li>
                     ))}
                   </ul>

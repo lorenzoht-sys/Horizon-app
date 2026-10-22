@@ -76,6 +76,8 @@ export interface FacturePdf {
   periode: string;
   /** Numéro de la facture corrigée, pour un avoir. */
   numeroOrigine?: string | null;
+  /** Motif de l'avoir (obligatoire depuis la PR 9, 2026-10-22), imprimé sous la référence d'origine. */
+  motif?: string | null;
   totalHt: number;
   montantTva: number;
   tauxTva: number;
@@ -232,6 +234,7 @@ export function construireBlocs(f: FacturePdf): BlocsFacture {
     `Date d'émission : ${formaterDate(f.dateEmission)}`,
     `Période : ${formaterPeriode(f.periode)}`,
     f.type === 'avoir' && f.numeroOrigine ? `Avoir sur la facture n° ${f.numeroOrigine}` : '',
+    f.type === 'avoir' && texte(f.motif) ? `Motif : ${texte(f.motif)}` : '',
   ].filter(Boolean);
 
   const paiement = [

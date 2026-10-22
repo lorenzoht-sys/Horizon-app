@@ -110,8 +110,15 @@ erDiagram
 3. Ensuite, seuls `statut` et `pdf_path` changent, et des paiements s'ajoutent. Un
    paiement est **immuable** : une correction est une nouvelle ligne de montant négatif.
 4. Correction : un avoir (`type = 'avoir'`, montants positifs, le signe est porté par
-   le type). S'il annule le total, la facture d'origine passe à `annulee` et libère
-   ses séances et le mois.
+   le type), créé par `creer_avoir` (PR 9, migration `20261027100000`) et validé dans la
+   même transaction : lignes de la facture cochées (quantité partielle possible pour les
+   frais) et/ou « Geste commercial », motif obligatoire imprimé sur le PDF. Le cumul des
+   avoirs ne dépasse jamais la facture ; dès qu'il l'atteint, la facture d'origine passe à
+   `annulee` et libère ses séances et le mois (« Refaire la facture du mois » relance
+   `generer_brouillon_facture`). Sinon son statut est recalculé (reste dû). Une séance
+   créditée par un avoir partiel reste rattachée à sa facture : « Suivi des séances »
+   l'affiche « créditée » avec le numéro de l'avoir. Facture déjà encaissée : « à
+   rembourser », hors d'Horizon.
 
 ## Garanties (toutes testées)
 
@@ -123,7 +130,8 @@ erDiagram
 | Facture validée immuable, non supprimable, sans retour au brouillon | Trigger `factures_inalterables` |
 | Paiement immuable, correction par ligne négative sans dépasser l'encaissé | Triggers `paiements_immuables` et `paiements_controle` ; droits UPDATE/DELETE retirés ; policies SELECT + INSERT |
 | Pas de facture créée directement validée, pas de faux numéro | Trigger `factures_controle_insertion` + variable locale posée par `valider_facture` |
-| Annulation uniquement par avoir total | Variable locale `horizon.annulation_facture` |
+| Annulation uniquement par avoir(s) couvrant tout le montant | Variable locale `horizon.annulation_facture`, trigger `factures_avoir_effets` |
+| Cumul des avoirs ≤ facture, motif obligatoire, ligne jamais créditée deux fois, TVA « solde » exacte | Trigger `factures_avoir_controle` |
 | Lignes figées après validation | Trigger `lignes_facture_inalterables` |
 | Séance facturée verrouillée (suppression et colonnes de facturation) | Trigger `seances_facturees_inalterables` |
 | Version de tarif utilisée verrouillée, sauf clôture | Trigger `tarifs_utilises_inalterables` |
