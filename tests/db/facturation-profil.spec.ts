@@ -36,6 +36,7 @@ decrire('Profil de facturation : écriture directe sous la RLS', () => {
     client.from('praticiens').update(formulaireVersMiseAJour(f)).eq('id', id).select(SELECT_PROFIL_FACTURATION);
 
   const complet: FormulaireFacturation = {
+    formeJuridique: 'ei',
     regimeTva: 'assujetti', tauxTva: '5.5', agrementSap: true, dateDeclarationSap: '2026-03-04', modeIntervention: 'prestataire',
     adresseIntervention: '2 rue B', facturationRue: '3 rue C', facturationCodePostal: '00001', facturationVille: 'Ailleurs',
     iban: 'FR76 3000 6000 0112 3456 7890 189', delaiPaiementJours: '45', penalitesRetard: 'Pénalités légales',
@@ -195,27 +196,32 @@ decrire('Profil de facturation : écriture directe sous la RLS', () => {
       const r = await a.client.rpc('valider_facture', { p_facture_id: factureId });
       expect(r.error?.message).toBe('Profil de facturation incomplet : siret, regime_tva');
       // L'interface annonçait déjà les mêmes manques AVANT le clic, avec le même vocabulaire.
-      expect(profilFacturationManquant(await profilLu(a))).toEqual(['SIRET', 'régime de TVA']);
-      expect(champsManquantsPourValider(await identiteLue(a), FORMULAIRE_VIDE).map(m => m.libelle)).toEqual(['SIRET (dans Paramètres)', 'Régime de TVA']);
+      // La forme juridique (20261031100000) n'est contrôlée qu'après ces manques : le serveur ne la cite pas encore.
+      expect(profilFacturationManquant(await profilLu(a))).toEqual(['SIRET', 'régime de TVA', 'forme juridique']);
+      expect(champsManquantsPourValider(await identiteLue(a), FORMULAIRE_VIDE).map(m => m.libelle)).toEqual(['SIRET (dans Paramètres)', 'Régime de TVA', 'Forme juridique']);
     });
 
     it('le formulaire ne supprime que ce qu\'il renseigne : le message suit chaque manque, un à un', async () => {
       const { a, factureId } = await avecBrouillon();
       // 1) Régime choisi via le formulaire, SIRET toujours absent (il se saisit dans Paramètres).
-      await enregistrerComme(a.client, a.id, { ...FORMULAIRE_VIDE, regimeTva: 'franchise_293B' });
+      await enregistrerComme(a.client, a.id, { ...FORMULAIRE_VIDE, formeJuridique: 'ei', regimeTva: 'franchise_293B' });
       expect((await a.client.rpc('valider_facture', { p_facture_id: factureId })).error?.message).toBe('Profil de facturation incomplet : siret');
       expect(profilFacturationManquant(await profilLu(a))).toEqual(['SIRET']);
       // 2) SIRET saisi (écran Paramètres), régime retiré : seul le régime manque.
       await a.client.from('praticiens').update({ siret: '73282932000074' }).eq('id', a.id);
-      await enregistrerComme(a.client, a.id, FORMULAIRE_VIDE);
+      await enregistrerComme(a.client, a.id, { ...FORMULAIRE_VIDE, formeJuridique: 'ei' });
       expect((await a.client.rpc('valider_facture', { p_facture_id: factureId })).error?.message).toBe('Profil de facturation incomplet : regime_tva');
       expect(profilFacturationManquant(await profilLu(a))).toEqual(['régime de TVA']);
+      // 3) Régime remis, forme juridique retirée : c'est elle que le serveur réclame (trigger factures_forme_juridique).
+      await enregistrerComme(a.client, a.id, { ...FORMULAIRE_VIDE, regimeTva: 'franchise_293B' });
+      expect((await a.client.rpc('valider_facture', { p_facture_id: factureId })).error?.message).toBe('Profil de facturation incomplet : forme_juridique');
+      expect(profilFacturationManquant(await profilLu(a))).toEqual(['forme juridique']);
     });
 
     it('profil complété par le formulaire : la facture est validée, numérotée, sans message d\'erreur', async () => {
       const { a, factureId, mois, contratId } = await avecBrouillon();
       await a.client.from('praticiens').update({ siret: '73282932000074' }).eq('id', a.id);   // Paramètres
-      const { error } = await enregistrerComme(a.client, a.id, { ...FORMULAIRE_VIDE, regimeTva: 'assujetti', tauxTva: '10', iban: 'FR76 3000 6000 0112 3456 7890 189', delaiPaiementJours: '15' });
+      const { error } = await enregistrerComme(a.client, a.id, { ...FORMULAIRE_VIDE, formeJuridique: 'ei', regimeTva: 'assujetti', tauxTva: '10', iban: 'FR76 3000 6000 0112 3456 7890 189', delaiPaiementJours: '15' });
       expect(error).toBeNull();
       expect(champsManquantsPourValider(await identiteLue(a), lireFormulaire((await a.client.from('praticiens').select(SELECT_PROFIL_FACTURATION).eq('id', a.id).maybeSingle()).data as never))).toEqual([]);
 
@@ -231,13 +237,13 @@ decrire('Profil de facturation : écriture directe sous la RLS', () => {
 
     it('adresse de facturation : vide ("") masque l\'adresse du profil côté serveur, NULL non (l\'interface enregistre NULL)', async () => {
       const { a, factureId } = await avecBrouillon();
-      await a.client.from('praticiens').update({ siret: '73282932000074', regime_tva: 'franchise_293B' }).eq('id', a.id);
+      await a.client.from('praticiens').update({ siret: '73282932000074', regime_tva: 'franchise_293B', forme_juridique: 'ei' }).eq('id', a.id);
       // Chaîne vide : refus « adresse », et l'interface (profilFacturationManquant) le prédit à l'identique.
       await a.client.from('praticiens').update({ facturation_adresse_rue: '' }).eq('id', a.id);
       expect(profilFacturationManquant(await profilLu(a))).toEqual(['adresse']);
       expect((await a.client.rpc('valider_facture', { p_facture_id: factureId })).error?.message).toBe('Profil de facturation incomplet : adresse');
       // Ce que le formulaire enregistre pour un champ vide : NULL, l'adresse professionnelle prend le relais.
-      await enregistrerComme(a.client, a.id, { ...FORMULAIRE_VIDE, regimeTva: 'franchise_293B' });
+      await enregistrerComme(a.client, a.id, { ...FORMULAIRE_VIDE, formeJuridique: 'ei', regimeTva: 'franchise_293B' });
       expect(profilFacturationManquant(await profilLu(a))).toEqual([]);
       expect((await a.client.rpc('valider_facture', { p_facture_id: factureId })).error).toBeNull();
     });

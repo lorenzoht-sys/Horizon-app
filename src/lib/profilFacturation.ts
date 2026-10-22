@@ -24,6 +24,8 @@ import { validerSiret } from './siret';
 
 export type RegimeTva = '' | 'franchise_293B' | 'assujetti';
 export type ModeIntervention = '' | 'prestataire' | 'mandataire';
+/** 'ei' : entrepreneur individuel (micro-entrepreneur compris), « EI » imprimé à côté du nom. */
+export type FormeJuridique = '' | 'ei' | 'societe';
 /** Présentation des factures (point A) : une ligne par séance, ou une seule ligne pour le mois. */
 export type PresentationFacture = 'detaillee' | 'globale';
 
@@ -38,7 +40,7 @@ export const SELECT_PROFIL_FACTURATION =
   'nom, siret, numero_sap, numero_tva, adresse_rue, adresse_code_postal, adresse_ville, ' +
   'regime_tva, taux_tva, agrement_sap, date_declaration_sap, mode_intervention, adresse_intervention, ' +
   'facturation_adresse_rue, facturation_code_postal, facturation_ville, iban, delai_paiement_jours, penalites_retard, ' +
-  'logo_praticien, presentation_facture, factures_proche_visibles';
+  'logo_praticien, presentation_facture, factures_proche_visibles, forme_juridique';
 
 /** Rappel d'identité, édité dans Paramètres. */
 export interface IdentiteProfil {
@@ -55,6 +57,8 @@ export interface IdentiteProfil {
 
 /** Valeurs du formulaire : toujours des chaînes (ou un booléen), « vide » = ''. */
 export interface FormulaireFacturation {
+  /** Obligatoire pour valider une facture (20261031100000) ; '' = non déclarée. */
+  formeJuridique: FormeJuridique;
   regimeTva: RegimeTva;
   /** '' | '5.5' | '10' */
   tauxTva: string;
@@ -80,6 +84,7 @@ export type ChampFormulaire = keyof FormulaireFacturation;
 export type ErreursFormulaire = Partial<Record<ChampFormulaire, string>>;
 
 export const FORMULAIRE_VIDE: FormulaireFacturation = {
+  formeJuridique: '',
   regimeTva: '', tauxTva: '', agrementSap: false, dateDeclarationSap: '', modeIntervention: '',
   adresseIntervention: '', facturationRue: '', facturationCodePostal: '', facturationVille: '',
   iban: '', delaiPaiementJours: '30', penalitesRetard: '', presentationFacture: 'detaillee',
@@ -112,6 +117,7 @@ export function lireFormulaire(row: Brut | null): FormulaireFacturation {
   const regime = row.regime_tva === 'franchise_293B' || row.regime_tva === 'assujetti' ? row.regime_tva : '';
   const mode = row.mode_intervention === 'prestataire' || row.mode_intervention === 'mandataire' ? row.mode_intervention : '';
   return {
+    formeJuridique: row.forme_juridique === 'ei' || row.forme_juridique === 'societe' ? row.forme_juridique : '',
     regimeTva: regime,
     tauxTva: tauxEnTexte(row.taux_tva),
     agrementSap: row.agrement_sap === true,
@@ -206,6 +212,7 @@ export function profilApresEnregistrement(identite: IdentiteProfil, f: Formulair
   const vide = (v: string) => v.trim() === '';
   return {
     nom: identite.nom, siret: identite.siret,
+    formeJuridique: f.formeJuridique || null,
     regimeTva: f.regimeTva || null,
     tauxTva: f.tauxTva ? Number(f.tauxTva) : null,
     adresseRue: identite.adresseRue, adresseCodePostal: identite.adresseCodePostal, adresseVille: identite.adresseVille,
@@ -225,6 +232,7 @@ export function champsManquantsPourValider(identite: IdentiteProfil, f: Formulai
   const manques: ManqueObligatoire[] = [];
   for (const m of profilFacturationManquant(profilApresEnregistrement(identite, f))) {
     if (m === 'régime de TVA') manques.push({ libelle: 'Régime de TVA', ou: 'ici', champ: 'regimeTva' });
+    else if (m === 'forme juridique') manques.push({ libelle: 'Forme juridique', ou: 'ici', champ: 'formeJuridique' });
     else if (m === 'SIRET') manques.push({ libelle: 'SIRET (dans Paramètres)', ou: 'parametres' });
     else if (m === 'nom') manques.push({ libelle: 'Nom (dans Paramètres)', ou: 'parametres' });
     else if (m === 'adresse') manques.push({ libelle: 'Adresse de facturation, ou adresse professionnelle dans Paramètres', ou: 'ici', champ: 'facturationRue' });
@@ -259,6 +267,7 @@ const videEnNull = (v: string): string | null => (v.trim() === '' ? null : v.tri
 export function formulaireVersMiseAJour(f: FormulaireFacturation): Record<string, unknown> {
   const assujetti = f.regimeTva === 'assujetti';
   return {
+    forme_juridique: f.formeJuridique || null,
     regime_tva: f.regimeTva || null,
     taux_tva: assujetti && f.tauxTva ? Number(f.tauxTva) : null,
     agrement_sap: f.agrementSap,
@@ -285,6 +294,7 @@ export function messageEnregistrementLisible(message: string): string {
   if (/praticiens_iban_format/.test(message)) return 'IBAN invalide.';
   if (/praticiens_delai_paiement_valide/.test(message)) return 'Délai de paiement : de 0 à 60 jours.';
   if (/praticiens_regime_tva_valide/.test(message)) return 'Régime de TVA invalide.';
+  if (/praticiens_forme_juridique_valide/.test(message)) return 'Forme juridique invalide.';
   if (/praticiens_mode_intervention_valide/.test(message)) return 'Mode d\'intervention invalide.';
   if (/praticiens_presentation_facture_valide/.test(message)) return 'Présentation des factures invalide.';
   return message;

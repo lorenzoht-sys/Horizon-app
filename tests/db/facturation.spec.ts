@@ -116,9 +116,9 @@ async function creerPraticien(c: Client, opts: { profilComplet?: boolean } = {})
     [id, `test-${id}@fact.test`],
   );
   await c.query(
-    `INSERT INTO public.praticiens (id, nom, prenom, email, siret, adresse_rue, adresse_code_postal, adresse_ville, regime_tva, delai_paiement_jours, iban)
-     VALUES ($1, 'PratTest', 'Alex', $2, $3, '1 rue Test', '00000', 'Villetest', $4, 30, 'FR7630006000011234567890189')`,
-    [id, `test-${id}@fact.test`, complet ? '00000000000018' : null, complet ? 'franchise_293B' : null],
+    `INSERT INTO public.praticiens (id, nom, prenom, email, siret, adresse_rue, adresse_code_postal, adresse_ville, regime_tva, delai_paiement_jours, iban, forme_juridique)
+     VALUES ($1, 'PratTest', 'Alex', $2, $3, '1 rue Test', '00000', 'Villetest', $4, 30, 'FR7630006000011234567890189', $5)`,
+    [id, `test-${id}@fact.test`, complet ? '00000000000018' : null, complet ? 'franchise_293B' : null, complet ? 'ei' : null],
   );
   return id;
 }

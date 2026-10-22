@@ -61,6 +61,23 @@ describe('formats', () => {
   });
 });
 
+describe('mention « EI » (20261031100000)', () => {
+  it('entrepreneur individuel sans nom commercial : « EI » à côté du nom, en première ligne', () => {
+    expect(construireBlocs(facture({ emetteur: { ...facture().emetteur, forme_juridique: 'ei' } })).emetteur[0]).toBe('Alex Exemple EI');
+  });
+  it('avec un nom commercial : le nom commercial d\'abord, « EI » sur la ligne du nom', () => {
+    const b = construireBlocs(facture({ emetteur: { ...facture().emetteur, societe: 'Cabinet Test', forme_juridique: 'ei' } }));
+    expect(b.emetteur.slice(0, 2)).toEqual(['Cabinet Test', 'Alex Exemple EI']);
+  });
+  it('société, ou forme absente du snapshot (factures antérieures) : rien n\'est ajouté, PDF identique', async () => {
+    expect(construireBlocs(facture({ emetteur: { ...facture().emetteur, forme_juridique: 'societe' } })).emetteur[0]).toBe('Alex Exemple');
+    expect(construireBlocs(facture()).emetteur[0]).toBe('Alex Exemple');
+    const a = Buffer.from(await composerFacturePdf(facture()));
+    const b = Buffer.from(await composerFacturePdf(facture({ emetteur: { ...facture().emetteur, forme_juridique: null } })));
+    expect(a.equals(b)).toBe(true);
+  });
+});
+
 describe('mentions du PDF', () => {
   it("reprend l'identité, le SIRET, la déclaration SAP, le mode et l'adresse d'intervention", () => {
     const b = construireBlocs(facture());

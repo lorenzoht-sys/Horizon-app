@@ -19,9 +19,9 @@ const identite: IdentiteProfil = {
   nom: 'Dupont', siret: '73282932000074', numeroSap: 'SAP000000000', numeroTva: '',
   adresseRue: '1 rue Test', adresseCodePostal: '00000', adresseVille: 'Villetest', logo: '',
 };
-const franchise: FormulaireFacturation = { ...FORMULAIRE_VIDE, regimeTva: 'franchise_293B' };
+const franchise: FormulaireFacturation = { ...FORMULAIRE_VIDE, formeJuridique: 'ei', regimeTva: 'franchise_293B' };
 const assujetti = (taux: string, agrement = false): FormulaireFacturation =>
-  ({ ...FORMULAIRE_VIDE, regimeTva: 'assujetti', tauxTva: taux, agrementSap: agrement });
+  ({ ...FORMULAIRE_VIDE, formeJuridique: 'ei', regimeTva: 'assujetti', tauxTva: taux, agrementSap: agrement });
 
 describe('lecture de la ligne praticiens', () => {
   it('une ligne vide donne un formulaire vide avec le délai par défaut de 30 jours', () => {
@@ -34,12 +34,14 @@ describe('lecture de la ligne praticiens', () => {
       mode_intervention: 'mandataire', adresse_intervention: '2 rue B', facturation_adresse_rue: '3 rue C',
       facturation_code_postal: '00001', facturation_ville: 'Ailleurs', iban: 'FR7630006000011234567890189',
       delai_paiement_jours: 45, penalites_retard: 'Pénalités légales', presentation_facture: 'globale', factures_proche_visibles: false,
+      forme_juridique: 'ei',
     });
     expect(f).toEqual({
       regimeTva: 'assujetti', tauxTva: '5.5', agrementSap: true, dateDeclarationSap: '2026-03-04',
       modeIntervention: 'mandataire', adresseIntervention: '2 rue B', facturationRue: '3 rue C',
       facturationCodePostal: '00001', facturationVille: 'Ailleurs', iban: 'FR7630006000011234567890189',
       delaiPaiementJours: '45', penalitesRetard: 'Pénalités légales', presentationFacture: 'globale', facturesProcheVisibles: false,
+      formeJuridique: 'ei',
     });
     expect(lireFormulaire({ regime_tva: 'assujetti', taux_tva: 10 }).tauxTva).toBe('10');
     expect(lireFormulaire({ regime_tva: 'franchise_293B', taux_tva: 0 }).tauxTva).toBe('');
@@ -121,7 +123,14 @@ describe('champsManquantsPourValider : mêmes exigences que valider_facture', ()
     expect(champsManquantsPourValider(identite, assujetti('10'))).toEqual([]);
   });
   it('sans régime de TVA : signalé ICI, avant tout enregistrement', () => {
-    expect(champsManquantsPourValider(identite, FORMULAIRE_VIDE)).toEqual([{ libelle: 'Régime de TVA', ou: 'ici', champ: 'regimeTva' }]);
+    expect(champsManquantsPourValider(identite, { ...FORMULAIRE_VIDE, formeJuridique: 'ei' })).toEqual([{ libelle: 'Régime de TVA', ou: 'ici', champ: 'regimeTva' }]);
+  });
+  it('sans forme juridique (praticien existant) : signalée ICI ; la validation serait refusée', () => {
+    expect(champsManquantsPourValider(identite, { ...franchise, formeJuridique: '' })).toEqual([{ libelle: 'Forme juridique', ou: 'ici', champ: 'formeJuridique' }]);
+    expect(champsManquantsPourValider(identite, FORMULAIRE_VIDE).map(x => x.champ)).toEqual(['regimeTva', 'formeJuridique']);
+    expect(lireFormulaire({ forme_juridique: 'societe' }).formeJuridique).toBe('societe');
+    expect(lireFormulaire({ forme_juridique: 'x' }).formeJuridique).toBe('');
+    expect(formulaireVersMiseAJour(FORMULAIRE_VIDE).forme_juridique).toBeNull();
   });
   it('SIRET et nom manquants : à corriger dans Paramètres', () => {
     const m = champsManquantsPourValider({ ...identite, siret: ' ', nom: '' }, franchise);
@@ -160,7 +169,7 @@ describe('formulaireVersMiseAJour : ce qui part vers la base', () => {
   it('ne contient que les colonnes de facturation, jamais l\'identité', () => {
     expect(Object.keys(formulaireVersMiseAJour(franchise)).sort()).toEqual([
       'adresse_intervention', 'agrement_sap', 'date_declaration_sap', 'delai_paiement_jours',
-      'facturation_adresse_rue', 'facturation_code_postal', 'facturation_ville', 'factures_proche_visibles', 'iban',
+      'facturation_adresse_rue', 'facturation_code_postal', 'facturation_ville', 'factures_proche_visibles', 'forme_juridique', 'iban',
       'mode_intervention', 'penalites_retard', 'presentation_facture', 'regime_tva', 'taux_tva',
     ]);
   });
@@ -184,7 +193,7 @@ describe('formulaireVersMiseAJour : ce qui part vers la base', () => {
   });
   it('aller-retour : relire ce qu\'on vient d\'écrire redonne le formulaire', () => {
     const f: FormulaireFacturation = {
-      regimeTva: 'assujetti', tauxTva: '5.5', agrementSap: true, dateDeclarationSap: '2026-03-04', modeIntervention: 'prestataire',
+      formeJuridique: 'ei', regimeTva: 'assujetti', tauxTva: '5.5', agrementSap: true, dateDeclarationSap: '2026-03-04', modeIntervention: 'prestataire',
       adresseIntervention: '2 rue B', facturationRue: '3 rue C', facturationCodePostal: '00001', facturationVille: 'Ailleurs',
       iban: 'FR7630006000011234567890189', delaiPaiementJours: '45', penalitesRetard: 'Pénalités légales', presentationFacture: 'globale',
       facturesProcheVisibles: false,

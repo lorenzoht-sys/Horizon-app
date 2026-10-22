@@ -28,7 +28,7 @@ import {
 // recouvrement), servi aussi sous 768 px, voir routesMobile.ts.
 
 const ORDRE_CHAMPS: ChampFormulaire[] = [
-  'regimeTva', 'tauxTva', 'dateDeclarationSap', 'modeIntervention', 'adresseIntervention',
+  'formeJuridique', 'regimeTva', 'tauxTva', 'dateDeclarationSap', 'modeIntervention', 'adresseIntervention',
   'facturationRue', 'facturationCodePostal', 'facturationVille', 'iban', 'delaiPaiementJours', 'penalitesRetard',
 ];
 
@@ -211,6 +211,18 @@ function Formulaire({ identite, initial, enregistrer }: {
               </div>
               <p className="text-sm text-gray-600">{identite.logo ? 'Ce logo figurera en haut à droite de vos prochaines factures.' : 'Vos factures sont émises sans logo.'}</p>
             </div>
+          </Section>
+
+          <Section titre="Forme juridique">
+            <Champ etiquette="Forme juridique" requis erreur={erreurs.formeJuridique}
+              aide="Entrepreneur individuel (micro-entrepreneur compris) : la mention « EI » est imprimée à côté de votre nom sur vos factures, comme la loi l'exige depuis 2022.">
+              <select name="profil-formeJuridique" data-testid="forme-juridique" value={f.formeJuridique}
+                onChange={e => maj('formeJuridique', e.target.value as FormulaireFacturation['formeJuridique'])} className={classeChamp(erreurs.formeJuridique)}>
+                <option value="">— Choisir —</option>
+                <option value="ei">Entrepreneur individuel (EI, micro-entrepreneur)</option>
+                <option value="societe">Société (SARL, SAS, EURL…)</option>
+              </select>
+            </Champ>
           </Section>
 
           <Section titre="TVA">
