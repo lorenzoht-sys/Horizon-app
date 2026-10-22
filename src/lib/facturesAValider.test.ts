@@ -10,6 +10,8 @@ import {
   lireBrouillon,
   lireFactureValidee,
   peutMarquerPayee,
+  peutEnvoyer,
+  emailPlausible,
   nomFichierFacture,
   dateCivileParis,
   dateOuvertureValidation,
@@ -122,7 +124,12 @@ describe('lecture des réponses PostgREST', () => {
   });
   it('lit une facture validée et un profil', () => {
     expect(lireFactureValidee({ id: 'f', numero: '2026-0001', periode: '2026-09-01', date_emission: '2026-10-02', statut: 'validee', total: '99.00', participants: { prenom: 'A', nom: 'B' } }))
-      .toEqual({ id: 'f', numero: '2026-0001', periode: '2026-09-01', dateEmission: '2026-10-02', statut: 'validee', total: 99, beneficiaire: { prenom: 'A', nom: 'B' }, pdfPath: null, type: 'facture', echeance: null, datePaiement: null });
+      .toEqual({ id: 'f', numero: '2026-0001', periode: '2026-09-01', dateEmission: '2026-10-02', statut: 'validee', total: 99, beneficiaire: { prenom: 'A', nom: 'B' }, pdfPath: null, type: 'facture', echeance: null, datePaiement: null, dernierEnvoi: null });
+    expect(lireFactureValidee({ id: 'f', type: 'facture', statut: 'envoyee', total: '1', envois_factures: [
+      { created_at: '2026-10-22T09:00:00Z', destinataire: 'a@example.com', resultat: 'envoye' },
+      { created_at: '2026-10-23T09:00:00Z', destinataire: 'b@example.com', resultat: 'echec' },
+      { created_at: '2026-10-22T10:00:00Z', destinataire: 'c@example.com', resultat: 'envoye' },
+    ] }).dernierEnvoi).toEqual({ date: '2026-10-22T10:00:00Z', destinataire: 'c@example.com' });
     expect(lireFactureValidee({ id: 'f', type: 'facture', statut: 'payee', echeance: '2026-11-01', total: '1', paiements: [{ date: '2026-10-20' }, { date: '2026-10-25' }, { date: '2026-10-05' }] }))
       .toMatchObject({ echeance: '2026-11-01', datePaiement: '2026-10-25' });
     expect(lireFactureValidee({ id: 'a', type: 'avoir', statut: 'validee', total: '1' }).type).toBe('avoir');
@@ -277,5 +284,16 @@ describe('peutMarquerPayee (PR 7)', () => {
     for (const statut of ['validee', 'envoyee', 'en_retard']) expect(peutMarquerPayee({ type: 'facture', statut })).toBe(true);
     for (const statut of ['payee', 'annulee', 'brouillon']) expect(peutMarquerPayee({ type: 'facture', statut })).toBe(false);
     expect(peutMarquerPayee({ type: 'avoir', statut: 'validee' })).toBe(false);
+  });
+});
+
+describe('envoi par e-mail (PR 8)', () => {
+  it('toute facture ou tout avoir émis s\'envoie, sauf annulé ou brouillon', () => {
+    for (const statut of ['validee', 'envoyee', 'payee', 'en_retard']) expect(peutEnvoyer({ statut })).toBe(true);
+    for (const statut of ['annulee', 'brouillon']) expect(peutEnvoyer({ statut })).toBe(false);
+  });
+  it('forme d\'une adresse', () => {
+    expect(emailPlausible('a@b.fr')).toBe(true);
+    for (const v of ['a@b', 'a b@c.fr', '']) expect(emailPlausible(v)).toBe(false);
   });
 });
