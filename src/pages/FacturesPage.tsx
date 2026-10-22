@@ -33,7 +33,7 @@ export default function FacturesPage() {
     setEnvoiEnCours(null);
     if ('ok' in r) {
       setSaisie(null);
-      toast.success(`Envoyée à ${r.destinataire}`);
+      toast.success(r.enregistree ? `Envoyée à ${r.destinataire} · adresse enregistrée dans la fiche` : `Envoyée à ${r.destinataire}`);
       return;
     }
     if (r.code === 'email_manquant' || r.code === 'email_invalide') {
@@ -127,7 +127,9 @@ export default function FacturesPage() {
                         </button>
                         <button type="button" onClick={() => setSaisie(null)} className="text-xs text-gray-500 px-2 py-1.5">Annuler</button>
                       </div>
-                      <label className="flex items-center gap-2 text-xs text-gray-600">
+                      {/* inline-flex : seuls la case et son texte sont cliquables. En pleine largeur, un clic à
+                          droite du texte cochait la case sans qu'on le voie (recette staging du 2026-10-22). */}
+                      <label className="inline-flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
                         <input type="checkbox" checked={saisie.enregistrer} data-testid="enregistrer-email"
                           onChange={e => setSaisie({ ...saisie, enregistrer: e.target.checked })} />
                         Enregistrer cette adresse dans la fiche

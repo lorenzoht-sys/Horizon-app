@@ -12,7 +12,8 @@
 //   enregistrer_email l'écrire aussi dans la fiche : e-mail du proche payeur (contrat) ou du bénéficiaire
 //                     (décision du 2026-10-22, case décochée par défaut). La facture validée, elle, ne
 //                     change pas : son snapshot est inaltérable ; le journal garde l'adresse utilisée.
-// Réponses : 200 { ok, destinataire, statut } ; 422 { code: 'email_manquant' | 'email_invalide' } ;
+// Réponses : 200 { ok, destinataire, statut, enregistree } (enregistree : l'adresse a bien été écrite dans la
+//            fiche, affiché par l'écran depuis la recette du 2026-10-22 où une écriture est passée inaperçue) ; 422 { code: 'email_manquant' | 'email_invalide' } ;
 //            409 facture non envoyable ; 502 échec Resend (journalisé).
 //
 // Secrets (par projet, `supabase secrets set`) : RESEND_API_KEY (clé « Sending access » du domaine),
@@ -137,13 +138,15 @@ Deno.serve(async (req) => {
   }
 
   // Enregistrer l'adresse saisie dans la fiche (case cochée) : filtre explicite sur le praticien.
+  let enregistree = false;
   if (saisie && corps.enregistrer_email === true) {
     const maj = dest.role === "proche"
-      ? admin.from("contrats").update({ payeur_email: cible.email }).eq("id", f.contrat_id).eq("praticien_id", praticienId)
-      : admin.from("participants").update({ email: cible.email }).eq("id", f.participant_id).eq("praticien_id", praticienId);
-    const { error: errM } = await maj;
+      ? admin.from("contrats").update({ payeur_email: cible.email }).eq("id", f.contrat_id).eq("praticien_id", praticienId).select("id")
+      : admin.from("participants").update({ email: cible.email }).eq("id", f.participant_id).eq("praticien_id", praticienId).select("id");
+    const { data: lignes, error: errM } = await maj;
     if (errM) console.error("[facturation-envoi] enregistrement de l'adresse", f.numero, errM.message);
+    else enregistree = (lignes?.length ?? 0) > 0;
   }
 
-  return json({ ok: true, destinataire: cible.email, statut }, 200, cors);
+  return json({ ok: true, destinataire: cible.email, statut, enregistree }, 200, cors);
 });
