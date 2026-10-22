@@ -15,7 +15,8 @@
 // régime ∈ {franchise_293B, assujetti} ; assujetti ⇒ taux 10, ou 5,5 SI agrément SAP ;
 // franchise ⇒ pas de taux (NULL ou 0) ; délai de paiement 0 à 60 jours ; IBAN
 // ^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$ (normalisé en majuscules sans espaces par un trigger) ;
-// mode d'intervention ∈ {prestataire, mandataire}. La base reste seule juge : ces contrôles
+// mode d'intervention ∈ {prestataire, mandataire} ; présentation ∈ {detaillee, globale} (20261028100000).
+// La base reste seule juge : ces contrôles
 // évitent un aller-retour, ils ne le remplacent pas.
 
 import { profilFacturationManquant, type ProfilFacturation } from './facturesAValider';
@@ -23,13 +24,21 @@ import { validerSiret } from './siret';
 
 export type RegimeTva = '' | 'franchise_293B' | 'assujetti';
 export type ModeIntervention = '' | 'prestataire' | 'mandataire';
+/** Présentation des factures (point A) : une ligne par séance, ou une seule ligne pour le mois. */
+export type PresentationFacture = 'detaillee' | 'globale';
+
+/** Libellés des deux présentations, communs au profil et à l'onglet Contrats de la fiche bénéficiaire. */
+export const PRESENTATIONS_FACTURE: { valeur: PresentationFacture; titre: string; detail: string }[] = [
+  { valeur: 'detaillee', titre: 'Détaillée', detail: 'Une ligne par séance, les frais de déplacement à part, et le récapitulatif.' },
+  { valeur: 'globale', titre: 'Globale', detail: 'Une seule ligne pour le mois : « Accompagnement en activité physique adaptée — N séances, déplacements inclus ».' },
+];
 
 /** Colonnes lues par l'écran : le formulaire (facturation) + le rappel d'identité (lecture seule). */
 export const SELECT_PROFIL_FACTURATION =
   'nom, siret, numero_sap, numero_tva, adresse_rue, adresse_code_postal, adresse_ville, ' +
   'regime_tva, taux_tva, agrement_sap, date_declaration_sap, mode_intervention, adresse_intervention, ' +
   'facturation_adresse_rue, facturation_code_postal, facturation_ville, iban, delai_paiement_jours, penalites_retard, ' +
-  'logo_praticien';
+  'logo_praticien, presentation_facture';
 
 /** Rappel d'identité, édité dans Paramètres. */
 export interface IdentiteProfil {
@@ -61,6 +70,8 @@ export interface FormulaireFacturation {
   /** Entier 0 à 60, en texte pour la saisie. */
   delaiPaiementJours: string;
   penalitesRetard: string;
+  /** Par défaut pour toutes les factures ; un contrat peut le remplacer (fiche bénéficiaire). */
+  presentationFacture: PresentationFacture;
 }
 
 export type ChampFormulaire = keyof FormulaireFacturation;
@@ -69,7 +80,7 @@ export type ErreursFormulaire = Partial<Record<ChampFormulaire, string>>;
 export const FORMULAIRE_VIDE: FormulaireFacturation = {
   regimeTva: '', tauxTva: '', agrementSap: false, dateDeclarationSap: '', modeIntervention: '',
   adresseIntervention: '', facturationRue: '', facturationCodePostal: '', facturationVille: '',
-  iban: '', delaiPaiementJours: '30', penalitesRetard: '',
+  iban: '', delaiPaiementJours: '30', penalitesRetard: '', presentationFacture: 'detaillee',
 };
 
 type Brut = Record<string, unknown>;
@@ -110,6 +121,7 @@ export function lireFormulaire(row: Brut | null): FormulaireFacturation {
     iban: texte(row.iban),
     delaiPaiementJours: row.delai_paiement_jours == null ? FORMULAIRE_VIDE.delaiPaiementJours : String(row.delai_paiement_jours),
     penalitesRetard: texte(row.penalites_retard),
+    presentationFacture: row.presentation_facture === 'globale' ? 'globale' : 'detaillee',
   };
 }
 
@@ -255,6 +267,7 @@ export function formulaireVersMiseAJour(f: FormulaireFacturation): Record<string
     iban: videEnNull(f.iban) === null ? null : normaliserIban(f.iban),
     delai_paiement_jours: Number(f.delaiPaiementJours.trim()),
     penalites_retard: videEnNull(f.penalitesRetard),
+    presentation_facture: f.presentationFacture,
   };
 }
 
@@ -268,5 +281,6 @@ export function messageEnregistrementLisible(message: string): string {
   if (/praticiens_delai_paiement_valide/.test(message)) return 'Délai de paiement : de 0 à 60 jours.';
   if (/praticiens_regime_tva_valide/.test(message)) return 'Régime de TVA invalide.';
   if (/praticiens_mode_intervention_valide/.test(message)) return 'Mode d\'intervention invalide.';
+  if (/praticiens_presentation_facture_valide/.test(message)) return 'Présentation des factures invalide.';
   return message;
 }

@@ -39,6 +39,7 @@ decrire('Profil de facturation : écriture directe sous la RLS', () => {
     regimeTva: 'assujetti', tauxTva: '5.5', agrementSap: true, dateDeclarationSap: '2026-03-04', modeIntervention: 'prestataire',
     adresseIntervention: '2 rue B', facturationRue: '3 rue C', facturationCodePostal: '00001', facturationVille: 'Ailleurs',
     iban: 'FR76 3000 6000 0112 3456 7890 189', delaiPaiementJours: '45', penalitesRetard: 'Pénalités légales',
+    presentationFacture: 'globale',
   };
 
   it('les champs sont persistés et relus correctement (IBAN normalisé par la base)', async () => {

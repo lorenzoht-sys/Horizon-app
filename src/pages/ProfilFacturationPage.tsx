@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Loader, XCircle } from '
 import PageWrapper from '../components/layout/PageWrapper';
 import { useProfilFacturation } from '../hooks/useProfilFacturation';
 import {
+  PRESENTATIONS_FACTURE,
   champsManquantsPourValider,
   siretAAlerter,
   validerFormulaire,
@@ -31,7 +32,7 @@ const ORDRE_CHAMPS: ChampFormulaire[] = [
   'facturationRue', 'facturationCodePostal', 'facturationVille', 'iban', 'delaiPaiementJours', 'penalitesRetard',
 ];
 
-const classeChamp = (erreur?: string) =>
+const classeChamp =(erreur?: string) =>
   `w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-colors ${
     erreur ? 'border-red-300 bg-red-50/40 focus:border-red-400 focus:ring-red-100'
            : 'border-gray-200 bg-white focus:border-primary focus:ring-primary/10'
@@ -293,6 +294,25 @@ function Formulaire({ identite, initial, enregistrer }: {
               <textarea name="profil-penalitesRetard" value={f.penalitesRetard} rows={3} onChange={e => maj('penalitesRetard', e.target.value)}
                 className={classeChamp(erreurs.penalitesRetard)} />
             </Champ>
+          </Section>
+
+          <Section titre="Présentation des factures" aide="Choix par défaut pour toutes vos factures ; il peut être changé pour un bénéficiaire, dans l'onglet Contrats de sa fiche. Le total est le même dans les deux cas, et une facture validée garde la présentation choisie à ce moment-là.">
+            <div role="radiogroup" aria-label="Présentation des factures" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {PRESENTATIONS_FACTURE.map(o => {
+                const choisi = f.presentationFacture === o.valeur;
+                return (
+                  <label key={o.valeur} data-testid={`presentation-${o.valeur}`}
+                    className={`flex gap-2.5 rounded-xl border p-3 cursor-pointer transition-colors ${choisi ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <input type="radio" name="profil-presentationFacture" value={o.valeur} checked={choisi}
+                      onChange={() => maj('presentationFacture', o.valeur)} className="mt-0.5 h-4 w-4 accent-primary" />
+                    <span className="text-sm">
+                      <span className="block font-semibold text-gray-800">{o.titre}</span>
+                      <span className="block text-xs text-gray-500 mt-0.5">{o.detail}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
           </Section>
 
           <div className="flex flex-wrap items-center gap-3 pb-6">

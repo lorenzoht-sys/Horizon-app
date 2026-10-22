@@ -399,6 +399,7 @@ export function dbToContrat(row: any): Contrat {
     dateReprisePrevue: row.date_reprise_prevue ?? undefined,
     tarifSeance: row.tarif_seance ?? undefined,
     exclureTournee: row.exclure_tournee ?? false,
+    presentationFacture: row.presentation_facture === 'detaillee' || row.presentation_facture === 'globale' ? row.presentation_facture : null,
   };
 }
 
