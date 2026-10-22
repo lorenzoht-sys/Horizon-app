@@ -6,10 +6,15 @@ import {
   formaterDate,
   formaterMontant,
   formaterPeriode,
+  mentionHorizon,
   recapitulatif,
   trierLignes,
   type FacturePdf,
 } from './composer';
+import { createHash } from 'node:crypto';
+import {
+  PLUS_JAKARTA_SANS_BOLD, PLUS_JAKARTA_SANS_BOLD_SHA256, PLUS_JAKARTA_SANS_REGULAR, PLUS_JAKARTA_SANS_REGULAR_SHA256,
+} from './polices';
 
 // Données entièrement fictives (aucun nom réel : données de santé).
 function facture(surcharge: Partial<FacturePdf> = {}): FacturePdf {
@@ -263,6 +268,51 @@ describe('composerFacturePdf', () => {
     expect(Buffer.from(a).equals(Buffer.from(detaillee))).toBe(false);
     // Une ligne au lieu de trois, sans récapitulatif : le contenu est plus court.
     expect(a.length).toBeLessThan(detaillee.length);
+  });
+
+  it('gabarit absent, NULL ou 1 : mêmes octets (factures émises avant le point C inchangées)', async () => {
+    const reference = Buffer.from(await composerFacturePdf(facture()));
+    for (const gabarit of [null, 1, 3]) {
+      expect(Buffer.from(await composerFacturePdf(facture({ gabarit }))).equals(reference), String(gabarit)).toBe(true);
+    }
+  });
+
+  it('gabarit 2 : police de la charte embarquée sous un nom FIXE, déterministe, pied « éditée avec Horizon »', async () => {
+    const a = Buffer.from(await composerFacturePdf(facture({ gabarit: 2 })));
+    const b = Buffer.from(await composerFacturePdf(facture({ gabarit: 2 })));
+    expect(a.equals(b)).toBe(true);
+    expect(a.equals(Buffer.from(await composerFacturePdf(facture())))).toBe(false);
+    const brut = a.toString('latin1');
+    expect(brut).toMatch(/\/BaseFont \/PlusJakartaSans-Regular\b/);
+    expect(brut).toMatch(/\/BaseFont \/PlusJakartaSans-Bold\b/);
+    expect(brut).not.toMatch(/Helvetica/);
+    const doc = await PDFDocument.load(a);
+    expect(doc.getPageCount()).toBe(1);
+    expect(doc.getTitle()).toBe('Facture n° 2026-0007');
+  });
+
+  it('gabarit 2 : un avoir, une franchise, la présentation globale et une longue facture se composent', async () => {
+    const lignes = Array.from({ length: 70 }, (_, i) => ({
+      libelle: `Séance du ${String((i % 28) + 1).padStart(2, '0')}/09/2026 — œuvre « test » №${i + 1} 😀`, quantite: 1, prixUnitaire: 10, montant: 10,
+      seanceDate: `2026-09-${String((i % 28) + 1).padStart(2, '0')}`, seanceHeure: '10:00', seanceType: 'seance',
+    }));
+    const longue = await PDFDocument.load(await composerFacturePdf(facture({ lignes, totalHt: 700, montantTva: 70, total: 770, gabarit: 2 })));
+    expect(longue.getPageCount()).toBeGreaterThan(1);
+    const globale = await composerFacturePdf(facture({ lignes, presentation: 'globale', gabarit: 2 }));
+    expect((await PDFDocument.load(globale)).getPageCount()).toBe(1);
+    const avoir = await composerFacturePdf(facture({ type: 'avoir', numero: '2026-0008', numeroOrigine: '2026-0007', motif: 'Séance annulée', gabarit: 2, emetteur: { ...facture().emetteur, regime_tva: 'franchise_293B' } }));
+    expect((await PDFDocument.load(avoir)).getTitle()).toBe('Avoir n° 2026-0008');
+  });
+
+  it('mention du pied de page accordée au type de document', () => {
+    expect(mentionHorizon('facture')).toBe('Facture éditée avec Horizon');
+    expect(mentionHorizon('avoir')).toBe('Avoir édité avec Horizon');
+  });
+
+  it('les polices embarquées sont exactement celles déclarées (sha256)', () => {
+    const sha = (b64: string) => createHash('sha256').update(Buffer.from(b64, 'base64')).digest('hex');
+    expect(sha(PLUS_JAKARTA_SANS_REGULAR)).toBe(PLUS_JAKARTA_SANS_REGULAR_SHA256);
+    expect(sha(PLUS_JAKARTA_SANS_BOLD)).toBe(PLUS_JAKARTA_SANS_BOLD_SHA256);
   });
 
   it('compose un avoir et une facture en franchise', async () => {
