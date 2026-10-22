@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { composerMessage, destinataire, emailValide, erreurCourte, nomExpediteur, nomPieceJointe, sujet, texte, type FactureEnvoi } from './envoi';
+import { LOGO_EMAIL, composerMessage, destinataire, emailValide, emetteurComplet, erreurCourte, html, nomAffiche, nomExpediteur, nomPieceJointe, sujet, texte, type FactureEnvoi } from './envoi';
 
 // Données entièrement fictives.
 const f = (s: Partial<FactureEnvoi> = {}): FactureEnvoi => ({
@@ -34,7 +34,7 @@ describe('envoi d\'une facture : composition', () => {
   it('message Resend : From entre guillemets, Répondre à = e-mail du praticien, PDF joint', () => {
     const m = composerMessage(f(), 'destinataire@example.com', 'JVBERi0=', 'factures@horizon-suivi.fr');
     expect(m).toMatchObject({
-      from: '"Mouv\'APA" <factures@horizon-suivi.fr>', to: ['destinataire@example.com'], reply_to: 'praticien@example.com',
+      from: '"Mouv\'APA via Horizon" <factures@horizon-suivi.fr>', to: ['destinataire@example.com'], reply_to: 'praticien@example.com',
       attachments: [{ filename: 'facture-2026-0008.pdf', content: 'JVBERi0=' }],
     });
     expect(composerMessage(f({ emetteur: { prenom: 'A', email: null } }), 'd@example.com', 'x', 'f@h.fr')).not.toHaveProperty('reply_to');
@@ -44,5 +44,41 @@ describe('envoi d\'une facture : composition', () => {
     for (const v of ['a@b', 'a b@c.fr', '', null, `${'a'.repeat(250)}@b.fr`]) expect(emailValide(v)).toBe(false);
     expect(erreurCourte('x'.repeat(900))).toHaveLength(500);
     expect(erreurCourte(new Error('boom'))).toBe('boom');
+  });
+
+  it('« via Horizon » : nom affiché et émetteur complet (prénom nom — nom commercial)', () => {
+    expect(nomAffiche(f().emetteur)).toBe("Mouv'APA via Horizon");
+    expect(nomAffiche({ prenom: 'Alex', nom: 'Exemple' })).toBe('Alex Exemple via Horizon');
+    expect(nomAffiche({})).toBe('Horizon');
+    expect(emetteurComplet(f().emetteur)).toBe("Alex Exemple — Mouv'APA");
+    expect(emetteurComplet({ prenom: 'Alex', nom: 'Exemple' })).toBe('Alex Exemple');
+    expect(emetteurComplet({ societe: "Mouv'APA" })).toBe("Mouv'APA");
+    expect(emetteurComplet({})).toBe('votre praticien');
+  });
+  it('corps HTML : logo Horizon, « de la part de », montant et échéance ; tout texte du profil échappé ; aucune autre image', () => {
+    const h = html(f());
+    expect(h).toContain(`src="${LOGO_EMAIL}"`);
+    expect(h).toContain('alt="Horizon"');
+    // Mode sombre : logo sur un bloc à fond blanc fixe ; e-mail déclaré en thème clair.
+    expect(h).toMatch(/<td bgcolor="#FFFFFF" style="background-color:#FFFFFF;[^"]*padding:8px 10px;">\s*<img /);
+    expect(h).toContain('<meta name="color-scheme" content="light only">');
+    expect(h).toContain('Facture de la part de <strong style="color:#1A2332;">Alex Exemple — Mouv&#39;APA</strong>');
+    expect(h).toContain('242,00 €');
+    expect(h).toContain('20/11/2026');
+    expect(h.match(/<img /g)).toHaveLength(1);
+    expect(h).not.toMatch(/<a /);
+    const piege = html(f({ emetteur: { societe: '<script>alert(1)</script>', prenom: 'A&B' } }));
+    expect(piege).not.toContain('<script>');
+    expect(piege).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(piege).toContain('A&amp;B');
+    const av = html(f({ type: 'avoir' }));
+    expect(av).toContain('Avoir de la part de');
+    expect(av).toContain("Montant de l&#39;avoir".replace('&#39;', "'"));
+    expect(av).not.toContain('Échéance');
+  });
+  it('message Resend : HTML et texte envoyés ensemble ; le texte signale « via Horizon »', () => {
+    const m = composerMessage(f(), 'destinataire@example.com', 'JVBERi0=', 'factures@horizon-suivi.fr');
+    expect(m.html).toContain('<!doctype html>');
+    expect(m.text).toContain('Envoyé via Horizon');
   });
 });
