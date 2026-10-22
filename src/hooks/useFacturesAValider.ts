@@ -160,5 +160,24 @@ export function useFacturesValidees() {
     return { ok: true };
   }, []);
 
-  return { factures, chargement, erreur, marquerPayee };
+  /**
+   * « Envoyer » / « Renvoyer » (PR 8) : Edge Function facturation-envoi, avec le jeton du praticien.
+   * `envoiId` est tiré par l'appelant à chaque clic : clé d'idempotence côté Resend.
+   */
+  const envoyer = useCallback(async (factureId: string, envoiId: string, email?: string, enregistrerEmail = false):
+    Promise<{ ok: true; destinataire: string; enregistree: boolean } | { code?: string; erreur: string }> => {
+    if (!supabase) return { erreur: 'Base de données indisponible' };
+    const { data, error } = await supabase.functions.invoke('facturation-envoi', {
+      body: { facture_id: factureId, envoi_id: envoiId, ...(email ? { email, enregistrer_email: enregistrerEmail } : {}) },
+    });
+    if (error) {
+      // FunctionsHttpError : le corps JSON de la fonction porte le code et le message lisible.
+      const corps = await (error as { context?: Response }).context?.json?.().catch(() => null);
+      return { code: corps?.code, erreur: corps?.erreur ?? error.message };
+    }
+    setVersion(v => v + 1);
+    return { ok: true, destinataire: String(data?.destinataire ?? ''), enregistree: data?.enregistree === true };
+  }, []);
+
+  return { factures, chargement, erreur, marquerPayee, envoyer };
 }

@@ -158,6 +158,11 @@ const EXCLUDED_TABLES: Record<string, string> = {
   // générique ferait un « skip » compté comme échec. Cloisonnement lecture / écriture / bénéficiaire testé
   // sur une vraie base par tests/db/ca-mensuel.spec.ts.
   ca_externe: 'praticien_id direct, vide en staging ; cloisonnement, écriture et absence de lecture admin testés sur base locale par tests/db/ca-mensuel.spec.ts',
+  // Journal des envois de factures par e-mail (migration 20261026100000, PR 8). Une seule policy, en LECTURE
+  // (praticien_id = auth.uid()) ; aucune écriture pour authenticated, INSERT pour service_role seulement
+  // (Edge Function facturation-envoi) ; inaltérable. Vide en staging tant qu'aucun envoi n'a eu lieu : le
+  // test générique ferait un « skip » compté comme échec. Cloisonnement testé par tests/db/facture-envoi.spec.ts.
+  envois_factures: 'praticien_id direct, lecture seule pour le praticien, écrite par service_role ; testée sur base locale par tests/db/facture-envoi.spec.ts',
 };
 
 // Tables protégées uniquement par jointure (pas de colonne praticien_id /

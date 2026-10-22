@@ -4,12 +4,14 @@ import { ArrowLeft, ArrowRight, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import PageWrapper from '../components/layout/PageWrapper';
 import { telechargerPdfFacture, useFacturesValidees } from '../hooks/useFacturesAValider';
-import { MOYENS_PAIEMENT, dateCivileParis, formaterDate, formaterEuro, libellePeriode, peutMarquerPayee } from '../lib/facturesAValider';
+import { MOYENS_PAIEMENT, dateCivileParis, emailPlausible, formaterDate, formaterEuro, libellePeriode, peutEnvoyer, peutMarquerPayee } from '../lib/facturesAValider';
 
 // Factures validées (numérotées, verrouillées) : liste volontairement minimale (facturation,
 // étape 3). Elle sert de destination à « Les retrouver » après une validation. Étape 5 : le PDF se
 // télécharge ici ; l'envoi par e-mail vient ensuite. PR 7 : « Marquer payée » (un paiement du reste dû,
-// marquer_facture_payee) ; « En retard » est posé par la base le lendemain de l'échéance.
+// marquer_facture_payee) ; « En retard » est posé par la base le lendemain de l'échéance. PR 8 :
+// « Envoyer » / « Renvoyer » par e-mail (Edge Function facturation-envoi) ; sans adresse connue, une saisie
+// s'ouvre, avec « Enregistrer cette adresse dans la fiche » décochée par défaut (décision du 2026-10-22).
 
 const STATUTS: Record<string, { libelle: string; classe: string }> = {
   validee: { libelle: 'Validée', classe: 'bg-emerald-50 text-emerald-700' },
@@ -20,7 +22,26 @@ const STATUTS: Record<string, { libelle: string; classe: string }> = {
 };
 
 export default function FacturesPage() {
-  const { factures, chargement, erreur, marquerPayee } = useFacturesValidees();
+  const { factures, chargement, erreur, marquerPayee, envoyer } = useFacturesValidees();
+  const [envoiEnCours, setEnvoiEnCours] = useState<string | null>(null);
+  // Saisie d'adresse ouverte sur une facture (adresse manquante ou invalide, ou autre adresse voulue).
+  const [saisie, setSaisie] = useState<{ id: string; email: string; enregistrer: boolean; message?: string } | null>(null);
+
+  async function lancerEnvoi(id: string, email?: string, enregistrer = false) {
+    setEnvoiEnCours(id);
+    const r = await envoyer(id, crypto.randomUUID(), email, enregistrer);
+    setEnvoiEnCours(null);
+    if ('ok' in r) {
+      setSaisie(null);
+      toast.success(r.enregistree ? `Envoyée à ${r.destinataire} · adresse enregistrée dans la fiche` : `Envoyée à ${r.destinataire}`);
+      return;
+    }
+    if (r.code === 'email_manquant' || r.code === 'email_invalide') {
+      setSaisie({ id, email: email ?? '', enregistrer, message: r.erreur });
+      return;
+    }
+    toast.error(r.erreur);
+  }
   const [telechargement, setTelechargement] = useState<string | null>(null);
   const aujourdhui = dateCivileParis();
   // Formulaire « Marquer payée » ouvert sur une seule facture à la fois.
@@ -62,7 +83,7 @@ export default function FacturesPage() {
         </div>
         <p className="text-sm text-gray-500 mt-0.5">
           {chargement ? 'Chargement…' : `${factures.length} facture${factures.length > 1 ? 's' : ''}`}
-          {' '}· l'envoi par e-mail arrive à l'étape suivante
+
         </p>
       </div>
 
@@ -92,6 +113,29 @@ export default function FacturesPage() {
                     ? <div className="text-xs text-green-700" data-testid="date-paiement">Payée le {formaterDate(f.datePaiement)}</div>
                     : f.type === 'facture' && f.echeance && f.statut !== 'annulee' &&
                       <div className={`text-xs ${f.statut === 'en_retard' ? 'text-red-600' : 'text-gray-400'}`} data-testid="echeance">Échéance le {formaterDate(f.echeance)}</div>}
+                  {saisie?.id === f.id && (
+                    <div className="mt-2 space-y-1.5" data-testid="saisie-email">
+                      {saisie.message && <p className="text-xs text-amber-700">{saisie.message} : saisissez l'adresse du destinataire.</p>}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input type="email" value={saisie.email} placeholder="adresse@exemple.fr" data-testid="email-envoi"
+                          onChange={e => setSaisie({ ...saisie, email: e.target.value.trim() })}
+                          className="border border-gray-200 rounded-lg px-2 py-1 text-sm min-w-0 flex-1" />
+                        <button type="button" data-testid="confirmer-envoi" disabled={!emailPlausible(saisie.email) || envoiEnCours === f.id}
+                          onClick={() => void lancerEnvoi(f.id, saisie.email, saisie.enregistrer)}
+                          className="text-xs font-semibold text-white bg-primary rounded-lg px-3 py-1.5 disabled:opacity-50">
+                          {envoiEnCours === f.id ? 'Envoi…' : 'Envoyer'}
+                        </button>
+                        <button type="button" onClick={() => setSaisie(null)} className="text-xs text-gray-500 px-2 py-1.5">Annuler</button>
+                      </div>
+                      {/* inline-flex : seuls la case et son texte sont cliquables. En pleine largeur, un clic à
+                          droite du texte cochait la case sans qu'on le voie (recette staging du 2026-10-22). */}
+                      <label className="inline-flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                        <input type="checkbox" checked={saisie.enregistrer} data-testid="enregistrer-email"
+                          onChange={e => setSaisie({ ...saisie, enregistrer: e.target.checked })} />
+                        Enregistrer cette adresse dans la fiche
+                      </label>
+                    </div>
+                  )}
                   {paiement?.id === f.id && (
                     <div className="mt-2 flex flex-wrap items-end gap-2" data-testid="formulaire-paiement">
                       <label className="text-xs text-gray-500">Payée le
@@ -131,6 +175,16 @@ export default function FacturesPage() {
                       <span data-testid="pdf-en-preparation" className="text-xs text-gray-400">PDF en préparation</span>
                     )}
                   </div>
+                  {f.dernierEnvoi && (
+                    <div className="text-xs text-blue-700 mt-1" data-testid="dernier-envoi">Envoyée le {formaterDate(f.dernierEnvoi.date.slice(0, 10))}</div>
+                  )}
+                  {peutEnvoyer(f) && f.pdfPath && saisie?.id !== f.id && (
+                    <button type="button" data-testid="envoyer-facture" disabled={envoiEnCours === f.id}
+                      onClick={() => void lancerEnvoi(f.id)}
+                      className="mt-1 block ml-auto text-xs font-medium text-blue-700 hover:text-blue-900 disabled:opacity-50">
+                      {envoiEnCours === f.id ? 'Envoi…' : f.dernierEnvoi ? 'Renvoyer' : 'Envoyer par e-mail'}
+                    </button>
+                  )}
                   {peutMarquerPayee(f) && paiement?.id !== f.id && (
                     <button type="button" data-testid="marquer-payee"
                       onClick={() => setPaiement({ id: f.id, date: aujourdhui, moyen: 'virement' })}

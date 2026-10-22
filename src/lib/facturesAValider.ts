@@ -48,6 +48,8 @@ export interface FactureValidee {
   echeance: string | null;
   /** Date du dernier paiement enregistré (AAAA-MM-JJ), NULL s'il n'y en a aucun (PR 7). */
   datePaiement: string | null;
+  /** Dernier envoi RÉUSSI par e-mail (journal envois_factures, PR 8), NULL s'il n'y en a aucun. */
+  dernierEnvoi: { date: string; destinataire: string } | null;
 }
 
 /** Champs du profil du praticien qui conditionnent la validation (valider_facture, étape 1). */
@@ -78,7 +80,7 @@ export const SELECT_PROFIL =
   'nom, siret, regime_tva, taux_tva, adresse_rue, adresse_code_postal, adresse_ville, ' +
   'facturation_adresse_rue, facturation_code_postal, facturation_ville';
 
-export const SELECT_FACTURE_VALIDEE = 'id, numero, type, periode, date_emission, echeance, statut, total, pdf_path, participants(prenom, nom), paiements(date)';
+export const SELECT_FACTURE_VALIDEE = 'id, numero, type, periode, date_emission, echeance, statut, total, pdf_path, participants(prenom, nom), paiements(date), envois_factures(created_at, destinataire, resultat)';
 
 /** Date civile Paris (AAAA-MM-JJ) : la règle de validation de la base se règle sur Paris, pas sur le poste. */
 export function dateCivileParis(instant: Date = new Date()): string {
@@ -278,7 +280,21 @@ export function lireFactureValidee(row: Brut): FactureValidee {
     type: row.type === 'avoir' ? 'avoir' : 'facture',
     echeance: row.echeance ?? null,
     datePaiement: ((row.paiements ?? []) as Brut[]).map(p => String(p.date)).sort().at(-1) ?? null,
+    dernierEnvoi: ((row.envois_factures ?? []) as Brut[])
+      .filter(e => e.resultat === 'envoye')
+      .map(e => ({ date: String(e.created_at), destinataire: String(e.destinataire) }))
+      .sort((a, b) => a.date.localeCompare(b.date)).at(-1) ?? null,
   };
+}
+
+/** « Envoyer » / « Renvoyer » par e-mail (PR 8) : toute facture ou tout avoir émis, sauf annulé. */
+export function peutEnvoyer(f: Pick<FactureValidee, 'statut'>): boolean {
+  return ['validee', 'envoyee', 'payee', 'en_retard'].includes(f.statut);
+}
+
+/** Forme d'une adresse e-mail (même règle que la base et la fonction d'envoi). */
+export function emailPlausible(v: string): boolean {
+  return v.length <= 254 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
 }
 
 /** Moyens de paiement acceptés par la base (paiements_moyen_valide). */

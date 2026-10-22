@@ -432,3 +432,8 @@ verify_jwt = true
 # FACTURATION_WEBHOOK_SECRET contrôlé dans index.ts.
 [functions.facturation-pdf]
 verify_jwt = false
+
+[functions.facturation-envoi]
+# Appelée par le praticien avec son jeton (plan facturation PR 8) ; la fonction vérifie aussi
+# que la facture est la sienne.
+verify_jwt = true
