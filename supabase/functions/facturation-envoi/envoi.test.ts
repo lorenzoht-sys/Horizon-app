@@ -59,6 +59,9 @@ describe('envoi d\'une facture : composition', () => {
     const h = html(f());
     expect(h).toContain(`src="${LOGO_EMAIL}"`);
     expect(h).toContain('alt="Horizon"');
+    // Mode sombre : logo sur un bloc à fond blanc fixe ; e-mail déclaré en thème clair.
+    expect(h).toMatch(/<td bgcolor="#FFFFFF" style="background-color:#FFFFFF;[^"]*padding:8px 10px;">\s*<img /);
+    expect(h).toContain('<meta name="color-scheme" content="light only">');
     expect(h).toContain('Facture de la part de <strong style="color:#1A2332;">Alex Exemple — Mouv&#39;APA</strong>');
     expect(h).toContain('242,00 €');
     expect(h).toContain('20/11/2026');

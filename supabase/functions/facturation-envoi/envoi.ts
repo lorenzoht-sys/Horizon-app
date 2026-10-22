@@ -109,6 +109,9 @@ function echapper(s: string): string {
 
 // Charte Horizon (tailwind.config.js) : vert #2BB89A, encre #1A2332, texte secondaire #5A6B7A, fonds
 // #E6F5F1 / #F5F9FB. Mise en page en tableaux et styles en ligne : seule forme fiable dans les clients mail.
+// Mode sombre (remarque du 2026-10-22) : le logo a un texte noir ; il est posé sur un bloc à fond blanc fixe
+// (bgcolor + style) pour rester lisible quand Gmail ou Apple Mail assombrissent le message, et l'e-mail se
+// déclare « light only » (respecté par Apple Mail). Images bloquées : texte alternatif « Horizon » en vert.
 const POLICE = "'Plus Jakarta Sans', 'Segoe UI', Helvetica, Arial, sans-serif";
 
 export function html(f: FactureEnvoi, logo: string = LOGO_EMAIL): string {
@@ -119,13 +122,17 @@ export function html(f: FactureEnvoi, logo: string = LOGO_EMAIL): string {
     `<td align="right" style="padding:6px 0;color:#1A2332;font-size:14px;font-weight:600;">${valeur}</td></tr>`;
   return `<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only">
 <title>${echapper(sujet(f))}</title></head>
 <body style="margin:0;padding:0;background:#F5F9FB;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F5F9FB;font-family:${POLICE};">
 <tr><td align="center" style="padding:24px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border-radius:14px;border-top:4px solid #2BB89A;">
-<tr><td style="padding:24px 28px 8px 28px;">
-<img src="${echapper(logo)}" width="140" alt="Horizon" style="display:block;width:140px;height:auto;border:0;color:#2BB89A;font-size:20px;font-weight:700;">
+<tr><td style="padding:20px 28px 8px 28px;">
+<table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td bgcolor="#FFFFFF" style="background-color:#FFFFFF;border-radius:8px;padding:8px 10px;">
+<img src="${echapper(logo)}" width="140" alt="Horizon" style="display:block;width:140px;height:auto;border:0;color:#2BB89A;font-family:${POLICE};font-size:20px;font-weight:700;">
+</td></tr></table>
 </td></tr>
 <tr><td style="padding:8px 28px 0 28px;color:#5A6B7A;font-size:14px;">${avoir ? 'Avoir' : 'Facture'} de la part de <strong style="color:#1A2332;">${de}</strong></td></tr>
 <tr><td style="padding:6px 28px 0 28px;color:#1A2332;font-size:20px;font-weight:700;">${echapper(sujet(f))}</td></tr>
