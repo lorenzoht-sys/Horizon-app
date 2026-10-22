@@ -18,7 +18,9 @@
 // (voir docs/FACTURATION.md, « Crédit d'impôt »).
 
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import { lignesAffichees, lirePresentation, type Presentation } from './regroupement.ts';
+import { PLUS_JAKARTA_SANS_BOLD, PLUS_JAKARTA_SANS_REGULAR } from './polices.ts';
 
 export interface AdressePdf {
   rue?: string | null;
@@ -90,6 +92,8 @@ export interface FacturePdf {
   logo?: { type: 'png' | 'jpg'; octets: Uint8Array } | null;
   /** Mode figé à la validation (factures.presentation, 20261028100000) ; NULL = « detaillee ». */
   presentation?: Presentation | null;
+  /** Gabarit figé à la validation (factures.gabarit, 20261029100000) : NULL ou 1 = Helvetica gris, 2 = charte Horizon. */
+  gabarit?: number | null;
 }
 
 // ---------- formats ----------
@@ -268,6 +272,42 @@ const NOIR = rgb(0.1, 0.1, 0.1);
 const GRIS = rgb(0.4, 0.4, 0.4);
 const FILET = rgb(0.8, 0.8, 0.8);
 
+type Couleur = ReturnType<typeof rgb>;
+const hex = (h: string): Couleur => rgb(parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255);
+
+/**
+ * Couleurs d'un gabarit. Le gabarit 1 reprend EXACTEMENT les constantes d'origine (NOIR, GRIS, FILET) :
+ * ses PDF sortent à l'octet près comme avant le point C. Le gabarit 2 suit tailwind.config.js.
+ */
+interface Teintes {
+  encre: Couleur;      // texte courant
+  gris: Couleur;       // références, mentions
+  etiquette: Couleur;  // « Émetteur », en-têtes du tableau, titres de section
+  filet: Couleur;
+  total: Couleur;      // ligne du total à payer
+  pied: Couleur;
+  /** Gabarit 2 seulement : filet d'accent sous l'en-tête et fond de l'en-tête du tableau. */
+  accent: Couleur | null;
+  fondEntete: Couleur | null;
+}
+
+const TEINTES_1: Teintes = { encre: NOIR, gris: GRIS, etiquette: GRIS, filet: FILET, total: NOIR, pied: GRIS, accent: null, fondEntete: null };
+const TEINTES_2: Teintes = {
+  encre: hex('#1A2332'),       // dark
+  gris: hex('#5A6B7A'),        // text-secondary
+  etiquette: hex('#1A9A7F'),   // primary-dark
+  filet: hex('#9DAFC0'),       // text-muted
+  total: hex('#1A9A7F'),       // primary-dark
+  pied: hex('#9DAFC0'),        // text-muted
+  accent: hex('#2BB89A'),      // primary
+  fondEntete: hex('#E6F5F1'),  // primary-light
+};
+
+/** Mention du gabarit 2, à droite du pied de page (décision du 2026-10-22), accordée pour un avoir. */
+export function mentionHorizon(type: FacturePdf['type']): string {
+  return type === 'avoir' ? 'Avoir édité avec Horizon' : 'Facture éditée avec Horizon';
+}
+
 interface Contexte {
   doc: PDFDocument;
   page: PDFPage;
@@ -276,6 +316,7 @@ interface Contexte {
   gras: PDFFont;
   pied: string;
   pages: PDFPage[];
+  t: Teintes;
 }
 
 /** Remplace ce que la police standard ne sait pas écrire : pdf-lib lève sinon une exception. */
@@ -312,21 +353,29 @@ function assurerPlace(c: Contexte, hauteur: number): void {
   if (c.y - hauteur < MARGE + 30) nouvellePage(c);
 }
 
-function ecrire(c: Contexte, s: string, opts: { x?: number; taille?: number; gras?: boolean; couleur?: ReturnType<typeof rgb>; largeur?: number } = {}): void {
+function ecrire(c: Contexte, s: string, opts: { x?: number; taille?: number; gras?: boolean; couleur?: Couleur; largeur?: number } = {}): void {
   const taille = opts.taille ?? 10;
   const police = opts.gras ? c.gras : c.normal;
   const largeur = opts.largeur ?? A4[0] - 2 * MARGE;
   for (const l of decouper(police, s, taille, largeur)) {
     assurerPlace(c, taille + 4);
-    c.page.drawText(l, { x: opts.x ?? MARGE, y: c.y - taille, size: taille, font: police, color: opts.couleur ?? NOIR });
+    c.page.drawText(l, { x: opts.x ?? MARGE, y: c.y - taille, size: taille, font: police, color: opts.couleur ?? c.t.encre });
     c.y -= taille + 4;
   }
 }
 
-function droite(c: Contexte, s: string, xDroit: number, y: number, taille: number, gras = false): void {
+function droite(c: Contexte, s: string, xDroit: number, y: number, taille: number, gras = false, couleur?: Couleur): void {
   const police = gras ? c.gras : c.normal;
   const t = sur(police, s);
-  c.page.drawText(t, { x: xDroit - police.widthOfTextAtSize(t, taille), y, size: taille, font: police, color: NOIR });
+  c.page.drawText(t, { x: xDroit - police.widthOfTextAtSize(t, taille), y, size: taille, font: police, color: couleur ?? c.t.encre });
+}
+
+/** Octets d'une police encodée en base64 (polices.ts) ; atob existe dans Deno comme dans Node. */
+function base64EnOctets(b64: string): Uint8Array {
+  const binaire = atob(b64);
+  const octets = new Uint8Array(binaire.length);
+  for (let i = 0; i < binaire.length; i++) octets[i] = binaire.charCodeAt(i);
+  return octets;
 }
 
 export async function composerFacturePdf(f: FacturePdf): Promise<Uint8Array> {
@@ -341,10 +390,23 @@ export async function composerFacturePdf(f: FacturePdf): Promise<Uint8Array> {
   doc.setTitle(blocs.titre);
   doc.setAuthor(texte(f.emetteur.societe) || nomComplet(f.emetteur.prenom, f.emetteur.nom) || 'Horizon');
 
-  const normal = await doc.embedFont(StandardFonts.Helvetica);
-  const gras = await doc.embedFont(StandardFonts.HelveticaBold);
+  // Gabarit figé à la validation (20261029100000). Toute valeur autre que 2 = gabarit 1 : les factures
+  // émises avant le point C se recomposent à l'identique.
+  const charte = f.gabarit === 2;
+  let normal: PDFFont;
+  let gras: PDFFont;
+  if (charte) {
+    // Police embarquée et sous-ensemblée. customName évite le suffixe ALÉATOIRE que pdf-lib ajoute sinon
+    // au nom de la police : sans lui, deux compositions ne donneraient pas les mêmes octets.
+    doc.registerFontkit(fontkit);
+    normal = await doc.embedFont(base64EnOctets(PLUS_JAKARTA_SANS_REGULAR), { subset: true, customName: 'PlusJakartaSans-Regular' });
+    gras = await doc.embedFont(base64EnOctets(PLUS_JAKARTA_SANS_BOLD), { subset: true, customName: 'PlusJakartaSans-Bold' });
+  } else {
+    normal = await doc.embedFont(StandardFonts.Helvetica);
+    gras = await doc.embedFont(StandardFonts.HelveticaBold);
+  }
   const premiere = doc.addPage(A4);
-  const c: Contexte = { doc, page: premiere, y: A4[1] - MARGE, normal, gras, pied: blocs.titre, pages: [premiere] };
+  const c: Contexte = { doc, page: premiere, y: A4[1] - MARGE, normal, gras, pied: blocs.titre, pages: [premiere], t: charte ? TEINTES_2 : TEINTES_1 };
 
   // Logo en haut à droite, dans une boîte de 140 × 56 points, jamais agrandi. Une image que pdf-lib ne
   // sait pas lire (PNG exotique, JPEG tronqué) est ignorée : le résultat reste le même à chaque
@@ -363,23 +425,28 @@ export async function composerFacturePdf(f: FacturePdf): Promise<Uint8Array> {
 
   ecrire(c, blocs.titre, { taille: 20, gras: true, largeur: A4[0] - 2 * MARGE - (f.logo ? LOGO_LARGEUR + 12 : 0) });
   c.y -= 6;
-  for (const l of blocs.references) ecrire(c, l, { couleur: GRIS });
+  for (const l of blocs.references) ecrire(c, l, { couleur: c.t.gris });
   c.y -= 10;
+  if (c.t.accent) {
+    // Gabarit 2 : filet d'accent sous l'en-tête.
+    c.page.drawLine({ start: { x: MARGE, y: c.y + 2 }, end: { x: A4[0] - MARGE, y: c.y + 2 }, thickness: 1.5, color: c.t.accent });
+    c.y -= 12;
+  }
 
   // Émetteur à gauche, destinataire à droite, au même niveau.
   const yHaut = c.y;
   const demi = (A4[0] - 2 * MARGE) / 2 - 10;
-  ecrire(c, 'Émetteur', { gras: true, taille: 9, couleur: GRIS, largeur: demi });
+  ecrire(c, 'Émetteur', { gras: true, taille: 9, couleur: c.t.etiquette, largeur: demi });
   blocs.emetteur.forEach((l, i) => ecrire(c, l, { gras: i === 0, largeur: demi }));
   const yBasEmetteur = c.y;
   c.page = c.pages[0];
   c.y = yHaut;
-  ecrire(c, 'Destinataire', { x: MARGE + demi + 20, gras: true, taille: 9, couleur: GRIS, largeur: demi });
+  ecrire(c, 'Destinataire', { x: MARGE + demi + 20, gras: true, taille: 9, couleur: c.t.etiquette, largeur: demi });
   blocs.destinataire.forEach((l, i) => ecrire(c, l, { x: MARGE + demi + 20, gras: i === 0, largeur: demi }));
-  for (const l of blocs.beneficiaire) ecrire(c, l, { x: MARGE + demi + 20, taille: 9, couleur: GRIS, largeur: demi });
+  for (const l of blocs.beneficiaire) ecrire(c, l, { x: MARGE + demi + 20, taille: 9, couleur: c.t.gris, largeur: demi });
   c.y = Math.min(c.y, yBasEmetteur) - 6;
 
-  for (const l of blocs.mentionsSap) ecrire(c, l, { taille: 9, couleur: GRIS });
+  for (const l of blocs.mentionsSap) ecrire(c, l, { taille: 9, couleur: c.t.gris });
   c.y -= 14;
 
   // Tableau des lignes : désignation, quantité, prix unitaire HT, montant HT.
@@ -389,12 +456,16 @@ export async function composerFacturePdf(f: FacturePdf): Promise<Uint8Array> {
   const enTete = (): void => {
     assurerPlace(c, 24);
     const base = c.y - 10;
-    c.page.drawText('Désignation', { x: MARGE, y: base, size: 9, font: c.gras, color: GRIS });
-    droite(c, 'Qté', xQte, base, 9, true);
-    droite(c, 'Prix unit. HT', xPu, base, 9, true);
-    droite(c, 'Montant HT', xMontant, base, 9, true);
+    // Gabarit 2 : bandeau clair derrière les intitulés, débordant de 6 points à gauche et à droite.
+    if (c.t.fondEntete) c.page.drawRectangle({ x: MARGE - 6, y: c.y - 16, width: xMontant - MARGE + 12, height: 18, color: c.t.fondEntete });
+    // Gabarit 1 : « Désignation » en gris, les trois autres intitulés en noir (rendu d'origine conservé).
+    const intitules = c.t.fondEntete ? c.t.etiquette : undefined;
+    c.page.drawText('Désignation', { x: MARGE, y: base, size: 9, font: c.gras, color: c.t.etiquette });
+    droite(c, 'Qté', xQte, base, 9, true, intitules);
+    droite(c, 'Prix unit. HT', xPu, base, 9, true, intitules);
+    droite(c, 'Montant HT', xMontant, base, 9, true, intitules);
     c.y -= 16;
-    c.page.drawLine({ start: { x: MARGE, y: c.y }, end: { x: xMontant, y: c.y }, thickness: 0.6, color: FILET });
+    c.page.drawLine({ start: { x: MARGE, y: c.y }, end: { x: xMontant, y: c.y }, thickness: 0.6, color: c.t.filet });
     c.y -= 6;
   };
   enTete();
@@ -410,19 +481,19 @@ export async function composerFacturePdf(f: FacturePdf): Promise<Uint8Array> {
     droite(c, formaterMontant(l.prixUnitaire), xPu, base, 10);
     droite(c, formaterMontant(l.montant), xMontant, base, 10);
     for (const m of morceaux) {
-      c.page.drawText(m, { x: MARGE, y: c.y - 10, size: 10, font: c.normal, color: NOIR });
+      c.page.drawText(m, { x: MARGE, y: c.y - 10, size: 10, font: c.normal, color: c.t.encre });
       c.y -= 14;
     }
     c.y -= 2;
   }
-  c.page.drawLine({ start: { x: MARGE, y: c.y }, end: { x: xMontant, y: c.y }, thickness: 0.6, color: FILET });
+  c.page.drawLine({ start: { x: MARGE, y: c.y }, end: { x: xMontant, y: c.y }, thickness: 0.6, color: c.t.filet });
   c.y -= 12;
 
   // Le récapitulatif redétaillerait ce que la présentation globale regroupe : il n'est imprimé qu'en détaillée.
   const recap = globale ? [] : recapitulatif(f.lignes);
   if (recap.length) {
     assurerPlace(c, 14 * (recap.length + 1) + 6);
-    ecrire(c, 'Récapitulatif', { gras: true, taille: 9, couleur: GRIS });
+    ecrire(c, 'Récapitulatif', { gras: true, taille: 9, couleur: c.t.etiquette });
     for (const l of recap) ecrire(c, l);
     c.y -= 10;
   }
@@ -431,14 +502,15 @@ export async function composerFacturePdf(f: FacturePdf): Promise<Uint8Array> {
   assurerPlace(c, 70);
   const ligneTotal = (libelle: string, valeur: string, fort = false): void => {
     const base = c.y - 10;
-    c.page.drawText(sur(c.normal, libelle), { x: xPu - 70, y: base, size: fort ? 11 : 10, font: fort ? c.gras : c.normal, color: NOIR });
-    droite(c, valeur, xMontant, base, fort ? 11 : 10, fort);
+    const couleur = fort ? c.t.total : c.t.encre;
+    c.page.drawText(sur(c.normal, libelle), { x: xPu - 70, y: base, size: fort ? 11 : 10, font: fort ? c.gras : c.normal, color: couleur });
+    droite(c, valeur, xMontant, base, fort ? 11 : 10, fort, couleur);
     c.y -= fort ? 18 : 15;
   };
   if (blocs.tva.franchise) {
     ligneTotal(f.type === 'avoir' ? "Total de l'avoir" : 'Total à payer', formaterMontant(f.total), true);
     c.y -= 4;
-    ecrire(c, blocs.tva.mention ?? '', { taille: 9, couleur: GRIS });
+    ecrire(c, blocs.tva.mention ?? '', { taille: 9, couleur: c.t.gris });
   } else {
     ligneTotal('Total HT', formaterMontant(f.totalHt));
     ligneTotal(`TVA (${formaterTaux(f.tauxTva)})`, formaterMontant(f.montantTva));
@@ -448,7 +520,7 @@ export async function composerFacturePdf(f: FacturePdf): Promise<Uint8Array> {
 
   if (blocs.paiement.length) {
     assurerPlace(c, 14 * (blocs.paiement.length + 1));
-    ecrire(c, 'Conditions de paiement', { gras: true, taille: 9, couleur: GRIS });
+    ecrire(c, 'Conditions de paiement', { gras: true, taille: 9, couleur: c.t.etiquette });
     for (const l of blocs.paiement) ecrire(c, l);
   }
 
@@ -456,7 +528,11 @@ export async function composerFacturePdf(f: FacturePdf): Promise<Uint8Array> {
   const total = c.pages.length;
   c.pages.forEach((p, i) => {
     const t = sur(normal, `${blocs.titre} · page ${i + 1}/${total}`);
-    p.drawText(t, { x: MARGE, y: 28, size: 8, font: normal, color: GRIS });
+    p.drawText(t, { x: MARGE, y: 28, size: 8, font: normal, color: c.t.pied });
+    if (charte) {
+      const m = sur(normal, mentionHorizon(f.type));
+      p.drawText(m, { x: A4[0] - MARGE - normal.widthOfTextAtSize(m, 8), y: 28, size: 8, font: normal, color: c.t.pied });
+    }
   });
 
   return await doc.save({ useObjectStreams: false });

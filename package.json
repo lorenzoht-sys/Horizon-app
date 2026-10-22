@@ -17,6 +17,7 @@
     "test:security": "node scripts/run-harnais-local.mjs"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
     "@react-pdf/renderer": "^4.5.1",
     "@sentry/node": "^10.57.0",
     "@sentry/react": "^10.57.0",
