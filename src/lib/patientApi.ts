@@ -4,6 +4,7 @@
 // patient / le JWT côté serveur (clé service_role, jamais exposée ici).
 
 import type { CoursPatientRecord, ReponseAnnonceeCours } from './coursPatient';
+import type { FacturePatient } from './facturesPatient';
 
 export interface PatientMeResponse {
   participantId: string;
@@ -23,6 +24,8 @@ export interface PatientMeResponse {
   programmePlanning: Record<string, unknown>[];
   programmeExercices: Record<string, unknown>[];
   documentsPatient: { id: string; titre: string; contenu: string; date_creation: string }[];
+  /** Factures et avoirs émis visibles du bénéficiaire (point D, D2). Optionnel : absent d'une ancienne réponse. */
+  factures?: FacturePatient[];
   seancesPatient: Record<string, unknown>[];
   exercicesRealises: { seance_patient_id: string; realise: boolean }[];
   /** Décompte total des séances autonomes validées, par programme_id — non limité aux 15 dernières (cf. seancesPatient). */
@@ -264,6 +267,30 @@ export async function patientSignalerAbsence(
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, status: res.status, code: data?.code, error: data?.error };
     return { ok: true, seanceId: data?.seanceId, absenceSignalee: data?.absenceSignalee ?? signale };
+  } catch {
+    return { ok: false, status: 0, error: 'Connexion impossible. Vérifiez votre réseau et réessayez.' };
+  }
+}
+
+export type ResultatUrlPdfFacture =
+  | { ok: true; url: string }
+  /** 0 = réseau injoignable. 404 = facture inconnue ou non visible. 409 = PDF en préparation. 429 = trop de requêtes. */
+  | { ok: false; status: number; error?: string };
+
+/**
+ * URL signée (60 s) du PDF d'une facture du bénéficiaire, demandée au moment du clic : le lien n'est
+ * jamais conservé. Le serveur vérifie que la facture est bien dans SA liste (participant du jeton).
+ */
+export async function patientUrlPdfFacture(token: string, factureId: string): Promise<ResultatUrlPdfFacture> {
+  try {
+    const res = await fetch('/api/patient/activite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ type: 'facture-pdf', factureId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || typeof data?.url !== 'string') return { ok: false, status: res.ok ? 500 : res.status, error: data?.error };
+    return { ok: true, url: data.url };
   } catch {
     return { ok: false, status: 0, error: 'Connexion impossible. Vérifiez votre réseau et réessayez.' };
   }

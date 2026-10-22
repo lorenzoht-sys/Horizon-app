@@ -5,6 +5,8 @@
 //   'cours-presence' → réponse « Je viens / Je ne viens pas » à un cours collectif
 //   'seance-absence' → signale (ou annule le signalement d') une absence pour
 //                       la prochaine séance individuelle planifiée
+//   'facture-pdf'    → URL signée (60 s) du PDF d'une de SES factures (lecture seule,
+//                       point D, D2 ; voir api/_lib/facturesPatient.ts)
 //
 // ── Pourquoi tout vit dans le même fichier ──────────────────────────────────
 // Ce n'est pas un choix de conception, c'est une contrainte de plan : Vercel Hobby
@@ -29,8 +31,9 @@ import {
 import { checkActiviteRateLimit, recordActiviteAttempt } from '../_lib/activiteRateLimit.js';
 import { dateParisCivile } from '../_lib/rappels.js';
 import { envoyerAlertePraticien } from '../_lib/notifications.js';
+import { urlPdfFacturePatient } from '../_lib/facturesPatient.js';
 
-const TYPES_VALIDES = ['test-etalon', 'exercice-libre', 'cours-presence', 'seance-absence'] as const;
+const TYPES_VALIDES = ['test-etalon', 'exercice-libre', 'cours-presence', 'seance-absence', 'facture-pdf'] as const;
 type TypeActivite = (typeof TYPES_VALIDES)[number];
 
 // Un événement d'audit par type, utilisé pour le refus par rate limit (avant
@@ -41,6 +44,7 @@ const EVENEMENT_PAR_TYPE: Record<TypeActivite, AuditEventType> = {
   'exercice-libre': 'patient_exercice_libre_submit',
   'cours-presence': 'patient_cours_presence_submit',
   'seance-absence': 'patient_seance_absence_submit',
+  'facture-pdf': 'patient_facture_pdf',
 };
 
 export default withSentry(async function handler(req: any, res: any) {
@@ -293,6 +297,21 @@ export default withSentry(async function handler(req: any, res: any) {
 
     await logAuditEvent(supabase, 'patient_seance_absence_submit', participantId, ip, true, { seanceId: seance.id, signale });
     return res.status(200).json({ ok: true, seanceId: seance.id, absenceSignalee: signale });
+  }
+
+  // ── facture-pdf ──────────────────────────────────────────────────────────
+  // Lecture seule. La facture doit être dans la liste du bénéficiaire DU JETON
+  // (documents_du_beneficiaire : émise, la sienne, pas masquée par le réglage
+  // « proche payeur ») ; sinon 404, comme cours-presence. L'URL expire en 60 s.
+  if (type === 'facture-pdf') {
+    const ip = getClientIp(req);
+    const r = await urlPdfFacturePatient(supabase, participantId, body.factureId);
+    if (!r.ok) {
+      await logAuditEvent(supabase, 'patient_facture_pdf', participantId, ip, false, { motif: r.motif });
+      return res.status(r.statut).json({ error: r.erreur });
+    }
+    await logAuditEvent(supabase, 'patient_facture_pdf', participantId, ip, true, { numero: r.numero });
+    return res.status(200).json({ ok: true, url: r.url });
   }
 
   // ── exercice-libre ────────────────────────────────────────────────────────
