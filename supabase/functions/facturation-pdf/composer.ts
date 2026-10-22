@@ -18,6 +18,7 @@
 // (voir docs/FACTURATION.md, « Crédit d'impôt »).
 
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { lignesAffichees, lirePresentation, type Presentation } from './regroupement.ts';
 
 export interface AdressePdf {
   rue?: string | null;
@@ -87,6 +88,8 @@ export interface FacturePdf {
   lignes: LignePdf[];
   /** Logo figé à la validation (logos_factures, clé snapshot_emetteur.logo_sha256), PR 5. */
   logo?: { type: 'png' | 'jpg'; octets: Uint8Array } | null;
+  /** Mode figé à la validation (factures.presentation, 20261028100000) ; NULL = « detaillee ». */
+  presentation?: Presentation | null;
 }
 
 // ---------- formats ----------
@@ -395,7 +398,11 @@ export async function composerFacturePdf(f: FacturePdf): Promise<Uint8Array> {
     c.y -= 6;
   };
   enTete();
-  for (const l of trierLignes(f.lignes)) {
+  // Point A (A2) : en « globale », séances et frais ne forment qu'une ligne (regroupement.ts). En
+  // « detaillee » (et pour toute facture antérieure), les lignes sont celles de la base, comme avant :
+  // ces PDF se recomposent octet pour octet.
+  const globale = lirePresentation(f.presentation) === 'globale';
+  for (const l of trierLignes(lignesAffichees(f.lignes, lirePresentation(f.presentation), f.periode))) {
     const morceaux = decouper(c.normal, l.libelle, 10, xQte - MARGE - 50);
     if (c.y - morceaux.length * 14 < MARGE + 30) { nouvellePage(c); enTete(); }
     const base = c.y - 10;
@@ -411,7 +418,8 @@ export async function composerFacturePdf(f: FacturePdf): Promise<Uint8Array> {
   c.page.drawLine({ start: { x: MARGE, y: c.y }, end: { x: xMontant, y: c.y }, thickness: 0.6, color: FILET });
   c.y -= 12;
 
-  const recap = recapitulatif(f.lignes);
+  // Le récapitulatif redétaillerait ce que la présentation globale regroupe : il n'est imprimé qu'en détaillée.
+  const recap = globale ? [] : recapitulatif(f.lignes);
   if (recap.length) {
     assurerPlace(c, 14 * (recap.length + 1) + 6);
     ecrire(c, 'Récapitulatif', { gras: true, taille: 9, couleur: GRIS });
