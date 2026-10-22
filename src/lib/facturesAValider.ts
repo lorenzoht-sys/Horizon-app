@@ -2,6 +2,10 @@
 // depuis la base, formats, contrôle du profil, tri des lignes et validation en série. Aucune
 // dépendance à Supabase ni à React : tout est testable (src/lib/facturesAValider.test.ts).
 
+// Regroupement de la présentation globale : le MÊME module que le PDF (Edge Function), sans dépendance.
+import { lirePresentation, type Presentation } from '../../supabase/functions/facturation-pdf/regroupement.ts';
+export { lignesAffichees, type Presentation } from '../../supabase/functions/facturation-pdf/regroupement.ts';
+
 export interface LigneBrouillon {
   id: string;
   libelle: string;
@@ -11,6 +15,8 @@ export interface LigneBrouillon {
   /** Date et heure de la séance liée, absentes pour une ligne de forfait. */
   seanceDate: string | null;
   seanceHeure: string | null;
+  /** « seance » ou « bilan » : la présentation globale compte les bilans à part (A2). */
+  seanceType: string | null;
 }
 
 export interface BeneficiaireBrouillon {
@@ -31,6 +37,8 @@ export interface FactureBrouillon {
   total: number;
   beneficiaire: BeneficiaireBrouillon;
   lignes: LigneBrouillon[];
+  /** Réglage du contrat (20261028100000) ; null = celui du praticien. Voir presentationApercu. */
+  presentationContrat: Presentation | null;
 }
 
 export interface FactureValidee {
@@ -73,6 +81,8 @@ export interface ProfilFacturation {
   facturationAdresseRue: string | null;
   facturationCodePostal: string | null;
   facturationVille: string | null;
+  /** Présentation par défaut du praticien (20261028100000) ; absente = « detaillee ». */
+  presentationFacture?: Presentation;
 }
 
 /**
@@ -82,12 +92,12 @@ export interface ProfilFacturation {
  */
 export const SELECT_BROUILLON =
   'id, periode, circuit, total_ht, montant_tva, total, ' +
-  'participants(prenom, nom, adresse_rue, adresse_code_postal, adresse_ville), ' +
-  'lignes_facture(id, libelle, quantite, prix_unitaire, montant, seances(date, heure_debut))';
+  'participants(prenom, nom, adresse_rue, adresse_code_postal, adresse_ville), contrats(presentation_facture), ' +
+  'lignes_facture(id, libelle, quantite, prix_unitaire, montant, seances(date, heure_debut, type))';
 
 export const SELECT_PROFIL =
   'nom, siret, regime_tva, taux_tva, adresse_rue, adresse_code_postal, adresse_ville, ' +
-  'facturation_adresse_rue, facturation_code_postal, facturation_ville';
+  'facturation_adresse_rue, facturation_code_postal, facturation_ville, presentation_facture';
 
 export const SELECT_FACTURE_VALIDEE =
   'id, numero, type, periode, date_emission, echeance, statut, total, total_ht, montant_tva, taux_tva, pdf_path, ' +
@@ -272,9 +282,11 @@ export function lireBrouillon(row: Brut): FactureBrouillon {
           montant: nombre(l.montant),
           seanceDate: s?.date ?? null,
           seanceHeure: s?.heure_debut ?? null,
+          seanceType: s?.type ?? null,
         };
       }),
     ),
+    presentationContrat: (() => { const c = un<Brut>(row.contrats); return c?.presentation_facture == null ? null : lirePresentation(c.presentation_facture); })(),
   };
 }
 
@@ -359,7 +371,17 @@ export function lireProfil(row: Brut | null): ProfilFacturation | null {
     facturationAdresseRue: row.facturation_adresse_rue ?? null,
     facturationCodePostal: row.facturation_code_postal ?? null,
     facturationVille: row.facturation_ville ?? null,
+    presentationFacture: lirePresentation(row.presentation_facture),
   };
+}
+
+/**
+ * Présentation qu'aura le brouillon s'il est validé maintenant : même règle que le trigger
+ * factures_presentation_figee (contrat, sinon praticien, sinon « detaillee »). L'aperçu regroupe les
+ * lignes avec le module du PDF (lignesAffichees), pour montrer ce qui sera imprimé.
+ */
+export function presentationApercu(f: Pick<FactureBrouillon, 'presentationContrat'>, profil: ProfilFacturation | null): Presentation {
+  return f.presentationContrat ?? profil?.presentationFacture ?? 'detaillee';
 }
 
 // ── Validation en série ───────────────────────────────────────────────────────────────────────

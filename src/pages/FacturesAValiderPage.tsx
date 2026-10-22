@@ -10,8 +10,10 @@ import {
   dateOuvertureValidation,
   formaterEuro,
   libellePeriode,
+  lignesAffichees,
   libelleTva,
   messageAdresseIncomplete,
+  presentationApercu,
   profilFacturationManquant,
   separerBrouillons,
   type BilanValidation,
@@ -80,6 +82,8 @@ export default function FacturesAValiderPage() {
 
   function carte(f: FactureBrouillon, validable: boolean) {
     const adresse = adresseBeneficiaireManquante(f.beneficiaire);
+    // A2 : l'aperçu montre les lignes telles que le PDF les imprimera (même regroupement).
+    const presentation = presentationApercu(f, profil);
     return (
       <article key={f.id} data-testid={validable ? 'facture-brouillon' : 'facture-en-cours'} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5 mb-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -89,6 +93,12 @@ export default function FacturesAValiderPage() {
           </div>
           <div className="flex flex-wrap gap-1.5">
             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{validable ? 'Brouillon' : 'En cours'}</span>
+            {presentation === 'globale' && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600" data-testid="presentation-globale"
+                title="Les séances et les frais de déplacement figurent sur une seule ligne (réglage du contrat ou du profil de facturation)">
+                Présentation globale
+              </span>
+            )}
             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary" data-testid="circuit">
               Circuit : {f.circuit}
             </span>
@@ -102,8 +112,8 @@ export default function FacturesAValiderPage() {
         )}
 
         <ul className="mt-3 divide-y divide-gray-50">
-          {f.lignes.map(l => (
-            <li key={l.id} className="flex items-start justify-between gap-3 py-2 text-sm" data-testid="ligne-facture">
+          {lignesAffichees(f.lignes, presentation, f.periode).map(l => (
+            <li key={'id' in l ? l.id : 'globale'} className="flex items-start justify-between gap-3 py-2 text-sm" data-testid="ligne-facture">
               <div className="min-w-0">
                 <div className="text-gray-800">{l.libelle}</div>
                 <div className="text-xs text-gray-400">{String(l.quantite).replace('.', ',')} × {formaterEuro(l.prixUnitaire)} HT</div>

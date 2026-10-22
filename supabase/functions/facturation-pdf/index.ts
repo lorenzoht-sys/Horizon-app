@@ -19,6 +19,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { composerFacturePdf, type FacturePdf } from "./composer.ts";
+import { lirePresentation } from "./regroupement.ts";
 
 const BUCKET = "factures";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -73,7 +74,7 @@ Deno.serve(async (req) => {
     .from("factures")
     .select(
       "id, numero, type, statut, periode, date_emission, echeance, total_ht, montant_tva, taux_tva, total, " +
-        "snapshot_emetteur, snapshot_destinataire, pdf_path, praticien_id, facture_origine_id, motif",
+        "snapshot_emetteur, snapshot_destinataire, pdf_path, praticien_id, facture_origine_id, motif, presentation",
     )
     .eq("id", factureId)
     .maybeSingle();
@@ -137,6 +138,7 @@ Deno.serve(async (req) => {
       };
     }),
     logo,
+    presentation: lirePresentation(f.presentation),
   };
 
   const octets = await composerFacturePdf(donnees);

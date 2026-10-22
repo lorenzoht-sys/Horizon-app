@@ -243,6 +243,28 @@ describe('composerFacturePdf', () => {
     expect((await PDFDocument.load(octets)).getPageCount()).toBeGreaterThanOrEqual(1);
   });
 
+  it("présentation : absente, NULL ou « detaillee » donnent les MÊMES octets (factures antérieures inchangées)", async () => {
+    const reference = Buffer.from(await composerFacturePdf(facture()));
+    for (const presentation of [null, 'detaillee'] as const) {
+      expect(Buffer.from(await composerFacturePdf(facture({ presentation }))).equals(reference), String(presentation)).toBe(true);
+    }
+  });
+
+  it('présentation globale : PDF différent, déterministe, totaux inchangés', async () => {
+    const lignes = [
+      { libelle: 'Séance du 03/09/2026 à 10:00 (1 h)', quantite: 1, prixUnitaire: 45, montant: 45, seanceDate: '2026-09-03', seanceHeure: '10:00', seanceType: 'seance' },
+      { libelle: 'Séance du 10/09/2026 à 10:00 (1 h)', quantite: 1, prixUnitaire: 45, montant: 45, seanceDate: '2026-09-10', seanceHeure: '10:00', seanceType: 'seance' },
+      { libelle: 'Frais de déplacement : 2 × 5 €', quantite: 2, prixUnitaire: 5, montant: 10 },
+    ];
+    const detaillee = await composerFacturePdf(facture({ lignes }));
+    const a = await composerFacturePdf(facture({ lignes, presentation: 'globale' }));
+    const b = await composerFacturePdf(facture({ lignes, presentation: 'globale' }));
+    expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
+    expect(Buffer.from(a).equals(Buffer.from(detaillee))).toBe(false);
+    // Une ligne au lieu de trois, sans récapitulatif : le contenu est plus court.
+    expect(a.length).toBeLessThan(detaillee.length);
+  });
+
   it('compose un avoir et une facture en franchise', async () => {
     const avoir = await composerFacturePdf(facture({ type: 'avoir', numero: '2026-0008', numeroOrigine: '2026-0007', emetteur: { ...facture().emetteur, regime_tva: 'franchise_293B' } }));
     expect(new TextDecoder().decode(avoir.slice(0, 5))).toBe('%PDF-');
