@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  actualiserStatutsFactures,
   contratAFacturer,
   executerFacturationMensuelle,
   genererBrouillonsDuMois,
@@ -479,5 +480,25 @@ describe('executerFacturationMensuelle : bilan journalisé', () => {
     expect(lignes[0].startsWith('[facturation] ')).toBe(true);
     expect(JSON.parse(lignes[0].slice('[facturation] '.length))).toMatchObject({ mois: '2026-09', brouillonsCrees: 1, erreurs: [{ contratId: 'c2' }] });
     expect(err.mock.calls.map(c => String(c[0]))).toEqual([expect.stringContaining('[facturation] contrat c2 :')]);
+  });
+});
+
+describe('actualiserStatutsFactures (PR 7)', () => {
+  afterEach(() => vi.restoreAllMocks());
+  const client = (r: { data: unknown; error: { message: string } | null }) => {
+    const appels: string[] = [];
+    return { appels, supabase: { rpc: async (nom: string) => { appels.push(nom); return r; } } as unknown as SupabaseClient };
+  };
+  it('appelle actualiser_statuts_factures et journalise un compteur seulement', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { appels, supabase } = client({ data: 3, error: null });
+    expect(await actualiserStatutsFactures(supabase)).toEqual({ statutsChanges: 3 });
+    expect(appels).toEqual(['actualiser_statuts_factures']);
+    expect(log.mock.calls.map(c => String(c[0]))).toEqual(['[facturation] {"statutsFactures":{"statutsChanges":3}}']);
+  });
+  it('échoue (tâche en erreur) si la base refuse', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { supabase } = client({ data: null, error: { message: 'permission denied' } });
+    await expect(actualiserStatutsFactures(supabase)).rejects.toThrow('permission denied');
   });
 });

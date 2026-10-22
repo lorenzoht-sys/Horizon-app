@@ -118,6 +118,7 @@ export function useFacturesValidees() {
   const [factures, setFactures] = useState<FactureValidee[]>([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let annule = false;
@@ -145,7 +146,19 @@ export function useFacturesValidees() {
       setChargement(false);
     })();
     return () => { annule = true; };
+  }, [version]);
+
+  /**
+   * « Marquer payée » (PR 7) : marquer_facture_payee() enregistre UN paiement du reste dû (RLS de
+   * paiements) et le statut suit par trigger. On relit ensuite la liste : ce qui s'affiche est la base.
+   */
+  const marquerPayee = useCallback(async (factureId: string, date: string, moyen: string): Promise<{ ok: true } | { erreur: string }> => {
+    if (!supabase) return { erreur: 'Base de données indisponible' };
+    const { error } = await supabase.rpc('marquer_facture_payee', { p_facture_id: factureId, p_date: date, p_moyen: moyen });
+    if (error) return { erreur: error.message };
+    setVersion(v => v + 1);
+    return { ok: true };
   }, []);
 
-  return { factures, chargement, erreur };
+  return { factures, chargement, erreur, marquerPayee };
 }

@@ -43,6 +43,11 @@ export interface FactureValidee {
   beneficiaire: { prenom: string; nom: string };
   /** Chemin du PDF dans le bucket privé `factures`, NULL tant qu'il n'est pas généré (étape 5). */
   pdfPath: string | null;
+  type: 'facture' | 'avoir';
+  /** AAAA-MM-JJ */
+  echeance: string | null;
+  /** Date du dernier paiement enregistré (AAAA-MM-JJ), NULL s'il n'y en a aucun (PR 7). */
+  datePaiement: string | null;
 }
 
 /** Champs du profil du praticien qui conditionnent la validation (valider_facture, étape 1). */
@@ -73,7 +78,7 @@ export const SELECT_PROFIL =
   'nom, siret, regime_tva, taux_tva, adresse_rue, adresse_code_postal, adresse_ville, ' +
   'facturation_adresse_rue, facturation_code_postal, facturation_ville';
 
-export const SELECT_FACTURE_VALIDEE = 'id, numero, periode, date_emission, statut, total, pdf_path, participants(prenom, nom)';
+export const SELECT_FACTURE_VALIDEE = 'id, numero, type, periode, date_emission, echeance, statut, total, pdf_path, participants(prenom, nom), paiements(date)';
 
 /** Date civile Paris (AAAA-MM-JJ) : la règle de validation de la base se règle sur Paris, pas sur le poste. */
 export function dateCivileParis(instant: Date = new Date()): string {
@@ -270,7 +275,25 @@ export function lireFactureValidee(row: Brut): FactureValidee {
     total: nombre(row.total),
     beneficiaire: { prenom: p.prenom ?? '', nom: p.nom ?? '' },
     pdfPath: row.pdf_path ?? null,
+    type: row.type === 'avoir' ? 'avoir' : 'facture',
+    echeance: row.echeance ?? null,
+    datePaiement: ((row.paiements ?? []) as Brut[]).map(p => String(p.date)).sort().at(-1) ?? null,
   };
+}
+
+/** Moyens de paiement acceptés par la base (paiements_moyen_valide). */
+export const MOYENS_PAIEMENT = [
+  { valeur: 'virement', libelle: 'Virement' },
+  { valeur: 'cheque', libelle: 'Chèque' },
+  { valeur: 'especes', libelle: 'Espèces' },
+  { valeur: 'carte', libelle: 'Carte' },
+  { valeur: 'prelevement', libelle: 'Prélèvement' },
+  { valeur: 'autre', libelle: 'Autre' },
+] as const;
+
+/** « Marquer payée » (PR 7) : une facture émise, ni payée, ni annulée ; jamais un avoir. */
+export function peutMarquerPayee(f: Pick<FactureValidee, 'type' | 'statut'>): boolean {
+  return f.type === 'facture' && ['validee', 'envoyee', 'en_retard'].includes(f.statut);
 }
 
 /** Nom proposé au téléchargement : le numéro de facture, sans rien de nominatif. */

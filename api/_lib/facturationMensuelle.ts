@@ -317,3 +317,19 @@ export async function executerFacturationMensuelle(
   }
   return bilan;
 }
+
+/**
+ * Passage quotidien des statuts des factures émises (PR 7, migration 20261025100000) : la base applique
+ * UNE règle (payée si soldée, en retard après l'échéance) à toutes les factures émises et renvoie le
+ * nombre de statuts changés. Journal sans aucune donnée de santé : un compteur.
+ */
+export async function actualiserStatutsFactures(supabase: SupabaseClient): Promise<{ statutsChanges: number }> {
+  const { data, error } = await supabase.rpc('actualiser_statuts_factures');
+  if (error) {
+    console.error(`[facturation] statuts des factures : ${error.message}`);
+    throw new Error(error.message);
+  }
+  const statutsChanges = Number(data ?? 0);
+  console.log(`[facturation] ${JSON.stringify({ statutsFactures: { statutsChanges } })}`);
+  return { statutsChanges };
+}
