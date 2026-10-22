@@ -33,13 +33,13 @@ describe('lecture de la ligne praticiens', () => {
       regime_tva: 'assujetti', taux_tva: '5.50', agrement_sap: true, date_declaration_sap: '2026-03-04',
       mode_intervention: 'mandataire', adresse_intervention: '2 rue B', facturation_adresse_rue: '3 rue C',
       facturation_code_postal: '00001', facturation_ville: 'Ailleurs', iban: 'FR7630006000011234567890189',
-      delai_paiement_jours: 45, penalites_retard: 'Pénalités légales', presentation_facture: 'globale',
+      delai_paiement_jours: 45, penalites_retard: 'Pénalités légales', presentation_facture: 'globale', factures_proche_visibles: false,
     });
     expect(f).toEqual({
       regimeTva: 'assujetti', tauxTva: '5.5', agrementSap: true, dateDeclarationSap: '2026-03-04',
       modeIntervention: 'mandataire', adresseIntervention: '2 rue B', facturationRue: '3 rue C',
       facturationCodePostal: '00001', facturationVille: 'Ailleurs', iban: 'FR7630006000011234567890189',
-      delaiPaiementJours: '45', penalitesRetard: 'Pénalités légales', presentationFacture: 'globale',
+      delaiPaiementJours: '45', penalitesRetard: 'Pénalités légales', presentationFacture: 'globale', facturesProcheVisibles: false,
     });
     expect(lireFormulaire({ regime_tva: 'assujetti', taux_tva: 10 }).tauxTva).toBe('10');
     expect(lireFormulaire({ regime_tva: 'franchise_293B', taux_tva: 0 }).tauxTva).toBe('');
@@ -160,7 +160,7 @@ describe('formulaireVersMiseAJour : ce qui part vers la base', () => {
   it('ne contient que les colonnes de facturation, jamais l\'identité', () => {
     expect(Object.keys(formulaireVersMiseAJour(franchise)).sort()).toEqual([
       'adresse_intervention', 'agrement_sap', 'date_declaration_sap', 'delai_paiement_jours',
-      'facturation_adresse_rue', 'facturation_code_postal', 'facturation_ville', 'iban',
+      'facturation_adresse_rue', 'facturation_code_postal', 'facturation_ville', 'factures_proche_visibles', 'iban',
       'mode_intervention', 'penalites_retard', 'presentation_facture', 'regime_tva', 'taux_tva',
     ]);
   });
@@ -187,6 +187,7 @@ describe('formulaireVersMiseAJour : ce qui part vers la base', () => {
       regimeTva: 'assujetti', tauxTva: '5.5', agrementSap: true, dateDeclarationSap: '2026-03-04', modeIntervention: 'prestataire',
       adresseIntervention: '2 rue B', facturationRue: '3 rue C', facturationCodePostal: '00001', facturationVille: 'Ailleurs',
       iban: 'FR7630006000011234567890189', delaiPaiementJours: '45', penalitesRetard: 'Pénalités légales', presentationFacture: 'globale',
+      facturesProcheVisibles: false,
     };
     expect(lireFormulaire(formulaireVersMiseAJour(f))).toEqual(f);
   });
