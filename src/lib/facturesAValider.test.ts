@@ -9,6 +9,7 @@ import {
   libelleTva,
   lireBrouillon,
   lireFactureValidee,
+  peutMarquerPayee,
   nomFichierFacture,
   dateCivileParis,
   dateOuvertureValidation,
@@ -121,7 +122,10 @@ describe('lecture des réponses PostgREST', () => {
   });
   it('lit une facture validée et un profil', () => {
     expect(lireFactureValidee({ id: 'f', numero: '2026-0001', periode: '2026-09-01', date_emission: '2026-10-02', statut: 'validee', total: '99.00', participants: { prenom: 'A', nom: 'B' } }))
-      .toEqual({ id: 'f', numero: '2026-0001', periode: '2026-09-01', dateEmission: '2026-10-02', statut: 'validee', total: 99, beneficiaire: { prenom: 'A', nom: 'B' }, pdfPath: null });
+      .toEqual({ id: 'f', numero: '2026-0001', periode: '2026-09-01', dateEmission: '2026-10-02', statut: 'validee', total: 99, beneficiaire: { prenom: 'A', nom: 'B' }, pdfPath: null, type: 'facture', echeance: null, datePaiement: null });
+    expect(lireFactureValidee({ id: 'f', type: 'facture', statut: 'payee', echeance: '2026-11-01', total: '1', paiements: [{ date: '2026-10-20' }, { date: '2026-10-25' }, { date: '2026-10-05' }] }))
+      .toMatchObject({ echeance: '2026-11-01', datePaiement: '2026-10-25' });
+    expect(lireFactureValidee({ id: 'a', type: 'avoir', statut: 'validee', total: '1' }).type).toBe('avoir');
     expect(lireFactureValidee({ id: 'f', numero: '2026-0001', periode: '2026-09-01', date_emission: '2026-10-02', statut: 'validee', total: '99.00', pdf_path: 'p/2026-0001.pdf', participants: null }).pdfPath).toBe('p/2026-0001.pdf');
     expect(lireProfil({ nom: 'D', siret: 'S', regime_tva: 'assujetti', taux_tva: '10.00', adresse_rue: 'r' }))
       .toMatchObject({ nom: 'D', regimeTva: 'assujetti', tauxTva: 10, adresseRue: 'r', adresseVille: null });
@@ -265,5 +269,13 @@ describe('messageValidationLisible : refus de l\'adresse du bénéficiaire par l
   it('ne touche pas aux autres refus', () => {
     expect(messageValidationLisible('Accès refusé à cette facture')).toBe('Accès refusé à cette facture');
     expect(messageValidationLisible('Profil de facturation incomplet : siret')).toBe('Profil de facturation incomplet : SIRET');
+  });
+});
+
+describe('peutMarquerPayee (PR 7)', () => {
+  it('une facture émise non soldée : oui ; payée, annulée, brouillon ou avoir : non', () => {
+    for (const statut of ['validee', 'envoyee', 'en_retard']) expect(peutMarquerPayee({ type: 'facture', statut })).toBe(true);
+    for (const statut of ['payee', 'annulee', 'brouillon']) expect(peutMarquerPayee({ type: 'facture', statut })).toBe(false);
+    expect(peutMarquerPayee({ type: 'avoir', statut: 'validee' })).toBe(false);
   });
 });

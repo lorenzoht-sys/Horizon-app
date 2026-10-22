@@ -78,7 +78,7 @@ import {
   type Tache,
 } from '../_lib/cronTaches.js';
 import { MARGE_RENOUVELLEMENT_JOURS, renouvelerContratsEligibles } from '../_lib/renouvellementContrats.js';
-import { executerFacturationMensuelle } from '../_lib/facturationMensuelle.js';
+import { actualiserStatutsFactures, executerFacturationMensuelle } from '../_lib/facturationMensuelle.js';
 import { chargerIdsParticipantsArchives, exclureBeneficiairesArchives } from '../_lib/participantsArchives.js';
 import {
   resoudrePrefs,
@@ -173,6 +173,12 @@ function construireTaches(supabase: SupabaseClient, maintenant: Date): Tache[] {
     taches.push({
       nom: 'facturation',
       executer: () => executerFacturationMensuelle(supabase, maintenant),
+    });
+    // Statuts des factures émises (PR 7) : « en retard » le lendemain de l'échéance, « payée » une fois
+    // soldée. Même créneau quotidien que la facturation.
+    taches.push({
+      nom: 'statuts-factures',
+      executer: () => actualiserStatutsFactures(supabase),
     });
   }
 

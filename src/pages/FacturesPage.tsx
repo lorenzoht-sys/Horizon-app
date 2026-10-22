@@ -4,11 +4,12 @@ import { ArrowLeft, ArrowRight, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import PageWrapper from '../components/layout/PageWrapper';
 import { telechargerPdfFacture, useFacturesValidees } from '../hooks/useFacturesAValider';
-import { formaterDate, formaterEuro, libellePeriode } from '../lib/facturesAValider';
+import { MOYENS_PAIEMENT, dateCivileParis, formaterDate, formaterEuro, libellePeriode, peutMarquerPayee } from '../lib/facturesAValider';
 
 // Factures validées (numérotées, verrouillées) : liste volontairement minimale (facturation,
 // étape 3). Elle sert de destination à « Les retrouver » après une validation. Étape 5 : le PDF se
-// télécharge ici ; l'envoi par e-mail vient ensuite.
+// télécharge ici ; l'envoi par e-mail vient ensuite. PR 7 : « Marquer payée » (un paiement du reste dû,
+// marquer_facture_payee) ; « En retard » est posé par la base le lendemain de l'échéance.
 
 const STATUTS: Record<string, { libelle: string; classe: string }> = {
   validee: { libelle: 'Validée', classe: 'bg-emerald-50 text-emerald-700' },
@@ -19,8 +20,22 @@ const STATUTS: Record<string, { libelle: string; classe: string }> = {
 };
 
 export default function FacturesPage() {
-  const { factures, chargement, erreur } = useFacturesValidees();
+  const { factures, chargement, erreur, marquerPayee } = useFacturesValidees();
   const [telechargement, setTelechargement] = useState<string | null>(null);
+  const aujourdhui = dateCivileParis();
+  // Formulaire « Marquer payée » ouvert sur une seule facture à la fois.
+  const [paiement, setPaiement] = useState<{ id: string; date: string; moyen: string } | null>(null);
+  const [enregistrement, setEnregistrement] = useState(false);
+
+  async function confirmerPaiement() {
+    if (!paiement) return;
+    setEnregistrement(true);
+    const r = await marquerPayee(paiement.id, paiement.date, paiement.moyen);
+    setEnregistrement(false);
+    if ('erreur' in r) { toast.error(r.erreur); return; }
+    setPaiement(null);
+    toast.success('Facture marquée payée');
+  }
 
   async function telecharger(id: string, pdfPath: string, numero: string) {
     setTelechargement(id);
@@ -73,6 +88,30 @@ export default function FacturesPage() {
                   <div className="font-semibold text-gray-900" data-testid="numero-facture">{f.numero}</div>
                   <div className="text-gray-700">{`${f.beneficiaire.prenom} ${f.beneficiaire.nom}`.trim()}</div>
                   <div className="text-xs text-gray-400">{libellePeriode(f.periode)} · émise le {formaterDate(f.dateEmission)}</div>
+                  {f.statut === 'payee' && f.datePaiement
+                    ? <div className="text-xs text-green-700" data-testid="date-paiement">Payée le {formaterDate(f.datePaiement)}</div>
+                    : f.type === 'facture' && f.echeance && f.statut !== 'annulee' &&
+                      <div className={`text-xs ${f.statut === 'en_retard' ? 'text-red-600' : 'text-gray-400'}`} data-testid="echeance">Échéance le {formaterDate(f.echeance)}</div>}
+                  {paiement?.id === f.id && (
+                    <div className="mt-2 flex flex-wrap items-end gap-2" data-testid="formulaire-paiement">
+                      <label className="text-xs text-gray-500">Payée le
+                        <input type="date" value={paiement.date} min={f.dateEmission} max={aujourdhui} data-testid="paiement-date"
+                          onChange={e => setPaiement({ ...paiement, date: e.target.value })}
+                          className="block mt-0.5 border border-gray-200 rounded-lg px-2 py-1 text-sm" />
+                      </label>
+                      <label className="text-xs text-gray-500">Moyen
+                        <select value={paiement.moyen} data-testid="paiement-moyen" onChange={e => setPaiement({ ...paiement, moyen: e.target.value })}
+                          className="block mt-0.5 border border-gray-200 rounded-lg px-2 py-1 text-sm bg-white">
+                          {MOYENS_PAIEMENT.map(m => <option key={m.valeur} value={m.valeur}>{m.libelle}</option>)}
+                        </select>
+                      </label>
+                      <button type="button" data-testid="confirmer-paiement" disabled={enregistrement} onClick={() => void confirmerPaiement()}
+                        className="text-xs font-semibold text-white bg-primary rounded-lg px-3 py-1.5 disabled:opacity-50">
+                        {enregistrement ? 'Enregistrement…' : 'Confirmer'}
+                      </button>
+                      <button type="button" onClick={() => setPaiement(null)} className="text-xs text-gray-500 px-2 py-1.5">Annuler</button>
+                    </div>
+                  )}
                 </div>
                 <div className="text-right flex-shrink-0">
                   <div className="font-semibold text-gray-900 tabular-nums">{formaterEuro(f.total)}</div>
@@ -92,6 +131,13 @@ export default function FacturesPage() {
                       <span data-testid="pdf-en-preparation" className="text-xs text-gray-400">PDF en préparation</span>
                     )}
                   </div>
+                  {peutMarquerPayee(f) && paiement?.id !== f.id && (
+                    <button type="button" data-testid="marquer-payee"
+                      onClick={() => setPaiement({ id: f.id, date: aujourdhui, moyen: 'virement' })}
+                      className="mt-1 text-xs font-medium text-green-700 hover:text-green-900">
+                      Marquer payée
+                    </button>
+                  )}
                 </div>
               </li>
             );
