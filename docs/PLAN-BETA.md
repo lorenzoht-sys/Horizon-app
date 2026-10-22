@@ -609,6 +609,14 @@ une faille exploitable aujourd'hui.
 
 ## BUG DE PRODUCTION — la réinitialisation de mot de passe ne fonctionnait pas (2026-08-29)
 
+> **Mise à jour du 2026-10-22 : l'envoi des e-mails passe par Resend, plus par Brevo.** Le SMTP
+> configuré dans Supabase (Authentication → Emails → SMTP Settings) est `smtp.resend.com` ; le domaine
+> `horizon-suivi.fr` n'est plus déclaré chez Brevo, qui est abandonné. L'envoi des factures (plan
+> facturation, PR 8) utilise aussi Resend, par son API. Le récit ci-dessous est l'historique de
+> l'incident du 2026-08-29, survenu quand Brevo était le SMTP : il est conservé tel quel. Les
+> enregistrements DNS de Brevo restés chez Hostinger (`brevo-code`, `brevo1/brevo2._domainkey`,
+> `r.mail`, rapports DMARC vers Brevo) sont à nettoyer, sans urgence.
+
 > **Résolu le 2026-08-29**, après TROIS défauts distincts empilés :
 > 1. aucun SMTP personnalisé — corrigé en branchant **Brevo** ;
 > 2. le **suivi des clics** de Brevo détruisait le fragment portant le jeton
@@ -753,7 +761,7 @@ ORDER BY 1;
 
 ## RÈGLE — jamais de suivi des clics sur les emails d'authentification
 
-**Le suivi des clics d'un routeur d'emails (Brevo, Mailchimp, SendGrid…)
+**Le suivi des clics d'un routeur d'emails (Brevo, Resend, Mailchimp, SendGrid…)
 détruit tout lien d'authentification Supabase. Ce n'est pas un réglage à
 ajuster : c'est une incompatibilité de principe.**
 
@@ -778,6 +786,10 @@ l'arrivée.**
 Aucune configuration ne répare ça. Ni la liste des Redirect URLs, ni le
 template. La seule issue est de désactiver le suivi des clics sur les emails
 transactionnels.
+
+Depuis le passage à Resend (voir la mise à jour en tête de la section du bug du 2026-08-29), la règle
+vaut à l'identique : le suivi des clics de Resend doit rester **désactivé** pour le domaine
+`horizon-suivi.fr`, e-mails de connexion comme envoi des factures.
 
 ### Pourquoi ça a coûté cher à diagnostiquer (2026-08-29)
 
