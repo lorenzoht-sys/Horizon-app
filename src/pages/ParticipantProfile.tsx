@@ -38,6 +38,7 @@ import BilanEvolutionCharts from '../components/charts/BilanEvolutionCharts';
 import BilanTimeline from '../components/bilan/BilanTimeline';
 import ContratsTab from '../components/participant/ContratsTab';
 import CoursCollectifsTab from '../components/participant/CoursCollectifsTab';
+import DocumentsTab from '../components/participant/DocumentsTab';
 import { useCoursCollectifs } from '../hooks/useCoursCollectifs';
 import { entreesCoursDuParticipant, type EntreeCours } from '../lib/coursCollectifs';
 import { cleEntree } from '../lib/journalAlertes';
@@ -882,7 +883,7 @@ function dateOnly(s: string): string { return s.slice(0, 10); }
 
 // ── TabsSection ───────────────────────────────────────────────────────────────
 
-type TabId = 'bilans' | 'contrats' | 'cours' | 'assiduite' | 'rappels';
+type TabId = 'bilans' | 'contrats' | 'cours' | 'assiduite' | 'documents' | 'rappels';
 
 // ── Types assiduité ───────────────────────────────────────────────────────────
 
@@ -1509,6 +1510,7 @@ export default function ParticipantProfile() {
     { id: 'contrats',  label: 'Contrats de suivi',   count: contratsCount },
     { id: 'cours',     label: '👥 Cours collectifs',  count: entreesCours.length > 0 ? entreesCours.length : undefined },
     { id: 'assiduite', label: alerteRessentis ? '📊 Assiduité ⚠' : '📊 Assiduité', count: seancesStats.length > 0 ? seancesStats.length : undefined },
+    { id: 'documents', label: '📄 Documents' },
     { id: 'rappels',   label: '🔔 Rappels' },
   ];
 
@@ -2057,6 +2059,9 @@ export default function ParticipantProfile() {
         )}
         {activeTab === 'cours' && (
           <CoursCollectifsTab entrees={entreesCours} aujourdhui={new Date().toLocaleDateString('sv-SE')} />
+        )}
+        {activeTab === 'documents' && (
+          <DocumentsTab participantId={participant.id} />
         )}
         {activeTab === 'assiduite' && (() => {
           if (seancesStats.length === 0) return (

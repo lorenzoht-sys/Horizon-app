@@ -38,7 +38,7 @@ export const SELECT_PROFIL_FACTURATION =
   'nom, siret, numero_sap, numero_tva, adresse_rue, adresse_code_postal, adresse_ville, ' +
   'regime_tva, taux_tva, agrement_sap, date_declaration_sap, mode_intervention, adresse_intervention, ' +
   'facturation_adresse_rue, facturation_code_postal, facturation_ville, iban, delai_paiement_jours, penalites_retard, ' +
-  'logo_praticien, presentation_facture';
+  'logo_praticien, presentation_facture, factures_proche_visibles';
 
 /** Rappel d'identité, édité dans Paramètres. */
 export interface IdentiteProfil {
@@ -72,6 +72,8 @@ export interface FormulaireFacturation {
   penalitesRetard: string;
   /** Par défaut pour toutes les factures ; un contrat peut le remplacer (fiche bénéficiaire). */
   presentationFacture: PresentationFacture;
+  /** Quand un proche paie, le bénéficiaire voit-il la facture dans son espace ? Oui par défaut (point D). */
+  facturesProcheVisibles: boolean;
 }
 
 export type ChampFormulaire = keyof FormulaireFacturation;
@@ -81,6 +83,7 @@ export const FORMULAIRE_VIDE: FormulaireFacturation = {
   regimeTva: '', tauxTva: '', agrementSap: false, dateDeclarationSap: '', modeIntervention: '',
   adresseIntervention: '', facturationRue: '', facturationCodePostal: '', facturationVille: '',
   iban: '', delaiPaiementJours: '30', penalitesRetard: '', presentationFacture: 'detaillee',
+  facturesProcheVisibles: true,
 };
 
 type Brut = Record<string, unknown>;
@@ -122,6 +125,7 @@ export function lireFormulaire(row: Brut | null): FormulaireFacturation {
     delaiPaiementJours: row.delai_paiement_jours == null ? FORMULAIRE_VIDE.delaiPaiementJours : String(row.delai_paiement_jours),
     penalitesRetard: texte(row.penalites_retard),
     presentationFacture: row.presentation_facture === 'globale' ? 'globale' : 'detaillee',
+    facturesProcheVisibles: row.factures_proche_visibles !== false,
   };
 }
 
@@ -268,6 +272,7 @@ export function formulaireVersMiseAJour(f: FormulaireFacturation): Record<string
     delai_paiement_jours: Number(f.delaiPaiementJours.trim()),
     penalites_retard: videEnNull(f.penalitesRetard),
     presentation_facture: f.presentationFacture,
+    factures_proche_visibles: f.facturesProcheVisibles,
   };
 }
 

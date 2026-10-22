@@ -315,6 +315,14 @@ function Formulaire({ identite, initial, enregistrer }: {
             </div>
           </Section>
 
+          <Section titre="Factures payées par un proche" aide="Quand un proche règle les séances, c'est lui qui reçoit la facture. Ce réglage indique si le bénéficiaire la voit aussi dans son espace. Il s'applique à toutes vos factures, y compris celles déjà émises.">
+            <label className="flex items-start gap-2.5 text-sm text-gray-700 cursor-pointer">
+              <input type="checkbox" data-testid="factures-proche-visibles" checked={f.facturesProcheVisibles}
+                onChange={e => maj('facturesProcheVisibles', e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-gray-300" />
+              <span>Le bénéficiaire voit aussi les factures payées par un proche</span>
+            </label>
+          </Section>
+
           <div className="flex flex-wrap items-center gap-3 pb-6">
             <button type="button" data-testid="enregistrer-profil" disabled={enCours || !modifie} onClick={() => void sauver()}
               className="inline-flex items-center gap-2 bg-primary text-white rounded-xl px-5 py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50">
