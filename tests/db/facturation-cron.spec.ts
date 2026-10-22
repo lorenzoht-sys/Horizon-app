@@ -251,7 +251,7 @@ decrire('Écran « Factures à valider » : lecture et validation avec le jeton 
     expect(r1.error?.message).toMatch(/^Profil de facturation incomplet : siret, regime_tva/);
     // Même constat côté écran, AVANT le clic : le profil lu par l'écran signale les mêmes manques.
     const { data: profilBrut } = await incomplet.client.from('praticiens').select(SELECT_PROFIL).eq('id', incomplet.id).maybeSingle();
-    expect(profilFacturationManquant(lireProfil(profilBrut as Record<string, unknown>))).toEqual(['SIRET', 'régime de TVA']);
+    expect(profilFacturationManquant(lireProfil(profilBrut as Record<string, unknown>))).toEqual(['SIRET', 'régime de TVA', 'forme juridique']);
 
     const f2 = (await lignesDe(c2.contratId, mois.periode)).factures[0].id;
     const r2 = await complet.client.rpc('valider_facture', { p_facture_id: f2 });

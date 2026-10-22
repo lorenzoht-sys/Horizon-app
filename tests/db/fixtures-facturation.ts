@@ -85,9 +85,9 @@ export async function creerPraticien(service: SupabaseClient, anonKey: string, p
   if (error || !data.user) throw new Error(`createUser : ${error?.message}`);
   const id = data.user.id;
   await pg(c => c.query(
-    `INSERT INTO public.praticiens (id, nom, prenom, email, siret, adresse_rue, adresse_code_postal, adresse_ville, regime_tva, delai_paiement_jours)
-     VALUES ($1, 'PratCron', 'Alex', $2, $3, '1 rue Test', '00000', 'Villetest', $4, 30)`,
-    [id, email, profilComplet ? '00000000000018' : null, profilComplet ? 'franchise_293B' : null],
+    `INSERT INTO public.praticiens (id, nom, prenom, email, siret, adresse_rue, adresse_code_postal, adresse_ville, regime_tva, delai_paiement_jours, forme_juridique)
+     VALUES ($1, 'PratCron', 'Alex', $2, $3, '1 rue Test', '00000', 'Villetest', $4, 30, $5)`,
+    [id, email, profilComplet ? '00000000000018' : null, profilComplet ? 'franchise_293B' : null, profilComplet ? 'ei' : null],
   ));
   const client = createClient(API_URL, anonKey, { auth: { persistSession: false, autoRefreshToken: false }, realtime: { transport: class {} as unknown as typeof WebSocket } });
   const { error: errConnexion } = await client.auth.signInWithPassword({ email, password: MOT_DE_PASSE });

@@ -81,6 +81,8 @@ export interface ProfilFacturation {
   facturationAdresseRue: string | null;
   facturationCodePostal: string | null;
   facturationVille: string | null;
+  /** 'ei' ou 'societe' (20261031100000) ; NULL = non renseignée, la validation est alors refusée. */
+  formeJuridique: string | null;
   /** Présentation par défaut du praticien (20261028100000) ; absente = « detaillee ». */
   presentationFacture?: Presentation;
 }
@@ -97,7 +99,7 @@ export const SELECT_BROUILLON =
 
 export const SELECT_PROFIL =
   'nom, siret, regime_tva, taux_tva, adresse_rue, adresse_code_postal, adresse_ville, ' +
-  'facturation_adresse_rue, facturation_code_postal, facturation_ville, presentation_facture';
+  'facturation_adresse_rue, facturation_code_postal, facturation_ville, presentation_facture, forme_juridique';
 
 export const SELECT_FACTURE_VALIDEE =
   'id, numero, type, periode, date_emission, echeance, statut, total, total_ht, montant_tva, taux_tva, pdf_path, ' +
@@ -181,6 +183,8 @@ export function profilFacturationManquant(profil: ProfilFacturation | null): str
   const cp = profil.facturationCodePostal ?? profil.adresseCodePostal;
   const ville = profil.facturationVille ?? profil.adresseVille;
   if (vide(rue) || vide(cp) || vide(ville)) manquants.push('adresse');
+  // Trigger factures_forme_juridique (20261031100000) : refus tant qu'elle n'est pas déclarée.
+  if (vide(profil.formeJuridique)) manquants.push('forme juridique');
   return manquants;
 }
 
@@ -213,6 +217,7 @@ const LIBELLES_PROFIL: Record<string, string> = {
   nom: 'nom',
   regime_tva: 'régime de TVA',
   adresse: 'adresse',
+  forme_juridique: 'forme juridique (à déclarer dans le profil de facturation)',
 };
 
 /**
@@ -371,6 +376,7 @@ export function lireProfil(row: Brut | null): ProfilFacturation | null {
     facturationAdresseRue: row.facturation_adresse_rue ?? null,
     facturationCodePostal: row.facturation_code_postal ?? null,
     facturationVille: row.facturation_ville ?? null,
+    formeJuridique: row.forme_juridique ?? null,
     presentationFacture: lirePresentation(row.presentation_facture),
   };
 }

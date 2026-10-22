@@ -36,7 +36,7 @@ import {
 const profilComplet: ProfilFacturation = {
   nom: 'Dupont', siret: '00000000000018', regimeTva: 'franchise_293B', tauxTva: null,
   adresseRue: '1 rue Test', adresseCodePostal: '00000', adresseVille: 'Villetest',
-  facturationAdresseRue: null, facturationCodePostal: null, facturationVille: null,
+  facturationAdresseRue: null, facturationCodePostal: null, facturationVille: null, formeJuridique: 'ei',
 };
 
 describe('formats', () => {
@@ -185,6 +185,16 @@ describe('aperçu de la présentation (A2)', () => {
       libelle: 'Accompagnement en activité physique adaptée — septembre 2026 : 1 séance et 1 bilan, déplacements inclus',
       montant: f.totalHt,
     });
+  });
+});
+
+describe('forme juridique (20261031100000)', () => {
+  it('absente : manquante pour valider, et le refus du serveur renvoie vers le profil de facturation', () => {
+    expect(profilFacturationManquant({ ...profilComplet, formeJuridique: null })).toEqual(['forme juridique']);
+    expect(profilFacturationManquant(profilComplet)).toEqual([]);
+    expect(messageValidationLisible('Profil de facturation incomplet : forme_juridique'))
+      .toBe('Profil de facturation incomplet : forme juridique (à déclarer dans le profil de facturation)');
+    expect(lireProfil({ nom: 'D', forme_juridique: 'ei' })?.formeJuridique).toBe('ei');
   });
 });
 

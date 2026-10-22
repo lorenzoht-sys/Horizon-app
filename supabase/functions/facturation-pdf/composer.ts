@@ -45,6 +45,8 @@ export interface EmetteurPdf {
   date_declaration_sap?: string | null;
   mode_intervention?: string | null;
   adresse_intervention?: string | null;
+  /** Figée à la validation (20261031100000) : 'ei' imprime « EI » à côté du nom ; absente sur les factures antérieures. */
+  forme_juridique?: string | null;
 }
 
 /** Forme du `snapshot_destinataire` : le proche payeur s'il y en a un, sinon le bénéficiaire. */
@@ -205,10 +207,15 @@ export function construireBlocs(f: FacturePdf): BlocsFacture {
   const e = f.emetteur;
   const franchise = e.regime_tva === 'franchise_293B';
   const identite = texte(e.societe) || nomComplet(e.prenom, e.nom);
+  // Entrepreneur individuel : « EI » à côté du NOM de la personne (obligation depuis le 15 mai 2022), sur
+  // la ligne du nom, qu'elle soit la première ou suive un nom commercial. Absent du snapshot (factures
+  // émises avant le 2026-10-31) : rien n'est ajouté, le PDF reste identique.
+  const ei = e.forme_juridique === 'ei';
+  const nomPersonne = nomComplet(e.prenom, e.nom);
 
   const emetteur = [
-    identite,
-    texte(e.societe) ? nomComplet(e.prenom, e.nom) : '',
+    texte(e.societe) ? identite : (ei && nomPersonne ? `${nomPersonne} EI` : identite),
+    texte(e.societe) ? (ei && nomPersonne ? `${nomPersonne} EI` : nomPersonne) : '',
     texte(e.titre),
     ...lignesAdresse(e.adresse),
     e.siret ? `SIRET : ${texte(e.siret)}` : '',
