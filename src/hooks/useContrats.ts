@@ -154,6 +154,16 @@ export function useContrats() {
     setContrats(prev => prev.map(c => c.id === id ? { ...c, exclureTournee } : c));
   }
 
+  /** null = revenir au choix du profil de facturation. Mise à jour ciblée, hors contratToDb. */
+  async function modifierPresentationFacture(id: string, presentationFacture: 'detaillee' | 'globale' | null): Promise<boolean> {
+    if (supabase) {
+      const { error } = await supabase.from('contrats').update({ presentation_facture: presentationFacture }).eq('id', id);
+      if (error) { console.error('Erreur modification presentation_facture:', error); toast.error('Erreur : ' + error.message); return false; }
+    }
+    setContrats(prev => prev.map(c => c.id === id ? { ...c, presentationFacture } : c));
+    return true;
+  }
+
   async function supprimerContrat(id: string) {
     if (supabase) {
       const { error } = await supabase.from('contrats').delete().eq('id', id);
@@ -213,6 +223,7 @@ export function useContrats() {
     reprendreContrat,
     modifierDateFin,
     toggleExclureTournee,
+    modifierPresentationFacture,
     supprimerContrat,
     incrementerSeancesRealisees,
     contratsDeParticipant,

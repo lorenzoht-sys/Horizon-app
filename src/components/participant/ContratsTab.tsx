@@ -12,6 +12,7 @@ import SectionTarifContrat from './SectionTarifContrat';
 import { evaluerReprise, calculerSeancesReprise } from '../../utils/repriseContrat';
 import { ChevauchementError } from '../../utils/horaires';
 import { getAuthHeader } from '../../lib/supabase';
+import { PRESENTATIONS_FACTURE } from '../../lib/profilFacturation';
 
 const STATUT_BADGE: Record<string, { label: string; class: string }> = {
   actif:    { label: 'Actif',    class: 'bg-green-100 text-green-700' },
@@ -206,7 +207,7 @@ interface Props {
 }
 
 export default function ContratsTab({ participantId }: Props) {
-  const { contratsDeParticipant, modifierStatut, mettreEnPause, reprendreContrat, modifierDateFin, toggleExclureTournee, supprimerContrat } = useContrats();
+  const { contratsDeParticipant, modifierStatut, mettreEnPause, reprendreContrat, modifierDateFin, toggleExclureTournee, modifierPresentationFacture, supprimerContrat } = useContrats();
   const { seances, bulkCreerSeances, retirerPlanifieesLocales } = useAgenda();
   const { participants } = useParticipants();
   const [modalPDF, setModalPDF] = useState<Contrat | null>(null);
@@ -463,6 +464,13 @@ export default function ContratsTab({ participantId }: Props) {
       : 'Réintégré dans l\'optimisation de tournée');
   }
 
+  async function handlePresentationFacture(contratId: string, valeur: string) {
+    const mode = valeur === 'detaillee' || valeur === 'globale' ? valeur : null;
+    if (await modifierPresentationFacture(contratId, mode)) {
+      toast.success('Présentation des factures enregistrée : elle s\'applique aux factures validées à partir de maintenant');
+    }
+  }
+
   function handleSupprimer(contratId: string) {
     const nbFutures = seances.filter(
       s => s.contratId === contratId && s.statut === 'planifiee' && s.date >= today
@@ -643,6 +651,21 @@ export default function ContratsTab({ participantId }: Props) {
             )}
 
             <SectionTarifContrat contratId={contrat.id} />
+
+            {/* Point A : un contrat peut s'écarter du choix du profil de facturation (ex. une structure
+                qui veut une ligne par mois). Figé sur chaque facture à sa validation (20261028100000). */}
+            <label className="flex flex-wrap items-center gap-2 mb-3">
+              <span className="text-xs text-gray-500">Présentation des factures</span>
+              <select
+                data-testid="contrat-presentation-facture"
+                value={contrat.presentationFacture ?? ''}
+                onChange={e => void handlePresentationFacture(contrat.id, e.target.value)}
+                className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:border-primary"
+              >
+                <option value="">Par défaut (profil de facturation)</option>
+                {PRESENTATIONS_FACTURE.map(o => <option key={o.valeur} value={o.valeur}>{o.titre}</option>)}
+              </select>
+            </label>
 
             {(contrat.statut === 'actif' || contrat.statut === 'a_venir') && (
               <label className="flex items-center gap-2 cursor-pointer select-none mb-3">

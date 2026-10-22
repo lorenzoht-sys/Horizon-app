@@ -520,6 +520,10 @@ export interface Contrat {
    * B) — le patient reste visible partout ailleurs dans l'app, mais n'est
    * jamais candidaté pour une optimisation automatique. */
   exclureTournee?: boolean;
+  /** Présentation des factures de ce contrat (migration 20261028100000) : null = celle du profil de
+   * facturation du praticien. Écrite seulement par modifierPresentationFacture (useContrats), jamais
+   * par contratToDb : un enregistrement complet du contrat ne doit pas l'écraser. */
+  presentationFacture?: 'detaillee' | 'globale' | null;
 }
 
 /**
