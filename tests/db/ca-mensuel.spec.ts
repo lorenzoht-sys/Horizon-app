@@ -49,8 +49,8 @@ decrire('Chiffre d\'affaires mensuel : agrégation et saisies externes', () => {
   async function avoir(p: Praticien, f: { factureId: string; contratId: string; participantId: string; mois: ReturnType<typeof moisDuTest> }, montant: number) {
     const id = await pg(async cl => {
       const a = await cl.query(
-        `INSERT INTO public.factures (praticien_id, contrat_id, participant_id, periode, type, facture_origine_id)
-         VALUES ($1, $2, $3, $4, 'avoir', $5) RETURNING id`, [p.id, f.contratId, f.participantId, f.mois.periode, f.factureId]);
+        `INSERT INTO public.factures (praticien_id, contrat_id, participant_id, periode, type, facture_origine_id, motif)
+         VALUES ($1, $2, $3, $4, 'avoir', $5, 'Motif de test') RETURNING id`, [p.id, f.contratId, f.participantId, f.mois.periode, f.factureId]);
       await cl.query(`INSERT INTO public.lignes_facture (facture_id, libelle, quantite, prix_unitaire, montant) VALUES ($1, 'Avoir', 1, $2, $2)`, [a.rows[0].id, montant]);
       return a.rows[0].id as string;
     });

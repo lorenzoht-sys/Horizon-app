@@ -544,8 +544,8 @@ decrire('Inaltérabilité (triggers)', () => {
       const v = await factureValidee(c);
       const avoir = randomUUID();
       await c.query(
-        `INSERT INTO public.factures (id, praticien_id, contrat_id, participant_id, periode, type, facture_origine_id)
-         VALUES ($1, $2, $3, $4, '2026-03-01', 'avoir', $5)`,
+        `INSERT INTO public.factures (id, praticien_id, contrat_id, participant_id, periode, type, facture_origine_id, motif)
+         VALUES ($1, $2, $3, $4, '2026-03-01', 'avoir', $5, 'Motif de test')`,
         [avoir, v.pro, v.ct.contratId, v.ct.participantId, v.factureId],
       );
       await c.query(`INSERT INTO public.lignes_facture (facture_id, libelle, quantite, prix_unitaire, montant) VALUES ($1, 'Avoir séance du 10/03/2026', 1, 45, 45)`, [avoir]);
@@ -570,13 +570,13 @@ decrire('Inaltérabilité (triggers)', () => {
       const brouillon = (await generer(c, ct.contratId, '2026-03-01'))!;
       await refus(
         c,
-        `INSERT INTO public.factures (praticien_id, contrat_id, participant_id, periode, type, facture_origine_id) VALUES ($1, $2, $3, '2026-03-01', 'avoir', $4)`,
+        `INSERT INTO public.factures (praticien_id, contrat_id, participant_id, periode, type, facture_origine_id, motif) VALUES ($1, $2, $3, '2026-03-01', 'avoir', $4, 'Motif de test')`,
         [pro, ct.contratId, ct.participantId, brouillon], /facture émise non annulée/,
       );
       await valider(c, brouillon);
       const avoir = randomUUID();
       await c.query(
-        `INSERT INTO public.factures (id, praticien_id, contrat_id, participant_id, periode, type, facture_origine_id) VALUES ($1, $2, $3, $4, '2026-03-01', 'avoir', $5)`,
+        `INSERT INTO public.factures (id, praticien_id, contrat_id, participant_id, periode, type, facture_origine_id, motif) VALUES ($1, $2, $3, $4, '2026-03-01', 'avoir', $5, 'Motif de test')`,
         [avoir, pro, ct.contratId, ct.participantId, brouillon],
       );
       await c.query(`INSERT INTO public.lignes_facture (facture_id, libelle, quantite, prix_unitaire, montant) VALUES ($1, 'Avoir', 1, 46, 46)`, [avoir]);
@@ -1132,7 +1132,7 @@ decrire('TVA : prix HT, TVA ajoutée (hypothèse à confirmer)', () => {
       const nouvelAvoir = async (ht: number): Promise<string> => {
         const id = randomUUID();
         await c.query(
-          `INSERT INTO public.factures (id, praticien_id, contrat_id, participant_id, periode, type, facture_origine_id) VALUES ($1, $2, $3, $4, '2026-03-01', 'avoir', $5)`,
+          `INSERT INTO public.factures (id, praticien_id, contrat_id, participant_id, periode, type, facture_origine_id, motif) VALUES ($1, $2, $3, $4, '2026-03-01', 'avoir', $5, 'Motif de test')`,
           [id, pro, ct.contratId, ct.participantId, f],
         );
         await c.query(`INSERT INTO public.lignes_facture (facture_id, libelle, quantite, prix_unitaire, montant) VALUES ($1, 'Avoir', 1, $2, $2)`, [id, ht]);

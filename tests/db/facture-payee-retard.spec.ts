@@ -59,7 +59,7 @@ decrire('Facture émise : « Marquer payée » et « En retard »', () => {
     const { id, contrat, M } = await factureValidee(p);
     const avoirId = randomUUID();
     await pg(async c => {
-      await c.query(`INSERT INTO public.factures (id, praticien_id, contrat_id, participant_id, periode, type, facture_origine_id) VALUES ($1, $2, $3, $4, $5, 'avoir', $6)`,
+      await c.query(`INSERT INTO public.factures (id, praticien_id, contrat_id, participant_id, periode, type, facture_origine_id, motif) VALUES ($1, $2, $3, $4, $5, 'avoir', $6, 'Motif de test')`,
         [avoirId, p.id, contrat.contratId, contrat.participantId, M.periode, id]);
       await c.query(`INSERT INTO public.lignes_facture (facture_id, libelle, quantite, prix_unitaire, montant) VALUES ($1, 'Geste commercial', 1, 15, 15)`, [avoirId]);
     });

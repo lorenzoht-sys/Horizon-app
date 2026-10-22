@@ -3,8 +3,10 @@ import { useState } from 'react';
 import { ArrowLeft, ArrowRight, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import PageWrapper from '../components/layout/PageWrapper';
+import ModalCreerAvoir from '../components/factures/ModalCreerAvoir';
 import { telechargerPdfFacture, useFacturesValidees } from '../hooks/useFacturesAValider';
-import { MOYENS_PAIEMENT, dateCivileParis, emailPlausible, formaterDate, formaterEuro, libellePeriode, peutEnvoyer, peutMarquerPayee } from '../lib/facturesAValider';
+import { aRembourser, type Choix } from '../lib/avoirs';
+import { MOYENS_PAIEMENT, avoirsDe, dateCivileParis, emailPlausible, formaterDate, formaterEuro, libellePeriode, peutCreerAvoir, peutEnvoyer, peutMarquerPayee, type FactureValidee } from '../lib/facturesAValider';
 
 // Factures validées (numérotées, verrouillées) : liste volontairement minimale (facturation,
 // étape 3). Elle sert de destination à « Les retrouver » après une validation. Étape 5 : le PDF se
@@ -12,6 +14,8 @@ import { MOYENS_PAIEMENT, dateCivileParis, emailPlausible, formaterDate, formate
 // marquer_facture_payee) ; « En retard » est posé par la base le lendemain de l'échéance. PR 8 :
 // « Envoyer » / « Renvoyer » par e-mail (Edge Function facturation-envoi) ; sans adresse connue, une saisie
 // s'ouvre, avec « Enregistrer cette adresse dans la fiche » décochée par défaut (décision du 2026-10-22).
+// PR 9 : « Créer un avoir » (fenêtre ModalCreerAvoir, validé immédiatement), avoirs listés sous leur facture,
+// « À rembourser » si la facture était déjà encaissée, « Refaire la facture du mois » après une annulation.
 
 const STATUTS: Record<string, { libelle: string; classe: string }> = {
   validee: { libelle: 'Validée', classe: 'bg-emerald-50 text-emerald-700' },
@@ -22,7 +26,30 @@ const STATUTS: Record<string, { libelle: string; classe: string }> = {
 };
 
 export default function FacturesPage() {
-  const { factures, chargement, erreur, marquerPayee, envoyer } = useFacturesValidees();
+  const { factures, chargement, erreur, marquerPayee, envoyer, creerAvoir, refaireFacture } = useFacturesValidees();
+  const [avoirOuvert, setAvoirOuvert] = useState<FactureValidee | null>(null);
+  const [refaireEnCours, setRefaireEnCours] = useState<string | null>(null);
+
+  async function confirmerAvoir(f: FactureValidee, lignes: Choix[], geste: number, motif: string, total: number): Promise<boolean> {
+    const r = await creerAvoir(f.id, lignes, geste, motif, total);
+    if ('erreur' in r) { toast.error(r.erreur); return false; }
+    toast.success([
+      `Avoir n° ${r.numero} créé (${formaterEuro(r.total)})`,
+      r.origineAnnulee ? `facture n° ${f.numero} annulée` : '',
+      r.aRembourser > 0 ? `à rembourser : ${formaterEuro(r.aRembourser)}` : '',
+    ].filter(Boolean).join(' · '));
+    return true;
+  }
+
+  async function refaire(f: FactureValidee) {
+    setRefaireEnCours(f.id);
+    const r = await refaireFacture(f.contratId, f.periode);
+    setRefaireEnCours(null);
+    if ('erreur' in r) { toast.error(r.erreur); return; }
+    if (r.cree) toast.success(`Brouillon de ${libellePeriode(f.periode)} recréé : à valider dans « Factures à valider »`);
+    else toast.info('Aucune séance à facturer pour ce mois');
+  }
+
   const [envoiEnCours, setEnvoiEnCours] = useState<string | null>(null);
   // Saisie d'adresse ouverte sur une facture (adresse manquante ou invalide, ou autre adresse voulue).
   const [saisie, setSaisie] = useState<{ id: string; email: string; enregistrer: boolean; message?: string } | null>(null);
@@ -103,12 +130,30 @@ export default function FacturesPage() {
         <ul className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
           {factures.map(f => {
             const statut = STATUTS[f.statut] ?? { libelle: f.statut, classe: 'bg-gray-100 text-gray-600' };
+            const avoirs = f.type === 'facture' ? avoirsDe(f.id, factures) : [];
+            const origine = f.type === 'avoir' ? factures.find(o => o.id === f.factureOrigineId) : undefined;
+            const rembourser = avoirs.length > 0 ? aRembourser(f.paye, f.total, avoirs.reduce((t, a) => t + a.total, 0)) : 0;
+            // Refaire : facture annulée dont le mois n'a pas déjà une autre facture émise dans la liste.
+            const peutRefaire = f.type === 'facture' && f.statut === 'annulee'
+              && !factures.some(o => o.type === 'facture' && o.statut !== 'annulee' && o.contratId === f.contratId && o.periode === f.periode);
             return (
               <li key={f.id} data-testid="facture-validee" className="flex items-start justify-between gap-3 p-4 text-sm">
                 <div className="min-w-0">
-                  <div className="font-semibold text-gray-900" data-testid="numero-facture">{f.numero}</div>
+                  <div className="font-semibold text-gray-900" data-testid="numero-facture">
+                    {f.type === 'avoir' && <span className="mr-1.5 text-xs font-medium text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">Avoir</span>}
+                    {f.numero}
+                  </div>
                   <div className="text-gray-700">{`${f.beneficiaire.prenom} ${f.beneficiaire.nom}`.trim()}</div>
                   <div className="text-xs text-gray-400">{libellePeriode(f.periode)} · émise le {formaterDate(f.dateEmission)}</div>
+                  {f.type === 'avoir' && (
+                    <div className="text-xs text-gray-500" data-testid="avoir-origine">
+                      {origine ? `Sur la facture n° ${origine.numero}` : 'Avoir'}{f.motif ? ` · ${f.motif}` : ''}
+                    </div>
+                  )}
+                  {avoirs.map(a => (
+                    <div key={a.id} className="text-xs text-purple-700" data-testid="avoir-de-facture">Avoir n° {a.numero} : −{formaterEuro(a.total)}</div>
+                  ))}
+                  {rembourser > 0 && <div className="text-xs font-medium text-amber-800" data-testid="a-rembourser">À rembourser : {formaterEuro(rembourser)}</div>}
                   {f.statut === 'payee' && f.datePaiement
                     ? <div className="text-xs text-green-700" data-testid="date-paiement">Payée le {formaterDate(f.datePaiement)}</div>
                     : f.type === 'facture' && f.echeance && f.statut !== 'annulee' &&
@@ -185,6 +230,18 @@ export default function FacturesPage() {
                       {envoiEnCours === f.id ? 'Envoi…' : f.dernierEnvoi ? 'Renvoyer' : 'Envoyer par e-mail'}
                     </button>
                   )}
+                  {peutCreerAvoir(f) && (
+                    <button type="button" data-testid="creer-avoir" onClick={() => setAvoirOuvert(f)}
+                      className="mt-1 block ml-auto text-xs font-medium text-purple-700 hover:text-purple-900">
+                      Créer un avoir
+                    </button>
+                  )}
+                  {peutRefaire && (
+                    <button type="button" data-testid="refaire-facture" disabled={refaireEnCours === f.id} onClick={() => void refaire(f)}
+                      className="mt-1 block ml-auto text-xs font-medium text-primary hover:underline disabled:opacity-50">
+                      {refaireEnCours === f.id ? 'Recalcul…' : 'Refaire la facture du mois'}
+                    </button>
+                  )}
                   {peutMarquerPayee(f) && paiement?.id !== f.id && (
                     <button type="button" data-testid="marquer-payee"
                       onClick={() => setPaiement({ id: f.id, date: aujourdhui, moyen: 'virement' })}
@@ -197,6 +254,15 @@ export default function FacturesPage() {
             );
           })}
         </ul>
+      )}
+
+      {avoirOuvert && (
+        <ModalCreerAvoir
+          facture={avoirOuvert}
+          avoirs={avoirsDe(avoirOuvert.id, factures)}
+          onClose={() => setAvoirOuvert(null)}
+          onCreer={(lignes, geste, motif, total) => confirmerAvoir(avoirOuvert, lignes, geste, motif, total)}
+        />
       )}
     </PageWrapper>
   );

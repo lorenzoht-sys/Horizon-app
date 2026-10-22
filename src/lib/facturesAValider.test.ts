@@ -19,6 +19,9 @@ import {
   premierJourMoisSuivant,
   separerBrouillons,
   type FactureBrouillon,
+  type FactureValidee,
+  avoirsDe,
+  peutCreerAvoir,
   lireProfil,
   messageValidationLisible,
   profilFacturationManquant,
@@ -124,7 +127,8 @@ describe('lecture des réponses PostgREST', () => {
   });
   it('lit une facture validée et un profil', () => {
     expect(lireFactureValidee({ id: 'f', numero: '2026-0001', periode: '2026-09-01', date_emission: '2026-10-02', statut: 'validee', total: '99.00', participants: { prenom: 'A', nom: 'B' } }))
-      .toEqual({ id: 'f', numero: '2026-0001', periode: '2026-09-01', dateEmission: '2026-10-02', statut: 'validee', total: 99, beneficiaire: { prenom: 'A', nom: 'B' }, pdfPath: null, type: 'facture', echeance: null, datePaiement: null, dernierEnvoi: null });
+      .toEqual({ id: 'f', numero: '2026-0001', periode: '2026-09-01', dateEmission: '2026-10-02', statut: 'validee', total: 99, beneficiaire: { prenom: 'A', nom: 'B' }, pdfPath: null, type: 'facture', echeance: null, datePaiement: null, dernierEnvoi: null,
+        factureOrigineId: null, motif: null, contratId: undefined, totalHt: 0, montantTva: 0, tauxTva: 0, paye: 0 });
     expect(lireFactureValidee({ id: 'f', type: 'facture', statut: 'envoyee', total: '1', envois_factures: [
       { created_at: '2026-10-22T09:00:00Z', destinataire: 'a@example.com', resultat: 'envoye' },
       { created_at: '2026-10-23T09:00:00Z', destinataire: 'b@example.com', resultat: 'echec' },
@@ -133,6 +137,9 @@ describe('lecture des réponses PostgREST', () => {
     expect(lireFactureValidee({ id: 'f', type: 'facture', statut: 'payee', echeance: '2026-11-01', total: '1', paiements: [{ date: '2026-10-20' }, { date: '2026-10-25' }, { date: '2026-10-05' }] }))
       .toMatchObject({ echeance: '2026-11-01', datePaiement: '2026-10-25' });
     expect(lireFactureValidee({ id: 'a', type: 'avoir', statut: 'validee', total: '1' }).type).toBe('avoir');
+    expect(lireFactureValidee({ id: 'a', type: 'avoir', statut: 'validee', total: '11.00', total_ht: '10.00', montant_tva: '1.00', taux_tva: '10.00',
+      contrat_id: 'c', facture_origine_id: 'f', motif: 'Séance annulée', paiements: [{ date: '2026-10-01', montant: '0.10' }, { date: '2026-10-02', montant: '0.20' }] }))
+      .toMatchObject({ factureOrigineId: 'f', motif: 'Séance annulée', contratId: 'c', totalHt: 10, montantTva: 1, tauxTva: 10, paye: 0.3 });
     expect(lireFactureValidee({ id: 'f', numero: '2026-0001', periode: '2026-09-01', date_emission: '2026-10-02', statut: 'validee', total: '99.00', pdf_path: 'p/2026-0001.pdf', participants: null }).pdfPath).toBe('p/2026-0001.pdf');
     expect(lireProfil({ nom: 'D', siret: 'S', regime_tva: 'assujetti', taux_tva: '10.00', adresse_rue: 'r' }))
       .toMatchObject({ nom: 'D', regimeTva: 'assujetti', tauxTva: 10, adresseRue: 'r', adresseVille: null });
@@ -295,5 +302,22 @@ describe('envoi par e-mail (PR 8)', () => {
   it('forme d\'une adresse', () => {
     expect(emailPlausible('a@b.fr')).toBe(true);
     for (const v of ['a@b', 'a b@c.fr', '']) expect(emailPlausible(v)).toBe(false);
+  });
+});
+
+describe('avoirs dans la liste des factures validées (PR 9)', () => {
+  const f = (o: Partial<FactureValidee>): FactureValidee => ({
+    id: 'f', numero: '2026-0001', periode: '2026-09-01', dateEmission: '2026-10-02', statut: 'validee', total: 90,
+    beneficiaire: { prenom: '', nom: '' }, pdfPath: null, type: 'facture', echeance: null, datePaiement: null, dernierEnvoi: null,
+    factureOrigineId: null, motif: null, contratId: 'c', totalHt: 90, montantTva: 0, tauxTva: 0, paye: 0, ...o,
+  });
+  it('« Créer un avoir » : facture émise non annulée, jamais un avoir', () => {
+    expect(['validee', 'envoyee', 'payee', 'en_retard'].every(statut => peutCreerAvoir(f({ statut })))).toBe(true);
+    expect(peutCreerAvoir(f({ statut: 'annulee' }))).toBe(false);
+    expect(peutCreerAvoir(f({ type: 'avoir' }))).toBe(false);
+  });
+  it('avoirsDe : les avoirs de la facture, et seulement eux', () => {
+    const liste = [f({}), f({ id: 'a1', type: 'avoir', factureOrigineId: 'f' }), f({ id: 'a2', type: 'avoir', factureOrigineId: 'g' }), f({ id: 'g' })];
+    expect(avoirsDe('f', liste).map(a => a.id)).toEqual(['a1']);
   });
 });

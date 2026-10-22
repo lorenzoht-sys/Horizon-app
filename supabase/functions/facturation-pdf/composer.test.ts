@@ -120,6 +120,12 @@ describe('mentions du PDF', () => {
     expect(b.references).toContain('Avoir sur la facture n° 2026-0007');
     expect(b.paiement).toEqual([]);
   });
+
+  it("avoir : motif imprimé sous la référence (espaces et retours à la ligne aplatis) ; jamais sur une facture", () => {
+    const b = construireBlocs(facture({ type: 'avoir', numero: '2026-0008', numeroOrigine: '2026-0007', motif: '  Séance du 3\nannulée  ' }));
+    expect(b.references.slice(-2)).toEqual(['Avoir sur la facture n° 2026-0007', 'Motif : Séance du 3 annulée']);
+    expect(construireBlocs(facture({ motif: 'ignoré' })).references.join(' ')).not.toMatch(/Motif/);
+  });
 });
 
 describe('ordre des lignes', () => {
