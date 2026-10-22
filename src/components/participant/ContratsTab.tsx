@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import type { Contrat, Seance } from '../../types';
 import ModalGenerationContrat from './ModalGenerationContrat';
 import SectionTarifContrat from './SectionTarifContrat';
+import SectionPayeurContrat from './SectionPayeurContrat';
 import { evaluerReprise, calculerSeancesReprise } from '../../utils/repriseContrat';
 import { ChevauchementError } from '../../utils/horaires';
 import { getAuthHeader } from '../../lib/supabase';
@@ -651,6 +652,7 @@ export default function ContratsTab({ participantId }: Props) {
             )}
 
             <SectionTarifContrat contratId={contrat.id} />
+            <SectionPayeurContrat contratId={contrat.id} />
 
             {/* Point A : un contrat peut s'écarter du choix du profil de facturation (ex. une structure
                 qui veut une ligne par mois). Figé sur chaque facture à sa validation (20261028100000). */}
