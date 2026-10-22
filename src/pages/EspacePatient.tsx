@@ -10,7 +10,8 @@ import {
 } from '../lib/coursPatient';
 import { niveauEffort, niveauBienEtre } from '../lib/ressentiCours';
 import { libellesSignalementAbsence } from '../lib/libellesSignalementAbsence';
-import { patientFetchMe, patientSauvegarderSeance, patientEnvoyerRetour, patientLogin, patientActiverRappels, patientDesactiverRappels, patientEnregistrerTestEtalon, patientMarquerExerciceLibre, patientAnnoncerPresence, patientSignalerAbsence } from '../lib/patientApi';
+import { patientFetchMe, patientSauvegarderSeance, patientEnvoyerRetour, patientLogin, patientActiverRappels, patientDesactiverRappels, patientEnregistrerTestEtalon, patientMarquerExerciceLibre, patientAnnoncerPresence, patientSignalerAbsence, patientUrlPdfFacture } from '../lib/patientApi';
+import { etatPourBeneficiaire, trierFacturesPatient, type FacturePatient } from '../lib/facturesPatient';
 import { activerRappelsPush, desactiverRappelsPush, etatAbonnementPush, estIOS, estInstalleeSurEcranAccueil, pushSupporte } from '../lib/push';
 import { loadExercices } from '../data/exercices';
 import { TESTS_ETALONS, getTestEtalon } from '../data/testsEtalons';
@@ -2395,11 +2396,74 @@ function TestEtalonModal({ token, test, dernierResultat, onAnnuler, onEnregistre
 
 // ── ÉCRAN 4 — Documents ───────────────────────────────────────────────────────
 
-function EcranDocuments({ bilans, participant, programmeActif, documentsPatient }: {
+// Factures et avoirs émis (point D, D2) : liste déjà filtrée par le serveur (documents_du_beneficiaire).
+// Le PDF s'ouvre par une URL signée de 60 s, demandée au clic et jamais conservée.
+function SectionFactures({ factures, token, avecMarge }: { factures: FacturePatient[]; token: string; avecMarge: boolean }) {
+  const [enCours, setEnCours] = useState<string | null>(null);
+  const fmtEuro = (n: number) => n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+  async function ouvrir(f: FacturePatient) {
+    setEnCours(f.id);
+    const r = await patientUrlPdfFacture(token, f.id);
+    setEnCours(null);
+    if (r.ok) { window.location.assign(r.url); return; }
+    toast.error(r.status === 409 ? 'Le PDF est en préparation, réessayez dans quelques minutes.'
+      : r.status === 429 ? 'Trop de demandes. Réessayez dans quelques minutes.'
+      : r.error ?? 'Téléchargement impossible. Réessayez plus tard.');
+  }
+  return (
+    <>
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', paddingLeft: 2, marginTop: avecMarge ? 8 : 0 }}>
+        Vos factures ({factures.length})
+      </div>
+      {trierFacturesPatient(factures).map(f => {
+        const etat = etatPourBeneficiaire(f);
+        const couleur = etat.ton === 'ok' ? C.green : etat.ton === 'attente' ? C.orange : C.gray;
+        return (
+          <div key={f.id} data-testid="facture-patient" style={{
+            background: 'white', border: `1.5px solid ${C.border}`, borderRadius: 18, padding: '14px 16px',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+          }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.dark }}>
+                🧾 {f.type === 'avoir' ? 'Avoir' : 'Facture'} · {fmtMoisAnnee(f.periode)}
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                N° {f.numero} · {fmtCourt(f.dateEmission)} · {fmtEuro(f.total)}
+              </div>
+              <span style={{ display: 'inline-block', marginTop: 6, fontSize: 10, fontWeight: 700, color: couleur, background: `${couleur}1A`, padding: '3px 8px', borderRadius: 20 }}>
+                {etat.libelle}
+              </span>
+            </div>
+            {f.pdfDisponible ? (
+              <button
+                data-testid="facture-patient-pdf"
+                onClick={() => void ouvrir(f)}
+                disabled={enCours === f.id}
+                style={{
+                  flexShrink: 0, background: 'var(--color-teal)', color: 'white', border: 'none', borderRadius: 12,
+                  padding: '9px 14px', fontSize: 13, fontWeight: 600, cursor: enCours === f.id ? 'not-allowed' : 'pointer',
+                  opacity: enCours === f.id ? 0.6 : 1,
+                }}
+              >
+                {enCours === f.id ? '…' : 'PDF'}
+              </button>
+            ) : (
+              <span style={{ flexShrink: 0, fontSize: 11, color: C.muted }}>PDF en préparation</span>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function EcranDocuments({ bilans, participant, programmeActif, documentsPatient, factures, token }: {
   bilans: Bilan[];
   participant: Participant;
   programmeActif: Programme | null;
   documentsPatient: { id: string; titre: string; contenu: string; date_creation: string }[];
+  factures: FacturePatient[];
+  token: string;
 }) {
   const navigate = useNavigate();
   const [genPDF, setGenPDF] = useState(false);
@@ -2407,7 +2471,7 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
   const praticien = loadPraticien();
   const sortedBilans = [...bilans].sort((a, b) => b.date.localeCompare(a.date));
   const carteSanteAutorisee = participant.visibiliteBeneficiaire?.carteSante !== false;
-  const hasContent = documentsPatient.length > 0 || sortedBilans.length > 0 || carteSanteAutorisee;
+  const hasContent = documentsPatient.length > 0 || factures.length > 0 || sortedBilans.length > 0 || carteSanteAutorisee;
 
   async function handleExportCarteSante() {
     setGenPDF(true);
@@ -2532,10 +2596,13 @@ function EcranDocuments({ bilans, participant, programmeActif, documentsPatient 
         </>
       )}
 
+      {/* Factures et avoirs (point D, D2) */}
+      {factures.length > 0 && <SectionFactures factures={factures} token={token} avecMarge={documentsPatient.length > 0} />}
+
       {/* Bilans — résumé en langage patient */}
       {sortedBilans.length > 0 && (
         <>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', paddingLeft: 2, marginTop: documentsPatient.length > 0 ? 8 : 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', paddingLeft: 2, marginTop: documentsPatient.length > 0 || factures.length > 0 ? 8 : 0 }}>
             Vos bilans ({sortedBilans.length})
           </div>
           {sortedBilans.map((bilan, i) => {
@@ -2667,6 +2734,7 @@ export default function EspacePatient() {
   const [programmes, setProgrammes]     = useState<Programme[]>([]);
   const [programmesV2, setProgrammesV2] = useState<ProgrammeV2[]>([]);
   const [documentsPatient, setDocumentsPatient] = useState<{ id: string; titre: string; contenu: string; date_creation: string }[]>([]);
+  const [factures, setFactures] = useState<FacturePatient[]>([]);
   const [seancesPatient, setSeancesPatient]     = useState<SeancePatientRecord[]>([]);
   const [seancesAutonomesCount, setSeancesAutonomesCount] = useState<Record<string, number>>({});
   const [testsEtalonsActifs, setTestsEtalonsActifs] = useState<string[]>([]);
@@ -2803,6 +2871,7 @@ export default function EspacePatient() {
       })));
 
       setDocumentsPatient(data.documentsPatient);
+      setFactures(data.factures ?? []);
 
       // Historique des séances patient (dernières 15)
       const spRows = data.seancesPatient;
@@ -2965,7 +3034,7 @@ export default function EspacePatient() {
           </>
         )}
         {tab === 'documents' && (
-          <EcranDocuments bilans={bilans} participant={participant} programmeActif={programmes.find(p => p.actif) ?? null} documentsPatient={documentsPatient} />
+          <EcranDocuments bilans={bilans} participant={participant} programmeActif={programmes.find(p => p.actif) ?? null} documentsPatient={documentsPatient} factures={factures} token={token} />
         )}
       </div>
 

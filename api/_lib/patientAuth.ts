@@ -80,6 +80,8 @@ export type AuditEventType =
   // Signalement (ou annulation du signalement) d'absence à la prochaine séance
   // planifiée (metadata : seanceId, signale, ou motif du refus).
   | 'patient_seance_absence_submit'
+  // Demande d'URL signée (60 s) du PDF d'une facture (metadata : numero, ou motif du refus).
+  | 'patient_facture_pdf'
   // Action praticien (pas patient) — même table : pas de raison de dupliquer
   // un mécanisme d'audit générique pour une différence d'origine de l'action.
   | 'praticien_seances_supprimees_fin_contrat'

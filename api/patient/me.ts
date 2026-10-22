@@ -1,6 +1,6 @@
 // GET /api/patient/me
 // Renvoie toutes les données de l'espace patient (participant, bilans,
-// séances, cours collectifs, programmes V1/V2, documents partagés, historique de séances)
+// séances, cours collectifs, programmes V1/V2, documents partagés, factures, historique de séances)
 // filtrées par le participant_id du JWT — jamais par un id fourni par le
 // client.
 
@@ -9,6 +9,7 @@ import { withSentry } from '../_lib/sentry.js';
 import { COLONNES_SEANCE_EXPOSEE } from '../_lib/colonnesSeancesExposees.js';
 import { lireLignesCoursPatient, construireCoursPatient } from '../_lib/coursPatient.js';
 import { captureMessage } from '../_lib/sentry.js';
+import { lireFacturesPatient } from '../_lib/facturesPatient.js';
 
 // Contrôle de partage bénéficiaire — voir supabase/migrations/20260713_visibilite_beneficiaire.sql
 // et src/types/index.ts (VisibiliteBeneficiaire, Bilan.visibleBeneficiaire).
@@ -161,6 +162,10 @@ export default withSentry(async function handler(req: any, res: any) {
   // retombe sur « mon praticien ».
   const praticienPrenom = await lirePrenomPraticien(supabase, participantRes.data.praticien_id);
 
+  // Factures et avoirs émis visibles du bénéficiaire (point D, D2) : règle de documents_du_beneficiaire,
+  // jamais le chemin du PDF (voir api/_lib/facturesPatient.ts). Une panne donne une liste vide.
+  const factures = await lireFacturesPatient(supabase, participantId);
+
   const participant = participantRes.data;
   const brut = (participant.visibilite_beneficiaire ?? {}) as Record<string, unknown>;
   const visibilite = { ...VISIBILITE_DEFAULT, ...brut };
@@ -269,6 +274,7 @@ export default withSentry(async function handler(req: any, res: any) {
     programmePlanning,
     programmeExercices,
     documentsPatient: docsRes.data ?? [],
+    factures,
     seancesPatient,
     exercicesRealises,
     seancesAutonomesCount,
