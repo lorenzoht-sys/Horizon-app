@@ -14,6 +14,22 @@ import type {
 import { Plus, X, Package, Folder, FolderPlus, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { extractYoutubeId } from '../utils/extractYoutubeId';
+import { famillesDe, positionDe } from '../data/exercicesMouvApa';
+import { LIBELLE_FAMILLE } from '../lib/libellesBibliotheque';
+import type { FamilleExercice, MaterielExercice } from '../types';
+
+// Filtres de la bibliothèque Mouv'APA (2026-10-25) : famille, position réelle et matériel, en plus des
+// filtres historiques (catégorie, profil). Avec ~180 exercices, une recherche par nom devient utile.
+const FAMILLES_FILTRE: FamilleExercice[] = [
+  'renforcement', 'cardio', 'mobilite', 'souplesse', 'equilibre', 'coordination', 'cognitif', 'pilates', 'respiration', 'recuperation',
+];
+const POSITIONS_LIB: { id: 'assis' | 'debout' | 'couche'; label: string }[] = [
+  { id: 'assis', label: '🪑 Assis' }, { id: 'debout', label: '🧍 Debout' }, { id: 'couche', label: '🧘 Au sol' },
+];
+const MATERIELS_FILTRE: { id: MaterielExercice | 'sans'; label: string }[] = [
+  { id: 'sans', label: 'Sans matériel' }, { id: 'elastique', label: 'Élastique' }, { id: 'ballon', label: 'Ballon' },
+  { id: 'petits_poids', label: 'Petits poids' }, { id: 'tapis', label: 'Tapis' }, { id: 'mur', label: 'Mur' },
+];
 
 const CATEGORIES: { value: CategorieExercice | 'all'; label: string }[] = [
   { value: 'all', label: 'Tous' },
@@ -223,6 +239,10 @@ export default function ExercicesPage() {
   const [catFilter, setCatFilter] = useState<CategorieExercice | 'all'>('all');
   const [profilFilter, setProfilFilter] = useState<ProfilHandicap | ProfilPathologie | null>(null);
   const [positionFilter, setPositionFilter] = useState('tous');
+  const [recherche, setRecherche] = useState('');
+  const [familleFilter, setFamilleFilter] = useState<FamilleExercice | null>(null);
+  const [positionLib, setPositionLib] = useState<'assis' | 'debout' | 'couche' | null>(null);
+  const [materielFilter, setMaterielFilter] = useState<MaterielExercice | 'sans' | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<Omit<Exercice, 'id'>>(EMPTY_EX);
   const [videoUrl, setVideoUrl] = useState('');
@@ -335,9 +355,26 @@ export default function ExercicesPage() {
   }
 
   const { compatible, incompatibles } = useMemo(() => {
-    const parCategorie = exercices.filter(ex =>
-      catFilter === 'all' || ex.categorie === catFilter
-    );
+    const q = recherche.trim().toLowerCase();
+    const parCategorie = exercices.filter(ex => {
+      if (catFilter !== 'all' && ex.categorie !== catFilter) return false;
+      if (q && !ex.nom.toLowerCase().includes(q)) return false;
+      if (familleFilter && !famillesDe(ex).includes(familleFilter)) return false;
+      if (positionLib) {
+        // « Assis ou debout » (tous) convient aux deux ; une position inconnue est écartée.
+        const pos = positionDe(ex);
+        if (!(pos === positionLib || (pos === 'tous' && positionLib !== 'couche'))) return false;
+      }
+      if (materielFilter === 'sans') {
+        // Matériel non renseigné (exercice historique ou personnel) : on se fie au texte existant.
+        const sans = ex.materiels
+          ? ex.materiels.every(m => m === 'aucun' || m === 'chaise')
+          : !ex.materielNecessaire || /^\s*aucun/i.test(ex.materielNecessaire);
+        if (!sans) return false;
+      }
+      if (materielFilter && materielFilter !== 'sans' && !(ex.materiels ?? []).includes(materielFilter)) return false;
+      return true;
+    });
 
     if (!profilFilter) {
       return { compatible: parCategorie, incompatibles: [] as Exercice[] };
@@ -372,7 +409,7 @@ export default function ExercicesPage() {
     const incompat = parCategorie.filter(isIncompatible);
 
     return { compatible: comp, incompatibles: incompat };
-  }, [exercices, catFilter, profilFilter, positionFilter]);
+  }, [exercices, catFilter, profilFilter, positionFilter, recherche, familleFilter, positionLib, materielFilter]);
 
   function handleProfilChange(profil: ProfilHandicap | ProfilPathologie) {
     if (profilFilter === profil) {
@@ -583,6 +620,43 @@ export default function ExercicesPage() {
         </div>
       )}
 
+      {/* Recherche et filtres de la bibliothèque */}
+      <div className="relative mb-3">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input value={recherche} onChange={e => setRecherche(e.target.value)} placeholder="Rechercher un exercice…"
+          aria-label="Rechercher un exercice"
+          className="w-full border border-gray-200 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-primary bg-white" />
+      </div>
+      <div className="flex gap-1.5 flex-wrap mb-2" role="group" aria-label="Filtrer par famille">
+        {FAMILLES_FILTRE.map(f => (
+          <button key={f} onClick={() => setFamilleFilter(familleFilter === f ? null : f)} aria-pressed={familleFilter === f}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+              familleFilter === f ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary/50'
+            }`}>
+            {LIBELLE_FAMILLE[f]}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-1.5 flex-wrap mb-3" role="group" aria-label="Filtrer par position et matériel">
+        {POSITIONS_LIB.map(p => (
+          <button key={p.id} onClick={() => setPositionLib(positionLib === p.id ? null : p.id)} aria-pressed={positionLib === p.id}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+              positionLib === p.id ? 'border-teal-500 bg-teal-50 text-teal-700' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+            }`}>
+            {p.label}
+          </button>
+        ))}
+        <span className="w-px bg-gray-200 mx-1" aria-hidden="true" />
+        {MATERIELS_FILTRE.map(m => (
+          <button key={m.id} onClick={() => setMaterielFilter(materielFilter === m.id ? null : m.id)} aria-pressed={materielFilter === m.id}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+              materielFilter === m.id ? 'border-teal-500 bg-teal-50 text-teal-700' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+            }`}>
+            {m.label}
+          </button>
+        ))}
+      </div>
+
       {/* Filtres catégorie */}
       <div className="flex gap-2 flex-wrap mb-4">
         {CATEGORIES.map(c => (
@@ -664,6 +738,7 @@ export default function ExercicesPage() {
                 <div>
                   <label className="block text-xs font-semibold text-dark mb-1">Nom *</label>
                   <input value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))}
+                    aria-label="Nom de l'exercice"
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" />
                 </div>
                 <div>

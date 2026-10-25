@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Exercice, CategorieExercice, ProfilHandicap, ProfilPathologie } from '../types';
 import { Plus, Play, X } from 'lucide-react';
 import YoutubePlayer from '../components/YoutubePlayer';
+import { LIBELLE_FAMILLE, LIBELLE_MATERIEL_COURT, LIBELLE_POSITION_EXERCICE } from '../lib/libellesBibliotheque';
 
 const CAT: Record<CategorieExercice, { icon: string; label: string; color: string }> = {
   equilibre: { icon: '↕',  label: 'Équilibre', color: '#185FA5' },
@@ -212,6 +213,41 @@ export default function ExerciceCard({
                 <span>⚠️</span><span>{exercice.consigneSecurite}</span>
               </p>
             )}
+
+            {/* Champs de la bibliothèque Mouv'APA : affichés seulement s'ils existent (aucun changement
+                pour les exercices historiques et personnels qui ne les ont pas). */}
+            {exercice.objectif && (
+              <p style={{ fontSize: 12, color: '#0D2B4B', margin: '0 0 4px' }}>🎯 {exercice.objectif}</p>
+            )}
+            {exercice.respiration && (
+              <p style={{ fontSize: 12, color: '#0F6E56', margin: '0 0 4px' }}>🌬️ {exercice.respiration}</p>
+            )}
+            {(exercice.varianteFacile || exercice.varianteDifficile) && (
+              <p style={{ fontSize: 12, color: '#555', margin: '0 0 4px' }}>
+                {exercice.varianteFacile && <>➖ Plus facile : {exercice.varianteFacile}</>}
+                {exercice.varianteFacile && exercice.varianteDifficile && <br />}
+                {exercice.varianteDifficile && <>➕ Plus difficile : {exercice.varianteDifficile}</>}
+              </p>
+            )}
+            {(exercice.familles?.length || exercice.materiels?.length) ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                {exercice.familles?.map(f => (
+                  <span key={f} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, background: '#E8F4F4', color: '#0D2B4B', fontWeight: 600 }}>
+                    {LIBELLE_FAMILLE[f]}
+                  </span>
+                ))}
+                {exercice.horsCatalogueIA && exercice.positionRequise && exercice.positionRequise !== 'fauteuil' && (
+                  <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, background: '#F3F4F6', color: '#374151' }}>
+                    {LIBELLE_POSITION_EXERCICE[exercice.positionRequise]}
+                  </span>
+                )}
+                {exercice.materiels?.filter(x => x !== 'aucun').map(x => (
+                  <span key={x} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, background: '#FFF7ED', color: '#9A3412' }}>
+                    {LIBELLE_MATERIEL_COURT[x]}
+                  </span>
+                ))}
+              </div>
+            ) : null}
 
             {exercice.videoYoutubeId && (
               <span

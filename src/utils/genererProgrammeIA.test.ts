@@ -187,7 +187,8 @@ describe('catalogue d\'exercices et plafond de prompt', () => {
 
   it('conserve un coût par exercice conforme à la mesure d\'origine', () => {
     const { taille } = taillePireCas();
-    const parExercice = taille / EXERCICES_BASE.length;
+    // Rapporté aux seuls exercices réellement envoyés (horsCatalogueIA exclus, voir formatCatalogue).
+    const parExercice = taille / EXERCICES_BASE.filter(ex => !ex.horsCatalogueIA).length;
 
     // ~333 caractères par exercice au 2026-09-07. Un dépassement franc de
     // cette borne signale qu'un champ verbeux vient d'entrer dans la
@@ -213,5 +214,14 @@ describe('catalogue d\'exercices et plafond de prompt', () => {
       'positionRequise',
       'profilsCompatibles',
     ]);
+  });
+});
+
+describe('bibliothèque Mouv\'APA et catalogue IA', () => {
+  it('les exercices horsCatalogueIA ne sont jamais envoyés au modèle', () => {
+    const hors = EXERCICES_BASE.filter(ex => ex.horsCatalogueIA);
+    expect(hors.length).toBeGreaterThan(0);
+    const envoyes = new Set((JSON.parse(formatCatalogue(EXERCICES_BASE)) as { id: string }[]).map(e => e.id));
+    for (const ex of hors) expect(envoyes.has(ex.id), ex.id).toBe(false);
   });
 });

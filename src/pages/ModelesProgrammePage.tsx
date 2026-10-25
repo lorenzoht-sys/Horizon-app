@@ -7,6 +7,9 @@ import { useProgrammesModeles, type ProgrammeModeleFormData } from '../hooks/use
 import { useProgrammeWizard } from '../hooks/useProgrammeWizard';
 import type { ProgrammeModele, JourProgramme } from '../types';
 import { JOURS_PROGRAMME as JP } from '../types';
+import CatalogueModelesMouvApa from '../components/programme/CatalogueModelesMouvApa';
+import { MODELES_MOUVAPA, versDonneesModele } from '../data/modelesMouvApa';
+import { EXERCICES_BASE } from '../data/exercices';
 import {
   ProgrammeWizardModal, JOUR_COURT, btnPrimary,
   type WizardData, type FormSeance,
@@ -158,6 +161,16 @@ export default function ModelesProgrammePage() {
     openEditWizardBase(modele.id, progModeleToWizard(modele));
   }
 
+  // « Mes modèles » (les siens, en base) et « Modèles Mouv'APA » (catalogue partagé, lecture seule).
+  // Les modèles Mouv'APA n'arrivent jamais seuls dans « Mes modèles » : seulement par « Ajouter ».
+  const [onglet, setOnglet] = useState<'mes' | 'mouvapa'>('mes');
+
+  async function ajouterDepuisCatalogue(modele: (typeof MODELES_MOUVAPA)[number]) {
+    const nouveauId = await createModele(versDonneesModele(modele, EXERCICES_BASE));
+    if (nouveauId) toast.success(`« ${modele.nom} » ajouté à vos modèles`);
+    else toast.error('Impossible d\'ajouter ce modèle. Réessayez.');
+  }
+
   async function handleSave() {
     const payload = wizardToFormData(wizardData);
     await handleSaveBase(async () => {
@@ -166,9 +179,9 @@ export default function ModelesProgrammePage() {
         toast[ok ? 'success' : 'error'](ok ? 'Modèle mis à jour !' : 'Erreur lors de la mise à jour du modèle');
         return ok;
       }
-      const ok = await createModele(payload);
-      toast[ok ? 'success' : 'error'](ok ? 'Modèle créé !' : 'Erreur lors de la création du modèle');
-      return ok;
+      const nouveauId = await createModele(payload);
+      toast[nouveauId ? 'success' : 'error'](nouveauId ? 'Modèle créé !' : 'Erreur lors de la création du modèle');
+      return nouveauId !== null;
     });
   }
 
@@ -188,16 +201,34 @@ export default function ModelesProgrammePage() {
         </button>
       </div>
 
-      {loading ? (
+      <div className="flex gap-1 border-b border-gray-200 mb-5" role="tablist">
+        {([['mes', `Mes modèles (${modeles.length})`], ['mouvapa', `Modèles Mouv'APA (${MODELES_MOUVAPA.length})`]] as const).map(([id, libelle]) => (
+          <button key={id} role="tab" aria-selected={onglet === id} onClick={() => setOnglet(id)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              onglet === id ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}>
+            {libelle}
+          </button>
+        ))}
+      </div>
+
+      {onglet === 'mouvapa' ? (
+        <CatalogueModelesMouvApa libelleAction="Ajouter à mes modèles" onAction={ajouterDepuisCatalogue} />
+      ) : loading ? (
         <div style={{ textAlign: 'center', padding: '40px', color: '#94A3B8', fontSize: 14 }}>Chargement…</div>
       ) : modeles.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 20px', background: 'white', border: '1px dashed #E0EEEE', borderRadius: 18 }}>
           <Activity size={40} style={{ margin: '0 auto 12px', display: 'block', opacity: 0.2 }} />
           <div style={{ fontSize: 16, fontWeight: 700, color: '#0D2B2B', marginBottom: 8 }}>Aucun modèle</div>
           <div style={{ fontSize: 13, color: '#94A3B8', marginBottom: 20, lineHeight: 1.6 }}>
-            Créez un premier modèle de programme réutilisable,<br />pour les problèmes récurrents que vous rencontrez.
+            Créez un premier modèle de programme réutilisable,<br />ou partez d'un des {MODELES_MOUVAPA.length} modèles Mouv'APA prêts à l'emploi.
           </div>
-          <button onClick={openWizard} style={btnPrimary}><Plus size={14} /> Créer un modèle</button>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' as const }}>
+            <button onClick={openWizard} style={btnPrimary}><Plus size={14} /> Créer un modèle</button>
+            <button onClick={() => setOnglet('mouvapa')} style={{ ...btnPrimary, background: 'white', color: 'var(--color-teal)', border: '1.5px solid var(--color-teal)' }}>
+              Voir les modèles Mouv'APA
+            </button>
+          </div>
         </div>
       ) : (
         modeles.map(modele => (

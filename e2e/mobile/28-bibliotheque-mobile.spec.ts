@@ -86,8 +86,9 @@ test.describe('Bibliothèque (exercices, modèles) sur mobile (route fusionnée 
       // C'est ce clic sur « Ajouter » qui prouve la régression si le
       // z-index revient à z-50 (testé dans les deux sens). ────────────────
       await page.getByRole('button', { name: /Ajouter un exercice/ }).click();
-      const modaleExercice = page.locator('div').filter({ has: page.getByText('Nouvel exercice') });
-      await modaleExercice.locator('input').first().fill(nomExercice);
+      // Champ ciblé par son libellé : depuis la recherche ajoutée en haut de page (PR #154), le
+      // « premier input » d'un conteneur parent était la barre de recherche, pas le nom.
+      await page.getByLabel('Nom de l\'exercice').fill(nomExercice);
 
       // Preuve directe et déterministe du correctif de z-index — plus
       // fiable que .click() seul (Playwright peut réussir un clic dont le

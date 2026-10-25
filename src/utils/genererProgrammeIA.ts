@@ -96,7 +96,9 @@ export function formatCatalogue(
   catalogue: Exercice[],
   profil?: ProfilHandicap | ProfilPathologie | null,
 ): string {
-  return JSON.stringify(catalogue.map(ex => ({
+  // Les exercices de la bibliothèque Mouv'APA (horsCatalogueIA) ne partent pas au modèle : le
+  // catalogue envoyé reste celui d'avant leur ajout, sous le plafond de prompt (voir le test).
+  return JSON.stringify(catalogue.filter(ex => !ex.horsCatalogueIA).map(ex => ({
     id: ex.id,
     nom: ex.nom,
     categorie: ex.categorie,
