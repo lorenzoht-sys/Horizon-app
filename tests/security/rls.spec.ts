@@ -440,6 +440,8 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
         'bilans_brouillons', 'templates_structure', 'dossiers_exercices',
         'exercices_personnalises', 'programmes_modeles', 'evenements_agenda',
         'cours_collectifs',
+        // Chantier 15 (migration 20261101100000) : praticien_id direct + updated_at, RLS « propriétaire ».
+        'categories_seance', 'bilans_auto',
       ] as const
     )('praticien B ne peut ni lire ni écrire une ligne de %s appartenant à praticien A', async (table) => {
       // Colonne de filtrage : praticien_id par défaut, sauf override (voir
@@ -980,6 +982,7 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
       'exercices_libres_activations', 'exercices_libres_validations', 'organisations',
       'organisation_membres', 'organisation_invitations', 'structure_access_logs',
       'documents_partages', 'cours_collectifs', 'praticien_push_subscriptions',
+      'categories_seance', 'bilans_auto',
     ];
     const known = new Set([...testedDirect, ...Object.keys(TABLE_OVERRIDES), ...Object.keys(EXCLUDED_TABLES)]);
     const unknown = publicTables.filter((t) => !known.has(t) && !t.startsWith('_'));
