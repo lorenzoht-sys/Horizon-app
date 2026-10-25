@@ -143,8 +143,12 @@ export function useProgrammesModeles() {
 
   // ── Create ──────────────────────────────────────────────────────────────────
 
-  const createModele = useCallback(async (data: ProgrammeModeleFormData): Promise<boolean> => {
-    if (!supabase) return false;
+  // Renvoie l'identifiant du modèle créé (null en cas d'échec). Une séance ou un exercice qui échoue
+  // à l'insertion n'est plus ignoré en silence : le modèle incomplet est supprimé (par son identifiant,
+  // les séances, exercices et planning suivent par ON DELETE CASCADE) et l'appelant reçoit null.
+  const createModele = useCallback(async (data: ProgrammeModeleFormData): Promise<string | null> => {
+    if (!supabase) return null;
+    let echecs = 0;
 
     const modeleId = uuidv4();
 
@@ -156,7 +160,7 @@ export function useProgrammesModeles() {
       message_motivation: data.messageMotivation ?? null,
       type: data.type,
     });
-    if (modeleError) { console.error('Erreur création modèle:', modeleError); return false; }
+    if (modeleError) { console.error('Erreur création modèle:', modeleError); return null; }
 
     const tempIdToRealId: Record<string, string> = {};
     for (let i = 0; i < data.seances.length; i++) {
@@ -171,7 +175,7 @@ export function useProgrammesModeles() {
         description: seance.description ?? null,
         ordre: i + 1,
       });
-      if (seanceError) { console.error('Erreur création séance modèle:', seanceError); }
+      if (seanceError) { console.error('Erreur création séance modèle:', seanceError); echecs++; continue; }
 
       for (let j = 0; j < seance.exercices.length; j++) {
         const ex = seance.exercices[j];
@@ -187,7 +191,7 @@ export function useProgrammesModeles() {
           duree_secondes: ex.dureeSecondes ?? null,
           ordre: j + 1,
         });
-        if (exError) { console.error('Erreur création exercice modèle:', exError); }
+        if (exError) { console.error('Erreur création exercice modèle:', exError); echecs++; }
       }
     }
 
@@ -203,11 +207,17 @@ export function useProgrammesModeles() {
         seance_id: seanceId,
         jour,
       });
-      if (planError) { console.error('Erreur création planning modèle:', planError); }
+      if (planError) { console.error('Erreur création planning modèle:', planError); echecs++; }
+    }
+
+    if (echecs > 0) {
+      await supabase.from('programmes_modeles').delete().eq('id', modeleId);
+      await load();
+      return null;
     }
 
     await load();
-    return true;
+    return modeleId;
   }, [load]);
 
   // ── Update ───────────────────────────────────────────────────────────────────

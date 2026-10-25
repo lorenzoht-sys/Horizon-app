@@ -1,7 +1,10 @@
 import type { CategorieExercice, Exercice, DossierExercice, DossierExerciceMembre, TypeExerciceRef } from '../types';
 import { supabase } from '../lib/supabase';
+import { EXERCICES_MOUVAPA, enrichirExistant } from './exercicesMouvApa';
 
-export const EXERCICES_BASE: Exercice[] = [
+// Catalogue historique, conservé tel quel (identifiants, noms et champs inchangés). La bibliothèque
+// Mouv'APA s'y AJOUTE dans EXERCICES_BASE ci-dessous, sans rien en retirer.
+const EXERCICES_HISTORIQUES: Exercice[] = [
   // ÉQUILIBRE
   {
     id: 'eq-unipodal',
@@ -1938,6 +1941,10 @@ export const EXERCICES_BASE: Exercice[] = [
     },
   },
 ];
+
+// Catalogue complet : historique (enrichi de familles et de matériel, sans autre changement) +
+// bibliothèque Mouv'APA (exercicesMouvApa.ts, exclue de la génération IA via horsCatalogueIA).
+export const EXERCICES_BASE: Exercice[] = [...EXERCICES_HISTORIQUES.map(enrichirExistant), ...EXERCICES_MOUVAPA];
 
 const CUSTOM_KEY = 'mouvtrack_custom_exercices';
 

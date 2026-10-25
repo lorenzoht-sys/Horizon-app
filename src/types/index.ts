@@ -263,6 +263,18 @@ export interface DeltaResult {
 // ============================================================
 
 export type CategorieExercice = 'equilibre' | 'force' | 'mobilite' | 'souplesse' | 'endurance' | 'memoire';
+
+// Familles « métier » de la bibliothèque (chantier bibliothèque Mouv'APA, 2026-10-25). Elles servent
+// au filtrage et à l'affichage, EN PLUS de `categorie` — qui reste la seule valeur lue par l'espace
+// patient, les PDF et le parcours de programme (6 valeurs, inchangées). Un exercice peut appartenir à
+// plusieurs familles (ex. « Bascule du bassin » : mobilité et Pilates).
+export type FamilleExercice =
+  | 'renforcement' | 'cardio' | 'mobilite' | 'souplesse' | 'equilibre'
+  | 'coordination' | 'cognitif' | 'pilates' | 'respiration' | 'recuperation';
+
+export type MaterielExercice =
+  | 'aucun' | 'chaise' | 'mur' | 'elastique' | 'ballon' | 'coussin'
+  | 'petits_poids' | 'step' | 'tapis';
 export type NiveauExercice = 'debutant' | 'intermediaire' | 'avance';
 export type Ressenti = 'bien' | 'moyen' | 'difficile' | 'douleur';
 
@@ -305,6 +317,18 @@ export interface Exercice {
     "2": NiveauConfig;
     "3": NiveauConfig;
   };
+  // ── Champs facultatifs de la bibliothèque Mouv'APA (absents des exercices historiques) ──
+  familles?: FamilleExercice[];
+  materiels?: MaterielExercice[];
+  objectif?: string;
+  /** Consigne respiratoire (systématique pour les exercices Pilates). */
+  respiration?: string;
+  varianteFacile?: string;
+  varianteDifficile?: string;
+  /** Exclu du catalogue envoyé à la génération de programme par IA : le prompt a un plafond de
+   *  taille (api/_lib/guard.ts, verrouillé par genererProgrammeIA.test.ts) que l'ajout de la
+   *  bibliothèque Mouv'APA ferait dépasser. L'exercice reste dans la bibliothèque et les modèles. */
+  horsCatalogueIA?: boolean;
 }
 
 export interface DossierExercice {
