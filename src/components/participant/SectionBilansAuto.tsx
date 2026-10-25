@@ -30,13 +30,18 @@ export default function SectionBilansAuto({ participant }: { participant: Partic
     .filter(s => s.participantId === participant.id && s.type !== 'seance' && s.statut === 'planifiee' && s.date >= aujourdhui)
     .sort((a, b) => a.date.localeCompare(b.date) || a.heureDebut.localeCompare(b.heureDebut));
 
-  // Retire les bilans auto à venir (par identifiant explicite) puis, si `actif`, repose la série.
+  // Retire si besoin les bilans auto à venir (par identifiant explicite), puis, si `actif`, pose ceux qui manquent.
   async function appliquer(actifVoulu: boolean, frequenceVoulue: number) {
     setEnCours(true);
     try {
       if (!(await enregistrer(actifVoulu, frequenceVoulue))) return;
 
-      const aRetirer = bilansAutoARetirer(seances, participant.id, aujourdhui);
+      // On ne retire les bilans automatiques à venir que s'il y a une raison : désactivation, ou
+      // fréquence changée (les dates ne seraient plus les bonnes). « Mettre à jour le planning » à
+      // fréquence inchangée ne fait qu'AJOUTER ce qui manque — sinon l'agenda serait vide le temps de
+      // tout recréer, et un échec de la recréation ferait perdre les bilans.
+      const frequenceChangee = reglage?.actif === true && reglage.frequenceMois !== frequenceVoulue;
+      const aRetirer = !actifVoulu || frequenceChangee ? bilansAutoARetirer(seances, participant.id, aujourdhui) : [];
       for (const s of aRetirer) await supprimerSeance(s.id);
       const retires = new Set(aRetirer.map(s => s.id));
 

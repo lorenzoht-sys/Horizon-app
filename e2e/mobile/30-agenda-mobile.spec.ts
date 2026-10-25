@@ -5,8 +5,7 @@ import { clientAdminTest } from '../nettoyageTest.js';
 // Sous-chantier 1 (Agenda mobile, cadrage validé) : écran natif EcranAgenda
 // (AppMobile.tsx), vue Jour uniquement (MVP) — pas de fusion de route,
 // react-big-calendar n'est pas utilisé côté mobile. Point d'entrée :
-// remplace le renvoi vers /agenda-v2 (desktop-only) depuis l'écran « Plus »
-// → « Mon activité » → « Agenda complet », qui pointe désormais vers /agenda.
+// l'onglet « Agenda » de la barre du bas (ex-« Agenda complet » de l'écran « Plus »).
 //
 // Réutilise telles quelles les modales extraites au sous-chantier 0
 // (ModalCreerSeanceManuelle, ModalEditSeance, ModalChoixSerie,
@@ -34,10 +33,9 @@ test.describe('Agenda mobile (écran natif, vue Jour — MVP)', () => {
 
     await loginPraticien(page);
 
-    // ── Ouvrir l'agenda depuis « Plus » → « Agenda complet » ────────────────
+    // ── Ouvrir l'agenda depuis l'onglet « Agenda » de la barre du bas ────────
     await page.goto('/');
-    await page.getByRole('button', { name: 'Plus', exact: true }).click();
-    await page.getByText('Agenda complet').click();
+    await page.getByRole('navigation', { name: 'Navigation principale' }).getByRole('button', { name: 'Agenda' }).click();
     // .first() : « Agenda » est aussi le libellé de l'onglet de la barre du bas (qui remplace Tournée).
     await expect(page.getByText('Agenda', { exact: true }).first()).toBeVisible();
 
@@ -209,8 +207,7 @@ test.describe('Agenda mobile — vue Mois', () => {
 
     await loginPraticien(page);
     await page.goto('/');
-    await page.getByRole('button', { name: 'Plus', exact: true }).click();
-    await page.getByText('Agenda complet').click();
+    await page.getByRole('navigation', { name: 'Navigation principale' }).getByRole('button', { name: 'Agenda' }).click();
     // .first() : « Agenda » est aussi le libellé de l'onglet de la barre du bas (qui remplace Tournée).
     await expect(page.getByText('Agenda', { exact: true }).first()).toBeVisible();
 
