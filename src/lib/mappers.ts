@@ -1,4 +1,4 @@
-import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, TemplateStructure, DisponibilitesPatient, JourSemaine, CreneauPreference, EvenementAgenda, VisibiliteBeneficiaire, TarifContrat, CoursCollectif, ParticipationCoursCollectif } from '../types';
+import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, TemplateStructure, DisponibilitesPatient, JourSemaine, CreneauPreference, EvenementAgenda, VisibiliteBeneficiaire, TarifContrat, CoursCollectif, ParticipationCoursCollectif, CategorieSeance, BilansAuto } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
 import { tm6EnPas } from './tm6';
 
@@ -530,6 +530,9 @@ export function dbToSeance(row: any): Seance {
     motifAnnulation: row.motif_annulation ?? undefined,
     motifAnnulationDetail: row.motif_annulation_detail ?? undefined,
     absenceSignaleeLe: row.absence_signalee_par_patient_le ?? undefined,
+    categorieId: row.categorie_id ?? undefined,
+    objectif: row.objectif ?? undefined,
+    bilanAuto: row.bilan_auto ?? false,
   };
 }
 
@@ -554,7 +557,18 @@ export function seanceToDb(s: Omit<Seance, 'id'> & { id?: string }): Record<stri
     coordonnees: s.coordonnees ?? null,
     motif_annulation: s.motifAnnulation ?? null,
     motif_annulation_detail: s.motifAnnulationDetail ?? null,
+    categorie_id: s.categorieId ?? null,
+    objectif: s.objectif ?? null,
+    bilan_auto: s.bilanAuto ?? false,
   };
+}
+
+export function dbToCategorieSeance(row: any): CategorieSeance {
+  return { id: row.id, nom: row.nom, couleur: row.couleur ?? '#6B7280', estBilan: !!row.est_bilan };
+}
+
+export function dbToBilansAuto(row: any): BilansAuto {
+  return { participantId: row.participant_id, actif: !!row.actif, frequenceMois: row.frequence_mois };
 }
 
 export function dbToEvenementAgenda(row: any): EvenementAgenda {

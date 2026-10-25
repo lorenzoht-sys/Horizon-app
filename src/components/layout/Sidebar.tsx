@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-  Home, Calendar, Route, Layers, Settings,
+  Home, Calendar, Layers, Settings,
   LogOut, Map, BarChart2, Bot, Library, ShieldCheck, User, Receipt,
 } from 'lucide-react';
 import { initialesPraticien } from '../../lib/initiales';
@@ -27,7 +27,6 @@ interface ItemNav { path: string; icon: typeof Home; label: string; end: boolean
 const NAV_ITEMS: ItemNav[] = [
   { path: '/',          icon: Home,      label: 'Tableau de bord', end: true  },
   { path: '/agenda-v2', icon: Calendar,  label: 'Agenda',          end: false },
-  { path: '/tournee',   icon: Route,     label: 'Tournée',         end: false },
   { path: '/bibliotheque', icon: Library, label: 'Bibliothèque',    end: false },
   { path: '/assistant',  icon: Bot,       label: 'Mon assistant',   end: false },
   { path: '/zones',      icon: Layers,    label: 'Zones',           end: false },

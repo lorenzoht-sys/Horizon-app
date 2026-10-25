@@ -8,10 +8,11 @@ import { toast } from 'sonner';
 import { useParticipants } from '../../hooks/useParticipants';
 import { useAgenda } from '../../hooks/useAgenda';
 import { useContrats } from '../../hooks/useContrats';
-import { useCompteRenduSeance } from '../../hooks/useCompteRenduSeance';
 import { useCoursCollectifs } from '../../hooks/useCoursCollectifs';
 import { useIndispos } from '../../hooks/useIndispos';
 import { useEvenementsAgenda } from '../../hooks/useEvenementsAgenda';
+import { useCategoriesSeance } from '../../hooks/useCategoriesSeance';
+import ModalCategoriesSeance from '../../components/agenda/ModalCategoriesSeance';
 import BilanStepper from '../../components/bilan/BilanStepper';
 import ModalSelectionTests from '../../components/bilan/ModalSelectionTests';
 import ModalPresenceCoursCollectif from '../../components/agenda/ModalPresenceCoursCollectif';
@@ -20,14 +21,13 @@ import ModalEditSeance from '../../components/agenda/ModalEditSeance';
 import ModalChoixSerie from '../../components/agenda/ModalChoixSerie';
 import ModalEvenementAgenda from '../../components/agenda/ModalEvenementAgenda';
 import NoteSeanceModal from '../../components/journal/NoteSeanceModal';
-import DicteePostSeance from '../../components/DicteePostSeance';
 import SettingsPage from '../SettingsPage';
-import type { Bilan, CoursCollectif, Participant, Seance, EvenementAgenda } from '../../types';
+import type { Bilan, CoursCollectif, Participant, Seance, EvenementAgenda, CategorieSeance } from '../../types';
 import {
   calculerFutures, planEditerUnique, planEditerSerie, planSupprimerUnique, planSupprimerSerie,
-  planActionSurSelection, executerOperations, optionsPorteePourAction, type MiseAJourSeance,
+  planActionSurSelection, avecInfosDeLaReference, executerOperations, optionsPorteePourAction, type MiseAJourSeance,
 } from '../../lib/planificationManuelle';
-import { CLE_JOUR_PAR_DOW, LABEL_TYPE_EVENEMENT, formatDate as formatDateAgenda, absenceSignaleeAffichable, type ChoixSerie } from '../../lib/agendaCommun';
+import { CLE_JOUR_PAR_DOW, LABEL_TYPE_EVENEMENT, formatDate as formatDateAgenda, absenceSignaleeAffichable, couleurCategorieDe, LABEL_TYPE, type ChoixSerie } from '../../lib/agendaCommun';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, getAuthHeader } from '../../lib/supabase';
 import {
@@ -43,6 +43,7 @@ import { initialesPraticien } from '../../lib/initiales';
 import { getContreIndications } from '../../lib/anamnese';
 import { libelleAge } from '../../lib/age';
 import { URLS_MOBILE, ecranMobileDepuisUrl } from '../../lib/routesMobile';
+import { idSeanceDepuisRecherche, validerSeanceDuBilan } from '../../lib/liaisonSeanceBilan';
 import BarreNavigationMobile from '../../components/layout/BarreNavigationMobile';
 import ModalRepriseBrouillon from '../../components/bilan/ModalRepriseBrouillon';
 import { useEtatSession } from '../../hooks/useEtatSession';
@@ -819,6 +820,7 @@ function BilanMobile({ participantId, onTermine }: { participantId: string; onTe
   // doit se refléter aussitôt dans `participant`.
   const { participants, loading, addBilan, updateParticipant } = useParticipants();
   const [testsIgnores, setTestsIgnores] = useState(false);
+  const { search: rechercheBilan } = useLocation();
   const [brouillonSauve] = useState(() => getBrouillon(participantId));
   const [reprise, setReprise] = useState<'a_decider' | 'reprendre' | 'recommencer'>(() => (brouillonSauve ? 'a_decider' : 'recommencer'));
   const participant = participants.find(p => p.id === participantId);
@@ -871,6 +873,7 @@ function BilanMobile({ participantId, onTermine }: { participantId: string; onTe
         participant={participant}
         onSave={async (bilan: Omit<Bilan, 'id'>) => {
           await addBilan(participant.id, bilan);
+          await validerSeanceDuBilan(idSeanceDepuisRecherche(rechercheBilan), participant.id);
           toast.success('Bilan enregistré ✅');
           onTermine();
         }}
@@ -881,328 +884,62 @@ function BilanMobile({ participantId, onTermine }: { participantId: string; onTe
   );
 }
 
-// ── EcranTournee ──────────────────────────────────────────────────────────────
-
-function EcranTournee() {
-  const { participants } = useParticipants();
-  const { seancesDuJour, changerStatut, creerSeance, modifierSeance } = useAgenda();
-  const today = new Date().toISOString().slice(0, 10);
-  const seances = seancesDuJour(today);
-
-  // ── Annuler ────────────────────────────────────────────────────────────────
-  // Confirmation légère (overlay, même pattern que « Confirmer la
-  // suppression » d'EcranSettings) avant d'annuler : le desktop (TourneePage,
-  // bouton ✕) n'en demande aucune, mais un bouton pris par erreur au doigt
-  // sur un écran tactile coûte plus cher qu'un clic de souris précis. Aucune
-  // raison requise : le desktop n'en impose pas non plus (motifAnnulation
-  // reste optionnel jusque dans le formulaire complet, AgendaV2Page.tsx).
-  const [annulerSeanceId, setAnnulerSeanceId] = useState<string | null>(null);
-  const seanceAAnnuler = seances.find(s => s.id === annulerSeanceId) ?? null;
-
-  async function confirmerAnnulation() {
-    if (!seanceAAnnuler) return;
-    await changerStatut(seanceAAnnuler.id, 'annulee');
-    toast.success('Séance annulée');
-    setAnnulerSeanceId(null);
-  }
-
-  // ── Reporter ───────────────────────────────────────────────────────────────
-  // Reproduit handleReporterSeance (AgendaV2Page.tsx), le seul mécanisme de
-  // report qui existe réellement dans l'app — son entrée UI desktop est
-  // désactivée depuis 356beb6 (« gardés intacts pour un usage futur »), pas
-  // supprimée. Même heure, nouvelle date seulement (pas de champ heure : le
-  // mécanisme desktop n'en propose pas) : la séance d'origine passe
-  // "reportee" SANS changer de date (trace historique), une nouvelle séance
-  // "planifiee" est créée à la date choisie.
-  const [reporterSeanceId, setReporterSeanceId] = useState<string | null>(null);
-  const [dateReport, setDateReport] = useState('');
-  const [reportEnCours, setReportEnCours] = useState(false);
-  const seanceAReporter = seances.find(s => s.id === reporterSeanceId) ?? null;
-
-  function ouvrirReport(s: typeof seances[number]) {
-    const defaut = new Date(`${s.date}T12:00`);
-    defaut.setDate(defaut.getDate() + 7);
-    setDateReport(defaut.toISOString().slice(0, 10));
-    setReporterSeanceId(s.id);
-  }
-
-  async function confirmerReport() {
-    if (!seanceAReporter || !dateReport) return;
-    setReportEnCours(true);
-    try {
-      // modifierSeance (pas changerStatut) : il faut son retour pour ne créer
-      // la nouvelle séance que si le passage en "reportee" a bien réussi —
-      // exactement le garde-fou de handleReporterSeance.
-      const ok = await modifierSeance(seanceAReporter.id, { statut: 'reportee' });
-      if (!ok) return;
-      await creerSeance({
-        participantId: seanceAReporter.participantId,
-        contratId: seanceAReporter.contratId,
-        type: seanceAReporter.type,
-        date: dateReport,
-        heureDebut: seanceAReporter.heureDebut,
-        heureFin: seanceAReporter.heureFin,
-        dureeMinutes: seanceAReporter.dureeMinutes,
-        statut: 'planifiee',
-        notes: `Reportée depuis le ${seanceAReporter.date}`,
-        adresse: seanceAReporter.adresse,
-        coordonnees: seanceAReporter.coordonnees,
-      });
-      toast.success(`Séance reportée au ${formatDateCourt(dateReport)}`);
-      setReporterSeanceId(null);
-    } finally {
-      setReportEnCours(false);
-    }
-  }
-  // Dictée ouverte conservée si l'interface est remplacée (rotation) : son
-  // contenu, lui, est conservé par DicteePostSeance.
-  const [dicteeParticipantId, setDicteeParticipantId] = useEtatSession<string | null>('tournee_dictee', null);
-  const dicteeParticipant = participants.find(x => x.id === dicteeParticipantId) ?? null;
-  const { ajouterCompteRendu } = useCompteRenduSeance(dicteeParticipant?.id ?? '');
-  const {
-    coursCollectifs, participationsDuCours,
-    modifierStatutCours, mettreAJourParticipation,
-  } = useCoursCollectifs();
-  const [coursSelectionneId, setCoursSelectionneId] = useState<string | null>(null);
-  const coursDuJour = coursCollectifs
-    .filter(c => c.date === today && c.statut !== 'annule')
-    .sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
-  const coursSelectionne = coursCollectifs.find(c => c.id === coursSelectionneId) ?? null;
-  // Séances + cours collectifs mêlés et triés, pour que la liste — et son
-  // état vide — reflètent bien le contenu réel de la tournée (les stats du
-  // bandeau ci-dessous, elles, restent sur les seules séances individuelles).
-  type ItemTournee =
-    | { kind: 'seance'; heureDebut: string; seance: typeof seances[number] }
-    | { kind: 'cours'; heureDebut: string; cours: CoursCollectif; nbInscrits: number };
-  const itemsTournee: ItemTournee[] = [
-    ...seances.map(seance => ({ kind: 'seance' as const, heureDebut: seance.heureDebut, seance })),
-    ...coursDuJour.map(cours => ({
-      kind: 'cours' as const,
-      heureDebut: cours.heureDebut,
-      cours,
-      nbInscrits: participationsDuCours(cours.id).length,
-    })),
-  ].sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
-
+// Carte d'une séance dans l'agenda mobile (vue Jour et listes À venir / Passées). Le bandeau de gauche
+// porte la couleur de la catégorie choisie par le praticien (gris sans catégorie) : on lit le planning
+// d'un coup d'œil sans ouvrir chaque séance. Les actions rapides évitent la modale pour le quotidien :
+// valider une séance réalisée, ouvrir la fiche, ouvrir le bilan lié.
+function CarteSeanceAgenda({ seance, participant, categorie, avecDate, onOuvrir, onValider, onFiche, onBilan }: {
+  seance: Seance;
+  participant: Participant | undefined;
+  categorie: CategorieSeance | undefined;
+  avecDate?: boolean;
+  onOuvrir: () => void;
+  onValider: () => void;
+  onFiche: () => void;
+  onBilan: () => void;
+}) {
+  const estAnnulee = seance.statut === 'annulee';
+  const estBilan = seance.type !== 'seance';
+  const couleur = estAnnulee ? '#EF4444' : (categorie?.couleur ?? '#B8C7C7');
+  const bouton: React.CSSProperties = { flex: 1, padding: '8px 4px', border: `1px solid ${C.border}`, background: 'white', borderRadius: 8, fontSize: 12, fontWeight: 600, color: C.text, cursor: 'pointer' };
   return (
-    <div>
-      <div style={{ background: 'white', paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Ma tournée</div>
-            <div style={{ fontSize: 12, color: C.muted }}>{seances.length} bénéficiaire{seances.length !== 1 ? 's' : ''} · {formatDateLong(new Date())}</div>
+    <div style={{ ...card, padding: 0, overflow: 'hidden', opacity: estAnnulee ? 0.55 : 1, display: 'flex' }}>
+      <span aria-hidden="true" data-testid="bandeau-categorie" style={{ width: 6, background: couleur, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0, padding: '10px 12px' }}>
+        <button onClick={onOuvrir} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{participant?.prenom} {participant?.nom}</div>
+              <div style={{ fontSize: 12, color: C.muted }}>
+                {avecDate ? `${formatDateAgenda(seance.date)} · ` : ''}{seance.heureDebut} · {seance.dureeMinutes} min
+                {estAnnulee ? ' · Annulée' : seance.statut === 'realisee' ? ' · ✅ Réalisée' : ''}
+              </div>
+            </div>
+            {absenceSignaleeAffichable(seance) && (
+              <span style={{ background: '#FFF1F2', color: '#BE123C', borderRadius: 8, padding: '4px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>🚫 Absence</span>
+            )}
           </div>
-        </div>
-        {seances.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-            <div style={{ flex: 1, background: '#DCFCE7', borderRadius: 10, padding: '8px', textAlign: 'center' }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: '#166534' }}>{seances.filter(s => s.statut === 'realisee').length}/{seances.length}</div>
-              <div style={{ fontSize: 10, color: '#166534' }}>réalisées</div>
-            </div>
-            <div style={{ flex: 1, background: '#E8F8F8', borderRadius: 10, padding: '8px', textAlign: 'center' }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: C.primary }}>{seances.reduce((acc, s) => acc + s.dureeMinutes, 0)} min</div>
-              <div style={{ fontSize: 10, color: C.primary }}>durée totale</div>
-            </div>
-            <div style={{ flex: 1, background: '#FEF3C7', borderRadius: 10, padding: '8px', textAlign: 'center' }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: '#92400E' }}>{seances[seances.length - 1]?.heureFin ?? '—'}</div>
-              <div style={{ fontSize: 10, color: '#92400E' }}>fin estimée</div>
-            </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+            {categorie ? (
+              <span style={{ background: `${categorie.couleur}22`, color: C.text, border: `1px solid ${categorie.couleur}`, borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>{categorie.nom}</span>
+            ) : estBilan ? (
+              <span style={{ background: '#EDE9FE', color: '#6D28D9', borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>{LABEL_TYPE[seance.type]}</span>
+            ) : null}
+            {seance.bilanAuto && <span style={{ background: C.bg, color: C.muted, borderRadius: 8, padding: '2px 8px', fontSize: 11 }}>🔄 Automatique</span>}
+          </div>
+          {seance.objectif && <div style={{ fontSize: 12, color: C.text, marginTop: 6 }}>🎯 {seance.objectif}</div>}
+          {seance.notes && <div style={{ fontSize: 12, color: C.muted, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📝 {seance.notes}</div>}
+        </button>
+        {!estAnnulee && (
+          <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+            {seance.statut === 'planifiee' && (
+              <button onClick={onValider} style={{ ...bouton, background: C.primary, color: 'white', border: 'none' }}>✓ Valider</button>
+            )}
+            <button onClick={onFiche} style={bouton}>👤 Fiche</button>
+            {estBilan && <button onClick={onBilan} style={bouton}>📋 Bilan</button>}
           </div>
         )}
       </div>
-
-      <div style={{ padding: '8px 16px' }}>
-        {itemsTournee.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: C.muted }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>🗺️</div>
-            Aucune séance aujourd'hui
-          </div>
-        ) : itemsTournee.map((item, i) => {
-          if (item.kind === 'cours') {
-            const { cours, nbInscrits } = item;
-            const badge = cours.statut === 'realise'
-              ? { label: '✅ Réalisé', bg: '#DCFCE7', color: '#166534' }
-              : { label: 'Planifié', bg: '#EDE9FE', color: '#6D28D9' };
-            return (
-              <div key={`cours-${cours.id}`} style={{ ...card, border: `1px solid #EDE9FE` }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    <span style={{ width: 26, height: 26, borderRadius: '50%', background: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>👥</span>
-                    <div>
-                      <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{cours.titre}</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>{cours.heureDebut} · {cours.dureeMinutes} min · {nbInscrits} inscrit{nbInscrits !== 1 ? 's' : ''}</div>
-                    </div>
-                  </div>
-                  <span style={{ background: badge.bg, color: badge.color, borderRadius: 8, padding: '4px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0, height: 'fit-content' }}>
-                    {badge.label}
-                  </span>
-                </div>
-                <button onClick={() => setCoursSelectionneId(cours.id)}
-                  style={{ width: '100%', padding: 9, background: '#7C3AED', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                  👥 Gérer les présences
-                </button>
-              </div>
-            );
-          }
-          const s = item.seance;
-          const p = participants.find(x => x.id === s.participantId);
-          const peutAnnuler = s.statut !== 'annulee' && s.statut !== 'realisee';
-          // Reporter n'a de sens que depuis "planifiee" — ni handleReporterSeance
-          // (dormant) ni son sous-écran d'origine ne documentaient de garde
-          // explicite ici, ce choix est donc le nôtre, pas une valeur copiée.
-          const peutReporter = s.statut === 'planifiee';
-          return (
-            <div key={s.id} style={card}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <span style={{ width: 26, height: 26, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'white', flexShrink: 0 }}>{i + 1}</span>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{p?.prenom} {p?.nom}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{s.heureDebut} · {s.dureeMinutes} min</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                  {/* Pas de badge "Annulée" : seancesDuJour (useAgenda.ts)
-                      exclut déjà les séances annulées de `seances` — une
-                      séance annulée disparaît donc de la tournée du jour,
-                      elle n'y reste jamais visible avec un badge. Même
-                      comportement, déjà en place, côté desktop
-                      (TourneePage.tsx utilise la même fonction). */}
-                  {s.statut === 'reportee' && (
-                    <span style={{ background: '#FEF3C7', color: '#92400E', borderRadius: 8, padding: '4px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
-                      🔄 Reportée
-                    </span>
-                  )}
-                  {/* Lecture seule de absence_signalee_par_patient_le
-                      (api/_lib/absenceSignalee.ts) : n'implique aucune
-                      action, ne change ni statut ni calcul — c'est au
-                      praticien de décider (annuler, reporter, ou laisser
-                      tel quel) via les boutons déjà présents plus bas.
-                      Affichage conditionné par absenceSignaleeAffichable
-                      (agendaCommun.ts) : voir sa doc pour la règle. */}
-                  {absenceSignaleeAffichable(s) && (
-                    <span style={{ background: '#FFF1F2', color: '#BE123C', borderRadius: 8, padding: '4px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
-                      🚫 Absence signalée
-                    </span>
-                  )}
-                  {s.adresse && (
-                    <button onClick={() => ouvrirMaps(s.adresse)}
-                      style={{ background: '#E8F8F8', border: 'none', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: C.primary }}>
-                      <i className="ti ti-map-pin" style={{ fontSize: 15 }} />Maps
-                    </button>
-                  )}
-                </div>
-              </div>
-              {s.adresse && <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>📍 {s.adresse}</div>}
-              <button onClick={() => { if (s.statut !== 'realisee') { changerStatut(s.id, 'realisee'); toast.success('Séance réalisée ✅'); } }}
-                style={{ width: '100%', padding: 9, background: s.statut === 'realisee' ? '#DCFCE7' : C.primary, color: s.statut === 'realisee' ? '#166534' : 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: s.statut === 'realisee' ? 'default' : 'pointer' }}>
-                {s.statut === 'realisee' ? '✅ Réalisée' : '✓ Marquer réalisée'}
-              </button>
-              {(peutReporter || peutAnnuler) && (
-                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                  {peutReporter && (
-                    <button onClick={() => ouvrirReport(s)}
-                      style={{ flex: 1, padding: 8, background: 'white', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, fontWeight: 700, color: C.text, cursor: 'pointer' }}>
-                      🔄 Reporter
-                    </button>
-                  )}
-                  {peutAnnuler && (
-                    <button onClick={() => setAnnulerSeanceId(s.id)}
-                      style={{ flex: 1, padding: 8, background: 'white', border: '1px solid #FECACA', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#DC2626', cursor: 'pointer' }}>
-                      ✕ Annuler
-                    </button>
-                  )}
-                </div>
-              )}
-              {s.statut === 'realisee' && p && (
-                <button
-                  onClick={() => setDicteeParticipantId(p.id)}
-                  style={{ marginTop: 6, width: '100%', padding: '8px', background: C.bg, border: `1px dashed ${C.primary}`, borderRadius: 8, fontSize: 12, fontWeight: 700, color: C.primary, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                  🎙️ Dicter le compte-rendu
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {dicteeParticipant && (
-        <DicteePostSeance
-          participant={dicteeParticipant}
-          onClose={() => setDicteeParticipantId(null)}
-          onSave={async (data) => { await ajouterCompteRendu(data); }}
-        />
-      )}
-
-      {coursSelectionne && (
-        <ModalPresenceCoursCollectif
-          cours={coursSelectionne}
-          participations={participationsDuCours(coursSelectionne.id)}
-          participants={participants}
-          onMettreAJourParticipation={(participationId, patch) => mettreAJourParticipation(participationId, patch)}
-          onModifierStatutCours={async statut => modifierStatutCours(coursSelectionne.id, statut)}
-          onClose={() => setCoursSelectionneId(null)}
-        />
-      )}
-
-      {seanceAAnnuler && (() => {
-        const p = participants.find(x => x.id === seanceAAnnuler.participantId);
-        return (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24 }}>
-            <div style={{ background: 'white', borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>
-                ⚠️ Annuler cette séance ?
-              </div>
-              <p style={{ fontSize: 14, color: '#4A6080', lineHeight: 1.6, marginBottom: 20 }}>
-                {p?.prenom} {p?.nom} — {seanceAAnnuler.heureDebut}. Réversible depuis l'agenda.
-              </p>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => setAnnulerSeanceId(null)}
-                  style={{ flex: 1, padding: '12px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
-                  Retour
-                </button>
-                <button onClick={confirmerAnnulation}
-                  style={{ flex: 1, padding: '12px', background: '#E85050', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, color: 'white', cursor: 'pointer' }}>
-                  Confirmer
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {seanceAReporter && (() => {
-        const p = participants.find(x => x.id === seanceAReporter.participantId);
-        return (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24 }}>
-            <div style={{ background: 'white', borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 10 }}>
-                🔄 Reporter cette séance
-              </div>
-              <p style={{ fontSize: 13, color: C.muted, marginBottom: 14, lineHeight: 1.5 }}>
-                {p?.prenom} {p?.nom} — une nouvelle séance sera créée à la même heure ({seanceAReporter.heureDebut}), à la date choisie.
-              </p>
-              <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 }}>
-                Nouvelle date
-              </label>
-              <input
-                type="date" value={dateReport} min={today} onChange={e => setDateReport(e.target.value)}
-                style={{ width: '100%', padding: '12px 14px', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 15, marginBottom: 20, boxSizing: 'border-box' }}
-              />
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => setReporterSeanceId(null)} disabled={reportEnCours}
-                  style={{ flex: 1, padding: '12px', background: 'none', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 14, fontWeight: 600, color: C.muted, cursor: reportEnCours ? 'wait' : 'pointer' }}>
-                  Annuler
-                </button>
-                <button onClick={confirmerReport} disabled={reportEnCours || !dateReport}
-                  style={{ flex: 1, padding: '12px', background: reportEnCours || !dateReport ? '#8FA8A8' : C.primary, border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, color: 'white', cursor: reportEnCours || !dateReport ? 'not-allowed' : 'pointer' }}>
-                  {reportEnCours ? 'Report…' : 'Confirmer le report'}
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }
@@ -1247,6 +984,9 @@ function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
   const { seances, modifierSeance, supprimerSeance, creerSeance, detecterConflits } = useAgenda();
   const { indisposDuJour } = useIndispos();
   const { evenements, supprimerEvenement } = useEvenementsAgenda();
+  const { categories, creerCategorie, modifierCategorie, supprimerCategorie, definirCategorieBilan } = useCategoriesSeance();
+  const [categoriesOuvert, setCategoriesOuvert] = useState(false);
+  const navigate = useNavigate();
   const {
     coursCollectifs, modifierStatutCours, mettreAJourParticipation, participationsDuCours,
     recharger: rechargerCoursCollectifs,
@@ -1257,7 +997,9 @@ function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
     const [a, m, j] = dateInitiale.split('-').map(Number);
     return new Date(a, m - 1, j);
   });
-  const [vue, setVue] = useState<'jour' | 'mois'>('jour');
+  const [vue, setVue] = useState<'jour' | 'mois' | 'avenir' | 'passees'>('jour');
+  // Listes À venir / Passées : par pages, pour ne pas rendre des années de séances d'un coup.
+  const [nbListe, setNbListe] = useState(30);
   const dateStr = format(jour, 'yyyy-MM-dd');
   const jourCle = CLE_JOUR_PAR_DOW[jour.getDay()];
 
@@ -1332,6 +1074,33 @@ function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
     ...evenementsJour.map(evenement => ({ kind: 'evenement' as const, heureDebut: evenement.heureDebut, evenement })),
   ].sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
 
+  const categorieDe = (s: Seance) => categories.find(c => c.id === s.categorieId);
+
+  // Pastilles de couleur de la vue Mois : catégories distinctes du jour (3 au plus), hors annulées.
+  const couleursParJour = useMemo(() => {
+    const map = new Map<string, string[]>();
+    seances.forEach(sc => {
+      const c = couleurCategorieDe(sc, categories);
+      if (!c || sc.statut === 'annulee') return;
+      const l = map.get(sc.date) ?? [];
+      if (!l.includes(c) && l.length < 3) map.set(sc.date, [...l, c]);
+    });
+    return map;
+  }, [seances, categories]);
+
+  const aujourdhuiStr = format(new Date(), 'yyyy-MM-dd');
+  const listeSeances = useMemo(() => {
+    if (vue !== 'avenir' && vue !== 'passees') return [];
+    const base = seances.filter(sc => sc.statut !== 'annulee');
+    return vue === 'avenir'
+      ? base.filter(sc => sc.date >= aujourdhuiStr).sort((a, b) => a.date.localeCompare(b.date) || a.heureDebut.localeCompare(b.heureDebut))
+      : base.filter(sc => sc.date < aujourdhuiStr).sort((a, b) => b.date.localeCompare(a.date) || b.heureDebut.localeCompare(a.heureDebut));
+  }, [seances, vue, aujourdhuiStr]);
+
+  async function validerSeance(sc: Seance) {
+    if (await modifierSeance(sc.id, { statut: 'realisee' })) toast.success('Séance validée');
+  }
+
   const [nouvelleSeanceOuverte, setNouvelleSeanceOuverte] = useState(false);
   const [seanceEditee, setSeanceEditee] = useState<Seance | null>(null);
   const [noteSeanceOuverte, setNoteSeanceOuverte] = useState<Seance | null>(null);
@@ -1375,13 +1144,13 @@ function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
       onSerie: async () => {
         const plan = planEditerSerie(seances, futures, dowCible, updates);
         if (!plan.ok) { toastConflitSerie(plan.conflits); return; }
-        const nb = await executerOperations(plan.operations, modifierSeance, supprimerSeance);
+        const nb = await executerOperations(avecInfosDeLaReference(plan.operations, seance.id, updates), modifierSeance, supprimerSeance);
         toast.success(`${nb} séances modifiées`);
       },
       onSelection: async (ids) => {
         const plan = planActionSurSelection(seances, ids, { type: 'editer', dowCible, updates });
         if (!plan.ok) { toastConflitSerie(plan.conflits); return; }
-        const nb = await executerOperations(plan.operations, modifierSeance, supprimerSeance);
+        const nb = await executerOperations(avecInfosDeLaReference(plan.operations, seance.id, updates), modifierSeance, supprimerSeance);
         toast.success(`${nb} séance${nb > 1 ? 's' : ''} modifiée${nb > 1 ? 's' : ''}`);
       },
     });
@@ -1463,15 +1232,14 @@ function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
           </button>
         </div>
         <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-          <button onClick={() => setVue('jour')}
-            style={{ flex: 1, padding: '6px 0', background: vue === 'jour' ? C.primary : C.bg, color: vue === 'jour' ? 'white' : C.text, border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            Jour
-          </button>
-          <button onClick={() => setVue('mois')}
-            style={{ flex: 1, padding: '6px 0', background: vue === 'mois' ? C.primary : C.bg, color: vue === 'mois' ? 'white' : C.text, border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            Mois
-          </button>
+          {([['jour', 'Jour'], ['mois', 'Mois'], ['avenir', 'À venir'], ['passees', 'Passées']] as const).map(([v, libelle]) => (
+            <button key={v} onClick={() => { setVue(v); setNbListe(30); }} aria-pressed={vue === v}
+              style={{ flex: 1, padding: '6px 0', background: vue === v ? C.primary : C.bg, color: vue === v ? 'white' : C.text, border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              {libelle}
+            </button>
+          ))}
         </div>
+        {(vue === 'jour' || vue === 'mois') && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <button onClick={() => setJour(d => vue === 'jour' ? addDays(d, -1) : addMonths(d, -1))} aria-label={vue === 'jour' ? 'Jour précédent' : 'Mois précédent'}
             style={{ width: 36, height: 36, background: C.bg, border: 'none', borderRadius: 8, fontSize: 16, color: C.text, cursor: 'pointer' }}>
@@ -1483,9 +1251,39 @@ function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
             ›
           </button>
         </div>
+        )}
+        <button onClick={() => setCategoriesOuvert(true)}
+          style={{ marginTop: 10, background: 'none', border: 'none', padding: 0, fontSize: 12, fontWeight: 700, color: C.primary, cursor: 'pointer' }}>
+          🎨 Catégories et couleurs
+        </button>
       </div>
 
-      {vue === 'mois' ? (
+      {vue === 'avenir' || vue === 'passees' ? (
+        <div style={{ padding: '8px 16px' }}>
+          {listeSeances.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: C.muted }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🗓️</div>
+              {vue === 'avenir' ? 'Aucune séance à venir' : 'Aucune séance passée'}
+            </div>
+          ) : (
+            <>
+              {listeSeances.slice(0, nbListe).map(s => (
+                <CarteSeanceAgenda key={s.id} seance={s} avecDate participant={participantMap.get(s.participantId)}
+                  categorie={categorieDe(s)}
+                  onOuvrir={() => setSeanceEditee(s)} onValider={() => void validerSeance(s)}
+                  onFiche={() => navigate(URLS_MOBILE.fiche(s.participantId))}
+                  onBilan={() => navigate(URLS_MOBILE.nouveauBilanDeSeance(s.participantId, s.id))} />
+              ))}
+              {listeSeances.length > nbListe && (
+                <button onClick={() => setNbListe(n => n + 30)}
+                  style={{ width: '100%', padding: 12, background: 'white', border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 13, fontWeight: 700, color: C.text, cursor: 'pointer' }}>
+                  Voir plus ({listeSeances.length - nbListe})
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      ) : vue === 'mois' ? (
         <div style={{ padding: '8px 16px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
             {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((lettre, i) => (
@@ -1509,6 +1307,11 @@ function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
                     background: 'white', cursor: 'pointer', opacity: horsMois ? 0.35 : 1,
                   }}>
                   <span style={{ fontSize: 13, fontWeight: estAujourdhui ? 700 : 500, color: C.text }}>{d.getDate()}</span>
+                  {(couleursParJour.get(dStr)?.length ?? 0) > 0 && (
+                    <span aria-hidden="true" style={{ display: 'flex', gap: 2 }}>
+                      {couleursParJour.get(dStr)!.map(c => <span key={c} style={{ width: 5, height: 5, borderRadius: '50%', background: c }} />)}
+                    </span>
+                  )}
                   {compte > 0 && (
                     <span data-testid="charge-jour" style={{ fontSize: 10, fontWeight: 700, color: 'white', background: C.primary, borderRadius: 8, minWidth: 16, height: 16, padding: '0 3px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {compte}
@@ -1586,30 +1389,12 @@ function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
             );
           }
           const s = item.seance;
-          const p = participantMap.get(s.participantId);
-          const estAnnulee = s.statut === 'annulee';
           return (
-            <button key={s.id} onClick={() => setSeanceEditee(s)}
-              style={{ ...card, width: '100%', textAlign: 'left', cursor: 'pointer', opacity: estAnnulee ? 0.55 : 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0 }}>
-                  <span style={{ width: 26, height: 26, borderRadius: '50%', background: estAnnulee ? '#EF4444' : C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'white', flexShrink: 0 }}>🕐</span>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p?.prenom} {p?.nom}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{s.heureDebut} · {s.dureeMinutes} min{estAnnulee ? ' · Annulée' : ''}</div>
-                  </div>
-                </div>
-                {/* Lecture seule (voir EcranTournee) : aucune action, aucun
-                    changement de statut. Affichage conditionné par
-                    absenceSignaleeAffichable (agendaCommun.ts), même
-                    fonction qu'EcranTournee. */}
-                {absenceSignaleeAffichable(s) && (
-                  <span style={{ background: '#FFF1F2', color: '#BE123C', borderRadius: 8, padding: '4px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
-                    🚫 Absence
-                  </span>
-                )}
-              </div>
-            </button>
+            <CarteSeanceAgenda key={s.id} seance={s} participant={participantMap.get(s.participantId)}
+              categorie={categorieDe(s)}
+              onOuvrir={() => setSeanceEditee(s)} onValider={() => void validerSeance(s)}
+              onFiche={() => navigate(URLS_MOBILE.fiche(s.participantId))}
+              onBilan={() => navigate(URLS_MOBILE.nouveauBilanDeSeance(s.participantId, s.id))} />
           );
         })}
       </div>
@@ -1622,6 +1407,8 @@ function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
           initial={{ date: dateStr }}
           onCreer={async data => { await creerSeance(data); }}
           onClose={() => setNouvelleSeanceOuverte(false)}
+          categories={categories}
+          onGererCategories={() => setCategoriesOuvert(true)}
         />
       )}
 
@@ -1641,6 +1428,10 @@ function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
             onReporter={nouvelleDate => handleReporterSeance(seanceEditee, nouvelleDate)}
             onNoteSeance={() => { setNoteSeanceOuverte(seanceEditee); setSeanceEditee(null); }}
             onClose={() => setSeanceEditee(null)}
+            categories={categories}
+            onGererCategories={() => setCategoriesOuvert(true)}
+            onOuvrirFiche={() => navigate(URLS_MOBILE.fiche(seanceEditee.participantId))}
+            onOuvrirBilan={() => navigate(URLS_MOBILE.nouveauBilanDeSeance(seanceEditee.participantId, seanceEditee.id))}
           />
         );
       })()}
@@ -1682,6 +1473,17 @@ function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
             setEvenementEdite(null);
           }}
           onClose={() => setEvenementEdite(null)}
+        />
+      )}
+
+      {categoriesOuvert && (
+        <ModalCategoriesSeance
+          categories={categories}
+          onCreer={(nom, couleur) => creerCategorie(nom, couleur)}
+          onModifier={modifierCategorie}
+          onSupprimer={supprimerCategorie}
+          onDefinirBilan={definirCategorieBilan}
+          onClose={() => setCategoriesOuvert(false)}
         />
       )}
 
@@ -1759,7 +1561,6 @@ function EcranPlus({ onLogout, onNaviguer }: { onLogout: () => void; onNaviguer:
           Agenda complet : écran natif mobile depuis le sous-chantier 1 (Agenda
           mobile, EcranAgenda), plus un renvoi vers /agenda-v2 (desktop). */}
       <SectionMobile titre="Mon activité">
-        <ItemMobile icon="ti-route" label="Tournée du jour" onClick={() => onNaviguer(URLS_MOBILE.tournee)} />
         <ItemMobile icon="ti-calendar" label="Agenda complet" onClick={() => onNaviguer(URLS_MOBILE.agenda)} />
         <ItemMobile icon="ti-map-pin" label="Carte bénéficiaires" onClick={() => onNaviguer('/map')} />
       </SectionMobile>
@@ -2377,9 +2178,6 @@ export default function AppMobile({ onLogout }: Props) {
       break;
     case 'saisie':
       contenu = <ChoixSaisie onPatient={() => navigate(URLS_MOBILE.nouveauBeneficiaire)} onBilan={() => navigate(URLS_MOBILE.choixBeneficiaireBilan)} />;
-      break;
-    case 'tournee':
-      contenu = <EcranTournee />;
       break;
     case 'agenda':
       // `key` : un nouveau lien daté (seconde notification, écran déjà

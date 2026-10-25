@@ -13,6 +13,10 @@ import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
 import { useIndispos } from '../hooks/useIndispos';
 import { useEvenementsAgenda } from '../hooks/useEvenementsAgenda';
+import { useCategoriesSeance } from '../hooks/useCategoriesSeance';
+import { useNavigate } from 'react-router-dom';
+import { URLS_MOBILE } from '../lib/routesMobile';
+import ModalCategoriesSeance from '../components/agenda/ModalCategoriesSeance';
 import { useZones } from '../hooks/useZones';
 import { useCoursCollectifs } from '../hooks/useCoursCollectifs';
 import { resumeAnnonces, libelleCompactAnnonces } from '../lib/coursCollectifs';
@@ -37,11 +41,11 @@ import {
 import {
   calculerFutures, estDeplacementNoop,
   planDeplacerUnique, planDeplacerSerie, planEditerUnique, planEditerSerie,
-  planSupprimerUnique, planSupprimerSerie, planActionSurSelection, executerOperations,
+  planSupprimerUnique, planSupprimerSerie, planActionSurSelection, avecInfosDeLaReference, executerOperations,
   optionsPorteePourAction, type MiseAJourSeance,
 } from '../lib/planificationManuelle';
 import {
-  LABEL_TYPE, LABEL_TYPE_EVENEMENT, getCouleurEvenement, titreEvenementSeance, heureToDate, formatDate,
+  LABEL_TYPE, LABEL_TYPE_EVENEMENT, getCouleurEvenement, couleurCategorieDe, titreEvenementSeance, heureToDate, formatDate,
   CLE_JOUR_PAR_DOW, CLE_JOUR_CAPITALISE_PAR_DOW, windowsDispoPourJour,
   type CalEvent, type DropPendant, type ChoixSerie,
 } from '../lib/agendaCommun';
@@ -144,6 +148,10 @@ export default function AgendaV2Page() {
   const { contrats, contratActifDeParticipant } = useContrats();
   const { indisposDuJour } = useIndispos();
   const { evenements, creerEvenement, supprimerEvenement } = useEvenementsAgenda();
+  // Catégories de séance du praticien (couleur de l'agenda), partagées avec le mobile par la base.
+  const { categories, creerCategorie, modifierCategorie, supprimerCategorie, definirCategorieBilan } = useCategoriesSeance();
+  const [categoriesOuvert, setCategoriesOuvert] = useState(false);
+  const navigate = useNavigate();
   // Zones géographiques définies par le praticien dans l'onglet Zones — la
   // zone d'un bénéficiaire est stockée sur la zone elle-même (participantIds),
   // pas sur le participant. zoneDePatient est la fonction déjà écrite dans ce
@@ -492,13 +500,13 @@ export default function AgendaV2Page() {
       onSerie: async () => {
         const plan = planEditerSerie(seances, futures, dowCible, updates);
         if (!plan.ok) { toastConflitSerie(plan.conflits); return; }
-        const nb = await executerOperations(plan.operations, modifierSeance, supprimerSeance);
+        const nb = await executerOperations(avecInfosDeLaReference(plan.operations, seance.id, updates), modifierSeance, supprimerSeance);
         toast.success(`${nb} séances modifiées`);
       },
       onSelection: async (ids) => {
         const plan = planActionSurSelection(seances, ids, { type: 'editer', dowCible, updates });
         if (!plan.ok) { toastConflitSerie(plan.conflits); return; }
-        const nb = await executerOperations(plan.operations, modifierSeance, supprimerSeance);
+        const nb = await executerOperations(avecInfosDeLaReference(plan.operations, seance.id, updates), modifierSeance, supprimerSeance);
         toast.success(`${nb} séance${nb > 1 ? 's' : ''} modifiée${nb > 1 ? 's' : ''}`);
       },
     });
@@ -804,7 +812,7 @@ export default function AgendaV2Page() {
                 const estDuBeneficiaireSelectionne = participantSelectionne && event.resource.participantId === participantSelectionne.id;
                 return {
                   style: {
-                    backgroundColor: estDuBeneficiaireSelectionne ? '#0d9488' : getCouleurEvenement(event.resource),
+                    backgroundColor: estDuBeneficiaireSelectionne ? '#0d9488' : getCouleurEvenement(event.resource, couleurCategorieDe(event.resource, categories)),
                     // L'opacité réduite d'une séance annulée s'applique
                     // maintenant aussi au bénéficiaire sélectionné : avant ce
                     // correctif, une séance annulée de ce bénéficiaire restait
@@ -875,6 +883,10 @@ export default function AgendaV2Page() {
             onReporter={nouvelleDate => handleReporterSeance(seanceEditee, nouvelleDate)}
             onNoteSeance={() => { setNoteSeanceOuverte(seanceEditee); setSeanceEditee(null); }}
             onClose={() => setSeanceEditee(null)}
+            categories={categories}
+            onGererCategories={() => setCategoriesOuvert(true)}
+            onOuvrirFiche={() => navigate(URLS_MOBILE.fiche(seanceEditee.participantId))}
+            onOuvrirBilan={() => navigate(URLS_MOBILE.nouveauBilanDeSeance(seanceEditee.participantId, seanceEditee.id))}
           />
         );
       })()}
@@ -899,6 +911,19 @@ export default function AgendaV2Page() {
           initial={slotInitialSeance}
           onCreer={async data => { await creerSeance(data); }}
           onClose={() => setNouvelleSeanceOuverte(false)}
+          categories={categories}
+          onGererCategories={() => setCategoriesOuvert(true)}
+        />
+      )}
+
+      {categoriesOuvert && (
+        <ModalCategoriesSeance
+          categories={categories}
+          onCreer={(nom, couleur) => creerCategorie(nom, couleur)}
+          onModifier={modifierCategorie}
+          onSupprimer={supprimerCategorie}
+          onDefinirBilan={definirCategorieBilan}
+          onClose={() => setCategoriesOuvert(false)}
         />
       )}
 

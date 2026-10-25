@@ -73,7 +73,7 @@ test.describe('Création d\'un contrat sur mobile (route fusionnée /contrat/nou
 
       // Le contrat ne génère plus les séances automatiquement : la génération
       // est passée sur Tournée → Planifier, et le toast le dit.
-      await expect(page.getByText(/Contrat créé\. Allez sur Tournée/)).toBeVisible();
+      await expect(page.getByText(/Contrat créé\. Allez sur Agenda/)).toBeVisible();
 
       // ── Présence après création ────────────────────────────────────────
       // La page redirige vers la fiche : le contrat doit y être visible dans

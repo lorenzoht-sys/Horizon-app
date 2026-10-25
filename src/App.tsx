@@ -29,7 +29,6 @@ const AssistantPage      = lazy(() => import('./pages/AssistantPage'));
 const EditBilan          = lazy(() => import('./pages/EditBilan'));
 const MapPage            = lazy(() => import('./pages/MapPage'));
 const ArchivesPage        = lazy(() => import('./pages/ArchivesPage'));
-const TourneePage        = lazy(() => import('./pages/TourneePage'));
 const AgendaV2Page       = lazy(() => import('./pages/AgendaV2Page'));
 const ZonesPage          = lazy(() => import('./pages/ZonesPage'));
 const BibliothequePage   = lazy(() => import('./pages/BibliothequePage'));
@@ -131,7 +130,8 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
                 pas une protection — n'en faire dépendre aucune. */}
             <Route path="/admin/comptes" element={<PageTransition><Suspense fallback={<MapFallback />}><AdminComptesPage /></Suspense></PageTransition>} />
             <Route path="/zones" element={<PageTransition><Suspense fallback={<MapFallback />}><ZonesPage /></Suspense></PageTransition>} />
-            <Route path="/tournee" element={<PageTransition><Suspense fallback={<MapFallback />}><TourneePage /></Suspense></PageTransition>} />
+            {/* Ancienne page Tournée (retirée 2026-10-25) : les anciens liens/favoris ouvrent l'agenda. */}
+            <Route path="/tournee" element={<Navigate to="/agenda-v2" replace />} />
             <Route path="/agenda-v2" element={<PageTransition><Suspense fallback={<MapFallback />}><AgendaV2Page /></Suspense></PageTransition>} />
             <Route path="/map" element={<PageTransition><Suspense fallback={<MapFallback />}><MapPage /></Suspense></PageTransition>} />
             <Route path="/archives" element={<PageTransition><Suspense fallback={<MapFallback />}><ArchivesPage /></Suspense></PageTransition>} />

@@ -10,7 +10,7 @@ describe('colonnes de seances exposées au bénéficiaire et au portail structur
   const colonnes = COLONNES_SEANCE_EXPOSEE.split(',').map(c => c.trim());
 
   it('ne contient aucune donnée interne au praticien', () => {
-    for (const interdite of ['notes', 'motif_annulation', 'motif_annulation_detail']) {
+    for (const interdite of ['notes', 'objectif', 'categorie_id', 'bilan_auto', 'motif_annulation', 'motif_annulation_detail']) {
       expect(colonnes, `« ${interdite} » ne doit jamais quitter le praticien`).not.toContain(interdite);
     }
   });

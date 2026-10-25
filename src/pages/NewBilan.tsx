@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useParticipants } from '../hooks/useParticipants';
 import {
   getBrouillon, supprimerBrouillon, sauvegarderBrouillon,
@@ -13,11 +13,13 @@ import { ArrowLeft } from 'lucide-react';
 import type { Bilan, TestKey } from '../types';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
+import { idSeanceDepuisRecherche, validerSeanceDuBilan } from '../lib/liaisonSeanceBilan';
 
 export default function NewBilan() {
   const { id } = useParams<{ id: string }>();
   const { participants, addBilan, updateParticipant } = useParticipants();
   const navigate = useNavigate();
+  const { search } = useLocation();
 
   // Lecture localStorage (synchrone, prioritaire)
   const [brouillonSauve, setBrouillonSauve] = useState<BrouillonBilan | null>(() =>
@@ -71,6 +73,7 @@ export default function NewBilan() {
 
   async function handleSave(bilan: Omit<Bilan, 'id'>) {
     const saved = await addBilan(participant!.id, bilan);
+    await validerSeanceDuBilan(idSeanceDepuisRecherche(search), participant!.id);
     toast.success('Bilan enregistré !');
     navigate(`/participant/${participant!.id}/bilan/${saved.id}`);
   }

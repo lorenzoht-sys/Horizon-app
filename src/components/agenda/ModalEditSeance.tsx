@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { X, Loader, Trash2, Undo2, Check, NotebookPen } from 'lucide-react';
+import { X, Loader, Trash2, Undo2, Check, NotebookPen, User, ClipboardList } from 'lucide-react';
 import { format, addDays } from 'date-fns';
-import type { Seance, StatutSeance, Contrat, RaisonAnnulation } from '../../types';
+import type { Seance, StatutSeance, Contrat, RaisonAnnulation, CategorieSeance } from '../../types';
+import SelecteurCategorie from './SelecteurCategorie';
 import { addMinutes, trouveChevauchement } from '../../utils/horaires';
 import { calculerFutures, type MiseAJourSeance } from '../../lib/planificationManuelle';
 import { formatDate, LABEL_STATUT, OPTIONS_RAISON_ANNULATION, LABEL_RAISON_ANNULATION } from '../../lib/agendaCommun';
@@ -11,7 +12,7 @@ import { formatDate, LABEL_STATUT, OPTIONS_RAISON_ANNULATION, LABEL_RAISON_ANNUL
 //    (PlanningGrilleView.tsx), sans le volet disponibilités/organisation :
 //    non demandé ici, périmètre propre à cet écran-là. ──────────────────────
 
-export default function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, onDelete, onRestaurer, onReporter, onNoteSeance, onClose }: {
+export default function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, onDelete, onRestaurer, onReporter, onNoteSeance, onClose, categories = [], onGererCategories, onOuvrirFiche, onOuvrirBilan }: {
   seance: Seance;
   nomBeneficiaire: string;
   seances: Seance[];
@@ -26,6 +27,12 @@ export default function ModalEditSeance({ seance, nomBeneficiaire, seances, cont
   onReporter: (nouvelleDate: string) => Promise<void>;
   onNoteSeance: () => void;
   onClose: () => void;
+  // Facultatifs : sans eux, la modale se comporte comme avant.
+  categories?: CategorieSeance[];
+  onGererCategories?: () => void;
+  // Raccourcis vers la fiche du bénéficiaire et vers le bilan lié (séances de type bilan).
+  onOuvrirFiche?: () => void;
+  onOuvrirBilan?: () => void;
 }) {
   const [date, setDate] = useState(seance.date);
   const [heureDebut, setHeureDebut] = useState(seance.heureDebut);
@@ -33,6 +40,9 @@ export default function ModalEditSeance({ seance, nomBeneficiaire, seances, cont
   const [statut, setStatut] = useState<StatutSeance>(seance.statut);
   const [raisonAnnulation, setRaisonAnnulation] = useState<RaisonAnnulation | ''>(seance.motifAnnulation ?? '');
   const [raisonAnnulationDetail, setRaisonAnnulationDetail] = useState(seance.motifAnnulationDetail ?? '');
+  const [categorieId, setCategorieId] = useState(seance.categorieId ?? '');
+  const [notes, setNotes] = useState(seance.notes ?? '');
+  const [objectif, setObjectif] = useState(seance.objectif ?? '');
   const [confirmSuppr, setConfirmSuppr] = useState(false);
   // "Reportée" ne passe pas par handleEnregistrer (qui ne fait que modifier
   // les champs de LA séance existante) : reporter crée une nouvelle séance à
@@ -64,7 +74,13 @@ export default function ModalEditSeance({ seance, nomBeneficiaire, seances, cont
     // séance est réannulée plus tard sous un motif différent (ou aucun).
     const motifAnnulation = statut === 'annulee' && raisonAnnulation ? raisonAnnulation : undefined;
     const motifAnnulationDetail = motifAnnulation === 'autre' ? raisonAnnulationDetail.trim() || undefined : undefined;
-    onSave({ date, heureDebut, heureFin, dureeMinutes: duree, statut, motifAnnulation, motifAnnulationDetail });
+    onSave({
+      date, heureDebut, heureFin, dureeMinutes: duree, statut, motifAnnulation, motifAnnulationDetail,
+      // Si la catégorie a été supprimée entre-temps, on n'écrit pas un identifiant orphelin.
+      categorieId: categories.length === 0 ? seance.categorieId : (categories.some(c => c.id === categorieId) ? categorieId : undefined),
+      notes: notes.trim() || undefined,
+      objectif: objectif.trim() || undefined,
+    });
     onClose();
   }
 
@@ -124,6 +140,23 @@ export default function ModalEditSeance({ seance, nomBeneficiaire, seances, cont
             <p className="text-sm font-semibold text-dark">{nomBeneficiaire}</p>
           </div>
 
+          {(onOuvrirFiche || (onOuvrirBilan && seance.type !== 'seance')) && (
+            <div className="flex gap-2">
+              {onOuvrirFiche && (
+                <button onClick={onOuvrirFiche}
+                  className="flex-1 flex items-center justify-center gap-1.5 border border-gray-200 rounded-xl py-2 text-xs font-semibold text-dark hover:bg-gray-50">
+                  <User size={13} /> Ouvrir la fiche
+                </button>
+              )}
+              {onOuvrirBilan && seance.type !== 'seance' && (
+                <button onClick={onOuvrirBilan}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold text-white bg-primary hover:bg-dark">
+                  <ClipboardList size={13} /> Ouvrir le bilan
+                </button>
+              )}
+            </div>
+          )}
+
           {seance.statut === 'annulee' && (
             <div className="flex items-center justify-between gap-3 bg-amber-light border border-amber/20 rounded-xl px-4 py-3">
               <div className="min-w-0">
@@ -146,6 +179,11 @@ export default function ModalEditSeance({ seance, nomBeneficiaire, seances, cont
             <p className="text-xs text-blue-700 bg-blue-50 rounded-xl px-4 py-3">
               Ce créneau se répète encore {futures.length} fois (jusqu'au {formatDate(futures[futures.length - 1].date)}). La portée (cette séance seule ou toute la série) sera demandée à l'enregistrement.
             </p>
+          )}
+
+          {(categories.length > 0 || onGererCategories) && (
+            <SelecteurCategorie categories={categories} valeur={categories.some(c => c.id === categorieId) ? categorieId : ''}
+              onChange={setCategorieId} onGerer={onGererCategories} />
           )}
 
           <div className="grid grid-cols-2 gap-3">
@@ -211,6 +249,18 @@ export default function ModalEditSeance({ seance, nomBeneficiaire, seances, cont
               )}
             </div>
           )}
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Objectif de la séance</label>
+            <input type="text" value={objectif} onChange={e => setObjectif(e.target.value)} maxLength={200}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Notes (visibles de vous seul)</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+              placeholder="Observations, paramètres à relever, à prévoir pour le prochain bilan…"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none" />
+          </div>
 
           {conflit && (
             <div className="bg-red-light border border-red/20 rounded-xl px-4 py-3">

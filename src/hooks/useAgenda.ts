@@ -80,6 +80,13 @@ export function useAgenda() {
   async function modifierSeance(id: string, updates: Partial<Seance>): Promise<boolean> {
     const current = seances.find(s => s.id === id);
     if (!current) { console.error('Séance introuvable:', id); return false; }
+    // Un bilan posé automatiquement puis déplacé à la main devient « le sien » : il perd son
+    // marqueur, donc ni un changement de fréquence ni la désactivation ne le retirera (bilansAuto.ts).
+    const deplace = current.bilanAuto && (
+      (updates.date !== undefined && updates.date !== current.date) ||
+      (updates.heureDebut !== undefined && updates.heureDebut !== current.heureDebut)
+    );
+    if (deplace) updates = { ...updates, bilanAuto: false };
     const merged = { ...current, ...updates };
     if (supabase) {
       const { error } = await supabase.from('seances').update(seanceToDb(merged)).eq('id', id);
