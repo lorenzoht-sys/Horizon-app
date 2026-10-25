@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Exercice, CategorieExercice, ProfilHandicap, ProfilPathologie } from '../types';
 import { Plus, Play, X } from 'lucide-react';
 import YoutubePlayer from '../components/YoutubePlayer';
@@ -66,10 +66,13 @@ interface Props {
   draggable?: boolean;
   onDragStart?: () => void;
   onDragEnd?: () => void;
+  /** Boutons en pied de carte (bibliothèque : « Partager dans Collectif », « Ajouter à mes
+   *  exercices »…). Opt-in : rien ne change pour les autres usages du composant. */
+  actions?: ReactNode;
 }
 
 export default function ExerciceCard({
-  exercice, onAdd, compact, profilHandicap, incompatible, draggable, onDragStart, onDragEnd,
+  exercice, onAdd, compact, profilHandicap, incompatible, draggable, onDragStart, onDragEnd, actions,
 }: Props) {
   const [showVideo, setShowVideo] = useState(false);
   const cat = CAT[exercice.categorie];
@@ -285,6 +288,8 @@ export default function ExerciceCard({
             <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 10, background: '#FEE2E2', color: '#991B1B', fontWeight: 700 }}>🔴 N3</span>
           </div>
         )}
+
+        {actions && <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>{actions}</div>}
       </div>
 
       {/* Modal vidéo — z-[1100], pas z-50 : sous 768px, BarreNavigationMobile
