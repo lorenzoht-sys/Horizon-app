@@ -96,7 +96,8 @@ export const LABEL_TYPE_EVENEMENT: Record<TypeEvenementAgenda, string> = {
   premier_contact_prospect: 'Premier contact (prospect)',
   bilan: 'Bilan',
   reunion: 'Réunion',
-  prospect: 'Prospect',
+  // Libellé seul (2026-10-25, bug 17) : la valeur 'prospect' reste en base, aucune migration.
+  prospect: 'Première rencontre',
   lieu_particulier: 'Lieu particulier',
   autre: 'Autre',
 };

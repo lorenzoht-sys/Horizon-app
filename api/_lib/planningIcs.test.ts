@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import ical, { type VEvent } from 'node-ical';
 import { subMonths, format } from 'date-fns';
-import { genererCalendrierPlanning, calculerBornesFenetreIcs, type SeancePourIcs } from './planningIcs.js';
+import {
+  genererCalendrierPlanning, calculerBornesFenetreIcs, coursVersIcs, evenementsVersIcs,
+  heureFinDepuisDuree, normaliserHeure,
+  type SeancePourIcs, type RowCoursIcs, type RowEvenementIcs,
+} from './planningIcs.js';
 import { dateHeureParisVersUTC } from './rappels.js';
 
 function seance(overrides: Partial<SeancePourIcs> = {}): SeancePourIcs {
@@ -126,5 +130,94 @@ describe('calculerBornesFenetreIcs', () => {
     const s = seance({ id: '55555555-5555-5555-5555-555555555555' });
     const events = parseEvents(genererCalendrierPlanning([s]));
     expect(events[0].uid).toContain(s.id);
+  });
+});
+
+// ── Bug 17 : cours collectifs et événements d'agenda dans le flux ──────────────
+
+function cours(overrides: Partial<RowCoursIcs> = {}): RowCoursIcs {
+  return { id: 'c0000000-0000-0000-0000-000000000001', titre: 'Gym douce', date: '2026-07-15', heure_debut: '14:00', duree_minutes: 60, ...overrides };
+}
+
+function evenement(overrides: Partial<RowEvenementIcs> = {}): RowEvenementIcs {
+  return {
+    id: 'e0000000-0000-0000-0000-000000000001', type: 'reunion', titre: 'Réunion équipe',
+    date: '2026-07-16', heure_debut: '09:00', heure_fin: '10:30', nom: null, prenom: null, adresse: null,
+    ...overrides,
+  };
+}
+
+describe('coursVersIcs', () => {
+  it('un cours collectif devient un événement, fin = début + durée', () => {
+    const [e] = coursVersIcs([cours()]);
+    expect(e).toEqual({
+      uid: 'cours-c0000000-0000-0000-0000-000000000001', date: '2026-07-15',
+      heureDebut: '14:00', heureFin: '15:00', summary: 'Cours collectif — Gym douce', location: null,
+    });
+  });
+
+  it('accepte une heure stockée avec les secondes', () => {
+    expect(coursVersIcs([cours({ heure_debut: '14:00:00' })])[0].heureFin).toBe('15:00');
+  });
+
+  it('ignore une ligne inexploitable au lieu de casser le flux', () => {
+    expect(coursVersIcs([cours({ duree_minutes: null }), cours({ heure_debut: 'n/a' }), cours({ date: '' })])).toEqual([]);
+  });
+});
+
+describe('heureFinDepuisDuree / normaliserHeure', () => {
+  it('plafonne à 23:59 (jamais sur le lendemain)', () => {
+    expect(heureFinDepuisDuree('23:30', 90)).toBe('23:59');
+    expect(heureFinDepuisDuree('09:15', 45)).toBe('10:00');
+  });
+  it('normalise HH:MM:SS en HH:MM et laisse le reste tel quel', () => {
+    expect(normaliserHeure('08:05:00')).toBe('08:05');
+    expect(normaliserHeure('08:05')).toBe('08:05');
+    expect(normaliserHeure(null)).toBe('');
+  });
+});
+
+describe('evenementsVersIcs', () => {
+  it('reprend le titre et l\'adresse, quel que soit le type (un type futur est exporté sans correction)', () => {
+    const [e] = evenementsVersIcs([evenement({ type: 'type_ajoute_demain', titre: 'Formation', adresse: 'Salle 2' })]);
+    expect(e).toMatchObject({ uid: 'evenement-e0000000-0000-0000-0000-000000000001', summary: 'Formation', location: 'Salle 2', heureFin: '10:30' });
+  });
+
+  it('première rencontre : « Prénom N. », jamais le nom complet ni le titre libre', () => {
+    const [avecNom] = evenementsVersIcs([evenement({ type: 'prospect', titre: 'Mme Dupont (prospect)', prenom: 'Jean', nom: 'Dupont' })]);
+    expect(avecNom.summary).toBe('Première rencontre — Jean D.');
+    expect(avecNom.summary).not.toContain('Dupont');
+    const [sansNom] = evenementsVersIcs([evenement({ type: 'premier_contact_prospect', titre: 'Mme Dupont (prospect)' })]);
+    expect(sansNom.summary).toBe('Première rencontre');
+  });
+
+  it('ignore un créneau invalide (fin avant début)', () => {
+    expect(evenementsVersIcs([evenement({ heure_debut: '11:00', heure_fin: '10:00' })])).toEqual([]);
+  });
+});
+
+describe('genererCalendrierPlanning — séances + autres occupations', () => {
+  it('contient séances, cours et événements, avec des UID distincts et les horaires de Paris', () => {
+    const autres = [...coursVersIcs([cours()]), ...evenementsVersIcs([evenement()])];
+    const events = parseEvents(genererCalendrierPlanning([seance()], autres));
+    expect(events).toHaveLength(3);
+    const coursEv = events.find(e => e.uid.includes('cours-'));
+    expect(coursEv?.summary).toBe('Cours collectif — Gym douce');
+    expect(coursEv?.start.toISOString()).toBe('2026-07-15T12:00:00.000Z');
+    expect(coursEv?.end?.toISOString()).toBe('2026-07-15T13:00:00.000Z');
+    expect(events.find(e => e.uid.includes('evenement-'))?.summary).toBe('Réunion équipe');
+  });
+
+  it('ne change pas l\'UID des séances déjà synchronisées (sinon doublons dans Google Agenda)', () => {
+    const s = seance({ id: '66666666-6666-6666-6666-666666666666' });
+    const seul = parseEvents(genererCalendrierPlanning([s]))[0].uid;
+    const avecAutres = parseEvents(genererCalendrierPlanning([s], coursVersIcs([cours()]))).find(e => e.uid.includes('66666666'))?.uid;
+    expect(avecAutres).toBe(seul);
+  });
+
+  it('un événement n\'a pas de DESCRIPTION : ni notes ni téléphone ne quittent Horizon', () => {
+    // Structurel : RowEvenementIcs ne porte ni notes ni telephone (colonnes non lues par la requête).
+    const out = genererCalendrierPlanning([], evenementsVersIcs([evenement({ type: 'prospect', prenom: 'Jean', nom: 'Dupont' })]));
+    expect(parseEvents(out)[0].description).toBeFalsy();
   });
 });
