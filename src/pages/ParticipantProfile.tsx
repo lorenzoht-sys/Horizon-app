@@ -27,6 +27,7 @@ import { loadExercicesPraticien } from '../data/exercices';
 import { useContrats } from '../hooks/useContrats';
 import { useStructures } from '../hooks/useStructures';
 import { useAgenda } from '../hooks/useAgenda';
+import SectionBilansAuto from '../components/participant/SectionBilansAuto';
 import { useJournalSeance } from '../hooks/useJournalSeance';
 import { useCompteRenduSeance } from '../hooks/useCompteRenduSeance';
 import { getBrouillon } from '../hooks/useBrouillonBilan';
@@ -1884,6 +1885,7 @@ export default function ParticipantProfile() {
             onSave={data => updateParticipant(id!, data)}
           />
           <CarteStats participant={participant} contratActif={contratActif} prochaineSeance={prochaineSeance} seances={seances} />
+          <SectionBilansAuto participant={participant} />
         </div>
         {/* Colonne droite */}
         <div className="flex flex-col gap-3">

@@ -17,7 +17,7 @@ const ONGLETS: { id: OngletMobile; icon: string; label: string; url: string; pri
   { id: 'accueil',       icon: 'ti-home',   label: 'Accueil',   url: URLS_MOBILE.accueil },
   { id: 'beneficiaires', icon: 'ti-users',  label: 'Bénéfic.',  url: URLS_MOBILE.beneficiaires },
   { id: 'saisie',        icon: 'ti-plus',   label: 'Saisie',    url: URLS_MOBILE.saisie, principal: true },
-  { id: 'tournee',       icon: 'ti-route',  label: 'Tournée',   url: URLS_MOBILE.tournee },
+  { id: 'agenda',        icon: 'ti-calendar', label: 'Agenda',  url: URLS_MOBILE.agenda },
   { id: 'plus',          icon: 'ti-menu-2', label: 'Plus',      url: URLS_MOBILE.plus },
 ];
 

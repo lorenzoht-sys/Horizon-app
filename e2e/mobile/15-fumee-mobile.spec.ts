@@ -82,14 +82,14 @@ test.describe('Fumée mobile (390×844)', () => {
     expect(erreurs, erreurs.join('\n')).toEqual([]);
   });
 
-  test('navigation vers la tournée (EcranTournee)', async ({ page }) => {
+  test('navigation vers l’agenda (EcranAgenda)', async ({ page }) => {
     const erreurs = ecouterErreursConsole(page);
     await loginPraticien(page);
 
-    await barreNav(page).getByRole('button', { name: 'Tournée' }).click();
+    await barreNav(page).getByRole('button', { name: 'Agenda' }).click();
 
-    await expect(page).toHaveURL(/\/tournee$/);
-    await expect(page.getByText('Ma tournée')).toBeVisible();
+    await expect(page).toHaveURL(/\/agenda$/);
+    await expect(page.getByText('+ Nouvelle séance')).toBeVisible();
     await expect(barreNav(page)).toBeVisible();
     expect(erreurs, erreurs.join('\n')).toEqual([]);
   });

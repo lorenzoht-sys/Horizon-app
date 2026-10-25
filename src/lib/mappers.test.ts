@@ -295,6 +295,31 @@ describe('dbToSeance / seanceToDb — absenceSignaleeLe (lecture seule côté pr
   });
 });
 
+describe('dbToSeance / seanceToDb — catégorie, objectif, bilan automatique (chantier 15)', () => {
+  const ligne = {
+    id: 's1', participant_id: 'p1', contrat_id: null,
+    date: '2026-10-01', heure_debut: '09:00', heure_fin: '09:45', duree_minutes: 45,
+    type: 'bilan', statut: 'planifiee', notes: 'n', adresse: '', coordonnees: null,
+    motif_annulation: null, motif_annulation_detail: null,
+  };
+
+  it('lit catégorie, objectif et marqueur ; colonnes absentes (migration non appliquée) = valeurs neutres', () => {
+    const s = dbToSeance({ ...ligne, categorie_id: 'c1', objectif: 'équilibre', bilan_auto: true });
+    expect(s).toMatchObject({ categorieId: 'c1', objectif: 'équilibre', bilanAuto: true });
+    const vide = dbToSeance(ligne);
+    expect(vide.categorieId).toBeUndefined();
+    expect(vide.objectif).toBeUndefined();
+    expect(vide.bilanAuto).toBe(false);
+  });
+
+  it('écrit les trois colonnes, et null quand la catégorie ou l’objectif sont retirés', () => {
+    const db = seanceToDb({ ...dbToSeance({ ...ligne, categorie_id: 'c1', objectif: 'x' }), categorieId: undefined, objectif: undefined });
+    expect(db.categorie_id).toBeNull();
+    expect(db.objectif).toBeNull();
+    expect(db.bilan_auto).toBe(false);
+  });
+});
+
 describe('dbToParticipant / participantToDb — beneficiaireSap (décision 3 du 2026-10-20)', () => {
   it('lit et écrit la colonne beneficiaire_sap', () => {
     expect(dbToParticipant({ id: 'p1', nom: 'X', prenom: 'Y', beneficiaire_sap: true }).beneficiaireSap).toBe(true);

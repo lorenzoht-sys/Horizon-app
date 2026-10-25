@@ -631,6 +631,30 @@ export interface Seance {
    * /api/patient/activite (type "seance-absence") l'écrit.
    */
   absenceSignaleeLe?: string;
+  /** Catégorie personnalisée du praticien (couleur de l'agenda) ; absente = couleur par défaut. */
+  categorieId?: string;
+  /** Objectif de la séance, saisi par le praticien (les notes libres sont dans `notes`). */
+  objectif?: string;
+  /** Séance posée par la programmation automatique des bilans (bilans_auto), jamais à la main. */
+  bilanAuto?: boolean;
+}
+
+/**
+ * Catégorie de séance propre à un praticien (« Bilan trimestriel », « Séance APA »…).
+ * Horizon n'en impose aucune. `estBilan` désigne celle que les bilans automatiques utilisent.
+ */
+export interface CategorieSeance {
+  id: string;
+  nom: string;
+  couleur: string;
+  estBilan: boolean;
+}
+
+/** Programmation automatique des bilans d'un bénéficiaire (absente = désactivée). */
+export interface BilansAuto {
+  participantId: string;
+  actif: boolean;
+  frequenceMois: number;
 }
 
 // Événement d'agenda : distinct d'une séance patient. 'indisponibilite' ici

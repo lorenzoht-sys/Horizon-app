@@ -156,7 +156,7 @@ export default function ContratNouveauPage() {
         exclureTournee,
       });
 
-      toast.success('Contrat créé. Allez sur Tournée → Planifier pour générer votre planning.');
+      toast.success('Contrat créé. Allez sur Agenda pour générer votre planning.');
       navigate(`/participant/${participant.id}`);
     } catch (err) {
       console.error('Erreur création contrat:', err);

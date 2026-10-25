@@ -11,14 +11,13 @@
 // desktop, c'est LA MÊME : tourner le téléphone affiche la version desktop
 // du même écran, et revenir en portrait rouvre l'écran mobile.
 
-export type OngletMobile = 'accueil' | 'beneficiaires' | 'saisie' | 'tournee' | 'assistant' | 'plus';
+export type OngletMobile = 'accueil' | 'beneficiaires' | 'saisie' | 'agenda' | 'assistant' | 'plus';
 
 export type EcranMobile =
   | { ecran: 'accueil' }
   | { ecran: 'beneficiaires' }
   | { ecran: 'saisie' }
   | { ecran: 'plus' }
-  | { ecran: 'tournee' }
   // `date` (AAAA-MM-JJ) : jour à afficher à l'ouverture, null = aujourd'hui.
   | { ecran: 'agenda'; date: string | null }
   | { ecran: 'assistant'; beneficiaireId: string | null }
@@ -37,7 +36,6 @@ export const URLS_MOBILE = {
   beneficiaires: '/?onglet=beneficiaires',
   saisie: '/?onglet=saisie',
   plus: '/?onglet=plus',
-  tournee: '/tournee',
   // Écran natif mobile (sous-chantier 1, Agenda) — distinct de /agenda-v2
   // (desktop-only, react-big-calendar) : remplace l'ancien renvoi vers
   // /agenda-v2 depuis l'écran "Plus" (Mon activité → Agenda complet).
@@ -54,6 +52,8 @@ export const URLS_MOBILE = {
   fiche: (id: string) => `/participant/${encodeURIComponent(id)}`,
   modifierBeneficiaire: (id: string) => `/participants/${encodeURIComponent(id)}/modifier`,
   nouveauBilan: (id: string) => `/participant/${encodeURIComponent(id)}/bilan/new`,
+  // Bilan lancé depuis une séance de l'agenda : l'enregistrement du bilan valide cette séance.
+  nouveauBilanDeSeance: (id: string, seanceId: string) => `/participant/${encodeURIComponent(id)}/bilan/new?seance=${encodeURIComponent(seanceId)}`,
   assistantAvec: (id: string) => `/assistant?beneficiaire=${encodeURIComponent(id)}`,
 } as const;
 
@@ -138,7 +138,8 @@ export function ecranMobileDepuisUrl(pathname: string, search: string): EcranMob
       default: return { ecran: 'accueil' };
     }
   }
-  if (chemin === '/tournee') return { ecran: 'tournee' };
+  // Ancienne Tournée (retirée 2026-10-25) : un lien ou favori /tournee ouvre l'agenda.
+  if (chemin === '/tournee') return { ecran: 'agenda', date: null };
   if (chemin === '/agenda') return { ecran: 'agenda', date: dateAgendaValide(params.get('date')) };
   if (chemin === '/assistant') return { ecran: 'assistant', beneficiaireId: params.get('beneficiaire') || null };
   if (chemin === '/settings') return { ecran: 'parametres' };
@@ -173,9 +174,10 @@ export function ongletDepuisUrl(pathname: string, search: string): OngletMobile 
     case 'beneficiaires':
     case 'saisie':
     case 'plus':
-    case 'tournee':
     case 'assistant':
       return e.ecran;
+    case 'agenda':
+      return 'agenda';
     default:
       return null;
   }

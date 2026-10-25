@@ -98,7 +98,8 @@ test.describe.serial('Agenda mobile — lien daté de la notification « absence
     try {
       await loginPraticien(page);
       await page.goto(`/agenda?date=${dateCible}`);
-      await expect(page.getByText('Agenda', { exact: true })).toBeVisible();
+      // .first() : « Agenda » est aussi le libellé de l'onglet de la barre du bas (qui remplace Tournée).
+    await expect(page.getByText('Agenda', { exact: true }).first()).toBeVisible();
 
       // Même libellé que formatDateLong (AppMobile.tsx), calculé dans le
       // navigateur pour partager sa locale et son fuseau.

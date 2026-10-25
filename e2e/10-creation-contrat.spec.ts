@@ -26,7 +26,7 @@ test.describe('Création d\'un contrat de suivi', () => {
       // Le contrat ne génère PLUS les séances automatiquement : la génération
       // est passée sur Tournée → Planifier, et le message de confirmation le dit
       // (ContratNouveauPage.tsx, toast après creerContrat).
-      await expect(page.getByText(/Contrat créé\. Allez sur Tournée/)).toBeVisible();
+      await expect(page.getByText(/Contrat créé\. Allez sur Agenda/)).toBeVisible();
     } finally {
       // Julien Bernard est un bénéficiaire PARTAGÉ : on ne supprime que CE
       // contrat. Son id est généré côté client (uuidv4, useContrats.ts) et

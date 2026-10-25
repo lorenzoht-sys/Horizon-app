@@ -87,7 +87,7 @@ describe('ecranMobileDepuisUrl', () => {
     expect(ecran(URLS_MOBILE.beneficiaires)).toEqual({ ecran: 'beneficiaires' });
     expect(ecran(URLS_MOBILE.saisie)).toEqual({ ecran: 'saisie' });
     expect(ecran(URLS_MOBILE.plus)).toEqual({ ecran: 'plus' });
-    expect(ecran(URLS_MOBILE.tournee)).toEqual({ ecran: 'tournee' });
+    expect(ecran('/tournee')).toEqual({ ecran: 'agenda', date: null });
     expect(ecran(URLS_MOBILE.assistant)).toEqual({ ecran: 'assistant', beneficiaireId: null });
   });
 
@@ -99,7 +99,7 @@ describe('ecranMobileDepuisUrl', () => {
   it('/agenda?date=AAAA-MM-JJ : jour à ouvrir (lien de la notification « absence signalée »)', () => {
     expect(ecran(URLS_MOBILE.agendaJour('2026-10-07'))).toEqual({ ecran: 'agenda', date: '2026-10-07' });
     expect(URLS_MOBILE.agendaJour('2026-10-07')).toBe('/agenda?date=2026-10-07');
-    expect(ongletDepuisUrl('/agenda', '?date=2026-10-07')).toBeNull();
+    expect(ongletDepuisUrl('/agenda', '?date=2026-10-07')).toBe('agenda');
   });
 
   it('/agenda?date= illisible ou inexistante : aujourd\'hui, comme sans paramètre', () => {
@@ -142,15 +142,14 @@ describe('ongletDepuisUrl', () => {
   it('met en évidence l’onglet de l’écran, et « Bénéfic. » sur la fiche', () => {
     expect(ongletDepuisUrl('/', '')).toBe('accueil');
     expect(ongletDepuisUrl('/', '?onglet=plus')).toBe('plus');
-    expect(ongletDepuisUrl('/tournee', '')).toBe('tournee');
+    expect(ongletDepuisUrl('/agenda', '')).toBe('agenda');
     expect(ongletDepuisUrl('/participant/p1', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/archives', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/participant/p1/bilan/b9', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/participant/p1/comparaison', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/participant/p1/contrat/nouveau', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/participants/nouveau', '')).toBeNull();
-    // /agenda n'est pas un onglet de la barre du bas (atteint depuis « Plus »,
-    // même situation que /assistant) : aucun onglet mis en évidence.
-    expect(ongletDepuisUrl('/agenda', '')).toBeNull();
+    // /agenda est l'onglet « Agenda » de la barre du bas (il remplace Tournée).
+    expect(ongletDepuisUrl('/agenda', '?date=2026-10-07')).toBe('agenda');
   });
 });

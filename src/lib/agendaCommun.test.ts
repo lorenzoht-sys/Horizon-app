@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { absenceSignaleeAffichable, titreEvenementSeance } from './agendaCommun';
+import { absenceSignaleeAffichable, titreEvenementSeance, getCouleurEvenement, couleurCategorieDe } from './agendaCommun';
 import type { Seance } from '../types';
 
 const seanceBase: Seance = {
@@ -58,5 +58,30 @@ describe('titreEvenementSeance — badge « absence signalée » agenda desktop'
   it('pas de préfixe sur une séance annulée, même signalée (cas signalé — voir absenceSignaleeAffichable)', () => {
     const seance = { ...seanceBase, statut: 'annulee' as const, absenceSignaleeLe: '2026-09-30T10:00:00.000Z' };
     expect(titreEvenementSeance(seance, participant)).toBe('Jean Dupont');
+  });
+});
+
+describe('getCouleurEvenement / couleurCategorieDe — couleur de catégorie (chantier 15)', () => {
+  const categories = [{ id: 'c1', couleur: '#8B5CF6' }];
+
+  it('la couleur de la catégorie remplace celle du type et du statut « réalisée »', () => {
+    expect(getCouleurEvenement({ ...seanceBase, statut: 'planifiee' }, '#8B5CF6')).toBe('#8B5CF6');
+    expect(getCouleurEvenement({ ...seanceBase, statut: 'realisee' }, '#8B5CF6')).toBe('#8B5CF6');
+  });
+
+  it('annulée et reportée restent rouge / orange quelle que soit la catégorie', () => {
+    expect(getCouleurEvenement({ ...seanceBase, statut: 'annulee' }, '#8B5CF6')).toBe('#EF4444');
+    expect(getCouleurEvenement({ ...seanceBase, statut: 'reportee' }, '#8B5CF6')).toBe('#F59E0B');
+  });
+
+  it('sans catégorie, couleurs historiques inchangées', () => {
+    expect(getCouleurEvenement({ ...seanceBase, statut: 'realisee' })).toBe('#3B6D11');
+    expect(getCouleurEvenement({ ...seanceBase, statut: 'planifiee', type: 'bilan' })).toBe('#8B5CF6');
+  });
+
+  it('catégorie supprimée ou absente : undefined', () => {
+    expect(couleurCategorieDe({ categorieId: 'c1' }, categories)).toBe('#8B5CF6');
+    expect(couleurCategorieDe({ categorieId: 'disparue' }, categories)).toBeUndefined();
+    expect(couleurCategorieDe({}, categories)).toBeUndefined();
   });
 });

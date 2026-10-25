@@ -37,9 +37,14 @@ export const LABEL_RAISON_ANNULATION: Record<RaisonAnnulation, string> = {
 };
 
 // Reproduit exactement getCouleurEvenement de AgendaPage.tsx.
-export function getCouleurEvenement(seance: Seance): string {
+//
+// `couleurCategorie` (chantier 15) : couleur de la catégorie choisie par le praticien. Elle remplace
+// les couleurs de type/« réalisée » (le praticien a choisi la sienne), mais jamais « annulée » ni
+// « reportée », qui doivent rester repérables d'un coup d'œil quelle que soit la catégorie.
+export function getCouleurEvenement(seance: Seance, couleurCategorie?: string): string {
   if (seance.statut === 'annulee') return '#EF4444';
   if (seance.statut === 'reportee') return '#F59E0B';
+  if (couleurCategorie) return couleurCategorie;
   if (seance.statut === 'realisee') return '#3B6D11';
   if (seance.type === 'bilan' || seance.type === 'bilan_initial') return '#8B5CF6';
   return seance.date === TODAY ? '#1A5F9E' : '#5B9BD5';
@@ -63,6 +68,11 @@ export function absenceSignaleeAffichable(seance: Pick<Seance, 'absenceSignaleeL
 // existe, et ne gère que le style) : le signalement d'absence patient est
 // donc rendu comme un simple préfixe textuel plutôt qu'un badge graphique
 // séparé. Ne modifie ni statut ni calcul — uniquement l'affichage.
+/** Couleur de la catégorie d'une séance, ou undefined (aucune catégorie, ou catégorie supprimée). */
+export function couleurCategorieDe(seance: Pick<Seance, 'categorieId'>, categories: { id: string; couleur: string }[]): string | undefined {
+  return seance.categorieId ? categories.find(c => c.id === seance.categorieId)?.couleur : undefined;
+}
+
 export function titreEvenementSeance(seance: Seance, participant: { prenom: string; nom: string } | undefined): string {
   const titreBase = participant ? `${participant.prenom} ${participant.nom}` : LABEL_TYPE[seance.type];
   return absenceSignaleeAffichable(seance) ? `🚫 ${titreBase}` : titreBase;

@@ -49,8 +49,8 @@ test.describe('Cours collectifs sur mobile (lecture + présence)', () => {
       await expect(page.getByText(titreCours)).toBeVisible();
       await expect(page.getByText('1 inscrit')).toBeVisible();
 
-      // ── Lecture sur mobile : EcranTournee, distinguée d'une séance ─────
-      await page.goto('/tournee');
+      // ── Lecture sur mobile : EcranAgenda, distinguée d'une séance ─────
+      await page.goto('/agenda');
       await expect(page.getByText(titreCours)).toBeVisible();
       await expect(page.getByText('1 inscrit', { exact: false })).toBeVisible();
 
@@ -101,7 +101,7 @@ test.describe('Cours collectifs sur mobile (lecture + présence)', () => {
       await expect(page.getByText(titreCours)).toHaveCount(0);
     } finally {
       // Filet de sécurité, sur le même modèle que
-      // 18-tournee-annuler-reporter.spec.ts : si une assertion a échoué
+      // 17-cours-collectifs-mobile.spec.ts : si une assertion a échoué
       // avant l'annulation normale ci-dessus, le cours de test resterait
       // "planifie" en base sinon — confirmé en pratique le 2026-09-24 (voir
       // rapport du chantier « fusion des paramètres ») : trois cours
@@ -117,7 +117,7 @@ test.describe('Cours collectifs sur mobile (lecture + présence)', () => {
         .last();
       // `.waitFor` (pas `.isVisible()` instantané) : laisse le temps à la
       // page de s'hydrater après `goto` — même piège déjà rencontré dans
-      // 18-tournee-annuler-reporter.spec.ts et 19-bilan-detail-mobile.spec.ts
+      // 19-bilan-detail-mobile.spec.ts
       // (carte pas encore montée, jugée absente à tort).
       const present = await carteRestante.waitFor({ state: 'visible', timeout: 8000 }).then(() => true).catch(() => false);
       if (present) {
@@ -163,7 +163,7 @@ test.describe('Cours collectifs sur mobile (lecture + présence)', () => {
 
     try {
       await page.setViewportSize({ width: 390, height: 844 });
-      await page.goto('/tournee');
+      await page.goto('/agenda');
       await page.waitForLoadState('networkidle');
       const carteCours = page.locator('div')
         .filter({ hasText: titreCours })
@@ -188,7 +188,7 @@ test.describe('Cours collectifs sur mobile (lecture + présence)', () => {
       await expect(boutonAnnuler).toBeHidden({ timeout: 10000 });
     } finally {
       await page.setViewportSize({ width: 390, height: 844 }).catch(() => {});
-      await page.goto('/tournee').catch(() => {});
+      await page.goto('/agenda').catch(() => {});
       await page.waitForLoadState('networkidle').catch(() => {});
       const carteRestante = page.locator('div')
         .filter({ hasText: titreCours })

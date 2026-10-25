@@ -38,7 +38,8 @@ test.describe('Agenda mobile (écran natif, vue Jour — MVP)', () => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Plus', exact: true }).click();
     await page.getByText('Agenda complet').click();
-    await expect(page.getByText('Agenda', { exact: true })).toBeVisible();
+    // .first() : « Agenda » est aussi le libellé de l'onglet de la barre du bas (qui remplace Tournée).
+    await expect(page.getByText('Agenda', { exact: true }).first()).toBeVisible();
 
     // ── Changer de jour (flèches) ────────────────────────────────────────────
     const labelJour = page.locator('div').filter({ hasText: /^(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)/ }).first();
@@ -210,7 +211,8 @@ test.describe('Agenda mobile — vue Mois', () => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Plus', exact: true }).click();
     await page.getByText('Agenda complet').click();
-    await expect(page.getByText('Agenda', { exact: true })).toBeVisible();
+    // .first() : « Agenda » est aussi le libellé de l'onglet de la barre du bas (qui remplace Tournée).
+    await expect(page.getByText('Agenda', { exact: true }).first()).toBeVisible();
 
     let seanceCreee = false;
     let seanceId: string | null = null;

@@ -29,6 +29,14 @@ export interface MiseAJourSeance {
   // raison quand une séance repasse à un autre statut.
   motifAnnulation?: Seance['motifAnnulation'];
   motifAnnulationDetail?: string;
+  // Catégorie (couleur) : clé ABSENTE = ne pas y toucher (restauration, report…) ; clé présente
+  // mais undefined = retirer la catégorie. D'où le `in` aux endroits qui recopient ces champs.
+  categorieId?: string;
+  // Notes et objectif : propres à UNE séance, jamais recopiés sur la série (planActionSurSelection
+  // ne les reprend pas). Pour la séance de référence d'une édition de série, voir
+  // avecInfosDeLaReference.
+  notes?: string;
+  objectif?: string;
 }
 
 export type OperationSeance =
@@ -91,6 +99,16 @@ export function planEditerSerie(
   updates: MiseAJourSeance,
 ): PlanSerie {
   return planActionSurSelection(seances, futures.map(f => f.id), { type: 'editer', dowCible, updates });
+}
+
+// Une édition portée sur une série ne recopie ni les notes ni l'objectif sur les autres séances, mais
+// la séance sur laquelle le praticien a cliqué doit les garder. On les ajoute à SON opération plutôt
+// que de relancer un second modifierSeance : deux écritures successives sur la même séance partiraient
+// de la même copie locale et la seconde annulerait la première.
+export function avecInfosDeLaReference(operations: OperationSeance[], seanceRefId: string, updates: MiseAJourSeance): OperationSeance[] {
+  return operations.map(op => op.type === 'update' && op.id === seanceRefId
+    ? { ...op, updates: { ...op.updates, notes: updates.notes, objectif: updates.objectif } }
+    : op);
 }
 
 // ── Suppression ────────────────────────────────────────────────────────────────
@@ -179,6 +197,7 @@ export function planActionSurSelection(
         date: c.date, heureDebut: updates.heureDebut, heureFin: updates.heureFin,
         dureeMinutes: updates.dureeMinutes, statut: updates.statut,
         motifAnnulation: updates.motifAnnulation, motifAnnulationDetail: updates.motifAnnulationDetail,
+        ...('categorieId' in updates ? { categorieId: updates.categorieId } : {}),
       },
     })),
   };

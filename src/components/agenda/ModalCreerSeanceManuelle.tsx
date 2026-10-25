@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { X, Loader, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import type { Participant, Seance, TypeSeance } from '../../types';
+import type { Participant, Seance, TypeSeance, CategorieSeance } from '../../types';
+import SelecteurCategorie from './SelecteurCategorie';
 import { addMinutes } from '../../utils/horaires';
 
 // ── Création manuelle d'une séance (port de ModalCreerSeance, AgendaPage.tsx)
@@ -12,12 +13,15 @@ import { addMinutes } from '../../utils/horaires';
 //    séance ponctuelle unique — c'est le seul moyen de planifier un bilan
 //    initial pour un prospect qui n'a pas encore de contrat. ─────────────────
 
-export default function ModalCreerSeanceManuelle({ participants, detecterConflits, onCreer, onClose, initial }: {
+export default function ModalCreerSeanceManuelle({ participants, detecterConflits, onCreer, onClose, initial, categories = [], onGererCategories }: {
   participants: Participant[];
   detecterConflits: (date: string, heureDebut: string, heureFin: string) => Seance[];
   onCreer: (data: Omit<Seance, 'id'>) => Promise<void>;
   onClose: () => void;
   initial?: { date?: string; heureDebut?: string };
+  // Catégories du praticien (couleur de l'agenda) — facultatives : sans elles, comportement inchangé.
+  categories?: CategorieSeance[];
+  onGererCategories?: () => void;
 }) {
   const [form, setForm] = useState({
     participantId: '',
@@ -26,6 +30,8 @@ export default function ModalCreerSeanceManuelle({ participants, detecterConflit
     heureDebut: initial?.heureDebut ?? '09:00',
     dureeMinutes: 45,
     notes: '',
+    objectif: '',
+    categorieId: '',
   });
   const [loading, setLoading] = useState(false);
 
@@ -48,6 +54,8 @@ export default function ModalCreerSeanceManuelle({ participants, detecterConflit
         dureeMinutes: form.dureeMinutes,
         statut: 'planifiee',
         notes: form.notes,
+        objectif: form.objectif.trim() || undefined,
+        categorieId: form.categorieId || undefined,
         adresse: [participant?.adresseRue, participant?.adresseCodePostal, participant?.adresseVille].filter(Boolean).join(', '),
         coordonnees: participant?.coordonnees ? { lat: participant.coordonnees.lat, lng: participant.coordonnees.lng } : undefined,
       });
@@ -76,13 +84,22 @@ export default function ModalCreerSeanceManuelle({ participants, detecterConflit
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Type</label>
-            <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as TypeSeance }))}
+            <select value={form.type} onChange={e => {
+              const type = e.target.value as TypeSeance;
+              // Un bilan prend d'office la catégorie « Bilan » du praticien (modifiable ensuite).
+              const catBilan = categories.find(c => c.estBilan)?.id ?? '';
+              setForm(f => ({ ...f, type, categorieId: type !== 'seance' && !f.categorieId ? catBilan : f.categorieId }));
+            }}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary">
               <option value="seance">Séance</option>
               <option value="bilan">Bilan</option>
               <option value="bilan_initial">Bilan initial</option>
             </select>
           </div>
+          {(categories.length > 0 || onGererCategories) && (
+            <SelecteurCategorie categories={categories} valeur={form.categorieId}
+              onChange={categorieId => setForm(f => ({ ...f, categorieId }))} onGerer={onGererCategories} />
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Date *</label>
@@ -107,6 +124,12 @@ export default function ModalCreerSeanceManuelle({ participants, detecterConflit
               {[participant.adresseRue, participant.adresseCodePostal, participant.adresseVille].filter(Boolean).join(', ') || 'Adresse non renseignée'}
             </div>
           )}
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Objectif de la séance</label>
+            <input type="text" value={form.objectif} onChange={e => setForm(f => ({ ...f, objectif: e.target.value }))}
+              maxLength={200} placeholder="Ex. travailler l'équilibre unipodal"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
+          </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Notes</label>
             <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
