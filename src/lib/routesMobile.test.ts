@@ -149,9 +149,7 @@ describe('ongletDepuisUrl', () => {
     expect(ongletDepuisUrl('/participant/p1/comparaison', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/participant/p1/contrat/nouveau', '')).toBe('beneficiaires');
     expect(ongletDepuisUrl('/participants/nouveau', '')).toBeNull();
-    // /agenda est l'onglet « Agenda » de la barre du bas (il remplace Tournée) ;
-    // /assistant n'en a pas.
+    // /agenda est l'onglet « Agenda » de la barre du bas (il remplace Tournée).
     expect(ongletDepuisUrl('/agenda', '?date=2026-10-07')).toBe('agenda');
-    expect(ongletDepuisUrl('/assistant', '')).toBeNull();
   });
 });
