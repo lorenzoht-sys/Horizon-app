@@ -195,11 +195,11 @@ test.describe.serial('Agenda mobile — catégories, objectif, bilans automatiqu
     expect(catBilan?.est_bilan).toBe(true);
     if (!existaitAvant) categorieBilanCreeeParLeTest = catBilan!.id;
 
-    // ── Rejouer l'activation ne crée pas de doublon ──
-    const nbAvantMiseAJour = poses.length;
+    // ── « Mettre à jour le planning » à fréquence inchangée : ni doublon, ni retrait (mêmes séances) ──
+    const idsAvant = poses.map(b => b.id).sort();
     await page.getByRole('button', { name: 'Mettre à jour le planning' }).click();
-    await page.waitForTimeout(2500);
-    expect((await autos()).length).toBe(nbAvantMiseAJour);
+    await page.waitForTimeout(4000);
+    expect((await autos()).map(b => b.id).sort(), 'aucune séance retirée ni ajoutée').toEqual(idsAvant);
 
     // ── Un bilan déplacé à la main n'est plus automatique (donc jamais retiré) ──
     const deplace = poses[0];
