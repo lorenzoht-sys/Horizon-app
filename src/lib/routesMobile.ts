@@ -37,8 +37,8 @@ export const URLS_MOBILE = {
   saisie: '/?onglet=saisie',
   plus: '/?onglet=plus',
   // Écran natif mobile (sous-chantier 1, Agenda) — distinct de /agenda-v2
-  // (desktop-only, react-big-calendar) : remplace l'ancien renvoi vers
-  // /agenda-v2 depuis l'écran "Plus" (Mon activité → Agenda complet).
+  // (desktop-only, react-big-calendar). Atteint par l'onglet « Agenda » de la
+  // barre du bas (l'entrée « Agenda complet » de l'écran « Plus » a été retirée).
   agenda: '/agenda',
   // Ouvre l'agenda mobile sur un jour précis — utilisé par la notification
   // push « absence signalée » (urlNotificationAbsencePraticien,
