@@ -185,8 +185,18 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
     modifierStatutCours, mettreAJourParticipation,
   } = useCoursCollectifs();
   const [coursSelectionneId, setCoursSelectionneId] = useState<string | null>(null);
+  // Couleurs de catégorie du praticien (les mêmes que dans l'agenda) et accès à l'agenda.
+  const { categories } = useCategoriesSeance();
+  const navigate = useNavigate();
   const today = new Date().toISOString().slice(0, 10);
   const seances = seancesDuJour(today);
+  const nbRealisees = seances.filter(s => s.statut === 'realisee').length;
+  const categorieDe = (sc: Seance) => categories.find(c => c.id === sc.categorieId);
+  // Échéances : les 3 prochains bilans planifiés (posés à la main ou automatiquement) à partir de demain.
+  const bilansAVenir = allSeances
+    .filter(sc => sc.type !== 'seance' && sc.statut === 'planifiee' && sc.date > today)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.heureDebut.localeCompare(b.heureDebut))
+    .slice(0, 3);
   // Même filtre que l'agenda desktop (AgendaV2Page) : un cours annulé ne
   // doit pas apparaître dans la timeline du jour.
   const coursDuJour = coursCollectifs
@@ -230,73 +240,51 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
     })),
   ].sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
 
-  const statCard: React.CSSProperties = {
-    background: 'white', borderRadius: 16, padding: '16px 20px',
-    boxShadow: '0 2px 10px rgba(13,43,43,0.07)',
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-  };
-  const divider: React.CSSProperties = { width: 1, height: 36, background: C.border };
+  // Tuile de chiffre (accueil) : icône Tabler dans une pastille teintée, chiffre en grand, libellé.
+  const Tuile = ({ icone, valeur, libelle, couleur = C.primary }: { icone: string; valeur: number; libelle: string; couleur?: string }) => (
+    <div style={{ background: 'white', borderRadius: 16, padding: '14px 14px', boxShadow: '0 2px 10px rgba(13,43,43,0.06)', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 12, background: `${couleur}1F`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <i className={`ti ${icone}`} style={{ fontSize: 20, color: couleur }} />
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 24, fontWeight: 800, color: couleur === C.primary ? C.text : couleur, lineHeight: 1 }}>{valeur}</div>
+        <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{libelle}</div>
+      </div>
+    </div>
+  );
+  const titreSection: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.08em' };
+  const pastilleCategorie = (c: { nom: string; couleur: string }) => (
+    <span style={{ background: `${c.couleur}22`, color: C.text, border: `1px solid ${c.couleur}`, borderRadius: 8, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{c.nom}</span>
+  );
 
   return (
     <div style={{ minHeight: '100vh', background: '#F0F4F4' }}>
 
       {/* ── HEADER ─────────────────────────────────────────────── */}
-      <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 18px)', paddingLeft: 20, paddingRight: 20, paddingBottom: 22 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <img src="/logo-horizon.png?v=2" alt="Horizon" style={{ height: 22, marginBottom: 12 }}
-              onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }} />
-            <div style={{ fontSize: 22, fontWeight: 800, color: 'white', lineHeight: 1.2 }}>Bonjour {prenom} 👋</div>
-            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 5 }}>{formatDateLong(new Date())}</div>
+      <div style={{ background: C.dark, borderRadius: '0 0 24px 24px', paddingTop: 'calc(env(safe-area-inset-top, 44px) + 18px)', paddingLeft: 20, paddingRight: 20, paddingBottom: 22 }}>
+        <img src="/logo-horizon.png?v=2" alt="Horizon" style={{ height: 22, marginBottom: 14 }}
+          onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }} />
+        <div style={{ fontSize: 24, fontWeight: 800, color: 'white', lineHeight: 1.2 }}>Bonjour {prenom}</div>
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginTop: 4, textTransform: 'capitalize' }}>{formatDateLong(new Date())}</div>
+
+        {/* Progression de la journée : séances faites / séances du jour. */}
+        <div style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 7 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>
+              {seances.length} séance{seances.length !== 1 ? 's' : ''} aujourd'hui
+            </span>
+            {seances.length > 0 && (
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>{nbRealisees} faite{nbRealisees !== 1 ? 's' : ''}</span>
+            )}
           </div>
-          <div style={{ background: C.primary, borderRadius: 24, padding: '6px 14px', fontSize: 13, fontWeight: 700, color: 'white', marginTop: 2, flexShrink: 0 }}>
-            {seances.length} séance{seances.length !== 1 ? 's' : ''}
+          <div role="progressbar" aria-valuemin={0} aria-valuemax={seances.length} aria-valuenow={nbRealisees} aria-label="Séances du jour réalisées"
+            style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.15)', overflow: 'hidden' }}>
+            <div style={{ width: seances.length ? `${(nbRealisees / seances.length) * 100}%` : '0%', height: '100%', background: C.primary, borderRadius: 3, transition: 'width .3s' }} />
           </div>
         </div>
       </div>
 
-      <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-        {/* ── STATS ──────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={statCard}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 22 }}>👥</span>
-              <div>
-                <div style={{ fontSize: 24, fontWeight: 800, color: C.primary, lineHeight: 1 }}>{participantsActifs.length}</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>bénéficiaires actifs</div>
-              </div>
-            </div>
-            <div style={divider} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 22 }}>📊</span>
-              <div>
-                <div style={{ fontSize: 24, fontWeight: 800, color: C.primary, lineHeight: 1 }}>{bilansAFaire.length}</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>bilans à faire</div>
-              </div>
-            </div>
-          </div>
-
-          <div style={statCard}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 22 }}>📅</span>
-              <div>
-                <div style={{ fontSize: 24, fontWeight: 800, color: C.primary, lineHeight: 1 }}>{seancesSemaine.length}</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>cette semaine</div>
-              </div>
-            </div>
-            <div style={divider} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 22 }}>⏰</span>
-              <div>
-                <div style={{ fontSize: 24, fontWeight: 800, color: contratsARenouveler.length > 0 ? '#F59E0B' : C.primary, lineHeight: 1 }}>
-                  {contratsARenouveler.length}
-                </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>contrat fin proche</div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 22 }}>
 
         {/* ── PROCHAINE SÉANCE ──────────────────────────────────── */}
         {prochaineSeance && (() => {
@@ -305,33 +293,45 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
           const contreIndDetail = ciInfo.detail ?? undefined;
           const hasCI = ciInfo.actif;
           const adresse = [p?.adresseRue, p?.adresseVille].filter(Boolean).join(', ');
+          const cat = categorieDe(prochaineSeance);
           return (
-            <div style={{ background: '#E8F8F8', borderRadius: 16, padding: '16px', border: `1px solid ${C.primary}33` }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.primary, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
-                Prochaine séance
-              </div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>
-                🕙 {prochaineSeance.heureDebut} · {p?.prenom} {p?.nom}
-              </div>
-              {adresse && (
-                <div style={{ fontSize: 13, color: 'var(--color-ink-2)', marginBottom: hasCI ? 8 : 14 }}>📍 {adresse}</div>
-              )}
-              {hasCI && contreIndDetail && (
-                <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '7px 10px', marginBottom: 14, fontSize: 12, color: '#B91C1C', fontWeight: 600 }}>
-                  ⚠️ {contreIndDetail}
+            <div style={{ background: 'white', borderRadius: 18, boxShadow: '0 4px 16px rgba(13,43,43,0.10)', overflow: 'hidden', display: 'flex' }}>
+              <span aria-hidden="true" style={{ width: 6, background: cat?.couleur ?? C.primary, flexShrink: 0 }} />
+              <div style={{ padding: 16, flex: 1, minWidth: 0 }}>
+                <div style={{ ...titreSection, color: C.primary, marginBottom: 8 }}>Prochaine séance</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                  <span style={{ fontSize: 26, fontWeight: 800, color: C.text, lineHeight: 1 }}>{prochaineSeance.heureDebut}</span>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: C.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p?.prenom} {p?.nom}</span>
                 </div>
-              )}
-              <div style={{ display: 'flex', gap: 8 }}>
-                {adresse && (
-                  <button onClick={() => ouvrirMaps(adresse)}
-                    style={{ flex: 1, padding: '11px', background: 'white', border: `1.5px solid ${C.primary}`, borderRadius: 10, fontSize: 13, fontWeight: 700, color: C.primary, cursor: 'pointer' }}>
-                    🗺️ Itinéraire
-                  </button>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                  {cat ? pastilleCategorie(cat) : prochaineSeance.type !== 'seance' && (
+                    <span style={{ background: '#EDE9FE', color: '#6D28D9', borderRadius: 8, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{LABEL_TYPE[prochaineSeance.type]}</span>
+                  )}
+                  <span style={{ fontSize: 12, color: C.muted }}>{prochaineSeance.dureeMinutes} min</span>
+                </div>
+                {prochaineSeance.objectif && (
+                  <div style={{ fontSize: 13, color: C.text, marginTop: 8 }}>🎯 {prochaineSeance.objectif}</div>
                 )}
-                <button onClick={() => p && onVoirFiche(p.id)}
-                  style={{ flex: 1, padding: '11px', background: C.primary, border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, color: 'white', cursor: 'pointer' }}>
-                  📋 Fiche →
-                </button>
+                {adresse && (
+                  <div style={{ fontSize: 13, color: 'var(--color-ink-2)', marginTop: 8 }}>📍 {adresse}</div>
+                )}
+                {hasCI && contreIndDetail && (
+                  <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '7px 10px', marginTop: 10, fontSize: 12, color: '#B91C1C', fontWeight: 600 }}>
+                    ⚠️ {contreIndDetail}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                  {adresse && (
+                    <button onClick={() => ouvrirMaps(adresse)}
+                      style={{ flex: 1, padding: '11px', background: 'white', border: `1.5px solid ${C.primary}`, borderRadius: 10, fontSize: 13, fontWeight: 700, color: C.primary, cursor: 'pointer' }}>
+                      🗺️ Itinéraire
+                    </button>
+                  )}
+                  <button onClick={() => p && onVoirFiche(p.id)}
+                    style={{ flex: 1, padding: '11px', background: C.primary, border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, color: 'white', cursor: 'pointer' }}>
+                    📋 Fiche →
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -339,17 +339,21 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
 
         {/* ── TIMELINE ou ÉTAT VIDE ─────────────────────────────── */}
         {itemsJour.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '36px 20px' }}>
-            <i className="ti ti-calendar-off" style={{ fontSize: 54, color: '#BDD0D0', display: 'block', marginBottom: 14 }} />
+          <div style={{ textAlign: 'center', padding: '28px 20px', background: 'white', borderRadius: 18, boxShadow: '0 2px 10px rgba(13,43,43,0.06)' }}>
+            <i className="ti ti-calendar-off" style={{ fontSize: 48, color: '#BDD0D0', display: 'block', marginBottom: 12 }} />
             <div style={{ fontSize: 16, fontWeight: 600, color: '#7A9A9A', marginBottom: 6 }}>Aucune séance aujourd'hui</div>
             <div style={{ fontSize: 13, color: C.muted }}>Profitez-en pour avancer sur vos bilans</div>
           </div>
         ) : (
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
-              Aujourd'hui
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={titreSection}>Aujourd'hui</div>
+              <button onClick={() => navigate(URLS_MOBILE.agenda)}
+                style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, fontWeight: 700, color: C.primary, cursor: 'pointer' }}>
+                Agenda →
+              </button>
             </div>
-            <div style={{ background: 'white', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 10px rgba(13,43,43,0.07)' }}>
+            <div style={{ background: 'white', borderRadius: 18, overflow: 'hidden', boxShadow: '0 2px 10px rgba(13,43,43,0.06)' }}>
               {itemsJour.map((item, index) => {
                 const isLast = index === itemsJour.length - 1;
                 if (item.kind === 'cours') {
@@ -357,14 +361,14 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
                   return (
                     <div key={`cours-${cours.id}`}>
                       <div onClick={() => setCoursSelectionneId(cours.id)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', cursor: 'pointer', background: '#F6F0FF' }}>
-                        <span style={{ fontSize: 15, flexShrink: 0 }}>👥</span>
-                        <span style={{ fontSize: 13, color: C.muted, flexShrink: 0, width: 38 }}>{cours.heureDebut}</span>
+                        style={{ display: 'flex', alignItems: 'stretch', gap: 12, padding: '12px 16px', cursor: 'pointer', background: '#F6F0FF' }}>
+                        <span aria-hidden="true" style={{ width: 4, borderRadius: 2, background: '#7C3AED', flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, fontWeight: 700, color: C.text, flexShrink: 0, width: 40 }}>{cours.heureDebut}</span>
                         <span style={{ fontSize: 14, fontWeight: 600, color: C.text, flex: 1, minWidth: 0 }}>
-                          {cours.titre}
+                          👥 {cours.titre}
                           <span style={{ fontSize: 11, fontWeight: 500, color: '#7C3AED' }}> · {nbInscrits} inscrit{nbInscrits !== 1 ? 's' : ''}</span>
                         </span>
-                        <i className="ti ti-chevron-right" style={{ fontSize: 15, color: '#D0DCDC' }} />
+                        <i className="ti ti-chevron-right" style={{ fontSize: 15, color: '#D0DCDC', alignSelf: 'center' }} />
                       </div>
                       {!isLast && <div style={{ height: 1, background: '#F0F4F4', marginLeft: 16 }} />}
                     </div>
@@ -373,19 +377,36 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
                 const seance = item.seance;
                 const p = participants.find(x => x.id === seance.participantId);
                 const estEnCours = seance.heureDebut <= currentTimeStr && seance.heureFin > currentTimeStr;
-                const icon = seance.statut === 'realisee' ? '✅'
-                  : seance.statut === 'annulee' ? '❌'
-                  : estEnCours ? '🔵' : '⬜';
+                const faite = seance.statut === 'realisee';
+                const cat = categorieDe(seance);
                 return (
                   <div key={seance.id}>
                     <div onClick={() => p && onVoirFiche(p.id)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', cursor: p ? 'pointer' : 'default', background: estEnCours ? '#F0FAFA' : 'white' }}>
-                      <span style={{ fontSize: 15, flexShrink: 0 }}>{icon}</span>
-                      <span style={{ fontSize: 13, color: C.muted, flexShrink: 0, width: 38 }}>{seance.heureDebut}</span>
-                      <span style={{ fontSize: 14, fontWeight: estEnCours ? 700 : 500, color: C.text, flex: 1 }}>
-                        {p?.prenom} {p?.nom}
-                      </span>
-                      <i className="ti ti-chevron-right" style={{ fontSize: 15, color: '#D0DCDC' }} />
+                      style={{ display: 'flex', alignItems: 'stretch', gap: 12, padding: '12px 16px', cursor: p ? 'pointer' : 'default', background: estEnCours ? '#F0FAFA' : 'white' }}>
+                      <span aria-hidden="true" style={{ width: 4, borderRadius: 2, background: cat?.couleur ?? '#B8C7C7', flexShrink: 0, opacity: faite ? 0.5 : 1 }} />
+                      <div style={{ flexShrink: 0, width: 40 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{seance.heureDebut}</div>
+                        <div style={{ fontSize: 11, color: C.muted }}>{seance.heureFin}</div>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: estEnCours ? 700 : 600, color: C.text, textDecoration: faite ? 'line-through' : 'none', opacity: faite ? 0.6 : 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {p?.prenom} {p?.nom}
+                        </div>
+                        {(cat || seance.type !== 'seance') && (
+                          <div style={{ marginTop: 3 }}>
+                            {cat ? pastilleCategorie(cat) : (
+                              <span style={{ background: '#EDE9FE', color: '#6D28D9', borderRadius: 8, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{LABEL_TYPE[seance.type]}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {faite ? (
+                        <i className="ti ti-circle-check" aria-label="Réalisée" style={{ fontSize: 20, color: C.green, alignSelf: 'center' }} />
+                      ) : estEnCours ? (
+                        <span style={{ background: C.primary, color: 'white', borderRadius: 8, padding: '3px 8px', fontSize: 11, fontWeight: 700, alignSelf: 'center' }}>En cours</span>
+                      ) : (
+                        <i className="ti ti-chevron-right" style={{ fontSize: 15, color: '#D0DCDC', alignSelf: 'center' }} />
+                      )}
                     </div>
                     {!isLast && <div style={{ height: 1, background: '#F0F4F4', marginLeft: 16 }} />}
                   </div>
@@ -395,9 +416,42 @@ function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; o
           </div>
         )}
 
+        {/* ── BILANS À VENIR ────────────────────────────────────── */}
+        {bilansAVenir.length > 0 && (
+          <div>
+            <div style={{ ...titreSection, marginBottom: 10 }}>Bilans à venir</div>
+            <div style={{ background: 'white', borderRadius: 18, overflow: 'hidden', boxShadow: '0 2px 10px rgba(13,43,43,0.06)' }}>
+              {bilansAVenir.map((b, i) => {
+                const p = participants.find(x => x.id === b.participantId);
+                const cat = categorieDe(b);
+                return (
+                  <button key={b.id} onClick={() => navigate(URLS_MOBILE.agendaJour(b.date))}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'none', border: 'none', borderTop: i === 0 ? 'none' : '1px solid #F0F4F4', cursor: 'pointer', textAlign: 'left' }}>
+                    <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: '50%', background: cat?.couleur ?? '#8B5CF6', flexShrink: 0 }} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: C.text, flexShrink: 0, width: 56 }}>{formatDateCourt(b.date)}</span>
+                    <span style={{ fontSize: 14, color: C.text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p?.prenom} {p?.nom}</span>
+                    <i className="ti ti-chevron-right" style={{ fontSize: 15, color: '#D0DCDC' }} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── CHIFFRES ──────────────────────────────────────────── */}
+        <div>
+          <div style={{ ...titreSection, marginBottom: 10 }}>En un coup d'œil</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <Tuile icone="ti-users" valeur={participantsActifs.length} libelle="bénéficiaires actifs" />
+            <Tuile icone="ti-calendar-week" valeur={seancesSemaine.length} libelle="cette semaine" />
+            <Tuile icone="ti-clipboard-check" valeur={bilansAFaire.length} libelle="bilans à faire" />
+            <Tuile icone="ti-clock-exclamation" valeur={contratsARenouveler.length} libelle="contrat fin proche" couleur={contratsARenouveler.length > 0 ? '#F59E0B' : C.primary} />
+          </div>
+        </div>
+
         {/* ── ALERTES ───────────────────────────────────────────── */}
         {contratsARenouveler.length > 0 && (
-          <div style={{ background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 12, padding: '12px 14px', fontSize: 13, color: '#92400E', fontWeight: 600 }}>
+          <div style={{ background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 14, padding: '12px 14px', fontSize: 13, color: '#92400E', fontWeight: 600 }}>
             ⏰ {contratsARenouveler.length} contrat{contratsARenouveler.length > 1 ? 's' : ''} à renouveler bientôt
           </div>
         )}
