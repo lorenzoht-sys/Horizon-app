@@ -202,7 +202,7 @@ export default function ModelesProgrammePage() {
       </div>
 
       <div className="flex gap-1 border-b border-gray-200 mb-5" role="tablist">
-        {([['mes', `Mes modèles (${modeles.length})`], ['mouvapa', `Modèles Mouv'APA (${MODELES_MOUVAPA.length})`]] as const).map(([id, libelle]) => (
+        {([['mes', `Mes modèles (${modeles.length})`], ['mouvapa', `Modèles Horizon (${MODELES_MOUVAPA.length})`]] as const).map(([id, libelle]) => (
           <button key={id} role="tab" aria-selected={onglet === id} onClick={() => setOnglet(id)}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
               onglet === id ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -221,12 +221,12 @@ export default function ModelesProgrammePage() {
           <Activity size={40} style={{ margin: '0 auto 12px', display: 'block', opacity: 0.2 }} />
           <div style={{ fontSize: 16, fontWeight: 700, color: '#0D2B2B', marginBottom: 8 }}>Aucun modèle</div>
           <div style={{ fontSize: 13, color: '#94A3B8', marginBottom: 20, lineHeight: 1.6 }}>
-            Créez un premier modèle de programme réutilisable,<br />ou partez d'un des {MODELES_MOUVAPA.length} modèles Mouv'APA prêts à l'emploi.
+            Créez un premier modèle de programme réutilisable,<br />ou partez d'un des {MODELES_MOUVAPA.length} modèles Horizon prêts à l'emploi.
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' as const }}>
             <button onClick={openWizard} style={btnPrimary}><Plus size={14} /> Créer un modèle</button>
             <button onClick={() => setOnglet('mouvapa')} style={{ ...btnPrimary, background: 'white', color: 'var(--color-teal)', border: '1.5px solid var(--color-teal)' }}>
-              Voir les modèles Mouv'APA
+              Voir les modèles Horizon
             </button>
           </div>
         </div>

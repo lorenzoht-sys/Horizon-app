@@ -27,7 +27,7 @@ async function idsModeles(admin: SupabaseClient, praticienId: string, nom: strin
   return (data ?? []).map(r => r.id as string);
 }
 
-test.describe.serial('Modèles Mouv\'APA — copie et application (390×844)', () => {
+test.describe.serial('Modèles Horizon — copie et application (390×844)', () => {
   test.describe.configure({ retries: 0 });
 
   let admin: SupabaseClient | null = null;
@@ -82,7 +82,7 @@ test.describe.serial('Modèles Mouv\'APA — copie et application (390×844)', (
     await loginPraticien(page);
     await page.goto('/bibliotheque');
     await page.getByRole('button', { name: 'Modèles de programme' }).click();
-    await page.getByRole('tab', { name: /Modèles Mouv'APA/ }).click();
+    await page.getByRole('tab', { name: /Modèles Horizon/ }).click();
     await page.getByRole('button', { name: '100 % assis', exact: true }).click();
     await page.getByLabel('Rechercher un modèle').fill(NOM_MODELE_COPIE);
 
@@ -117,7 +117,7 @@ test.describe.serial('Modèles Mouv\'APA — copie et application (390×844)', (
     await page.goto(`/participant/${participantId}`);
     await page.waitForLoadState('networkidle');
     await page.getByRole('button', { name: 'Utiliser un modèle' }).click();
-    await page.getByRole('tab', { name: /Modèles Mouv'APA/ }).click();
+    await page.getByRole('tab', { name: /Modèles Horizon/ }).click();
     await page.getByLabel('Rechercher un modèle').fill(NOM_MODELE_APPLIQUE);
     const carte = page.getByText(NOM_MODELE_APPLIQUE, { exact: true }).locator('xpath=ancestor::div[1]');
     await carte.getByRole('button', { name: 'Utiliser', exact: true }).click();

@@ -48,7 +48,7 @@ export default function AppliquerModeleModal({ participantId, onClose, onApplied
           <button onClick={onClose} className="text-gray-400"><X size={18} /></button>
         </div>
         <div className="flex gap-1 border-b border-gray-100 px-4 flex-shrink-0" role="tablist">
-          {([['mes', 'Mes modèles'], ['mouvapa', `Modèles Mouv'APA (${MODELES_MOUVAPA.length})`]] as const).map(([id, libelle]) => (
+          {([['mes', 'Mes modèles'], ['mouvapa', `Modèles Horizon (${MODELES_MOUVAPA.length})`]] as const).map(([id, libelle]) => (
             <button key={id} role="tab" aria-selected={onglet === id} onClick={() => setOnglet(id)}
               className={`px-3 py-2 text-[13px] font-medium border-b-2 -mb-px ${onglet === id ? 'border-primary text-primary' : 'border-transparent text-gray-500'}`}>
               {libelle}
@@ -62,7 +62,7 @@ export default function AppliquerModeleModal({ participantId, onClose, onApplied
             <div className="text-center py-8 text-gray-400 text-sm">Chargement…</div>
           ) : modeles.length === 0 ? (
             <div className="text-center py-8 text-gray-400 text-sm">
-              Aucun modèle pour l'instant. Choisissez un modèle Mouv'APA (onglet ci-dessus) ou créez-en un depuis « Modèles ».
+              Aucun modèle pour l'instant. Choisissez un modèle Horizon (onglet ci-dessus) ou créez-en un depuis « Modèles ».
             </div>
           ) : modeles.map(modele => {
             const totalEx = modele.seances.reduce((sum, s) => sum + s.exercices.length, 0);
