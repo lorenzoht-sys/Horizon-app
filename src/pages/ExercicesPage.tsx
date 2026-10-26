@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, type ReactNode } from 'react';
 import {
   loadExercicesPraticien, saveExercicePersonnalise,
   getExercicesLocaux, migrationExercicesDejaFaite, migrerExercicesLocalStorageVersSupabase,
@@ -6,20 +6,25 @@ import {
   loadMembresDossiers, ajouterExerciceADossier, retirerExerciceDeDossier,
 } from '../data/exercices';
 import PageWrapper from '../components/layout/PageWrapper';
-import ExerciceCard from '../programme/ExerciceCard';
+import CarteExerciceCompacte from '../components/exercices/CarteExerciceCompacte';
+import FicheExerciceModal from '../components/exercices/FicheExerciceModal';
 import type {
   CategorieExercice, Exercice, ProfilHandicap, ProfilPathologie,
   DossierExercice, DossierExerciceMembre, TypeExerciceRef,
 } from '../types';
-import { Plus, X, Package, Folder, FolderPlus, Search } from 'lucide-react';
+import { Plus, X, Package, Folder, FolderPlus, Search, SlidersHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { extractYoutubeId } from '../utils/extractYoutubeId';
-import { famillesDe, positionDe } from '../data/exercicesMouvApa';
 import { LIBELLE_FAMILLE } from '../lib/libellesBibliotheque';
+import { FILTRES_VIDES, filtrerExercices, nombreFiltresPanneau, type FiltresExercices } from '../lib/filtresExercices';
 import type { FamilleExercice, MaterielExercice } from '../types';
 
-// Filtres de la bibliothèque Mouv'APA (2026-10-25) : famille, position réelle et matériel, en plus des
-// filtres historiques (catégorie, profil). Avec ~180 exercices, une recherche par nom devient utile.
+// Refonte du 2026-10-26 : avec 195 exercices, la page empilait 6 à 7 rangées de filtres avant le
+// premier exercice et des cartes complètes (2 à 3 par écran de téléphone). Désormais : onglets
+// Tous / Mes exercices, recherche, un bouton « Filtres » qui ouvre un panneau (Type, Position,
+// Matériel, Profil), les filtres actifs en étiquettes, des cartes compactes et la fiche complète au
+// clic. Un seul filtre Type (ex-Catégorie + Famille) et un seul filtre Position : voir
+// src/lib/filtresExercices.ts.
 const FAMILLES_FILTRE: FamilleExercice[] = [
   'renforcement', 'cardio', 'mobilite', 'souplesse', 'equilibre', 'coordination', 'cognitif', 'pilates', 'respiration', 'recuperation',
 ];
@@ -61,14 +66,6 @@ const PROFILS_PATHOLOGIE: { id: ProfilPathologie; label: string; emoji: string; 
 // compteur faux dès qu'on filtrait sur « Diabète » ou « Prothèse genou ».
 const PROFILS_TOUS: { id: ProfilHandicap | ProfilPathologie; label: string; emoji: string; color: string }[] =
   [...PROFILS_HANDICAP, ...PROFILS_PATHOLOGIE];
-
-const POSITIONS: { id: string; label: string }[] = [
-  { id: 'tous',     label: 'Toutes positions' },
-  { id: 'fauteuil', label: '♿ Fauteuil' },
-  { id: 'assis',    label: '🪑 Assis' },
-  { id: 'debout',   label: '🧍 Debout' },
-  { id: 'couche',   label: '🛏 Allongé' },
-];
 
 const EMPTY_EX: Omit<Exercice, 'id'> = {
   nom: '',
@@ -233,16 +230,38 @@ function DossierModal({
   );
 }
 
+function estSpecifique(ex: Exercice, profil: ProfilHandicap | ProfilPathologie): boolean {
+  return !!ex.profilsCompatibles?.includes(profil) && !ex.profilsCompatibles.includes('tous');
+}
+
+function Puce({ actif, onClick, children }: { actif: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button onClick={onClick} aria-pressed={actif}
+      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+        actif ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary/50'
+      }`}>
+      {children}
+    </button>
+  );
+}
+
+function SectionFiltre({ titre, aide, children }: { titre: string; aide?: string; children: ReactNode }) {
+  return (
+    <div role="group" aria-label={titre}>
+      <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">{titre}</div>
+      {aide && <p className="text-[11px] text-gray-400 -mt-1 mb-1.5">{aide}</p>}
+      <div className="flex gap-1.5 flex-wrap">{children}</div>
+    </div>
+  );
+}
+
 export default function ExercicesPage() {
   const [exercices, setExercices] = useState<Exercice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [catFilter, setCatFilter] = useState<CategorieExercice | 'all'>('all');
   const [profilFilter, setProfilFilter] = useState<ProfilHandicap | ProfilPathologie | null>(null);
-  const [positionFilter, setPositionFilter] = useState('tous');
-  const [recherche, setRecherche] = useState('');
-  const [familleFilter, setFamilleFilter] = useState<FamilleExercice | null>(null);
-  const [positionLib, setPositionLib] = useState<'assis' | 'debout' | 'couche' | null>(null);
-  const [materielFilter, setMaterielFilter] = useState<MaterielExercice | 'sans' | null>(null);
+  const [filtres, setFiltres] = useState<FiltresExercices>(FILTRES_VIDES);
+  const [panneauOuvert, setPanneauOuvert] = useState(false);
+  const [ficheId, setFicheId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<Omit<Exercice, 'id'>>(EMPTY_EX);
   const [videoUrl, setVideoUrl] = useState('');
@@ -355,70 +374,41 @@ export default function ExercicesPage() {
   }
 
   const { compatible, incompatibles } = useMemo(() => {
-    const q = recherche.trim().toLowerCase();
-    const parCategorie = exercices.filter(ex => {
-      if (catFilter !== 'all' && ex.categorie !== catFilter) return false;
-      if (q && !ex.nom.toLowerCase().includes(q)) return false;
-      if (familleFilter && !famillesDe(ex).includes(familleFilter)) return false;
-      if (positionLib) {
-        // « Assis ou debout » (tous) convient aux deux ; une position inconnue est écartée.
-        const pos = positionDe(ex);
-        if (!(pos === positionLib || (pos === 'tous' && positionLib !== 'couche'))) return false;
-      }
-      if (materielFilter === 'sans') {
-        // Matériel non renseigné (exercice historique ou personnel) : on se fie au texte existant.
-        const sans = ex.materiels
-          ? ex.materiels.every(m => m === 'aucun' || m === 'chaise')
-          : !ex.materielNecessaire || /^\s*aucun/i.test(ex.materielNecessaire);
-        if (!sans) return false;
-      }
-      if (materielFilter && materielFilter !== 'sans' && !(ex.materiels ?? []).includes(materielFilter)) return false;
-      return true;
-    });
+    const filtresBase = filtrerExercices(exercices, filtres);
 
     if (!profilFilter) {
-      return { compatible: parCategorie, incompatibles: [] as Exercice[] };
+      return { compatible: filtresBase, incompatibles: [] as Exercice[] };
     }
 
-    const isCompatible = (ex: Exercice) => {
-      const profilOk =
-        !ex.profilsCompatibles ||
-        ex.profilsCompatibles.includes('tous') ||
-        ex.profilsCompatibles.includes(profilFilter);
-      const posOk =
-        positionFilter === 'tous' ||
-        !ex.positionRequise ||
-        ex.positionRequise === 'tous' ||
-        ex.positionRequise === positionFilter;
-      return profilOk && posOk;
-    };
+    // Profil : même règle qu'avant la refonte. Le filtre de position propre au profil a disparu au
+    // profit du filtre Position unique (déjà appliqué par filtrerExercices).
+    const isCompatible = (ex: Exercice) =>
+      !ex.profilsCompatibles ||
+      ex.profilsCompatibles.includes('tous') ||
+      ex.profilsCompatibles.includes(profilFilter);
 
-    const isIncompatible = (ex: Exercice) =>
-      !!ex.profilsCompatibles &&
-      !ex.profilsCompatibles.includes('tous') &&
-      !ex.profilsCompatibles.includes(profilFilter);
-
-    const comp = parCategorie.filter(isCompatible).sort((a, b) => {
-      const aSpec = a.profilsCompatibles?.includes(profilFilter) && !a.profilsCompatibles.includes('tous');
-      const bSpec = b.profilsCompatibles?.includes(profilFilter) && !b.profilsCompatibles.includes('tous');
+    const comp = filtresBase.filter(isCompatible).sort((a, b) => {
+      const aSpec = estSpecifique(a, profilFilter);
+      const bSpec = estSpecifique(b, profilFilter);
       if (aSpec && !bSpec) return -1;
       if (!aSpec && bSpec) return 1;
       return 0;
     });
 
-    const incompat = parCategorie.filter(isIncompatible);
-
-    return { compatible: comp, incompatibles: incompat };
-  }, [exercices, catFilter, profilFilter, positionFilter, recherche, familleFilter, positionLib, materielFilter]);
+    return { compatible: comp, incompatibles: filtresBase.filter(ex => !isCompatible(ex)) };
+  }, [exercices, filtres, profilFilter]);
 
   function handleProfilChange(profil: ProfilHandicap | ProfilPathologie) {
-    if (profilFilter === profil) {
-      setProfilFilter(null);
-      setPositionFilter('tous');
-    } else {
-      setProfilFilter(profil);
-      setPositionFilter('tous');
-    }
+    setProfilFilter(profilFilter === profil ? null : profil);
+  }
+
+  function changerFiltre<K extends keyof FiltresExercices>(cle: K, valeur: FiltresExercices[K]) {
+    setFiltres(f => ({ ...f, [cle]: f[cle] === valeur && cle !== 'recherche' && cle !== 'origine' ? null : valeur }));
+  }
+
+  function effacerFiltres() {
+    setFiltres(f => ({ ...FILTRES_VIDES, origine: f.origine, recherche: f.recherche }));
+    setProfilFilter(null);
   }
 
   async function handleAdd() {
@@ -433,6 +423,15 @@ export default function ExercicesPage() {
   }
 
   const profilActif = profilFilter ? PROFILS_TOUS.find(p => p.id === profilFilter) ?? null : null;
+  const nbPerso = exercices.filter(ex => ex.custom).length;
+  const nbFiltresPanneau = nombreFiltresPanneau(filtres, !!profilFilter);
+  const fiche = ficheId ? exercices.find(ex => ex.id === ficheId) ?? null : null;
+  const etiquettes: { cle: string; libelle: string; retirer: () => void }[] = [
+    ...(filtres.type ? [{ cle: 'type', libelle: LIBELLE_FAMILLE[filtres.type], retirer: () => changerFiltre('type', null) }] : []),
+    ...(filtres.position ? [{ cle: 'position', libelle: POSITIONS_LIB.find(p => p.id === filtres.position)!.label, retirer: () => changerFiltre('position', null) }] : []),
+    ...(filtres.materiel ? [{ cle: 'materiel', libelle: MATERIELS_FILTRE.find(m => m.id === filtres.materiel)!.label, retirer: () => changerFiltre('materiel', null) }] : []),
+    ...(profilActif ? [{ cle: 'profil', libelle: `${profilActif.emoji} ${profilActif.label}`, retirer: () => setProfilFilter(null) }] : []),
+  ];
   const dossierOuvert = dossiers.find(d => d.id === dossierOuvertId) ?? null;
 
   return (
@@ -538,166 +537,144 @@ export default function ExercicesPage() {
         )}
       </div>
 
-      {/* Filtres profil handicap */}
-      <div className="flex gap-1 flex-wrap mb-1">
-        <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide self-center mr-1">Profil handicap :</span>
-        {PROFILS_HANDICAP.map(p => (
-          <button
-            key={p.id}
-            onClick={() => handleProfilChange(p.id)}
-            style={profilFilter === p.id ? { background: p.color, color: 'white', border: 'none' } : {}}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${
-              profilFilter === p.id
-                ? ''
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-transparent'
-            }`}
-          >
-            {p.emoji} {p.label}
+      {/* Onglets Tous / Mes exercices */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-3 w-full sm:w-auto sm:inline-flex" role="tablist" aria-label="Origine des exercices">
+        {([['tous', `Tous (${exercices.length})`], ['perso', `Mes exercices (${nbPerso})`]] as const).map(([id, libelle]) => (
+          <button key={id} role="tab" aria-selected={filtres.origine === id} onClick={() => changerFiltre('origine', id)}
+            className={`flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+              filtres.origine === id ? 'bg-white text-dark shadow-sm' : 'text-gray-500 hover:text-dark'
+            }`}>
+            {libelle}
           </button>
         ))}
       </div>
 
-      {/* Filtres profil pathologique */}
-      <div className="flex gap-1 flex-wrap mb-2">
-        <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide self-center mr-1">Pathologie :</span>
-        {PROFILS_PATHOLOGIE.map(p => (
-          <button
-            key={p.id}
-            onClick={() => handleProfilChange(p.id)}
-            style={profilFilter === p.id ? { background: p.color, color: 'white', border: 'none' } : {}}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${
-              profilFilter === p.id
-                ? ''
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-transparent'
-            }`}
-          >
-            {p.emoji} {p.label}
-          </button>
-        ))}
+      {/* Recherche + bouton Filtres */}
+      <div className="flex gap-2 mb-3">
+        <div className="relative flex-1 min-w-0">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input value={filtres.recherche} onChange={e => changerFiltre('recherche', e.target.value)} placeholder="Rechercher un exercice…"
+            aria-label="Rechercher un exercice"
+            className="w-full border border-gray-200 rounded-xl pl-8 pr-8 py-2 text-sm focus:outline-none focus:border-primary bg-white" />
+          {filtres.recherche && (
+            <button onClick={() => changerFiltre('recherche', '')} aria-label="Effacer la recherche"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-dark p-1"><X size={14} /></button>
+          )}
+        </div>
+        <button onClick={() => setPanneauOuvert(o => !o)} aria-expanded={panneauOuvert} aria-controls="panneau-filtres-exercices"
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold border transition-colors flex-shrink-0 ${
+            panneauOuvert || nbFiltresPanneau > 0 ? 'border-primary text-primary bg-primary/5' : 'border-gray-200 text-gray-600 bg-white hover:border-primary/50'
+          }`}>
+          <SlidersHorizontal size={15} /> Filtres
+          {nbFiltresPanneau > 0 && (
+            <span className="bg-primary text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{nbFiltresPanneau}</span>
+          )}
+        </button>
       </div>
 
-      {/* Filtre position (visible si profil actif) */}
-      {profilFilter && (
-        <div className="flex gap-1 flex-wrap mb-2">
-          {POSITIONS.map(pos => (
-            <button
-              key={pos.id}
-              onClick={() => setPositionFilter(pos.id)}
-              className={`px-2 py-0.5 rounded-lg text-xs font-medium border transition-colors ${
-                positionFilter === pos.id
-                  ? 'border-teal-500 bg-teal-50 text-teal-700'
-                  : 'border-gray-200 text-gray-500 hover:border-gray-300'
-              }`}
-            >
-              {pos.label}
+      {/* Panneau des filtres */}
+      {panneauOuvert && (
+        <div id="panneau-filtres-exercices" className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 mb-3 space-y-4">
+          <SectionFiltre titre="Type">
+            {FAMILLES_FILTRE.map(f => (
+              <Puce key={f} actif={filtres.type === f} onClick={() => changerFiltre('type', f)}>{LIBELLE_FAMILLE[f]}</Puce>
+            ))}
+          </SectionFiltre>
+          <SectionFiltre titre="Position">
+            {POSITIONS_LIB.map(p => (
+              <Puce key={p.id} actif={filtres.position === p.id} onClick={() => changerFiltre('position', p.id)}>{p.label}</Puce>
+            ))}
+          </SectionFiltre>
+          <SectionFiltre titre="Matériel">
+            {MATERIELS_FILTRE.map(m => (
+              <Puce key={m.id} actif={filtres.materiel === m.id} onClick={() => changerFiltre('materiel', m.id)}>{m.label}</Puce>
+            ))}
+          </SectionFiltre>
+          <SectionFiltre titre="Profil du bénéficiaire" aide="Met en avant les exercices adaptés et grise ceux qui sont déconseillés.">
+            {PROFILS_TOUS.map(p => (
+              <button key={p.id} onClick={() => handleProfilChange(p.id)} aria-pressed={profilFilter === p.id}
+                style={profilFilter === p.id ? { background: p.color, color: 'white', borderColor: p.color } : {}}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                  profilFilter === p.id ? '' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                }`}>
+                {p.emoji} {p.label}
+              </button>
+            ))}
+          </SectionFiltre>
+          <div className="flex items-center justify-between gap-3 pt-1 border-t border-gray-100">
+            <button onClick={effacerFiltres} disabled={nbFiltresPanneau === 0}
+              className="text-xs font-semibold text-gray-500 hover:text-dark disabled:opacity-40 pt-3">
+              Tout effacer
+            </button>
+            <button onClick={() => setPanneauOuvert(false)}
+              className="mt-3 bg-primary text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-dark transition-colors">
+              Voir {compatible.length} exercice{compatible.length > 1 ? 's' : ''}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Filtres actifs */}
+      {etiquettes.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 mb-3">
+          {etiquettes.map(e => (
+            <button key={e.cle} onClick={e.retirer} aria-label={`Retirer le filtre ${e.libelle}`}
+              className="flex items-center gap-1 bg-primary/10 text-primary text-xs font-semibold pl-2.5 pr-1.5 py-1 rounded-full hover:bg-primary/20">
+              {e.libelle} <X size={12} />
             </button>
           ))}
+          {etiquettes.length > 1 && (
+            <button onClick={effacerFiltres} className="text-xs text-gray-500 hover:text-dark font-medium ml-1">Tout effacer</button>
+          )}
         </div>
       )}
 
       {/* Bandeau profil actif */}
       {profilActif && (
-        <div
-          className="flex items-center gap-3 rounded-xl px-4 py-2.5 mb-3"
-          style={{ background: profilActif.color + '18', border: `1px solid ${profilActif.color}40` }}
-        >
-          <span className="text-xl">{profilActif.emoji}</span>
-          <div className="flex-1">
-            <span className="text-sm font-semibold" style={{ color: profilActif.color }}>
-              Filtre actif : {profilActif.label}
-            </span>
-            <div className="text-xs mt-0.5" style={{ color: profilActif.color + 'AA' }}>
-              Exercices spécifiques en premier · Exercices universels · Non recommandés grisés
-            </div>
-          </div>
-          <button
-            onClick={() => { setProfilFilter(null); setPositionFilter('tous'); }}
-            className="transition-colors"
-            style={{ color: profilActif.color + '80' }}
-          >
-            <X size={16} />
-          </button>
-        </div>
+        <p className="text-xs mb-3" style={{ color: profilActif.color }}>
+          {profilActif.emoji} Profil {profilActif.label} : exercices adaptés en premier, déconseillés grisés en bas de liste.
+        </p>
       )}
 
-      {/* Recherche et filtres de la bibliothèque */}
-      <div className="relative mb-3">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input value={recherche} onChange={e => setRecherche(e.target.value)} placeholder="Rechercher un exercice…"
-          aria-label="Rechercher un exercice"
-          className="w-full border border-gray-200 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-primary bg-white" />
-      </div>
-      <div className="flex gap-1.5 flex-wrap mb-2" role="group" aria-label="Filtrer par famille">
-        {FAMILLES_FILTRE.map(f => (
-          <button key={f} onClick={() => setFamilleFilter(familleFilter === f ? null : f)} aria-pressed={familleFilter === f}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-              familleFilter === f ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary/50'
-            }`}>
-            {LIBELLE_FAMILLE[f]}
-          </button>
-        ))}
-      </div>
-      <div className="flex gap-1.5 flex-wrap mb-3" role="group" aria-label="Filtrer par position et matériel">
-        {POSITIONS_LIB.map(p => (
-          <button key={p.id} onClick={() => setPositionLib(positionLib === p.id ? null : p.id)} aria-pressed={positionLib === p.id}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-              positionLib === p.id ? 'border-teal-500 bg-teal-50 text-teal-700' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-            }`}>
-            {p.label}
-          </button>
-        ))}
-        <span className="w-px bg-gray-200 mx-1" aria-hidden="true" />
-        {MATERIELS_FILTRE.map(m => (
-          <button key={m.id} onClick={() => setMaterielFilter(materielFilter === m.id ? null : m.id)} aria-pressed={materielFilter === m.id}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-              materielFilter === m.id ? 'border-teal-500 bg-teal-50 text-teal-700' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-            }`}>
-            {m.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Filtres catégorie */}
-      <div className="flex gap-2 flex-wrap mb-4">
-        {CATEGORIES.map(c => (
-          <button
-            key={c.value}
-            onClick={() => setCatFilter(c.value as CategorieExercice | 'all')}
-            className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
-              catFilter === c.value
-                ? 'bg-primary text-white'
-                : 'bg-white border border-gray-200 text-gray-600 hover:border-primary/50'
-            }`}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
-
       {/* Compteur */}
-      <p className="text-xs text-gray-400 mb-4">
+      <p className="text-xs text-gray-400 mb-3">
         {compatible.length} exercice{compatible.length > 1 ? 's' : ''}
-        {profilActif ? ` compatible${compatible.length > 1 ? 's' : ''} avec ce profil` : ' disponibles'}
+        {profilActif ? ` compatible${compatible.length > 1 ? 's' : ''} avec ce profil` : ''}
         {incompatibles.length > 0 && ` · ${incompatibles.length} non recommandé${incompatibles.length > 1 ? 's' : ''}`}
-        {' · glissez une carte sur un dossier pour l\'y ranger'}
+        <span className="hidden md:inline"> · cliquez pour la fiche complète, glissez une carte sur un dossier pour l'y ranger</span>
       </p>
 
-      {/* Grille unique — base + personnalisés, chaque carte glissable vers un dossier */}
+      {/* Grille de cartes compactes — base + personnalisés, glissables vers un dossier */}
       {loading ? (
         <div className="text-center py-12 text-gray-400 text-sm">Chargement…</div>
+      ) : compatible.length === 0 && incompatibles.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-sm text-gray-500">
+            {filtres.origine === 'perso' && nbPerso === 0
+              ? 'Vous n\'avez pas encore créé d\'exercice personnel.'
+              : 'Aucun exercice ne correspond à cette recherche.'}
+          </p>
+          {filtres.origine === 'perso' && nbPerso === 0 ? (
+            <button onClick={() => setShowForm(true)} className="mt-3 text-sm font-semibold text-primary hover:underline">Créer mon premier exercice</button>
+          ) : (nbFiltresPanneau > 0 || filtres.recherche) && (
+            <button onClick={() => { effacerFiltres(); setFiltres(f => ({ ...f, recherche: '' })); }} className="mt-3 text-sm font-semibold text-primary hover:underline">Effacer les filtres</button>
+          )}
+        </div>
       ) : (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {compatible.map(ex => (
-          <ExerciceCard
-            key={ex.id}
-            exercice={ex}
-            profilHandicap={profilFilter ?? undefined}
-            draggable
-            onDragStart={() => setDraggedExercice(refDe(ex))}
-            onDragEnd={() => setDraggedExercice(null)}
-          />
-        ))}
-      </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
+          {compatible.map(ex => (
+            <CarteExerciceCompacte
+              key={ex.id}
+              exercice={ex}
+              onOuvrir={() => setFicheId(ex.id)}
+              specifique={profilFilter ? estSpecifique(ex, profilFilter) : false}
+              adaptation={profilFilter ? !!ex.adaptations?.[profilFilter] : false}
+              draggable
+              onDragStart={() => setDraggedExercice(refDe(ex))}
+              onDragEnd={() => setDraggedExercice(null)}
+            />
+          ))}
+        </div>
       )}
 
       {/* Section exercices non recommandés */}
@@ -710,12 +687,13 @@ export default function ExercicesPage() {
             </span>
             <div className="flex-1 h-px bg-gray-100" />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
             {incompatibles.map(ex => (
-              <ExerciceCard
+              <CarteExerciceCompacte
                 key={ex.id}
                 exercice={ex}
                 incompatible
+                onOuvrir={() => setFicheId(ex.id)}
                 draggable
                 onDragStart={() => setDraggedExercice(refDe(ex))}
                 onDragEnd={() => setDraggedExercice(null)}
@@ -724,6 +702,8 @@ export default function ExercicesPage() {
           </div>
         </div>
       )}
+
+      {fiche && <FicheExerciceModal exercice={fiche} profil={profilFilter ?? undefined} onClose={() => setFicheId(null)} />}
 
       {/* Modal ajout — z-[1100], même raison que DossierModal ci-dessus. */}
       {showForm && (
