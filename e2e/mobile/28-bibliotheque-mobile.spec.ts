@@ -46,9 +46,20 @@ test.describe('Bibliothèque (exercices, modèles) sur mobile (route fusionnée 
     let dossierId: string | null = null;
     let modeleId: string | null = null;
     try {
-      // ── Onglet Exercices (par défaut) — filtre par pastille catégorie ──
-      await page.getByRole('button', { name: '🟢 Force' }).click();
-      await expect(page.getByText(/glissez une carte sur un dossier/)).toBeVisible();
+      // ── Onglet Exercices (par défaut) — panneau « Filtres » (refonte du
+      // 2026-10-26 : un seul filtre Type remplace Catégorie + Famille). ──
+      await page.getByRole('button', { name: /^Filtres/ }).click();
+      await page.getByRole('group', { name: 'Type' }).getByRole('button', { name: 'Renforcement', exact: true }).click();
+      await page.getByRole('button', { name: /^Voir \d+ exercices?$/ }).click();
+      await expect(page.getByRole('button', { name: 'Retirer le filtre Renforcement' })).toBeVisible();
+
+      // ── Carte compacte → fiche complète, dont le bouton du bas reste
+      // cliquable au-dessus de la barre de navigation. ─────────────────────
+      await page.getByRole('button', { name: /^Voir l'exercice / }).first().click();
+      const fiche = page.getByRole('dialog');
+      await expect(fiche.getByText('Fiche exercice')).toBeVisible();
+      await fiche.getByRole('button', { name: 'Fermer', exact: true }).last().click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
 
       let overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
       expect(overflow, 'onglet Exercices : pas de défilement horizontal à 390px').toBe(false);

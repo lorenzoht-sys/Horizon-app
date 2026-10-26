@@ -922,7 +922,7 @@ export function enrichirExistant(ex: Exercice): Exercice {
   return { ...ex, familles: ex.familles ?? e.familles, materiels: ex.materiels ?? e.materiels };
 }
 
-const FAMILLES_PAR_CATEGORIE: Record<CategorieExercice, FamilleExercice[]> = {
+export const FAMILLES_PAR_CATEGORIE: Record<CategorieExercice, FamilleExercice[]> = {
   equilibre: ['equilibre'], force: ['renforcement'], mobilite: ['mobilite'],
   souplesse: ['souplesse'], endurance: ['cardio'], memoire: ['coordination', 'cognitif'],
 };
