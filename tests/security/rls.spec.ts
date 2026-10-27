@@ -302,7 +302,25 @@ const TABLES_TESTS_DEDIES = [
 // Chaque entrée passe le test correspondant en `it.fails` (il reste vert
 // tant que la fuite existe, et échoue le jour où elle est corrigée : retirer
 // alors l'entrée). Toute entrée est une FUITE CONSTATÉE, à traiter.
-const FUITES_CONSTATEES: Record<string, string> = {};
+const FUITES_CONSTATEES: Record<string, string> = {
+  // FUITE CONSTATÉE (harnais CI, PR #164, 2026-10-27) — la policy
+  // tests_etalons_activations_praticien_all ne vérifie que
+  // praticien_id = auth.uid() : B attache une activation au bénéficiaire de A.
+  'tests_etalons_activations:insertion-beneficiaire-de-A':
+    'WITH CHECK sans contrôle du bénéficiaire (praticien_id = auth.uid() seulement)',
+  // FUITE CONSTATÉE (idem) — exercices_libres_activations_praticien_all.
+  'exercices_libres_activations:insertion-beneficiaire-de-A':
+    'WITH CHECK sans contrôle du bénéficiaire (praticien_id = auth.uid() seulement)',
+  // FUITE CONSTATÉE (idem) — praticien_gere_rappel_preferences, et le trigger
+  // set_praticien_id_from_auth remplit praticien_id avec B quand il est omis.
+  'rappel_preferences:insertion-beneficiaire-de-A':
+    'WITH CHECK sans contrôle du bénéficiaire (praticien_id = auth.uid() seulement)',
+  // FUITE CONSTATÉE (idem) — orga_acces_participations_cours_collectifs :
+  // WITH CHECK acces_participant(participant_id) suffit, sans contrôle du
+  // cours ; B inscrit SON bénéficiaire au cours de A.
+  'participations_cours_collectifs:insertion-beneficiaire-de-B':
+    'WITH CHECK de la policy orga sans contrôle du cours (acces_participant seul)',
+};
 
 async function requireStagingEnv() {
   if (!HAS_STAGING_ENV) {
