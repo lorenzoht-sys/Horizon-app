@@ -51,10 +51,12 @@ const CLES_EN_FUITE_BENEFICIAIRE: string[] = [
   'factures_suivi.participant_id', 'assistant_logs.patient_id', 'seances.contrat_id', 'notes_seances.seance_id',
 ];
 
-const CLES_EN_FUITE_STRUCTURE: string[] = [
-  'participants.structure_id', 'documents_partages.structure_id', 'cours_collectifs.structure_id',
-  'templates_structure.structure_id', 'factures_suivi.structure_id', 'cours_collectifs.programme_commun_id',
-];
+// Historique : 6 clés de la famille « structure » en fuite le 2026-10-27
+// (PR #167), plus le rattachement à une organisation et le portail de
+// structure. Fermées par 20261104100000_rls_ecriture_structure_verifiee.sql
+// (lot K2), SAUF factures_suivi.structure_id, fermée par le lot K1 (même
+// policy que factures_suivi.participant_id).
+const CLES_EN_FUITE_STRUCTURE: string[] = ['factures_suivi.structure_id'];
 
 const CLES_EN_FUITE_FAIBLE: string[] = [
   'dossier_exercice_membres.dossier_id', 'exercices_personnalises.dossier_id',
@@ -66,13 +68,7 @@ const CLES_EN_FUITE = [...CLES_EN_FUITE_BENEFICIAIRE, ...CLES_EN_FUITE_STRUCTURE
 const MOTIF = "WITH CHECK sans contrôle d'appartenance de l'objet référencé";
 export const FUITES_CONSTATEES: Record<string, string> = {
   ...Object.fromEntries(CLES_EN_FUITE.flatMap(c => [[`${c}:insertion`, MOTIF], [`${c}:repointage`, MOTIF]])),
-  ...(CLES_EN_FUITE_STRUCTURE.length ? {
-    // FUITE CONSTATÉE — participants_update ne vérifie pas l'organisation.
-    'participants.organisation_id:repointage': "participants_update sans contrôle d'appartenance à l'organisation",
-    // FUITE CONSTATÉE — conséquence visible : le portail de la structure de A
-    // affiche le bénéficiaire et le document de B.
-    'portail-structure:beneficiaire-de-B': 'participants.structure_id et documents_partages.structure_id non vérifiés',
-  } : {}),
+  // participants.organisation_id et portail de structure : fermés par K2.
 };
 
 type Ligne = Record<string, unknown>;
