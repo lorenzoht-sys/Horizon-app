@@ -9,6 +9,7 @@ import { loadExercicesPraticien, saveExercicePersonnalise } from '../../data/exe
 import BoutonReformulation from '../ui/BoutonReformulation';
 import { useDevice } from '../../hooks/useDevice';
 import { identiteDe } from '../../utils/pseudonymiserIA';
+import { calculerAge } from '../../lib/age';
 
 // Wizard 4 étapes partagé entre la création/édition d'un programme réel
 // (ProgrammePage.tsx, rattaché à un bénéficiaire) et d'un modèle réutilisable
@@ -421,9 +422,7 @@ function ExercicePickerModal({
   const [allExercices, setAllExercices] = useState<Exercice[]>([]);
   useEffect(() => { loadExercicesPraticien().then(setAllExercices); }, []);
 
-  const patientAge = participant?.dateNaissance
-    ? Math.floor((Date.now() - new Date(participant.dateNaissance).getTime()) / (365.25 * 24 * 3600 * 1000))
-    : null;
+  const patientAge = participant?.dateNaissance ? calculerAge(participant.dateNaissance) : null;
   const isSenior = patientAge != null && patientAge >= 65;
   const suggestLabel =
     participant && (participant.profilHandicap || isSenior)
