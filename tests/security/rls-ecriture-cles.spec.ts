@@ -43,39 +43,36 @@ const ACTIF = Boolean(URL && ANON_KEY && SERVICE_KEY);
 // puis par le harnais en CI sur le staging. Cause commune : le WITH CHECK
 // ne vérifie que praticien_id = auth.uid() (ou le bénéficiaire, pour les
 // tables patient), jamais l'appartenance de l'objet référencé.
-const CLES_EN_FUITE = [
-  'bilans.participant_id',
-  'contrats.participant_id',
-  'seances.participant_id',
-  'programmes.participant_id',
-  'notes_seances.participant_id',
-  'comptes_rendus_seances.participant_id',
-  'bilans_brouillons.participant_id',
-  'factures_suivi.participant_id',
-  'assistant_logs.patient_id',
-  'seances.contrat_id',
-  'notes_seances.seance_id',
-  'participants.structure_id',
-  'documents_partages.structure_id',
-  'cours_collectifs.structure_id',
-  'templates_structure.structure_id',
-  'factures_suivi.structure_id',
-  'dossier_exercice_membres.dossier_id',
-  'exercices_personnalises.dossier_id',
-  'cours_collectifs.programme_commun_id',
-  'participations_cours_collectifs.programme_individuel_id',
-  'seances_patient.programme_id',
-  'seances_patient.seance_id',
-  'exercices_realises.exercice_id',
+// Une liste par famille : chaque migration (K1, K2, K3) ne vide que la
+// sienne, sans toucher aux lignes des autres.
+const CLES_EN_FUITE_BENEFICIAIRE: string[] = [
+  'bilans.participant_id', 'contrats.participant_id', 'seances.participant_id', 'programmes.participant_id',
+  'notes_seances.participant_id', 'comptes_rendus_seances.participant_id', 'bilans_brouillons.participant_id',
+  'factures_suivi.participant_id', 'assistant_logs.patient_id', 'seances.contrat_id', 'notes_seances.seance_id',
 ];
+
+const CLES_EN_FUITE_STRUCTURE: string[] = [
+  'participants.structure_id', 'documents_partages.structure_id', 'cours_collectifs.structure_id',
+  'templates_structure.structure_id', 'factures_suivi.structure_id', 'cours_collectifs.programme_commun_id',
+];
+
+const CLES_EN_FUITE_FAIBLE: string[] = [
+  'dossier_exercice_membres.dossier_id', 'exercices_personnalises.dossier_id',
+  'participations_cours_collectifs.programme_individuel_id', 'seances_patient.programme_id',
+  'seances_patient.seance_id', 'exercices_realises.exercice_id',
+];
+
+const CLES_EN_FUITE = [...CLES_EN_FUITE_BENEFICIAIRE, ...CLES_EN_FUITE_STRUCTURE, ...CLES_EN_FUITE_FAIBLE];
 const MOTIF = "WITH CHECK sans contrôle d'appartenance de l'objet référencé";
 export const FUITES_CONSTATEES: Record<string, string> = {
   ...Object.fromEntries(CLES_EN_FUITE.flatMap(c => [[`${c}:insertion`, MOTIF], [`${c}:repointage`, MOTIF]])),
-  // FUITE CONSTATÉE — participants_update ne vérifie pas l'organisation.
-  'participants.organisation_id:repointage': "participants_update sans contrôle d'appartenance à l'organisation",
-  // FUITE CONSTATÉE — conséquence visible : le portail de la structure de A
-  // affiche le bénéficiaire et le document de B.
-  'portail-structure:beneficiaire-de-B': 'participants.structure_id et documents_partages.structure_id non vérifiés',
+  ...(CLES_EN_FUITE_STRUCTURE.length ? {
+    // FUITE CONSTATÉE — participants_update ne vérifie pas l'organisation.
+    'participants.organisation_id:repointage': "participants_update sans contrôle d'appartenance à l'organisation",
+    // FUITE CONSTATÉE — conséquence visible : le portail de la structure de A
+    // affiche le bénéficiaire et le document de B.
+    'portail-structure:beneficiaire-de-B': 'participants.structure_id et documents_partages.structure_id non vérifiés',
+  } : {}),
 };
 
 type Ligne = Record<string, unknown>;
@@ -104,6 +101,9 @@ describe.skipIf(!ACTIF)('Écriture croisée par clé étrangère (lot J)', () =>
   const client: Partial<Record<Proprio, SupabaseClient>> = {};
   const o = {} as Record<Proprio, Objets>;
   let organisationA: string;
+  let organisationPartagee: string;
+  let beneficiaireArchiveA: string;
+  let objetsOrganisation: Objets;
   const aSupprimer: [string, string][] = []; // [table, id], supprimés à l'envers
 
   async function inserer(table: string, ligne: Ligne): Promise<string> {
@@ -147,6 +147,17 @@ describe.skipIf(!ACTIF)('Écriture croisée par clé étrangère (lot J)', () =>
     // Organisation dont A est administrateur ; B n'en est PAS membre.
     organisationA = await inserer('organisations', { nom: 'RLS-Ecriture organisation A', statut: 'active', actif: true });
     await inserer('organisation_membres', { organisation_id: organisationA, user_id: o.A.praticien, role: 'admin', actif: true });
+
+    // Cas légitimes : bénéficiaire ARCHIVÉ de A, et organisation partagée
+    // dont B est membre (intervenant) avec un bénéficiaire de l'organisation
+    // créé par A, son contrat et sa séance.
+    beneficiaireArchiveA = await inserer('participants', { praticien_id: o.A.praticien, prenom: 'E2E', nom: 'RLS-Ecriture archivé', code_acces: `RLA${Math.floor(Math.random() * 1e7)}`, rgpd, archive: true });
+    organisationPartagee = await inserer('organisations', { nom: 'RLS-Ecriture organisation partagée', statut: 'active', actif: true });
+    await inserer('organisation_membres', { organisation_id: organisationPartagee, user_id: o.B.praticien, role: 'intervenant', actif: true });
+    const pOrg = await inserer('participants', { praticien_id: o.A.praticien, prenom: 'E2E', nom: 'RLS-Ecriture organisation', code_acces: `RLG${Math.floor(Math.random() * 1e7)}`, rgpd, organisation_id: organisationPartagee });
+    const kOrg = await inserer('contrats', { praticien_id: o.A.praticien, participant_id: pOrg, date_debut: '2099-01-01', date_fin: '2099-12-31' });
+    const seOrg = await inserer('seances', { praticien_id: o.A.praticien, participant_id: pOrg, contrat_id: kOrg, date: '2099-01-20', heure_debut: '10:00', heure_fin: '11:00', type: 'seance', statut: 'planifiee' });
+    objetsOrganisation = { ...o.A, participant: pOrg, contrat: kOrg, seance: seOrg };
   }, 120_000);
 
   afterAll(async () => {
@@ -271,6 +282,30 @@ describe.skipIf(!ACTIF)('Écriture croisée par clé étrangère (lot J)', () =>
       if (lu) await supprimer(c.table, id);
       expect(error?.message ?? null, `A n'a pas pu écrire dans ${c.table}`).toBeNull();
       expect(lu, `ligne légitime de A absente de ${c.table}`).not.toBeNull();
+    });
+  }
+
+  // Cas légitimes à préserver par les correctifs (famille bénéficiaire).
+  for (const c of CAS.filter(x => x.famille === 'beneficiaire')) {
+    const cle = `${c.table}.${c.colonne}`;
+    it(`${cle} — A écrit sur son bénéficiaire ARCHIVÉ`, async () => {
+      const id = randomUUID();
+      const objets = { ...o.A, participant: beneficiaireArchiveA };
+      const { error } = await c.ecrivain('A').from(c.table).insert({ ...c.ligne(objets, objets), id });
+      const lu = await relire(c.table, id);
+      if (lu) await supprimer(c.table, id);
+      expect(error?.message ?? null, `écriture refusée sur un bénéficiaire archivé dans ${c.table}`).toBeNull();
+      expect(lu).not.toBeNull();
+    });
+    it(`${cle} — B, membre de l'organisation, écrit sur un bénéficiaire de l'organisation`, async () => {
+      const id = randomUUID();
+      // Ligne au nom de B ; bénéficiaire, contrat et séance de l'organisation.
+      const proprio = { ...objetsOrganisation, praticien: o.B.praticien };
+      const { error } = await c.ecrivain('B').from(c.table).insert({ ...c.ligne(proprio, objetsOrganisation), id });
+      const lu = await relire(c.table, id);
+      if (lu) await supprimer(c.table, id);
+      expect(error?.message ?? null, `écriture de membre d'organisation refusée dans ${c.table}`).toBeNull();
+      expect(lu).not.toBeNull();
     });
   }
 
