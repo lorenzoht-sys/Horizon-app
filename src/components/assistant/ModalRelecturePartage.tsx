@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Send } from 'lucide-react';
 import BoutonReformulation from '../ui/BoutonReformulation';
+import type { IdentiteBeneficiaire } from '../../utils/pseudonymiserIA';
 
 interface Props {
   /** Nom lisible du destinataire, affiché tel quel (ex: "Camille Martin (bénéficiaire)"). */
@@ -10,9 +11,11 @@ interface Props {
   /** Reçoit le texte final (potentiellement modifié) — l'insert en base ne doit
    *  se produire qu'ici, jamais avant l'appel de cette fonction. */
   onConfirmer: (texteFinal: string) => Promise<void>;
+  /** Bénéficiaire concerné par le document : masqué/réinséré par la reformulation IA. */
+  identite?: IdentiteBeneficiaire | null;
 }
 
-export default function ModalRelecturePartage({ destinataire, texteInitial, onAnnuler, onConfirmer }: Props) {
+export default function ModalRelecturePartage({ destinataire, texteInitial, onAnnuler, onConfirmer, identite }: Props) {
   const [texte, setTexte] = useState(texteInitial);
   const [envoi, setEnvoi] = useState(false);
 
@@ -49,7 +52,7 @@ export default function ModalRelecturePartage({ destinataire, texteInitial, onAn
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm leading-relaxed focus:outline-none focus:border-primary transition-colors resize-y disabled:opacity-50"
           />
           <div className="mt-2">
-            <BoutonReformulation texte={texte} onReformule={setTexte} disabled={envoi} />
+            <BoutonReformulation texte={texte} onReformule={setTexte} disabled={envoi} identite={identite} />
           </div>
         </div>
 

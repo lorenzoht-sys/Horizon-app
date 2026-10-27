@@ -51,6 +51,8 @@ import { getBrouillonParticipant, sauvegarderBrouillonParticipant, supprimerBrou
 import { getBrouillon, supprimerBrouillon } from '../../hooks/useBrouillonBilan';
 import { formaterDateNaissanceAffichage, masquerSaisieDateNaissance, messageErreurDateNaissance, parserDateNaissanceSaisie } from '../../utils/dateNaissance';
 import { contratsDesBeneficiairesActifs } from '../../lib/archivage';
+import { buildAssistantPromptMobile, historiquePourIA } from '../../utils/promptAssistant';
+import { identiteDe, masquerIdentiteConnue, reinsererIdentite, versParticipantIA } from '../../utils/pseudonymiserIA';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1884,29 +1886,6 @@ function EditPatientMobile({ participant, onBack: retourParent }: { participant:
 
 // ── EcranAssistant ────────────────────────────────────────────────────────────
 
-function buildAssistantPrompt(patient: import('../../types').Participant | null, history: { role: string; content: string }[], question: string): string {
-  const base = `Tu es un assistant clinique expert en Activité Physique Adaptée (APA), spécialisé dans l'accompagnement des enseignants APA libéraux en France.
-Tu réponds UNIQUEMENT en français. Tu es concis, professionnel, pratique.
-Tu ne fais jamais de diagnostic médical.`;
-
-  const patientCtx = patient
-    ? (() => {
-        const age = libelleAge(patient.dateNaissance);
-        const bi = patient.bilans.find(b => b.type === 'initial') ?? null;
-        const ciInfoExport = getContreIndications(patient, bi);
-        const ci = ciInfoExport.actif ? (ciInfoExport.detail ?? 'non précisées') : 'aucune';
-        const pathologies = [patient.pathologie, patient.antecedentsMedicaux].filter(Boolean).join(' / ') || 'non renseigné';
-        return `\n\nPATIENT : ${patient.prenom} ${patient.nom}, ${age}. Pathologies : ${pathologies}. Contre-indications : ${ci}.`;
-      })()
-    : '';
-
-  const prior = history.length > 0
-    ? '\n\nÉCHANGES PRÉCÉDENTS:\n' + history.map(m => `${m.role === 'user' ? 'Q' : 'R'}: ${m.content}`).join('\n')
-    : '';
-
-  return `${base}${patientCtx}${prior}\n\n---\nQUESTION:\n${question}`;
-}
-
 function EcranAssistant({
   preSelectedPatientId,
   onOuvrirSettings,
@@ -1915,7 +1894,8 @@ function EcranAssistant({
   onOuvrirSettings: () => void;
 }) {
   const { participants } = useParticipants();
-  type Msg = { role: 'user' | 'assistant'; content: string };
+  // contenuIA : version envoyable (sans le nom), voir historiquePourIA.
+  type Msg = { role: 'user' | 'assistant'; content: string; contenuIA?: string };
   // Conversation conservée si l'interface est remplacée (rotation). Une réponse
   // encore en attente à ce moment-là est perdue ; la question, non.
   const [selectedPatientId, setSelectedPatientId] = useEtatSession<string | null>('assistant_mobile_beneficiaire', null);
@@ -1946,15 +1926,23 @@ function EcranAssistant({
     setMessages(prev => [...prev, { role: 'user', content: trimmed }]);
     setLoading(true);
     try {
-      const prompt = buildAssistantPrompt(selectedPatient, messages, trimmed);
+      // Pseudonymisation (lot A, 2026-10-27) : ni le nom ni la date de
+      // naissance ne partent ; l'identité est réinsérée dans la réponse.
+      const identite = selectedPatient ? identiteDe(selectedPatient) : null;
+      const prompt = buildAssistantPromptMobile(
+        selectedPatient ? versParticipantIA(selectedPatient) : null,
+        historiquePourIA(messages, identite),
+        masquerIdentiteConnue(trimmed, identite),
+      );
       const res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
         body: JSON.stringify({ prompt }),
       });
       const data = await res.json();
-      const responseText: string = data.text ?? (data.error ? `Erreur : ${data.error}` : 'Pas de réponse.');
-      setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
+      const brut: string | undefined = data.text;
+      const responseText: string = brut != null ? reinsererIdentite(brut, identite) : (data.error ? `Erreur : ${data.error}` : 'Pas de réponse.');
+      setMessages(prev => [...prev, { role: 'assistant', content: responseText, ...(brut != null ? { contenuIA: brut } : {}) }]);
       if (supabase) {
         try {
           await supabase.from('assistant_logs').insert({

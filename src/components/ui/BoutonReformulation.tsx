@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Sparkles, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { suggererReformulation } from '../../utils/reformulerMessageBeneficiaire';
+import type { IdentiteBeneficiaire } from '../../utils/pseudonymiserIA';
 
 interface Props {
   /** Texte actuel du champ — jamais lu au montage, seulement au clic. */
@@ -16,16 +17,19 @@ interface Props {
   onReformule: (nouveauTexte: string) => void;
   disabled?: boolean;
   className?: string;
+  /** Bénéficiaire concerné : son nom est masqué avant l'envoi à l'IA puis
+   *  réinséré (voir suggererReformulation). */
+  identite?: IdentiteBeneficiaire | null;
 }
 
-export default function BoutonReformulation({ texte, onReformule, disabled, className }: Props) {
+export default function BoutonReformulation({ texte, onReformule, disabled, className, identite }: Props) {
   const [loading, setLoading] = useState(false);
   const [texteOriginal, setTexteOriginal] = useState<string | null>(null);
 
   async function handleSuggerer() {
     setLoading(true);
     try {
-      const suggestion = await suggererReformulation(texte);
+      const suggestion = await suggererReformulation(texte, identite);
       setTexteOriginal(texte);
       onReformule(suggestion);
     } catch {

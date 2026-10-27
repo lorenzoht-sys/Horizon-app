@@ -226,8 +226,10 @@ export default function DicteePostSeance({ participant, onClose: fermerParent, o
       const programmeActif = participant.programmes?.find(p => p.actif);
       const { data, error } = await supabase.functions.invoke('analyser-seance', {
         body: {
+          // Plus de nomPatient (lot A pseudonymisation, 2026-10-27) : l'identité
+          // du bénéficiaire ne part plus vers Anthropic. La fonction l'ignore
+          // de toute façon si une ancienne version de l'app l'envoie encore.
           transcription,
-          nomPatient: `${participant.prenom} ${participant.nom}`,
           pathologie: participant.pathologie ?? null,
           objectifProgramme: programmeActif?.objectif ?? null,
           dateAujourdhui: new Date().toISOString().slice(0, 10),

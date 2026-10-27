@@ -38,8 +38,10 @@ export function trouverOptionFrequence(
 
 // Contre-indications : nouvelle source = fiche patient (anamnese),
 // avec repli sur l'ancien emplacement (bilan initial) pour les bilans déjà remplis.
+// `Pick` et non `Participant` : appelée aussi sur un ParticipantIA (liste
+// blanche sans identité, src/utils/pseudonymiserIA.ts) pour les prompts IA.
 export function getContreIndications(
-  participant: Participant,
+  participant: Pick<Participant, 'anamnese' | 'bilans'>,
   bilanInitial?: Bilan | null
 ): { actif: boolean; detail: string | null } {
   if (participant.anamnese?.contreIndications != null) {
@@ -56,7 +58,7 @@ export function getContreIndications(
 // patient (anamnese), avec repli sur l'ancien emplacement (bilan initial) pour
 // les bilans déjà remplis.
 export function getTestsAutonomie(
-  participant: Participant,
+  participant: Pick<Participant, 'anamnese' | 'bilans'>,
   bilanInitial?: Bilan | null
 ): {
   sedentarite: { score: number | null; profil: 'inactif' | 'actif' | 'tres_actif' | null; reponses: SedentariteReponses | null };

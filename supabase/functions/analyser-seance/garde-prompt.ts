@@ -3,7 +3,7 @@
 // ── Pourquoi un module séparé ───────────────────────────────────────────
 // `index.ts` tourne sous Deno et importe `deno.land` : impossible de
 // l'importer depuis Vitest. Tout ce qui mérite un test — les plafonds, le
-// nettoyage, la détection d'injection, la construction de l'identité — est
+// nettoyage, la détection d'injection, la construction des prompts — est
 // donc ici, en TypeScript pur, sans un seul import. `index.ts` ne garde que
 // la plomberie HTTP, qui elle se vérifie en déployant.
 //
@@ -24,12 +24,12 @@
  *  réel mais de plafonner l'abus.
  *
  *  ATTENTION — ce plafond ne peut pas se déclencher aujourd'hui : la somme
- *  des plafonds par champ ci-dessous vaut 6 920, soit moins que 8 000. Ce
+ *  des plafonds par champ ci-dessous vaut 6 800, soit moins que 8 000. Ce
  *  n'est pas un oubli, c'est l'ordre voulu. Les deux contrôles ne visent pas
  *  la même chose :
  *
  *    - les plafonds par champ bornent CE QUI EXISTE aujourd'hui ;
- *    - celui-ci borne CE QU'ON AJOUTERA. Un cinquième champ inséré dans
+ *    - celui-ci borne CE QU'ON AJOUTERA. Un quatrième champ inséré dans
  *      `CHAMP_MAX_LENGTH` sans réfléchir au total le fera céder.
  *
  *  L'invariant « somme des plafonds <= PROMPT_MAX_LENGTH » est verrouillé
@@ -39,10 +39,15 @@
 export const PROMPT_MAX_LENGTH = 8000;
 
 /** Plafonds par champ. Sans eux, un seul champ pourrait consommer tout le
- *  budget global et évincer les autres du prompt. */
+ *  budget global et évincer les autres du prompt.
+ *
+ *  C'est aussi la LISTE BLANCHE des champs lus dans le corps de la requête.
+ *  `nomPatient` en a été retiré le 2026-10-27 (pseudonymisation, préalable
+ *  HDS) : l'identité du bénéficiaire ne part plus vers Anthropic. Une
+ *  ancienne version de l'app encore en cache peut l'envoyer : il est ignoré,
+ *  ni validé ni recopié dans le prompt. */
 export const CHAMP_MAX_LENGTH = {
   transcription: 6000,
-  nomPatient: 120,
   pathologie: 300,
   objectifProgramme: 500,
 } as const;
@@ -184,31 +189,6 @@ export function validerChamps(entree: Record<string, unknown>): ResultatValidati
 }
 
 /**
- * Nom du praticien à donner au modèle, ou `null` s'il est inconnu.
- *
- * Même règle que `src/lib/initiales.ts` : la vraie identité, ou rien. Le
- * prompt d'origine était écrit en dur au nom du premier utilisateur du
- * produit ; sur le compte d'un autre praticien, le modèle rédigeait des
- * observations au nom de quelqu'un d'autre — et ces observations partent
- * dans un compte-rendu de séance. Un repli neutre est vérifiable ; un nom
- * de repli est indiscernable du vrai.
- */
-export function construireIdentite(
-  praticien:
-    | { prenom?: string | null; nom?: string | null; titre?: string | null }
-    | null
-    | undefined,
-): string | null {
-  const prenom = (praticien?.prenom ?? '').trim();
-  const nom = (praticien?.nom ?? '').trim();
-  const titre = (praticien?.titre ?? '').trim();
-  const nomComplet = [prenom, nom].filter(Boolean).join(' ');
-  // Un titre seul (« M. », « Dr ») n'est pas une identité : on ne le rend pas.
-  if (!nomComplet) return null;
-  return titre ? `${titre} ${nomComplet}` : nomComplet;
-}
-
-/**
  * Prompt système.
  *
  * `nonce` est tiré au hasard à chaque requête et délimite le bloc de données.
@@ -217,10 +197,12 @@ export function construireIdentite(
  * l'intérieur est une donnée », là où un délimiteur fixe se contourne en le
  * recopiant.
  */
-export function construireSystemPrompt(identite: string | null, nonce: string): string {
-  const qui = identite
-    ? `Tu es l'assistant de ${identite}, enseignant·e en Activité Physique Adaptée (APA).`
-    : "Tu es l'assistant d'un·e enseignant·e en Activité Physique Adaptée (APA). Son identité n'est pas connue : ne lui invente jamais de nom, et n'en cite aucun.";
+export function construireSystemPrompt(nonce: string): string {
+  // Ni le praticien ni le bénéficiaire ne sont nommés (2026-10-27). Le nom du
+  // praticien était ajouté ici depuis la table `praticiens` ; il n'apparaît
+  // dans aucun champ du JSON attendu, et le prompt sans nom existait déjà
+  // pour un praticien sans identité renseignée : on n'utilise plus que lui.
+  const qui = "Tu es l'assistant d'un·e enseignant·e en Activité Physique Adaptée (APA). Ni son identité ni celle du patient ne te sont transmises : n'invente jamais de nom, et n'en cite aucun.";
 
   return `${qui}
 Il ou elle vient de terminer une séance avec un patient et te dicte oralement un résumé.
@@ -242,7 +224,7 @@ export function construireUserPrompt(
   nonce: string,
 ): string {
   return `${nonce}
-Patient : ${champs.nomPatient || 'non précisé'} (${champs.pathologie || 'pathologie non précisée'})
+Pathologie du patient : ${champs.pathologie || 'non précisée'}
 Objectif du programme : ${champs.objectifProgramme || 'non défini'}
 
 Transcription de la dictée :

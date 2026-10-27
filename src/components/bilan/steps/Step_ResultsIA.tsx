@@ -64,6 +64,7 @@ const NOTES_LABELS_TEST: Record<keyof NotesBilan, string> = {
 type CleResultatPartageable = 'equilibre' | 'force' | 'handGrip' | 'mobilite' | 'endurance';
 import { EtatPartageBilan } from '../EtatPartageBeneficiaire';
 import { distanceTm6, resultatTm6 } from '../../../lib/tm6';
+import { identiteDe } from '../../../utils/pseudonymiserIA';
 
 const PARTAGE_ITEMS: { key: CleResultatPartageable; label: string }[] = [
   { key: 'equilibre', label: 'Équilibre' },
@@ -339,6 +340,7 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
                   interpretationIA: { ...interpretation, messageClient: nouveauTexte },
                   messageClient: nouveauTexte,
                 })}
+                identite={identiteDe(participant)}
               />
             </div>
             <p className="text-xs text-gray-400 mt-1">Ce message sera visible dans l'espace client du bénéficiaire.</p>

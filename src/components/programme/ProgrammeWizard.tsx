@@ -8,6 +8,7 @@ import { TYPE_PROGRAMME_LABELS as TPL, JOURS_PROGRAMME as JP, CATEGORIE_EXERCICE
 import { loadExercicesPraticien, saveExercicePersonnalise } from '../../data/exercices';
 import BoutonReformulation from '../ui/BoutonReformulation';
 import { useDevice } from '../../hooks/useDevice';
+import { identiteDe } from '../../utils/pseudonymiserIA';
 
 // Wizard 4 étapes partagé entre la création/édition d'un programme réel
 // (ProgrammePage.tsx, rattaché à un bénéficiaire) et d'un modèle réutilisable
@@ -611,10 +612,11 @@ function ExercicePickerModal({
 
 // ── Étape 1 — Infos générales ─────────────────────────────────────────────────
 
-function Step1({ data, onChange, estModele }: {
+function Step1({ data, onChange, estModele, participant }: {
   data: WizardData;
   onChange: (d: Partial<WizardData>) => void;
   estModele?: boolean;
+  participant?: Participant;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -673,6 +675,7 @@ function Step1({ data, onChange, estModele }: {
           <BoutonReformulation
             texte={data.messageMotivation}
             onReformule={nouveauTexte => onChange({ messageMotivation: nouveauTexte })}
+            identite={participant ? identiteDe(participant) : null}
           />
         </div>
       </div>
@@ -981,7 +984,7 @@ export function ProgrammeWizardModal({
 
         {/* Contenu de l'étape */}
         <div style={{ padding: '24px', maxHeight: '60vh', overflowY: 'auto' }}>
-          {step === 1 && <Step1 data={data} onChange={onChange} estModele={estModele} />}
+          {step === 1 && <Step1 data={data} onChange={onChange} estModele={estModele} participant={participant} />}
           {step === 2 && <Step2 data={data} onChange={onChange} participant={participant} />}
           {step === 3 && <Step3 data={data} onChange={onChange} />}
           {step === 4 && <Step4 data={data} />}

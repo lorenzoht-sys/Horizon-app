@@ -21,7 +21,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.2";
 import {
-  construireIdentite,
   construireSystemPrompt,
   construireUserPrompt,
   validerChamps,
@@ -118,7 +117,7 @@ serve(async (req) => {
     }
 
     // service_role : même choix que `api/_lib/patientAuth.ts`. Le client ne
-    // sert qu'à valider le token et à lire une ligne de `praticiens` ; il
+    // sert qu'à valider le token ; il
     // n'est jamais construit à partir de données venant de la requête.
     const supabase = createClient(supabaseUrl, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -158,26 +157,6 @@ serve(async (req) => {
       return json({ error: "Configuration serveur incomplète" }, 500, cors);
     }
 
-    // ── Identité du praticien ───────────────────────────────────────────
-    // Lue en base, jamais reçue du client : le nom du praticien finit dans
-    // des observations enregistrées au dossier, un client compromis pourrait
-    // sinon les faire signer par n'importe qui.
-    //
-    // `maybeSingle()` et non `single()` : un praticien qui n'a pas encore
-    // rempli son identité n'est pas une erreur, c'est le cas nominal juste
-    // après l'onboarding. Une lecture en échec donne `null` — donc un prompt
-    // sans nom, jamais un nom de repli (cf. src/lib/initiales.ts).
-    const { data: praticien, error: praticienErr } = await supabase
-      .from("praticiens")
-      .select("prenom, nom, titre")
-      .eq("id", praticienId)
-      .maybeSingle();
-
-    if (praticienErr) {
-      console.error(`[analyser-seance] lecture praticiens échouée : ${praticienErr.message}`);
-    }
-    const identite = construireIdentite(praticien);
-
     // Marqueur imprévisible, régénéré à chaque requête : un texte injecté ne
     // peut pas refermer un bloc dont il ignore le nom.
     const nonce = `#### DICTEE-${crypto.randomUUID()} ####`;
@@ -196,7 +175,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 1500,
-        system: construireSystemPrompt(identite, nonce),
+        system: construireSystemPrompt(nonce),
         messages: [
           {
             role: "user",
@@ -222,7 +201,9 @@ serve(async (req) => {
     try {
       parsed = JSON.parse(cleanText);
     } catch {
-      console.error(`[analyser-seance] réponse non JSON : ${cleanText.slice(0, 500)}`);
+      // Jamais le contenu : la réponse reformule une dictée de séance, donc
+      // des données de santé (lot A pseudonymisation, 2026-10-27).
+      console.error(`[analyser-seance] réponse non JSON (${cleanText.length} caractères)`);
       return json({ error: "Réponse IA non exploitable" }, 502, cors);
     }
 
