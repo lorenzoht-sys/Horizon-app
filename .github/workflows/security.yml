@@ -40,22 +40,18 @@ jobs:
 
       - run: npm ci
 
-      # ⚠️ TEMPORAIRE — contournement, pas une solution. Depuis le lot B
-      # sécurité HDS (2026-10-27), `npm audit --omit=dev` ne remonte plus
-      # qu'UNE vulnérabilité :
-      #   - xlsx (prototype pollution, ReDoS), sans correctif sur npm —
-      #     décision séparée à prendre (SheetJS hors npm, exceljs, ou import
-      #     CSV seul). Les autres (dompurify, nanoid, pdfjs-dist, postcss,
-      #     react-router…) sont corrigées.
-      # `continue-on-error` empêche seulement cette étape de bloquer le job
-      # (et donc d'empêcher le harnais RLS ci-dessous de s'exécuter) — le
-      # rapport complet de `npm audit` reste intégralement affiché dans les
-      # logs de cette étape, qui apparaît en avertissement (⚠) et non en vert
-      # dans l'interface GitHub. À rendre bloquant (retirer
-      # `continue-on-error`) dès que xlsx est tranché.
-      - name: npm audit (non bloquant temporairement — voir commentaire ci-dessus)
-        run: npm audit --audit-level=high --production
-        continue-on-error: true
+      # BLOQUANT depuis le 2026-10-27 (lot E sécurité HDS). Il était non
+      # bloquant (`continue-on-error`) tant que des vulnérabilités connues
+      # restaient sans traitement : corrigées au lot B (#158), et xlsx
+      # remplacé au lot E par SheetJS 0.20.3, installé depuis
+      # cdn.sheetjs.com. ⚠️ Ce paquet hors registre npm est INVISIBLE pour
+      # `npm audit` et Dependabot : sa veille se fait à la main
+      # (https://cdn.sheetjs.com, docs.sheetjs.com).
+      # Seuil « high », sur les dépendances de production seulement : une
+      # vulnérabilité élevée ou critique fait échouer le job, avant le
+      # harnais RLS.
+      - name: npm audit (bloquant)
+        run: npm audit --audit-level=high --omit=dev
 
       - run: npm run typecheck:api
       - run: npm run build
