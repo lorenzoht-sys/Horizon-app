@@ -4,6 +4,12 @@ on:
   push:
     branches: [main, consolidation]
   pull_request:
+  # Analyse gitleaks de l'historique COMPLET, chaque lundi à 6 h UTC (job
+  # gitleaks-historique). Le job audit, lui, ne regarde que les commits
+  # poussés ; il ne tourne pas sur ce déclencheur.
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
 
 jobs:
   # Vérifications statiques + tests de sécurité : gitleaks (secrets dans
@@ -15,6 +21,7 @@ jobs:
   # valable que si le harnais a réellement tourné, jamais parce qu'il a été
   # silencieusement ignoré.
   audit:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -93,3 +100,56 @@ jobs:
           E2E_PATIENT_CODE: ${{ vars.E2E_PATIENT_CODE }}
           E2E_PATIENT_CODE_2: ${{ vars.E2E_PATIENT_CODE_2 }}
           E2E_STRUCTURE_TOKEN: ${{ vars.E2E_STRUCTURE_TOKEN }}
+
+  # Cloisonnement et intégrité de la facturation (factures, lignes_facture,
+  # paiements, ca_externe, envois_factures…) : tests/db/*.spec.ts, qu'aucun
+  # workflow ne lançait (lot I sécurité HDS, 2026-10-27). Ils tournent sur
+  # une base Supabase LOCALE démarrée dans le runner : migrations du dépôt et
+  # seed fictif (supabase/seed.sql), clés de démo publiques de la CLI.
+  # Aucun secret, aucune base distante. Les tests refusent eux-mêmes toute
+  # cible autre que 127.0.0.1 (voir tests/db/facturation.spec.ts).
+  base-locale:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.119.0
+
+      # Services inutiles aux tests exclus pour accélérer le démarrage ; restent
+      # Postgres, Auth (gotrue), PostgREST, Storage et Kong. Validé en local le
+      # 2026-10-27 : 253/253 tests avec exactement cette liste.
+      - name: Base Supabase locale (migrations du dépôt + seed fictif)
+        run: supabase start -x realtime,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+
+      - name: tests/db — un skip est un échec, jamais un vert silencieux
+        run: |
+          npx vitest run tests/db --reporter=json --outputFile=vitest-db-result.json || true
+          node scripts/verifier-resultat-harnais.mjs vitest-db-result.json tests/db
+
+  # Historique complet, valeurs masquées (--redact) : le journal ne montre que
+  # fichier, commit et règle. Les constats déjà examinés sont dans
+  # .gitleaksignore, avec leur justification.
+  gitleaks-historique:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks — historique complet de toutes les branches
+        run: |
+          git fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
+          docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.28.0 \
+            git /repo --log-opts="--all" --redact --no-banner -v \
+            --gitleaks-ignore-path /repo/.gitleaksignore

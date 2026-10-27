@@ -1,0 +1,16 @@
+# Constats gitleaks examinés et acceptés (analyse complète de l'historique,
+# lot I sécurité HDS, 2026-10-27). Une empreinte = commit:fichier:règle:ligne.
+# N'y ajouter une ligne qu'après avoir vérifié la nature du secret, et en
+# donnant la raison ci-dessous. Jamais de valeur dans ce fichier.
+#
+# Faux positifs : dans .env.example, la « valeur » est l'en-tête JWT public
+# standard suivi de « ... » (texte d'exemple, aucune clé).
+89998190327f52e49d7a58fcebf4dff5db19606f:.env.example:generic-api-key:7
+a796b23faf4c99a96fdf58000171d44683d6438b:.env.example:generic-api-key:2
+#
+# Clé PUBLIQUE (sb_publishable_, VITE_SUPABASE_ANON_KEY) dans .env.local.txt,
+# committé le 2026-05-28 puis retiré par 52d1c2e. Cette clé est publique par
+# conception : elle est embarquée dans le bundle servi au navigateur, et la
+# RLS en est la seule protection. Acceptée, pas de rotation nécessaire.
+9c469b5db98194fbcf2292e49ae1671ac1e22617:.env.local.txt:generic-api-key:2
+a796b23faf4c99a96fdf58000171d44683d6438b:.env.local.txt:generic-api-key:2

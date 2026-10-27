@@ -35,6 +35,9 @@
 import { readFileSync } from 'fs';
 
 const chemin = process.argv[2];
+// Dossier testé, pour les messages : tests/security par défaut, tests/db pour
+// le job base-locale de security.yml (lot I, 2026-10-27).
+const dossier = process.argv[3] ?? 'tests/security';
 if (!chemin) {
   console.error('::error::Usage : node scripts/verifier-resultat-harnais.mjs <rapport.json>');
   process.exit(1);
@@ -65,7 +68,7 @@ function noms(statuts) {
 }
 
 if (total === 0) {
-  console.error('::error::Aucun test trouvé dans tests/security/ — vérifie include dans vitest.config.ts.');
+  console.error(`::error::Aucun test trouvé dans ${dossier}/ — vérifie include dans vitest.config.ts.`);
   process.exit(1);
 }
 
@@ -81,7 +84,7 @@ if (ignores > 0) {
     console.error(`::error::SKIP : ${a.fullName}`);
   }
   console.error(
-    `::error::${ignores}/${total} test(s) SKIP dans tests/security/ ` +
+    `::error::${ignores}/${total} test(s) SKIP dans ${dossier}/ ` +
       `(secrets STAGING_* manquants ou invalides, ou hook de préparation en échec) — ` +
       `voir tests/security/rls.spec.ts. Un skip ne peut jamais être vert ici.`
   );
@@ -94,10 +97,10 @@ if (echecs > 0) {
     console.error(`::error::ÉCHEC : ${a.fullName}`);
     for (const m of a.failureMessages || []) console.error(m.split('\n')[0]);
   }
-  console.error(`::error::${echecs}/${total} test(s) en ÉCHEC dans tests/security/.`);
+  console.error(`::error::${echecs}/${total} test(s) en ÉCHEC dans ${dossier}/.`);
   probleme = true;
 }
 
 if (probleme) process.exit(1);
 
-console.log(`${total} test(s) exécuté(s) avec succès dans tests/security/ — harnais RLS réellement vérifié.`);
+console.log(`${total} test(s) exécuté(s) avec succès dans ${dossier}/ — réellement vérifié.`);
