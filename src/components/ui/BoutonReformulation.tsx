@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Sparkles, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { suggererReformulation } from '../../utils/reformulerMessageBeneficiaire';
+import RappelNomsIA from './RappelNomsIA';
 import type { IdentiteBeneficiaire } from '../../utils/pseudonymiserIA';
 
 interface Props {
@@ -66,6 +67,8 @@ export default function BoutonReformulation({ texte, onReformule, disabled, clas
           <Undo2 size={12} /> Revenir au texte original
         </button>
       )}
+      {/* basis-full : passe sous les boutons, sans changer leur disposition. */}
+      <RappelNomsIA className="basis-full" />
     </div>
   );
 }

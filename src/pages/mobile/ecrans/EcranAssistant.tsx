@@ -8,6 +8,7 @@ import { libelleAge } from '../../../lib/age';
 import { useEtatSession } from '../../../hooks/useEtatSession';
 import { buildAssistantPromptMobile, historiquePourIA } from '../../../utils/promptAssistant';
 import { identiteDe, masquerIdentiteConnue, reinsererIdentite, versParticipantIA } from '../../../utils/pseudonymiserIA';
+import RappelNomsIA from '../../../components/ui/RappelNomsIA';
 import { C } from './communs';
 
 // ── EcranAssistant ────────────────────────────────────────────────────────────
@@ -196,6 +197,10 @@ export function EcranAssistant({
 
       {/* Zone saisie */}
       <div style={{ background: 'white', borderTop: `1px solid ${C.border}`, padding: '10px 14px', paddingBottom: 'calc(10px + env(safe-area-inset-bottom, 0px))', flexShrink: 0 }}>
+        {/* Au-dessus de la saisie, pas en dessous : mesuré le 2026-10-27
+            (15-fumee-mobile, 390×844), le bas de cette zone passe sous la
+            barre de navigation basse ; un rappel placé dessous y était caché. */}
+        <RappelNomsIA style={{ marginBottom: 6 }} />
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <textarea
             value={input}
