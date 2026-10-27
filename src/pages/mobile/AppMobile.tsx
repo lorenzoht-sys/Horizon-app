@@ -52,6 +52,7 @@ import { getBrouillon, supprimerBrouillon } from '../../hooks/useBrouillonBilan'
 import { formaterDateNaissanceAffichage, masquerSaisieDateNaissance, messageErreurDateNaissance, parserDateNaissanceSaisie } from '../../utils/dateNaissance';
 import { contratsDesBeneficiairesActifs } from '../../lib/archivage';
 import { buildAssistantPromptMobile, historiquePourIA } from '../../utils/promptAssistant';
+import RappelNomsIA from '../../components/ui/RappelNomsIA';
 import { identiteDe, masquerIdentiteConnue, reinsererIdentite, versParticipantIA } from '../../utils/pseudonymiserIA';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -2096,6 +2097,7 @@ function EcranAssistant({
             <i className="ti ti-send" style={{ fontSize: 17 }} />
           </button>
         </div>
+        <RappelNomsIA style={{ marginTop: 6 }} />
       </div>
 
       {/* Bottom sheet sélecteur patient */}

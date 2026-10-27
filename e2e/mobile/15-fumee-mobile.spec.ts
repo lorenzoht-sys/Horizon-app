@@ -120,6 +120,35 @@ test.describe('Fumée mobile (390×844)', () => {
   // (BarreNavigationMobile.tsx) et le bouton "Assistant" de la fiche
   // bénéficiaire (ParticipantProfile.tsx, masqué sous 768px, pas retiré :
   // encore utilisé par le desktop).
+  // Lot F sécurité HDS : rappel « nom du bénéficiaire » sur l'écran d'attente
+  // de la dictée, mesuré à 390×844 (dans l'écran, pas sous la barre basse).
+  // Rien n'est enregistré : la modale est refermée sans dicter. Si la
+  // reconnaissance vocale n'est pas disponible dans le navigateur de test,
+  // l'écran « Navigateur non supporté » n'envoie rien à l'IA et n'a pas de
+  // rappel : la mesure est alors sans objet.
+  test('dictée post-séance : rappel visible au-dessus de la barre de navigation', async ({ page }) => {
+    const erreurs = ecouterErreursConsole(page);
+    await loginPraticien(page);
+
+    await barreNav(page).getByRole('button', { name: 'Bénéfic.' }).click();
+    await page.getByText(`${env.patientPrenom} ${env.patientNom}`).first().click();
+    await page.waitForURL(/\/participant\/[0-9a-fA-F-]+$/);
+    await page.getByRole('button', { name: /Dicter/ }).filter({ visible: true }).first().click();
+
+    const nonSupporte = page.getByText('Navigateur non supporté');
+    const rappel = page.getByTestId('rappel-noms-ia');
+    await expect(nonSupporte.or(rappel)).toBeVisible();
+    if (await rappel.isVisible()) {
+      await rappel.scrollIntoViewIfNeeded();
+      const boite = (await rappel.boundingBox())!;
+      expect(boite.y + boite.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+      if (await barreNav(page).isVisible()) {
+        expect(boite.y + boite.height).toBeLessThanOrEqual((await barreNav(page).boundingBox())!.y);
+      }
+    }
+    expect(erreurs, erreurs.join('\n')).toEqual([]);
+  });
+
   test('barre de navigation : "Assistant" retiré, 5 onglets restants', async ({ page }) => {
     const erreurs = ecouterErreursConsole(page);
     await loginPraticien(page);
@@ -143,6 +172,20 @@ test.describe('Fumée mobile (390×844)', () => {
     // `exact: true` : « Mon assistant » (sans préciser) matche aussi le titre
     // de l'état vide « Mon assistant APA » (AppMobile.tsx, EcranAssistant).
     await expect(page.getByText('🤖 Mon assistant', { exact: true })).toBeVisible();
+
+    // Rappel « nom du bénéficiaire » sous la saisie (lot F sécurité HDS) :
+    // mesuré, pas supposé — entièrement dans l'écran et jamais sous la barre
+    // de navigation basse si elle est affichée.
+    const rappel = page.getByTestId('rappel-noms-ia');
+    await expect(rappel).toBeVisible();
+    const boite = await rappel.boundingBox();
+    const hauteur = page.viewportSize()!.height;
+    expect(boite, 'rappel sans dimensions').not.toBeNull();
+    expect(boite!.y + boite!.height).toBeLessThanOrEqual(hauteur);
+    if (await barreNav(page).isVisible()) {
+      const nav = await barreNav(page).boundingBox();
+      expect(boite!.y + boite!.height).toBeLessThanOrEqual(nav!.y);
+    }
     expect(erreurs, erreurs.join('\n')).toEqual([]);
   });
 });
