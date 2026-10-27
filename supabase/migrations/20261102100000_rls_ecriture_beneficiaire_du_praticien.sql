@@ -117,8 +117,17 @@ CREATE POLICY "praticien_gere_rappel_preferences" ON public.rappel_preferences
 DROP POLICY IF EXISTS "praticien_gere_participations_cours_collectifs" ON public.participations_cours_collectifs;
 CREATE POLICY "praticien_gere_participations_cours_collectifs" ON public.participations_cours_collectifs
   USING (public.est_cours_du_praticien(cours_id))
-  WITH CHECK (public.est_cours_du_praticien(cours_id) AND public.acces_participant(participant_id));
+  WITH CHECK (
+    public.est_cours_du_praticien(cours_id)
+    AND public.acces_participant(participant_id)
+    AND (programme_individuel_id IS NULL OR EXISTS (SELECT 1 FROM public.programmes_modeles m WHERE m.id = programme_individuel_id))
+  );
 
+-- programme_individuel_id (ajout du 2026-10-27, lot K3) : le modèle de
+-- programme rattaché doit être visible du praticien (EXISTS filtré par la
+-- RLS de programmes_modeles) — sinon B pointait le modèle de A. Traité ici,
+-- dans la seule migration qui réécrit ces deux policies.
+--
 -- Accès organisation : en plus du bénéficiaire, le cours doit être visible.
 -- C'est la fuite constatée : acces_participant seul laissait B inscrire son
 -- propre bénéficiaire à n'importe quel cours.
@@ -126,7 +135,11 @@ DROP POLICY IF EXISTS "orga_acces_participations_cours_collectifs" ON public.par
 CREATE POLICY "orga_acces_participations_cours_collectifs" ON public.participations_cours_collectifs
   TO authenticated
   USING (public.acces_participant(participant_id))
-  WITH CHECK (public.acces_participant(participant_id) AND public.cours_accessible(cours_id));
+  WITH CHECK (
+    public.acces_participant(participant_id)
+    AND public.cours_accessible(cours_id)
+    AND (programme_individuel_id IS NULL OR EXISTS (SELECT 1 FROM public.programmes_modeles m WHERE m.id = programme_individuel_id))
+  );
 
 -- ═══ Contrôle final ═════════════════════════════════════════════════════════
 DO $controle$
@@ -140,7 +153,9 @@ BEGIN
       ('exercices_libres_activations',    'exercices_libres_activations_praticien_all',      'acces_participant(participant_id)'),
       ('rappel_preferences',              'praticien_gere_rappel_preferences',               'acces_participant(participant_id)'),
       ('participations_cours_collectifs', 'praticien_gere_participations_cours_collectifs',  'acces_participant(participant_id)'),
-      ('participations_cours_collectifs', 'orga_acces_participations_cours_collectifs',      'cours_accessible(cours_id)')
+      ('participations_cours_collectifs', 'orga_acces_participations_cours_collectifs',      'cours_accessible(cours_id)'),
+      ('participations_cours_collectifs', 'praticien_gere_participations_cours_collectifs',  'FROM programmes_modeles m'),
+      ('participations_cours_collectifs', 'orga_acces_participations_cours_collectifs',      'FROM programmes_modeles m')
     ) AS v(tablename, policyname, attendu)
   LOOP
     IF NOT EXISTS (
@@ -186,7 +201,7 @@ BEGIN
     RAISE EXCEPTION 'Fuites d''écriture : authenticated ne peut pas exécuter cours_accessible';
   END IF;
 
-  RAISE NOTICE 'Fuites d''écriture : 5 policies et la fonction cours_accessible vérifiées.';
+  RAISE NOTICE 'Fuites d''écriture : 5 policies (7 contrôles) et la fonction cours_accessible vérifiées.';
 END
 $controle$;
 
