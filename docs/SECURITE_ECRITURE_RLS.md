@@ -91,3 +91,29 @@ Les écritures par `service_role` (routes `api/*`, cron, Edge Functions) ne
 sont pas concernées par la RLS. Elles relèvent de la règle « routes API » de
 `CHECKLIST_RELEASE.md` (section 3) : tout identifiant reçu du client a un
 contrôle d'appartenance explicite.
+
+## Contrôles à exiger avant tout merge sur `main`
+
+Une règle de protection de branche ne se lit pas depuis le dépôt : elle se
+vérifie dans GitHub, en une minute.
+
+**Chemin** : dépôt `Horizon-app` → **Settings** → **Branches** (ou
+**Rules → Rulesets**, selon l'interface) → règle qui s'applique à `main` →
+case **« Require status checks to pass before merging »** cochée → liste
+**« Status checks that are required »**.
+
+| Contrôle à exiger | Workflow | Ce qu'il vérifie |
+|---|---|---|
+| `build` | CI (`ci.yml`) | build, `typecheck:api`, `typecheck:e2e`, tests unitaires |
+| `e2e` | CI (`ci.yml`) | parcours Playwright sur le Preview Vercel (staging) |
+| `audit` | Sécurité (`security.yml`) | gitleaks (commits poussés), `npm audit` bloquant, secrets dans le bundle, **harnais RLS** (`tests/security/`, dont `rls-ecriture-cles.spec.ts`) — un skip y est un échec |
+| `base-locale` | Sécurité (`security.yml`) | `tests/db` sur une base Supabase locale (facturation, cloisonnement, `fuite-facturation.spec.ts`) — **après le merge de #165** |
+
+**À ne pas exiger** : `gitleaks-historique` (il ne tourne que le lundi et à la
+demande, jamais sur une PR : l'exiger bloquerait tous les merges).
+
+Le harnais RLS n'est pas un contrôle à part : c'est une étape du job `audit`.
+Exiger `audit` suffit à l'exiger.
+
+Conseillé en plus, sur la même page : **« Require branches to be up to date
+before merging »** (la CI a tourné sur le code tel qu'il sera mergé).
