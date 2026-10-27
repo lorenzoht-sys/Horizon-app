@@ -14,6 +14,8 @@ import { getAuthHeader } from '../lib/supabase';
 import type { Bilan, Participant } from '../types';
 import { toast } from 'sonner';
 import { distanceTm6 } from '../lib/tm6';
+import { construirePromptResumeEvolution } from '../utils/promptComparaison';
+import { identiteDe, reinsererIdentite } from '../utils/pseudonymiserIA';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -237,20 +239,7 @@ function ResumeIA({ participant, bilans }: { participant: Participant; bilans: B
 
       const age = Math.floor((Date.now() - new Date(participant.dateNaissance).getTime()) / (365.25 * 24 * 3600 * 1000));
 
-      const prompt = `Tu es expert en Activité Physique Adaptée (APA). Génère un résumé d'évolution positif et motivant.
-
-Patient : ${participant.prenom} ${participant.nom}, ${age} ans
-Durée de suivi : ${nbMois} mois (${bilans.length} bilans)
-
-Évolution des tests :
-${deltasTexte}
-
-Génère :
-1. Un résumé professionnel en 3-4 phrases (ton APA, factuel, mentionner les progressions clés)
-2. Un message motivant court pour le patient (2 phrases, positif, commencer par "Bravo ${participant.prenom},")
-
-Réponds UNIQUEMENT en JSON valide :
-{"resumePro":"...","messagePatient":"..."}`;
+      const prompt = construirePromptResumeEvolution({ age, nbMois, nbBilans: bilans.length, deltasTexte });
 
       const res = await fetch('/api/claude', {
         method: 'POST',
@@ -262,7 +251,11 @@ Réponds UNIQUEMENT en JSON valide :
       const data = await res.json();
       const texte: string = data.text ?? '';
       const parsed = JSON.parse(texte.replace(/```json|```/g, '').trim());
-      setResume({ resumePro: parsed.resumePro ?? '', messagePatient: parsed.messagePatient ?? '' });
+      const identite = identiteDe(participant);
+      setResume({
+        resumePro: reinsererIdentite(parsed.resumePro ?? '', identite),
+        messagePatient: reinsererIdentite(parsed.messagePatient ?? '', identite),
+      });
     } catch (e) {
       toast.error("Erreur lors de la génération IA");
     } finally {

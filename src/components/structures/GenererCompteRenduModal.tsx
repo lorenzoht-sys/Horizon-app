@@ -8,6 +8,7 @@ import { useProgrammeV2 } from '../../hooks/useProgrammeV2';
 import { useTemplatesStructure } from '../../hooks/useTemplatesStructure';
 import { detecterTypeTemplate, type DetectionTemplate } from '../../utils/detecterTypeTemplate';
 import { analyserDonneesDisponibles, buildChampsAcroFormPrompt } from '../../utils/buildCompteRenduStructureContext';
+import { identiteDe, reinsererIdentiteDans } from '../../utils/pseudonymiserIA';
 import { remplirEtTelechargerPdf } from '../../utils/remplirFormulairePdf';
 import { getAuthHeader } from '../../lib/supabase';
 
@@ -108,7 +109,9 @@ export default function GenererCompteRenduModal({ patient, structure, onClose }:
       if (!res.ok) throw new Error(data.error || 'Erreur lors de la génération');
       let valeurs: Record<string, string>;
       try {
-        valeurs = JSON.parse(data.text ?? '{}');
+        // L'IA a écrit {{NOM}}, {{PRENOM}}, {{DATE_NAISSANCE}}… dans les champs
+        // d'identité : l'identité réelle n'est inscrite qu'ici, dans le navigateur.
+        valeurs = reinsererIdentiteDans(JSON.parse(data.text ?? '{}') as Record<string, string>, identiteDe(patient));
       } catch {
         throw new Error('Réponse de l\'IA invalide — réessayez.');
       }

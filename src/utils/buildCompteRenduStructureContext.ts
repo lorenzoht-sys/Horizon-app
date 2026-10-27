@@ -3,7 +3,7 @@ import { EXERCICES_BASE } from '../data/exercices';
 import { programmeV2Actif } from '../lib/programmeActifV2';
 import { computeTinettiScores, tinettiRisque } from '../data/tinetti';
 import type { ChampFormulaire } from './detecterTypeTemplate';
-import { libelleAge } from '../lib/age';
+import { MARQUEURS, identiteDe, libelleAgeIA, masquerIdentiteConnue, versParticipantIA, type ParticipantIA } from './pseudonymiserIA';
 import { distanceTm6, resultatTm6 } from '../lib/tm6';
 
 function fmtDate(d: string): string {
@@ -106,7 +106,7 @@ export function analyserDonneesDisponibles(
 }
 
 function buildDonneesPatientText(
-  patient: Participant,
+  patient: ParticipantIA,
   contratActif: Contrat | null,
   programmeActif: Programme | null,
   programmesV2: ProgrammeV2[],
@@ -122,7 +122,7 @@ function buildDonneesPatientText(
     dernierBilan?.objectifsSuivants ? `Objectifs suivants (dernier bilan) : ${dernierBilan.objectifsSuivants}` : null,
   ].filter(Boolean).join('\n') || 'Non renseigné';
 
-  return `Identité : ${patient.prenom} ${patient.nom}, ${libelleAge(patient.dateNaissance)}
+  return `Identité : non transmise (voir la règle IDENTITÉ ci-dessus), ${libelleAgeIA(patient.age)}
 Pathologie principale : ${patient.pathologie || 'non renseignée'}
 
 ${dernierBilan ? `DERNIER BILAN — ${fmtDate(dernierBilan.date)} (${dernierBilan.type === 'initial' ? 'initial' : `T${dernierBilan.trimestre}`})
@@ -171,6 +171,13 @@ export function buildChampsAcroFormPrompt(opts: {
 }): string {
   const { champs, patient, structure, contratActif, programmeActif, programmesV2 } = opts;
   const listeChamps = champs.map(c => `- "${c.nom}" (${libelleTypeChamp(c)})`).join('\n');
+  // Titres de programmes générés avant la pseudonymisation : ils peuvent
+  // porter le prénom (« Programme Équilibre Jeanne »).
+  const identite = identiteDe(patient);
+  const programmeMasque = programmeActif
+    ? { ...programmeActif, titre: masquerIdentiteConnue(programmeActif.titre, identite), objectif: masquerIdentiteConnue(programmeActif.objectif, identite) }
+    : null;
+  const programmesV2Masques = programmesV2.map(p => ({ ...p, nom: masquerIdentiteConnue(p.nom, identite) }));
 
   return `Tu es l'assistant d'un enseignant en Activité Physique Adaptée (APA) qui exerce en libéral et intervient auprès de structures (EHPAD, centres, associations).
 
@@ -180,6 +187,7 @@ Ta tâche : pour chaque champ listé ci-dessous, indiquer la valeur à y inscrir
 
 ${REGLES_STRICTES}
 - Si une donnée manque pour un champ, utilise la valeur "Non renseigné" (ou "Non" pour une case à cocher).
+- IDENTITÉ : le nom, le prénom et la date de naissance du patient ne te sont pas transmis ; ils seront inscrits automatiquement à partir de marqueurs. Pour un champ qui demande le nom, réponds exactement ${MARQUEURS.nom} ; le prénom : ${MARQUEURS.prenom} ; le nom et le prénom ensemble : ${MARQUEURS.beneficiaire} ; la date de naissance : ${MARQUEURS.dateNaissance}. Dans un texte libre, écris "le bénéficiaire" ou ces marqueurs, jamais un nom inventé.
 - Réponds UNIQUEMENT avec un objet JSON de la forme { "nomDuChamp": "valeur" }, une entrée pour chaque champ listé ci-dessous, rien d'autre avant ou après.
 
 ═══════════════════════════════════════
@@ -190,5 +198,5 @@ ${listeChamps}
 ═══════════════════════════════════════
 DONNÉES DU PATIENT
 ═══════════════════════════════════════
-${buildDonneesPatientText(patient, contratActif, programmeActif, programmesV2)}`;
+${buildDonneesPatientText(versParticipantIA(patient), contratActif, programmeMasque, programmesV2Masques)}`;
 }

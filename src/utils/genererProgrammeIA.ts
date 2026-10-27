@@ -17,7 +17,10 @@ import type { Participant, Bilan, ProgrammeV2, Exercice, TypeProgramme, JourProg
 import { JOURS_PROGRAMME } from '../types';
 import { getAuthHeader } from '../lib/supabase';
 import { getContreIndications, getTestsAutonomie } from '../lib/anamnese';
-import { libelleAge } from '../lib/age';
+import {
+  CONSIGNE_MARQUEURS, LIBELLE_NEUTRE, MARQUEURS, identiteDe, libelleAgeIA, masquerIdentiteConnue,
+  reinsererIdentiteDans, versParticipantIA, type ParticipantIA,
+} from './pseudonymiserIA';
 
 // ─── Types (déplacés depuis ProgrammePage.tsx — importés par les deux appelants) ──
 
@@ -62,8 +65,11 @@ export interface ProgrammeIA {
 
 // ─── Contexte patient ─────────────────────────────────────────────────────────
 
-function buildContextePatient(patient: Participant, dernierBilan: Bilan | null): string {
-  const age = libelleAge(patient.dateNaissance);
+// Typé sur ParticipantIA (liste blanche, pseudonymiserIA.ts) : le prénom, le
+// nom et la date de naissance ne sont pas lisibles ici. Exporté pour le test
+// de non-fuite de l'identité.
+export function buildContextePatient(patient: ParticipantIA, dernierBilan: Bilan | null): string {
+  const age = libelleAgeIA(patient.age);
   const traitements = (patient.traitements ?? []).map(t => t.nom).filter(Boolean).join(', ');
   const antecedents = [patient.antecedentsMedicaux, patient.antecedentsChirurgicaux].filter(Boolean).join(' · ');
   const bilanInitial = patient.bilans.find(b => b.type === 'initial') ?? null;
@@ -71,7 +77,7 @@ function buildContextePatient(patient: Participant, dernierBilan: Bilan | null):
   const ci = ciInfo.actif ? (ciInfo.detail ?? 'non précisées') : 'aucune contre-indication renseignée';
   const { sedentarite, fatigue } = getTestsAutonomie(patient, bilanInitial);
 
-  return `PATIENT : ${patient.prenom} ${patient.nom}, ${age}
+  return `PATIENT : ${LIBELLE_NEUTRE}, ${age}
 PATHOLOGIE : ${patient.pathologie || 'non renseignée'}
 ANTÉCÉDENTS : ${antecedents || 'non renseignés'}
 TRAITEMENTS : ${traitements || 'non renseignés'}
@@ -122,10 +128,14 @@ export function formatCatalogue(
  *  par les deux points d'entrée avant la génération du programme. Un échec
  *  ici n'empêche pas de continuer : l'appelant peut générer sans réponses. */
 export async function genererQuestionsClarification(patient: Participant): Promise<string[]> {
-  const contexte = buildContextePatient(patient, patient.bilans[0] ?? null);
+  const identite = identiteDe(patient);
+  const patientIA = versParticipantIA(patient);
+  const contexte = buildContextePatient(patientIA, patientIA.bilans[0] ?? null);
   const prompt = `Tu es un expert en Activité Physique Adaptée (APA). Avant de construire un programme d'exercices pour ce patient, identifie 2 à 4 questions CIBLÉES à poser au praticien — uniquement sur des capacités précises qui ne sont PAS déjà couvertes par le profil ci-dessous (ne redemande jamais une information déjà présente : pathologie, contre-indications, mode de déplacement, etc.).
 
 ${contexte}
+
+${CONSIGNE_MARQUEURS}
 
 Réponds UNIQUEMENT en JSON valide (aucun backtick, aucun commentaire) avec cette structure exacte :
 { "questions": ["question 1", "question 2", ...] }`;
@@ -144,7 +154,7 @@ Réponds UNIQUEMENT en JSON valide (aucun backtick, aucun commentaire) avec cett
   const data = await response.json();
   let parsed: { questions?: unknown };
   try {
-    parsed = JSON.parse(data.text ?? '{}');
+    parsed = reinsererIdentiteDans(JSON.parse(data.text ?? '{}'), identite);
   } catch {
     throw new Error('Réponse IA invalide (JSON incorrect) — réessayez.');
   }
@@ -159,8 +169,11 @@ Réponds UNIQUEMENT en JSON valide (aucun backtick, aucun commentaire) avec cett
 
 // ─── Étape 2 — Génération structurée ──────────────────────────────────────────
 
-function construirePrompt(
-  patient: Participant,
+/** Exporté pour le test de non-fuite de l'identité. `programmesExistants` :
+ *  leurs noms ont pu être générés avec le prénom avant ce chantier, d'où le
+ *  masquage par l'appelant (genererProgrammeStructure). */
+export function construirePrompt(
+  patient: ParticipantIA,
   config: ConfigGenerationIA,
   reponsesClarification: string,
   catalogue: Exercice[],
@@ -179,6 +192,8 @@ Génère un programme d'exercices personnalisé pour ce patient.
 
 ${contexte}
 PROGRAMMES EXISTANTS : ${programmesExistants.map(p => p.nom).join(', ') || 'aucun'}
+
+${CONSIGNE_MARQUEURS}
 
 CONFIGURATION DEMANDÉE :
 - Objectif : ${config.objectif}
@@ -205,7 +220,7 @@ Réponds UNIQUEMENT avec un JSON valide, sans texte avant ou après, sans balise
 
 Format JSON exact attendu :
 {
-  "nom": "string (nom court et descriptif, ex: Programme Équilibre ${patient.prenom})",
+  "nom": "string (nom court et descriptif, ex: Programme Équilibre ${MARQUEURS.prenom})",
   "description": "string (1-2 phrases décrivant le programme)",
   "objectif": "string (objectif principal en 1 phrase)",
   "message_motivation": "string (message positif et encourageant pour le patient, 1 phrase)",
@@ -309,7 +324,15 @@ export async function genererProgrammeStructure(
   programmesExistants: ProgrammeV2[],
   precisionsLibres?: string,
 ): Promise<ProgrammeIA> {
-  const prompt = construirePrompt(patient, config, reponsesClarification, catalogue, dernierBilan, programmesExistants, precisionsLibres);
+  const identite = identiteDe(patient);
+  const programmesMasques = programmesExistants.map(p => ({ ...p, nom: masquerIdentiteConnue(p.nom, identite) }));
+  // Les questions de clarification reviennent ici avec le prénom réinséré
+  // (« E2E monte-t-il les escaliers ? ») : même masquage que l'historique de
+  // l'assistant, aller-retour sans perte.
+  const prompt = construirePrompt(
+    versParticipantIA(patient), config, masquerIdentiteConnue(reponsesClarification, identite), catalogue, dernierBilan,
+    programmesMasques, masquerIdentiteConnue(precisionsLibres, identite),
+  );
 
   const response = await fetch('/api/claude', {
     method: 'POST',
@@ -331,7 +354,7 @@ export async function genererProgrammeStructure(
     throw new Error("L'IA a renvoyé une réponse invalide. Réessayez.");
   }
 
-  return validerEtResoudre(parsed, catalogue);
+  return validerEtResoudre(reinsererIdentiteDans(parsed, identite), catalogue);
 }
 
 // ─── Étape 3 — Mapping vers createProgramme() (useProgrammeV2.ts) ────────────

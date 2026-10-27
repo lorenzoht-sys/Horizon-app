@@ -7,12 +7,17 @@
 // automatique des libellés à seuils (mécanisme différent, sans IA).
 
 import { getAuthHeader } from '../lib/supabase';
+import { CONSIGNE_MARQUEURS, masquerIdentiteConnue, reinsererIdentite, type IdentiteBeneficiaire } from './pseudonymiserIA';
 
-export async function suggererReformulation(texte: string): Promise<string> {
+/** `identite` : bénéficiaire concerné, quand l'appelant le connaît. Les textes
+ *  à reformuler sont souvent eux-mêmes générés (« Bonjour Jeanne, … ») : son
+ *  nom connu est masqué avant l'envoi et réinséré au retour (aller-retour
+ *  sans perte, voir pseudonymiserIA.ts). */
+export async function suggererReformulation(texte: string, identite?: IdentiteBeneficiaire | null): Promise<string> {
   const prompt = `Reformule le texte suivant pour qu'il reste motivant et bienveillant pour un bénéficiaire, sans changer le sens clinique et sans inventer d'information absente du texte d'origine. Réponds uniquement avec le texte reformulé, sans commentaire, sans guillemets, sans préambule.
-
+${identite ? `\n${CONSIGNE_MARQUEURS}\n` : ''}
 Texte à reformuler :
-${texte}`;
+${masquerIdentiteConnue(texte, identite)}`;
 
   const response = await fetch('/api/claude', {
     method: 'POST',
@@ -26,7 +31,7 @@ ${texte}`;
   }
 
   const data = await response.json();
-  const texteReformule: string = (data.text ?? '').trim();
+  const texteReformule: string = reinsererIdentite((data.text ?? '').trim(), identite);
   if (!texteReformule) {
     throw new Error('Réponse vide de l\'IA');
   }

@@ -1,10 +1,13 @@
 import type { InterpretationIA, NotesBilan } from '../types';
 import { getAuthHeader } from '../lib/supabase';
+import { CONSIGNE_MARQUEURS, MARQUEURS, LIBELLE_NEUTRE, identiteDe, reinsererIdentiteDans } from './pseudonymiserIA';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ResultatsBilan {
   // null si la date de naissance est absente ou invalide (voir src/lib/age.ts).
+  // prenom/nom restent dans le navigateur : ils ne servent qu'à réinsérer
+  // l'identité dans la réponse (voir pseudonymiserIA.ts).
   participant: { prenom: string; nom: string; age: number | null; profil: string };
   notes: NotesBilan;
   valeurs: {
@@ -48,7 +51,13 @@ const LABELS_VALEURS: Record<string, string> = {
 
 // ─── Construction du prompt ───────────────────────────────────────────────────
 
-function construirePrompt(r: ResultatsBilan): string {
+/** Ce que le prompt a le droit de lire : le type exclut prénom et nom, qui
+ *  ne doivent jamais partir vers Anthropic. Exporté pour être testé. */
+export type ResultatsBilanIA = Omit<ResultatsBilan, 'participant'> & {
+  participant: Omit<ResultatsBilan['participant'], 'prenom' | 'nom'>;
+};
+
+export function construirePrompt(r: ResultatsBilanIA): string {
   const notesTexte = (Object.entries(r.notes) as [keyof NotesBilan, number | undefined][])
     .filter(([, v]) => v !== undefined)
     .map(([k, v]) => `  ${LABELS_NOTES[k]}: ${v}/5`)
@@ -71,8 +80,7 @@ function construirePrompt(r: ResultatsBilan): string {
   return `Tu es un expert en Activité Physique Adaptée (APA) certifié.
 Analyse les résultats de bilan fonctionnel suivants et génère une interprétation professionnelle.
 
-PATIENT :
-  Nom : ${r.participant.prenom} ${r.participant.nom}
+PATIENT : ${LIBELLE_NEUTRE}
   Âge : ${r.participant.age === null ? 'non renseigné' : `${r.participant.age} ans`}
   Profil : ${r.participant.profil}
   Douleur quotidienne : ${r.douleur ?? 'non renseigné'}/10
@@ -85,10 +93,12 @@ VALEURS BRUTES :
 ${valeursTexte}
 ${comparaison}
 
+${CONSIGNE_MARQUEURS}
+
 Réponds UNIQUEMENT en JSON valide (aucun backtick, aucun commentaire) avec cette structure exacte :
 {
   "textePro": "Interprétation professionnelle en 3-5 phrases. Ton clinique et factuel. Mentionner points forts ET points faibles. Comparer au bilan précédent si disponible.",
-  "messageClient": "Message motivant pour le patient en 2-3 phrases. Langage simple et positif. Commencer par 'Bonjour ${r.participant.prenom},'.",
+  "messageClient": "Message motivant pour le patient en 2-3 phrases. Langage simple et positif. Commencer par 'Bonjour ${MARQUEURS.prenom},'.",
   "pointsForts": ["point fort 1", "point fort 2"],
   "pointsATravail": ["point à améliorer 1", "point à améliorer 2"],
   "recommandations": ["recommandation concrète 1", "recommandation concrète 2", "recommandation concrète 3"]
@@ -101,7 +111,9 @@ export async function genererInterpretation(
   resultats: ResultatsBilan
 ): Promise<InterpretationIA> {
 
-  const prompt = construirePrompt(resultats);
+  const { participant: { prenom, nom, ...participantIA }, ...reste } = resultats;
+  const identite = identiteDe({ prenom, nom });
+  const prompt = construirePrompt({ ...reste, participant: participantIA });
 
   const response = await fetch('/api/claude', {
     method: 'POST',
@@ -118,7 +130,7 @@ export async function genererInterpretation(
   const texte: string = data.text ?? '';
 
   try {
-    const parsed = JSON.parse(texte);
+    const parsed = reinsererIdentiteDans(JSON.parse(texte), identite);
     return {
       textePro:        parsed.textePro        ?? '',
       messageClient:   parsed.messageClient   ?? '',
@@ -130,7 +142,7 @@ export async function genererInterpretation(
     };
   } catch {
     return {
-      textePro:        texte,
+      textePro:        reinsererIdentiteDans(texte, identite),
       messageClient:   '',
       pointsForts:     [],
       pointsATravail:  [],
