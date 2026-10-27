@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { pdfMake, mdToPdfMake } from '../utils/markdownToPdf';
 import MarkdownRendu from '../components/ui/MarkdownRendu';
 import ModalRelecturePartage from '../components/assistant/ModalRelecturePartage';
+import RappelNomsIA from '../components/ui/RappelNomsIA';
 import { EXERCICES_BASE, loadExercicesPraticien } from '../data/exercices';
 import { genererQuestionsClarification, genererProgrammeStructure } from '../utils/genererProgrammeIA';
 import {
@@ -1258,6 +1259,7 @@ export default function AssistantPage() {
                 <Send size={16} />
               </button>
             </div>
+            <RappelNomsIA style={{ marginTop: 6 }} />
           </div>
         )}
       </div>
