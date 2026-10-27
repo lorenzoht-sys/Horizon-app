@@ -76,12 +76,22 @@ pour **ne jamais transmettre** :
 - **Côté serveur** (`api/_lib/sentry.ts`) : le corps des requêtes (`request.data`
   — peut contenir des prompts envoyés à `/api/claude` ou des codes patient),
   les cookies, et les en-têtes `Authorization`/`Cookie` sont retirés avant
-  l'envoi.
+  l'envoi. L'URL de la requête et le tag `route` sont réduits au chemin
+  (sans query string : `?token=`, `?code=`…), `query_string` est supprimé,
+  et les breadcrumbs d'appels sortants (Supabase REST, Anthropic) perdent
+  leur query string (filtres `?id=eq.…`). Les breadcrumbs `console` sont
+  supprimés (2026-10-27).
 - **Côté front** (`src/lib/sentry.ts`) :
   - Les URLs des erreurs et des breadcrumbs sont nettoyées : la query string
     et le `#hash` sont retirés, les identifiants UUID (participant, séance,
     bilan...) sont remplacés par `:id`, et les tokens de portail structure
-    (`/structure/<token>`) sont remplacés par `/structure/:token`.
+    (`/structure/<token>`, `/client/<token>`) par `:token`. Les breadcrumbs
+    de navigation sont nettoyés de la même façon (`from` et `to`).
+  - `event.user` est supprimé à l'envoi, quelle que soit sa source.
+  - Les breadcrumbs de clic et de saisie (`ui.*`) ne gardent que le type
+    d'élément (`button`, `input`) : ni `title`, ni `aria-label`, ni
+    classes, qui contiennent souvent le nom d'un bénéficiaire.
+  - Le nettoyage est dans `src/lib/sentryNettoyage.ts` (testé).
   - Les breadcrumbs de catégorie `console` (issus de `console.log` /
     `console.error`) sont entièrement supprimés, pour éviter qu'une donnée
     affichée par erreur dans la console finisse dans Sentry.

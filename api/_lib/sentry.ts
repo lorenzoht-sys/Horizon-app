@@ -9,6 +9,52 @@ import * as Sentry from '@sentry/node';
 
 let initialized = false;
 
+// ── Nettoyage (lot D sécurité HDS, 2026-10-27) ─────────────────────────────
+// Exportés pour être testés (api/_lib/sentry.test.ts).
+
+/** Chemin seul, sans query string ni hash : les routes reçoivent des jetons
+ *  en query (/api/planning/ics?token=…, ?code=, ?ptoken=). */
+export function cheminSeul(url: string | undefined | null): string {
+  if (!url) return '/';
+  try {
+    return new URL(url, 'http://localhost').pathname;
+  } catch {
+    return '/';
+  }
+}
+
+/** Retire corps, cookies, en-têtes d'authentification, query string, et
+ *  réduit l'URL au chemin. */
+export function nettoyerEvenementServeur<T extends Sentry.ErrorEvent>(event: T): T {
+  // Ne jamais transmettre le corps des requêtes (peut contenir des
+  // données de santé : prompts /api/claude, codes patient...), les
+  // cookies, ni les en-têtes d'authentification.
+  if (event.request) {
+    delete event.request.data;
+    delete event.request.cookies;
+    delete event.request.query_string;
+    if (event.request.url) event.request.url = cheminSeul(event.request.url);
+    if (event.request.headers) {
+      for (const key of Object.keys(event.request.headers)) {
+        if (/^(authorization|cookie)$/i.test(key)) delete event.request.headers[key];
+      }
+    }
+  }
+  return event;
+}
+
+/** Breadcrumbs des appels HTTP sortants (Supabase REST, Anthropic) : leurs
+ *  URL portent des filtres (?id=eq.<uuid>, ?code_acces=eq.…). Chemin seul. */
+export function nettoyerBreadcrumbServeur(breadcrumb: Sentry.Breadcrumb): Sentry.Breadcrumb | null {
+  if (breadcrumb.category === 'console') return null;
+  if (!breadcrumb.data) return breadcrumb;
+  const data = { ...breadcrumb.data };
+  if (data.url != null) data.url = cheminSeul(String(data.url));
+  delete data['http.query'];
+  delete data['http.fragment'];
+  return { ...breadcrumb, data };
+}
+
 function initSentry(): void {
   if (initialized) return;
   initialized = true;
@@ -20,21 +66,8 @@ function initSentry(): void {
     dsn,
     sendDefaultPii: false,
     tracesSampleRate: 0,
-    beforeSend(event) {
-      // Ne jamais transmettre le corps des requêtes (peut contenir des
-      // données de santé : prompts /api/claude, codes patient...), les
-      // cookies, ni les en-têtes d'authentification.
-      if (event.request) {
-        delete event.request.data;
-        delete event.request.cookies;
-        if (event.request.headers) {
-          for (const key of Object.keys(event.request.headers)) {
-            if (/^(authorization|cookie)$/i.test(key)) delete event.request.headers[key];
-          }
-        }
-      }
-      return event;
-    },
+    beforeSend: event => nettoyerEvenementServeur(event),
+    beforeBreadcrumb: breadcrumb => nettoyerBreadcrumbServeur(breadcrumb),
   });
 }
 
@@ -74,7 +107,7 @@ export function withSentry(handler: Handler): Handler {
     try {
       return await handler(req, res);
     } catch (err) {
-      Sentry.captureException(err, { tags: { route: req.url } });
+      Sentry.captureException(err, { tags: { route: cheminSeul(req.url) } });
       await Sentry.flush(2000);
       if (!res.headersSent) {
         res.status(500).json({ error: 'Erreur serveur' });
