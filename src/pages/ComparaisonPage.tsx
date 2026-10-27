@@ -14,6 +14,7 @@ import { getAuthHeader } from '../lib/supabase';
 import type { Bilan, Participant } from '../types';
 import { toast } from 'sonner';
 import { distanceTm6 } from '../lib/tm6';
+import { calculerAge, libelleAge } from '../lib/age';
 import { construirePromptResumeEvolution } from '../utils/promptComparaison';
 import { identiteDe, reinsererIdentite } from '../utils/pseudonymiserIA';
 
@@ -237,7 +238,7 @@ function ResumeIA({ participant, bilans }: { participant: Participant; bilans: B
         .filter(Boolean)
         .join('\n');
 
-      const age = Math.floor((Date.now() - new Date(participant.dateNaissance).getTime()) / (365.25 * 24 * 3600 * 1000));
+      const age = calculerAge(participant.dateNaissance);
 
       const prompt = construirePromptResumeEvolution({ age, nbMois, nbBilans: bilans.length, deltasTexte });
 
@@ -431,7 +432,6 @@ function PrintableRapportEvolution({ participant, bilans, settings }: {
   const initial = bilans[0];
   const dernier = bilans[bilans.length - 1];
   const nbMois = differenceInMonths(new Date(dernier.date), new Date(initial.date));
-  const age = Math.floor((Date.now() - new Date(participant.dateNaissance).getTime()) / (365.25 * 24 * 3600 * 1000));
 
   const s: Record<string, React.CSSProperties> = {
     page: { width: 794, minHeight: 1123, padding: '28px 36px', boxSizing: 'border-box', background: 'white' },
@@ -475,7 +475,7 @@ function PrintableRapportEvolution({ participant, bilans, settings }: {
           {participant.prenom} {participant.nom}
         </div>
         <div style={{ fontSize: 11, color: '#4A6080', marginTop: 3 }}>
-          {age} ans · Suivi du {formatDateFR(initial.date)} au {formatDateFR(dernier.date)}
+          {libelleAge(participant.dateNaissance)} · Suivi du {formatDateFR(initial.date)} au {formatDateFR(dernier.date)}
         </div>
       </div>
 
