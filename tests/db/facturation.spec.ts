@@ -826,8 +826,10 @@ decrire('RLS : un praticien ne voit et ne gère que ses factures ; l\'admin lit 
       // Insérer pour le compte d'un autre praticien, ou sur le contrat d'un autre : refusé.
       await refus(c, `INSERT INTO public.factures (praticien_id, contrat_id, participant_id, periode) VALUES ($1, $2, $3, '2026-07-01')`,
         [b.pro, b.ct.contratId, b.ct.participantId], /row-level security/);
+      // Depuis le lot M (20261106100000), le trigger de cohérence refuse avant la RLS : le praticien
+      // de la facture n'est pas celui du contrat. Le refus reste exigé, seul le message change.
       await refus(c, `INSERT INTO public.factures (praticien_id, contrat_id, participant_id, periode) VALUES ($1, $2, $3, '2026-07-01')`,
-        [a.pro, b.ct.contratId, b.ct.participantId], /row-level security/);
+        [a.pro, b.ct.contratId, b.ct.participantId], /row-level security|le praticien doit être celui du contrat/);
       await refus(c, `INSERT INTO public.paiements (facture_id, date, montant, moyen) VALUES ($1, '2026-04-01', 45, 'virement')`, [b.factureId], /row-level security/);
       // La numérotation n'est pas accessible directement.
       await refus(c, `SELECT * FROM public.compteurs_facture`, [], /permission denied/);
@@ -869,7 +871,7 @@ decrire('RLS : un praticien ne voit et ne gère que ses factures ; l\'admin lit 
       expect((await c.query(`UPDATE public.factures SET statut = 'envoyee' WHERE id = $1`, [a.factureId])).rowCount).toBe(0);
       expect((await c.query(`DELETE FROM public.lignes_facture WHERE facture_id = $1`, [a.factureId])).rowCount).toBe(0);
       await refus(c, `INSERT INTO public.factures (praticien_id, contrat_id, participant_id, periode) VALUES ($1, $2, $3, '2026-07-01')`,
-        [admin, a.ct.contratId, a.ct.participantId], /row-level security/);
+        [admin, a.ct.contratId, a.ct.participantId], /row-level security|le praticien doit être celui du contrat/);
     });
   });
 
