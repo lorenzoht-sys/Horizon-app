@@ -45,15 +45,17 @@ const ACTIF = Boolean(URL && ANON_KEY && SERVICE_KEY);
 // tables patient), jamais l'appartenance de l'objet référencé.
 // Une liste par famille : chaque migration (K1, K2, K3) ne vide que la
 // sienne, sans toucher aux lignes des autres.
-const CLES_EN_FUITE_BENEFICIAIRE: string[] = [
-  'bilans.participant_id', 'contrats.participant_id', 'seances.participant_id', 'programmes.participant_id',
-  'notes_seances.participant_id', 'comptes_rendus_seances.participant_id', 'bilans_brouillons.participant_id',
-  'factures_suivi.participant_id', 'assistant_logs.patient_id', 'seances.contrat_id', 'notes_seances.seance_id',
-];
+// Historique : 11 clés en fuite constatées le 2026-10-27 (PR #167), fermées
+// par la migration 20261103100000_rls_ecriture_beneficiaire_verifie.sql
+// (lot K1). Tant qu'elle n'est pas appliquée à une base, leurs tests y
+// échouent.
+const CLES_EN_FUITE_BENEFICIAIRE: string[] = [];
 
 const CLES_EN_FUITE_STRUCTURE: string[] = [
   'participants.structure_id', 'documents_partages.structure_id', 'cours_collectifs.structure_id',
-  'templates_structure.structure_id', 'factures_suivi.structure_id', 'cours_collectifs.programme_commun_id',
+  // factures_suivi.structure_id : fermée par K1 (même policy que
+  // factures_suivi.participant_id, traitée en une seule fois).
+  'templates_structure.structure_id', 'cours_collectifs.programme_commun_id',
 ];
 
 const CLES_EN_FUITE_FAIBLE: string[] = [
