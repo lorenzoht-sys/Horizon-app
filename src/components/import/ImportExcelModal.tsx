@@ -1,7 +1,6 @@
 import { useState, useRef } from 'react';
-import * as XLSX from 'xlsx';
 import type { Participant } from '../../types';
-import { downloadTemplate, exportPatientsExcel, parseExcelRows, type ImportError } from '../../utils/excelImport';
+import { downloadTemplate, exportPatientsExcel, lireClasseurImport, parseExcelRows, type ImportError } from '../../utils/excelImport';
 import { X, Download, Upload, FileSpreadsheet, CheckCircle, AlertCircle, Info, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -42,15 +41,7 @@ export default function ImportExcelModal({ onClose, participants, addParticipant
 
     try {
       const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { cellDates: true });
-
-      const sheetName = wb.SheetNames.includes('Patients')
-        ? 'Patients'
-        : wb.SheetNames[0];
-      const rows = XLSX.utils.sheet_to_json<unknown[]>(
-        wb.Sheets[sheetName],
-        { header: 1, raw: true, defval: '' }
-      );
+      const rows = lireClasseurImport(buffer);
 
       const parsed = parseExcelRows(rows as unknown[][], participants);
       const total = parsed.succes.length;

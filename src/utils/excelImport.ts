@@ -83,6 +83,23 @@ const VALID_TAGS: TagPatient[] = ['senior', 'post_op', 'chronique', 'adulte_bles
 // refusées avec un message explicite plutôt qu'importées sans consentement.
 export const COL_CONSENTEMENT = 17;
 
+// ── Lecture du fichier ────────────────────────────────────────
+
+/** Lignes brutes de la feuille « Patients » (ou de la première feuille),
+ *  telles que les lisait ImportExcelModal. Extrait du composant pour que la
+ *  lecture soit testée (remplacement de xlsx 0.18.5 par SheetJS 0.20.3,
+ *  lot E sécurité HDS, 2026-10-27). */
+export function lireClasseurImport(buffer: ArrayBuffer): unknown[][] {
+  const wb = XLSX.read(buffer, { cellDates: true });
+  const sheetName = wb.SheetNames.includes('Patients')
+    ? 'Patients'
+    : wb.SheetNames[0];
+  return XLSX.utils.sheet_to_json<unknown[]>(
+    wb.Sheets[sheetName],
+    { header: 1, raw: true, defval: '' }
+  );
+}
+
 // ── Parsing du fichier ────────────────────────────────────────
 
 export function parseExcelRows(
@@ -223,7 +240,8 @@ const INSTRUCTIONS = [
   ['  • Le fichier exporté depuis Mouv\'APA peut être réimporté sans modification'],
 ];
 
-export function downloadTemplate(): void {
+/** Classeur du modèle d'import, séparé du téléchargement pour être testé. */
+export function construireClasseurModele(): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
 
   const ws = XLSX.utils.aoa_to_sheet([COLS.map(c => c.header)]);
@@ -233,13 +251,17 @@ export function downloadTemplate(): void {
   const wsInstr = XLSX.utils.aoa_to_sheet(INSTRUCTIONS);
   wsInstr['!cols'] = [{ wch: 62 }];
   XLSX.utils.book_append_sheet(wb, wsInstr, 'Instructions');
+  return wb;
+}
 
-  XLSX.writeFile(wb, 'Template_Import_Patients.xlsx');
+export function downloadTemplate(): void {
+  XLSX.writeFile(construireClasseurModele(), 'Template_Import_Patients.xlsx');
 }
 
 // ── Export patients → Excel ───────────────────────────────────
 
-export function exportPatientsExcel(participants: Participant[]): void {
+/** Classeur de l'export patients, séparé du téléchargement pour être testé. */
+export function construireClasseurExport(participants: Participant[]): XLSX.WorkBook {
   const headers = COLS.map(c =>
     c.header.replace(' ✱', '').replace(/\s+\(.*?\)/, '').trim()
   );
@@ -271,7 +293,10 @@ export function exportPatientsExcel(participants: Participant[]): void {
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
   ws['!cols'] = COLS.map(c => ({ wch: c.wch }));
   XLSX.utils.book_append_sheet(wb, ws, 'Patients');
+  return wb;
+}
 
+export function exportPatientsExcel(participants: Participant[]): void {
   const date = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `Patients_${date}.xlsx`);
+  XLSX.writeFile(construireClasseurExport(participants), `Patients_${date}.xlsx`);
 }
