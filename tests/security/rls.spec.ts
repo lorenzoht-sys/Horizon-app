@@ -303,23 +303,13 @@ const TABLES_TESTS_DEDIES = [
 // tant que la fuite existe, et échoue le jour où elle est corrigée : retirer
 // alors l'entrée). Toute entrée est une FUITE CONSTATÉE, à traiter.
 const FUITES_CONSTATEES: Record<string, string> = {
-  // FUITE CONSTATÉE (harnais CI, PR #164, 2026-10-27) — la policy
-  // tests_etalons_activations_praticien_all ne vérifie que
-  // praticien_id = auth.uid() : B attache une activation au bénéficiaire de A.
-  'tests_etalons_activations:insertion-beneficiaire-de-A':
-    'WITH CHECK sans contrôle du bénéficiaire (praticien_id = auth.uid() seulement)',
-  // FUITE CONSTATÉE (idem) — exercices_libres_activations_praticien_all.
-  'exercices_libres_activations:insertion-beneficiaire-de-A':
-    'WITH CHECK sans contrôle du bénéficiaire (praticien_id = auth.uid() seulement)',
-  // FUITE CONSTATÉE (idem) — praticien_gere_rappel_preferences, et le trigger
-  // set_praticien_id_from_auth remplit praticien_id avec B quand il est omis.
-  'rappel_preferences:insertion-beneficiaire-de-A':
-    'WITH CHECK sans contrôle du bénéficiaire (praticien_id = auth.uid() seulement)',
-  // FUITE CONSTATÉE (idem) — orga_acces_participations_cours_collectifs :
-  // WITH CHECK acces_participant(participant_id) suffit, sans contrôle du
-  // cours ; B inscrit SON bénéficiaire au cours de A.
-  'participations_cours_collectifs:insertion-beneficiaire-de-B':
-    'WITH CHECK de la policy orga sans contrôle du cours (acces_participant seul)',
+  // Historique : quatre fuites d'écriture constatées ici le 2026-10-27 (PR
+  // #164) — tests_etalons_activations, exercices_libres_activations,
+  // rappel_preferences (B rattachait sa ligne au bénéficiaire de A) et
+  // participations_cours_collectifs (B inscrivait son bénéficiaire au cours
+  // de A). Fermées par la migration 20261102100000_rls_ecriture_beneficiaire_
+  // du_praticien.sql : les tests correspondants sont redevenus normaux. Tant
+  // que cette migration n'est pas appliquée à une base, ils y échouent.
 };
 
 async function requireStagingEnv() {
@@ -1312,6 +1302,127 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
       const { data } = await admin.from('praticien_push_subscriptions').select('id').eq('endpoint', endpoint);
       for (const r of data ?? []) await supprimer('praticien_push_subscriptions', r.id);
       expect(data ?? [], 'praticien B a créé un abonnement push au nom de A').toHaveLength(0);
+    });
+
+    // Après le correctif (migration 20261102100000) : la règle ne doit pas
+    // bloquer l'usage normal. Chaque écriture ci-dessous reproduit celle de
+    // l'application (upsert onConflict de useActivitesHorsProgramme,
+    // insert de useRappelPreferences et de useCoursCollectifs).
+    describe('usage légitime préservé par le correctif des fuites d\'écriture', () => {
+      let pArchive: string;
+
+      beforeAll(async () => {
+        const { data, error } = await admin.from('participants')
+          .insert({ praticien_id: praticienAId, prenom: 'E2E', nom: 'RLS-Spec archivé', code_acces: `RLSA${Math.floor(Math.random() * 1e6)}`, rgpd, archive: true })
+          .select('id').single();
+        if (error || !data) throw new Error(`Bénéficiaire archivé fictif impossible à créer : ${error?.message}`);
+        pArchive = data.id;
+      });
+      afterAll(async () => {
+        if (pArchive) await admin.from('participants').delete().eq('id', pArchive);
+      });
+
+      async function ecrireEtNettoyer(table: string, ecriture: () => PromiseLike<{ error: { message: string } | null }>, filtre: Ligne) {
+        const { error } = await ecriture();
+        let q = admin.from(table).select('id');
+        for (const [k, v] of Object.entries(filtre)) q = v === null ? q.is(k, null) : q.eq(k, v as string);
+        const { data } = await q;
+        for (const r of (data ?? []) as Ligne[]) await supprimer(table, r.id);
+        expect(error?.message ?? null, `écriture légitime refusée dans ${table}`).toBeNull();
+        expect(data ?? [], `écriture légitime absente de ${table}`).toHaveLength(1);
+      }
+
+      for (const [libelle, cible] of [['son bénéficiaire', () => pA], ['son bénéficiaire ARCHIVÉ', () => pArchive]] as const) {
+        it(`A active un test étalon pour ${libelle} (upsert)`, async () => {
+          const testId = nonce();
+          await ecrireEtNettoyer('tests_etalons_activations',
+            () => clientA.from('tests_etalons_activations').upsert({ participant_id: cible(), test_id: testId, praticien_id: praticienAId, actif: true }, { onConflict: 'participant_id,test_id' }),
+            { test_id: testId });
+        });
+        it(`A assigne un exercice libre à ${libelle} (upsert)`, async () => {
+          const exId = nonce();
+          await ecrireEtNettoyer('exercices_libres_activations',
+            () => clientA.from('exercices_libres_activations').upsert({ participant_id: cible(), exercice_id: exId, praticien_id: praticienAId, nom: 'RLS-SPEC', actif: true }, { onConflict: 'participant_id,exercice_id' }),
+            { exercice_id: exId });
+        });
+        it(`A règle les rappels de ${libelle}`, async () => {
+          // Sur pA2 plutôt que pA (dont la ligne de préférence peut exister) ;
+          // le cas archivé, lui, n'en a aucune.
+          const participantId = libelle === 'son bénéficiaire' ? pA2 : cible();
+          await ecrireEtNettoyer('rappel_preferences',
+            () => clientA.from('rappel_preferences').insert({ praticien_id: praticienAId, participant_id: participantId, rappel_seance_actif: true }),
+            { participant_id: participantId });
+        });
+      }
+
+      it('B enregistre ses réglages de rappel globaux (participant_id NULL)', async () => {
+        await ecrireEtNettoyer('rappel_preferences',
+          () => clientB.from('rappel_preferences').insert({ praticien_id: praticienBId, participant_id: null, rappel_seance_actif: true }),
+          { praticien_id: praticienBId, participant_id: null });
+      });
+
+      it('A crée un cours et y inscrit son bénéficiaire et son bénéficiaire archivé', async () => {
+        const { data: cours, error } = await clientA.from('cours_collectifs').insert({
+          praticien_id: praticienAId, titre: 'RLS-SPEC usage légitime', date: '2099-01-03', heure_debut: '10:00', duree_minutes: 45, mode_facturation: 'individuel',
+        }).select('id').single();
+        expect(error?.message ?? null).toBeNull();
+        try {
+          const { error: partErr } = await clientA.from('participations_cours_collectifs')
+            .insert([{ cours_id: cours!.id, participant_id: pA }, { cours_id: cours!.id, participant_id: pArchive }]);
+          expect(partErr?.message ?? null, 'inscription légitime refusée').toBeNull();
+          const { data } = await admin.from('participations_cours_collectifs').select('id').eq('cours_id', cours!.id);
+          expect(data ?? []).toHaveLength(2);
+        } finally {
+          if (cours?.id) await admin.from('cours_collectifs').delete().eq('id', cours.id);
+        }
+      });
+
+      describe('accès d\'organisation (praticien B membre, bénéficiaire détenu par l\'organisation)', () => {
+        let orgId: string;
+        let pOrg: string;
+        beforeAll(async () => {
+          const { data: org, error } = await admin.from('organisations').insert({ nom: 'RLS-Spec org légitime', statut: 'active', actif: true }).select('id').single();
+          if (error || !org) throw new Error(`Organisation fictive impossible à créer : ${error?.message}`);
+          orgId = org.id;
+          await admin.from('organisation_membres').insert({ organisation_id: orgId, user_id: praticienBId, role: 'intervenant', actif: true });
+          const { data: p, error: pErr } = await admin.from('participants')
+            .insert({ praticien_id: praticienAId, prenom: 'E2E', nom: 'RLS-Spec organisation', code_acces: `RLSO${Math.floor(Math.random() * 1e6)}`, rgpd, organisation_id: orgId })
+            .select('id').single();
+          if (pErr || !p) throw new Error(`Bénéficiaire d'organisation fictif impossible à créer : ${pErr?.message}`);
+          pOrg = p.id;
+        });
+        afterAll(async () => {
+          // Le bénéficiaire d'abord : participants.organisation_id est en ON DELETE RESTRICT.
+          if (pOrg) await admin.from('participants').delete().eq('id', pOrg);
+          if (orgId) await admin.from('organisations').delete().eq('id', orgId);
+        });
+
+        it('B active un test étalon pour un bénéficiaire de son organisation', async () => {
+          const testId = nonce();
+          await ecrireEtNettoyer('tests_etalons_activations',
+            () => clientB.from('tests_etalons_activations').insert({ participant_id: pOrg, test_id: testId, praticien_id: praticienBId }),
+            { test_id: testId });
+        });
+
+        it('B règle les rappels d\'un bénéficiaire de son organisation', async () => {
+          await ecrireEtNettoyer('rappel_preferences',
+            () => clientB.from('rappel_preferences').insert({ participant_id: pOrg, rappel_seance_actif: true }),
+            { participant_id: pOrg });
+        });
+
+        it('B n\'inscrit pas un bénéficiaire de son organisation à un cours de A qu\'il ne voit pas', async () => {
+          const { data: cours } = await admin.from('cours_collectifs').insert({
+            praticien_id: praticienAId, titre: 'RLS-SPEC cours invisible pour B', date: '2099-01-04', heure_debut: '10:00', duree_minutes: 45, mode_facturation: 'individuel',
+          }).select('id').single();
+          try {
+            await clientB.from('participations_cours_collectifs').insert({ cours_id: cours!.id, participant_id: pOrg });
+            const { data } = await admin.from('participations_cours_collectifs').select('id').eq('cours_id', cours!.id);
+            expect(data ?? [], 'B a inscrit un bénéficiaire à un cours qu\'il ne voit pas').toHaveLength(0);
+          } finally {
+            if (cours?.id) await admin.from('cours_collectifs').delete().eq('id', cours.id);
+          }
+        });
+      });
     });
 
     describe('participations_cours_collectifs : écriture croisée', () => {
