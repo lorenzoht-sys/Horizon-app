@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, AlertTriangle } from 'lucide-react';
 import type { Participant, TestKey } from '../../types';
+import { computeDefauts } from '../../lib/testsParDefaut';
 
 interface TestInfo {
   key: TestKey;
@@ -33,16 +34,6 @@ const CATEGORIES: { key: TestInfo['categorie']; label: string }[] = [
   { key: 'autonomie',  label: 'Autonomie' },
 ];
 
-function computeDefauts(participant: Participant): TestKey[] {
-  const age = Math.floor(
-    (Date.now() - new Date(participant.dateNaissance).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
-  );
-  const defauts: TestKey[] = ['equilibre', 'chairStand', 'tug', 'tm6'];
-  if (age >= 70) {
-    defauts.push('tinetti', 'memoire', 'berg', 'moca', 'adl');
-  }
-  return defauts;
-}
 
 function hasCardioRespi(participant: Participant): boolean {
   return !!participant.tags?.includes('chronique');

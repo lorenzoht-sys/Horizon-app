@@ -28,6 +28,7 @@ import { trouverTarifApplicable, totalFactureSeance } from '../lib/tarifsContrat
 import { useCoursCollectifs } from '../hooks/useCoursCollectifs';
 import { datesCoursCollectifsIndividuelFacturables } from '../lib/coursCollectifs';
 import { distanceTm6 } from '../lib/tm6';
+import { calculerAge } from '../lib/age';
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -80,15 +81,6 @@ function moisPrecedentKey(key: string): string {
     : `${y}-${String(m - 1).padStart(2, '0')}`;
 }
 
-function calculerAge(dateNaissance?: string): number {
-  if (!dateNaissance) return 0;
-  const now = new Date();
-  const birth = new Date(dateNaissance);
-  let age = now.getFullYear() - birth.getFullYear();
-  const m = now.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
-  return age;
-}
 
 function getLast12Weeks(): { label: string; debut: Date; fin: Date }[] {
   const result: { label: string; debut: Date; fin: Date }[] = [];
@@ -1235,7 +1227,7 @@ function SectionRepartition({ participants }: { participants: Participant[] }) {
           const age = calculerAge(p.dateNaissance);
           const ctx = (p.contexteClinic ?? '').toLowerCase();
           if (ctx.includes('pth') || ctx.includes('opér') || ctx.includes('post-op')) counts['Post-op']++;
-          else if (age >= 65) counts['Sénior']++;
+          else if (age !== null && age >= 65) counts['Sénior']++;
           else counts['Autre']++;
         }
       } catch {

@@ -1,10 +1,11 @@
 // Prompt du résumé d'évolution (ComparaisonPage.tsx), extrait de la page pour
 // être testé (lot A pseudonymisation, 2026-10-27). La fonction ne reçoit
 // aucune identité : le prénom n'est réinséré qu'au retour, dans la page.
-import { CONSIGNE_MARQUEURS, LIBELLE_NEUTRE, MARQUEURS } from './pseudonymiserIA';
+import { CONSIGNE_MARQUEURS, LIBELLE_NEUTRE, MARQUEURS, libelleAgeIA } from './pseudonymiserIA';
 
 export function construirePromptResumeEvolution(opts: {
-  age: number;
+  /** null : date de naissance absente ou invalide (src/lib/age.ts). */
+  age: number | null;
   nbMois: number;
   nbBilans: number;
   deltasTexte: string;
@@ -12,7 +13,7 @@ export function construirePromptResumeEvolution(opts: {
   const { age, nbMois, nbBilans, deltasTexte } = opts;
   return `Tu es expert en Activité Physique Adaptée (APA). Génère un résumé d'évolution positif et motivant.
 
-Patient : ${LIBELLE_NEUTRE}, ${age} ans
+Patient : ${LIBELLE_NEUTRE}, ${libelleAgeIA(age)}
 Durée de suivi : ${nbMois} mois (${nbBilans} bilans)
 
 Évolution des tests :
