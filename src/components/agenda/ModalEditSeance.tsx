@@ -109,9 +109,14 @@ export default function ModalEditSeance({ seance, nomBeneficiaire, seances, cont
     onClose();
   }
 
+  // max-h-full + overflow-y-auto : depuis l'ajout de Fiche/Bilan, catégorie,
+  // objectif et notes (3605819, 25/10/2026), le contenu dépasse la hauteur
+  // de l'écran ; sans ces classes le bas de la modale (Supprimer, Note,
+  // Enregistrer) était coupé et inatteignable, sur PC comme sur mobile.
+  // overscroll-contain : le défilement ne se propage pas à l'agenda dessous.
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 1010 }}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-full overflow-y-auto overscroll-contain">
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
           <h3 className="text-base font-bold text-dark">{etapeReport ? 'Reporter la séance' : 'Modifier la séance'}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1"><X size={16} /></button>
