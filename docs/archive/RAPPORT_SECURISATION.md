@@ -24,7 +24,7 @@ manuellement.
 | Tâche | Statut | Commit | Résumé |
 |-------|--------|--------|--------|
 | T1 | ✅ Fait | `deec834` | Script SQL `sql/rls_final.sql` : verrouille le rôle `anon` (plus aucun accès direct aux tables). **À exécuter manuellement.** |
-| T2 | ✅ Fait | `a8866c5` | `MIGRATION_ANON.md` : liste complète des anciens accès "anon" et où ils ont été migrés. |
+| T2 | ✅ Fait | `a8866c5` | `docs/archive/MIGRATION_ANON.md` : liste complète des anciens accès "anon" et où ils ont été migrés. |
 | T3 | ✅ Fait | `8999819` | Nouvelles routes serveur `/api/patient/login`, `/api/patient/me`, `/api/patient/seance`. |
 | T4 | ✅ Fait | `e1d10bf` | Session patient (cookie/JWT) qui fonctionne même si plusieurs patients utilisent le même appareil. |
 | T5 | ✅ Fait | `1f02b54` | Nouvelle route serveur `/api/structure/data` (remplace l'accès direct du portail structure). |
@@ -232,7 +232,7 @@ avant de fusionner vers `main`.
 1f02b54 [securisation] T5: API serverless /api/structure/data (service_role)
 e1d10bf [securisation] T4: gestion session patient sur appareil partage
 8999819 [securisation] T3: API serverless /api/patient/* (login, me, seance) + migration espace patient
-a8866c5 [securisation] T2: MIGRATION_ANON.md - inventaire des acces anon
+a8866c5 [securisation] T2: docs/archive/MIGRATION_ANON.md - inventaire des acces anon
 deec834 [securisation] T1: sql/rls_final.sql - verrouillage RLS du role anon
 ```
 

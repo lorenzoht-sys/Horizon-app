@@ -6,7 +6,7 @@
 // `supabase db dump` quand Docker n'est pas disponible.
 //
 // La sortie est écrite dans supabase/_staging_schema_dump.sql (déjà dans
-// .gitignore), conformément à GUIDE_STAGING.md étape 2.1 : ce fichier est
+// .gitignore), conformément à docs/GUIDE_STAGING.md étape 2.1 : ce fichier est
 // destiné à être collé dans le SQL Editor d'un NOUVEAU projet Supabase vide
 // (horizon-staging).
 //
@@ -425,7 +425,7 @@ async function main() {
       `-- Schéma "public" — généré par scripts/dump-schema.ts\n` +
       `-- Source : ${sourceLabel(config)}, le ${new Date().toISOString()}\n` +
       `-- À coller dans le SQL Editor d'un projet Supabase VIDE\n` +
-      `-- (voir GUIDE_STAGING.md, étape 2.1)\n` +
+      `-- (voir docs/GUIDE_STAGING.md, étape 2.1)\n` +
       `-- ============================================================\n`;
 
     const content = header + '\n' + sections.filter(s => s.length > 0).map(s => s.join('\n\n')).join('\n\n');

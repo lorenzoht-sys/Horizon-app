@@ -30,7 +30,7 @@ import {
 /**
  * Origines autorisées, en dur dans un secret plutôt que dans le code.
  *
- * `RAPPORT_CONSOLIDATION.md` note que les URLs de déploiement codées en dur
+ * `docs/archive/RAPPORT_CONSOLIDATION.md` note que les URLs de déploiement codées en dur
  * ont déjà été retirées une fois du projet : les réintroduire ici obligerait
  * à redéployer la fonction à chaque changement de domaine, et un déploiement
  * oublié se traduirait par une panne CORS opaque côté navigateur.

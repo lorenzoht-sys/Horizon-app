@@ -184,7 +184,7 @@ repartir d'une base propre.
 - Job `build` (toujours exécuté) : `npm ci`, `npm run build`,
   `npm run typecheck:api`, `npm run typecheck:e2e`. Volontairement **sans**
   `npm run lint` (erreurs de lint pré-existantes, hors périmètre — voir
-  `AUDIT.md`).
+  `docs/archive/AUDIT.md`).
 - Job `e2e` (exécuté seulement si la variable de dépôt `E2E_BASE_URL` est
   configurée dans **Settings > Secrets and variables > Actions**) : lance
   cette suite contre un Preview Vercel. `E2E_PRATICIEN_PASSWORD` et

@@ -35,7 +35,7 @@ manuelles connues ont bien été faites.
   - **Preview** : valeurs de staging (voir
     `supabase/migrations/SETUP_STAGING.md`), jamais les secrets de prod.
 - [ ] Aucun secret (clé API, mot de passe, token) n'est commité dans le code
-      (voir audit des secrets dans `RAPPORT_SECURISATION.md`, T8).
+      (voir audit des secrets dans `docs/archive/RAPPORT_SECURISATION.md`, T8).
 
 ## 4. Vérification manuelle "site en marche"
 

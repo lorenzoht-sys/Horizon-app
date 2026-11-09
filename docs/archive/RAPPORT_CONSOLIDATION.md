@@ -23,7 +23,7 @@ prévu pour la conformité).
 
 | Tâche | Statut | Commit | Résumé |
 |-------|--------|--------|--------|
-| T1 | ✅ Fait | `fe886a8` | `AUDIT.md` : état des lieux complet (arborescence, code mort, dépendances, doublons, tables hors-migration). |
+| T1 | ✅ Fait | `fe886a8` | `docs/archive/AUDIT.md` : état des lieux complet (arborescence, code mort, dépendances, doublons, tables hors-migration). |
 | T2 | ✅ Fait | `3b66a2d` | Suppression de 16 fichiers source morts (3625 lignes) + 74 fichiers de debug/captures suivis par erreur ; nettoyage `package.json` (deps inutilisées/manquantes). |
 | T3 | ✅ Fait | `6e27c53` | `supabase init` + 6 nouvelles migrations versionnées (table manquante, RLS, rate limiting, journal d'accès structure) ; suppression de `sql/` (scripts "à la main"). |
 | T4 | ✅ Fait | `016daa1` | Config centralisée (`src/lib/config.ts`), suppression des URLs codées en dur, jeu de données fictif + procédure de staging Supabase/Vercel. |
@@ -38,7 +38,7 @@ Aucune tâche n'est **BLOQUÉE**.
 
 ## 3. Détail par tâche
 
-### T1 — Audit (`AUDIT.md`)
+### T1 — Audit (`docs/archive/AUDIT.md`)
 État des lieux factuel : arborescence commentée, code mort, dépendances npm
 inutilisées/manquantes, doublons (programme V1/V2), 5 tables actives mais
 absentes des migrations, table `bilans_brouillons` référencée mais
@@ -53,7 +53,7 @@ inexistante (404 connu).
 - `package.json` : retrait de `html2pdf.js`/`@types/html2pdf.js`,
   `react-hot-toast`, `react-countup` (inutilisés) ; ajout de `html2canvas`
   (utilisé mais non déclaré).
-- Corrections de deux estimations erronées dans `AUDIT.md` (console.log,
+- Corrections de deux estimations erronées dans `docs/archive/AUDIT.md` (console.log,
   faux positifs TODO/FIXME).
 
 ### T3 — Migrations SQL versionnées
@@ -176,7 +176,7 @@ suggéré, tout ce qui reste à faire :
    - `20260613_structure_access_logs.sql`
    - `20260613_audit_logs.sql`
 
-   ⚠️ Les 3 premières viennent de `RAPPORT_SECURISATION.md` (branche
+   ⚠️ Les 3 premières viennent de `docs/archive/RAPPORT_SECURISATION.md` (branche
    `securisation`, déjà mergée) et étaient peut-être déjà en attente avant
    cette consolidation — vérifie dans le SQL Editor si les tables/policies
    existent déjà avant de rejouer (les fichiers sont idempotents,
@@ -223,7 +223,7 @@ avec succès avant chaque commit. Aucune tâche n'a nécessité de revert.
 Historique des commits de la branche (du plus ancien au plus récent) :
 
 ```
-fe886a8 [consolidation] T1: etat des lieux (AUDIT.md)
+fe886a8 [consolidation] T1: etat des lieux (docs/archive/AUDIT.md)
 3b66a2d [consolidation] T2: grand menage - code mort, deps inutilisees, fichiers de debug
 6e27c53 [consolidation] T3: migrations SQL versionnees (supabase init + RLS/rate limit/audit)
 016daa1 [consolidation] T4: environnement de staging

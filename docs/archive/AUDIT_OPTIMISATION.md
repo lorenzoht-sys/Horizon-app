@@ -9,7 +9,7 @@
 > `src/utils/kmeans.ts`, `src/types/index.ts`, migrations `20260622_refonte_contrats.sql` /
 > `20260622_durees_seances_contrats.sql`, `vitest.config.ts`.
 >
-> ⚠️ Remplace l'ancien `AUDIT_OPTIMISATION.md` (daté du 18 juin), qui décrivait une version antérieure
+> ⚠️ Remplace l'ancien `docs/archive/AUDIT_OPTIMISATION.md` (daté du 18 juin), qui décrivait une version antérieure
 > du système (TourneePage seul, sans ORS, sans planificateur.ts, sans refonte des contrats). Ce
 > document-là est obsolète et son contenu n'est plus d'actualité.
 

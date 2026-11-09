@@ -46,7 +46,7 @@
 //     nombre de séances le lendemain).
 // Le journal rappels_envoyes garantit qu'un même rappel n'est jamais envoyé
 // deux fois, même si le cron tourne plusieurs fois dans la fenêtre.
-// Voir RAPPORT_RAPPELS.md pour la configuration complète côté Supabase.
+// Voir docs/archive/RAPPORT_RAPPELS.md pour la configuration complète côté Supabase.
 //
 // ── Renouvellement des contrats ─────────────────────────────────────────────
 // Prolonge silencieusement (aucune notification à Pierre) les contrats à

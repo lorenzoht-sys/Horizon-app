@@ -1563,7 +1563,7 @@ navigateur via `GET /api/patient/me`, et `seancePatientId` est renvoyé par
 
 ## Code mort de l'ancienne architecture « client anon direct »
 
-`MIGRATION_ANON.md` décrit le passage d'un accès Supabase anon direct
+`docs/archive/MIGRATION_ANON.md` décrit le passage d'un accès Supabase anon direct
 (portail structure) vers les routes serveur `GET /api/structure/*`
 (service_role). Plusieurs vestiges de l'ancienne architecture n'ont jamais
 été supprimés. Aucun n'a d'appelant — vérifié par `grep` sur `src/`, `api/`,

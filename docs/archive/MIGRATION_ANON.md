@@ -1,4 +1,4 @@
-# MIGRATION_ANON.md — Inventaire des accès Supabase "anon"
+# docs/archive/MIGRATION_ANON.md — Inventaire des accès Supabase "anon"
 
 Carte exhaustive de tous les appels Supabase effectués **sans session
 praticien** (espace patient `/patient` + portail structure

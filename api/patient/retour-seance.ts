@@ -57,7 +57,7 @@ export default withSentry(async function handler(req: any, res: any) {
   }
 
   // praticien_id peut être NULL (référent parti, mode organisation — voir
-  // palier 2 de CONCEPTION_MODE_ORGANISATION.md) : retours_seance.praticien_id
+  // palier 2 de docs/archive/CONCEPTION_MODE_ORGANISATION.md) : retours_seance.praticien_id
   // est nullable depuis la migration FK SET NULL, ce n'est plus une condition
   // de rejet.
 

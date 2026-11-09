@@ -9,7 +9,7 @@ jobs:
   # Vérifications statiques : toujours exécutées, ne dépendent d'aucun
   # environnement de staging. Volontairement SANS `npm run lint` (erreurs
   # de lint pré-existantes, hors périmètre de la consolidation — voir
-  # AUDIT.md et docs/PLAN-BETA.md).
+  # docs/archive/AUDIT.md et docs/PLAN-BETA.md).
   build:
     runs-on: ubuntu-latest
     steps:
@@ -41,7 +41,7 @@ jobs:
       - run: npm run test:unit:ci
 
   # Suite E2E Playwright — cible un déploiement Vercel de Preview branché sur
-  # le projet Supabase de STAGING (voir GUIDE_STAGING.md et e2e/README.md).
+  # le projet Supabase de STAGING (voir docs/GUIDE_STAGING.md et e2e/README.md).
   #
   # ── Comment la cible est choisie, et pourquoi ────────────────────────────
   # Ce job ciblait auparavant une URL figée (`vars.E2E_BASE_URL`), pointant

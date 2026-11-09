@@ -104,9 +104,9 @@ Avant de merger sur `main`, voir **`CHECKLIST_RELEASE.md`**.
 Cette application traite des données de santé. Plusieurs documents
 encadrent ça :
 
-- **`RAPPORT_SECURISATION.md`** — sécurisation des accès (auth serveur pour
+- **`docs/archive/RAPPORT_SECURISATION.md`** — sécurisation des accès (auth serveur pour
   l'espace patient et le portail structure, RLS, rate limiting).
-- **`AUDIT.md`** — état des lieux détaillé du code (Tâche 1, consolidation).
+- **`docs/archive/AUDIT.md`** — état des lieux détaillé du code (Tâche 1, consolidation).
 - **`supabase/migrations/`** — historique versionné du schéma (règle d'or :
   toute évolution passe par un fichier de migration, jamais une modification
   directe dans Supabase Studio).

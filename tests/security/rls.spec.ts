@@ -945,7 +945,7 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
   // de tout contrôle de débit.
   //
   // Fermé par 20260826_revoke_public_execute_functions.sql, qui SUPPRIME la
-  // fonction (code mort depuis MIGRATION_ANON.md) plutôt que de se contenter
+  // fonction (code mort depuis docs/archive/MIGRATION_ANON.md) plutôt que de se contenter
   // d'un REVOKE — un REVOKE seul peut être défait par une future migration
   // qui recrée la fonction sans reconsidérer ses grants, ce qui s'était
   // précisément produit.
