@@ -7,7 +7,7 @@ token). **L'application traite des données de santé.**
 
 ## Stack
 
-- **Front** : React 19, Vite, TypeScript (strict, `noUnusedLocals`/`noUnusedParameters`), Tailwind CSS 3, React Router 7, `sonner` (toasts), `lucide-react`, Chart.js / Recharts, Leaflet, `vite-plugin-pwa`.
+- **Front** : React 19, Vite, TypeScript (strict, `noUnusedLocals`/`noUnusedParameters`), Tailwind CSS 3, React Router 7, `sonner` (toasts), `lucide-react`, Recharts, Leaflet, `vite-plugin-pwa`.
 - **Données** : Supabase (Postgres, Auth, RLS). Le client front est dans `src/lib/supabase.ts`.
 - **Backend** : fonctions serverless Vercel dans `api/` (1 fichier = 1 route, clé `service_role`). Les helpers partagés sont dans `api/_lib/`. Config TS dédiée NodeNext (`api/tsconfig.json`) : les imports relatifs portent l'extension `.js`.
 - **Edge Functions Supabase** : `supabase/functions/` (Deno).
