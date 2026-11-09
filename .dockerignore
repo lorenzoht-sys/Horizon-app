@@ -1,0 +1,12 @@
+# Contexte des images Clever Cloud (clevercloud/Dockerfile.app) : rien de
+# local, aucun secret, aucun dump.
+.git
+node_modules
+dist
+dist-api
+.env
+.env.*
+!.env.example
+clevercloud/_dumps
+test-results
+playwright-report

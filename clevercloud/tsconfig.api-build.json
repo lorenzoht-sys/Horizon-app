@@ -1,0 +1,12 @@
+{
+  "//": "Compile api/ en JavaScript pour le serveur Clever Cloud (sur Vercel, la plateforme compile elle-même). Les tests sont exclus.",
+  "extends": "../api/tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "../dist-api",
+    "rootDir": "..",
+    "sourceMap": false
+  },
+  "include": ["../api/**/*.ts"],
+  "exclude": ["../api/**/*.test.ts"]
+}
