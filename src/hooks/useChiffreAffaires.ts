@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 import {
   ajouterMois,
   caParMoisCle,
@@ -59,7 +60,7 @@ export function useChiffreAffaires(mois: string) {
   /** Ajoute une saisie au mois affiché. Ne lève jamais. */
   const ajouter = useCallback(async (v: { participantId: string; libelle: string; montant: number }): Promise<{ erreur?: string }> => {
     if (!supabase) return { erreur: 'Base de données indisponible' };
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await utilisateurCourant();
     if (!user) return { erreur: 'Session expirée' };
     const { error } = await supabase.from('ca_externe').insert({
       praticien_id: user.id, participant_id: v.participantId, mois, libelle: v.libelle, montant: v.montant,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 import {
   SELECT_COMPTES_RENDUS,
   SELECT_FACTURES_DOCUMENTS,
@@ -25,7 +26,7 @@ export function useDocumentsBeneficiaire(participantId: string) {
   const charger = useCallback(async () => {
     const client = supabase;
     if (!client) { setChargement(false); return; }
-    const { data: { user } } = await client.auth.getUser();
+    const user = await utilisateurCourant();
     const [f, d, p] = await Promise.all([
       client.from('factures').select(SELECT_FACTURES_DOCUMENTS).eq('participant_id', participantId).neq('statut', 'brouillon'),
       client.from('documents_patient').select(SELECT_COMPTES_RENDUS).eq('participant_id', participantId),

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 import { dbToTemplateStructure } from '../lib/mappers';
 import type { TemplateStructure } from '../types';
 
@@ -11,7 +12,7 @@ export function useTemplatesStructure(structureId: string | undefined) {
 
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    utilisateurCourant().then((user) => {
       if (user) setPraticienId(user.id);
     });
   }, []);

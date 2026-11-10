@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 import { dbToStructure, structureToDb } from '../lib/mappers';
 import type { Structure } from '../types';
 
@@ -13,7 +14,7 @@ export function useStructures() {
 
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    utilisateurCourant().then((user) => {
       if (user) setPraticienId(user.id);
     });
   }, []);

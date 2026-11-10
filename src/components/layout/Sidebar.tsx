@@ -7,6 +7,7 @@ import {
 import { initialesPraticien } from '../../lib/initiales';
 import { IndicateurConnexion, BoutonInstallerApp } from '../pwa/PWAComponents';
 import { supabase } from '../../lib/supabase';
+import { utilisateurCourant } from '../../lib/session';
 import LegalFooterLinks from '../legal/LegalFooterLinks';
 import { useAppRole } from '../../hooks/useAppRole';
 
@@ -44,7 +45,7 @@ export default function Sidebar({ onLogout }: Props) {
 
   async function fetchPraticien() {
     if (!supabase) return;
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await utilisateurCourant();
     if (!user) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (supabase as any)

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 import {
   SELECT_PROFIL_FACTURATION,
   formulaireVersMiseAJour,
@@ -32,7 +33,7 @@ export function useProfilFacturation() {
 
   const charger = useCallback(async () => {
     if (!supabase) { setChargement(false); return; }
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await utilisateurCourant();
     if (!user) { setErreur('Utilisateur non connecté'); setChargement(false); return; }
     const { data, error } = await supabase
       .from('praticiens')
@@ -61,7 +62,7 @@ export function useProfilFacturation() {
     const erreurs = validerFormulaire(formulaire);
     if (Object.keys(erreurs).length > 0) return { ok: false, message: 'Veuillez corriger les erreurs', erreurs };
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await utilisateurCourant();
     if (!user) return { ok: false, message: 'Utilisateur non connecté' };
 
     const { data, error } = await supabase

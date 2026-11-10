@@ -7,6 +7,7 @@ import PageWrapper from '../components/layout/PageWrapper';
 import type { Indisponibilite, JourSemaine, Participant } from '../types';
 import { SectionApplication } from '../components/pwa/PWAComponents';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 import {
   type SettingsPraticien,
   DEFAULTS_SETTINGS as DEFAULTS,
@@ -596,7 +597,7 @@ function SectionAlertesPraticien() {
     setEnCours(true);
     const res = await activerRappelsPush();
     if (res.ok) {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await utilisateurCourant();
       const ok = user ? await praticienEnregistrerAbonnementPush(supabase, user.id, res.subscription) : false;
       if (ok) {
         setEtat('actif');
@@ -623,7 +624,7 @@ function SectionAlertesPraticien() {
     setEnCours(true);
     const endpoint = await desactiverRappelsPush();
     if (endpoint) {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await utilisateurCourant();
       if (user) await praticienSupprimerAbonnementPush(supabase, user.id, endpoint);
     }
     setEtat('inactif');
@@ -733,7 +734,7 @@ function SectionExportPlanning() {
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
     void (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await utilisateurCourant();
       if (!user) { setLoading(false); return; }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data } = await (supabase as any)
@@ -760,7 +761,7 @@ function SectionExportPlanning() {
       return;
     }
     setWorking(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await utilisateurCourant();
     if (!user) { setWorking(false); toast.error('Utilisateur non connecté'); return; }
     const nouveauToken = genToken();
     const { error } = await supabase.from('praticiens').update({ token_planning_ics: nouveauToken }).eq('id', user.id);
@@ -853,7 +854,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
     void (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await utilisateurCourant();
       if (!user) { setLoading(false); return; }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data } = await (supabase as any)
@@ -954,7 +955,7 @@ export default function SettingsPage() {
 
     let userId = '';
     if (supabase) {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await utilisateurCourant();
       if (!user) { toast.error('Utilisateur non connecté'); return; }
       userId = user.id;
     }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 
 export interface FactureSuivi {
   id: string;
@@ -42,7 +43,7 @@ export function useFactures() {
 
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    utilisateurCourant().then((user) => {
       if (user) setPraticienId(user.id);
     });
   }, []);
