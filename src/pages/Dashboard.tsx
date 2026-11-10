@@ -17,8 +17,7 @@ import { getAllBrouillons } from '../hooks/useBrouillonBilan';
 import { toast } from 'sonner';
 import { DashboardSkeleton } from '../components/skeletons/DashboardSkeleton';
 import { AnimatedNumber } from '../components/ui/AnimatedNumber';
-import { supabase } from '../lib/supabase';
-import { enLots } from '../lib/lots';
+import { chargerAssiduite7Jours, chargerRetoursParBeneficiaire, ressentisPreoccupants } from '../lib/suiviBeneficiaire';
 import CarteStructure from '../components/structures/CarteStructure';
 import ModalCreationStructure from '../components/structures/ModalCreationStructure';
 
@@ -76,41 +75,9 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (!supabase || assiduiteLoaded.current) return;
+    if (assiduiteLoaded.current) return;
     assiduiteLoaded.current = true;
-    async function loadAssiduite() {
-      const j7 = new Date(); j7.setDate(j7.getDate() - 7);
-      const isoJ7 = j7.toISOString().split('T')[0];
-      const spRes = await supabase!.from('seances_patient')
-        .select('id, participant_id, date_seance')
-        .gte('date_seance', isoJ7)
-        .order('date_seance', { ascending: false });
-      if (!spRes.data || spRes.data.length === 0) return;
-      const erRes = await supabase!.from('exercices_realises')
-        .select('seance_patient_id, realise')
-        .in('seance_patient_id', spRes.data.map((s: Record<string, unknown>) => s.id));
-      const erRows = (erRes.data ?? []) as { seance_patient_id: string; realise: boolean }[];
-      const byPatient: Record<string, { nb: number; taux: number | null; derniere: string | null }> = {};
-      const grouped: Record<string, { spId: string; date: string }[]> = {};
-      for (const sp of spRes.data as Record<string, unknown>[]) {
-        const pid = sp.participant_id as string;
-        if (!grouped[pid]) grouped[pid] = [];
-        grouped[pid].push({ spId: sp.id as string, date: sp.date_seance as string });
-      }
-      for (const [pid, sessions] of Object.entries(grouped)) {
-        const allItems = erRows.filter(e => sessions.some(s => s.spId === e.seance_patient_id));
-        const realises = allItems.filter(e => e.realise).length;
-        const total = allItems.length;
-        const derniere = sessions.sort((a, b) => b.date.localeCompare(a.date))[0]?.date ?? null;
-        byPatient[pid] = {
-          nb: sessions.length,
-          taux: total > 0 ? Math.round((realises / total) * 100) : null,
-          derniere,
-        };
-      }
-      setAssiduite(byPatient);
-    }
-    void loadAssiduite();
+    void chargerAssiduite7Jours().then(setAssiduite);
   }, []);
 
   useEffect(() => {
@@ -121,30 +88,12 @@ export default function Dashboard() {
       // saisir des retours depuis son espace, ce n'est plus au praticien de le surveiller).
       const ids = participants.filter(p => !p.archive).map(p => p.id);
       if (ids.length === 0) return;
-      // Par lots (2026-11-10) : la liste d'identifiants part dans l'URL, et
-      // au-delà de quelques centaines de bénéficiaires PostgREST refuse la
-      // requête (erreur 400). Chaque bénéficiaire est dans un seul lot, donc
-      // l'ordre par date de ses retours est conservé.
-      const reponses = await Promise.all(enLots(ids).map(lot => supabase!
-        .from('retours_seance')
-        .select('participant_id, borg_rpe, bien_etre')
-        .in('participant_id', lot)
-        .order('date', { ascending: false })));
-      const data = reponses.flatMap(r => r.data ?? []);
-      if (data.length === 0) return;
-      const byParticipant: Record<string, { borgRpe: number; bienEtre: number }[]> = {};
-      for (const r of data as { participant_id: string; borg_rpe: number; bien_etre: number }[]) {
-        if (!byParticipant[r.participant_id]) byParticipant[r.participant_id] = [];
-        byParticipant[r.participant_id].push({ borgRpe: r.borg_rpe, bienEtre: r.bien_etre });
-      }
+      const parBeneficiaire = await chargerRetoursParBeneficiaire(ids);
       const alertes: { id: string; prenom: string; nom: string }[] = [];
-      for (const [pid, retours] of Object.entries(byParticipant)) {
-        if (retours.length < 3) continue;
-        const last3 = retours.slice(0, 3);
-        if (last3.every(r => r.borgRpe >= 8) || last3.every(r => r.bienEtre >= 4)) {
-          const p = participants.find(x => x.id === pid);
-          if (p) alertes.push({ id: p.id, prenom: p.prenom, nom: p.nom });
-        }
+      for (const [pid, retours] of Object.entries(parBeneficiaire)) {
+        if (!ressentisPreoccupants(retours)) continue;
+        const p = participants.find(x => x.id === pid);
+        if (p) alertes.push({ id: p.id, prenom: p.prenom, nom: p.nom });
       }
       setPatientsASurveiller(alertes);
     }
