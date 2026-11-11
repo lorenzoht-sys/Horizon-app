@@ -104,6 +104,22 @@ export function useAgenda() {
     setSeances(prev => prev.filter(s => s.id !== id));
   }
 
+  // Retire un bilan automatique SEULEMENT s'il l'est encore en base
+  // (2026-11-11). La liste en mémoire peut avoir un temps de retard : un bilan
+  // tout juste déplacé à la main est déjà « le sien » en base (bilan_auto =
+  // false) alors que l'écran le croit encore automatique. Sans ce filtre,
+  // désactiver l'option à cet instant le supprimait (vu en e2e, test
+  // mobile/35). Renvoie true si la séance a bien été retirée.
+  async function supprimerBilanAuto(id: string): Promise<boolean> {
+    if (supabase) {
+      const { data, error } = await supabase.from('seances').delete().eq('id', id).eq('bilan_auto', true).select('id');
+      if (error) { console.error('Erreur suppression séance:', error); toast.error(messageErreurSeance(error)); return false; }
+      if (!data || data.length === 0) return false;
+    }
+    setSeances(prev => prev.filter(s => s.id !== id));
+    return true;
+  }
+
   function seancesDeSemaine(dateDebut: Date): Seance[] {
     const fin = addDays(dateDebut, 6);
     return seances.filter(s => {
@@ -162,6 +178,7 @@ export function useAgenda() {
     bulkCreerSeances,
     modifierSeance,
     supprimerSeance,
+    supprimerBilanAuto,
     retirerPlanifieesLocales,
     seancesDeSemaine,
     seancesDuJour,
