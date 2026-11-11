@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 import type { Choix, Credit, LigneOrigine } from '../lib/avoirs';
 import {
   SELECT_BROUILLON,
@@ -40,7 +41,7 @@ export function useFacturesAValider() {
 
   const charger = useCallback(async () => {
     if (!supabase) { setChargement(false); return; }
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await utilisateurCourant();
     if (!user) { setBrouillons([]); setProfil(null); setChargement(false); return; }
     const [fb, pr] = await Promise.all([
       supabase
@@ -154,7 +155,7 @@ export function useFacturesValidees() {
     (async () => {
       if (!supabase) { setChargement(false); return; }
       // Mêmes raisons que pour les brouillons (voir l'en-tête) : seulement les factures du praticien connecté.
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await utilisateurCourant();
       if (annule) return;
       if (!user) { setFactures([]); setChargement(false); return; }
       const { data, error } = await supabase

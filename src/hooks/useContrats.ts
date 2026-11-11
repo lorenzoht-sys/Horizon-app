@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import type { Contrat, StatutContrat, PeriodiciteContrat, JourSemaine } from '../types';
 import { calculerNbSeancesEstime, CYCLE_SEMAINES } from '../utils/horaires';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 import { dbToContrat, contratToDb } from '../lib/mappers';
 
 interface CreerContratData {
@@ -55,7 +56,7 @@ export function useContrats() {
     const nbSeances = calculerNbSeancesEstime(data.dateDebut, data.dateFin, tauxHebdo);
     let praticienId: string | undefined;
     if (supabase) {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await utilisateurCourant();
       praticienId = user?.id;
     }
 

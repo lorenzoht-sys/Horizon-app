@@ -1,6 +1,7 @@
 import { useState, useEffect, type FormEvent, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 import { validerSiret } from '../lib/siret';
 import {
   rowToSettings,
@@ -58,7 +59,7 @@ export default function OnboardingPage({ onComplete }: Props) {
   // déjà une fiche ne doit pas les ressaisir.
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    utilisateurCourant().then((user) => {
       if (!user) return;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (supabase as any)
@@ -107,7 +108,7 @@ export default function OnboardingPage({ onComplete }: Props) {
     if (!supabase) { onComplete(); navigate('/'); return; }
 
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await utilisateurCourant();
     if (!user) { onComplete(); navigate('/'); return; }
 
     const siretClean = controleSiret.siret;

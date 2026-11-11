@@ -13,6 +13,7 @@ import { ArrowLeft } from 'lucide-react';
 import type { Bilan, TestKey } from '../types';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 import { idSeanceDepuisRecherche, validerSeanceDuBilan } from '../lib/liaisonSeanceBilan';
 
 export default function NewBilan() {
@@ -36,7 +37,7 @@ export default function NewBilan() {
     setCheckingCloud(true);
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = await utilisateurCourant();
         if (!user) return;
         const cloudDraft = await loadBrouillonFromSupabase(id, user.id);
         if (cloudDraft) {

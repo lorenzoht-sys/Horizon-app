@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { toast } from 'sonner';
 import type { CoursCollectif, ParticipationCoursCollectif, StatutCoursCollectif, StatutPresenceCours } from '../types';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 import {
   dbToCoursCollectif, coursCollectifToDb,
   dbToParticipationCoursCollectif, participationCoursCollectifToDb,
@@ -45,7 +46,7 @@ export function useCoursCollectifs() {
 
   async function creerCoursCollectif(data: CreerCoursCollectifData): Promise<CoursCollectif | null> {
     if (!supabase) return null;
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await utilisateurCourant();
     if (!user) return null;
 
     const cours: CoursCollectif = {

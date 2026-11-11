@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { DashboardSkeleton } from '../components/skeletons/DashboardSkeleton';
 import { AnimatedNumber } from '../components/ui/AnimatedNumber';
 import { supabase } from '../lib/supabase';
+import { enLots } from '../lib/lots';
 import CarteStructure from '../components/structures/CarteStructure';
 import ModalCreationStructure from '../components/structures/ModalCreationStructure';
 
@@ -120,12 +121,17 @@ export default function Dashboard() {
       // saisir des retours depuis son espace, ce n'est plus au praticien de le surveiller).
       const ids = participants.filter(p => !p.archive).map(p => p.id);
       if (ids.length === 0) return;
-      const { data } = await supabase!
+      // Par lots (2026-11-10) : la liste d'identifiants part dans l'URL, et
+      // au-delà de quelques centaines de bénéficiaires PostgREST refuse la
+      // requête (erreur 400). Chaque bénéficiaire est dans un seul lot, donc
+      // l'ordre par date de ses retours est conservé.
+      const reponses = await Promise.all(enLots(ids).map(lot => supabase!
         .from('retours_seance')
         .select('participant_id, borg_rpe, bien_etre')
-        .in('participant_id', ids)
-        .order('date', { ascending: false });
-      if (!data || data.length === 0) return;
+        .in('participant_id', lot)
+        .order('date', { ascending: false })));
+      const data = reponses.flatMap(r => r.data ?? []);
+      if (data.length === 0) return;
       const byParticipant: Record<string, { borgRpe: number; bienEtre: number }[]> = {};
       for (const r of data as { participant_id: string; borg_rpe: number; bien_etre: number }[]) {
         if (!byParticipant[r.participant_id]) byParticipant[r.participant_id] = [];

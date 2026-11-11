@@ -5,6 +5,7 @@ import { generateToken } from '../utils/generateToken';
 import { genererCodeAcces } from '../utils/codeAcces';
 import { geocodeAdresse } from '../utils/geocodeAdresse';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 import { dbToParticipant, participantToDb, bilanToDb } from '../lib/mappers';
 import { separerParArchivage } from '../lib/archivage';
 import { messageSuppressionBeneficiaire } from '../lib/suppressionBeneficiaire';
@@ -113,7 +114,7 @@ export function useParticipants() {
     }
     let cancelled = false;
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await utilisateurCourant();
       if (cancelled) return;
       if (!user) { setLoading(false); return; }
       const { data, error } = await supabase
@@ -150,7 +151,7 @@ export function useParticipants() {
   const addParticipant = useCallback(async (data: Omit<Participant, 'id' | 'token' | 'bilans'>) => {
     const newP: Participant = { tags: [], ...data, id: uuidv4(), token: generateToken(), codeAcces: genererCodeAcces(), bilans: [] };
     if (supabase) {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await utilisateurCourant();
       for (let tentative = 0; tentative < MAX_TENTATIVES_CODE_ACCES; tentative++) {
         const dbRow = { ...participantToDb(newP), praticien_id: user?.id ?? null };
         const { error } = await supabase.from('participants').insert(dbRow);

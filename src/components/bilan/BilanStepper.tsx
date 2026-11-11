@@ -7,6 +7,7 @@ import {
   type BrouillonBilan,
 } from '../../hooks/useBrouillonBilan';
 import { supabase } from '../../lib/supabase';
+import { utilisateurCourant } from '../../lib/session';
 import Step1_Identity from './steps/Step1_Identity';
 import Step2_Physical from './steps/Step2_Physical';
 import Step3_EnduranceMemory from './steps/Step3_EnduranceMemory';
@@ -98,7 +99,7 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
   // Récupérer l'ID du praticien une seule fois
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    utilisateurCourant().then((user) => {
       if (user) setPraticienId(user.id);
     });
   }, []);

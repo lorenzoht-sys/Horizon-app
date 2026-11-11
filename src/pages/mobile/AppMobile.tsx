@@ -30,6 +30,7 @@ import {
 import { CLE_JOUR_PAR_DOW, LABEL_TYPE_EVENEMENT, formatDate as formatDateAgenda, absenceSignaleeAffichable, couleurCategorieDe, LABEL_TYPE, type ChoixSerie } from '../../lib/agendaCommun';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, getAuthHeader } from '../../lib/supabase';
+import { utilisateurCourant } from '../../lib/session';
 import {
   EVENT_SETTINGS_PRATICIEN,
   chargerSettingsPraticien,
@@ -125,7 +126,7 @@ function usePraticienSettings() {
 
   async function sauvegarderSettings(form: SettingsPraticien) {
     if (!supabase) throw new Error('Supabase non configuré');
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await utilisateurCourant();
     if (!user) throw new Error('Non connecté');
     // Base d'abord, cache ensuite — l'ordre est garanti par le module.
     await enregistrerSettingsPraticien(form, user.id);

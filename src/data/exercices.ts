@@ -1,5 +1,6 @@
 import type { CategorieExercice, Exercice, DossierExercice, DossierExerciceMembre, TypeExerciceRef } from '../types';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 import { EXERCICES_MOUVAPA, enrichirExistant } from './exercicesMouvApa';
 
 // Catalogue historique, conservé tel quel (identifiants, noms et champs inchangés). La bibliothèque
@@ -2045,7 +2046,7 @@ export async function loadExercicesPraticien(): Promise<Exercice[]> {
 export async function saveExercicePersonnalise(ex: Omit<Exercice, 'id'>): Promise<Exercice | null> {
   if (!supabase) return null;
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await utilisateurCourant();
     if (!user) return null;
 
     const { data, error } = await supabase
@@ -2117,7 +2118,7 @@ export async function migrerExercicesLocalStorageVersSupabase(): Promise<{ count
   }
 
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await utilisateurCourant();
     if (!user) return null;
 
     const rows = locaux.map(ex => ({
@@ -2187,7 +2188,7 @@ export async function loadDossiersExercices(): Promise<DossierExercice[]> {
 export async function creerDossierExercice(nom: string, ordre: number): Promise<DossierExercice | null> {
   if (!supabase) return null;
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await utilisateurCourant();
     if (!user) return null;
 
     const { data, error } = await supabase
@@ -2263,7 +2264,7 @@ export async function ajouterExerciceADossier(
 ): Promise<DossierExerciceMembre | null> {
   if (!supabase) return null;
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await utilisateurCourant();
     if (!user) return null;
 
     const { data, error } = await supabase

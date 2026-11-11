@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 
 export interface RappelPreferences {
   rappelSeanceActif: boolean;
@@ -78,7 +79,7 @@ export function useRappelPreferences(participantId?: string) {
 
   async function enregistrer(next: RappelPreferences): Promise<boolean> {
     if (!supabase) return false;
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await utilisateurCourant();
     if (!user) return false;
 
     const payload = {

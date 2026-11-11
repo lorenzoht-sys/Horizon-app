@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { utilisateurCourant } from '../lib/session';
 import type { Exercice } from '../types';
 
 export interface TestEtalonResultatRow {
@@ -37,7 +38,7 @@ export function useActivitesHorsProgramme(participantId: string) {
 
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    utilisateurCourant().then((user) => {
       if (user) setPraticienId(user.id);
     });
   }, []);
