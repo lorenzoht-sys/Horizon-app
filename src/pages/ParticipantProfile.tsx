@@ -55,7 +55,11 @@ import { getSedProfil, getFSSProfil } from '../components/bilan/TestsAutonomie';
 import { etatSedentarite, etatFatigue, SED_TOTAL_MAX, FSS_TOTAL_MAX, type EtatQuestionnaire } from '../lib/scoresAutonomie';
 import { useRappelPreferences, type RappelPreferences } from '../hooks/useRappelPreferences';
 import { toast } from 'sonner';
-import { supabase, getAuthHeader } from '../lib/supabase';
+import { getAuthHeader } from '../lib/supabase';
+import {
+  chargerRetoursSeance, chargerSeancesStats, compterAppareilsRappels, ressentisPreoccupants,
+  type RetourSeance, type SeancePatientStat,
+} from '../lib/suiviBeneficiaire';
 import { patientAccesPraticien } from '../lib/patientApi';
 import type { Bilan, Participant, Contrat, Seance, ProfilHandicap } from '../types';
 import { getContreIndications, getTestsAutonomie, formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../lib/anamnese';
@@ -851,12 +855,7 @@ function CarteDisponibilites({
 
 // ── Types ressentis ───────────────────────────────────────────────────────────
 
-interface RetourSeance {
-  id: string;
-  date: string;
-  borgRpe: number;
-  bienEtre: number;
-}
+// RetourSeance : voir src/lib/suiviBeneficiaire.ts
 
 // Libellés Borg RPE simplifié (valeurs utilisées : 2/4/6/8/10)
 const BORG_LABEL: Record<number, string> = {
@@ -888,17 +887,7 @@ type TabId = 'bilans' | 'contrats' | 'cours' | 'assiduite' | 'documents' | 'rapp
 
 // ── Types assiduité ───────────────────────────────────────────────────────────
 
-interface SeancePatientStat {
-  id: string;
-  seanceId: string;
-  programmeId: string;
-  dateSeance: string;
-  statut: string;
-  commentairePatient: string | null;
-  dureeMinutes: number | null;
-  nbRealises: number;
-  nbTotal: number;
-}
+// SeancePatientStat : voir src/lib/suiviBeneficiaire.ts
 
 function TabsSection({ activeTab, setActiveTab, tabs, children }: {
   activeTab: TabId;
@@ -955,16 +944,10 @@ function SectionRappelsPatient({ participantId }: { participantId: string }) {
   }, [loading, prefs]);
 
   useEffect(() => {
-    if (!supabase) return;
     let annule = false;
-    async function charger() {
-      const { count } = await supabase!
-        .from('push_subscriptions')
-        .select('id', { count: 'exact', head: true })
-        .eq('participant_id', participantId);
-      if (!annule) setNbAppareils(count ?? 0);
-    }
-    void charger();
+    void compterAppareilsRappels(participantId).then(nb => {
+      if (!annule && nb !== null) setNbAppareils(nb);
+    });
     return () => { annule = true; };
   }, [participantId]);
 
@@ -1124,62 +1107,19 @@ export default function ParticipantProfile() {
   const [retours, setRetours]               = useState<RetourSeance[]>([]);
 
   useEffect(() => {
-    if (!id || !supabase) return;
-    async function loadRetours() {
-      const { data } = await supabase!
-        .from('retours_seance')
-        .select('id, date, borg_rpe, bien_etre')
-        .eq('participant_id', id)
-        .order('date', { ascending: false })
-        .limit(30);
-      if (data) {
-        setRetours(data.map((r: Record<string, unknown>) => ({
-          id: r.id as string,
-          date: r.date as string,
-          borgRpe: r.borg_rpe as number,
-          bienEtre: r.bien_etre as number,
-        })));
-      }
-    }
-    void loadRetours();
+    if (!id) return;
+    void chargerRetoursSeance(id).then(data => { if (data) setRetours(data); });
   }, [id]);
 
   useEffect(() => {
-    if (!id || !supabase) return;
-    async function loadAssiduite() {
-      const spRes = await supabase!.from('seances_patient')
-        .select('id, seance_id, programme_id, date_seance, statut, commentaire_patient, duree_minutes')
-        .eq('participant_id', id)
-        .order('date_seance', { ascending: false })
-        .limit(30);
-      if (!spRes.data || spRes.data.length === 0) return;
-      const erRes = await supabase!.from('exercices_realises')
-        .select('seance_patient_id, realise')
-        .in('seance_patient_id', spRes.data.map((s: Record<string, unknown>) => s.id));
-      const erRows = (erRes.data ?? []) as { seance_patient_id: string; realise: boolean }[];
-      setSeancesStats(spRes.data.map((sp: Record<string, unknown>) => {
-        const items = erRows.filter(e => e.seance_patient_id === sp.id);
-        return {
-          id: sp.id as string,
-          seanceId: sp.seance_id as string,
-          programmeId: sp.programme_id as string,
-          dateSeance: sp.date_seance as string,
-          statut: sp.statut as string,
-          commentairePatient: (sp.commentaire_patient as string | null) ?? null,
-          dureeMinutes: (sp.duree_minutes as number | null) ?? null,
-          nbRealises: items.filter(e => e.realise).length,
-          nbTotal: items.length,
-        };
-      }));
-    }
-    void loadAssiduite();
+    if (!id) return;
+    // Toujours remplacer l'état, même par une liste vide : sinon, en passant
+    // d'une fiche à une autre sans démontage, les séances du bénéficiaire
+    // précédent resteraient affichées (2026-11-10).
+    void chargerSeancesStats(id).then(setSeancesStats);
   }, [id]);
 
-  const alerteRessentis = useMemo(() => {
-    if (retours.length < 3) return false;
-    const last3 = retours.slice(0, 3);
-    return last3.every(r => r.borgRpe >= 8) || last3.every(r => r.bienEtre >= 4);
-  }, [retours]);
+  const alerteRessentis = useMemo(() => ressentisPreoccupants(retours), [retours]);
 
   const participant = participants.find(p => p.id === id);
   const { compteRendus, ajouterCompteRendu } = useCompteRenduSeance(participant?.id ?? '');
