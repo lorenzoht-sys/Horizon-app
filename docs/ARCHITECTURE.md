@@ -37,6 +37,9 @@ Deux règles sont vérifiées par des tests, qui échouent si on les enfreint :
 2. **L'identité du praticien se lit par `utilisateurCourant()`**, jamais par
    `supabase.auth.getUser()` (`src/lib/session.test.ts`).
 
+La session praticien se ferme après une heure sans interaction
+(`src/lib/inactivite.ts`, `src/hooks/useDeconnexionInactivite.ts`).
+
 Elles existent pour que changer de source de données ou de fournisseur
 d'authentification se fasse dans une couche connue.
 

@@ -10,6 +10,7 @@ import AppMobile from './pages/mobile/AppMobile';
 import BarreNavigationMobile from './components/layout/BarreNavigationMobile';
 import { estRouteInterfaceUnique } from './lib/routesMobile';
 import { effacerTousEtatsSession } from './lib/etatSession';
+import { useDeconnexionInactivite } from './hooks/useDeconnexionInactivite';
 import { Toaster, toast } from 'sonner';
 import Sidebar from './components/layout/Sidebar';
 import Dashboard from './pages/Dashboard';
@@ -361,7 +362,7 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Utilisé uniquement pour la connexion de secours (identifiants codés en dur)
+  // Appelé par LoginPage après une connexion réussie.
   function handleLogin() {
     setIsLoggedIn(true);
   }
@@ -379,6 +380,21 @@ export default function App() {
     setIsLoggedIn(false);
     setShowOnboarding(false);
   }
+
+  // Session praticien fermée après une heure sans interaction. Sans Supabase
+  // (mode local de démonstration), il n'y a pas de session à protéger.
+  // Portée « local » : seul cet appareil est déconnecté. La portée par défaut
+  // révoquerait aussi la session du téléphone que le praticien utilise ailleurs.
+  function deconnecterPourInactivite() {
+    effacerTousEtatsSession();
+    if (supabase) void supabase.auth.signOut({ scope: 'local' });
+    setIsLoggedIn(false);
+    setShowOnboarding(false);
+  }
+  useDeconnexionInactivite(
+    !supabase || authLoading ? 'inconnu' : isLoggedIn ? 'connecte' : 'deconnecte',
+    deconnecterPourInactivite,
+  );
 
   if (authLoading) {
     return (
