@@ -7,13 +7,13 @@ Ne pas modifier à la main : relancer le script après chaque chantier.
 
 | Élément | Nombre |
 | --- | --- |
-| Fichiers du front (hors tests) | 269 (66 701 lignes) |
+| Fichiers du front (hors tests) | 264 (64 966 lignes) |
 | Routes API (`api/`) | 12 |
 | Edge Functions | 3 |
 | Tables (schéma public) | 62 |
 | Tables lues ou écrites directement par le front | 47 |
 | Fonctions SQL appelées en RPC par le front | 8 |
-| Tests unitaires | 89 fichiers |
+| Tests unitaires | 91 fichiers |
 | Scénarios e2e | 39 fichiers |
 
 ## Table par table
@@ -109,7 +109,7 @@ Plus les accès sont regroupés dans `hooks/`, plus un changement de source de d
 
 | Couche | Fichiers avec accès direct | Appels `.from()` |
 | --- | --- | --- |
-| `src/hooks/` | 27 | 148 |
+| `src/hooks/` | 27 | 149 |
 | `src/pages/` | 6 | 29 |
 | `src/components/` | 2 | 3 |
 | `src/lib/` | 4 | 11 |
@@ -175,7 +175,6 @@ Ce sont les zones où une modification a le plus de chances d'avoir des effets d
 | `src/types/index.ts` | 1 211 | — |
 | `src/components/programme/ProgrammeWizard.tsx` | 1 023 | — |
 | `src/pages/AgendaV2Page.tsx` | 1 022 | — |
-| `src/components/planning/PlanningGrilleView.tsx` | 1 020 | — |
 | `src/data/exercicesMouvApa.ts` | 943 | — |
 | `src/pages/PortailStructure.tsx` | 893 | — |
 | `src/components/participant/ContratsTab.tsx` | 890 | — |
@@ -184,5 +183,5 @@ Ce sont les zones où une modification a le plus de chances d'avoir des effets d
 
 ## Couverture de tests
 
-- 89 fichiers de tests unitaires (Vitest), 39 scénarios e2e (Playwright), plus le harnais RLS (`tests/security/`).
+- 91 fichiers de tests unitaires (Vitest), 39 scénarios e2e (Playwright), plus le harnais RLS (`tests/security/`).
 - Modules de `src/lib/` sans test unitaire à côté (9 sur 52) : `lib/analyse-tournee`, `lib/anamnese`, `lib/liaisonSeanceBilan`, `lib/libellesBibliotheque`, `lib/patientApi`, `lib/push`, `lib/sentry`, `lib/settingsPraticien`, `lib/structureApi`.

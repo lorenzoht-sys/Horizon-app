@@ -46,7 +46,7 @@ export default function OnboardingPage({ onComplete }: Props) {
   const [societe, setSociete] = useState('');
   const [siret,   setSiret]   = useState('');
   // Echappatoire salarie. Le mode `intervenant` de
-  // CONCEPTION_MODE_ORGANISATION.md decrit un salarie APA d'une structure :
+  // docs/archive/CONCEPTION_MODE_ORGANISATION.md decrit un salarie APA d'une structure :
   // il n'a pas de SIRET personnel, et n'emet pas de contrat de prestation.
   // Non persiste — aucune colonne pour ca, et rien n'en depend ailleurs :
   // cette case ne fait que lever l'exigence ICI. La regle reelle est

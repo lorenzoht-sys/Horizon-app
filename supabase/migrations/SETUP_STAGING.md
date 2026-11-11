@@ -1,6 +1,6 @@
-# Mise en place d'un environnement de staging — voir `GUIDE_STAGING.md`
+# Mise en place d'un environnement de staging — voir `docs/GUIDE_STAGING.md`
 
-⚠️ Ce document est remplacé par **`GUIDE_STAGING.md`** (à la racine du
+⚠️ Ce document est remplacé par **`docs/GUIDE_STAGING.md`** (à la racine du
 dépôt), qui contient la procédure complète et à jour : création du projet
 Supabase "horizon-staging", application des migrations dans l'ordre, seed de
 données fictives, configuration Vercel par environnement, vérification, et

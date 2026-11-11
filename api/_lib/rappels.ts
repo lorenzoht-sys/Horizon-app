@@ -136,6 +136,6 @@ export function doitEnvoyerRappelVeilleSeance(
   return heureParisCivile(maintenant) >= prefs.rappelJourSeanceHeure.slice(0, 5);
 }
 
-// Messages neutres (RGPD/confidentialité santé) — voir RAPPORT_RAPPELS.md.
+// Messages neutres (RGPD/confidentialité santé) — voir docs/archive/RAPPORT_RAPPELS.md.
 export const MESSAGE_RAPPEL_SEANCE = { titre: 'Horizon', corps: 'Vous avez une séance aujourd’hui.' };
 export const MESSAGE_RAPPEL_VEILLE_SEANCE = { titre: 'Horizon', corps: 'Vous avez une séance d’exercices demain.' };

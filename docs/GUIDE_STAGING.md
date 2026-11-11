@@ -1,4 +1,4 @@
-# GUIDE_STAGING.md — Mise en place de l'environnement de staging
+# docs/GUIDE_STAGING.md — Mise en place de l'environnement de staging
 
 Ce document est le **guide unique et à jour** pour créer l'environnement de
 staging (il remplace `supabase/migrations/SETUP_STAGING.md`, désormais un
@@ -326,7 +326,7 @@ qu'une URL de PR qui change à chaque fois.
 Le reste de l'application fonctionne **sans** cette étape (les rappels
 automatiques ne seront simplement jamais envoyés sur staging). Ne fais cette
 étape que si tu veux tester spécifiquement la fonctionnalité "rappels
-automatiques" (notifications push) — voir `RAPPORT_RAPPELS.md` pour le
+automatiques" (notifications push) — voir `docs/archive/RAPPORT_RAPPELS.md` pour le
 contexte complet.
 
 1. **Générer une paire de clés VAPID dédiée à staging** (ou réutiliser celle

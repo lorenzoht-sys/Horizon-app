@@ -1,4 +1,4 @@
-# AUDIT.md — État des lieux (Consolidation Horizon)
+# docs/archive/AUDIT.md — État des lieux (Consolidation Horizon)
 
 > Document de travail, généré au début de la branche `consolidation`.
 > Objectif : servir de référence pour les Tâches 2 à 8. Ne contient aucune
