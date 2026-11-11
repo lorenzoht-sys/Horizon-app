@@ -187,7 +187,18 @@ jobs:
         if: env.SUPABASE_TEST_URL != ''
         run: npx tsx scripts/staging-reset-etat-e2e.ts --apply
 
-      - run: npx playwright install --with-deps chromium
+      # Les dépendances système passent par les miroirs apt d'Ubuntu, parfois
+      # indisponibles : le 2026-11-11, l'étape a échoué trois fois de suite
+      # (« Some index files failed to download ») sans qu'aucun test ne tourne.
+      # On tente donc l'installation complète dans un délai borné, puis, à
+      # défaut, le navigateur seul : l'image du runner embarque déjà les
+      # bibliothèques de Chrome. S'il en manquait une, l'e2e échouerait au
+      # lancement du navigateur, avec un message explicite.
+      - name: Installer Chromium pour Playwright
+        run: |
+          if timeout 240 npx playwright install --with-deps chromium; then exit 0; fi
+          echo "::warning::Dépendances système indisponibles (miroirs apt) : installation du navigateur seul."
+          npx playwright install chromium
       - run: npm run test:e2e
 
       # Diagnostic : conserve captures, traces (prises à la reprise) et contextes d'erreur Playwright,
