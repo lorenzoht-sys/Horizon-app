@@ -17,7 +17,7 @@ import { formatDate } from '../../lib/agendaCommun';
 // catégorie) ou supprimable ; un bilan déplacé à la main n'est plus jamais retiré automatiquement.
 
 export default function SectionBilansAuto({ participant }: { participant: Participant }) {
-  const { seances, bulkCreerSeances, supprimerSeance, supprimerBilanAuto, modifierSeance } = useAgenda();
+  const { seances, seancesChargees, bulkCreerSeances, supprimerSeance, supprimerBilanAuto, modifierSeance } = useAgenda();
   const { reglage, charge, enregistrer } = useBilansAuto(participant.id);
   const { categories, categorieBilan } = useCategoriesSeance();
   const [enCours, setEnCours] = useState(false);
@@ -107,7 +107,7 @@ export default function SectionBilansAuto({ participant }: { participant: Partic
           <p className="text-xs text-gray-500 mt-0.5">Prévoir les prochains bilans dans l’agenda.</p>
         </div>
         <button
-          role="switch" aria-checked={actif} aria-label="Bilans automatiques" disabled={enCours}
+          role="switch" aria-checked={actif} aria-label="Bilans automatiques" disabled={enCours || !seancesChargees}
           onClick={() => void appliquer(!actif, frequence)}
           className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${actif ? 'bg-primary' : 'bg-gray-300'}`}
         >
@@ -119,7 +119,7 @@ export default function SectionBilansAuto({ participant }: { participant: Partic
         <div className="mt-3 space-y-3">
           <div className="flex items-center gap-2">
             <label htmlFor="freq-bilan" className="text-xs text-gray-500">Fréquence : tous les</label>
-            <select id="freq-bilan" value={frequence} disabled={enCours}
+            <select id="freq-bilan" value={frequence} disabled={enCours || !seancesChargees}
               onChange={e => void appliquer(true, Number(e.target.value))}
               className="border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-primary">
               {FREQUENCES_BILAN_MOIS.map(m => <option key={m} value={m}>{m} mois</option>)}
