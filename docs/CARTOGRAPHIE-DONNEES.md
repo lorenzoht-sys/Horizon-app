@@ -1,19 +1,19 @@
 # Cartographie des données d'Horizon (générée)
 
-Générée par `node scripts/cartographie.mjs` le 2026-11-10.
+Générée par `node scripts/cartographie.mjs` le 2026-11-11.
 Ne pas modifier à la main : relancer le script après chaque chantier.
 
 ## Chiffres clés
 
 | Élément | Nombre |
 | --- | --- |
-| Fichiers du front (hors tests) | 268 (66 628 lignes) |
+| Fichiers du front (hors tests) | 269 (66 701 lignes) |
 | Routes API (`api/`) | 12 |
 | Edge Functions | 3 |
 | Tables (schéma public) | 62 |
 | Tables lues ou écrites directement par le front | 47 |
 | Fonctions SQL appelées en RPC par le front | 8 |
-| Tests unitaires | 88 fichiers |
+| Tests unitaires | 89 fichiers |
 | Scénarios e2e | 39 fichiers |
 
 ## Table par table
@@ -45,7 +45,7 @@ Functions (clé `service_role`, RLS contournée : le contrôle est dans le code)
 | `exercices_libres_activations` | 2 | 0 | hooks/useActivitesHorsProgramme | api/patient/activite, api/patient/me |
 | `exercices_libres_validations` | 2 | 0 | hooks/useActivitesHorsProgramme | api/patient/activite, api/patient/me |
 | `exercices_personnalises` | 1 | 0 | data/exercices | — |
-| `exercices_realises` | 4 | 0 | pages/AssistantPage, pages/Dashboard, pages/ParticipantProfile | api/patient/me, api/patient/seance |
+| `exercices_realises` | 4 | 0 | lib/suiviBeneficiaire, pages/AssistantPage | api/patient/me, api/patient/seance |
 | `factures` | 2 | 11 | hooks/useDocumentsBeneficiaire, hooks/useFacturesAValider | api/_lib/facturationMensuelle, supabase/functions/facturation-envoi/index, supabase/functions/facturation-pdf/index |
 | `factures_suivi` | 1 | 0 | hooks/useFactures | api/structure/data |
 | `indisponibilites` | 4 | 1 | hooks/useIndispos, pages/SettingsPage | — |
@@ -71,12 +71,12 @@ Functions (clé `service_role`, RLS contournée : le contrôle est dans le code)
 | `programme_seances` | 3 | 0 | hooks/useProgrammeV2, pages/AssistantPage | api/patient/me, api/patient/seance |
 | `programmes` | 5 | 2 | hooks/useProgramme, hooks/useProgrammeV2, pages/AssistantPage, pages/SettingsPage | api/patient/me, api/patient/seance |
 | `programmes_modeles` | 1 | 2 | hooks/useProgrammesModeles | — |
-| `push_subscriptions` | 2 | 0 | pages/ParticipantProfile | api/_lib/notifications, api/patient/push-subscribe |
+| `push_subscriptions` | 2 | 0 | lib/suiviBeneficiaire | api/_lib/notifications, api/patient/push-subscribe |
 | `rappel_preferences` | 1 | 2 | hooks/useRappelPreferences | api/cron/rappels |
 | `rappels_envoyes` | 2 | 0 | — | api/cron/rappels |
-| `retours_seance` | 2 | 0 | pages/Dashboard, pages/ParticipantProfile | api/patient/retour-seance |
+| `retours_seance` | 2 | 0 | lib/suiviBeneficiaire | api/patient/retour-seance |
 | `seances` | 5 | 7 | hooks/useAgenda, lib/liaisonSeanceBilan, pages/AssistantPage | api/_lib/planningIcs, api/_lib/renouvellementContrats, api/cron/rappels, api/patient/activite, api/patient/me, api/seances/supprimer-planifiees, api/structure/data |
-| `seances_patient` | 4 | 0 | hooks/useProgrammeV2, pages/AssistantPage, pages/Dashboard, pages/ParticipantProfile | api/patient/me, api/patient/retour-seance, api/patient/seance |
+| `seances_patient` | 4 | 0 | hooks/useProgrammeV2, lib/suiviBeneficiaire, pages/AssistantPage | api/patient/me, api/patient/retour-seance, api/patient/seance |
 | `structure_access_logs` | 1 | 0 | — | api/_lib/structureAuth |
 | `structures` | 1 | 0 | hooks/useStructures, pages/StructureDetail | api/_lib/structureAuth |
 | `tarifs_contrats` | 2 | 4 | hooks/useTarifsContrat | — |
@@ -110,9 +110,9 @@ Plus les accès sont regroupés dans `hooks/`, plus un changement de source de d
 | Couche | Fichiers avec accès direct | Appels `.from()` |
 | --- | --- | --- |
 | `src/hooks/` | 27 | 148 |
-| `src/pages/` | 8 | 36 |
+| `src/pages/` | 6 | 29 |
 | `src/components/` | 2 | 3 |
-| `src/lib/` | 3 | 5 |
+| `src/lib/` | 4 | 11 |
 | `src/data/` | 1 | 9 |
 | `src/utils/` | 0 | 0 |
 
@@ -165,12 +165,12 @@ Ce sont les zones où une modification a le plus de chances d'avoir des effets d
 | Fichier | Lignes | Tables touchées directement |
 | --- | --- | --- |
 | `src/pages/EspacePatient.tsx` | 3 090 | — |
-| `src/pages/ParticipantProfile.tsx` | 2 482 | seances_patient, exercices_realises, retours_seance, push_subscriptions |
+| `src/pages/ParticipantProfile.tsx` | 2 422 | — |
 | `src/components/participant/ParticipantForm.tsx` | 2 371 | — |
 | `src/data/exercices.ts` | 2 301 | exercices_personnalises, dossiers_exercices, dossier_exercice_membres |
 | `src/pages/mobile/AppMobile.tsx` | 2 284 | assistant_logs |
 | `src/pages/StatsPage.tsx` | 1 532 | — |
-| `src/pages/AssistantPage.tsx` | 1 277 | seances, comptes_rendus_seances, documents_patient, notes_seances, programmes, programme_seances, programme_planning, programme_exercices, seances_patient, assistant_logs, exercices_realises, documents_partages |
+| `src/pages/AssistantPage.tsx` | 1 277 | seances, comptes_rendus_seances, documents_patient, notes_seances, programmes, programme_seances, programme_planning, programme_exercices, seances_patient, exercices_realises, assistant_logs, documents_partages |
 | `src/pages/SettingsPage.tsx` | 1 226 | praticiens, participants, indisponibilites, bilans, programmes |
 | `src/types/index.ts` | 1 211 | — |
 | `src/components/programme/ProgrammeWizard.tsx` | 1 023 | — |
@@ -184,5 +184,5 @@ Ce sont les zones où une modification a le plus de chances d'avoir des effets d
 
 ## Couverture de tests
 
-- 88 fichiers de tests unitaires (Vitest), 39 scénarios e2e (Playwright), plus le harnais RLS (`tests/security/`).
-- Modules de `src/lib/` sans test unitaire à côté (9 sur 51) : `lib/analyse-tournee`, `lib/anamnese`, `lib/liaisonSeanceBilan`, `lib/libellesBibliotheque`, `lib/patientApi`, `lib/push`, `lib/sentry`, `lib/settingsPraticien`, `lib/structureApi`.
+- 89 fichiers de tests unitaires (Vitest), 39 scénarios e2e (Playwright), plus le harnais RLS (`tests/security/`).
+- Modules de `src/lib/` sans test unitaire à côté (9 sur 52) : `lib/analyse-tournee`, `lib/anamnese`, `lib/liaisonSeanceBilan`, `lib/libellesBibliotheque`, `lib/patientApi`, `lib/push`, `lib/sentry`, `lib/settingsPraticien`, `lib/structureApi`.
