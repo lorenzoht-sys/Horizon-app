@@ -219,6 +219,29 @@ async function main() {
     // Pas de code ni de nom dans les logs : seulement le rang et le compte.
     console.log(`Bénéficiaire de démo n°${codesDemo.indexOf(code) + 1} désarchivé : ${modifiees.length}`);
   }
+
+  // ── 6. Programmes et cours laissés par des runs interrompus ───────────
+  // Ces tests créent une ligne au titre reconnaissable et la suppriment en
+  // fin de test. Un run interrompu (ou deux runs simultanés, avant le
+  // `concurrency` de ci.yml) laisse la ligne : au run suivant, le titre
+  // existe en double et l'assertion échoue en « strict mode violation ».
+  // Constaté le 2026-11-10 : 2 programmes « … généré desktop (édité) » et
+  // 7 cours collectifs de test sur le staging.
+  //
+  // Chaque filtre est un préfixe propre aux tests (aucune ligne du seed ne
+  // le porte — vérifié dans scripts/seed-staging.sql). Les tables filles
+  // suivent par ON DELETE CASCADE.
+  const prefixes: [table: string, prefixe: string][] = [
+    ['programmes', 'Programme Équilibre généré desktop'], // e2e/16-generation-ia-desktop
+    ['programmes', 'Programme E2E '],                     // e2e/05, 15, mobile/21, mobile/23
+    ['cours_collectifs', 'RLS-E2E cours mobile'],         // e2e/mobile/17
+  ];
+  for (const [table, prefixe] of prefixes) {
+    await supprimer(
+      `${table}?titre=like.${encodeURIComponent(`${prefixe}*`)}`,
+      `Résidus « ${prefixe.trim()}… » supprimés (${table})`,
+    );
+  }
 }
 
 main().catch(err => {
