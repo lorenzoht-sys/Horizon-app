@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { creerPraticien } from '../lib/acces/praticien';
 import AuthLeftPanel from '../components/layout/AuthLeftPanel';
 import LegalFooterLinks from '../components/legal/LegalFooterLinks';
 import './LoginPage.css';
@@ -74,10 +75,7 @@ export default function RegisterPage() {
 
     // Étape 2 — Créer la ligne praticien
     if (data.user) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('praticiens')
-        .insert({
+      await creerPraticien({
           id:     data.user.id,
           email:  email.trim(),
           prenom: prenom.trim(),

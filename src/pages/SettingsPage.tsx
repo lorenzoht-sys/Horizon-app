@@ -7,6 +7,9 @@ import PageWrapper from '../components/layout/PageWrapper';
 import type { Indisponibilite, JourSemaine, Participant } from '../types';
 import { SectionApplication } from '../components/pwa/PWAComponents';
 import { supabase } from '../lib/supabase';
+import { lirePraticien, majTokenPlanning } from '../lib/acces/praticien';
+import { listerIndisponibilites, ajouterIndisponibilite, supprimerIndisponibilite } from '../lib/acces/indisponibilites';
+import { exporterParticipantsComplets, restaurerParticipant, restaurerBilan, restaurerProgramme } from '../lib/acces/sauvegarde';
 import { utilisateurCourant } from '../lib/session';
 import {
   type SettingsPraticien,
@@ -110,10 +113,7 @@ function SectionIndisponibilites() {
 
   useEffect(() => {
     if (!supabase) return;
-    supabase
-      .from('indisponibilites')
-      .select('*')
-      .order('jour')
+    listerIndisponibilites()
       .then(({ data, error }) => {
         if (error) { console.error('Erreur chargement indispos:', error); return; }
         setIndispos((data ?? []).map(row => ({
@@ -129,7 +129,7 @@ function SectionIndisponibilites() {
 
   async function handleSave(item: Indisponibilite) {
     if (supabase) {
-      const { error } = await supabase.from('indisponibilites').insert({
+      const { error } = await ajouterIndisponibilite({
         id: item.id,
         jour: item.jour,
         heure_debut: item.heureDebut,
@@ -146,7 +146,7 @@ function SectionIndisponibilites() {
 
   async function handleDelete(id: string) {
     if (supabase) {
-      await supabase.from('indisponibilites').delete().eq('id', id);
+      await supprimerIndisponibilite(id);
     }
     setIndispos(prev => prev.filter(i => i.id !== id));
   }
@@ -212,10 +212,7 @@ function SectionDonnees() {
     if (!supabase) { toast.error('Supabase non configuré'); return; }
     setExporting(true);
     try {
-      const { data, error } = await supabase
-        .from('participants')
-        .select('*, bilans(*), programmes(*)')
-        .order('created_at', { ascending: false });
+      const { data, error } = await exporterParticipantsComplets();
       if (error) throw error;
       const mapped = (data ?? []).map(dbToParticipant);
       const blob = new Blob([JSON.stringify(mapped, null, 2)], { type: 'application/json' });
@@ -272,7 +269,7 @@ function SectionDonnees() {
         // depuis le 2026-09-13 : RE-créer une fiche supprimée qui n'a pas de
         // consentement RGPD est refusé (trigger BEFORE INSERT) — restaurer une
         // fiche qui existe encore reste possible.
-        const { error: erreurFiche } = await supabase.from('participants').upsert(participantToDb(rest));
+        const { error: erreurFiche } = await restaurerParticipant(participantToDb(rest));
         if (erreurFiche) {
           refuses++;
           premiereErreur ||= erreurFiche.message;
@@ -280,10 +277,10 @@ function SectionDonnees() {
         }
 
         for (const b of pBilans ?? []) {
-          await supabase.from('bilans').upsert(bilanToDb(p.id, b));
+          await restaurerBilan(bilanToDb(p.id, b));
         }
         for (const prog of (pProgs ?? []) as Parameters<typeof programmeToDb>[0][]) {
-          await supabase.from('programmes').upsert({
+          await restaurerProgramme({
             ...programmeToDb(prog),
             date_creation: (prog as { dateCreation?: string }).dateCreation ?? new Date().toISOString().slice(0, 10),
           });
@@ -736,12 +733,7 @@ function SectionExportPlanning() {
     void (async () => {
       const user = await utilisateurCourant();
       if (!user) { setLoading(false); return; }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
-        .from('praticiens')
-        .select('token_planning_ics')
-        .eq('id', user.id)
-        .single();
+      const { data } = await lirePraticien(user.id, 'token_planning_ics');
       setToken(data?.token_planning_ics ?? null);
       setLoading(false);
     })();
@@ -764,7 +756,7 @@ function SectionExportPlanning() {
     const user = await utilisateurCourant();
     if (!user) { setWorking(false); toast.error('Utilisateur non connecté'); return; }
     const nouveauToken = genToken();
-    const { error } = await supabase.from('praticiens').update({ token_planning_ics: nouveauToken }).eq('id', user.id);
+    const { error } = await majTokenPlanning(user.id, nouveauToken);
     setWorking(false);
     if (error) { toast.error(`Erreur : ${error.message}`); return; }
     setToken(nouveauToken);
@@ -856,12 +848,7 @@ export default function SettingsPage() {
     void (async () => {
       const user = await utilisateurCourant();
       if (!user) { setLoading(false); return; }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
-        .from('praticiens')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      const { data } = await lirePraticien(user.id, '*');
       if (data) {
         const charge = rowToSettings(data);
         setForm(charge);

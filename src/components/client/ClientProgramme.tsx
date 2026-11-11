@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { Programme, Ressenti, CategorieExercice } from '../../types';
-import { loadExercices } from '../../data/exercices';
+import { loadExercices } from '../../lib/bibliothequeExercices';
 import YoutubePlayer from '../YoutubePlayer';
 import { CheckCircle, Circle, Send, Play, X } from 'lucide-react';
 

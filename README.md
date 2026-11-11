@@ -49,6 +49,8 @@ pas (mais l'app praticien fonctionne via le client Supabase `anon`).
 
 ## Structure du dépôt
 
+Vue d'ensemble de l'architecture : **`docs/ARCHITECTURE.md`**. Qui lit quelle table : `docs/CARTOGRAPHIE-DONNEES.md`.
+
 ```
 src/            Application praticien (React) — pages, composants, hooks Supabase
 api/            Fonctions serverless Vercel ("1 fichier = 1 route")

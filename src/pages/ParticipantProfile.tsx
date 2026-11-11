@@ -23,7 +23,7 @@ import { ProgrammeWizardModal } from '../components/programme/ProgrammeWizard';
 import { ConfigIAModal, PreviewIAModal, OBJECTIFS_IA } from '../components/programme/ProgrammeIA';
 import { genererProgrammeStructure, versPayloadCreateProgramme, type ProgrammeIA } from '../utils/genererProgrammeIA';
 import { exportProgrammePDF } from '../utils/exportPDF';
-import { loadExercicesPraticien } from '../data/exercices';
+import { loadExercicesPraticien } from '../lib/bibliothequeExercices';
 import { useContrats } from '../hooks/useContrats';
 import { useStructures } from '../hooks/useStructures';
 import { useAgenda } from '../hooks/useAgenda';

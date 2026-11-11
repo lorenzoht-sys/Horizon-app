@@ -7,13 +7,13 @@ Ne pas modifier à la main : relancer le script après chaque chantier.
 
 | Élément | Nombre |
 | --- | --- |
-| Fichiers du front (hors tests) | 264 (64 966 lignes) |
+| Fichiers du front (hors tests) | 271 (65 072 lignes) |
 | Routes API (`api/`) | 12 |
 | Edge Functions | 3 |
 | Tables (schéma public) | 62 |
 | Tables lues ou écrites directement par le front | 47 |
 | Fonctions SQL appelées en RPC par le front | 8 |
-| Tests unitaires | 91 fichiers |
+| Tests unitaires | 92 fichiers |
 | Scénarios e2e | 39 fichiers |
 
 ## Table par table
@@ -24,61 +24,61 @@ Functions (clé `service_role`, RLS contournée : le contrôle est dans le code)
 
 | Table | Politiques RLS | Triggers | Front | Serveur |
 | --- | --- | --- | --- | --- |
-| `assistant_logs` | 0 | 1 | pages/AssistantPage, pages/mobile/AppMobile | — |
+| `assistant_logs` | 0 | 1 | lib/acces/assistant | — |
 | `audit_logs` | 2 | 1 | — | api/_lib/patientAuth |
-| `bilans` | 5 | 2 | hooks/useParticipants, pages/SettingsPage | api/patient/me |
+| `bilans` | 5 | 2 | hooks/useParticipants, lib/acces/sauvegarde | api/patient/me |
 | `bilans_auto` | 1 | 2 | hooks/useBilansAuto | — |
 | `bilans_brouillons` | 1 | 0 | hooks/useBrouillonBilan | — |
 | `ca_externe` | 1 | 1 | hooks/useChiffreAffaires | — |
 | `categories_seance` | 1 | 2 | hooks/useCategoriesSeance | — |
 | `claude_rate_limit` | 0 | 0 | — | api/_lib/rateLimit |
-| `comptes_rendus_seances` | 5 | 2 | hooks/useCompteRenduSeance, pages/AssistantPage | — |
+| `comptes_rendus_seances` | 5 | 2 | hooks/useCompteRenduSeance, lib/acces/assistant | — |
 | `compteurs_facture` | 0 | 0 | — | — |
-| `contrats` | 5 | 2 | components/participant/SectionPayeurContrat, hooks/useContrats | api/_lib/facturationMensuelle, api/_lib/renouvellementContrats, api/seances/supprimer-planifiees, supabase/functions/facturation-envoi/index |
+| `contrats` | 5 | 2 | hooks/useContrats, lib/acces/contrats | api/_lib/facturationMensuelle, api/_lib/renouvellementContrats, api/seances/supprimer-planifiees, supabase/functions/facturation-envoi/index |
 | `cours_collectifs` | 2 | 0 | hooks/useCoursCollectifs | api/_lib/planningIcs |
-| `documents_partages` | 1 | 0 | pages/AssistantPage | api/structure/data |
-| `documents_patient` | 2 | 1 | hooks/useDocumentsBeneficiaire, pages/AssistantPage | api/patient/me |
-| `dossier_exercice_membres` | 1 | 0 | data/exercices | — |
-| `dossiers_exercices` | 1 | 0 | data/exercices | — |
+| `documents_partages` | 1 | 0 | lib/acces/assistant | api/structure/data |
+| `documents_patient` | 2 | 1 | hooks/useDocumentsBeneficiaire, lib/acces/assistant | api/patient/me |
+| `dossier_exercice_membres` | 1 | 0 | lib/bibliothequeExercices | — |
+| `dossiers_exercices` | 1 | 0 | lib/bibliothequeExercices | — |
 | `envois_factures` | 1 | 1 | — | supabase/functions/facturation-envoi/index |
 | `evenements_agenda` | 4 | 2 | hooks/useEvenementsAgenda | api/_lib/planningIcs |
 | `exercices_libres_activations` | 2 | 0 | hooks/useActivitesHorsProgramme | api/patient/activite, api/patient/me |
 | `exercices_libres_validations` | 2 | 0 | hooks/useActivitesHorsProgramme | api/patient/activite, api/patient/me |
-| `exercices_personnalises` | 1 | 0 | data/exercices | — |
-| `exercices_realises` | 4 | 0 | lib/suiviBeneficiaire, pages/AssistantPage | api/patient/me, api/patient/seance |
+| `exercices_personnalises` | 1 | 0 | lib/bibliothequeExercices | — |
+| `exercices_realises` | 4 | 0 | lib/acces/assistant, lib/suiviBeneficiaire | api/patient/me, api/patient/seance |
 | `factures` | 2 | 11 | hooks/useDocumentsBeneficiaire, hooks/useFacturesAValider | api/_lib/facturationMensuelle, supabase/functions/facturation-envoi/index, supabase/functions/facturation-pdf/index |
 | `factures_suivi` | 1 | 0 | hooks/useFactures | api/structure/data |
-| `indisponibilites` | 4 | 1 | hooks/useIndispos, pages/SettingsPage | — |
+| `indisponibilites` | 4 | 1 | hooks/useIndispos, lib/acces/indisponibilites | — |
 | `lignes_facture` | 2 | 1 | hooks/useFacturesAValider | supabase/functions/facturation-pdf/index |
 | `logos_factures` | 0 | 1 | — | supabase/functions/facturation-pdf/index |
-| `notes_seances` | 5 | 2 | hooks/useJournalSeance, pages/AssistantPage | — |
+| `notes_seances` | 5 | 2 | hooks/useJournalSeance, lib/acces/assistant | — |
 | `organisation_demande_attempts` | 0 | 0 | — | api/organisation |
 | `organisation_invitations` | 2 | 0 | — | — |
 | `organisation_membres` | 4 | 0 | — | — |
 | `organisations` | 2 | 0 | — | api/organisation |
 | `paiements` | 4 | 3 | — | — |
-| `participants` | 5 | 5 | hooks/useChiffreAffaires, hooks/useParticipants, hooks/useSuiviSeances, pages/SettingsPage | api/_lib/participantsArchives, api/_lib/patientSession, api/_lib/renouvellementContrats, api/patient/activite, api/patient/me, api/patient/retour-seance, api/structure/data, supabase/functions/facturation-envoi/index |
+| `participants` | 5 | 5 | hooks/useChiffreAffaires, hooks/useParticipants, hooks/useSuiviSeances, lib/acces/sauvegarde | api/_lib/participantsArchives, api/_lib/patientSession, api/_lib/renouvellementContrats, api/patient/activite, api/patient/me, api/patient/retour-seance, api/structure/data, supabase/functions/facturation-envoi/index |
 | `participations_cours_collectifs` | 2 | 0 | hooks/useCoursCollectifs | api/_lib/coursPatient, api/patient/activite |
 | `patient_activite_rate_limit` | 0 | 0 | — | api/_lib/activiteRateLimit |
 | `patient_login_attempts` | 0 | 0 | — | api/_lib/patientAuth |
 | `praticien_push_subscriptions` | 4 | 0 | lib/praticienPush | api/_lib/notifications |
-| `praticiens` | 4 | 2 | App, components/layout/Sidebar, hooks/useDocumentsBeneficiaire, hooks/useFacturesAValider, hooks/useProfilFacturation, lib/settingsPraticien, pages/OnboardingPage, pages/RegisterPage, pages/SettingsPage | api/_lib/planningIcs, api/organisation, api/patient/me, api/structure/data |
-| `programme_exercices` | 3 | 0 | hooks/useProgrammeV2, pages/AssistantPage | api/patient/me, api/patient/seance |
+| `praticiens` | 4 | 2 | App, hooks/useDocumentsBeneficiaire, hooks/useFacturesAValider, hooks/useProfilFacturation, lib/acces/praticien, lib/settingsPraticien | api/_lib/planningIcs, api/organisation, api/patient/me, api/structure/data |
+| `programme_exercices` | 3 | 0 | hooks/useProgrammeV2, lib/acces/assistant | api/patient/me, api/patient/seance |
 | `programme_modele_exercices` | 1 | 0 | hooks/useProgrammesModeles | — |
 | `programme_modele_planning` | 1 | 0 | hooks/useProgrammesModeles | — |
 | `programme_modele_seances` | 1 | 0 | hooks/useProgrammesModeles | — |
-| `programme_planning` | 3 | 0 | hooks/useProgrammeV2, pages/AssistantPage | api/patient/me |
-| `programme_seances` | 3 | 0 | hooks/useProgrammeV2, pages/AssistantPage | api/patient/me, api/patient/seance |
-| `programmes` | 5 | 2 | hooks/useProgramme, hooks/useProgrammeV2, pages/AssistantPage, pages/SettingsPage | api/patient/me, api/patient/seance |
+| `programme_planning` | 3 | 0 | hooks/useProgrammeV2, lib/acces/assistant | api/patient/me |
+| `programme_seances` | 3 | 0 | hooks/useProgrammeV2, lib/acces/assistant | api/patient/me, api/patient/seance |
+| `programmes` | 5 | 2 | hooks/useProgramme, hooks/useProgrammeV2, lib/acces/assistant, lib/acces/sauvegarde | api/patient/me, api/patient/seance |
 | `programmes_modeles` | 1 | 2 | hooks/useProgrammesModeles | — |
 | `push_subscriptions` | 2 | 0 | lib/suiviBeneficiaire | api/_lib/notifications, api/patient/push-subscribe |
 | `rappel_preferences` | 1 | 2 | hooks/useRappelPreferences | api/cron/rappels |
 | `rappels_envoyes` | 2 | 0 | — | api/cron/rappels |
 | `retours_seance` | 2 | 0 | lib/suiviBeneficiaire | api/patient/retour-seance |
-| `seances` | 5 | 7 | hooks/useAgenda, lib/liaisonSeanceBilan, pages/AssistantPage | api/_lib/planningIcs, api/_lib/renouvellementContrats, api/cron/rappels, api/patient/activite, api/patient/me, api/seances/supprimer-planifiees, api/structure/data |
-| `seances_patient` | 4 | 0 | hooks/useProgrammeV2, lib/suiviBeneficiaire, pages/AssistantPage | api/patient/me, api/patient/retour-seance, api/patient/seance |
+| `seances` | 5 | 7 | hooks/useAgenda, lib/acces/assistant, lib/liaisonSeanceBilan | api/_lib/planningIcs, api/_lib/renouvellementContrats, api/cron/rappels, api/patient/activite, api/patient/me, api/seances/supprimer-planifiees, api/structure/data |
+| `seances_patient` | 4 | 0 | hooks/useProgrammeV2, lib/acces/assistant, lib/suiviBeneficiaire | api/patient/me, api/patient/retour-seance, api/patient/seance |
 | `structure_access_logs` | 1 | 0 | — | api/_lib/structureAuth |
-| `structures` | 1 | 0 | hooks/useStructures, pages/StructureDetail | api/_lib/structureAuth |
+| `structures` | 1 | 0 | hooks/useStructures, lib/acces/structures | api/_lib/structureAuth |
 | `tarifs_contrats` | 2 | 4 | hooks/useTarifsContrat | — |
 | `templates_structure` | 1 | 0 | hooks/useTemplatesStructure | — |
 | `tests_etalons_activations` | 2 | 0 | hooks/useActivitesHorsProgramme | api/patient/activite, api/patient/me |
@@ -110,10 +110,10 @@ Plus les accès sont regroupés dans `hooks/`, plus un changement de source de d
 | Couche | Fichiers avec accès direct | Appels `.from()` |
 | --- | --- | --- |
 | `src/hooks/` | 27 | 149 |
-| `src/pages/` | 6 | 29 |
-| `src/components/` | 2 | 3 |
-| `src/lib/` | 4 | 11 |
-| `src/data/` | 1 | 9 |
+| `src/pages/` | 0 | 0 |
+| `src/components/` | 0 | 0 |
+| `src/lib/` | 11 | 46 |
+| `src/data/` | 0 | 0 |
 | `src/utils/` | 0 | 0 |
 
 Appels à Supabase Auth (`supabase.auth.*`) : `App`, `lib/session`, `lib/settingsPraticien`, `lib/supabase`, `pages/ForgotPasswordPage`, `pages/LoginPage`, `pages/RegisterPage`, `pages/ResetPasswordPage`.
@@ -167,11 +167,11 @@ Ce sont les zones où une modification a le plus de chances d'avoir des effets d
 | `src/pages/EspacePatient.tsx` | 3 090 | — |
 | `src/pages/ParticipantProfile.tsx` | 2 422 | — |
 | `src/components/participant/ParticipantForm.tsx` | 2 371 | — |
-| `src/data/exercices.ts` | 2 301 | exercices_personnalises, dossiers_exercices, dossier_exercice_membres |
-| `src/pages/mobile/AppMobile.tsx` | 2 284 | assistant_logs |
+| `src/pages/mobile/AppMobile.tsx` | 2 285 | — |
+| `src/data/exercices.ts` | 1 947 | — |
 | `src/pages/StatsPage.tsx` | 1 532 | — |
-| `src/pages/AssistantPage.tsx` | 1 277 | seances, comptes_rendus_seances, documents_patient, notes_seances, programmes, programme_seances, programme_planning, programme_exercices, seances_patient, exercices_realises, assistant_logs, documents_partages |
-| `src/pages/SettingsPage.tsx` | 1 226 | praticiens, participants, indisponibilites, bilans, programmes |
+| `src/pages/AssistantPage.tsx` | 1 272 | — |
+| `src/pages/SettingsPage.tsx` | 1 213 | — |
 | `src/types/index.ts` | 1 211 | — |
 | `src/components/programme/ProgrammeWizard.tsx` | 1 023 | — |
 | `src/pages/AgendaV2Page.tsx` | 1 022 | — |
@@ -179,9 +179,9 @@ Ce sont les zones où une modification a le plus de chances d'avoir des effets d
 | `src/pages/PortailStructure.tsx` | 893 | — |
 | `src/components/participant/ContratsTab.tsx` | 890 | — |
 | `src/components/bilan/FormulaireBilanInitial.tsx` | 812 | — |
-| `src/pages/ExercicesPage.tsx` | 812 | — |
+| `src/pages/ExercicesPage.tsx` | 807 | — |
 
 ## Couverture de tests
 
-- 91 fichiers de tests unitaires (Vitest), 39 scénarios e2e (Playwright), plus le harnais RLS (`tests/security/`).
-- Modules de `src/lib/` sans test unitaire à côté (9 sur 52) : `lib/analyse-tournee`, `lib/anamnese`, `lib/liaisonSeanceBilan`, `lib/libellesBibliotheque`, `lib/patientApi`, `lib/push`, `lib/sentry`, `lib/settingsPraticien`, `lib/structureApi`.
+- 92 fichiers de tests unitaires (Vitest), 39 scénarios e2e (Playwright), plus le harnais RLS (`tests/security/`).
+- Modules de `src/lib/` sans test unitaire à côté (16 sur 59) : `lib/acces/assistant`, `lib/acces/contrats`, `lib/acces/indisponibilites`, `lib/acces/praticien`, `lib/acces/sauvegarde`, `lib/acces/structures`, `lib/analyse-tournee`, `lib/anamnese`, `lib/bibliothequeExercices`, `lib/liaisonSeanceBilan`, `lib/libellesBibliotheque`, `lib/patientApi`, `lib/push`, `lib/sentry`, `lib/settingsPraticien`, `lib/structureApi`.

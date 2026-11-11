@@ -96,6 +96,16 @@ export const supabase = SUPABASE_URL && SUPABASE_ANON_KEY
 
 export const isSupabaseConfigured = Boolean(supabase);
 
+/**
+ * Client Supabase non nul, pour la couche d'accès aux données
+ * (src/lib/acces/, src/hooks/). Lève si l'application tourne sans Supabase
+ * configuré : l'appelant doit avoir vérifié `supabase` avant.
+ */
+export function clientSupabase() {
+  if (!supabase) throw new Error('Supabase non configuré');
+  return supabase;
+}
+
 // En-tête Authorization à ajouter aux appels /api/claude (T6 — sécurisation
 // Horizon) : le proxy IA vérifie cette session praticien avant d'utiliser
 // la clé Anthropic. Objet vide si aucune session (le serveur renverra 401).

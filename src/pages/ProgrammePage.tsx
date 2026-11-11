@@ -16,7 +16,7 @@ import PageWrapper from '../components/layout/PageWrapper';
 import { toast } from 'sonner';
 import type { JourProgramme, ProgrammeV2, Participant, Bilan } from '../types';
 import { JOURS_PROGRAMME as JP } from '../types';
-import { loadExercicesPraticien } from '../data/exercices';
+import { loadExercicesPraticien } from '../lib/bibliothequeExercices';
 import { TESTS_ETALONS } from '../data/testsEtalons';
 import type { Exercice } from '../types';
 import { chargerSettingsPraticien } from '../lib/settingsPraticien';

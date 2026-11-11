@@ -5,7 +5,7 @@ import { Plus, Trash2, X, Search, Activity, ChevronRight, ChevronLeft } from 'lu
 import { toast } from 'sonner';
 import type { TypeProgramme, JourProgramme, Participant, Exercice } from '../../types';
 import { TYPE_PROGRAMME_LABELS as TPL, JOURS_PROGRAMME as JP, CATEGORIE_EXERCICE_LABELS as CEL } from '../../types';
-import { loadExercicesPraticien, saveExercicePersonnalise } from '../../data/exercices';
+import { loadExercicesPraticien, saveExercicePersonnalise } from '../../lib/bibliothequeExercices';
 import BoutonReformulation from '../ui/BoutonReformulation';
 import { useDevice } from '../../hooks/useDevice';
 import { identiteDe } from '../../utils/pseudonymiserIA';

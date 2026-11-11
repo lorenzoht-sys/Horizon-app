@@ -35,7 +35,7 @@ La CI (`.github/workflows/ci.yml`) enchaîne build, `typecheck:api`, `typecheck:
 ## Structure
 
 - `src/pages/` : pages desktop. `src/pages/mobile/AppMobile.tsx` porte les écrans mobiles natifs.
-- `src/lib/` : logique métier pure, testée en `*.test.ts` à côté du fichier. `src/lib/routesMobile.ts` gère le routage mobile.
+- `src/lib/` : logique métier pure, testée en `*.test.ts` à côté du fichier. `src/lib/acces/` : requêtes Supabase hors hooks. `src/lib/routesMobile.ts` gère le routage mobile.
 - `src/components/`, `src/hooks/` (hooks Supabase `useXxx`), `src/utils/`, `src/data/` (référentiels de tests).
 - `api/patient/`, `api/structure/`, `api/cron/`, `api/planning/`, `api/seances/` : les routes. Les tests unitaires dans `api/` hors `_lib` sont préfixés `_` (ex. `api/patient/_me.test.ts`) pour ne pas devenir des fonctions Vercel.
 - `supabase/migrations/AAAAMMJJHHMMSS_description.sql` : la seule voie de changement de schéma, jamais Supabase Studio. `20260528000000_baseline_schema_prod.sql` recrée la production ; les anciennes migrations sont dans `supabase/migrations_archive/`. Procédure : `docs/SCHEMA.md`.
@@ -49,6 +49,7 @@ La CI (`.github/workflows/ci.yml`) enchaîne build, `typecheck:api`, `typecheck:
 - Les migrations sont idempotentes (`IF NOT EXISTS`, `DROP POLICY IF EXISTS` puis `CREATE POLICY`).
 - Variables serveur (`SUPABASE_SERVICE_ROLE_KEY`, `PATIENT_SESSION_SECRET`, `ANTHROPIC_API_KEY`) : jamais de préfixe `VITE_`.
 - Avant un merge sur `main` : `CHECKLIST_RELEASE.md`.
+- Couches du front (`docs/ARCHITECTURE.md`) : aucune requête Supabase dans `src/pages/` ni `src/components/` (elles vont dans `src/hooks/` ou `src/lib/acces/`) ; l'identité du praticien se lit par `utilisateurCourant()` (`src/lib/session.ts`). Deux tests le vérifient.
 
 ## Règles de travail (à respecter systématiquement)
 

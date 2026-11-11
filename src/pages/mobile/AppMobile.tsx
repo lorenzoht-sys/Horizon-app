@@ -30,6 +30,7 @@ import {
 import { CLE_JOUR_PAR_DOW, LABEL_TYPE_EVENEMENT, formatDate as formatDateAgenda, absenceSignaleeAffichable, couleurCategorieDe, LABEL_TYPE, type ChoixSerie } from '../../lib/agendaCommun';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, getAuthHeader } from '../../lib/supabase';
+import { ajouterJournalAssistant } from '../../lib/acces/assistant';
 import { utilisateurCourant } from '../../lib/session';
 import {
   EVENT_SETTINGS_PRATICIEN,
@@ -1946,7 +1947,7 @@ function EcranAssistant({
       setMessages(prev => [...prev, { role: 'assistant', content: responseText, ...(brut != null ? { contenuIA: brut } : {}) }]);
       if (supabase) {
         try {
-          await supabase.from('assistant_logs').insert({
+          await ajouterJournalAssistant({
             patient_id: selectedPatient?.id ?? null,
             question: trimmed,
             reponse: responseText,
