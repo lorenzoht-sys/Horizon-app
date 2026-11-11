@@ -127,6 +127,23 @@ test.describe('Rapport d\'évolution sur mobile (route fusionnée /comparaison)'
 
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
       expect(overflow, 'ComparaisonPage ne doit pas déborder horizontalement à 390px').toBe(false);
+
+      // ── Export « Rapport PDF » (html2canvas + jspdf) ────────────────────
+      // Vérifié ici, et non dans 37-exports-sous-csp, parce que ce test est
+      // le seul à garantir les 2 bilans que la page exige : un second test
+      // qui créerait et supprimerait des bilans sur le même bénéficiaire
+      // entrerait en course avec celui-ci (les projets tournent en parallèle).
+      // Ajouté le 2026-11-11 avec la CSP appliquée (PR #184) : l'export doit
+      // sortir sans violation de la politique.
+      const violationsCsp: string[] = [];
+      page.on('console', msg => {
+        const texte = msg.text();
+        if (/Content Security Policy/i.test(texte) && !/vercel\.live/.test(texte)) violationsCsp.push(texte);
+      });
+      const telechargement = page.waitForEvent('download', { timeout: 30000 });
+      await page.getByRole('button', { name: 'Rapport PDF' }).click();
+      expect((await telechargement).suggestedFilename()).toMatch(/^Rapport_Evolution_.*\.pdf$/);
+      expect(violationsCsp).toEqual([]);
     } finally {
       // ── Nettoyage : supprime uniquement les bilans créés par ce test ───
       if (pasCrees.length > 0) {

@@ -27,9 +27,18 @@ test.describe('Export PDF d\'un bilan', () => {
     // `waitForURL` attend par défaut.
     await expect(page).toHaveURL(/\/bilan\/[0-9a-fA-F-]+$/);
 
+    // Erreurs de console gardées pour le message d'échec : si le PDF ne sort
+    // pas, la cause (ressource bloquée par la CSP, exception du générateur)
+    // est dans la console, pas dans « waiting for event download ».
+    const erreursConsole: string[] = [];
+    page.on('console', msg => { if (msg.type() === 'error') erreursConsole.push(msg.text()); });
+    page.on('pageerror', err => erreursConsole.push(`pageerror: ${err.message}`));
+
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: /Fiche bilan PDF/ }).click();
-    const download = await downloadPromise;
+    const download = await downloadPromise.catch(err => {
+      throw new Error(`${(err as Error).message}\nConsole du navigateur :\n${erreursConsole.join('\n') || '(aucune erreur)'}`);
+    });
 
     expect(download.suggestedFilename()).toMatch(/\.pdf$/i);
   });

@@ -82,7 +82,7 @@ test('les en-têtes de sécurité de vercel.json sont appliqués', async () => {
   const r = await fetch(`${base}/patient/accueil`);
   assert.equal(r.headers.get('x-frame-options'), 'DENY');
   assert.equal(r.headers.get('referrer-policy'), 'no-referrer');
-  assert.ok(r.headers.get('content-security-policy-report-only'));
+  assert.ok(r.headers.get('content-security-policy'));
   const api = await fetch(`${base}/api/patient/me`);
   assert.equal(api.headers.get('cache-control'), 'no-store');
 });

@@ -26,7 +26,10 @@ import { skipUnlessPraticien, loginPraticien, env } from '../helpers.js';
 function estBruitCorsPolicesTierces(texte: string): boolean {
   return (
     (texte.includes('blocked by CORS policy') && texte.includes('x-vercel-set-bypass-cookie')) ||
-    texte === 'Failed to load resource: net::ERR_FAILED'
+    texte === 'Failed to load resource: net::ERR_FAILED' ||
+    // Barre d'outils des Previews Vercel : injectée par la plateforme, bloquée
+    // par la CSP de l'application (attendu). Elle n'existe pas en production.
+    (texte.includes('https://vercel.live/') && texte.includes('Content Security Policy'))
   );
 }
 
