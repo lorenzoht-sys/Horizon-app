@@ -72,6 +72,16 @@ jobs:
     # ubuntu26.04 ») : l'e2e échouait avant de lancer un seul test. À relever
     # en même temps que la version de Playwright.
     runs-on: ubuntu-24.04
+    # Un seul e2e à la fois, toutes branches confondues (2026-11-10) : tous les
+    # runs partagent le même staging (mêmes bénéficiaires de démo, même
+    # rate-limit de connexion patient). Deux runs simultanés se marchent
+    # dessus : constaté le 2026-11-10, deux PR lancées à une minute d'écart
+    # ont échoué sur des tests différents, l'une archivant le bénéficiaire que
+    # l'autre cherchait. Les runs suivants attendent leur tour ; GitHub ne
+    # garde qu'un run en attente par groupe (le plus récent).
+    concurrency:
+      group: e2e-staging
+      cancel-in-progress: false
     if: >-
       vars.E2E_BASE_URL != '' &&
       (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')

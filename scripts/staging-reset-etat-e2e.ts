@@ -2,7 +2,8 @@
 //
 // Remet, sur STAGING, le jeu de démo dans son état de départ AVANT un run
 // Playwright : séances du jour, brouillons de bilan, bilans trimestriels et
-// participants créés par les runs précédents.
+// participants créés par les runs précédents, bénéficiaires de démo restés
+// archivés.
 //
 // L'en-tête annonçait « les séances patient enregistrées AUJOURD'HUI » et
 // nommait un fichier qui n'existe pas (`staging-reset-seances-du-jour.ts`) :
@@ -180,6 +181,67 @@ async function main() {
     'participants?prenom=eq.Test&nom=like.E2E*',
     'Participants E2E supprimés',
   );
+
+  // ── 5. Bénéficiaires de démo restés archivés ──────────────────────────
+  // `e2e/mobile/16-archivage-beneficiaire` archive Julien Bernard puis le
+  // désarchive par l'interface, dans un `finally`. Si le run est interrompu
+  // (annulation, crash du navigateur, panne de runner), il reste archivé :
+  // il disparaît de la liste active et tous les tests qui l'y cherchent
+  // échouent, run après run, sans pouvoir s'en sortir seuls. Constaté le
+  // 2026-11-10 : 11 tests en échec sur `main`, tous en attente de son nom.
+  //
+  // Le filtre porte sur le CODE D'ACCÈS exact des deux bénéficiaires de démo
+  // (index unique `idx_participants_code_acces`) ET sur `archive=true` :
+  // aucune autre fiche ne peut être touchée, et rien n'est écrit si l'état
+  // est déjà bon. Même écriture que `archiverParticipant(id, false)`
+  // (src/hooks/useParticipants.ts) : le flag et sa date ensemble.
+  const codesDemo = [
+    process.env.E2E_PATIENT_CODE ?? 'CAME2E26',
+    process.env.E2E_PATIENT_CODE_2 ?? 'JUNE2E27',
+  ];
+  for (const code of codesDemo) {
+    if (!/^[A-Z0-9]{4,12}$/.test(code)) {
+      throw new Error("Code d'accès de démo au format inattendu : désarchivage refusé.");
+    }
+    const reponse = await fetch(
+      `${url}/rest/v1/participants?code_acces=eq.${code}&archive=eq.true`,
+      {
+        method: 'PATCH',
+        headers: { ...entetes, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archive: false, date_archivage: null }),
+      },
+    );
+    if (!reponse.ok) {
+      const corps = await reponse.text().catch(() => '');
+      throw new Error(`Désarchivage du bénéficiaire de démo refusé (HTTP ${reponse.status}) : ${corps.slice(0, 300)}`);
+    }
+    const modifiees = (await reponse.json().catch(() => [])) as unknown[];
+    // Pas de code ni de nom dans les logs : seulement le rang et le compte.
+    console.log(`Bénéficiaire de démo n°${codesDemo.indexOf(code) + 1} désarchivé : ${modifiees.length}`);
+  }
+
+  // ── 6. Programmes et cours laissés par des runs interrompus ───────────
+  // Ces tests créent une ligne au titre reconnaissable et la suppriment en
+  // fin de test. Un run interrompu (ou deux runs simultanés, avant le
+  // `concurrency` de ci.yml) laisse la ligne : au run suivant, le titre
+  // existe en double et l'assertion échoue en « strict mode violation ».
+  // Constaté le 2026-11-10 : 2 programmes « … généré desktop (édité) » et
+  // 7 cours collectifs de test sur le staging.
+  //
+  // Chaque filtre est un préfixe propre aux tests (aucune ligne du seed ne
+  // le porte — vérifié dans scripts/seed-staging.sql). Les tables filles
+  // suivent par ON DELETE CASCADE.
+  const prefixes: [table: string, prefixe: string][] = [
+    ['programmes', 'Programme Équilibre généré desktop'], // e2e/16-generation-ia-desktop
+    ['programmes', 'Programme E2E '],                     // e2e/05, 15, mobile/21, mobile/23
+    ['cours_collectifs', 'RLS-E2E cours mobile'],         // e2e/mobile/17
+  ];
+  for (const [table, prefixe] of prefixes) {
+    await supprimer(
+      `${table}?titre=like.${encodeURIComponent(`${prefixe}*`)}`,
+      `Résidus « ${prefixe.trim()}… » supprimés (${table})`,
+    );
+  }
 }
 
 main().catch(err => {
