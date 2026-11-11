@@ -22,7 +22,7 @@ pas un audit externe ni un test d'intrusion.
 ### Accès
 | Espace | Mécanisme | Protections |
 | --- | --- | --- |
-| Praticien | Supabase Auth, e-mail et mot de passe | RLS par `auth.uid()` ; page d'inscription retirée de l'application, comptes créés sur invitation |
+| Praticien | Supabase Auth, e-mail et mot de passe | RLS par `auth.uid()` ; page d'inscription retirée de l'application, comptes créés sur invitation ; déconnexion après 60 minutes d'inactivité, préavis de 2 minutes |
 | Patient | code de 8 caractères tiré par `crypto` (alphabet de 31, tirage sans biais, 39,7 bits), puis jeton signé HS256 valable 30 jours | 5 tentatives par 15 minutes et par IP, connexions journalisées ; chaque route patient tire l'identité du jeton, jamais du corps de la requête |
 | Structure | jeton de 256 bits en en-tête, avec date d'expiration | accès journalisés, données limitées aux bénéficiaires de la structure |
 | Administration | rôle `admin` dans `user_roles`, vérifié côté serveur | |
@@ -58,8 +58,8 @@ pas un audit externe ni un test d'intrusion.
 | --- | --- | --- | --- |
 | 1 | Hébergement | Supabase et Vercel ne sont pas certifiés HDS | migration Clever Cloud (`clevercloud/README.md`) |
 | 2 | Sous-traitants | Anthropic (assistant) et Resend (envoi des factures) reçoivent des données de santé | décision à prendre ; pour Resend, envoyer un lien plutôt que le PDF |
-| 3 | CSP | déclarée en `Report-Only` : rien n'est bloqué | PR #184, à valider à la main sur le Preview |
-| 4 | Praticiens | pas de double authentification, pas de déconnexion après inactivité | MFA (TOTP) et délai d'inactivité, à décider |
+| 3 | CSP | déclarée en `Report-Only` : rien n'est bloqué | PR #184 : e2e complet passé avec la CSP appliquée ; exports et imports hors e2e à valider à la main sur le Preview (liste dans la PR) |
+| 4 | Praticiens | pas de double authentification (la déconnexion après 60 minutes d'inactivité est en place, #188) | MFA (TOTP), à prévoir avec le fournisseur d'identité de la cible HDS |
 | 5 | Patients | le code d'accès est le seul facteur, n'expire pas, et la session dure 30 jours | durée de session plus courte ou renouvellement du code, à décider |
 | 6 | Icônes | feuille de style Tabler chargée depuis un CDN en `@latest`, sans contrôle d'intégrité | figer la version ou l'héberger avec l'application |
 | 7 | Dépôt GitHub | public ; alertes Dependabot et protection de la branche `main` non vérifiables depuis la CI | réglages du dépôt à revoir |
