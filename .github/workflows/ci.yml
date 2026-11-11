@@ -10,6 +10,71 @@ jobs:
   # environnement de staging. Volontairement SANS `npm run lint` (erreurs
   # de lint pré-existantes, hors périmètre de la consolidation — voir
   # docs/archive/AUDIT.md et docs/PLAN-BETA.md).
+  # Serveur de la cible Clever Cloud (clevercloud/serveur) : il exécute les
+  # routes api/ et les Edge Functions sans les modifier. Job à part, en Node 22 :
+  # le serveur lit directement le TypeScript des fonctions (Node >= 22.18), ce
+  # que le Node 20 du job `build` ne sait pas faire. `npm ci` est nécessaire pour
+  # charger les trois vraies fonctions et composer un PDF de facture.
+  serveur-clevercloud:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node --test clevercloud/serveur/*.test.mjs
+
+  # Répétition à blanc de la cible HDS : le schéma du dépôt est reconstruit sur
+  # un PostgreSQL 17 STANDARD (sans Supabase), puis lu et écrit par le chemin
+  # réel du front praticien : serveur Node → PostgREST → RLS. Données fictives.
+  # Aucun secret : la base vit le temps du job.
+  repetition-cible:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: repetition
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PGURI: postgresql://postgres:repetition@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Secret des jetons tiré au hasard à chaque job : rien de fixe dans le dépôt.
+      - name: Secret de test pour les jetons
+        run: echo "REPETITION_JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Schéma, jeu fictif et contrôles de RLS
+        run: clevercloud/scripts/repetition.sh
+
+      # Même image et mêmes réglages que clevercloud/postgrest/, sauf le secret
+      # des jetons (de test) et le port.
+      - name: PostgREST
+        run: |
+          docker run -d --name postgrest --network host \
+            -e PGRST_DB_URI="$PGURI" -e PGRST_DB_SCHEMAS=public \
+            -e PGRST_DB_EXTRA_SEARCH_PATH=public,extensions -e PGRST_DB_ANON_ROLE=anon \
+            -e PGRST_DB_MAX_ROWS=1000 -e PGRST_OPENAPI_MODE=disabled \
+            -e PGRST_JWT_SECRET="$REPETITION_JWT_SECRET" -e PGRST_SERVER_PORT=3000 \
+            postgrest/postgrest:v12.2.3
+          for i in $(seq 1 30); do curl -fsS -o /dev/null http://localhost:3000/participants?limit=0 -H "Accept: application/json" && break; sleep 1; done
+          docker logs postgrest 2>&1 | tail -5
+
+      - name: Lecture et écriture par le serveur Node et PostgREST
+        run: node --test clevercloud/scripts/repetition-http.test.mjs
+        env:
+          POSTGREST_URL: http://localhost:3000
+
   build:
     runs-on: ubuntu-latest
     steps:

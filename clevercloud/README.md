@@ -17,23 +17,44 @@ Supabase tant que la bascule n'a pas été décidée. Inventaire de départ : do
 | `postgrest/` | image PostgREST figée + variables | prêt |
 | `sql/01_compat_auth.sql` | schéma `auth` minimal : `auth.uid()`, `auth.users` (id + e-mail, aucun mot de passe) | testé sur PostgreSQL 16 |
 | `scripts/nettoyer-dump.mjs` | retire d'un dump Supabase ce qui ne se restaure pas ailleurs | testé |
+| `scripts/repetition.sh`, `sql/02_controle_repetition.sql`, `scripts/repetition-http.test.mjs` | répétition à blanc de la migration du schéma, avec contrôles de RLS | rejouée par la CI |
+| `serveur/compatDeno.mjs`, `stockageS3.mjs`, `relais.mjs` | Edge Functions, stockage Cellar, relais PostgREST | testés |
 
-## Validation faite (09/11/2026, base locale jetable, données fictives)
+## Répétition à blanc (rejouable, données fictives)
 
-1. `sql/01_compat_auth.sql` sur une base vierge : échoue proprement sans les rôles, passe avec, rejouable.
-2. Les 31 migrations de `supabase/migrations/`, nettoyées, se rejouent toutes sans erreur (62 tables, 135 politiques ; les 3 politiques du schéma `storage` sont retirées).
-3. RLS avec des jetons simulés : le praticien A ne voit que son bénéficiaire, B que le sien, `anon` est refusé. Le trigger qui attribue le rôle « praticien » fonctionne. Le garde-fou RGPD bloque un bénéficiaire sans consentement.
+`PGURI=postgresql://… clevercloud/scripts/repetition.sh` reconstruit la base sur un PostgreSQL standard **vide et jetable** (le script refuse une base qui contient déjà des tables) :
+
+1. rôles `anon`, `authenticated`, `service_role` ;
+2. `sql/01_compat_auth.sql` ;
+3. les 30 migrations de `supabase/migrations/`, nettoyées par `scripts/nettoyer-dump.mjs` : 62 tables, toutes avec RLS, 135 politiques (les 3 politiques du schéma `storage` sont retirées), 50 fonctions, 63 triggers ;
+4. `sql/02_controle_repetition.sql` : deux praticiens et deux bénéficiaires fictifs, puis 8 contrôles (cloisonnement en lecture et en écriture, usurpation d'identité refusée, garde-fou RGPD, rôle `anon` sans accès, rôle serveur, RLS sur toutes les tables).
+
+Le job `repetition-cible` de la CI la rejoue à chaque PR sur **PostgreSQL 17**, puis démarre PostgREST (même image que `postgrest/`) et vérifie le chemin complet du front praticien, serveur Node → `/rest/v1` → PostgREST → RLS, avec des jetons signés (`scripts/repetition-http.test.mjs`).
 
 Écart relevé : la production Supabase est en **PostgreSQL 17** (privilège `MAINTAIN`). Choisir la version 17 pour l'add-on.
 
+## Faits dans le serveur, sans modifier l'application
+
+Le front, les routes `api/` et les Edge Functions gardent leur code. Le serveur reprend les chemins qu'appelle `supabase-js` :
+
+| Chemin | Rôle | Fichier | Activé par |
+| --- | --- | --- | --- |
+| `/api/*` | les 12 routes | `compatVercel.mjs` | toujours |
+| `/functions/v1/<nom>` | les 3 Edge Functions, lues en TypeScript par Node (>= 22.18) | `compatDeno.mjs`, `crochetsModules.mjs` | toujours |
+| `/rest/v1/*` | relais vers PostgREST, préfixe retiré | `relais.mjs` | `POSTGREST_URL` |
+| `/storage/v1/object/factures/*` | téléchargement d'une facture par le praticien, après contrôle par la RLS de `factures` | `relais.mjs` | `POSTGREST_URL` et Cellar |
+| `client.storage` côté serveur | écriture, lecture et URL présignée dans Cellar (S3, signature V4) | `stockageS3.mjs`, `clientCompat.mjs` | `CELLAR_ADDON_HOST`, `CELLAR_ADDON_KEY_ID`, `CELLAR_ADDON_KEY_SECRET` |
+
+`SUPABASE_URL` (lu par les routes et les fonctions) vaut alors l'adresse de l'application elle-même, puisqu'elle sert `/rest/v1`.
+
+Sans ces variables, rien ne change : le stockage Supabase reste utilisé, ce qui permet une recette par étapes. Tests : `node --test clevercloud/serveur/*.test.mjs` (job `serveur-clevercloud` de la CI). La signature S3 est vérifiée par les exemples de la documentation AWS ; elle reste à confirmer contre Cellar en recette (région, adressage par chemin).
+
 ## Ce qui reste à faire (PR suivantes, chacune derrière un interrupteur)
 
-1. **Front praticien → Keycloak** : remplacer les appels `supabase.auth.*` (connexion, session, mot de passe oublié, invitation) par OIDC, et transmettre le jeton Keycloak à `supabase-js` pour PostgREST.
-2. **Stockage → Cellar** : 3 points de code (écriture du PDF, URL signée patient, téléchargement praticien).
-3. **Edge Functions** (`analyser-seance`, `facturation-envoi`, `facturation-pdf`) : à porter en routes Node du serveur, ou à garder en Deno dans une image à part. Décision à prendre.
-4. **`public.declencher_pdf_facture`** : seule fonction qui utilise `pg_net` et Vault. À remplacer par un appel depuis l'application.
-5. **Chemin `/rest/v1`** : `supabase-js` appelle `<url>/rest/v1/…`, alors que PostgREST répond à la racine. Il faut soit un domaine avec préfixe de chemin côté Clever Cloud, soit un relais dans `serveur.mjs`. Dépend de la réponse de l'hébergeur.
-6. **Services externes** : décision sur Anthropic et Resend, qui reçoivent des données de santé.
+1. **Front praticien → Keycloak** : remplacer les appels `supabase.auth.*` (connexion, session, mot de passe oublié, invitation) par OIDC, et transmettre le jeton Keycloak à `supabase-js` pour PostgREST. Côté serveur, six points vérifient le jeton du praticien par `supabase.auth.getUser` (`api/claude.ts`, `api/_lib/adminAuth.ts`, `api/_lib/patientSession.ts`, `api/seances/supprimer-planifiees.ts`, et les fonctions `analyser-seance` et `facturation-envoi`) ; `api/organisation.ts` utilise l'API d'administration des comptes (liste, invitation, mise à jour).
+2. **`public.declencher_pdf_facture`** : seule fonction qui utilise `pg_net` et Vault. Si `pg_net` existe sur l'add-on, il suffit de changer l'adresse appelée (`/functions/v1/facturation-pdf` du serveur) et de lire le secret ailleurs que dans Vault. Sinon, à remplacer par un appel depuis l'application.
+3. **Copie des PDF** du bucket Supabase vers Cellar, avec contrôle du nombre de fichiers et des sommes de contrôle.
+4. **Services externes** : décision sur Anthropic et Resend, qui reçoivent des données de santé.
 
 ## Ressources prévues
 
@@ -76,7 +97,7 @@ lui-même identifiants et secrets.
 
 1. Versions de PostgreSQL disponibles en `parhds` (17 nécessaire) ; extensions `pgcrypto`, `uuid-ossp`, `pg_cron`, `pg_net`.
 2. Création des rôles `anon`, `authenticated`, `service_role` et `GRANT <rôle> TO <utilisateur de l'add-on>`. PostgREST change de rôle à chaque requête (`SET ROLE`).
-3. Peut-on servir une application sous un préfixe de chemin (`app.horizon-suivi.fr/rest/v1` → PostgREST) ? Le préfixe est-il retiré avant transmission ?
+3. Peut-on servir une application sous un préfixe de chemin (`app.horizon-suivi.fr/rest/v1` → PostgREST) ? Le préfixe est-il retiré avant transmission ? (Facultatif depuis le relais de `serveur.mjs` : la réponse permettrait seulement d'éviter un saut.)
 4. Comportement de `X-Forwarded-For` derrière les load balancers : la dernière valeur est-elle toujours l'IP vue par la plateforme ? La limitation des tentatives de connexion patient en dépend.
 5. Les variables de l'application sont-elles transmises au build Docker comme `ARG` ? Le front en a besoin au build.
 6. Keycloak en zone standard pour des comptes de professionnels de santé : conforme à leur lecture du périmètre HDS ?

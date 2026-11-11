@@ -15,7 +15,7 @@
     "test:unit:ci": "vitest run --exclude **/tests/security/** --exclude **/tests/db/**",
     "test:db": "vitest run tests/db",
     "test:security": "node scripts/run-harnais-local.mjs",
-    "test:clever": "node --test clevercloud/serveur/serveur.test.mjs clevercloud/scripts/nettoyer-dump.test.mjs"
+    "test:clever": "node --test clevercloud/serveur/*.test.mjs clevercloud/scripts/*.test.mjs"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
