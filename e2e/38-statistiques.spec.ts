@@ -32,7 +32,10 @@ test.describe('Tableau de bord du praticien', () => {
     }
 
     await page.waitForLoadState('networkidle');
-    await testInfo.attach('tableau-de-bord.png', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+    // Écrite dans test-results/ (et non jointe en mémoire) : c'est ce dossier que la CI conserve.
+    const capture = testInfo.outputPath('tableau-de-bord.png');
+    await page.screenshot({ path: capture, fullPage: true });
+    await testInfo.attach('tableau-de-bord.png', { path: capture, contentType: 'image/png' });
     expect(erreurs).toEqual([]);
   });
 });
