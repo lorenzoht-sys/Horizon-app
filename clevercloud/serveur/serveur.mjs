@@ -1,6 +1,7 @@
 // Serveur HTTP unique d'Horizon pour Clever Cloud (2026-11-09, socle de la
 // migration HDS). Il remplace ce que fait Vercel aujourd'hui :
 //   - exécuter les routes de api/ (compilées dans dist-api/ par le Dockerfile) ;
+//   - exécuter les Edge Functions de supabase/functions/ (compatDeno.mjs) ;
 //   - servir le front statique (dist/) avec la réécriture SPA ;
 //   - appliquer les en-têtes de sécurité de vercel.json, lus tels quels pour
 //     qu'il n'existe qu'UNE définition de la CSP et des autres en-têtes.
@@ -14,8 +15,11 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { adapter, CorpsTropGros } from './compatVercel.mjs';
+import { adapter, CorpsTropGros, normaliserIp } from './compatVercel.mjs';
 import { demarrerCronInterne } from './cron.mjs';
+import { installerCrochets, chargerFonctions, executerFonction } from './compatDeno.mjs';
+import { relayerVersPostgrest, servirFacture } from './relais.mjs';
+import { configurationS3, creerStockageS3 } from './stockageS3.mjs';
 
 const ICI = path.dirname(fileURLToPath(import.meta.url));
 const RACINE = path.resolve(ICI, '../..');
@@ -109,10 +113,17 @@ export function creerServeur({
   dossierApi = process.env.DOSSIER_API ?? path.join(RACINE, 'dist-api', 'api'),
   dossierStatique = process.env.DOSSIER_STATIQUE ?? path.join(RACINE, 'dist'),
   servirFront = process.env.SERVIR_FRONT !== '0',
+  dossierFonctions = process.env.DOSSIER_FONCTIONS ?? path.join(RACINE, 'supabase', 'functions'),
+  postgrest = process.env.POSTGREST_URL,
+  stockage = (c => (c ? creerStockageS3(c) : null))(configurationS3()),
   regles = chargerEnTetes(),
 } = {}) {
   const routes = listerRoutes(dossierApi);
   const modules = new Map();
+  // Edge Functions : chargées au premier appel (une fonction qui ne se charge
+  // pas ne doit pas empêcher le reste du serveur de démarrer).
+  installerCrochets([dossierApi, dossierFonctions]);
+  let fonctions;
   const statique = path.resolve(dossierStatique);
 
   return http.createServer(async (req, res) => {
@@ -138,6 +149,26 @@ export function creerServeur({
         await adapter(req, res, url);
         await handler(req, res);
         return;
+      }
+
+      // Chemins attendus par supabase-js côté front (voir relais.mjs).
+      if (postgrest && (chemin === '/rest/v1' || chemin.startsWith('/rest/v1/'))) {
+        return await relayerVersPostgrest(req, res, url, postgrest);
+      }
+      if (postgrest && stockage && chemin.startsWith('/storage/v1/object/factures/')) {
+        return await servirFacture(req, res, url, { base: postgrest, stockage });
+      }
+
+      if (chemin.startsWith('/functions/v1/')) {
+        fonctions ??= chargerFonctions(dossierFonctions);
+        const traitement = (await fonctions).get(chemin.slice('/functions/v1/'.length).replace(/\/+$/, ''));
+        if (!traitement) {
+          res.statusCode = 404;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          return res.end(JSON.stringify({ error: 'Fonction inconnue' }));
+        }
+        normaliserIp(req.headers);
+        return await executerFonction(traitement, req, res, url);
       }
 
       if (!servirFront || (req.method !== 'GET' && req.method !== 'HEAD')) {

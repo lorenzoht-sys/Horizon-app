@@ -3,10 +3,12 @@
 # Sur Clever Cloud : CC_DOCKERFILE=clevercloud/Dockerfile.app (contexte = racine du dépôt).
 #
 # Image figée (jamais de tag latest). Avant la mise en service, remplacer le tag
-# par son empreinte (node:22.11.0-alpine@sha256:…) relevée avec `docker pull`.
+# par son empreinte (node:22.18.0-alpine@sha256:…) relevée avec `docker pull`.
+# Node >= 22.18 est requis : le serveur lit directement le TypeScript des Edge
+# Functions (retrait des types natif, voir clevercloud/serveur/compatDeno.mjs).
 
 # ── Étape 1 : build ───────────────────────────────────────────────────────────
-FROM node:22.11.0-alpine AS build
+FROM node:22.18.0-alpine AS build
 WORKDIR /app
 
 # Variables du front : lues par Vite AU BUILD, donc à fournir comme arguments
@@ -28,7 +30,7 @@ RUN npm run build \
  && npm prune --omit=dev
 
 # ── Étape 2 : exécution ───────────────────────────────────────────────────────
-FROM node:22.11.0-alpine
+FROM node:22.18.0-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 # Le serveur lit vercel.json (en-têtes de sécurité) : une seule source de vérité.
@@ -37,6 +39,8 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/dist-api ./dist-api
 COPY --from=build /app/clevercloud/serveur ./clevercloud/serveur
+# Edge Functions : exécutées telles quelles par le serveur (/functions/v1/<nom>).
+COPY --from=build /app/supabase/functions ./supabase/functions
 # Aucune écriture disque à l'exécution (instances immuables) : utilisateur non root.
 USER node
 EXPOSE 8080
