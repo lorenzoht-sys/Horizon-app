@@ -45,3 +45,7 @@ supabase/migrations/migrations/
 
 # Instantanés de production (lecture seule, voir docs/SCHEMA.md) : jamais commités.
 supabase/_prod_*
+
+# Socle Clever Cloud : sortie de compilation de api/ et dumps de base (jamais commités).
+dist-api
+clevercloud/_dumps/
