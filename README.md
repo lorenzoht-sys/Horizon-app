@@ -60,8 +60,9 @@ supabase/
   migrations/   Historique versionné du schéma (règle d'or : voir migrations/README.md)
   functions/    Edge Functions Supabase (analyser-seance, interpreter-bilan)
 e2e/            Tests Playwright (parcours praticien, patient, structure)
-docs/           Procédures de configuration manuelle (Sentry, branch protection, PITR...)
-scripts/        Scripts ponctuels (ex. seed de l'environnement de staging)
+docs/           Procédures, schéma, cartographie des données ; docs/archive/ : rapports datés
+scripts/        Scripts de build, de CI et de staging (index : scripts/README.md)
+clevercloud/    Socle de la migration HDS vers Clever Cloud (inactif, voir son README)
 ```
 
 ## Scripts npm
