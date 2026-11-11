@@ -37,13 +37,22 @@ Deux règles sont vérifiées par des tests, qui échouent si on les enfreint :
 2. **L'identité du praticien se lit par `utilisateurCourant()`**, jamais par
    `supabase.auth.getUser()` (`src/lib/session.test.ts`).
 
+La session praticien se ferme après une heure sans interaction
+(`src/lib/inactivite.ts`, `src/hooks/useDeconnexionInactivite.ts`).
+
 Elles existent pour que changer de source de données ou de fournisseur
 d'authentification se fasse dans une couche connue.
 
 Autres dossiers : `data/` (référentiels statiques d'exercices et de tests, sans accès à la base),
 `types/` (types partagés), `utils/` (fonctions sans état),
-`pages/mobile/AppMobile.tsx` (écrans mobiles natifs ; les autres routes
-mobiles réutilisent les pages desktop, voir `lib/routesMobile.ts`).
+`pages/mobile/` (`AppMobile.tsx` aiguille vers les écrans natifs de
+`pages/mobile/ecrans/` ; les autres routes mobiles réutilisent les pages
+desktop, voir `lib/routesMobile.ts`).
+
+Un écran volumineux est découpé en un fichier par sous-écran, dans un dossier
+à son nom : `pages/espace-patient/`, `pages/fiche-beneficiaire/`,
+`pages/mobile/ecrans/`, `components/participant/formulaire/`. Le fichier
+d'origine ne garde que le composant principal.
 
 ## Serveur
 
@@ -88,9 +97,12 @@ la main par le responsable du projet (`CHECKLIST_RELEASE.md`).
 
 ## Dette connue
 
-- Quatre écrans dépassent 2 000 lignes (`EspacePatient`, `ParticipantProfile`,
-  `ParticipantForm`, `AppMobile`). Ils ne construisent plus de requêtes, mais
-  restent longs à lire : à découper par onglet ou par écran.
+- `ParticipantProfile` et `ParticipantForm` font encore environ 1 400 lignes
+  chacun : leurs sous-composants sont sortis (`src/pages/fiche-beneficiaire/`,
+  `src/components/participant/formulaire/`), mais le composant principal reste
+  une seule fonction. À découper par onglet ou par étape.
+- `useAgenda` charge toutes les séances dans chaque composant qui l'appelle :
+  pas d'état partagé entre écrans.
 - `src/lib/acces/` renvoie les requêtes Supabase telles quelles : c'est une
   frontière, pas encore une abstraction. Suffisant pour une migration qui
   garde PostgREST.
