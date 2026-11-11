@@ -34,7 +34,7 @@ La CI (`.github/workflows/ci.yml`) enchaîne build, `typecheck:api`, `typecheck:
 
 ## Structure
 
-- `src/pages/` : pages desktop. `src/pages/mobile/AppMobile.tsx` porte les écrans mobiles natifs.
+- `src/pages/` : pages desktop. `src/pages/mobile/AppMobile.tsx` aiguille vers les écrans mobiles natifs de `src/pages/mobile/ecrans/`. Les sous-écrans des grosses pages sont dans un dossier à leur nom (`espace-patient/`, `fiche-beneficiaire/`).
 - `src/lib/` : logique métier pure, testée en `*.test.ts` à côté du fichier. `src/lib/acces/` : requêtes Supabase hors hooks. `src/lib/routesMobile.ts` gère le routage mobile.
 - `src/components/`, `src/hooks/` (hooks Supabase `useXxx`), `src/utils/`, `src/data/` (référentiels de tests).
 - `api/patient/`, `api/structure/`, `api/cron/`, `api/planning/`, `api/seances/` : les routes. Les tests unitaires dans `api/` hors `_lib` sont préfixés `_` (ex. `api/patient/_me.test.ts`) pour ne pas devenir des fonctions Vercel.

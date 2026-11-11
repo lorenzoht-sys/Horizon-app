@@ -7,7 +7,7 @@ Ne pas modifier à la main : relancer le script après chaque chantier.
 
 | Élément | Nombre |
 | --- | --- |
-| Fichiers du front (hors tests) | 271 (65 072 lignes) |
+| Fichiers du front (hors tests) | 316 (65 289 lignes) |
 | Routes API (`api/`) | 12 |
 | Edge Functions | 3 |
 | Tables (schéma public) | 62 |
@@ -153,7 +153,7 @@ Les tables d'une route incluent celles de ses helpers `api/_lib/` importés, com
 | img.youtube.com | pages/ExercicesPage, programme/ExerciceCard |
 | maps.google.com | pages/ParticipantProfile |
 | unpkg.com | pages/ZonesPage |
-| www.google.com | pages/mobile/AppMobile |
+| www.google.com | pages/mobile/ecrans/EcranAujourdhui |
 | www.openstreetmap.org | components/map/MapView, pages/ZonesPage |
 | www.youtube-nocookie.com | components/YoutubePlayer |
 | youtu.be | utils/exportPDF |
@@ -164,20 +164,17 @@ Ce sont les zones où une modification a le plus de chances d'avoir des effets d
 
 | Fichier | Lignes | Tables touchées directement |
 | --- | --- | --- |
-| `src/pages/EspacePatient.tsx` | 3 090 | — |
-| `src/pages/ParticipantProfile.tsx` | 2 422 | — |
-| `src/components/participant/ParticipantForm.tsx` | 2 371 | — |
-| `src/pages/mobile/AppMobile.tsx` | 2 285 | — |
 | `src/data/exercices.ts` | 1 947 | — |
 | `src/pages/StatsPage.tsx` | 1 532 | — |
-| `src/pages/AssistantPage.tsx` | 1 272 | — |
-| `src/pages/SettingsPage.tsx` | 1 213 | — |
+| `src/pages/ParticipantProfile.tsx` | 1 465 | — |
+| `src/components/participant/ParticipantForm.tsx` | 1 409 | — |
 | `src/types/index.ts` | 1 211 | — |
 | `src/components/programme/ProgrammeWizard.tsx` | 1 023 | — |
 | `src/pages/AgendaV2Page.tsx` | 1 022 | — |
 | `src/data/exercicesMouvApa.ts` | 943 | — |
 | `src/pages/PortailStructure.tsx` | 893 | — |
 | `src/components/participant/ContratsTab.tsx` | 890 | — |
+| `src/pages/AssistantPage.tsx` | 877 | — |
 | `src/components/bilan/FormulaireBilanInitial.tsx` | 812 | — |
 | `src/pages/ExercicesPage.tsx` | 807 | — |
 
