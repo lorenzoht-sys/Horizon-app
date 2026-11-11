@@ -107,6 +107,8 @@ Avant de merger sur `main`, voir **`CHECKLIST_RELEASE.md`**.
 Cette application traite des données de santé. Plusieurs documents
 encadrent ça :
 
+- **`docs/SECURITE.md`** — état des mesures de sécurité et points ouverts.
+
 - **`docs/archive/RAPPORT_SECURISATION.md`** — sécurisation des accès (auth serveur pour
   l'espace patient et le portail structure, RLS, rate limiting).
 - **`docs/archive/AUDIT.md`** — état des lieux détaillé du code (Tâche 1, consolidation).
