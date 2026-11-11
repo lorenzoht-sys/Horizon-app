@@ -22,8 +22,8 @@ pas un audit externe ni un test d'intrusion.
 ### Accès
 | Espace | Mécanisme | Protections |
 | --- | --- | --- |
-| Praticien | Supabase Auth, e-mail et mot de passe | RLS par `auth.uid()` ; inscription libre fermée, comptes créés sur invitation |
-| Patient | code de 8 caractères tiré par `crypto` (alphabet de 31, tirage sans biais, 39,7 bits), puis jeton signé HS256 valable 30 jours | 5 tentatives par 15 minutes et par IP, connexions journalisées, contrôles anti-IDOR dans chaque route |
+| Praticien | Supabase Auth, e-mail et mot de passe | RLS par `auth.uid()` ; page d'inscription retirée de l'application, comptes créés sur invitation |
+| Patient | code de 8 caractères tiré par `crypto` (alphabet de 31, tirage sans biais, 39,7 bits), puis jeton signé HS256 valable 30 jours | 5 tentatives par 15 minutes et par IP, connexions journalisées ; chaque route patient tire l'identité du jeton, jamais du corps de la requête |
 | Structure | jeton de 256 bits en en-tête, avec date d'expiration | accès journalisés, données limitées aux bénéficiaires de la structure |
 | Administration | rôle `admin` dans `user_roles`, vérifié côté serveur | |
 | Tâches planifiées | secret partagé, comparaison à temps constant | |
@@ -64,4 +64,5 @@ pas un audit externe ni un test d'intrusion.
 | 6 | Icônes | feuille de style Tabler chargée depuis un CDN en `@latest`, sans contrôle d'intégrité | figer la version ou l'héberger avec l'application |
 | 7 | Dépôt GitHub | public ; alertes Dependabot et protection de la branche `main` non vérifiables depuis la CI | réglages du dépôt à revoir |
 | 8 | ESLint | absent de la CI | corriger les erreurs existantes puis l'ajouter |
-| 9 | Portail structure | pas de limite de requêtes sur `api/structure/data` | faible, vu la taille du jeton ; à ajouter par cohérence |
+| 9 | Inscription | la page est retirée, mais le réglage « inscriptions ouvertes » du projet Supabase n'est pas visible depuis le code | vérifier dans le tableau de bord que les inscriptions sont fermées |
+| 10 | Portail structure | pas de limite de requêtes sur `api/structure/data` | faible, vu la taille du jeton ; à ajouter par cohérence |
