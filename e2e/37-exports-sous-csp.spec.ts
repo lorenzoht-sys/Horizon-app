@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { skipUnlessPraticien, loginPraticien, ouvrirFicheParticipant, env } from './helpers.js';
+import { skipUnlessPraticien, loginPraticien, env } from './helpers.js';
 
 // Exports et imports qui reposent sur une bibliothèque tierce chargée dans le
 // navigateur. Ajouté le 2026-11-11 avec le passage de la CSP du mode
@@ -10,9 +10,12 @@ import { skipUnlessPraticien, loginPraticien, ouvrirFicheParticipant, env } from
 //
 // | Parcours                         | Bibliothèque          |
 // | -------------------------------- | --------------------- |
-// | Rapport d'évolution PDF          | html2canvas + jspdf   |
 // | Export / import Excel            | xlsx                  |
 // | Compte-rendu PDF de l'assistant  | pdfmake               |
+//
+// Le rapport d'évolution (html2canvas + jspdf) est vérifié dans
+// mobile/25-comparaison-evolution-mobile, seul test à garantir les 2 bilans
+// qu'il exige.
 //
 // Aucune écriture en base : l'import lit un fichier sans ligne de données,
 // la réponse de l'IA et l'écriture du journal de l'assistant sont simulées.
@@ -30,23 +33,6 @@ function surveillerCsp(page: Page): string[] {
 
 test.describe('Exports et imports sous CSP appliquée', () => {
   test.beforeEach(() => skipUnlessPraticien());
-
-  test('rapport d\'évolution PDF', async ({ page }) => {
-    const violations = surveillerCsp(page);
-    await loginPraticien(page);
-    await ouvrirFicheParticipant(page, `${env.patientPrenom} ${env.patientNom}`);
-    await page.goto(`${page.url()}/comparaison`);
-
-    const bouton = page.getByRole('button', { name: 'Rapport PDF' });
-    const pasAssez = page.getByText('Pas encore assez de bilans');
-    await expect(bouton.or(pasAssez)).toBeVisible({ timeout: 20000 });
-    test.skip(await pasAssez.isVisible(), 'Le bénéficiaire de démonstration a moins de 2 bilans : pas de rapport d\'évolution à exporter.');
-
-    const telechargement = page.waitForEvent('download', { timeout: 30000 });
-    await bouton.click();
-    expect((await telechargement).suggestedFilename()).toMatch(/^Rapport_Evolution_.*\.pdf$/);
-    expect(violations).toEqual([]);
-  });
 
   test('export Excel puis lecture d\'un fichier importé', async ({ page }) => {
     const violations = surveillerCsp(page);
