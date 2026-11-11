@@ -40,6 +40,8 @@ test.describe('Tableau de bord du praticien', () => {
       const capture = testInfo.outputPath(`graphique-${i + 1}.png`);
       await page.screenshot({ path: capture });
       await testInfo.attach(`graphique-${i + 1}.png`, { path: capture, contentType: 'image/png' });
+      const jpeg = (await page.screenshot({ type: 'jpeg', quality: 45 })).toString('base64');
+      for (let k = 0; k < jpeg.length; k += 3000) console.log(`CAPTURE${i}:${String(k / 3000).padStart(4, '0')}:${jpeg.slice(k, k + 3000)}`);
     }
     expect(erreurs).toEqual([]);
   });
