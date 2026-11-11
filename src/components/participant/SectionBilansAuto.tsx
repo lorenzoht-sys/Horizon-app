@@ -17,7 +17,7 @@ import { formatDate } from '../../lib/agendaCommun';
 // catégorie) ou supprimable ; un bilan déplacé à la main n'est plus jamais retiré automatiquement.
 
 export default function SectionBilansAuto({ participant }: { participant: Participant }) {
-  const { seances, bulkCreerSeances, supprimerSeance, modifierSeance } = useAgenda();
+  const { seances, bulkCreerSeances, supprimerSeance, supprimerBilanAuto, modifierSeance } = useAgenda();
   const { reglage, charge, enregistrer } = useBilansAuto(participant.id);
   const { categories, categorieBilan } = useCategoriesSeance();
   const [enCours, setEnCours] = useState(false);
@@ -42,11 +42,13 @@ export default function SectionBilansAuto({ participant }: { participant: Partic
       // tout recréer, et un échec de la recréation ferait perdre les bilans.
       const frequenceChangee = reglage?.actif === true && reglage.frequenceMois !== frequenceVoulue;
       const aRetirer = !actifVoulu || frequenceChangee ? bilansAutoARetirer(seances, participant.id, aujourdhui) : [];
-      for (const s of aRetirer) await supprimerSeance(s.id);
-      const retires = new Set(aRetirer.map(s => s.id));
+      // Seuls les bilans encore automatiques EN BASE sont retirés (voir
+      // supprimerBilanAuto) : un bilan déplacé à la main à l'instant reste.
+      const retires = new Set<string>();
+      for (const s of aRetirer) if (await supprimerBilanAuto(s.id)) retires.add(s.id);
 
       if (!actifVoulu) {
-        if (aRetirer.length > 0) toast.success(`${aRetirer.length} bilan${aRetirer.length > 1 ? 's' : ''} prévu${aRetirer.length > 1 ? 's' : ''} retiré${aRetirer.length > 1 ? 's' : ''} de l’agenda`);
+        if (retires.size > 0) toast.success(`${retires.size} bilan${retires.size > 1 ? 's' : ''} prévu${retires.size > 1 ? 's' : ''} retiré${retires.size > 1 ? 's' : ''} de l’agenda`);
         return;
       }
 
