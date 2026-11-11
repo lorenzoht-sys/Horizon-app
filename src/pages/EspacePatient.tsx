@@ -13,7 +13,7 @@ import { libellesSignalementAbsence } from '../lib/libellesSignalementAbsence';
 import { patientFetchMe, patientSauvegarderSeance, patientEnvoyerRetour, patientLogin, patientActiverRappels, patientDesactiverRappels, patientEnregistrerTestEtalon, patientMarquerExerciceLibre, patientAnnoncerPresence, patientSignalerAbsence, patientUrlPdfFacture } from '../lib/patientApi';
 import { etatPourBeneficiaire, trierFacturesPatient, type FacturePatient } from '../lib/facturesPatient';
 import { activerRappelsPush, desactiverRappelsPush, etatAbonnementPush, estIOS, estInstalleeSurEcranAccueil, pushSupporte } from '../lib/push';
-import { loadExercices } from '../data/exercices';
+import { loadExercices } from '../lib/bibliothequeExercices';
 import { TESTS_ETALONS, getTestEtalon } from '../data/testsEtalons';
 import { exportProgrammePDF } from '../utils/exportPDF';
 import { exportCarteSantePatient } from '../utils/exportDossierPDF';

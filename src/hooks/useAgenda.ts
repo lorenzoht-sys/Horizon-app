@@ -20,6 +20,11 @@ export { addMinutes };
 
 export function useAgenda() {
   const [seances, setSeances] = useState<Seance[]>([]);
+  // Vrai une fois la première lecture terminée (2026-11-11). Sans ce signal,
+  // un écran pouvait agir sur une liste encore vide : activer les bilans
+  // automatiques avant la fin du chargement répondait « planifiez un premier
+  // bilan » alors qu'un bilan de référence existait (vu en e2e, mobile/35).
+  const [seancesChargees, setSeancesChargees] = useState(!supabase);
   const { participants } = useParticipants();
 
   useEffect(() => {
@@ -31,8 +36,9 @@ export function useAgenda() {
       .order('date', { ascending: true })
       .then(({ data, error }) => {
         if (cancelled) return;
-        if (error) { console.error('Erreur chargement séances:', error); return; }
+        if (error) { console.error('Erreur chargement séances:', error); setSeancesChargees(true); return; }
         setSeances((data ?? []).map(dbToSeance));
+        setSeancesChargees(true);
       });
     return () => { cancelled = true; };
   }, []);
@@ -174,6 +180,7 @@ export function useAgenda() {
 
   return {
     seances,
+    seancesChargees,
     creerSeance,
     bulkCreerSeances,
     modifierSeance,

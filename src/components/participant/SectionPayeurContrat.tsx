@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
+import { lirePayeurContrat, majPayeurContrat } from '../../lib/acces/contrats';
 import {
-  SELECT_PAYEUR, lirePayeur, messagePayeurLisible, payeurVersMiseAJour, resumePayeur, validerPayeur,
+  lirePayeur, messagePayeurLisible, payeurVersMiseAJour, resumePayeur, validerPayeur,
   type ErreursPayeur, type FormulairePayeur,
 } from '../../lib/payeurContrat';
 
@@ -19,7 +20,7 @@ export default function SectionPayeurContrat({ contratId }: { contratId: string 
 
   const charger = useCallback(async () => {
     if (!supabase) return;
-    const { data, error } = await supabase.from('contrats').select(SELECT_PAYEUR).eq('id', contratId).maybeSingle();
+    const { data, error } = await lirePayeurContrat(contratId);
     if (error) { console.error('[SectionPayeurContrat] lecture :', error); return; }
     setEnBase(lirePayeur(data as Record<string, unknown> | null));
   }, [contratId]);
@@ -38,7 +39,7 @@ export default function SectionPayeurContrat({ contratId }: { contratId: string 
     const e = validerPayeur(f);
     if (Object.keys(e).length > 0) { setErreurs(e); return; }
     setEnCours(true);
-    const { data, error } = await supabase.from('contrats').update(payeurVersMiseAJour(f)).eq('id', contratId).select(SELECT_PAYEUR);
+    const { data, error } = await majPayeurContrat(contratId, payeurVersMiseAJour(f));
     setEnCours(false);
     if (error) { toast.error(messagePayeurLisible(error.message)); return; }
     if (!data || data.length === 0) { toast.error('Contrat introuvable ou non modifiable'); return; }

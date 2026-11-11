@@ -8,12 +8,20 @@ import { useStructures } from '../hooks/useStructures';
 import { getContreIndications } from '../lib/anamnese';
 import { partagerDocument } from '../lib/partageDocument';
 import { supabase, getAuthHeader } from '../lib/supabase';
+import {
+  listerJournalAssistant, ajouterJournalAssistant, supprimerJournalAssistant,
+  lireProgrammeActif, lireSeancesProgramme, lireExercicesProgramme, lirePlanningProgramme,
+  lireComptesRendusRecents, lireSeancesPatientRecentes, lireNotesRecentes,
+  lireSeancesPlanifieesDepuis, lireExercicesRealises,
+  partagerAvecBeneficiaire, partagerAvecStructure,
+} from '../lib/acces/assistant';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { toast } from 'sonner';
 import { pdfMake, mdToPdfMake } from '../utils/markdownToPdf';
 import MarkdownRendu from '../components/ui/MarkdownRendu';
 import ModalRelecturePartage from '../components/assistant/ModalRelecturePartage';
-import { EXERCICES_BASE, loadExercicesPraticien } from '../data/exercices';
+import { EXERCICES_BASE } from '../data/exercices';
+import { loadExercicesPraticien } from '../lib/bibliothequeExercices';
 import { genererQuestionsClarification, genererProgrammeStructure } from '../utils/genererProgrammeIA';
 import {
   formatExerciceV1Ligne, formatExerciceV2Ligne, calculerPlanningReel, formatHistoriqueConversation,
@@ -148,23 +156,18 @@ function fmt(d: string): string {
 async function chargerProgrammeActif(patientId: string): Promise<ProgrammeResume | null> {
   if (!supabase) return null;
 
-  const { data: progRows } = await supabase
-    .from('programmes')
-    .select('*')
-    .eq('participant_id', patientId)
-    .eq('actif', true)
-    .limit(1);
+  const { data: progRows } = await lireProgrammeActif(patientId);
   const row = progRows?.[0] as Record<string, unknown> | undefined;
   if (!row) return null;
 
   if (row.type) {
-    const { data: seanceRows } = await supabase.from('programme_seances').select('*').eq('programme_id', row.id).order('ordre');
+    const { data: seanceRows } = await lireSeancesProgramme(row.id);
     const seances = (seanceRows ?? []) as { id: string }[];
     const [exRes, planRes] = await Promise.all([
       seances.length > 0
-        ? supabase.from('programme_exercices').select('*').in('seance_id', seances.map(s => s.id)).order('ordre')
+        ? lireExercicesProgramme(seances.map(s => s.id))
         : Promise.resolve({ data: [] as Record<string, unknown>[] }),
-      supabase.from('programme_planning').select('*').eq('programme_id', row.id),
+      lirePlanningProgramme(row.id),
     ]);
     const exRows = (exRes.data ?? []) as Record<string, unknown>[];
     const planRows = (planRes.data ?? []) as Record<string, unknown>[];
@@ -565,11 +568,7 @@ export default function AssistantPage() {
   async function loadLogs() {
     if (!supabase) return;
     try {
-      const { data } = await supabase
-        .from('assistant_logs')
-        .select('id, question, reponse, patient_id, created_at')
-        .order('created_at', { ascending: false })
-        .limit(50);
+      const { data } = await listerJournalAssistant();
       if (data) setLogs(data as AssistantLog[]);
     } catch { /* non bloquant */ }
   }
@@ -579,7 +578,7 @@ export default function AssistantPage() {
     if (!window.confirm('Supprimer cette question de l’historique ?')) return;
     const precedent = logs;
     setLogs(prev => prev.filter(l => l.id !== logId));
-    const { error } = await supabase.from('assistant_logs').delete().eq('id', logId);
+    const { error } = await supprimerJournalAssistant(logId);
     if (error) {
       setLogs(precedent);
       toast.error('Erreur lors de la suppression');
@@ -612,12 +611,12 @@ export default function AssistantPage() {
     const seuilPlanningISO = seuilPlanning.toISOString().slice(0, 10);
 
     const [crRes, spRes, notesRes, seancesRes, programmeRes] = await Promise.allSettled([
-      supabase ? supabase.from('comptes_rendus_seances').select('date_seance, observations, progression, points_attention, douleurs_signalees').eq('participant_id', patientId).order('date_seance', { ascending: false }).limit(5) : Promise.resolve({ data: null }),
-      supabase ? supabase.from('seances_patient').select('id, date_seance, commentaire_patient').eq('participant_id', patientId).order('date_seance', { ascending: false }).limit(30) : Promise.resolve({ data: null }),
-      supabase ? supabase.from('notes_seances').select('date, ressenti, note, alertes, douleur_eva').eq('participant_id', patientId).order('date', { ascending: false }).limit(5) : Promise.resolve({ data: null }),
+      supabase ? lireComptesRendusRecents(patientId) : Promise.resolve({ data: null }),
+      supabase ? lireSeancesPatientRecentes(patientId) : Promise.resolve({ data: null }),
+      supabase ? lireNotesRecentes(patientId) : Promise.resolve({ data: null }),
       // Colonnes explicites : motif_annulation/motif_annulation_detail sont internes
       // au praticien et ne doivent jamais transiter par le prompt IA (cf. assistantContexte.ts).
-      supabase ? supabase.from('seances').select('date, statut').eq('participant_id', patientId).eq('type', 'seance').gte('date', seuilPlanningISO) : Promise.resolve({ data: null }),
+      supabase ? lireSeancesPlanifieesDepuis(patientId, seuilPlanningISO) : Promise.resolve({ data: null }),
       chargerProgrammeActif(patientId),
     ]);
     const programme = programmeRes.status === 'fulfilled' ? programmeRes.value : null;
@@ -646,9 +645,7 @@ export default function AssistantPage() {
       const sp30 = spData.filter(s => new Date(s.date_seance as string) >= j30);
       let taux30j: number | null = null;
       if (supabase && sp30.length > 0) {
-        const erRes = await supabase.from('exercices_realises')
-          .select('seance_patient_id, realise')
-          .in('seance_patient_id', sp30.map(s => s.id));
+        const erRes = await lireExercicesRealises(sp30.map(s => s.id));
         const erRows = (erRes.data ?? []) as { seance_patient_id: string; realise: boolean }[];
         const total = erRows.length;
         const realises = erRows.filter(e => e.realise).length;
@@ -859,7 +856,7 @@ export default function AssistantPage() {
   async function saveLog(question: string, reponse: string, patientId: string | null, action: ActionType) {
     if (!supabase) return;
     try {
-      await supabase.from('assistant_logs').insert({ patient_id: patientId, question, reponse, action_type: action });
+      await ajouterJournalAssistant({ patient_id: patientId, question, reponse, action_type: action });
       await loadLogs();
     } catch { /* non bloquant */ }
   }
@@ -1131,10 +1128,9 @@ export default function AssistantPage() {
                             texteInitial: msg.content,
                             onConfirmer: async (texteFinal) => {
                               if (!supabase) return;
-                              const client = supabase;
                               const date = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
                               const resultat = await partagerDocument(
-                                () => client.from('documents_patient').insert({
+                                () => partagerAvecBeneficiaire({
                                   participant_id: patient.id,
                                   titre: `Compte-rendu du ${date}`,
                                   contenu: texteFinal,
@@ -1165,9 +1161,8 @@ export default function AssistantPage() {
                             texteInitial: msg.content,
                             onConfirmer: async (texteFinal) => {
                               if (!supabase) return;
-                              const client = supabase;
                               const resultat = await partagerDocument(
-                                () => client.from('documents_partages').insert({
+                                () => partagerAvecStructure({
                                   participant_id: patient.id,
                                   structure_id: structureId,
                                   type_document: actionType,

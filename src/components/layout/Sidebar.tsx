@@ -7,6 +7,7 @@ import {
 import { initialesPraticien } from '../../lib/initiales';
 import { IndicateurConnexion, BoutonInstallerApp } from '../pwa/PWAComponents';
 import { supabase } from '../../lib/supabase';
+import { lirePraticien } from '../../lib/acces/praticien';
 import { utilisateurCourant } from '../../lib/session';
 import LegalFooterLinks from '../legal/LegalFooterLinks';
 import { useAppRole } from '../../hooks/useAppRole';
@@ -47,12 +48,7 @@ export default function Sidebar({ onLogout }: Props) {
     if (!supabase) return;
     const user = await utilisateurCourant();
     if (!user) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase as any)
-      .from('praticiens')
-      .select('prenom, nom, titre, siret, numero_sap')
-      .eq('id', user.id)
-      .single();
+    const { data } = await lirePraticien(user.id, 'prenom, nom, titre, siret, numero_sap');
     if (data) setPraticien(data);
   }
 

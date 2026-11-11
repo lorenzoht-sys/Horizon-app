@@ -1,10 +1,5 @@
 import { useState, useMemo, useEffect, type ReactNode } from 'react';
-import {
-  loadExercicesPraticien, saveExercicePersonnalise,
-  getExercicesLocaux, migrationExercicesDejaFaite, migrerExercicesLocalStorageVersSupabase,
-  loadDossiersExercices, creerDossierExercice, reordonnerDossiersExercices,
-  loadMembresDossiers, ajouterExerciceADossier, retirerExerciceDeDossier,
-} from '../data/exercices';
+import { loadExercicesPraticien, saveExercicePersonnalise, getExercicesLocaux, migrationExercicesDejaFaite, migrerExercicesLocalStorageVersSupabase, loadDossiersExercices, creerDossierExercice, reordonnerDossiersExercices, loadMembresDossiers, ajouterExerciceADossier, retirerExerciceDeDossier } from '../lib/bibliothequeExercices';
 import PageWrapper from '../components/layout/PageWrapper';
 import CarteExerciceCompacte from '../components/exercices/CarteExerciceCompacte';
 import FicheExerciceModal from '../components/exercices/FicheExerciceModal';

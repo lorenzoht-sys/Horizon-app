@@ -1,6 +1,7 @@
 import { useState, useEffect, type FormEvent, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { lirePraticien, enregistrerPraticien } from '../lib/acces/praticien';
 import { utilisateurCourant } from '../lib/session';
 import { validerSiret } from '../lib/siret';
 import {
@@ -61,12 +62,7 @@ export default function OnboardingPage({ onComplete }: Props) {
     if (!supabase) return;
     utilisateurCourant().then((user) => {
       if (!user) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any)
-        .from('praticiens')
-        .select('prenom, nom')
-        .eq('id', user.id)
-        .single()
+      lirePraticien(user.id, 'prenom, nom')
         .then(({ data }: { data: { prenom?: string; nom?: string } | null }) => {
           if (data?.prenom) setPrenom(data.prenom);
           if (data?.nom) setNom(data.nom);
@@ -114,10 +110,7 @@ export default function OnboardingPage({ onComplete }: Props) {
     const siretClean = controleSiret.siret;
     // `.select()` sur l'upsert : on veut la LIGNE COMPLETE en retour, pas
     // seulement le succes. Voir l'ecriture du cache juste dessous.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: ligne, error: upsertError } = await (supabase as any)
-      .from('praticiens')
-      .upsert({
+    const { data: ligne, error: upsertError } = await enregistrerPraticien({
         id:      user.id,
         prenom:  prenom.trim(),
         nom:     nom.trim(),
@@ -125,9 +118,7 @@ export default function OnboardingPage({ onComplete }: Props) {
         societe: societe.trim() || null,
         siret:   siretClean || null,
         email:   user.email,
-      })
-      .select()
-      .single();
+      });
 
     if (upsertError) {
       console.error('[Onboarding] Erreur upsert praticiens:', upsertError);
