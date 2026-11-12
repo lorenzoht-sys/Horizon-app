@@ -79,10 +79,37 @@ jobs:
         # n'a donc JAMAIS pu s'exécuter, malgré le nom de cette étape.
         # Sorti du YAML pour qu'il soit exécutable — et donc vérifiable —
         # hors de la CI : `node scripts/verifier-resultat-harnais.mjs <json>`.
+        # Second essai (2026-11-12) : le harnais et le job e2e de ci.yml
+        # partagent le même staging. Quand ils tournent en même temps, l'e2e
+        # remet le jeu de démo à zéro et modifie des séances pendant que le
+        # harnais les lit : constaté le 2026-11-12, 4 échecs sur 225 sans
+        # rapport avec le code, verts à la relance seule. Un groupe de
+        # concurrence commun ne convient pas (GitHub ne garde qu'un job en
+        # attente par groupe : l'un annulerait l'autre). En cas d'échec, on
+        # attend donc la fin de tout e2e en cours, puis on rejoue UNE fois.
+        # Une vraie fuite de cloisonnement est déterministe : elle échoue aux
+        # deux essais et le job reste rouge. Le premier rapport est conservé
+        # dans les journaux, rien n'est masqué.
         run: |
-          npx vitest run tests/security --reporter=json --outputFile=vitest-security-result.json || true
-          node scripts/verifier-resultat-harnais.mjs vitest-security-result.json
+          lancer() {
+            npx vitest run tests/security --reporter=json --outputFile=vitest-security-result.json || true
+            node scripts/verifier-resultat-harnais.mjs vitest-security-result.json
+          }
+          if lancer; then exit 0; fi
+          echo "::warning::Harnais en échec au premier essai : attente de la fin d'un éventuel e2e, puis second et dernier essai."
+          for tentative in $(seq 1 40); do
+            en_cours=0
+            for run in $(gh api "repos/$GITHUB_REPOSITORY/actions/runs?status=in_progress&per_page=50" --jq '.workflow_runs[] | select(.name == "CI") | .id' 2>/dev/null || true); do
+              n=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/jobs" --jq '[.jobs[] | select(.name == "e2e" and .status == "in_progress")] | length' 2>/dev/null || echo 0)
+              en_cours=$((en_cours + n))
+            done
+            [ "$en_cours" = "0" ] && break
+            echo "  (tentative $tentative/40) e2e en cours, nouvelle vérification dans 30 s"
+            sleep 30
+          done
+          lancer
         env:
+          GH_TOKEN: ${{ github.token }}
           SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
           SUPABASE_TEST_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
           SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}

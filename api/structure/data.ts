@@ -7,7 +7,7 @@
 // (supabase/migrations/20260613_structure_access_logs.sql).
 
 import { getServiceClient, getClientIp } from '../_lib/patientAuth.js';
-import { validateStructureToken, logStructureAccess, getStructureToken } from '../_lib/structureAuth.js';
+import { validateStructureToken, logStructureAccess, getStructureToken, checkStructureRateLimit } from '../_lib/structureAuth.js';
 import { withSentry } from '../_lib/sentry.js';
 import { COLONNES_SEANCE_EXPOSEE } from '../_lib/colonnesSeancesExposees.js';
 
@@ -28,6 +28,12 @@ export default withSentry(async function handler(req: any, res: any) {
 
   const structure = await validateStructureToken(supabase, token);
   if (!structure) return res.status(401).json({ error: 'Lien invalide ou structure inactive' });
+
+  // Avant la journalisation : une requête refusée n'est pas comptée, sinon un
+  // client en boucle prolongerait indéfiniment son propre blocage.
+  if (!(await checkStructureRateLimit(supabase, structure.id))) {
+    return res.status(429).json({ error: 'Trop de requêtes, réessayez dans une minute' });
+  }
 
   await logStructureAccess(supabase, structure.id, getClientIp(req));
 
