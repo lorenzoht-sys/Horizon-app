@@ -23,11 +23,10 @@ const decrire = describe.skipIf(!DISPONIBLE);
 // Constat du 2026-10-27 sur la base locale (schéma de main) : H1, H2, H3 et
 // H3b en fuite ; H4 (avoirs) rassurant. H1, H3 et H3b sont fermées par la
 // migration 20261106100000_facturation_appartenance.sql de ce lot.
-export const FUITES_CONSTATEES: Record<string, string> = {
-  // FUITE CONSTATÉE — fermée par le lot K1 (#168, seances.contrat_id), pas
-  // par ce lot : le test redevient normal quand K1 est dans la branche.
-  'seance-sur-contrat-de-A': "seances.contrat_id non vérifié — la séance de B entre dans la facture de A (fermé par K1, #168)",
-};
+// H2 (séance de B rattachée au contrat de A) est fermée par le lot K1
+// (20261103100000_rls_ecriture_beneficiaire_verifie.sql, seances.contrat_id),
+// réuni avec ce lot sur main le 2026-11-12 : plus aucune fuite attendue.
+export const FUITES_CONSTATEES: Record<string, string> = {};
 
 type Ligne = Record<string, any>;
 const q = async (sql: string, params: unknown[] = []) => (await pg(c => c.query(sql, params))).rows as Ligne[];
