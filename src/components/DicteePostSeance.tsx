@@ -3,6 +3,7 @@ import { X, Mic, MicOff, RefreshCw, CheckCircle, Plus, Trash2, PenLine } from 'l
 import type { Participant } from '../types';
 import type { ExerciceRealise, CompteRenduSeanceInsert } from '../types/seance';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import RappelNomsIA from './ui/RappelNomsIA';
 import { resoudreTranscriptionFinale } from '../lib/dicteeTranscription';
 import { ecrireEtatSession, effacerEtatSession, lireEtatSession } from '../lib/etatSession';
 import { supabase } from '../lib/supabase';
@@ -368,6 +369,7 @@ export default function DicteePostSeance({ participant, onClose: fermerParent, o
                       : 'Appuyez sur le micro et parlez librement. Claude structurera vos notes automatiquement.'
                     }
                   </p>
+                  <RappelNomsIA className="text-center max-w-xs mt-1.5" />
                   {isIOS && (
                     <div className="mt-2 px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-lg text-center">
                       <p className="text-[11px] text-blue-600 font-medium">Mode Safari iOS — sessions courtes actives</p>

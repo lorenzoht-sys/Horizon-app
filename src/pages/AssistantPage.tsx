@@ -13,6 +13,7 @@ import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { toast } from 'sonner';
 import MarkdownRendu from '../components/ui/MarkdownRendu';
 import ModalRelecturePartage from '../components/assistant/ModalRelecturePartage';
+import RappelNomsIA from '../components/ui/RappelNomsIA';
 import { loadExercicesPraticien } from '../lib/bibliothequeExercices';
 import { genererQuestionsClarification, genererProgrammeStructure } from '../utils/genererProgrammeIA';
 import { calculerPlanningReel, formatHistoriqueConversation, type SeanceReelleBrute, type NoteManuelleResume, type DicteeResume } from '../utils/assistantContexte';
@@ -858,6 +859,7 @@ export default function AssistantPage() {
                 <Send size={16} />
               </button>
             </div>
+            <RappelNomsIA style={{ marginTop: 6 }} />
           </div>
         )}
       </div>

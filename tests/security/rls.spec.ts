@@ -270,6 +270,58 @@ const DETTE_PRIVILEGES_AUTHENTICATED: Record<string, string> = {
   zones_geographiques: 'REFERENCES,TRIGGER,TRUNCATE',
 };
 
+// Tables du test générique « Praticien A ↔ Praticien B » (colonne
+// praticien_id directe, ou OWNER_COLUMN_OVERRIDES). Une seule liste, lue à la
+// fois par le test paramétré et par « couverture complète » : avant le lot H
+// (2026-10-27), la couverture tenait sa propre liste, qui comptait comme
+// testées 16 tables qu'aucun test de cloisonnement ne touchait.
+const TABLES_PRATICIEN_DIRECT = [
+  'praticiens', 'participants', 'bilans', 'contrats', 'seances', 'notes_seances',
+  'programmes', 'zones_geographiques', 'indisponibilites', 'assistant_logs',
+  'comptes_rendus_seances', 'documents_patient', 'factures_suivi', 'structures',
+  'bilans_brouillons', 'templates_structure', 'dossiers_exercices',
+  'exercices_personnalises', 'programmes_modeles', 'evenements_agenda',
+  'cours_collectifs',
+  // Chantier 15 (migration 20261101100000) : praticien_id direct + updated_at, RLS « propriétaire ».
+  'categories_seance', 'bilans_auto',
+] as const;
+
+// Tables couvertes par un describe dédié (lecture, modification,
+// suppression et insertion croisées). Le describe « Lot H » vérifie que
+// chacune a bien ses tests : cette liste ne peut pas mentir.
+const TABLES_TESTS_DEDIES = [
+  'seances_patient', 'exercices_realises', 'retours_seance', 'tests_etalons_activations',
+  'tests_etalons_resultats', 'exercices_libres_activations', 'exercices_libres_validations',
+  'documents_partages', 'push_subscriptions', 'rappel_preferences', 'rappels_envoyes',
+  'structure_access_logs', 'organisations', 'organisation_membres', 'organisation_invitations',
+  'praticien_push_subscriptions', 'participations_cours_collectifs',
+] as const;
+
+// Fuites RÉELLES constatées par ce harnais et non encore corrigées (une
+// policy ne se corrige que par une migration). Clé « table:tentative ».
+// Chaque entrée passe le test correspondant en `it.fails` (il reste vert
+// tant que la fuite existe, et échoue le jour où elle est corrigée : retirer
+// alors l'entrée). Toute entrée est une FUITE CONSTATÉE, à traiter.
+const FUITES_CONSTATEES: Record<string, string> = {
+  // FUITE CONSTATÉE (harnais CI, PR #164, 2026-10-27) — la policy
+  // tests_etalons_activations_praticien_all ne vérifie que
+  // praticien_id = auth.uid() : B attache une activation au bénéficiaire de A.
+  'tests_etalons_activations:insertion-beneficiaire-de-A':
+    'WITH CHECK sans contrôle du bénéficiaire (praticien_id = auth.uid() seulement)',
+  // FUITE CONSTATÉE (idem) — exercices_libres_activations_praticien_all.
+  'exercices_libres_activations:insertion-beneficiaire-de-A':
+    'WITH CHECK sans contrôle du bénéficiaire (praticien_id = auth.uid() seulement)',
+  // FUITE CONSTATÉE (idem) — praticien_gere_rappel_preferences, et le trigger
+  // set_praticien_id_from_auth remplit praticien_id avec B quand il est omis.
+  'rappel_preferences:insertion-beneficiaire-de-A':
+    'WITH CHECK sans contrôle du bénéficiaire (praticien_id = auth.uid() seulement)',
+  // FUITE CONSTATÉE (idem) — orga_acces_participations_cours_collectifs :
+  // WITH CHECK acces_participant(participant_id) suffit, sans contrôle du
+  // cours ; B inscrit SON bénéficiaire au cours de A.
+  'participations_cours_collectifs:insertion-beneficiaire-de-B':
+    'WITH CHECK de la policy orga sans contrôle du cours (acces_participant seul)',
+};
+
 async function requireStagingEnv() {
   if (!HAS_STAGING_ENV) {
     throw new Error(
@@ -427,22 +479,10 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
 
   describe('Praticien A ↔ Praticien B (tables avec colonne praticien_id directe)', () => {
     it.each(
-      // Rempli dynamiquement dans beforeAll via un it.concurrent artificiel
-      // n'étant pas possible (it.each s'évalue avant beforeAll), on filtre
-      // via un test paramétré sur la liste statique de la cartographie
-      // (docs/CARTOGRAPHIE_SECURITE.md §1) comme fallback si l'introspection
-      // dynamique échoue à runtime — voir le test "couverture complète" plus
-      // bas qui, lui, compare cette liste à information_schema en direct.
-      [
-        'praticiens', 'participants', 'bilans', 'contrats', 'seances', 'notes_seances',
-        'programmes', 'zones_geographiques', 'indisponibilites', 'assistant_logs',
-        'comptes_rendus_seances', 'documents_patient', 'factures_suivi', 'structures',
-        'bilans_brouillons', 'templates_structure', 'dossiers_exercices',
-        'exercices_personnalises', 'programmes_modeles', 'evenements_agenda',
-        'cours_collectifs',
-        // Chantier 15 (migration 20261101100000) : praticien_id direct + updated_at, RLS « propriétaire ».
-        'categories_seance', 'bilans_auto',
-      ] as const
+      // Liste statique (it.each s'évalue avant beforeAll) : voir
+      // TABLES_PRATICIEN_DIRECT en tête de fichier, et le test « couverture
+      // complète » qui la compare à information_schema en direct.
+      TABLES_PRATICIEN_DIRECT
     )('praticien B ne peut ni lire ni écrire une ligne de %s appartenant à praticien A', async (table) => {
       // Colonne de filtrage : praticien_id par défaut, sauf override (voir
       // OWNER_COLUMN_OVERRIDES ci-dessus — cas de `praticiens`, qui n'a pas
@@ -967,23 +1007,367 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
     });
   });
 
+  // ────────────────────────────────────────────────────────────────────────
+  // Lot H sécurité HDS (2026-10-27) : cloisonnement A ↔ B des 16 tables que
+  // le test « couverture complète » comptait comme testées alors qu'aucun
+  // test de lecture/écriture croisée ne les touchait. Pour chaque table, une
+  // ligne appartenant à praticien A est créée en service_role sur un
+  // bénéficiaire FICTIF de A (prénom E2E, créé et supprimé par ce bloc), puis
+  // praticien B tente de la lire, la modifier, la supprimer, et d'insérer une
+  // ligne rattachée à A. Chaque tentative est vérifiée en relisant la base en
+  // service_role : une erreur PostgREST ne prouve rien à elle seule.
+  //
+  // Une tentative qui RÉUSSIT est une fuite : le test correspondant est alors
+  // marqué `it.fails` avec un commentaire « FUITE CONSTATÉE » (la policy ne
+  // se corrige que par une migration, hors de ce lot). Le jour où la policy
+  // est corrigée, ce `it.fails` échoue : retirer le marqueur.
+  describe('Lot H — cloisonnement A ↔ B des tables sans test dédié', () => {
+    let pA: string;  // bénéficiaire fictif de praticien A
+    let pA2: string; // second bénéficiaire fictif de A, sans préférence de rappel
+    let structureA: string;
+    const nonce = () => `rls-spec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const rgpd = { consentementObtenu: true, droitAcces: true, droitRectification: true, droitEffacement: true, methodeConsentement: 'ecrit', consentementDate: new Date().toISOString().slice(0, 10) };
+
+    beforeAll(async () => {
+      const creer = async (nom: string) => {
+        const { data, error } = await admin.from('participants')
+          .insert({ praticien_id: praticienAId, prenom: 'E2E', nom, code_acces: `RLSH${Math.floor(Math.random() * 1e6)}`, rgpd })
+          .select('id').single();
+        if (error || !data) throw new Error(`Bénéficiaire fictif de A impossible à créer : ${error?.message}`);
+        return data.id as string;
+      };
+      pA = await creer('RLS-Spec Lot H');
+      pA2 = await creer('RLS-Spec Lot H bis');
+      const { data: s, error: sErr } = await admin.from('structures')
+        .insert({ praticien_id: praticienAId, nom: 'RLS-Spec structure', contact_email: 'rls-spec@example.invalid' })
+        .select('id').single();
+      if (sErr || !s) throw new Error(`Structure fictive de A impossible à créer : ${sErr?.message}`);
+      structureA = s.id;
+    }, 60_000);
+
+    afterAll(async () => {
+      // Par identifiant précis ; les lignes enfants partent par ON DELETE CASCADE.
+      if (structureA) await admin.from('structures').delete().eq('id', structureA);
+      for (const id of [pA, pA2]) if (id) await admin.from('participants').delete().eq('id', id);
+    });
+
+    type Ligne = Record<string, unknown>;
+    interface Cas {
+      table: string;
+      /** Clé primaire (id uuid par défaut ; bigint pour structure_access_logs). */
+      ligneA: () => Promise<Ligne> | Ligne;
+      /** Colonne modifiée par la tentative de B, et la valeur qu'il essaie d'y mettre. */
+      modif: [string, unknown];
+      /** Contrôle positif : A relit sa propre ligne (si une policy SELECT le lui permet). */
+      lectureA: boolean;
+      /** Tentatives d'insertion croisée par B : la ligne, et le filtre qui la retrouve en service_role. */
+      insertionsB: () => Promise<{ ligne: Ligne; filtre: Ligne; note: string }[]> | { ligne: Ligne; filtre: Ligne; note: string }[];
+    }
+
+    async function creerLigneA(c: Cas): Promise<{ id: unknown; ligne: Ligne }> {
+      const ligne = await c.ligneA();
+      const { data, error } = await admin.from(c.table).insert(ligne).select('*').single();
+      if (error || !data) throw new Error(`Fixture ${c.table} impossible à créer : ${error?.message}`);
+      return { id: (data as Ligne).id, ligne: data as Ligne };
+    }
+    async function relire(table: string, id: unknown): Promise<Ligne | null> {
+      const { data } = await admin.from(table).select('*').eq('id', id as string).maybeSingle();
+      return (data as Ligne | null) ?? null;
+    }
+    async function supprimer(table: string, id: unknown) {
+      await admin.from(table).delete().eq('id', id as string);
+    }
+
+    const CAS: Cas[] = [
+      {
+        table: 'seances_patient', lectureA: true, modif: ['commentaire_patient', 'modifie-par-B'],
+        ligneA: () => ({ participant_id: pA, date_seance: '2099-01-01', statut: 'terminee', commentaire_patient: 'rls-spec' }),
+        insertionsB: () => { const n = nonce(); return [{ ligne: { participant_id: pA, date_seance: '2099-01-02', statut: 'terminee', commentaire_patient: n }, filtre: { commentaire_patient: n }, note: 'séance sur le bénéficiaire de A' }]; },
+      },
+      {
+        table: 'exercices_realises', lectureA: true, modif: ['commentaire', 'modifie-par-B'],
+        ligneA: async () => {
+          const { data } = await admin.from('seances_patient').insert({ participant_id: pA, date_seance: '2099-01-03', statut: 'terminee' }).select('id').single();
+          return { seance_patient_id: (data as Ligne).id, realise: false, commentaire: 'rls-spec' };
+        },
+        insertionsB: async () => {
+          const { data } = await admin.from('seances_patient').insert({ participant_id: pA, date_seance: '2099-01-04', statut: 'terminee' }).select('id').single();
+          const n = nonce();
+          return [{ ligne: { seance_patient_id: (data as Ligne).id, realise: true, commentaire: n }, filtre: { commentaire: n }, note: 'exercice sur une séance de A' }];
+        },
+      },
+      {
+        table: 'retours_seance', lectureA: true, modif: ['borg_rpe', 9],
+        ligneA: () => ({ participant_id: pA, praticien_id: praticienAId, date: '2099-01-01', borg_rpe: 5, bien_etre: 3 }),
+        insertionsB: () => [
+          { ligne: { participant_id: pA, praticien_id: praticienAId, date: '2099-02-01', borg_rpe: 7, bien_etre: 2 }, filtre: { participant_id: pA, date: '2099-02-01' }, note: 'praticien_id de A' },
+          { ligne: { participant_id: pA, praticien_id: praticienBId, date: '2099-02-02', borg_rpe: 7, bien_etre: 2 }, filtre: { participant_id: pA, date: '2099-02-02' }, note: 'praticien_id de B, bénéficiaire de A' },
+        ],
+      },
+      {
+        table: 'tests_etalons_activations', lectureA: true, modif: ['actif', false],
+        ligneA: () => ({ participant_id: pA, praticien_id: praticienAId, test_id: nonce(), actif: true }),
+        insertionsB: () => { const n1 = nonce(); return [
+          { ligne: { participant_id: pA, praticien_id: praticienAId, test_id: n1 }, filtre: { test_id: n1 }, note: 'praticien_id de A' },
+        ]; },
+      },
+      {
+        table: 'tests_etalons_resultats', lectureA: true, modif: ['valeur', 99],
+        ligneA: () => ({ participant_id: pA, test_id: nonce(), valeur: 3, date_test: '2099-01-01' }),
+        insertionsB: () => { const n = nonce(); return [{ ligne: { participant_id: pA, test_id: n, valeur: 1, date_test: '2099-01-02' }, filtre: { test_id: n }, note: 'résultat sur le bénéficiaire de A' }]; },
+      },
+      {
+        table: 'exercices_libres_activations', lectureA: true, modif: ['nom', 'modifie-par-B'],
+        ligneA: () => ({ participant_id: pA, praticien_id: praticienAId, exercice_id: nonce(), nom: 'RLS-SPEC' }),
+        insertionsB: () => { const n1 = nonce(); return [
+          { ligne: { participant_id: pA, praticien_id: praticienAId, exercice_id: n1, nom: 'RLS-SPEC B' }, filtre: { exercice_id: n1 }, note: 'praticien_id de A' },
+        ]; },
+      },
+      {
+        table: 'exercices_libres_validations', lectureA: true, modif: ['note', 'modifie-par-B'],
+        ligneA: () => ({ participant_id: pA, exercice_id: nonce(), date: '2099-01-01', fait: true }),
+        insertionsB: () => { const n = nonce(); return [{ ligne: { participant_id: pA, exercice_id: n, date: '2099-01-02', fait: true }, filtre: { exercice_id: n }, note: 'validation sur le bénéficiaire de A' }]; },
+      },
+      {
+        table: 'documents_partages', lectureA: true, modif: ['contenu', 'modifie-par-B'],
+        ligneA: () => ({ participant_id: pA, type_document: 'compte_rendu', contenu: 'rls-spec', date_document: '2099-01-01' }),
+        insertionsB: () => { const n = nonce(); return [{ ligne: { participant_id: pA, type_document: 'compte_rendu', contenu: n, date_document: '2099-01-02' }, filtre: { contenu: n }, note: 'document sur le bénéficiaire de A' }]; },
+      },
+      {
+        table: 'push_subscriptions', lectureA: true, modif: ['user_agent', 'modifie-par-B'],
+        ligneA: () => ({ participant_id: pA, endpoint: `https://rls-spec.example/${nonce()}`, p256dh: 'p256dh-test', auth_key: 'auth-test' }),
+        insertionsB: () => { const e = `https://rls-spec.example/${nonce()}`; return [{ ligne: { participant_id: pA, endpoint: e, p256dh: 'x', auth_key: 'y' }, filtre: { endpoint: e }, note: 'abonnement sur le bénéficiaire de A' }]; },
+      },
+      {
+        table: 'rappel_preferences', lectureA: true, modif: ['rappel_seance_actif', false],
+        ligneA: () => ({ praticien_id: praticienAId, participant_id: pA, rappel_seance_actif: true }),
+        // Sur pA2 (aucune préférence) : l'index unique par participant ferait
+        // échouer l'insertion sur pA pour une raison sans rapport avec la RLS.
+        insertionsB: () => [
+          { ligne: { praticien_id: praticienAId, participant_id: pA2, rappel_seance_actif: true }, filtre: { participant_id: pA2 }, note: 'praticien_id de A' },
+        ],
+      },
+      {
+        table: 'rappels_envoyes', lectureA: true, modif: ['type', 'relance_exercices'],
+        ligneA: () => ({ participant_id: pA, type: 'rappel_seance', reference_id: crypto.randomUUID() }),
+        insertionsB: () => { const r = crypto.randomUUID(); return [{ ligne: { participant_id: pA, type: 'rappel_seance', reference_id: r }, filtre: { reference_id: r }, note: 'rappel sur le bénéficiaire de A' }]; },
+      },
+      {
+        table: 'structure_access_logs', lectureA: true, modif: ['ip', '198.51.100.99'],
+        ligneA: () => ({ structure_id: structureA, ip: '203.0.113.10' }),
+        insertionsB: () => { const ip = `203.0.113.${Math.floor(Math.random() * 200) + 20}-${nonce()}`; return [{ ligne: { structure_id: structureA, ip }, filtre: { ip }, note: 'journal sur la structure de A' }]; },
+      },
+    ];
+
+    it('chaque table de TABLES_TESTS_DEDIES a bien ses tests de cloisonnement dans ce bloc', () => {
+      const couvertes = new Set<string>([
+        ...CAS.map(c => c.table),
+        'organisations', 'organisation_membres', 'organisation_invitations',
+        'praticien_push_subscriptions', 'participations_cours_collectifs',
+      ]);
+      expect([...couvertes].sort()).toEqual([...TABLES_TESTS_DEDIES].sort());
+    });
+
+    for (const c of CAS) {
+      const fuite = FUITES_CONSTATEES[`${c.table}:lecture`];
+      (fuite ? it.fails : it)(`${c.table} : praticien B ne lit pas une ligne de A${fuite ? ` — FUITE CONSTATÉE : ${fuite}` : ''}`, async () => {
+        const { id } = await creerLigneA(c);
+        try {
+          if (c.lectureA) {
+            const { data: luA, error } = await clientA.from(c.table).select('id').eq('id', id as string);
+            expect(error?.message ?? null, `contrôle positif : A doit relire sa ligne de ${c.table}`).toBeNull();
+            expect(luA ?? [], `contrôle positif : A doit relire sa ligne de ${c.table}`).toHaveLength(1);
+          }
+          const { data: luB } = await clientB.from(c.table).select('*').eq('id', id as string);
+          expect(luB ?? [], `praticien B a lu la ligne de A dans ${c.table}`).toHaveLength(0);
+        } finally {
+          await supprimer(c.table, id);
+        }
+      });
+
+      const fuiteModif = FUITES_CONSTATEES[`${c.table}:modification`];
+      (fuiteModif ? it.fails : it)(`${c.table} : praticien B ne modifie ni ne supprime une ligne de A${fuiteModif ? ` — FUITE CONSTATÉE : ${fuiteModif}` : ''}`, async () => {
+        const { id, ligne } = await creerLigneA(c);
+        try {
+          const [col, valeur] = c.modif;
+          await clientB.from(c.table).update({ [col]: valeur }).eq('id', id as string);
+          const apresModif = await relire(c.table, id);
+          expect(apresModif?.[col], `praticien B a modifié ${col} d'une ligne de A dans ${c.table}`).toEqual(ligne[col]);
+
+          await clientB.from(c.table).delete().eq('id', id as string);
+          expect(await relire(c.table, id), `praticien B a supprimé une ligne de A dans ${c.table}`).not.toBeNull();
+        } finally {
+          await supprimer(c.table, id);
+        }
+      });
+
+      const fuiteInsert = FUITES_CONSTATEES[`${c.table}:insertion`];
+      (fuiteInsert ? it.fails : it)(`${c.table} : praticien B n'insère pas de ligne rattachée à A${fuiteInsert ? ` — FUITE CONSTATÉE : ${fuiteInsert}` : ''}`, async () => {
+        const tentatives = await c.insertionsB();
+        const reussies: string[] = [];
+        for (const t of tentatives) {
+          // Sans .select() : une insertion acceptée mais illisible pour B
+          // (RETURNING filtré par la policy SELECT) passerait sinon pour un refus.
+          await clientB.from(c.table).insert(t.ligne);
+          let q = admin.from(c.table).select('id');
+          for (const [k, v] of Object.entries(t.filtre)) q = q.eq(k, v as string);
+          const { data } = await q;
+          for (const r of (data ?? []) as Ligne[]) { reussies.push(t.note); await supprimer(c.table, r.id); }
+        }
+        expect(reussies, `praticien B a inséré dans ${c.table} : ${reussies.join(', ')}`).toEqual([]);
+      });
+    }
+
+    // Variante « praticien_id de B, bénéficiaire de A » : séparée des
+    // insertions ci-dessus parce que la policy de ces trois tables ne vérifie
+    // QUE praticien_id = auth.uid(), jamais que le bénéficiaire appartient au
+    // praticien. Le trigger set_praticien_id_from_auth (rappel_preferences)
+    // remplit praticien_id avec B quand il est omis.
+    const INSERTIONS_BENEFICIAIRE_DE_A: { table: string; ligne: () => Ligne; filtre: (l: Ligne) => Ligne }[] = [
+      { table: 'tests_etalons_activations', ligne: () => ({ participant_id: pA, praticien_id: praticienBId, test_id: nonce() }), filtre: l => ({ test_id: l.test_id }) },
+      { table: 'exercices_libres_activations', ligne: () => ({ participant_id: pA, praticien_id: praticienBId, exercice_id: nonce(), nom: 'RLS-SPEC B' }), filtre: l => ({ exercice_id: l.exercice_id }) },
+      { table: 'rappel_preferences', ligne: () => ({ participant_id: pA2, rappel_seance_actif: true }), filtre: () => ({ participant_id: pA2 }) },
+    ];
+    for (const ins of INSERTIONS_BENEFICIAIRE_DE_A) {
+      const fuite = FUITES_CONSTATEES[`${ins.table}:insertion-beneficiaire-de-A`];
+      (fuite ? it.fails : it)(`${ins.table} : praticien B n'attache pas sa propre ligne au bénéficiaire de A${fuite ? ` — FUITE CONSTATÉE : ${fuite}` : ''}`, async () => {
+        const ligne = ins.ligne();
+        await clientB.from(ins.table).insert(ligne);
+        let q = admin.from(ins.table).select('id');
+        for (const [k, v] of Object.entries(ins.filtre(ligne))) q = q.eq(k, v as string);
+        const { data } = await q;
+        for (const r of (data ?? []) as Ligne[]) await supprimer(ins.table, r.id);
+        expect(data ?? [], `praticien B a attaché une ligne de ${ins.table} au bénéficiaire de A`).toHaveLength(0);
+      });
+    }
+
+    describe('organisations, organisation_membres, organisation_invitations', () => {
+      let orgId: string;
+      let membreAId: string;
+      let invitationId: string;
+
+      beforeAll(async () => {
+        const { data: org, error } = await admin.from('organisations')
+          .insert({ nom: 'RLS-Spec organisation', statut: 'active', actif: true }).select('id').single();
+        if (error || !org) throw new Error(`Organisation fictive impossible à créer : ${error?.message}`);
+        orgId = org.id;
+        const { data: m, error: mErr } = await admin.from('organisation_membres')
+          .insert({ organisation_id: orgId, user_id: praticienAId, role: 'admin', actif: true }).select('id').single();
+        if (mErr || !m) throw new Error(`Adhésion de A impossible à créer : ${mErr?.message}`);
+        membreAId = m.id;
+        const { data: inv, error: invErr } = await admin.from('organisation_invitations')
+          .insert({ organisation_id: orgId, code: nonce(), role: 'intervenant', cree_par: praticienAId }).select('id').single();
+        if (invErr || !inv) throw new Error(`Invitation fictive impossible à créer : ${invErr?.message}`);
+        invitationId = inv.id;
+      });
+
+      afterAll(async () => {
+        // Membres et invitations partent avec l'organisation (ON DELETE CASCADE).
+        if (orgId) await admin.from('organisations').delete().eq('id', orgId);
+      });
+
+      it('contrôle positif : A (admin) lit son organisation, ses membres et ses invitations', async () => {
+        for (const [table, id] of [['organisations', orgId], ['organisation_membres', membreAId], ['organisation_invitations', invitationId]] as const) {
+          const { data, error } = await clientA.from(table).select('id').eq('id', id);
+          expect(error?.message ?? null, `A doit relire ${table}`).toBeNull();
+          expect(data ?? [], `A doit relire ${table}`).toHaveLength(1);
+        }
+      });
+
+      it('praticien B ne lit ni l\'organisation de A, ni ses membres, ni ses invitations', async () => {
+        for (const [table, id] of [['organisations', orgId], ['organisation_membres', membreAId], ['organisation_invitations', invitationId]] as const) {
+          const { data } = await clientB.from(table).select('*').eq('id', id);
+          expect(data ?? [], `praticien B a lu ${table} de l'organisation de A`).toHaveLength(0);
+        }
+      });
+
+      it('praticien B ne modifie pas l\'organisation de A ni ses membres', async () => {
+        await clientB.from('organisations').update({ nom: 'modifie-par-B' }).eq('id', orgId);
+        expect((await relire('organisations', orgId))?.nom).toBe('RLS-Spec organisation');
+        await clientB.from('organisation_membres').update({ role: 'intervenant' }).eq('id', membreAId);
+        expect((await relire('organisation_membres', membreAId))?.role).toBe('admin');
+        await clientB.from('organisation_membres').delete().eq('id', membreAId);
+        expect(await relire('organisation_membres', membreAId)).not.toBeNull();
+        await clientB.from('organisation_invitations').delete().eq('id', invitationId);
+        expect(await relire('organisation_invitations', invitationId)).not.toBeNull();
+      });
+
+      it('praticien B ne s\'ajoute pas à l\'organisation de A et n\'y crée pas d\'invitation', async () => {
+        await clientB.from('organisation_membres').insert({ organisation_id: orgId, user_id: praticienBId, role: 'admin', actif: true });
+        const { data: m } = await admin.from('organisation_membres').select('id').eq('organisation_id', orgId).eq('user_id', praticienBId);
+        for (const r of m ?? []) await supprimer('organisation_membres', r.id);
+        expect(m ?? [], 'praticien B s\'est ajouté comme membre de l\'organisation de A').toHaveLength(0);
+
+        const code = nonce();
+        await clientB.from('organisation_invitations').insert({ organisation_id: orgId, code, role: 'admin', cree_par: praticienBId });
+        const { data: inv } = await admin.from('organisation_invitations').select('id').eq('code', code);
+        for (const r of inv ?? []) await supprimer('organisation_invitations', r.id);
+        expect(inv ?? [], 'praticien B a créé une invitation dans l\'organisation de A').toHaveLength(0);
+      });
+    });
+
+    it('praticien_push_subscriptions : praticien B n\'insère pas d\'abonnement au nom de A', async () => {
+      const endpoint = `https://rls-spec-test.example/${nonce()}`;
+      await clientB.from('praticien_push_subscriptions').insert({ praticien_id: praticienAId, endpoint, p256dh: 'x', auth_key: 'y' });
+      const { data } = await admin.from('praticien_push_subscriptions').select('id').eq('endpoint', endpoint);
+      for (const r of data ?? []) await supprimer('praticien_push_subscriptions', r.id);
+      expect(data ?? [], 'praticien B a créé un abonnement push au nom de A').toHaveLength(0);
+    });
+
+    describe('participations_cours_collectifs : écriture croisée', () => {
+      let coursId: string;
+      let participationAId: string;
+
+      beforeAll(async () => {
+        const { data: cours, error } = await admin.from('cours_collectifs').insert({
+          praticien_id: praticienAId, titre: 'RLS-SPEC lot H', date: '2099-01-02', heure_debut: '10:00', duree_minutes: 45, mode_facturation: 'individuel',
+        }).select('id').single();
+        if (error || !cours) throw new Error(`Cours fictif de A impossible à créer : ${error?.message}`);
+        coursId = cours.id;
+        const { data: p, error: pErr } = await admin.from('participations_cours_collectifs')
+          .insert({ cours_id: coursId, participant_id: pA }).select('id').single();
+        if (pErr || !p) throw new Error(`Participation fictive impossible à créer : ${pErr?.message}`);
+        participationAId = p.id;
+      });
+
+      afterAll(async () => {
+        // Les participations partent avec le cours (ON DELETE CASCADE).
+        if (coursId) await admin.from('cours_collectifs').delete().eq('id', coursId);
+      });
+
+      it('praticien B ne modifie ni ne supprime une participation au cours de A', async () => {
+        await clientB.from('participations_cours_collectifs').update({ statut_presence: 'absent', notes: 'modifie-par-B' }).eq('id', participationAId);
+        const apres = await relire('participations_cours_collectifs', participationAId);
+        expect(apres?.statut_presence, 'praticien B a modifié une participation au cours de A').toBe('present');
+        expect(apres?.notes ?? null).toBeNull();
+        await clientB.from('participations_cours_collectifs').delete().eq('id', participationAId);
+        expect(await relire('participations_cours_collectifs', participationAId), 'praticien B a supprimé une participation au cours de A').not.toBeNull();
+      });
+
+      it('praticien B n\'inscrit pas le bénéficiaire de A au cours de A', async () => {
+        await clientB.from('participations_cours_collectifs').insert({ cours_id: coursId, participant_id: pA2 });
+        const { data } = await admin.from('participations_cours_collectifs').select('id').eq('cours_id', coursId).eq('participant_id', pA2);
+        for (const r of data ?? []) await supprimer('participations_cours_collectifs', r.id);
+        expect(data ?? [], 'praticien B a inscrit un bénéficiaire de A au cours de A').toHaveLength(0);
+      });
+
+      const fuite = FUITES_CONSTATEES['participations_cours_collectifs:insertion-beneficiaire-de-B'];
+      (fuite ? it.fails : it)(`praticien B n'inscrit pas son propre bénéficiaire au cours de A${fuite ? ` — FUITE CONSTATÉE : ${fuite}` : ''}`, async () => {
+        await clientB.from('participations_cours_collectifs').insert({ cours_id: coursId, participant_id: participantBId });
+        const { data } = await admin.from('participations_cours_collectifs').select('id').eq('cours_id', coursId).eq('participant_id', participantBId);
+        for (const r of data ?? []) await supprimer('participations_cours_collectifs', r.id);
+        expect(data ?? [], 'praticien B a inscrit son bénéficiaire au cours de A').toHaveLength(0);
+      });
+    });
+  });
+
   it('couverture complète : toute table public non testée ci-dessus est explicitement listée (EXCLUDED_TABLES ou TABLE_OVERRIDES)', async () => {
     if (publicTablesError) {
       throw new Error(`Impossible de vérifier la couverture des tables : ${publicTablesError}`);
     }
-    const testedDirect = [
-      'praticiens', 'participants', 'bilans', 'contrats', 'seances', 'notes_seances',
-      'programmes', 'zones_geographiques', 'indisponibilites', 'assistant_logs',
-      'comptes_rendus_seances', 'documents_patient', 'factures_suivi', 'structures',
-      'bilans_brouillons', 'templates_structure', 'dossiers_exercices',
-      'exercices_personnalises', 'programmes_modeles', 'evenements_agenda',
-      'seances_patient', 'exercices_realises', 'push_subscriptions', 'rappel_preferences',
-      'rappels_envoyes', 'retours_seance', 'tests_etalons_activations', 'tests_etalons_resultats',
-      'exercices_libres_activations', 'exercices_libres_validations', 'organisations',
-      'organisation_membres', 'organisation_invitations', 'structure_access_logs',
-      'documents_partages', 'cours_collectifs', 'praticien_push_subscriptions',
-      'categories_seance', 'bilans_auto',
-    ];
+    // Seules les tables réellement passées par un test de cloisonnement
+    // comptent (lot H, 2026-10-27).
+    const testedDirect = [...TABLES_PRATICIEN_DIRECT, ...TABLES_TESTS_DEDIES];
     const known = new Set([...testedDirect, ...Object.keys(TABLE_OVERRIDES), ...Object.keys(EXCLUDED_TABLES)]);
     const unknown = publicTables.filter((t) => !known.has(t) && !t.startsWith('_'));
     expect(
