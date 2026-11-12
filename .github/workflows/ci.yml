@@ -25,6 +25,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node --test clevercloud/serveur/*.test.mjs
+      # Scripts de migration (nettoyeur de dump, copie des PDF vers Cellar).
+      # repetition-http.test.mjs a besoin de PostgREST : il tourne dans le job suivant.
+      - run: node --test clevercloud/scripts/nettoyer-dump.test.mjs clevercloud/scripts/copier-factures.test.mjs
 
   # Répétition à blanc de la cible HDS : le schéma du dépôt est reconstruit sur
   # un PostgreSQL 17 STANDARD (sans Supabase), puis lu et écrit par le chemin
