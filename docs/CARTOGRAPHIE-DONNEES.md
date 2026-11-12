@@ -1,20 +1,20 @@
 # Cartographie des données d'Horizon (générée)
 
-Générée par `node scripts/cartographie.mjs` le 2026-11-11.
+Générée par `node scripts/cartographie.mjs` le 2026-11-12.
 Ne pas modifier à la main : relancer le script après chaque chantier.
 
 ## Chiffres clés
 
 | Élément | Nombre |
 | --- | --- |
-| Fichiers du front (hors tests) | 316 (65 289 lignes) |
+| Fichiers du front (hors tests) | 320 (65 445 lignes) |
 | Routes API (`api/`) | 12 |
 | Edge Functions | 3 |
 | Tables (schéma public) | 62 |
 | Tables lues ou écrites directement par le front | 47 |
 | Fonctions SQL appelées en RPC par le front | 8 |
-| Tests unitaires | 92 fichiers |
-| Scénarios e2e | 39 fichiers |
+| Tests unitaires | 98 fichiers |
+| Scénarios e2e | 41 fichiers |
 
 ## Table par table
 
@@ -46,7 +46,7 @@ Functions (clé `service_role`, RLS contournée : le contrôle est dans le code)
 | `exercices_libres_validations` | 2 | 0 | hooks/useActivitesHorsProgramme | api/patient/activite, api/patient/me |
 | `exercices_personnalises` | 1 | 0 | lib/bibliothequeExercices | — |
 | `exercices_realises` | 4 | 0 | lib/acces/assistant, lib/suiviBeneficiaire | api/patient/me, api/patient/seance |
-| `factures` | 2 | 11 | hooks/useDocumentsBeneficiaire, hooks/useFacturesAValider | api/_lib/facturationMensuelle, supabase/functions/facturation-envoi/index, supabase/functions/facturation-pdf/index |
+| `factures` | 2 | 12 | hooks/useDocumentsBeneficiaire, hooks/useFacturesAValider | api/_lib/facturationMensuelle, supabase/functions/facturation-envoi/index, supabase/functions/facturation-pdf/index |
 | `factures_suivi` | 1 | 0 | hooks/useFactures | api/structure/data |
 | `indisponibilites` | 4 | 1 | hooks/useIndispos, lib/acces/indisponibilites | — |
 | `lignes_facture` | 2 | 1 | hooks/useFacturesAValider | supabase/functions/facturation-pdf/index |
@@ -165,20 +165,20 @@ Ce sont les zones où une modification a le plus de chances d'avoir des effets d
 | Fichier | Lignes | Tables touchées directement |
 | --- | --- | --- |
 | `src/data/exercices.ts` | 1 947 | — |
-| `src/pages/StatsPage.tsx` | 1 532 | — |
+| `src/pages/StatsPage.tsx` | 1 470 | — |
 | `src/pages/ParticipantProfile.tsx` | 1 465 | — |
 | `src/components/participant/ParticipantForm.tsx` | 1 409 | — |
 | `src/types/index.ts` | 1 211 | — |
-| `src/components/programme/ProgrammeWizard.tsx` | 1 023 | — |
+| `src/components/programme/ProgrammeWizard.tsx` | 1 022 | — |
 | `src/pages/AgendaV2Page.tsx` | 1 022 | — |
 | `src/data/exercicesMouvApa.ts` | 943 | — |
 | `src/pages/PortailStructure.tsx` | 893 | — |
 | `src/components/participant/ContratsTab.tsx` | 890 | — |
-| `src/pages/AssistantPage.tsx` | 877 | — |
+| `src/pages/AssistantPage.tsx` | 879 | — |
 | `src/components/bilan/FormulaireBilanInitial.tsx` | 812 | — |
 | `src/pages/ExercicesPage.tsx` | 807 | — |
 
 ## Couverture de tests
 
-- 92 fichiers de tests unitaires (Vitest), 39 scénarios e2e (Playwright), plus le harnais RLS (`tests/security/`).
-- Modules de `src/lib/` sans test unitaire à côté (16 sur 59) : `lib/acces/assistant`, `lib/acces/contrats`, `lib/acces/indisponibilites`, `lib/acces/praticien`, `lib/acces/sauvegarde`, `lib/acces/structures`, `lib/analyse-tournee`, `lib/anamnese`, `lib/bibliothequeExercices`, `lib/liaisonSeanceBilan`, `lib/libellesBibliotheque`, `lib/patientApi`, `lib/push`, `lib/sentry`, `lib/settingsPraticien`, `lib/structureApi`.
+- 98 fichiers de tests unitaires (Vitest), 41 scénarios e2e (Playwright), plus le harnais RLS (`tests/security/`).
+- Modules de `src/lib/` sans test unitaire à côté (16 sur 61) : `lib/acces/assistant`, `lib/acces/contrats`, `lib/acces/indisponibilites`, `lib/acces/praticien`, `lib/acces/sauvegarde`, `lib/acces/structures`, `lib/analyse-tournee`, `lib/anamnese`, `lib/bibliothequeExercices`, `lib/liaisonSeanceBilan`, `lib/libellesBibliotheque`, `lib/patientApi`, `lib/push`, `lib/sentry`, `lib/settingsPraticien`, `lib/structureApi`.

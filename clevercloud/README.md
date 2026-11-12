@@ -19,6 +19,7 @@ Supabase tant que la bascule n'a pas été décidée. Inventaire de départ : do
 | `scripts/nettoyer-dump.mjs` | retire d'un dump Supabase ce qui ne se restaure pas ailleurs | testé |
 | `scripts/repetition.sh`, `sql/02_controle_repetition.sql`, `scripts/repetition-http.test.mjs` | répétition à blanc de la migration du schéma, avec contrôles de RLS | rejouée par la CI |
 | `serveur/compatDeno.mjs`, `stockageS3.mjs`, `relais.mjs` | Edge Functions, stockage Cellar, relais PostgREST | testés |
+| `scripts/copier-factures.mjs` | copie des PDF de factures du stockage Supabase vers Cellar, contrôlée par empreinte SHA-256 ; sans `--executer`, compare sans rien écrire | testé contre de faux services, jamais lancé sur des données réelles |
 
 ## Répétition à blanc (rejouable, données fictives)
 
@@ -26,7 +27,7 @@ Supabase tant que la bascule n'a pas été décidée. Inventaire de départ : do
 
 1. rôles `anon`, `authenticated`, `service_role` ;
 2. `sql/01_compat_auth.sql` ;
-3. les 30 migrations de `supabase/migrations/`, nettoyées par `scripts/nettoyer-dump.mjs` : 62 tables, toutes avec RLS, 135 politiques (les 3 politiques du schéma `storage` sont retirées), 50 fonctions, 63 triggers ;
+3. les 35 migrations de `supabase/migrations/`, nettoyées par `scripts/nettoyer-dump.mjs` : 62 tables, toutes avec RLS, 135 politiques (les 3 politiques du schéma `storage` sont retirées), 52 fonctions, 64 triggers (relevé du 12/11/2026) ;
 4. `sql/02_controle_repetition.sql` : deux praticiens et deux bénéficiaires fictifs, puis 8 contrôles (cloisonnement en lecture et en écriture, usurpation d'identité refusée, garde-fou RGPD, rôle `anon` sans accès, rôle serveur, RLS sur toutes les tables).
 
 Le job `repetition-cible` de la CI la rejoue à chaque PR sur **PostgreSQL 17**, puis démarre PostgREST (même image que `postgrest/`) et vérifie le chemin complet du front praticien, serveur Node → `/rest/v1` → PostgREST → RLS, avec des jetons signés (`scripts/repetition-http.test.mjs`).
@@ -53,7 +54,7 @@ Sans ces variables, rien ne change : le stockage Supabase reste utilisé, ce qui
 
 1. **Front praticien → Keycloak** : remplacer les appels `supabase.auth.*` (connexion, session, mot de passe oublié, invitation) par OIDC, et transmettre le jeton Keycloak à `supabase-js` pour PostgREST. Côté serveur, six points vérifient le jeton du praticien par `supabase.auth.getUser` (`api/claude.ts`, `api/_lib/adminAuth.ts`, `api/_lib/patientSession.ts`, `api/seances/supprimer-planifiees.ts`, et les fonctions `analyser-seance` et `facturation-envoi`) ; `api/organisation.ts` utilise l'API d'administration des comptes (liste, invitation, mise à jour).
 2. **`public.declencher_pdf_facture`** : seule fonction qui utilise `pg_net` et Vault. Si `pg_net` existe sur l'add-on, il suffit de changer l'adresse appelée (`/functions/v1/facturation-pdf` du serveur) et de lire le secret ailleurs que dans Vault. Sinon, à remplacer par un appel depuis l'application.
-3. **Copie des PDF** du bucket Supabase vers Cellar, avec contrôle du nombre de fichiers et des sommes de contrôle.
+3. **Copie des PDF** du bucket Supabase vers Cellar : le script existe (`scripts/copier-factures.mjs`, liste tirée de `factures.pdf_path`, relecture et empreinte de chaque fichier, aucun écrasement). Reste à le lancer en recette, puis à la bascule, par Lorenzo.
 4. **Services externes** : décision sur Anthropic et Resend, qui reçoivent des données de santé.
 
 ## Ressources prévues

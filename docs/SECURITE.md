@@ -41,6 +41,9 @@ pas un audit externe ni un test d'intrusion.
 - En-têtes : HSTS (2 ans), `X-Content-Type-Options`, `X-Frame-Options: DENY`,
   `Referrer-Policy` (`no-referrer` sur les espaces patient et structure),
   `Permissions-Policy`, `Cache-Control: no-store` sur les routes `api/`.
+- CSP appliquée (#184, 11/11/2026), et non plus seulement déclarée : l'export
+  Excel, la lecture d'un fichier importé et les PDF sont vérifiés sous cette
+  politique par les tests e2e (`e2e/37-exports-sous-csp.spec.ts`).
 - Aucun `dangerouslySetInnerHTML`, `eval` ni `innerHTML` dans `src/` et `api/`.
 - Cache de la PWA limité aux fichiers statiques et aux polices : aucune
   réponse d'API n'est mise en cache.
@@ -67,7 +70,7 @@ pas un audit externe ni un test d'intrusion.
 | --- | --- | --- | --- |
 | 1 | Hébergement | Supabase et Vercel ne sont pas certifiés HDS | migration Clever Cloud (`clevercloud/README.md`) |
 | 2 | Sous-traitants | Anthropic (assistant) et Resend (envoi des factures) reçoivent des données de santé | décision à prendre ; pour Resend, envoyer un lien plutôt que le PDF |
-| 3 | CSP | déclarée en `Report-Only` : rien n'est bloqué | PR #184 : e2e complet passé avec la CSP appliquée ; exports et imports hors e2e à valider à la main sur le Preview (liste dans la PR) |
+| 3 | CSP | traité le 11/11/2026 (#184) : la politique est appliquée, voir « Application » | rejouer `e2e/37` après tout changement de la politique |
 | 4 | Praticiens | pas de double authentification (la déconnexion après 60 minutes d'inactivité est en place, #188) | MFA (TOTP), à prévoir avec le fournisseur d'identité de la cible HDS |
 | 5 | Patients | le code d'accès est le seul facteur, n'expire pas, et la session dure 30 jours | durée de session plus courte ou renouvellement du code, à décider |
 | 6 | Icônes | feuille de style Tabler chargée depuis un CDN en `@latest`, sans contrôle d'intégrité | figer la version ou l'héberger avec l'application |
