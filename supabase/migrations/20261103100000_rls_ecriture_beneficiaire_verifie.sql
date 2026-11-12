@@ -49,7 +49,11 @@ BEGIN;
 DO $cible$
 DECLARE
   v_cible       text := 'staging';  -- ⚠️ 'staging' | 'production' — À CHANGER À LA MAIN POUR LA PROD
-  v_est_staging boolean := EXISTS (SELECT 1 FROM public.structures WHERE token_acces = 'staging-token-demo-0001');
+  -- Second repère, ajouté le 2026-11-12 : la structure de démo avait disparu
+  -- du staging (jeton modifié ou supprimé), le premier repère seul refusait
+  -- donc le staging. Les comptes de démo du seed n'existent pas en production.
+  v_est_staging boolean := EXISTS (SELECT 1 FROM public.structures WHERE token_acces = 'staging-token-demo-0001')
+                        OR EXISTS (SELECT 1 FROM auth.users WHERE email IN ('staging.praticien@example.com', 'staging.praticien2@example.com'));
   v_base_vide   boolean := NOT EXISTS (SELECT 1 FROM public.praticiens);
 BEGIN
   IF v_cible NOT IN ('staging', 'production') THEN
