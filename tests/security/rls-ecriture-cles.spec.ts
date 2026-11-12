@@ -59,10 +59,12 @@ const CLES_EN_FUITE_BENEFICIAIRE: string[] = [];
 const CLES_EN_FUITE_STRUCTURE: string[] = [];
 
 // Historique : 6 clés de faible portée en fuite le 2026-10-27 (PR #167).
-// Fermées par 20261105100000_rls_ecriture_faible_portee.sql (lot K3), SAUF
-// participations_cours_collectifs.programme_individuel_id, fermée par la
-// migration de #166 (mêmes policies que les participations).
-const CLES_EN_FUITE_FAIBLE: string[] = ['participations_cours_collectifs.programme_individuel_id'];
+// Fermées par 20261105100000_rls_ecriture_faible_portee.sql (lot K3), sauf
+// participations_cours_collectifs.programme_individuel_id, fermée par
+// 20261102100000_rls_ecriture_beneficiaire_du_praticien.sql (#166, mêmes
+// policies que les participations). Les deux sont réunies sur main le
+// 2026-11-12 : plus aucune clé en fuite.
+const CLES_EN_FUITE_FAIBLE: string[] = [];
 
 const CLES_EN_FUITE = [...CLES_EN_FUITE_BENEFICIAIRE, ...CLES_EN_FUITE_STRUCTURE, ...CLES_EN_FUITE_FAIBLE];
 const MOTIF = "WITH CHECK sans contrôle d'appartenance de l'objet référencé";
