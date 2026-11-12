@@ -45,34 +45,32 @@ const ACTIF = Boolean(URL && ANON_KEY && SERVICE_KEY);
 // tables patient), jamais l'appartenance de l'objet référencé.
 // Une liste par famille : chaque migration (K1, K2, K3) ne vide que la
 // sienne, sans toucher aux lignes des autres.
-const CLES_EN_FUITE_BENEFICIAIRE: string[] = [
-  'bilans.participant_id', 'contrats.participant_id', 'seances.participant_id', 'programmes.participant_id',
-  'notes_seances.participant_id', 'comptes_rendus_seances.participant_id', 'bilans_brouillons.participant_id',
-  'factures_suivi.participant_id', 'assistant_logs.patient_id', 'seances.contrat_id', 'notes_seances.seance_id',
-];
+// Historique : 11 clés en fuite constatées le 2026-10-27 (PR #167), fermées
+// par la migration 20261103100000_rls_ecriture_beneficiaire_verifie.sql
+// (lot K1). Tant qu'elle n'est pas appliquée à une base, leurs tests y
+// échouent.
+const CLES_EN_FUITE_BENEFICIAIRE: string[] = [];
 
-const CLES_EN_FUITE_STRUCTURE: string[] = [
-  'participants.structure_id', 'documents_partages.structure_id', 'cours_collectifs.structure_id',
-  'templates_structure.structure_id', 'factures_suivi.structure_id', 'cours_collectifs.programme_commun_id',
-];
+// Historique : 6 clés de la famille « structure » en fuite le 2026-10-27
+// (PR #167), plus le rattachement à une organisation et le portail de
+// structure. Fermées par 20261104100000_rls_ecriture_structure_verifiee.sql
+// (lot K2), sauf factures_suivi.structure_id, fermée par le lot K1 (même
+// policy que factures_suivi.participant_id).
+const CLES_EN_FUITE_STRUCTURE: string[] = [];
 
-const CLES_EN_FUITE_FAIBLE: string[] = [
-  'dossier_exercice_membres.dossier_id', 'exercices_personnalises.dossier_id',
-  'participations_cours_collectifs.programme_individuel_id', 'seances_patient.programme_id',
-  'seances_patient.seance_id', 'exercices_realises.exercice_id',
-];
+// Historique : 6 clés de faible portée en fuite le 2026-10-27 (PR #167).
+// Fermées par 20261105100000_rls_ecriture_faible_portee.sql (lot K3), sauf
+// participations_cours_collectifs.programme_individuel_id, fermée par
+// 20261102100000_rls_ecriture_beneficiaire_du_praticien.sql (#166, mêmes
+// policies que les participations). Les deux sont réunies sur main le
+// 2026-11-12 : plus aucune clé en fuite.
+const CLES_EN_FUITE_FAIBLE: string[] = [];
 
 const CLES_EN_FUITE = [...CLES_EN_FUITE_BENEFICIAIRE, ...CLES_EN_FUITE_STRUCTURE, ...CLES_EN_FUITE_FAIBLE];
 const MOTIF = "WITH CHECK sans contrôle d'appartenance de l'objet référencé";
 export const FUITES_CONSTATEES: Record<string, string> = {
   ...Object.fromEntries(CLES_EN_FUITE.flatMap(c => [[`${c}:insertion`, MOTIF], [`${c}:repointage`, MOTIF]])),
-  ...(CLES_EN_FUITE_STRUCTURE.length ? {
-    // FUITE CONSTATÉE — participants_update ne vérifie pas l'organisation.
-    'participants.organisation_id:repointage': "participants_update sans contrôle d'appartenance à l'organisation",
-    // FUITE CONSTATÉE — conséquence visible : le portail de la structure de A
-    // affiche le bénéficiaire et le document de B.
-    'portail-structure:beneficiaire-de-B': 'participants.structure_id et documents_partages.structure_id non vérifiés',
-  } : {}),
+  // participants.organisation_id et portail de structure : fermés par K2.
 };
 
 type Ligne = Record<string, unknown>;
