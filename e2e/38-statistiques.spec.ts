@@ -32,10 +32,15 @@ test.describe('Tableau de bord du praticien', () => {
     }
 
     await page.waitForLoadState('networkidle');
-    // Écrite dans test-results/ (et non jointe en mémoire) : c'est ce dossier que la CI conserve.
-    const capture = testInfo.outputPath('tableau-de-bord.png');
-    await page.screenshot({ path: capture, fullPage: true });
-    await testInfo.attach('tableau-de-bord.png', { path: capture, contentType: 'image/png' });
+    // Une capture par graphique, écrite dans test-results/ (le dossier que la CI
+    // conserve). La page défile dans un conteneur interne : une capture « pleine
+    // page » ne montrerait que le haut, sans aucun graphique.
+    for (let i = 0; i < await graphiques.count(); i++) {
+      await graphiques.nth(i).scrollIntoViewIfNeeded();
+      const capture = testInfo.outputPath(`graphique-${i + 1}.png`);
+      await page.screenshot({ path: capture });
+      await testInfo.attach(`graphique-${i + 1}.png`, { path: capture, contentType: 'image/png' });
+    }
     expect(erreurs).toEqual([]);
   });
 });

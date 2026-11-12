@@ -2,12 +2,9 @@ import { useState, useEffect, Component, useCallback } from 'react';
 import { chargerSettingsPraticien } from '../lib/settingsPraticien';
 import type { ReactNode } from 'react';
 import {
-  Chart as ChartJS,
-  CategoryScale, LinearScale, BarElement, LineElement,
-  PointElement, Tooltip, Legend, Filler, ArcElement,
-  BarController, LineController, DoughnutController,
-} from 'chart.js';
-import { Chart, Line, Doughnut } from 'react-chartjs-2';
+  ResponsiveContainer, ComposedChart, Bar, Cell, Line, AreaChart, Area,
+  PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip,
+} from 'recharts';
 import { TrendingUp, TrendingDown, Edit3, ChevronDown, ChevronUp, CheckCircle, RefreshCw } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import PageWrapper from '../components/layout/PageWrapper';
@@ -28,12 +25,6 @@ import { trouverTarifApplicable, totalFactureSeance } from '../lib/tarifsContrat
 import { useCoursCollectifs } from '../hooks/useCoursCollectifs';
 import { datesCoursCollectifsIndividuelFacturables } from '../lib/coursCollectifs';
 import { distanceTm6 } from '../lib/tm6';
-
-ChartJS.register(
-  CategoryScale, LinearScale, BarElement, LineElement,
-  PointElement, Tooltip, Legend, Filler, ArcElement,
-  BarController, LineController, DoughnutController,
-);
 
 // ─── ErrorBoundary ────────────────────────────────────────────────────────────
 
@@ -315,62 +306,39 @@ function GraphiqueCA({ statsPro, caParMois }: { statsPro: StatsPro; caParMois: R
     caData = Array(12).fill(null);
   }
 
-  const data: any = {
-    labels: MOIS_COURTS,
-    datasets: [
-      {
-        type: 'bar' as const,
-        label: 'CA (€)',
-        data: caData,
-        backgroundColor: caData.map((_, i) => i === moisActuel ? '#1A5F9E' : '#B5D4F4'),
-        borderRadius: 5,
-        borderSkipped: false,
-        order: 2,
-      },
-      {
-        type: 'line' as const,
-        label: 'Objectif mensuel',
-        data: Array(12).fill(statsPro.objectifMensuel ?? 0),
-        borderColor: '#F59E0B',
-        borderDash: [5, 4] as any,
-        borderWidth: 1.5,
-        pointRadius: 0,
-        fill: false,
-        tension: 0,
-        order: 1,
-      },
-    ],
-  };
-
-  const options: any = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          label: (ctx: any) =>
-            ctx.parsed.y !== null
-              ? `${ctx.dataset.label} : ${Number(ctx.parsed.y).toLocaleString('fr-FR')} €`
-              : 'Non renseigné',
-        },
-      },
-    },
-    scales: {
-      x: { grid: { display: false }, ticks: { font: { size: 11 } } },
-      y: {
-        grid: { color: 'rgba(0,0,0,0.05)' },
-        ticks: {
-          font: { size: 11 },
-          callback: (v: any) => `${Number(v).toLocaleString('fr-FR')}€`,
-        },
-      },
-    },
-  };
+  // Migré de chart.js vers recharts (2026-11-09, allègement pré-HDS) : une
+  // seule bibliothèque de graphiques dans le bundle. Rendu équivalent :
+  // barres (mois en cours foncé) + objectif mensuel en pointillés.
+  const objectif = statsPro.objectifMensuel ?? 0;
+  const data = MOIS_COURTS.map((mois, i) => ({ mois, ca: caData[i], objectif }));
+  const euros = (v: unknown) => `${Number(v).toLocaleString('fr-FR')}€`;
 
   return (
     <div style={{ height: 220 }}>
-      <Chart type="bar" data={data} options={options} />
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+          <CartesianGrid vertical={false} stroke="rgba(0,0,0,0.05)" />
+          <XAxis dataKey="mois" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 11 }} tickFormatter={euros} tickLine={false} axisLine={false} width={56} />
+          <Tooltip
+            formatter={(value: any, name: any) =>
+              value !== null && value !== undefined
+                ? [`${Number(value).toLocaleString('fr-FR')} €`, name]
+                : ['Non renseigné', name]
+            }
+          />
+          <Bar dataKey="ca" name="CA (€)" radius={[5, 5, 5, 5]} isAnimationActive={false}>
+            {data.map((_, i) => (
+              <Cell key={i} fill={i === moisActuel ? '#1A5F9E' : '#B5D4F4'} />
+            ))}
+          </Bar>
+          <Line
+            dataKey="objectif" name="Objectif mensuel" type="linear"
+            stroke="#F59E0B" strokeDasharray="5 4" strokeWidth={1.5}
+            dot={false} activeDot={false} isAnimationActive={false}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -392,37 +360,23 @@ function GraphiqueSeances({ seances }: { seances: any[] }) {
     seancesData = Array(12).fill(0);
   }
 
-  const data = {
-    labels: semaines.map(s => s.label),
-    datasets: [{
-      label: 'Séances réalisées',
-      data: seancesData,
-      borderColor: '#1A5F9E',
-      backgroundColor: 'rgba(26,95,158,0.08)',
-      tension: 0.3,
-      fill: true,
-      pointRadius: 3,
-      pointBackgroundColor: '#1A5F9E',
-    }],
-  };
-
-  const options: any = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    scales: {
-      x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-      y: {
-        min: 0,
-        grid: { color: 'rgba(0,0,0,0.05)' },
-        ticks: { font: { size: 11 }, stepSize: 2 },
-      },
-    },
-  };
+  const data = semaines.map((s, i) => ({ semaine: s.label, seances: seancesData[i] }));
 
   return (
     <div style={{ height: 220 }}>
-      <Line data={data} options={options} />
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+          <CartesianGrid vertical={false} stroke="rgba(0,0,0,0.05)" />
+          <XAxis dataKey="semaine" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+          <YAxis domain={[0, 'auto']} allowDecimals={false} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={32} />
+          <Tooltip />
+          <Area
+            type="monotone" dataKey="seances" name="Séances réalisées"
+            stroke="#1A5F9E" fill="rgba(26,95,158,0.08)" fillOpacity={1}
+            dot={{ r: 3, fill: '#1A5F9E', strokeWidth: 0 }} isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -1256,34 +1210,26 @@ function SectionRepartition({ participants }: { participants: Participant[] }) {
 
   const total = filteredData.reduce((a, b) => a + b, 0);
 
-  const data = {
-    labels: filteredLabels,
-    datasets: [{
-      data: filteredData,
-      backgroundColor: COLORS.slice(0, filteredLabels.length),
-      borderWidth: 0,
-      hoverOffset: 4,
-    }],
-  };
-
-  const options: any = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          label: (ctx: any) => `${ctx.label} : ${ctx.parsed} bénéficiaire${ctx.parsed > 1 ? 's' : ''}`,
-        },
-      },
-    },
-    cutout: '65%',
-  };
+  const data = filteredLabels.map((label, i) => ({ label, valeur: filteredData[i] }));
 
   return (
     <div className="flex items-center gap-4">
       <div style={{ width: 110, height: 110, flexShrink: 0 }}>
-        <Doughnut data={data} options={options} />
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data} dataKey="valeur" nameKey="label"
+              innerRadius="65%" outerRadius="100%" stroke="none" isAnimationActive={false}
+            >
+              {data.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
+            </Pie>
+            <Tooltip
+              formatter={(value: any, name: any) =>
+                [`${value} bénéficiaire${Number(value) > 1 ? 's' : ''}`, name]
+              }
+            />
+          </PieChart>
+        </ResponsiveContainer>
       </div>
       <div className="flex-1 space-y-1.5">
         {filteredLabels.map((l, i) => (
