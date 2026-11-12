@@ -95,7 +95,11 @@ if (ignores > 0) {
 if (echecs > 0) {
   for (const a of noms(['failed'])) {
     console.error(`::error::ÉCHEC : ${a.fullName}`);
-    for (const m of a.failureMessages || []) console.error(m.split('\n')[0]);
+    // Trois lignes, pas une : pour un dépassement de délai, vitest met en
+    // première ligne « Error: STACK_TRACE_ERROR » et le vrai motif (« Test
+    // timed out in … ») en dessous. Avec une seule ligne, un test lent et une
+    // fuite de cloisonnement étaient indiscernables (constaté le 2026-11-12).
+    for (const m of a.failureMessages || []) console.error(m.split('\n').slice(0, 3).join('\n'));
   }
   console.error(`::error::${echecs}/${total} test(s) en ÉCHEC dans ${dossier}/.`);
   probleme = true;

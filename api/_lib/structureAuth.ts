@@ -54,3 +54,30 @@ export async function validateStructureToken(supabase: SupabaseClient, token: st
 export async function logStructureAccess(supabase: SupabaseClient, structureId: string, ip: string): Promise<void> {
   await supabase.from('structure_access_logs').insert({ structure_id: structureId, ip });
 }
+
+// Limite de requêtes du portail structure (2026-11-12, point ouvert n°10 de
+// docs/SECURITE.md). Le jeton de 256 bits rend la recherche exhaustive
+// impraticable ; cette limite borne autre chose : l'aspiration en boucle des
+// données d'une structure par quiconque détient son lien (ou un script mal
+// écrit). Le portail fait UN appel par chargement de page, 60 par minute
+// laissent donc une marge large à un établissement dont plusieurs postes
+// rechargent en même temps.
+//
+// Aucune table nouvelle : structure_access_logs journalise déjà chaque accès
+// réussi, il suffit de compter. Un jeton invalide ne journalise rien et n'est
+// donc pas compté ; il ne renvoie de toute façon aucune donnée.
+export const STRUCTURE_RATE_LIMIT_MAX = 60;
+const STRUCTURE_RATE_LIMIT_WINDOW_SECONDS = 60;
+
+// Même convention que checkClaudeRateLimit : true = la requête peut passer.
+// Si le comptage échoue, la requête passe (une panne du journal ne doit pas
+// fermer le portail à un EHPAD).
+export async function checkStructureRateLimit(supabase: SupabaseClient, structureId: string): Promise<boolean> {
+  const since = new Date(Date.now() - STRUCTURE_RATE_LIMIT_WINDOW_SECONDS * 1000).toISOString();
+  const { count } = await supabase
+    .from('structure_access_logs')
+    .select('id', { count: 'exact', head: true })
+    .eq('structure_id', structureId)
+    .gte('accessed_at', since);
+  return (count ?? 0) < STRUCTURE_RATE_LIMIT_MAX;
+}

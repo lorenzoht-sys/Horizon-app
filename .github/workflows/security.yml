@@ -79,8 +79,18 @@ jobs:
         # n'a donc JAMAIS pu s'exécuter, malgré le nom de cette étape.
         # Sorti du YAML pour qu'il soit exécutable — et donc vérifiable —
         # hors de la CI : `node scripts/verifier-resultat-harnais.mjs <json>`.
+        # --testTimeout=30000 (2026-11-12) : chaque test fait 2 à 3 allers-retours
+        # vers le staging, avec le délai par défaut de vitest (5 s). Quand le
+        # job e2e de ci.yml charge le même staging au même moment, quelques
+        # requêtes dépassent 5 s : 4 échecs sur 225 puis 1 sur 225 le
+        # 2026-11-12, tous marqués « STACK_TRACE_ERROR » dans le rapport (la
+        # marque que vitest pose sur un dépassement de délai), sur des tests
+        # différents d'un essai à l'autre et verts à la relance. Un test
+        # lent n'est pas une fuite : le délai est porté à 30 s pour ce harnais
+        # seulement. Pas de second essai : une vraie fuite doit rester rouge
+        # du premier coup.
         run: |
-          npx vitest run tests/security --reporter=json --outputFile=vitest-security-result.json || true
+          npx vitest run tests/security --testTimeout=30000 --reporter=json --outputFile=vitest-security-result.json || true
           node scripts/verifier-resultat-harnais.mjs vitest-security-result.json
         env:
           SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}

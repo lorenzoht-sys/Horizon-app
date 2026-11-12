@@ -62,6 +62,11 @@ for migration in "$RACINE"/supabase/migrations/*.sql; do
 done
 echo "    $n migrations appliquées"
 
+# Fonction du trigger de facture neutralisée : sur la cible, le PDF est généré
+# par l'application (clevercloud/serveur/repriseFactures.mjs).
+sql -v cible=staging -f "$RACINE/clevercloud/sql/03_facture_pdf_sans_pg_net.sql" >/dev/null
+echo "    fonction declencher_pdf_facture() neutralisée (pas de pg_net ni de Vault)"
+
 echo "4/5 Jeu fictif et contrôles de RLS"
 sql -o /dev/null -f "$RACINE/clevercloud/sql/02_controle_repetition.sql"
 

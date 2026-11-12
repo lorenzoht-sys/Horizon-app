@@ -19,6 +19,7 @@ Supabase tant que la bascule n'a pas été décidée. Inventaire de départ : do
 | `scripts/nettoyer-dump.mjs` | retire d'un dump Supabase ce qui ne se restaure pas ailleurs | testé |
 | `scripts/repetition.sh`, `sql/02_controle_repetition.sql`, `scripts/repetition-http.test.mjs` | répétition à blanc de la migration du schéma, avec contrôles de RLS | rejouée par la CI |
 | `serveur/compatDeno.mjs`, `stockageS3.mjs`, `relais.mjs` | Edge Functions, stockage Cellar, relais PostgREST | testés |
+| `serveur/repriseFactures.mjs`, `sql/03_facture_pdf_sans_pg_net.sql` | génération des PDF de factures sans `pg_net` ni Vault : l'application reprend les factures validées sans PDF et appelle la fonction `facturation-pdf` | testés ; le SQL est rejoué par la répétition à blanc |
 | `scripts/copier-factures.mjs` | copie des PDF de factures du stockage Supabase vers Cellar, contrôlée par empreinte SHA-256 ; sans `--executer`, compare sans rien écrire | testé contre de faux services, jamais lancé sur des données réelles |
 
 ## Répétition à blanc (rejouable, données fictives)
@@ -53,7 +54,7 @@ Sans ces variables, rien ne change : le stockage Supabase reste utilisé, ce qui
 ## Ce qui reste à faire (PR suivantes, chacune derrière un interrupteur)
 
 1. **Front praticien → Keycloak** : remplacer les appels `supabase.auth.*` (connexion, session, mot de passe oublié, invitation) par OIDC, et transmettre le jeton Keycloak à `supabase-js` pour PostgREST. Côté serveur, six points vérifient le jeton du praticien par `supabase.auth.getUser` (`api/claude.ts`, `api/_lib/adminAuth.ts`, `api/_lib/patientSession.ts`, `api/seances/supprimer-planifiees.ts`, et les fonctions `analyser-seance` et `facturation-envoi`) ; `api/organisation.ts` utilise l'API d'administration des comptes (liste, invitation, mise à jour).
-2. **`public.declencher_pdf_facture`** : seule fonction qui utilise `pg_net` et Vault. Si `pg_net` existe sur l'add-on, il suffit de changer l'adresse appelée (`/functions/v1/facturation-pdf` du serveur) et de lire le secret ailleurs que dans Vault. Sinon, à remplacer par un appel depuis l'application.
+2. **`public.declencher_pdf_facture`** : seule fonction qui utilisait `pg_net` et Vault. Traité sans dépendre de l'add-on : `sql/03_facture_pdf_sans_pg_net.sql` neutralise le corps de la fonction sur la cible, et `REPRISE_FACTURES_PDF=1` fait générer les PDF par l'application (passage toutes les 15 s, instance 0, nouvel essai en cas d'échec). Reste la recette sur la cible : valider une facture, vérifier que son PDF arrive dans Cellar.
 3. **Copie des PDF** du bucket Supabase vers Cellar : le script existe (`scripts/copier-factures.mjs`, liste tirée de `factures.pdf_path`, relecture et empreinte de chaque fichier, aucun écrasement). Reste à le lancer en recette, puis à la bascule, par Lorenzo.
 4. **Services externes** : décision sur Anthropic et Resend, qui reçoivent des données de santé.
 
@@ -79,6 +80,7 @@ Pas de Redis : Horizon n'a pas de file de travaux.
 | `PATIENT_SESSION_SECRET`, `CRON_SECRET`, `VAPID_*`, `ANTHROPIC_API_KEY`, `APP_URL`, `SENTRY_DSN` | inchangées (nouvelles valeurs pour staging) |
 | `RESEND_API_KEY`, `FACTURES_EXPEDITEUR`, `ORIGINES_AUTORISEES`, `FACTURATION_WEBHOOK_SECRET` | variables de l'application qui accueillera les Edge Functions |
 | job pg_cron + `pg_net` | `CRON_INTERNE=1` (instance 0), **après** arrêt du job pg_cron |
+| trigger `pg_net` + secrets Vault (`facturation_pdf_url`, `facturation_webhook_secret`) | `REPRISE_FACTURES_PDF=1` (instance 0), avec `POSTGREST_URL`, `SUPABASE_SERVICE_ROLE_KEY` et `FACTURATION_WEBHOOK_SECRET` ; `sql/03_facture_pdf_sans_pg_net.sql` joué sur la base |
 | — | `PORT` / `CC_DOCKER_EXPOSED_HTTP_PORT` (8080), `CC_DOCKERFILE` |
 
 ## Procédure (staging d'abord, toujours avec des données fictives)
@@ -88,7 +90,7 @@ lui-même identifiants et secrets.
 
 1. Créer les deux organisations, puis l'add-on PostgreSQL 17 en `parhds` avec le chiffrement au repos.
 2. Demander au support les rôles `anon`, `authenticated`, `service_role`, et l'appartenance de l'utilisateur de l'add-on à ces rôles (nécessaire à PostgREST).
-3. `psql "$URI?sslmode=require" -v cible=staging -f clevercloud/sql/01_compat_auth.sql`
+3. `psql "$URI?sslmode=require" -v cible=staging -f clevercloud/sql/01_compat_auth.sql` ; puis, **après** la restauration du schéma (étape 4), `-f clevercloud/sql/03_facture_pdf_sans_pg_net.sql`.
 4. Schéma : dump du schéma `public` du **staging** Supabase (`pg_dump --schema=public --no-owner`), puis `node clevercloud/scripts/nettoyer-dump.mjs dump.sql dump-net.sql rapport.md` dans `clevercloud/_dumps/` (ignoré par git), puis restauration. Lire le rapport.
 5. Données : jeu fictif (`scripts/seed-staging.sql`), avec `auth.users` alimentée en id + e-mail seulement.
 6. Déployer `horizon-postgrest`, puis `horizon-app` (`APP_ENV=staging`).
@@ -109,7 +111,7 @@ lui-même identifiants et secrets.
 
 - [ ] Staging Clever Cloud : e2e et harnais RLS verts, recette manuelle des trois espaces.
 - [ ] Contrat HDS signé ; chiffrement au repos vérifié sur PostgreSQL et Cellar.
-- [ ] Rapport du nettoyeur relu sur le dump de **production** ; fonction `declencher_pdf_facture` adaptée.
+- [ ] Rapport du nettoyeur relu sur le dump de **production** ; `sql/03_facture_pdf_sans_pg_net.sql` joué et `REPRISE_FACTURES_PDF=1` : une facture validée en recette obtient son PDF.
 - [ ] Praticiens importés dans Keycloak avec leurs UUID ; e-mail de réinitialisation du mot de passe prêt.
 - [ ] PDF de factures copiés vers Cellar, nombre de fichiers et sommes de contrôle identiques.
 - [ ] Comptes de lignes identiques, table par table, entre Supabase et Clever Cloud.

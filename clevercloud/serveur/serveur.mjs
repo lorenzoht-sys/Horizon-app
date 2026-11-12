@@ -17,6 +17,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { adapter, CorpsTropGros, normaliserIp } from './compatVercel.mjs';
 import { demarrerCronInterne } from './cron.mjs';
+import { demarrerRepriseFactures } from './repriseFactures.mjs';
 import { installerCrochets, chargerFonctions, executerFonction } from './compatDeno.mjs';
 import { relayerVersPostgrest, servirFacture } from './relais.mjs';
 import { configurationS3, creerStockageS3 } from './stockageS3.mjs';
@@ -204,6 +205,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   serveur.listen(port, () => {
     console.log(`[serveur] Horizon (${appEnv}) en écoute sur le port ${port}`);
     demarrerCronInterne({ port });
+    demarrerRepriseFactures({ port });
   });
   // Clever Cloud démarre la nouvelle instance avant d'arrêter l'ancienne :
   // on termine proprement les requêtes en cours.
