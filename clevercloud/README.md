@@ -19,6 +19,7 @@ Supabase tant que la bascule n'a pas été décidée. Inventaire de départ : do
 | `scripts/nettoyer-dump.mjs` | retire d'un dump Supabase ce qui ne se restaure pas ailleurs | testé |
 | `scripts/repetition.sh`, `sql/02_controle_repetition.sql`, `scripts/repetition-http.test.mjs` | répétition à blanc de la migration du schéma, avec contrôles de RLS | rejouée par la CI |
 | `serveur/compatDeno.mjs`, `stockageS3.mjs`, `relais.mjs` | Edge Functions, stockage Cellar, relais PostgREST | testés |
+| `serveur/jetonPraticien.mjs` | vérification locale du jeton praticien (RS256 par JWKS ou HS256 par secret, jamais les deux), derrière `client.auth.getUser` | testé avec des jetons signés en local ; jamais confronté à un vrai Keycloak |
 | `serveur/repriseFactures.mjs`, `sql/03_facture_pdf_sans_pg_net.sql` | génération des PDF de factures sans `pg_net` ni Vault : l'application reprend les factures validées sans PDF et appelle la fonction `facturation-pdf` | testés ; le SQL est rejoué par la répétition à blanc |
 | `scripts/copier-factures.mjs` | copie des PDF de factures du stockage Supabase vers Cellar, contrôlée par empreinte SHA-256 ; sans `--executer`, compare sans rien écrire | testé contre de faux services, jamais lancé sur des données réelles |
 
@@ -53,7 +54,7 @@ Sans ces variables, rien ne change : le stockage Supabase reste utilisé, ce qui
 
 ## Ce qui reste à faire (PR suivantes, chacune derrière un interrupteur)
 
-1. **Front praticien → Keycloak** : remplacer les appels `supabase.auth.*` (connexion, session, mot de passe oublié, invitation) par OIDC, et transmettre le jeton Keycloak à `supabase-js` pour PostgREST. Côté serveur, six points vérifient le jeton du praticien par `supabase.auth.getUser` (`api/claude.ts`, `api/_lib/adminAuth.ts`, `api/_lib/patientSession.ts`, `api/seances/supprimer-planifiees.ts`, et les fonctions `analyser-seance` et `facturation-envoi`) ; `api/organisation.ts` utilise l'API d'administration des comptes (liste, invitation, mise à jour).
+1. **Front praticien → Keycloak** : remplacer les appels `supabase.auth.*` (connexion, session, mot de passe oublié, invitation) par OIDC, et transmettre le jeton Keycloak à `supabase-js` pour PostgREST. Côté serveur, six points vérifient le jeton du praticien par `supabase.auth.getUser` (`api/claude.ts`, `api/_lib/adminAuth.ts`, `api/_lib/patientSession.ts`, `api/seances/supprimer-planifiees.ts`, et les fonctions `analyser-seance` et `facturation-envoi`) : **traité** par `serveur/jetonPraticien.mjs`, qui vérifie le jeton localement derrière le même appel (`AUTH_JWKS_URL` pour Keycloak, ou `AUTH_JWT_SECRET` pour une connexion gérée par l'application ; `AUTH_ISSUER` et `AUTH_AUDIENCE` conseillés). Ces six points gardent leur code, quel que soit le fournisseur retenu. Reste côté serveur : `api/organisation.ts`, qui utilise l'API d'administration des comptes (liste, invitation, mise à jour) et répond par un refus explicite sur la cible tant qu'elle n'est pas branchée sur le fournisseur.
 2. **`public.declencher_pdf_facture`** : seule fonction qui utilisait `pg_net` et Vault. Traité sans dépendre de l'add-on : `sql/03_facture_pdf_sans_pg_net.sql` neutralise le corps de la fonction sur la cible, et `REPRISE_FACTURES_PDF=1` fait générer les PDF par l'application (passage toutes les 15 s, instance 0, nouvel essai en cas d'échec). Reste la recette sur la cible : valider une facture, vérifier que son PDF arrive dans Cellar.
 3. **Copie des PDF** du bucket Supabase vers Cellar : le script existe (`scripts/copier-factures.mjs`, liste tirée de `factures.pdf_path`, relecture et empreinte de chaque fichier, aucun écrasement). Reste à le lancer en recette, puis à la bascule, par Lorenzo.
 4. **Services externes** : décision sur Anthropic et Resend, qui reçoivent des données de santé.
@@ -80,6 +81,7 @@ Pas de Redis : Horizon n'a pas de file de travaux.
 | `PATIENT_SESSION_SECRET`, `CRON_SECRET`, `VAPID_*`, `ANTHROPIC_API_KEY`, `APP_URL`, `SENTRY_DSN` | inchangées (nouvelles valeurs pour staging) |
 | `RESEND_API_KEY`, `FACTURES_EXPEDITEUR`, `ORIGINES_AUTORISEES`, `FACTURATION_WEBHOOK_SECRET` | variables de l'application qui accueillera les Edge Functions |
 | job pg_cron + `pg_net` | `CRON_INTERNE=1` (instance 0), **après** arrêt du job pg_cron |
+| Supabase Auth, côté serveur (`auth.getUser`) | `AUTH_JWKS_URL` (ou `AUTH_JWT_SECRET`), `AUTH_ISSUER`, `AUTH_AUDIENCE` : les mêmes clés que `PGRST_JWT_SECRET` de PostgREST |
 | trigger `pg_net` + secrets Vault (`facturation_pdf_url`, `facturation_webhook_secret`) | `REPRISE_FACTURES_PDF=1` (instance 0), avec `POSTGREST_URL`, `SUPABASE_SERVICE_ROLE_KEY` et `FACTURATION_WEBHOOK_SECRET` ; `sql/03_facture_pdf_sans_pg_net.sql` joué sur la base |
 | — | `PORT` / `CC_DOCKER_EXPOSED_HTTP_PORT` (8080), `CC_DOCKERFILE` |
 
