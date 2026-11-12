@@ -23,7 +23,9 @@ export default withSentry(async function handler(req: any, res: any) {
   try {
     supabase = getServiceClient();
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    // Le détail (noms des variables manquantes) reste dans les journaux serveur.
+    console.error(`[structure/data] client service indisponible : ${String(err)}`);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 
   const structure = await validateStructureToken(supabase, token);

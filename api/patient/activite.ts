@@ -32,6 +32,7 @@ import { checkActiviteRateLimit, recordActiviteAttempt } from '../_lib/activiteR
 import { dateParisCivile } from '../_lib/rappels.js';
 import { envoyerAlertePraticien } from '../_lib/notifications.js';
 import { urlPdfFacturePatient } from '../_lib/facturesPatient.js';
+import { dateCivileValide, texteDansLaBorne, MESSAGE_TEXTE_TROP_LONG } from '../_lib/saisiePatient.js';
 
 const TYPES_VALIDES = ['test-etalon', 'exercice-libre', 'cours-presence', 'seance-absence', 'facture-pdf'] as const;
 type TypeActivite = (typeof TYPES_VALIDES)[number];
@@ -71,7 +72,9 @@ export default withSentry(async function handler(req: any, res: any) {
   try {
     supabase = getServiceClient();
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    // Le détail (noms des variables manquantes) reste dans les journaux serveur.
+    console.error(`[activite] client service indisponible : ${String(err)}`);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 
   // Rate limit générique (api/_lib/activiteRateLimit.ts), un budget par
@@ -94,7 +97,7 @@ export default withSentry(async function handler(req: any, res: any) {
     if (
       !testId || typeof testId !== 'string' ||
       typeof valeur !== 'number' || !Number.isInteger(valeur) || valeur < 0 ||
-      (dateTest !== undefined && typeof dateTest !== 'string')
+      (dateTest !== undefined && !dateCivileValide(dateTest))
     ) {
       return res.status(400).json({ error: 'Paramètres invalides' });
     }
@@ -319,11 +322,15 @@ export default withSentry(async function handler(req: any, res: any) {
 
   if (
     !exerciceId || typeof exerciceId !== 'string' ||
-    (date !== undefined && typeof date !== 'string') ||
+    (date !== undefined && !dateCivileValide(date)) ||
     (fait !== undefined && typeof fait !== 'boolean') ||
     (note !== undefined && note !== null && typeof note !== 'string')
   ) {
     return res.status(400).json({ error: 'Paramètres invalides' });
+  }
+
+  if (!texteDansLaBorne(note)) {
+    return res.status(400).json({ error: MESSAGE_TEXTE_TROP_LONG });
   }
 
   const { data: activation } = await supabase

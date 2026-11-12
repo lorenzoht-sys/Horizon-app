@@ -64,6 +64,16 @@ pas un audit externe ni un test d'intrusion.
 - Aucune écriture en production par script : migrations versionnées,
   appliquées à la main (`CHECKLIST_RELEASE.md`).
 
+## Revue du 12/11/2026
+
+Relecture complète des routes qui contournent la RLS (`api/patient/*`, `api/structure/data`, `api/cron/rappels`, `api/planning/ics`, `api/organisation`, `api/claude`, `api/seances/supprimer-planifiees`) et contrôles automatiques du schéma rejoué en local.
+
+- Routes : l'identité vient toujours du jeton, jamais du corps ; les identifiants reçus sont revérifiés contre le bénéficiaire du jeton ; les secrets sont comparés à temps constant. Aucune écriture ni lecture croisée trouvée.
+- Schéma : RLS active sur les 62 tables, aucune fonction `SECURITY DEFINER` sans `search_path` figé ni exécutable par `anon`, aucune politique ouverte en écriture.
+- Front : aucun `dangerouslySetInnerHTML`, le markdown est rendu sans HTML brut, CSP appliquée.
+- Corrigé le jour même : colonnes internes retirées de la réponse au bénéficiaire (point 11), saisies du bénéficiaire bornées (texte 5 000 caractères, dates civiles valides, 200 exercices par séance), algorithme du jeton patient épinglé à HS256, détail des erreurs de configuration retiré des réponses 500.
+- Laissé en décision : points 11 et 12 ci-dessous.
+
 ## Points ouverts
 
 | # | Sujet | Constat | Piste |
@@ -78,3 +88,5 @@ pas un audit externe ni un test d'intrusion.
 | 8 | ESLint | absent de la CI | corriger les erreurs existantes puis l'ajouter |
 | 9 | Inscription | la page est retirée, mais le réglage « inscriptions ouvertes » du projet Supabase n'est pas visible depuis le code | vérifier dans le tableau de bord que les inscriptions sont fermées |
 | 10 | Portail structure | traité le 12/11/2026 : 60 requêtes par minute et par structure sur `api/structure/data`, comptées dans le journal des accès | — |
+| 11 | Ce que reçoit le bénéficiaire | `api/patient/me` lit `participants` et `bilans` en entier. Depuis le 12/11/2026, les colonnes qu'aucun écran ni PDF du bénéficiaire ne lit sont retirées de la réponse (coordonnées bancaires, trace du consentement, étiquettes, code de porte, scores cognitifs, notes de travail). Restent envoyés : `bilan_initial_data` (le formulaire initial complet), `interpretation_ia` et `notes_professionnelles`. La carte santé téléchargeable par le bénéficiaire imprime l'interprétation professionnelle (à défaut les notes professionnelles), le Tinetti et la souplesse, quels que soient les résultats cochés « partagés » | décision de produit : soit la carte santé suit les cases de partage, soit le réglage est renommé pour dire ce qu'il partage ; ensuite, liste fermée des colonnes envoyées |
+| 12 | Bénéficiaire archivé, session | un bénéficiaire archivé garde l'accès à son espace, et un jeton patient émis reste valide 30 jours sans révocation possible (ni à l'archivage, ni si le code est compromis) | à décider avec le point 5 ; une révocation demande une lecture en base par requête |

@@ -5,6 +5,10 @@
 
 import { getServiceClient, verifyPatientToken, extractBearerToken, getClientIp, logAuditEvent } from '../_lib/patientAuth.js';
 import { withSentry } from '../_lib/sentry.js';
+import {
+  dateCivileValide, texteDansLaBorne, MESSAGE_TEXTE_TROP_LONG,
+  EXERCICES_PAR_SEANCE_MAX, DUREE_SEANCE_MAX_MINUTES,
+} from '../_lib/saisiePatient.js';
 
 const STATUTS_VALIDES = ['terminee', 'partielle', 'en_cours'];
 
@@ -39,18 +43,27 @@ export default withSentry(async function handler(req: any, res: any) {
   if (
     !programmeId || typeof programmeId !== 'string' ||
     !seanceId || typeof seanceId !== 'string' ||
-    !dateSeance || typeof dateSeance !== 'string' ||
+    !dateCivileValide(dateSeance) ||
     !STATUTS_VALIDES.includes(statut) ||
-    !Array.isArray(exercices)
+    !Array.isArray(exercices) || exercices.length > EXERCICES_PAR_SEANCE_MAX
   ) {
     return res.status(400).json({ error: 'Paramètres invalides' });
+  }
+  // Bornes des saisies libres : voir api/_lib/saisiePatient.ts.
+  if (
+    !texteDansLaBorne(commentairePatient) ||
+    exercices.some((ex: { commentaire?: unknown } | null | undefined) => ex && !texteDansLaBorne(ex.commentaire))
+  ) {
+    return res.status(400).json({ error: MESSAGE_TEXTE_TROP_LONG });
   }
 
   let supabase;
   try {
     supabase = getServiceClient();
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    // Le détail (noms des variables manquantes) reste dans les journaux serveur.
+    console.error(`[seance] client service indisponible : ${String(err)}`);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 
   // ── Anti-IDOR ─────────────────────────────────────────────────────────
@@ -127,7 +140,9 @@ export default withSentry(async function handler(req: any, res: any) {
       date_seance: dateSeance,
       statut,
       commentaire_patient: typeof commentairePatient === 'string' && commentairePatient.trim() ? commentairePatient.trim() : null,
-      duree_minutes: typeof dureeMinutes === 'number' ? dureeMinutes : null,
+      // Hors bornes ou non entier : ignoré plutôt que refusé, la durée est une
+      // information d'appoint et ne doit pas faire perdre la séance validée.
+      duree_minutes: typeof dureeMinutes === 'number' && Number.isInteger(dureeMinutes) && dureeMinutes >= 0 && dureeMinutes <= DUREE_SEANCE_MAX_MINUTES ? dureeMinutes : null,
     })
     .select()
     .single();
