@@ -40,10 +40,11 @@
 //                                   nommée ne puisse jamais faire pointer ce
 //                                   fichier de test vers la production.
 //
-// Réutilise le praticien + les 2 patients + la structure de démo créés par
-// scripts/seed-staging.sql (voir ce fichier pour les codes d'accès :
-// E2E_PATIENT_CODE / E2E_PATIENT_CODE_2 / E2E_STRUCTURE_TOKEN, mêmes
-// variables que e2e/README.md) comme "praticien A". Un "praticien B" et un
+// Réutilise le praticien + les 2 patients créés par scripts/seed-staging.sql
+// (voir ce fichier pour les codes d'accès : E2E_PATIENT_CODE /
+// E2E_PATIENT_CODE_2, mêmes variables que e2e/README.md) comme "praticien A".
+// La structure de démo n'est plus utilisée depuis le 2026-11-12 : le test du
+// portail structure crée la sienne. Un "praticien B" et un
 // participant qui lui appartient sont créés à la volée par ce fichier
 // (service_role, prefixe `rls-spec-`) puis supprimés dans `afterAll`, pour
 // ne pas dépendre d'un second jeu de données statique à maintenir.
@@ -77,7 +78,6 @@ const PRATICIEN_A_EMAIL = process.env.E2E_PRATICIEN_EMAIL ?? 'staging.praticien@
 const PRATICIEN_A_PASSWORD = process.env.E2E_PRATICIEN_PASSWORD;
 const PATIENT_A_CODE = process.env.E2E_PATIENT_CODE ?? 'CAME2E26';
 const PATIENT_B_CODE = process.env.E2E_PATIENT_CODE_2 ?? 'JUNE2E27';
-const STRUCTURE_TOKEN = process.env.E2E_STRUCTURE_TOKEN ?? 'staging-token-demo-0001';
 
 // Connexion Postgres DIRECTE au projet de staging. Volontairement nommée
 // différemment de DATABASE_URL (que scripts/dump-schema.ts utilise pour la
@@ -614,21 +614,70 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
   });
 
   describe('Structure ↔ patient non rattaché', () => {
-    it('le token structure de démo ne renvoie pas le participant B (non rattaché à cette structure)', async () => {
+    // Jusqu'au 2026-11-12, ce test lisait la structure de démo (token
+    // E2E_STRUCTURE_TOKEN) et, faute de la trouver, se terminait par un
+    // avertissement : il passait au vert sans rien vérifier. Or cette
+    // structure est absente du staging depuis le 2026-09-28 au moins (constat
+    // de e2e/08-portail-structure.spec.ts), donc le test ne prouvait plus rien.
+    // Même remède que dans le test e2e : il crée sa PROPRE structure et son
+    // PROPRE bénéficiaire rattaché, puis les supprime par identifiant précis.
+    it('une structure ne voit que ses bénéficiaires rattachés (ni celui de B, ni un non-rattaché de A)', async () => {
       // Le portail structure passe entièrement par service_role +
       // api/structure/data.ts (aucun accès anon direct aux tables, voir
-      // 20260613_rls_anon_lockdown.sql) : ce test appelle donc la même
-      // requête que la route, avec le service_role, en simulant le filtre
-      // structure_id qu'elle applique — pour prouver que la requête
-      // elle-même exclut bien participant B, indépendamment du code de la route.
-      const { data: structure } = await admin.from('structures').select('id, praticien_id').eq('token_acces', STRUCTURE_TOKEN).maybeSingle();
-      if (!structure) {
-        console.warn(`Structure de démo (token ${STRUCTURE_TOKEN}) introuvable — seed-staging.sql exécuté sur ce staging ?`);
-        return;
+      // 20260613_rls_anon_lockdown.sql) : ce test rejoue donc la requête de
+      // la route, avec le service_role et le même filtre structure_id, pour
+      // prouver que la requête elle-même exclut les bénéficiaires non
+      // rattachés, indépendamment du code de la route.
+      const marqueur = `rls-spec-${Date.now()}`;
+      let structureId: string | undefined;
+      let rattacheId: string | undefined;
+      try {
+        const { data: structure, error: structureErr } = await admin
+          .from('structures')
+          .insert({
+            praticien_id: praticienAId,
+            nom: `RLS-SPEC ${marqueur}`,
+            contact_email: 'rls-spec-structure@test.local',
+            token_acces: marqueur,
+            actif: true,
+          })
+          .select('id')
+          .single();
+        expect(structureErr?.message ?? null, 'création de la structure de test').toBeNull();
+        structureId = structure?.id;
+        expect(structureId).toBeTruthy();
+
+        const { data: rattache, error: rattacheErr } = await admin
+          .from('participants')
+          .insert({
+            praticien_id: praticienAId,
+            structure_id: structureId,
+            prenom: 'Test',
+            nom: `RLS-SPEC ${marqueur}`,
+            date_naissance: '1950-01-01',
+            // Exigé par le trigger trg_participants_consentement_rgpd_creation,
+            // y compris en service_role.
+            rgpd: { consentementObtenu: true, consentementDate: new Date().toISOString().slice(0, 10), methodeConsentement: 'numerique' },
+          })
+          .select('id')
+          .single();
+        expect(rattacheErr?.message ?? null, 'création du bénéficiaire rattaché').toBeNull();
+        rattacheId = rattache?.id;
+        expect(rattacheId).toBeTruthy();
+
+        const { data: vus, error: vusErr } = await admin.from('participants').select('id').eq('structure_id', structureId as string);
+        expect(vusErr?.message ?? null).toBeNull();
+        const ids = (vus ?? []).map((r) => r.id);
+        // Égalité stricte : un tableau vide ne passerait pas, contrairement à
+        // un simple « ne contient pas ».
+        expect(ids, 'la structure doit voir exactement son bénéficiaire rattaché').toEqual([rattacheId]);
+        expect(ids, 'bénéficiaire de B visible par la structure de A').not.toContain(participantBId);
+        expect(ids, 'bénéficiaire de A non rattaché visible par la structure').not.toContain(participantAId);
+      } finally {
+        // Suppressions par identifiant précis, enfant avant parent.
+        if (rattacheId) await admin.from('participants').delete().eq('id', rattacheId);
+        if (structureId) await admin.from('structures').delete().eq('id', structureId);
       }
-      const { data: rattaches } = await admin.from('participants').select('id').eq('structure_id', structure.id);
-      const ids = (rattaches ?? []).map((r) => r.id);
-      expect(ids, 'participant B (praticien B, non rattaché à cette structure) apparaît dans les participants de la structure de démo').not.toContain(participantBId);
     });
   });
 

@@ -26,7 +26,7 @@ Supabase tant que la bascule n'a pas été décidée. Inventaire de départ : do
 
 1. rôles `anon`, `authenticated`, `service_role` ;
 2. `sql/01_compat_auth.sql` ;
-3. les 30 migrations de `supabase/migrations/`, nettoyées par `scripts/nettoyer-dump.mjs` : 62 tables, toutes avec RLS, 135 politiques (les 3 politiques du schéma `storage` sont retirées), 50 fonctions, 63 triggers ;
+3. les 35 migrations de `supabase/migrations/`, nettoyées par `scripts/nettoyer-dump.mjs` : 62 tables, toutes avec RLS, 135 politiques (les 3 politiques du schéma `storage` sont retirées), 52 fonctions, 64 triggers (relevé du 12/11/2026) ;
 4. `sql/02_controle_repetition.sql` : deux praticiens et deux bénéficiaires fictifs, puis 8 contrôles (cloisonnement en lecture et en écriture, usurpation d'identité refusée, garde-fou RGPD, rôle `anon` sans accès, rôle serveur, RLS sur toutes les tables).
 
 Le job `repetition-cible` de la CI la rejoue à chaque PR sur **PostgreSQL 17**, puis démarre PostgREST (même image que `postgrest/`) et vérifie le chemin complet du front praticien, serveur Node → `/rest/v1` → PostgREST → RLS, avec des jetons signés (`scripts/repetition-http.test.mjs`).
