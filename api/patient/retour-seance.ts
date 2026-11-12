@@ -40,7 +40,9 @@ export default withSentry(async function handler(req: any, res: any) {
   try {
     supabase = getServiceClient();
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    // Le détail (noms des variables manquantes) reste dans les journaux serveur.
+    console.error(`[retour-seance] client service indisponible : ${String(err)}`);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 
   // Récupérer praticien_id depuis participants — jamais depuis le body

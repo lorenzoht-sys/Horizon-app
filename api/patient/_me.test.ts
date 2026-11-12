@@ -6,7 +6,7 @@
 // bilan_initial_data.formulaireFlat.data (lu par getTestsAutonomie() côté
 // frontend quand participant.anamnese est vide).
 import { describe, it, expect } from 'vitest';
-import { filtrerBilan, normaliserPrenomPraticien } from './me.js';
+import { filtrerBilan, normaliserPrenomPraticien, retirerColonnes, COLONNES_PARTICIPANT_INTERNES, COLONNES_BILAN_INTERNES } from './me.js';
 
 function bilanBrut(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -114,5 +114,56 @@ describe('normaliserPrenomPraticien', () => {
     expect(normaliserPrenomPraticien('  ')).toBeNull();
     expect(normaliserPrenomPraticien(null)).toBeNull();
     expect(normaliserPrenomPraticien(42)).toBeNull();
+  });
+});
+
+// ── Colonnes internes (2026-11-12) ──────────────────────────────────────────
+
+describe('colonnes internes jamais envoyées au bénéficiaire', () => {
+  it('retire du participant les coordonnées bancaires, le consentement et les champs de travail du praticien', () => {
+    const ligne: Record<string, unknown> = {
+      id: 'p1', prenom: 'Test', nom: 'E2E', anamnese: { autonomie: {} }, profil_handicap: 'senior',
+      visibilite_beneficiaire: { bilans: true }, message_beneficiaire: 'Bravo',
+      iban: 'FR76…', bic: 'XXXXFRPP', rgpd: { consentementObtenu: true }, droit_image: true,
+      tags: ['à surveiller'], contexte_clinic: 'note interne', tests_actifs: ['tug'],
+      code_portail: '1234A', personne_contact: 'voisine', coordonnees_lat: 48.1, coordonnees_lng: 2.3,
+      beneficiaire_sap: true,
+    };
+    const rendu = retirerColonnes(ligne, COLONNES_PARTICIPANT_INTERNES);
+    for (const c of COLONNES_PARTICIPANT_INTERNES) expect(rendu, c).not.toHaveProperty(c);
+    // Ce que les écrans et les PDF du bénéficiaire lisent reste intact.
+    expect(rendu).toMatchObject({
+      id: 'p1', prenom: 'Test', nom: 'E2E', profil_handicap: 'senior',
+      visibilite_beneficiaire: { bilans: true }, message_beneficiaire: 'Bravo',
+    });
+    expect(rendu.anamnese).toEqual({ autonomie: {} });
+  });
+
+  it('filtrerBilan retire les scores cognitifs et les notes de travail, MÊME quand tout est partagé', () => {
+    const bilan = bilanBrut({
+      visible_beneficiaire: { equilibre: true, force: true, handGrip: true, mobilite: true, endurance: true },
+      moca_score: 21, memoire_score_immediat: 3, memoire_score_differe: 2, memoire_dubois: { a: 1 },
+      berg_data: { total: 40 }, adl_data: {}, iadl_data: {}, apley_data: {}, douleur_eva: 6,
+      marche10m_habituel: 9.1, marche10m_max: 7.2,
+      points_vigilance: 'chute récente', objectifs_suivants: 'x', notes_bilan: { a: 'b' }, profil_enrichi: {},
+    });
+    const rendu = filtrerBilan(bilan, true, true);
+    for (const c of COLONNES_BILAN_INTERNES) expect(rendu, c).not.toHaveProperty(c);
+    // Les résultats partagés, eux, passent toujours.
+    expect(rendu.equilibre_droite).toBe(12.3);
+    expect(rendu.tug_3m).toBe(8.5);
+  });
+
+  it('les deux listes ne retirent rien de ce que le chemin bénéficiaire lit', () => {
+    // Garde-fou : ces colonnes sont lues par l'espace bénéficiaire ou ses PDF
+    // (relevé du 2026-11-12). Les ajouter aux listes casserait un écran.
+    const lues = [
+      'prenom', 'nom', 'date_naissance', 'anamnese', 'traitements', 'antecedents_structures', 'profil_handicap',
+      'visibilite_beneficiaire', 'message_beneficiaire', 'taille', 'poids', 'medecin_traitant', 'objectifs_patient',
+      'message_client', 'interpretation_ia', 'notes_professionnelles', 'tinetti_data', 'souplesse_valeur',
+      'bilan_initial_data', 'visible_beneficiaire', 'tm6_distance_metres', 'chair_stand_30', 'tug_3m',
+    ];
+    const retirees = new Set<string>([...COLONNES_PARTICIPANT_INTERNES, ...COLONNES_BILAN_INTERNES]);
+    for (const c of lues) expect(retirees.has(c), c).toBe(false);
   });
 });

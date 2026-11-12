@@ -23,7 +23,9 @@ export default withSentry(async function handler(req: any, res: any) {
   try {
     supabase = getServiceClient();
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    // Le détail (noms des variables manquantes) reste dans les journaux serveur.
+    console.error(`[seances/supprimer-planifiees] client service indisponible : ${String(err)}`);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 
   const { data: userData, error: userErr } = await supabase.auth.getUser(token);

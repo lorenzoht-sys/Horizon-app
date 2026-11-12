@@ -30,7 +30,9 @@ export default withSentry(async function handler(req: any, res: any) {
   try {
     supabase = getServiceClient();
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    // Le détail (noms des variables manquantes) reste dans les journaux serveur.
+    console.error(`[patient/push-subscribe] client service indisponible : ${String(err)}`);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 
   if (req.method === 'POST') {

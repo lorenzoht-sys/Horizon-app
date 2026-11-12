@@ -86,7 +86,9 @@ async function handleAdmin(req: any, res: any, body: any) {
   try {
     supabase = getServiceClient();
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    // Le détail (noms des variables manquantes) reste dans les journaux serveur.
+    console.error(`[organisation] client service indisponible : ${String(err)}`);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 
   const auth = await exigerAdmin(req, supabase);
@@ -356,7 +358,9 @@ async function handleDemande(req: any, res: any, body: any) {
   try {
     supabase = getServiceClient();
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    // Le détail (noms des variables manquantes) reste dans les journaux serveur.
+    console.error(`[organisation] client service indisponible : ${String(err)}`);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 
   const ip = getClientIp(req);

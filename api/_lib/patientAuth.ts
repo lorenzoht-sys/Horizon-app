@@ -33,7 +33,10 @@ export async function signPatientToken(participantId: string): Promise<string> {
 }
 
 export async function verifyPatientToken(token: string): Promise<string> {
-  const { payload } = await jwtVerify(token, getSecretKey());
+  // Algorithme épinglé (2026-11-12) : avec une clé symétrique, jose refuse déjà
+  // `none` et les algorithmes asymétriques, mais accepterait HS384/HS512. Les
+  // jetons sont émis en HS256 (signPatientToken) : rien d'autre n'est légitime.
+  const { payload } = await jwtVerify(token, getSecretKey(), { algorithms: ['HS256'] });
   const participantId = payload.participant_id;
   if (typeof participantId !== 'string' || !participantId) {
     throw new Error('Token invalide');

@@ -51,6 +51,39 @@ const COLONNES_PAR_RESULTAT: Record<string, string[]> = {
   ],
 };
 
+// ── Colonnes internes, jamais envoyées au bénéficiaire (2026-11-12) ───────
+// `participants` et `bilans` sont lus en select('*') : la carte santé et les
+// écrans du bénéficiaire en consomment une grande partie, et une liste fermée
+// de ce qui est PARTAGÉ relève d'une décision de produit (voir
+// docs/SECURITE.md, point 11). En attendant, cette liste retire ce qu'aucun
+// écran ni aucun PDF du bénéficiaire ne lit — relevé fait sur le code le
+// 2026-11-12 : src/pages/EspacePatient.tsx, src/pages/espace-patient/,
+// DossierPDF en mode « patient », ProgrammePDF, src/lib/anamnese.ts — et qui
+// n'a rien à faire dans son navigateur : coordonnées bancaires, trace du
+// consentement, étiquettes et contexte rédigés par le praticien, code de
+// porte et personne à prévenir (utiles au praticien en tournée), scores
+// cognitifs et notes de travail du bilan.
+// Avant d'en retirer une : vérifier qu'elle est lue côté bénéficiaire.
+// `profil_handicap` n'y figure PAS : le PDF du programme s'en sert.
+export const COLONNES_PARTICIPANT_INTERNES = [
+  'iban', 'bic', 'rgpd', 'droit_image', 'tags', 'contexte_clinic', 'tests_actifs',
+  'code_portail', 'personne_contact', 'coordonnees_lat', 'coordonnees_lng', 'beneficiaire_sap',
+] as const;
+
+export const COLONNES_BILAN_INTERNES = [
+  'memoire_score_immediat', 'memoire_score_differe', 'memoire_dubois', 'moca_score',
+  'berg_data', 'adl_data', 'iadl_data', 'apley_data', 'douleur_eva',
+  'marche10m_habituel', 'marche10m_max',
+  'points_vigilance', 'objectifs_suivants', 'notes_bilan', 'profil_enrichi',
+] as const;
+
+/** Retire des colonnes d'une ligne DB brute. Mutation en place : la ligne
+ *  d'origine ne doit plus exister sous sa forme complète après l'appel. */
+export function retirerColonnes<T extends Record<string, unknown>>(ligne: T, colonnes: readonly string[]): T {
+  for (const c of colonnes) delete (ligne as Record<string, unknown>)[c];
+  return ligne;
+}
+
 const COLONNES_SEDENTARITE = ['sedentarite_score', 'sedentarite_profil', 'sedentarite_reponses'];
 const COLONNES_FATIGUE = ['fatigue_score', 'fatigue_profil', 'fatigue_reponses'];
 
@@ -68,6 +101,7 @@ function retirerClesFlat(flat: Record<string, unknown> | undefined, cles: string
  *  en place — le bilan n'est jamais renvoyé tel quel, seulement sa version
  *  filtrée. */
 export function filtrerBilan(bilan: any, sedentariteVisible: boolean, fatigueVisible: boolean): any {
+  retirerColonnes(bilan, COLONNES_BILAN_INTERNES);
   const visible = bilan.visible_beneficiaire ?? {};
   for (const [resultat, colonnes] of Object.entries(COLONNES_PAR_RESULTAT)) {
     if (visible[resultat] !== true) {
@@ -105,7 +139,8 @@ export default withSentry(async function handler(req: any, res: any) {
   try {
     supabase = getServiceClient();
   } catch (err) {
-    return res.status(500).json({ error: String(err) });
+    console.error(`[patient/me] client service indisponible : ${String(err)}`);
+    return res.status(500).json({ error: 'Erreur serveur' });
   }
 
   const [participantRes, bilansRes, seancesRes, programmesRes, docsRes, testsActifsRes, testsResultatsRes, exLibresActifsRes, exLibresValidationsRes, coursRes] = await Promise.all([
@@ -166,7 +201,8 @@ export default withSentry(async function handler(req: any, res: any) {
   // jamais le chemin du PDF (voir api/_lib/facturesPatient.ts). Une panne donne une liste vide.
   const factures = await lireFacturesPatient(supabase, participantId);
 
-  const participant = participantRes.data;
+  // Après la lecture de praticien_id ci-dessus, avant tout envoi.
+  const participant = retirerColonnes(participantRes.data, COLONNES_PARTICIPANT_INTERNES);
   const brut = (participant.visibilite_beneficiaire ?? {}) as Record<string, unknown>;
   const visibilite = { ...VISIBILITE_DEFAULT, ...brut };
 
