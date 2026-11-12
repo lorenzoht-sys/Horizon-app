@@ -1,6 +1,6 @@
 # Sécurité d'Horizon : état des mesures
 
-État au 11/11/2026, établi par relecture du code et des migrations. Ce
+État au 12/11/2026, établi par relecture du code et des migrations. Ce
 document décrit ce qui est en place et ce qui reste ouvert ; il ne remplace
 pas un audit externe ni un test d'intrusion.
 
@@ -16,8 +16,17 @@ pas un audit externe ni un test d'intrusion.
 - Règles métier sensibles en base : factures inaltérables et numérotées par
   trigger, consentement RGPD exigé à la création d'un bénéficiaire,
   suppression bloquée s'il existe un historique financier, journal d'audit.
-- Harnais RLS : 72 cas exécutés contre le staging à chaque PR
-  (`tests/security/`). Un harnais ignoré fait échouer la CI.
+- Écritures cloisonnées entre praticiens (12/11/2026, #192 et #193) : une
+  ligne ne peut référencer qu'un bénéficiaire, un contrat, une séance, un
+  cours, une structure, un modèle ou un dossier auquel son auteur a accès, et
+  une facture ne peut porter que le bénéficiaire de son propre contrat
+  (trigger `factures_coherence_beneficiaire`). Cinq migrations
+  (`20261102100000` à `20261106100000`), appliquées au staging et à la
+  production le 12/11/2026. Contrôle préalable en production : aucune
+  écriture croisée n'avait eu lieu.
+- Harnais RLS : 225 cas exécutés contre le staging à chaque PR
+  (`tests/security/`), dont les écritures croisées par clé étrangère. Un
+  harnais ignoré fait échouer la CI.
 
 ### Accès
 | Espace | Mécanisme | Protections |
