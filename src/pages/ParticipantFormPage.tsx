@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 
 export default function ParticipantFormPage() {
   const { id } = useParams<{ id: string }>();
-  const { participants, addParticipant, updateParticipant } = useParticipants();
+  const { participants, addParticipant, updateParticipant, loading: chargementParticipants } = useParticipants();
   const navigate = useNavigate();
 
   const isEdition = Boolean(id);
@@ -17,7 +17,7 @@ export default function ParticipantFormPage() {
   if (isEdition && !participant) {
     return (
       <PageWrapper>
-        <div className="text-center py-20 text-gray-400">Participant introuvable</div>
+        <div className="text-center py-20 text-gray-400">{chargementParticipants ? 'Chargement…' : 'Participant introuvable'}</div>
       </PageWrapper>
     );
   }

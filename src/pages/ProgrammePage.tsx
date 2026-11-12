@@ -397,7 +397,7 @@ export default function ProgrammePage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { participants } = useParticipants();
+  const { participants, loading: chargementParticipants } = useParticipants();
   const { programmes: progsV2, loading, seancesAutonomesStats, createProgramme, updateProgramme, toggleActif, deleteProgrammeV2 } = useProgrammeV2(id!);
   const { programmes: progsV1, programmeActif: progV1Actif } = useProgramme(id!);
   const activitesHorsProgramme = useActivitesHorsProgramme(id!);
@@ -558,7 +558,7 @@ export default function ProgrammePage() {
   }
 
   if (!participant) {
-    return <PageWrapper><div className="text-center py-20 text-gray-400">Participant introuvable</div></PageWrapper>;
+    return <PageWrapper><div className="text-center py-20 text-gray-400">{chargementParticipants ? 'Chargement…' : 'Participant introuvable'}</div></PageWrapper>;
   }
 
   // V1 programmes without a type (old flat structure)

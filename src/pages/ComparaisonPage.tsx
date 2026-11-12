@@ -320,13 +320,13 @@ function ResumeIA({ participant, bilans }: { participant: Participant; bilans: B
 
 export default function ComparaisonPage() {
   const { id } = useParams<{ id: string }>();
-  const { participants } = useParticipants();
+  const { participants, loading: chargementParticipants } = useParticipants();
   const [exportingPDF, setExportingPDF] = useState(false);
 
   const participant = participants.find(p => p.id === id);
   if (!participant) return (
     <PageWrapper>
-      <div className="text-center py-20 text-gray-400">Participant introuvable</div>
+      <div className="text-center py-20 text-gray-400">{chargementParticipants ? 'Chargement…' : 'Participant introuvable'}</div>
     </PageWrapper>
   );
 

@@ -12,7 +12,7 @@ type BilanForm = Omit<Bilan, 'id'>;
 
 export default function EditBilan() {
   const { id, bilanId } = useParams<{ id: string; bilanId: string }>();
-  const { participants, updateBilan } = useParticipants();
+  const { participants, updateBilan, loading: chargementParticipants } = useParticipants();
   const navigate = useNavigate();
 
   const participant = participants.find(p => p.id === id);
@@ -20,7 +20,7 @@ export default function EditBilan() {
 
   if (!participant || !bilan) return (
     <PageWrapper>
-      <div className="text-center py-20 text-gray-400">Bilan introuvable</div>
+      <div className="text-center py-20 text-gray-400">{chargementParticipants ? 'Chargement…' : 'Bilan introuvable'}</div>
     </PageWrapper>
   );
 
