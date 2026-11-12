@@ -5,6 +5,14 @@ test.describe('Export PDF d\'un bilan', () => {
   test.beforeEach(() => skipUnlessPraticien());
 
   test('un praticien peut générer le PDF d\'un bilan existant', async ({ page }) => {
+    // 60 s et non les 30 s par défaut (2026-11-12) : ce parcours enchaîne la
+    // connexion, la fiche du bénéficiaire (jusqu'à 15 s, voir plus bas) puis la
+    // page du bilan, qui recharge à son tour toute la liste des bénéficiaires.
+    // Sur 25 exécutions de CI relevées le 2026-11-12, il a dépassé 30 s trois
+    // fois au premier essai, toujours en attendant le bouton d'export, et est
+    // passé au second. C'est le budget du test qui était trop court pour trois
+    // pages chargées à la suite, pas l'export qui échouait.
+    test.setTimeout(60_000);
     await loginPraticien(page);
     await ouvrirFicheParticipant(page, `${env.patientPrenom} ${env.patientNom}`);
 

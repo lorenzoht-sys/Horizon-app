@@ -18,7 +18,7 @@ import { idSeanceDepuisRecherche, validerSeanceDuBilan } from '../lib/liaisonSea
 
 export default function NewBilan() {
   const { id } = useParams<{ id: string }>();
-  const { participants, addBilan, updateParticipant } = useParticipants();
+  const { participants, addBilan, updateParticipant, loading: chargementParticipants } = useParticipants();
   const navigate = useNavigate();
   const { search } = useLocation();
 
@@ -56,7 +56,7 @@ export default function NewBilan() {
   const participant = participants.find(p => p.id === id);
   if (!participant) return (
     <PageWrapper>
-      <div className="text-center py-20 text-gray-400">Participant introuvable</div>
+      <div className="text-center py-20 text-gray-400">{chargementParticipants ? 'Chargement…' : 'Participant introuvable'}</div>
     </PageWrapper>
   );
 

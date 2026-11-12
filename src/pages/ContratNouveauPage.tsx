@@ -29,7 +29,7 @@ type ModePeriode = 'duree' | 'seances';
 export default function ContratNouveauPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { participants } = useParticipants();
+  const { participants, loading: chargementParticipants } = useParticipants();
   const { creerContrat } = useContrats();
 
   const { seances } = useAgenda();
@@ -178,7 +178,7 @@ export default function ContratNouveauPage() {
   if (!participant) {
     return (
       <PageWrapper>
-        <div className="text-center py-20 text-gray-400">Participant introuvable</div>
+        <div className="text-center py-20 text-gray-400">{chargementParticipants ? 'Chargement…' : 'Participant introuvable'}</div>
       </PageWrapper>
     );
   }

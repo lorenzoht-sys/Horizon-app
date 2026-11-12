@@ -24,7 +24,7 @@ const PARTAGE_ITEMS: { key: CleResultatPartageable; label: string }[] = [
 
 export default function BilanDetail() {
   const { id, bilanId } = useParams<{ id: string; bilanId: string }>();
-  const { participants, updateBilan } = useParticipants();
+  const { participants, updateBilan, loading: chargementParticipants } = useParticipants();
   const [exporting, setExporting] = useState(false);
   const [exportingBeneficiaire, setExportingBeneficiaire] = useState(false);
   const navigate = useNavigate();
@@ -32,9 +32,15 @@ export default function BilanDetail() {
   const participant = participants.find(p => p.id === id);
   const bilan = participant?.bilans.find(b => b.id === bilanId);
 
+  // « Chargement… » tant que la liste n'est pas arrivée (2026-11-12) : cette
+  // page recharge tous les bénéficiaires à l'ouverture, et affichait « Bilan
+  // introuvable » pendant ce temps — faux pour l'utilisateur sur une connexion
+  // lente, et cause probable des passages au second essai de
+  // e2e/04-export-pdf-bilan. Même motif que ParticipantProfile ; appliqué le
+  // même jour aux six autres pages qui avaient le même défaut.
   if (!participant || !bilan) return (
     <PageWrapper>
-      <div className="text-center py-20 text-gray-400">Bilan introuvable</div>
+      <div className="text-center py-20 text-gray-400">{chargementParticipants ? 'Chargement…' : 'Bilan introuvable'}</div>
     </PageWrapper>
   );
 
