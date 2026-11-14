@@ -877,6 +877,7 @@ export default function AgendaV2Page() {
             nomBeneficiaire={nomBeneficiaireDe(seanceEditee)}
             seances={seances}
             contrat={contratEdite}
+            contrats={contrats}
             onSave={updates => handleEnregistrerSeance(seanceEditee, updates)}
             onDelete={() => handleSupprimerSeance(seanceEditee)}
             onRestaurer={() => handleRestaurerSeance(seanceEditee)}
@@ -907,6 +908,7 @@ export default function AgendaV2Page() {
       {nouvelleSeanceOuverte && (
         <ModalCreerSeanceManuelle
           participants={participantsActifs}
+          contrats={contrats}
           detecterConflits={detecterConflits}
           initial={slotInitialSeance}
           onCreer={async data => { await creerSeance(data); }}

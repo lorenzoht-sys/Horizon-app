@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { X, Loader, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import type { Participant, Seance, TypeSeance, CategorieSeance } from '../../types';
+import type { Participant, Seance, TypeSeance, CategorieSeance, Contrat } from '../../types';
 import SelecteurCategorie from './SelecteurCategorie';
 import { addMinutes } from '../../utils/horaires';
+import { contratsDuBeneficiaire, contratSuggere, libelleContrat } from '../../lib/contratSeance';
 
 // ── Création manuelle d'une séance (port de ModalCreerSeance, AgendaPage.tsx)
 //    — n'importe quel bénéficiaire, avec ou sans contrat actif. Contrairement
@@ -12,9 +13,17 @@ import { addMinutes } from '../../utils/horaires';
 //    contrat actif pour générer une série récurrente), ce chemin crée une
 //    séance ponctuelle unique — c'est le seul moyen de planifier un bilan
 //    initial pour un prospect qui n'a pas encore de contrat. ─────────────────
+//
+//    Contrat (14/11/2026) : jusque-là ce chemin n'écrivait jamais contrat_id,
+//    donc une séance ponctuelle d'un bénéficiaire sous contrat n'entrait dans
+//    aucune facture (retour de Pierre). Le contrat qui couvre la date est
+//    désormais proposé d'office, modifiable, « Aucun contrat » restant possible
+//    pour un prospect. Voir src/lib/contratSeance.ts.
 
-export default function ModalCreerSeanceManuelle({ participants, detecterConflits, onCreer, onClose, initial, categories = [], onGererCategories }: {
+export default function ModalCreerSeanceManuelle({ participants, contrats = [], detecterConflits, onCreer, onClose, initial, categories = [], onGererCategories }: {
   participants: Participant[];
+  // Contrats du praticien : sans eux la séance est créée sans contrat (comportement d'avant).
+  contrats?: Contrat[];
   detecterConflits: (date: string, heureDebut: string, heureFin: string) => Seance[];
   onCreer: (data: Omit<Seance, 'id'>) => Promise<void>;
   onClose: () => void;
@@ -33,7 +42,13 @@ export default function ModalCreerSeanceManuelle({ participants, detecterConflit
     objectif: '',
     categorieId: '',
   });
+  // null = suivre la suggestion (elle change avec le bénéficiaire et la date) ; '' = aucun contrat.
+  const [contratChoisi, setContratChoisi] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const contratsBeneficiaire = form.participantId ? contratsDuBeneficiaire(contrats, form.participantId) : [];
+  const suggestion = form.participantId ? contratSuggere(contrats, form.participantId, form.date) : undefined;
+  const contratId = contratChoisi ?? suggestion?.id ?? '';
 
   const participant = participants.find(p => p.id === form.participantId);
   const heureFin = addMinutes(form.heureDebut, form.dureeMinutes);
@@ -47,6 +62,8 @@ export default function ModalCreerSeanceManuelle({ participants, detecterConflit
     try {
       await onCreer({
         participantId: form.participantId,
+        // Garde : un identifiant resté d'un autre bénéficiaire n'est jamais écrit.
+        contratId: contratsBeneficiaire.some(c => c.id === contratId) ? contratId : undefined,
         type: form.type,
         date: form.date,
         heureDebut: form.heureDebut,
@@ -76,12 +93,22 @@ export default function ModalCreerSeanceManuelle({ participants, detecterConflit
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Bénéficiaire *</label>
-            <select value={form.participantId} onChange={e => setForm(f => ({ ...f, participantId: e.target.value }))}
+            <select value={form.participantId} onChange={e => { setForm(f => ({ ...f, participantId: e.target.value })); setContratChoisi(null); }}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary">
               <option value="">Choisir un bénéficiaire… (avec ou sans contrat)</option>
               {participants.map(p => <option key={p.id} value={p.id}>{p.prenom} {p.nom}</option>)}
             </select>
           </div>
+          {contratsBeneficiaire.length > 0 && (
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Contrat</label>
+              <select value={contratId} onChange={e => setContratChoisi(e.target.value)} data-testid="select-contrat-seance"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                {contratsBeneficiaire.map(c => <option key={c.id} value={c.id}>{libelleContrat(c)}</option>)}
+                <option value="">Aucun contrat (séance non facturée)</option>
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-xs text-gray-500 mb-1">Type</label>
             <select value={form.type} onChange={e => {
