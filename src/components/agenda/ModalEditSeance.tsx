@@ -5,6 +5,7 @@ import type { Seance, StatutSeance, Contrat, RaisonAnnulation, CategorieSeance }
 import SelecteurCategorie from './SelecteurCategorie';
 import { addMinutes, trouveChevauchement } from '../../utils/horaires';
 import { calculerFutures, type MiseAJourSeance } from '../../lib/planificationManuelle';
+import { contratsDuBeneficiaire, contratSuggere, libelleContrat } from '../../lib/contratSeance';
 import { formatDate, LABEL_STATUT, OPTIONS_RAISON_ANNULATION, LABEL_RAISON_ANNULATION } from '../../lib/agendaCommun';
 
 // ── Édition / suppression d'une séance existante (étape 3) — remplace la
@@ -12,11 +13,13 @@ import { formatDate, LABEL_STATUT, OPTIONS_RAISON_ANNULATION, LABEL_RAISON_ANNUL
 //    (PlanningGrilleView.tsx), sans le volet disponibilités/organisation :
 //    non demandé ici, périmètre propre à cet écran-là. ──────────────────────
 
-export default function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, onSave, onDelete, onRestaurer, onReporter, onNoteSeance, onClose, categories = [], onGererCategories, onOuvrirFiche, onOuvrirBilan }: {
+export default function ModalEditSeance({ seance, nomBeneficiaire, seances, contrat, contrats = [], onSave, onDelete, onRestaurer, onReporter, onNoteSeance, onClose, categories = [], onGererCategories, onOuvrirFiche, onOuvrirBilan }: {
   seance: Seance;
   nomBeneficiaire: string;
   seances: Seance[];
   contrat: Contrat | null;
+  // Contrats du praticien : servent à rattacher une séance restée sans contrat (voir plus bas).
+  contrats?: Contrat[];
   onSave: (updates: MiseAJourSeance) => void;
   onDelete: () => void;
   onRestaurer: () => void;
@@ -44,6 +47,14 @@ export default function ModalEditSeance({ seance, nomBeneficiaire, seances, cont
   const [notes, setNotes] = useState(seance.notes ?? '');
   const [objectif, setObjectif] = useState(seance.objectif ?? '');
   const [confirmSuppr, setConfirmSuppr] = useState(false);
+  // Séance sans contrat (créée par « Nouvelle séance » avant le 14/11/2026, voir
+  // src/lib/contratSeance.ts) : elle n'entre dans aucune facture et le suivi des séances demande de
+  // la rattacher. Le choix n'est proposé QUE dans ce cas : changer le contrat d'une séance déjà
+  // rattachée déplacerait son montant d'une facture à l'autre, ce qui n'a jamais été demandé.
+  const contratsRattachables = seance.contratId ? [] : contratsDuBeneficiaire(contrats, seance.participantId);
+  const [contratRattache, setContratRattache] = useState(() => (
+    seance.contratId ? '' : contratSuggere(contrats, seance.participantId, seance.date)?.id ?? ''
+  ));
   // "Reportée" ne passe pas par handleEnregistrer (qui ne fait que modifier
   // les champs de LA séance existante) : reporter crée une nouvelle séance à
   // la nouvelle date et marque celle-ci "reportee", sans y toucher sinon —
@@ -80,6 +91,8 @@ export default function ModalEditSeance({ seance, nomBeneficiaire, seances, cont
       categorieId: categories.length === 0 ? seance.categorieId : (categories.some(c => c.id === categorieId) ? categorieId : undefined),
       notes: notes.trim() || undefined,
       objectif: objectif.trim() || undefined,
+      // Clé présente seulement quand on rattache : absente, le contrat n'est pas touché.
+      ...(contratsRattachables.some(c => c.id === contratRattache) ? { contratId: contratRattache } : {}),
     });
     onClose();
   }
@@ -184,6 +197,19 @@ export default function ModalEditSeance({ seance, nomBeneficiaire, seances, cont
             <p className="text-xs text-blue-700 bg-blue-50 rounded-xl px-4 py-3">
               Ce créneau se répète encore {futures.length} fois (jusqu'au {formatDate(futures[futures.length - 1].date)}). La portée (cette séance seule ou toute la série) sera demandée à l'enregistrement.
             </p>
+          )}
+
+          {contratsRattachables.length > 0 && (
+            <div className="bg-amber-light border border-amber/20 rounded-xl px-4 py-3" data-testid="rattacher-contrat-seance">
+              <label className="block text-xs font-semibold text-amber mb-1.5">
+                Séance sans contrat : elle n'est pas facturée tant qu'elle n'est pas rattachée
+              </label>
+              <select value={contratRattache} onChange={e => setContratRattache(e.target.value)}
+                className="w-full border border-gray-200 bg-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary">
+                {contratsRattachables.map(c => <option key={c.id} value={c.id}>{libelleContrat(c)}</option>)}
+                <option value="">Laisser sans contrat</option>
+              </select>
+            </div>
           )}
 
           {(categories.length > 0 || onGererCategories) && (

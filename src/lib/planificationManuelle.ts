@@ -37,6 +37,10 @@ export interface MiseAJourSeance {
   // avecInfosDeLaReference.
   notes?: string;
   objectif?: string;
+  // Rattachement d'une séance restée sans contrat (ModalEditSeance, 14/11/2026). Clé ABSENTE = ne pas
+  // toucher au contrat. Propre à LA séance éditée : jamais recopié sur une série (planActionSurSelection
+  // ne le reprend pas), seule la séance de référence le reçoit (avecInfosDeLaReference).
+  contratId?: string;
 }
 
 export type OperationSeance =
@@ -107,7 +111,7 @@ export function planEditerSerie(
 // de la même copie locale et la seconde annulerait la première.
 export function avecInfosDeLaReference(operations: OperationSeance[], seanceRefId: string, updates: MiseAJourSeance): OperationSeance[] {
   return operations.map(op => op.type === 'update' && op.id === seanceRefId
-    ? { ...op, updates: { ...op.updates, notes: updates.notes, objectif: updates.objectif } }
+    ? { ...op, updates: { ...op.updates, notes: updates.notes, objectif: updates.objectif, ...('contratId' in updates ? { contratId: updates.contratId } : {}) } }
     : op);
 }
 

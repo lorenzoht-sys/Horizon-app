@@ -545,6 +545,7 @@ export function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
       {nouvelleSeanceOuverte && (
         <ModalCreerSeanceManuelle
           participants={participantsActifs}
+          contrats={contrats}
           detecterConflits={detecterConflits}
           initial={{ date: dateStr }}
           onCreer={async data => { await creerSeance(data); }}
@@ -564,6 +565,7 @@ export function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
             nomBeneficiaire={nomBeneficiaireDe(seanceEditee)}
             seances={seances}
             contrat={contratEdite}
+            contrats={contrats}
             onSave={updates => handleEnregistrerSeance(seanceEditee, updates)}
             onDelete={() => handleSupprimerSeance(seanceEditee)}
             onRestaurer={() => handleRestaurerSeance(seanceEditee)}
