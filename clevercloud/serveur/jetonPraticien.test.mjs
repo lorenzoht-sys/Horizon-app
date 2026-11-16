@@ -30,6 +30,13 @@ test('configuration : rien, un mode, jamais les deux ; secret court refusé', ()
   assert.deepEqual(configurationJeton({ AUTH_JWT_SECRET: SECRET }), { jwks: null, secret: SECRET, emetteur: null, audience: null });
   assert.throws(() => configurationJeton({ AUTH_JWT_SECRET: SECRET, AUTH_JWKS_URL: 'http://x' }), /exclusifs/);
   assert.throws(() => configurationJeton({ AUTH_JWT_SECRET: 'court' }), /trop court/);
+  // Mode JWKS : un jeton du même fournisseur émis pour un autre client ne doit pas passer.
+  assert.throws(() => configurationJeton({ AUTH_JWKS_URL: 'http://x' }), /obligatoires/);
+  assert.throws(() => configurationJeton({ AUTH_JWKS_URL: 'http://x', AUTH_ISSUER: 'https://id.example' }), /obligatoires/);
+  assert.deepEqual(
+    configurationJeton({ AUTH_JWKS_URL: 'http://x', AUTH_ISSUER: 'https://id.example', AUTH_AUDIENCE: 'horizon' }),
+    { jwks: 'http://x', secret: null, emetteur: 'https://id.example', audience: 'horizon' },
+  );
 });
 
 test('HS256 : jeton valide → même forme que supabase.auth.getUser', async () => {

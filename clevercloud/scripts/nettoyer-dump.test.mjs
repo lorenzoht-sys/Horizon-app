@@ -33,3 +33,11 @@ test('retire ce qui est propre à Supabase et garde le reste', () => {
   assert.equal(r.retirees.length, 7);
   assert.deepEqual(r.aAdapter, ['public.g']);
 });
+
+test('retire CREATE SCHEMA public, que pg_dump émet et qui existe déjà sur la cible', () => {
+  const r = nettoyer('CREATE SCHEMA public;\nCREATE SCHEMA "public";\nCREATE SCHEMA autre;\nCREATE TABLE public.t (id int);');
+  assert.doesNotMatch(r.sql, /CREATE SCHEMA "?public/);
+  assert.match(r.sql, /CREATE SCHEMA autre;/);
+  assert.match(r.sql, /CREATE TABLE public\.t/);
+  assert.equal(r.retirees.length, 2);
+});

@@ -15,19 +15,41 @@ import https from 'node:https';
 // En-têtes propres à une connexion : jamais recopiés d'un côté à l'autre.
 const SAUT = new Set(['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'host']);
 
-/** Transmet la requête telle quelle à PostgREST, en flux, sans la lire. */
-export function relayerVersPostgrest(req, res, url, base) {
+// Au-delà, PostgREST est considéré comme bloqué : sans délai, chaque requête en
+// attente garderait une connexion ouverte et l'application finirait saturée.
+// Large devant les requêtes du front (la plus longue relevée dure quelques secondes).
+export const DELAI_POSTGREST_MS = 30_000;
+
+/**
+ * Transmet la requête telle quelle à PostgREST, en flux, sans la lire.
+ * PostgREST injoignable ou muet : 502, sans détail. Si le navigateur abandonne
+ * (onglet fermé, navigation), la requête vers PostgREST est coupée aussi.
+ */
+export function relayerVersPostgrest(req, res, url, base, { delai = DELAI_POSTGREST_MS } = {}) {
   const cible = new URL(url.pathname.slice('/rest/v1'.length) || '/', base);
   cible.search = url.search;
   const entetes = Object.fromEntries(Object.entries(req.headers).filter(([n]) => !SAUT.has(n)));
-  return new Promise((resolve, reject) => {
+  return new Promise(resolve => {
     const amont = (cible.protocol === 'https:' ? https : http).request(cible, { method: req.method, headers: entetes }, rep => {
       res.statusCode = rep.statusCode ?? 502;
       for (const [n, v] of Object.entries(rep.headers)) if (!SAUT.has(n) && v !== undefined) res.setHeader(n, v);
       rep.pipe(res);
       rep.on('end', resolve);
     });
-    amont.on('error', reject);
+    amont.setTimeout(delai, () => amont.destroy(new Error('délai dépassé')));
+    amont.on('error', err => {
+      // Jamais de détail vers le client ; le nom de l'erreur suffit au journal.
+      if (!res.destroyed) console.error(`[relais] PostgREST : ${err?.code ?? err?.message ?? 'erreur'}`);
+      if (!res.headersSent) {
+        res.statusCode = 502;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ message: 'Service de données indisponible' }));
+      } else {
+        res.destroy(); // réponse déjà commencée : la couper plutôt que la laisser tronquée en silence
+      }
+      resolve();
+    });
+    res.on('close', () => { if (!res.writableEnded) amont.destroy(); });
     req.pipe(amont);
   });
 }
