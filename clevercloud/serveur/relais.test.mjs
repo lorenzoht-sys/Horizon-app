@@ -48,6 +48,39 @@ test('/rest/v1 : préfixe retiré, méthode, requête, corps et en-têtes transm
   assert.deepEqual([v.methode, v.auth, v.prefer, v.corps], ['POST', 'Bearer praticien-a', 'return=representation', '{"nom":"Test"}']);
 });
 
+test('/rest/v1 : jamais de cache navigateur pour les données relayées', async () => {
+  const rep = await fetch(`${base}/rest/v1/participants?select=id`, { headers: { authorization: 'Bearer praticien-a' } });
+  assert.equal(rep.headers.get('cache-control'), 'no-store');
+});
+
+test('/rest/v1 : PostgREST injoignable ou muet donne un 502 sans détail', async () => {
+  const demarrer = async options => {
+    const s = creerServeur({ dossierApi: '/inexistant', dossierStatique: '/inexistant', dossierFonctions: '/inexistant', servirFront: false, regles: [], stockage: null, ...options });
+    await new Promise(r => s.listen(0, '127.0.0.1', r));
+    return s;
+  };
+  // Injoignable : un port où rien n'écoute.
+  const ferme = http.createServer();
+  await new Promise(r => ferme.listen(0, '127.0.0.1', r));
+  const portLibre = ferme.address().port;
+  await new Promise(r => ferme.close(r));
+  const s1 = await demarrer({ postgrest: `http://127.0.0.1:${portLibre}` });
+  const r1 = await fetch(`http://127.0.0.1:${s1.address().port}/rest/v1/participants`);
+  assert.equal(r1.status, 502);
+  assert.deepEqual(await r1.json(), { message: 'Service de données indisponible' });
+  s1.close();
+
+  // Muet : accepte la connexion et ne répond jamais.
+  const muet = http.createServer(() => {});
+  await new Promise(r => muet.listen(0, '127.0.0.1', r));
+  const s2 = await demarrer({ postgrest: `http://127.0.0.1:${muet.address().port}`, delaiPostgrest: 100 });
+  const r2 = await fetch(`http://127.0.0.1:${s2.address().port}/rest/v1/participants`);
+  assert.equal(r2.status, 502);
+  s2.close();
+  muet.closeAllConnections();
+  muet.close();
+});
+
 test('/rest/v1/rpc : les appels de fonctions SQL passent aussi', async () => {
   await fetch(`${base}/rest/v1/rpc/valider_facture`, { method: 'POST', body: '{}' });
   assert.equal(vus.at(-1).url, '/rpc/valider_facture');

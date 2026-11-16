@@ -533,22 +533,32 @@ BEGIN
 
   INSERT INTO participants (
     id, praticien_id, nom, prenom, date_naissance, email, telephone,
-    pathologie, profil, tags, adresse_rue, adresse_code_postal, adresse_ville, code_acces
+    pathologie, profil, tags, adresse_rue, adresse_code_postal, adresse_ville, code_acces, rgpd
   ) VALUES (
     v_nadia_id, v_praticien_id, 'Girard', 'Nadia', '1952-11-04',
     'nadia.girard.staging@example.com', '0611121314',
     'Ostéoporose', 'Autonome', ARRAY['senior'],
-    '4 rue Démo Deux', '69004', 'Lyon', 'DEMO2P01'
+    '4 rue Démo Deux', '69004', 'Lyon', 'DEMO2P01',
+    -- Obligatoire depuis 20260913_rgpd_consentement_creation.sql : sans ce
+    -- consentement, tout le bloc « Démo 2 » était refusé par le trigger
+    -- (constaté le 2026-11-16 en rejouant le seed sur une base vierge).
+    jsonb_build_object('consentementObtenu', true, 'droitAcces', true, 'droitRectification', true,
+      'droitEffacement', true, 'methodeConsentement', 'ecrit', 'consentementDate', CURRENT_DATE::text)
   );
 
   INSERT INTO participants (
     id, praticien_id, nom, prenom, date_naissance, email, telephone,
-    pathologie, profil, tags, adresse_rue, adresse_code_postal, adresse_ville, code_acces
+    pathologie, profil, tags, adresse_rue, adresse_code_postal, adresse_ville, code_acces, rgpd
   ) VALUES (
     v_marc_id, v_praticien_id, 'Fabre', 'Marc', '1948-02-18',
     'marc.fabre.staging@example.com', '0615161718',
     'Suites de PTH', 'Aide partielle', ARRAY['chronique'],
-    '5 avenue Démo Deux', '69005', 'Lyon', 'DEMO2P02'
+    '5 avenue Démo Deux', '69005', 'Lyon', 'DEMO2P02',
+    -- Obligatoire depuis 20260913_rgpd_consentement_creation.sql : sans ce
+    -- consentement, tout le bloc « Démo 2 » était refusé par le trigger
+    -- (constaté le 2026-11-16 en rejouant le seed sur une base vierge).
+    jsonb_build_object('consentementObtenu', true, 'droitAcces', true, 'droitRectification', true,
+      'droitEffacement', true, 'methodeConsentement', 'ecrit', 'consentementDate', CURRENT_DATE::text)
   );
 
   INSERT INTO structures (

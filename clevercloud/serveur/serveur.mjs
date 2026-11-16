@@ -116,6 +116,7 @@ export function creerServeur({
   servirFront = process.env.SERVIR_FRONT !== '0',
   dossierFonctions = process.env.DOSSIER_FONCTIONS ?? path.join(RACINE, 'supabase', 'functions'),
   postgrest = process.env.POSTGREST_URL,
+  delaiPostgrest,
   stockage = (c => (c ? creerStockageS3(c) : null))(configurationS3()),
   regles = chargerEnTetes(),
 } = {}) {
@@ -152,9 +153,15 @@ export function creerServeur({
         return;
       }
 
+      // Données de santé servies par le relais et par les fonctions : jamais de
+      // cache navigateur ni intermédiaire. vercel.json ne pose no-store que sur
+      // /api/* ; ces chemins n'existaient pas sur Vercel (2026-11-16). Une
+      // réponse qui fixe son propre Cache-Control garde la main.
+      if (/^\/(rest|functions|storage)\/v1(\/|$)/.test(chemin)) res.setHeader('Cache-Control', 'no-store');
+
       // Chemins attendus par supabase-js côté front (voir relais.mjs).
       if (postgrest && (chemin === '/rest/v1' || chemin.startsWith('/rest/v1/'))) {
-        return await relayerVersPostgrest(req, res, url, postgrest);
+        return await relayerVersPostgrest(req, res, url, postgrest, delaiPostgrest ? { delai: delaiPostgrest } : undefined);
       }
       if (postgrest && stockage && chemin.startsWith('/storage/v1/object/factures/')) {
         return await servirFacture(req, res, url, { base: postgrest, stockage });

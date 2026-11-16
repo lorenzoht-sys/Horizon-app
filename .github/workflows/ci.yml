@@ -26,7 +26,7 @@ jobs:
       - run: npm ci
       - run: node --test clevercloud/serveur/*.test.mjs
       # Scripts de migration (nettoyeur de dump, copie des PDF vers Cellar).
-      # repetition-http.test.mjs a besoin de PostgREST : il tourne dans le job suivant.
+      # repetition-http et repetition-jwks ont besoin de PostgREST : job suivant.
       - run: node --test clevercloud/scripts/nettoyer-dump.test.mjs clevercloud/scripts/copier-factures.test.mjs
 
   # Répétition à blanc de la cible HDS : le schéma du dépôt est reconstruit sur
@@ -60,23 +60,66 @@ jobs:
       - name: Schéma, jeu fictif et contrôles de RLS
         run: clevercloud/scripts/repetition.sh
 
+      # Transfert de cette base vers une base neuve, par le script qui servira à
+      # la bascule (2026-11-16). La base d'arrivée appartient à un utilisateur
+      # SANS droit de superutilisateur, comme celui d'un add-on : c'est ce qui
+      # révèle une instruction que seul un superutilisateur peut jouer. Le
+      # script se termine par la comparaison ligne à ligne des deux bases.
+      - name: Transfert vers une base neuve, avec les droits d'un add-on
+        run: |
+          psql "$PGURI" -X -q -v ON_ERROR_STOP=1 -c "CREATE ROLE addon LOGIN PASSWORD 'repetition'" \
+            -c "GRANT anon, authenticated, service_role TO addon" -c "CREATE DATABASE cible OWNER addon"
+          pg_dump --version
+          clevercloud/scripts/transferer-base.sh
+        env:
+          SOURCE_URI: ${{ env.PGURI }}
+          CIBLE_URI: postgresql://addon:repetition@localhost:5432/cible
+          CIBLE: staging
+
       # Même image et mêmes réglages que clevercloud/postgrest/, sauf le secret
-      # des jetons (de test) et le port.
+      # des jetons (de test) et le port. PostgREST lit la base TRANSFÉRÉE, avec
+      # l'utilisateur sans privilège : il doit pouvoir endosser les trois rôles.
       - name: PostgREST
         run: |
           docker run -d --name postgrest --network host \
-            -e PGRST_DB_URI="$PGURI" -e PGRST_DB_SCHEMAS=public \
+            -e PGRST_DB_URI="$CIBLE_URI" -e PGRST_DB_SCHEMAS=public \
             -e PGRST_DB_EXTRA_SEARCH_PATH=public,extensions -e PGRST_DB_ANON_ROLE=anon \
             -e PGRST_DB_MAX_ROWS=1000 -e PGRST_OPENAPI_MODE=disabled \
             -e PGRST_JWT_SECRET="$REPETITION_JWT_SECRET" -e PGRST_SERVER_PORT=3000 \
             postgrest/postgrest:v12.2.3
           for i in $(seq 1 30); do curl -fsS -o /dev/null http://localhost:3000/participants?limit=0 -H "Accept: application/json" && break; sleep 1; done
           docker logs postgrest 2>&1 | tail -5
+        env:
+          CIBLE_URI: postgresql://addon:repetition@localhost:5432/cible
 
       - name: Lecture et écriture par le serveur Node et PostgREST
         run: node --test clevercloud/scripts/repetition-http.test.mjs
         env:
           POSTGREST_URL: http://localhost:3000
+
+      # Mode « fournisseur d'identité » (Keycloak) : PostgREST reçoit la clé
+      # publique du fournisseur ET une clé propre au serveur, pour que le jeton
+      # service_role des routes api/ reste vérifiable. Clés tirées au hasard.
+      - name: PostgREST en mode fournisseur d'identité (jeu de deux clés)
+        run: |
+          node clevercloud/scripts/cles-repetition.mjs "$RUNNER_TEMP/cles"
+          docker run -d --name postgrest-jwks --network host \
+            -e PGRST_DB_URI="$CIBLE_URI" -e PGRST_DB_SCHEMAS=public \
+            -e PGRST_DB_EXTRA_SEARCH_PATH=public,extensions -e PGRST_DB_ANON_ROLE=anon \
+            -e PGRST_DB_MAX_ROWS=1000 -e PGRST_OPENAPI_MODE=disabled \
+            -e PGRST_JWT_SECRET="$(cat "$RUNNER_TEMP/cles/jwks.json")" -e PGRST_JWT_AUD=horizon-praticien \
+            -e PGRST_JWT_ROLE_CLAIM_KEY=.role -e PGRST_SERVER_PORT=3001 \
+            postgrest/postgrest:v12.2.3
+          for i in $(seq 1 30); do curl -fsS -o /dev/null http://localhost:3001/participants?limit=0 -H "Accept: application/json" && break; sleep 1; done
+          docker logs postgrest-jwks 2>&1 | tail -5
+        env:
+          CIBLE_URI: postgresql://addon:repetition@localhost:5432/cible
+
+      - name: Jetons du fournisseur et jeton du serveur, contre PostgREST
+        run: node --test clevercloud/scripts/repetition-jwks.test.mjs
+        env:
+          POSTGREST_JWKS_URL: http://localhost:3001
+          CLES_REPETITION: ${{ runner.temp }}/cles
 
   build:
     runs-on: ubuntu-latest

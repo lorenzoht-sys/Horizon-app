@@ -20,8 +20,8 @@
 // d'algorithme (un jeton HS256 signé avec la clé PUBLIQUE prise pour secret).
 //
 // Exigé d'un jeton : signature valide, `exp` présent et futur, `nbf` passé s'il
-// existe, `iss` égal à AUTH_ISSUER et `aud` contenant AUTH_AUDIENCE quand ces
-// variables sont posées, `sub` au format UUID. L'UUID est celui du praticien
+// existe, `iss` égal à AUTH_ISSUER et `aud` contenant AUTH_AUDIENCE (obligatoires
+// en mode JWKS, facultatives avec un secret partagé), `sub` au format UUID. L'UUID est celui du praticien
 // dans la base : les comptes doivent être importés en conservant leurs
 // identifiants, sinon les politiques RLS (auth.uid()) ne reconnaîtraient plus
 // personne.
@@ -46,6 +46,14 @@ export function configurationJeton(env = process.env) {
   if (!jwks && !secret) return null;
   if (jwks && secret) throw new Error('AUTH_JWKS_URL et AUTH_JWT_SECRET sont exclusifs : un seul mode de signature à la fois.');
   if (secret && secret.length < 32) throw new Error('AUTH_JWT_SECRET trop court (32 caractères au minimum).');
+  // Un fournisseur d'identité signe avec les mêmes clés les jetons de TOUS ses
+  // clients (dans Keycloak : la console de compte, tout autre client du realm).
+  // Sans contrôle de l'émetteur et de l'audience, un jeton émis pour un autre
+  // usage serait accepté ici. Obligatoires en mode JWKS depuis le 2026-11-16 ;
+  // PostgREST fait le même contrôle de son côté (PGRST_JWT_AUD).
+  if (jwks && (!env.AUTH_ISSUER || !env.AUTH_AUDIENCE)) {
+    throw new Error('AUTH_ISSUER et AUTH_AUDIENCE sont obligatoires avec AUTH_JWKS_URL.');
+  }
   return { jwks, secret, emetteur: env.AUTH_ISSUER || null, audience: env.AUTH_AUDIENCE || null };
 }
 

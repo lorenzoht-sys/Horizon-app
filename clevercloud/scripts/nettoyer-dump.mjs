@@ -13,6 +13,7 @@
 //   - les changements de propriétaire (le propriétaire sera l'utilisateur de
 //     l'add-on) et les droits accordés aux rôles internes de Supabase ;
 //   - la publication Realtime (inutilisée par le code) ;
+//   - CREATE SCHEMA public, que pg_dump émet et qui existe déjà ;
 //   - toute instruction qui vise directement les schémas storage, vault, net,
 //     cron ou realtime (le stockage passe sur Cellar, le cron dans l'appli).
 // Le trigger trg_auth_users_role_par_defaut est GARDÉ : il ne lit que NEW.id,
@@ -89,6 +90,10 @@ const SCHEMAS_SUPABASE = /(^|[\s(,])"?(storage|vault|net|cron|realtime|supabase_
 const CORPS_A_ADAPTER = /\b(storage|vault|net|cron)\s*\.\s*[a-z_]/i;
 
 export const REGLES = [
+  // `pg_dump --schema=public` commence par CREATE SCHEMA public, qui existe
+  // déjà sur toute base PostgreSQL : la restauration s'arrêtait à la première
+  // instruction (constaté le 2026-11-16 en répétant le transfert).
+  { nom: 'création du schéma public (il existe déjà)', teste: s => /^CREATE SCHEMA "?public"?\s*;?$/i.test(s) },
   { nom: 'extension Supabase ou recréée par la compatibilité', teste: s => EXTENSIONS_RETIREES.test(s) },
   { nom: 'commentaire sur extension', teste: s => /^COMMENT ON EXTENSION/i.test(s) },
   { nom: 'changement de propriétaire', teste: s => /^ALTER .* OWNER TO /i.test(s) },
