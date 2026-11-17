@@ -23,7 +23,15 @@ import type { Participant, Contrat, RessentiSeance, StatutSeance, TypeStructure 
 import { libelleAge } from '../lib/age';
 import { LeftColumn } from './assistant/ColonneGauche';
 import { type AssistantLog, type PatientExtras } from './assistant/communs';
-import { downloadPDF } from './assistant/exportPdf';
+// Export PDF chargé au clic : pdfmake et ses polices (≈ 1,8 Mo bruts) partaient
+// sinon à chaque ouverture de l'assistant (nettoyage, lot 1 bis, 2026-11-17).
+// downloadPDF affiche lui-même ses erreurs ; ici, seul l'échec du
+// téléchargement du module (réseau coupé) reste à signaler.
+function downloadPDF(...args: Parameters<typeof import('./assistant/exportPdf').downloadPDF>) {
+  import('./assistant/exportPdf')
+    .then(m => m.downloadPDF(...args))
+    .catch(() => toast.error('Export PDF indisponible : vérifiez la connexion et réessayez.'));
+}
 import { chargerProgrammeActif } from './assistant/programmeActif';
 
 type Phase = 'home' | 'chat';

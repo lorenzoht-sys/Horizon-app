@@ -2,10 +2,17 @@
 // côté client : le fichier n'est jamais envoyé à un serveur pour cette étape,
 // il reste en mémoire le temps de l'extraction puis n'est plus référencé.
 
-import * as pdfjsLib from 'pdfjs-dist';
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+// pdfjs-dist (≈ 420 Ko) est chargé au premier PDF déposé, comme mammoth pour
+// les .docx : importé en tête de fichier, il partait avec la fenêtre de
+// compte rendu dès son ouverture (nettoyage, lot 1 bis, 2026-11-17).
+async function chargerPdfjs() {
+  const [pdfjsLib, { default: pdfWorkerUrl }] = await Promise.all([
+    import('pdfjs-dist'),
+    import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+  ]);
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+  return pdfjsLib;
+}
 
 export type TemplateFormat = 'pdf' | 'docx';
 
@@ -23,6 +30,7 @@ export function detecterFormat(file: File): TemplateFormat | null {
 }
 
 async function extraireTextePdf(file: File): Promise<string> {
+  const pdfjsLib = await chargerPdfjs();
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
   const pages: string[] = [];
