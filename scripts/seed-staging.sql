@@ -9,23 +9,18 @@
 -- n'a aucun moyen fiable de vérifier une référence de projet (pas de
 -- fonction Postgres équivalente à inspecter une connection string) — le
 -- garde-fou anti-prod vit donc dans scripts/staging-reseed.ts (même patron
--- que scripts/staging-fix-acces-participant-pour.ts et
--- scripts/staging-apply-grant-parity.ts), pas dans ce fichier. Exécute ce
+-- que scripts/staging-apply-migration.ts), pas dans ce fichier. Exécute ce
 -- script UNIQUEMENT via ce runner, jamais en collant directement dans un
 -- SQL Editor dont tu n'es pas certain à 100% qu'il s'agit du projet staging.
 --
 -- ── Ce que ce script NE touche PAS : tm6_variantes ──────────────────────
 -- Ce catalogue n'est ni purgé ni réinséré ici. Un reseed laisse donc
 -- intactes ses policies, sa colonne `praticien_id` et ses lignes — dont
--- celles créées par scripts/staging-restaurer-etat-prod-tm6.ts.
+-- celles créées en août 2026 pour valider le backfill du lot 8 sécurité
+-- (script de fixture retiré le 2026-11-17, voir l'historique git).
 --
 -- Seuls les rattachements `bilans.tm6_variante_id` disparaissent, puisque
--- les bilans sont repurgés. Ils ne servaient qu'à valider le backfill du
--- lot 8, une fois : il n'y a AUCUNE raison de rejouer ce script de fixture
--- après un reseed — il recrée volontairement l'état VULNÉRABLE de la
--- production (policies USING(true)), et il faudrait alors réappliquer
--- 20260817_securite_01_tm6_variantes_rls.sql derrière pour ne pas laisser
--- staging ouvert.
+-- les bilans sont repurgés.
 --
 -- La protection contre un `[F-01]` vert sans rien vérifier ne repose pas
 -- sur ces données : elle est structurelle, dans tests/security/rls.spec.ts

@@ -1,3 +1,6 @@
+> **Archivé le 2026-11-17** (nettoyage, lot 3) : journal des chantiers de l'été
+> 2026, clos. Les règles encore valables sont reprises dans `docs/REGLES.md`.
+
 # Plan bêta — points à traiter avant ouverture
 
 ## CE FICHIER EST LA SEULE RÉFÉRENCE DE SUIVI — il n'existe pas de « plan en N étapes »

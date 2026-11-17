@@ -1434,7 +1434,7 @@ const EXERCICES_HISTORIQUES: Exercice[] = [
   //
   // Priorité donnée aux profils les moins couverts du catalogue avant cet
   // ajout — diabete/obesite/prothese_genou/prothese_hanche, 3 exercices
-  // chacun, aucun avec texte d'adaptation — voir docs/PLAN-BETA.md.
+  // chacun, aucun avec texte d'adaptation — voir docs/archive/PLAN-BETA.md.
 
   // FORCE — Otago
   {

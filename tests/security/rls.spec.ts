@@ -211,7 +211,7 @@ const OWNER_COLUMN_OVERRIDES: Record<string, string> = {
 };
 
 // Dette de privilèges héritée de la règle `ALTER DEFAULT PRIVILEGES` de
-// PRODUCTION (voir docs/PLAN-BETA.md). Ces tables sont nées en prod avec
+// PRODUCTION (voir docs/archive/PLAN-BETA.md). Ces tables sont nées en prod avec
 // tous les privilèges accordés à `authenticated` ; les migrations de parité
 // des 21 et 22 août (20260821/20260822_grant_parity_staging*.sql) ont
 // recopié cet état sur staging, TRUNCATE compris.
@@ -219,7 +219,7 @@ const OWNER_COLUMN_OVERRIDES: Record<string, string> = {
 // Aucune de ces lignes n'a été voulue par quiconque : c'est l'accident
 // d'origine, matérialisé. La liste doit se VIDER, pas s'allonger — elle est
 // le décompte du chantier « REVOKE de la règle par défaut » planifié dans
-// docs/PLAN-BETA.md. Toute entrée retirée en base doit l'être ici dans la
+// docs/archive/PLAN-BETA.md. Toute entrée retirée en base doit l'être ici dans la
 // même PR : le test [F-13] échoue sinon, volontairement.
 const DETTE_PRIVILEGES_AUTHENTICATED: Record<string, string> = {
   assistant_logs: 'REFERENCES,TRIGGER,TRUNCATE',
@@ -429,7 +429,7 @@ describe.skipIf(!HAS_STAGING_ENV)('Cloisonnement RLS multi-tenant (staging)', ()
     // n'est PAS exposé par PostgREST (schémas exposés = public/graphql_public,
     // voir supabase/config.toml). La requête échouait donc systématiquement, et
     // ce test a longtemps été le seul échec « connu et accepté » du harnais
-    // (docs/PLAN-BETA.md). Il passe désormais par la connexion Postgres
+    // (docs/archive/PLAN-BETA.md). Il passe désormais par la connexion Postgres
     // directe, comme le bloc « Findings structurels » en bas de fichier —
     // possible depuis que STAGING_DATABASE_URL pointe sur le pooler
     // (joignable en IPv4, donc depuis les runners GitHub) le 2026-08-27.
@@ -1835,7 +1835,7 @@ describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postg
   // Ils tournent sur STAGING, qui n'a AUCUNE règle `ALTER DEFAULT
   // PRIVILEGES` sur le schéma `public`, là où la production en a une qui
   // accorde tout à `authenticated` sur chaque table créée (voir
-  // docs/PLAN-BETA.md, « ÉCART STRUCTUREL »).
+  // docs/archive/PLAN-BETA.md, « ÉCART STRUCTUREL »).
   //
   //   - [F-12] (RLS activée) vaut pour les deux bases : le schéma est le
   //     même, la RLS se réplique par les migrations.
@@ -1918,7 +1918,7 @@ describe.skipIf(!STAGING_DB_URL)('Findings structurels (staging, connexion Postg
 // `rls-spec-` comme les autres comptes jetables de ce fichier.
 //
 // DEUX GARDES ANTI-TEST-VIDE, sans lesquels ce describe passerait au vert
-// en ne prouvant rien (règle de méthode, docs/PLAN-BETA.md) :
+// en ne prouvant rien (règle de méthode, docs/archive/PLAN-BETA.md) :
 //   1. le compte de test est-il RÉELLEMENT admin ? Un compte ordinaire ne
 //      verrait rien non plus — le test serait vrai pour la mauvaise raison.
 //   2. les tables contiennent-elles des lignes à protéger ? Sur une base
@@ -1943,7 +1943,7 @@ describe.skipIf(!URL || !ANON_KEY || !SERVICE_KEY)('[RÔLES] un compte admin ne 
 
     // ── Nettoyage PRÉALABLE, pas de fin ───────────────────────────
     // Règle « une suite qui écrit dans une base partagée nettoie AVANT »
-    // (docs/PLAN-BETA.md). L'`afterAll` plus bas est un confort, pas une
+    // (docs/archive/PLAN-BETA.md). L'`afterAll` plus bas est un confort, pas une
     // garantie : il ne s'exécute pas si le process est tué, et c'est
     // précisément quand ça se passe mal que la trace reste.
     //

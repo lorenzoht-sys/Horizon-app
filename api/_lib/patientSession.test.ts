@@ -35,7 +35,7 @@ const { connexionParCode, accesViaPraticien } = await import('./patientSession.j
 // qui accorde l'accès au propriétaire OU à un membre actif de l'organisation
 // active du participant. Les tests affirmaient donc une sémantique que le
 // code n'avait plus — ils ne protégeaient plus rien. Personne ne l'a vu
-// parce que la CI n'exécutait pas `test:unit` (voir docs/PLAN-BETA.md).
+// parce que la CI n'exécutait pas `test:unit` (voir docs/archive/PLAN-BETA.md).
 function creerSupabaseFake(options: {
   participant?: { id: string; praticien_id?: string } | null;
   participantError?: unknown;

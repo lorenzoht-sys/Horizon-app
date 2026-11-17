@@ -32,7 +32,7 @@
 // ── Pourquoi l'API REST et non une connexion Postgres directe ────────────
 // `STAGING_DATABASE_URL` est une connexion directe, joignable en IPv6
 // uniquement : les runners GitHub n'ont pas d'IPv6 et échouent en
-// `ENETUNREACH` (limitation déjà documentée dans docs/PLAN-BETA.md, qui
+// `ENETUNREACH` (limitation déjà documentée dans docs/archive/PLAN-BETA.md, qui
 // bloque aussi le bloc « Findings structurels » du harnais). On passe donc
 // par PostgREST avec la clé service_role — mêmes secrets que le harnais,
 // en HTTPS, donc joignable depuis la CI.
@@ -160,7 +160,7 @@ async function main() {
   // `02-creation-patient` crée une fiche `Test E2E<timestamp>` à chaque
   // passage (`e2e/02-creation-patient.spec.ts:12-13`) et ne la supprime
   // jamais. Ce cas était DÉJÀ décrit dans la règle « nettoie AVANT, pas
-  // après » (docs/PLAN-BETA.md, « Trois occurrences le même jour ») —
+  // après » (docs/archive/PLAN-BETA.md, « Trois occurrences le même jour ») —
   // « `02` ajoute un participant à chaque passage » — mais seuls les deux
   // autres cas y avaient reçu leur bloc ici. Trou de couverture, pas panne :
   // `supprimer()` lève sur erreur HTTP, rien n'échouait en silence.

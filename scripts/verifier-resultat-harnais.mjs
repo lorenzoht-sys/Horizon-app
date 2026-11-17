@@ -9,7 +9,7 @@
 // que personne ne pouvait voir sans la lire attentivement : le contrôle des
 // SKIP était placé APRÈS celui des échecs, qui fait `process.exit(1)`. Or un
 // test échoue en permanence (couverture `information_schema`, échec connu et
-// accepté — voir docs/PLAN-BETA.md). Le contrôle des skips était donc
+// accepté — voir docs/archive/PLAN-BETA.md). Le contrôle des skips était donc
 // INATTEIGNABLE depuis sa création : un bloc entier du harnais pouvait être
 // ignoré sans que rien ne le signale, malgré le nom de l'étape qui promet
 // l'inverse. Constaté le 2026-08-27.

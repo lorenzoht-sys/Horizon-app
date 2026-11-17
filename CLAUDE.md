@@ -53,6 +53,8 @@ La CI (`.github/workflows/ci.yml`) enchaîne build, `typecheck:api`, `typecheck:
 
 ## Règles de travail (à respecter systématiquement)
 
+Les règles détaillées et leur historique sont dans `docs/REGLES.md`.
+
 - Jamais de select suivi de delete dans le même script. Toute suppression
   ou modification en masse porte son propre filtre explicite (par
   identifiant précis), jamais hérité d'une lecture précédente sans

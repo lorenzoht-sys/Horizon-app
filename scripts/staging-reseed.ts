@@ -2,8 +2,7 @@
 //
 // Exécute scripts/seed-staging.sql (purge puis recréation des comptes de
 // démo praticien A / praticien Démo 2) sur staging. Même mécanisme que
-// scripts/staging-fix-acces-participant-pour.ts et
-// scripts/staging-apply-grant-parity.ts : lecture seule par défaut,
+// scripts/staging-apply-migration.ts : lecture seule par défaut,
 // garde-fou anti-prod, --apply explicite, rapport détaillé après coup.
 //
 // Connexion : process.env.STAGING_DATABASE_URL, chargée depuis

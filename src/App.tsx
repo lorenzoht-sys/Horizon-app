@@ -439,7 +439,7 @@ export default function App() {
             trouvé en production.
             RegisterPage.tsx est CONSERVÉE volontairement : elle sera
             réutilisée comme page « définir mon mot de passe » au bout du
-            lien d'invitation (option 2, voir docs/PLAN-BETA.md). Ne pas la
+            lien d'invitation (option 2, voir docs/archive/PLAN-BETA.md). Ne pas la
             supprimer, et ne pas remettre cette route en l'état. */}
         <Route path="/forgot-password" element={
           isLoggedIn ? <Navigate to="/" replace /> : <ForgotPasswordPage />

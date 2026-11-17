@@ -5,7 +5,7 @@
 //
 // Ce test ne couvre pas la requête Supabase, il couvre la COMPARAISON — la
 // seule partie qu'on peut écrire de travers sans que rien ne le signale. Le
-// piège visé est nommé dans docs/PLAN-BETA.md : comparer des cardinalités au
+// piège visé est nommé dans docs/archive/PLAN-BETA.md : comparer des cardinalités au
 // lieu d'ensembles. Avec `.in('id', idsRecus)`, Postgres dédoublonne : deux
 // ids identiques reçus renvoient une seule ligne. Un contrôle écrit
 // `lignes.length === idsRecus.length` refuserait alors un envoi légitime, et

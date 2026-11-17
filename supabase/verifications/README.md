@@ -3,7 +3,7 @@
 Une migration appliquée n'est pas une migration vérifiée. **Le « Success » du
 SQL Editor ne prouve rien** — le 2026-08-29, `20260829_roles_02_trigger…` a
 affiché un succès sans avoir rien créé, et seule la vérification lancée après
-coup l'a révélé (voir `docs/PLAN-BETA.md`).
+coup l'a révélé (voir `docs/archive/PLAN-BETA.md`).
 
 Ce dossier contient, pour chaque migration qui le mérite, deux fichiers.
 

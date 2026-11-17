@@ -5,8 +5,8 @@
 // communication du code par téléphone ou SMS. Exemple : K7P9X2M4.
 //
 // Utilisé côté client (génération à la création d'un participant, voir
-// src/hooks/useParticipants.ts) et par scripts/backfill-code-acces.ts
-// (attribution rétroactive aux participants existants).
+// src/hooks/useParticipants.ts). A servi aussi à l'attribution rétroactive
+// aux participants existants (script ponctuel retiré le 2026-11-17).
 //
 // ── [F-02] Pourquoi `crypto.getRandomValues` et non `Math.random()` ──────
 // Ce code est l'UNIQUE identifiant du portail bénéficiaire : le connaître,

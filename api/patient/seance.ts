@@ -13,7 +13,7 @@ import {
 const STATUTS_VALIDES = ['terminee', 'partielle', 'en_cours'];
 
 // Comparaison d'ENSEMBLES, pas de cardinalités — règle de méthode de
-// docs/PLAN-BETA.md (« un contrôle compare un ensemble exact »). Compter les
+// docs/archive/PLAN-BETA.md (« un contrôle compare un ensemble exact »). Compter les
 // lignes renvoyées suffirait à laisser passer un id étranger dès qu'un id
 // légitime est envoyé deux fois. Exporté pour être testé seul : c'est la
 // partie du contrôle F-14 qui peut être écrite juste et se tromper quand même.

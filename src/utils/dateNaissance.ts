@@ -1,6 +1,6 @@
 // Saisie au clavier d'une date de naissance (JJ/MM/AAAA), en remplacement de
 // <input type="date"> — dont le sélecteur natif impose de défiler année par
-// année sur mobile, pénible pour une naissance ancienne (voir docs/PLAN-BETA.md,
+// année sur mobile, pénible pour une naissance ancienne (voir docs/archive/PLAN-BETA.md,
 // retours de Pierre, point 03). Le format de stockage ne change pas : ISO
 // AAAA-MM-JJ, comme produit par <input type="date"> et par
 // src/utils/excelImport.ts (import en masse), pour qu'une date saisie au

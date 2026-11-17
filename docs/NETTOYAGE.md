@@ -63,6 +63,26 @@ l'instant.
    dizaine de scripts ponctuels déjà appliqués. Sans effet sur l'application,
    mais ils alourdissent la prise en main du dépôt.
 
+### Deux remarques du prestataire, vérifiées
+
+- **« La plupart des commentaires ne veulent rien dire. »** Non vérifié.
+  2 626 blocs de commentaires dans `src/` et `api/`. Sur un échantillon tiré au
+  hasard, environ 7 sur 10 expliquent une raison (sécurité, données de santé,
+  incident daté) ; le reste sont des intitulés de section dans le JSX
+  (`{/* Header */}`, `{/* Actions */}` : 463 lignes de ce type). Ces intitulés
+  signalent surtout des composants trop longs (6 fichiers de plus de 1 000
+  lignes) : c'est le découpage de ces fichiers qui améliorera la lisibilité,
+  pas la suppression des intitulés.
+- **« Beaucoup trop de tables. »** Non vérifié. 62 tables, toutes utilisées par le
+  code ou par des fonctions SQL. Elles couvrent sept domaines (bénéficiaires et
+  bilans, programmes et modèles, agenda et séances, facturation, espace patient,
+  structures et organisations, journaux et limites de débit). Fusions
+  possibles mais mineures : quatre tables de limite de débit
+  (`claude_rate_limit`, `patient_activite_rate_limit`, `patient_login_attempts`,
+  `organisation_demande_attempts`) et deux d'abonnements push
+  (`push_subscriptions`, `praticien_push_subscriptions`). Changements de schéma :
+  après la bascule HDS seulement.
+
 ## Plan, par lots
 
 Chaque lot = une PR, CI verte (build, unitaires, e2e, harnais RLS), merge sur
@@ -82,4 +102,8 @@ recette Clever Cloud ; 4 et 5 après la bascule HDS.
 
 ## Journal
 
-- 2026-11-17 : mesures initiales, lot 0.
+- 2026-11-17 : mesures initiales, lot 0 (#202, mergé).
+- 2026-11-17 : lot 1 (#203) : démarrage 1 089 → 407 Ko compressés.
+- 2026-11-17 : lot 2 (#204) : image serveur 545 → 151 Mo.
+- 2026-11-17 : lot 3 : `PLAN-BETA.md` archivé, ses règles durables reprises
+  dans `docs/REGLES.md` ; neuf scripts ponctuels retirés.

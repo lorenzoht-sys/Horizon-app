@@ -17,7 +17,7 @@
 // faire épeler une URL ni un code au téléphone.
 //
 // ── Ce script ne touche AUCUNE base de données ──────────────────────────
-// Même règle que scripts/regenerer-codes-acces-structure.ts : toute lecture
+// Même règle que l'ancien script de régénération des codes : toute lecture
 // de la production part du SQL Editor, lancée à la main. Ce script consomme
 // un export JSON et n'a besoin d'aucun identifiant de connexion.
 //
@@ -51,7 +51,7 @@
 // personnel du bénéficiaire, ça ne l'est pas sur un poste partagé — d'où la
 // colonne « code seul » ci-dessous, pour ceux à qui il vaut mieux dicter le
 // code et laisser taper.
-// Le nettoyage de l'URL est un lot à part (docs/PLAN-BETA.md).
+// Le nettoyage de l'URL est un lot à part (docs/archive/PLAN-BETA.md).
 //
 // ── Usage ───────────────────────────────────────────────────────────────
 //   npx tsx scripts/liens-acces-beneficiaires.ts \
