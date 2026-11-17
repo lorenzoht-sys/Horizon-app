@@ -54,11 +54,14 @@ jobs:
       # cdn.sheetjs.com. ⚠️ Ce paquet hors registre npm est INVISIBLE pour
       # `npm audit` et Dependabot : sa veille se fait à la main
       # (https://cdn.sheetjs.com, docs.sheetjs.com).
-      # Seuil « high », sur les dépendances de production seulement : une
-      # vulnérabilité élevée ou critique fait échouer le job, avant le
-      # harnais RLS.
+      # Seuil « high » : une vulnérabilité élevée ou critique fait échouer le
+      # job, avant le harnais RLS. Sur TOUTES les dépendances depuis le
+      # 2026-11-17 (nettoyage, lot 2) : les bibliothèques du front sont
+      # passées en devDependencies pour alléger l'image du serveur, mais elles
+      # partent toujours dans le navigateur ; `--omit=dev` les aurait sorties
+      # de l'audit.
       - name: npm audit (bloquant)
-        run: npm audit --audit-level=high --omit=dev
+        run: npm audit --audit-level=high
 
       - run: npm run typecheck:api
       - run: npm run build

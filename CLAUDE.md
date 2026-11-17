@@ -47,6 +47,7 @@ La CI (`.github/workflows/ci.yml`) enchaîne build, `typecheck:api`, `typecheck:
 - Code, noms, commentaires, commits et docs **en français**. Les commits suivent les Conventional Commits avec un scope, par exemple `feat(patient): …` ou `fix(e2e): …`, suivis du numéro de PR.
 - Les commentaires expliquent le *pourquoi* et l'historique d'une décision (date, incident, PR), pas le *quoi*.
 - Les migrations sont idempotentes (`IF NOT EXISTS`, `DROP POLICY IF EXISTS` puis `CREATE POLICY`).
+- `dependencies` de package.json = ce que le serveur charge à l'exécution (routes `api/`, `clevercloud/serveur`, Edge Functions). Une bibliothèque du front va en `devDependencies` (Vite l'empaquette). Vérifié par `clevercloud/scripts/verifier-dependances.mjs` en CI.
 - Variables serveur (`SUPABASE_SERVICE_ROLE_KEY`, `PATIENT_SESSION_SECRET`, `ANTHROPIC_API_KEY`) : jamais de préfixe `VITE_`.
 - Avant un merge sur `main` : `CHECKLIST_RELEASE.md`.
 - Couches du front (`docs/ARCHITECTURE.md`) : aucune requête Supabase dans `src/pages/` ni `src/components/` (elles vont dans `src/hooks/` ou `src/lib/acces/`) ; l'identité du praticien se lit par `utilisateurCourant()` (`src/lib/session.ts`). Deux tests le vérifient.
