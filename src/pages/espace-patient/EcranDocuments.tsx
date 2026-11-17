@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import type { Participant, Bilan, Programme } from '../../types';
 import { patientUrlPdfFacture } from '../../lib/patientApi';
 import { etatPourBeneficiaire, trierFacturesPatient, type FacturePatient } from '../../lib/facturesPatient';
-import { exportCarteSantePatient } from '../../utils/exportDossierPDF';
+import { exportCarteSantePatient } from '../../utils/pdfALaDemande';
 import { purgerSessionPatient } from '../../hooks/useAccesPatients';
 import MarkdownRendu from '../../components/ui/MarkdownRendu';
 import { resultatTm6 } from '../../lib/tm6';

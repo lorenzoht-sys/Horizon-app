@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import type { Participant, Programme, ProgrammeV2, ProgrammeSeanceV2, JourProgramme } from '../../types';
 import { JOURS_PROGRAMME } from '../../types';
 import { loadExercices } from '../../lib/bibliothequeExercices';
-import { exportProgrammePDF } from '../../utils/exportPDF';
+import { exportProgrammePDF } from '../../utils/pdfALaDemande';
 import { ModeSeance, type SeanceActive } from './ModeSeance';
 import { C, type SeancePatientRecord, fmtCourt, loadPraticien } from './communs';
 

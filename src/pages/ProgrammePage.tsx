@@ -20,7 +20,7 @@ import { loadExercicesPraticien } from '../lib/bibliothequeExercices';
 import { TESTS_ETALONS } from '../data/testsEtalons';
 import type { Exercice } from '../types';
 import { chargerSettingsPraticien } from '../lib/settingsPraticien';
-import { exportProgrammePDF } from '../utils/exportPDF';
+import { exportProgrammePDF } from '../utils/pdfALaDemande';
 import {
   genererProgrammeStructure, versPayloadCreateProgramme,
   type ProgrammeIA,
