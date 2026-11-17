@@ -46,7 +46,7 @@ test.describe('Rotation portrait ↔ paysage', () => {
 
     await page.setViewportSize(PAYSAGE);
     // Obligatoire depuis la fermeture du trou « date de naissance jamais
-    // vérifiée dans l'assistant par étapes » (bug 03, docs/PLAN-BETA.md) :
+    // vérifiée dans l'assistant par étapes » (bug 03, docs/archive/PLAN-BETA.md) :
     // sans elle, submit() bloque ici avec un message différent et le test
     // ne peut jamais atteindre la vérification du consentement RGPD visée.
     await page.getByPlaceholder('JJ/MM/AAAA').fill('12/05/1957');

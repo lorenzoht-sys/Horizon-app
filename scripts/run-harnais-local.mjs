@@ -49,7 +49,7 @@ import path from 'path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Résolu depuis l'emplacement du script, jamais codé en dur : deux scripts
 // de ce dossier portent déjà un chemin absolu vers le scratchpad d'une
-// session terminée, et y écrivent dans le vide (voir docs/PLAN-BETA.md).
+// session terminée, et y écrivent dans le vide (voir docs/archive/PLAN-BETA.md).
 const projet = path.resolve(__dirname, '..');
 const envPath = path.join(projet, '.env.test.local');
 

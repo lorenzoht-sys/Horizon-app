@@ -29,21 +29,19 @@ leur cible (`assertStagingTarget`) et exigent `--apply`.
 | `dump-schema.ts` | dump du schéma `public` sans Docker |
 | `seed-staging-partage-beneficiaire.sql` | jeu fictif pour le partage bénéficiaire |
 
-## Ponctuels, déjà appliqués (conservés pour l'historique)
+## Ponctuels
 
-Chacun a servi une fois, pour un chantier daté décrit dans son en-tête. Ne
-pas relancer sans relire.
+Chacun sert à un chantier daté décrit dans son en-tête. Ne pas relancer sans
+relire.
 
 | Script | Chantier |
 | --- | --- |
-| `backfill-code-acces.ts` | attribution des codes d'accès aux bénéficiaires existants |
-| `regenerer-codes-acces-structure.ts` | régénération de codes exposés par le portail structure |
-| `renouveler-contrats-expires.ts` | remédiation au déploiement du renouvellement automatique |
 | `liens-acces-beneficiaires.ts` | liens d'accès direct sur le domaine canonique |
-| `compter-questionnaires-incomplets.sql` | décompte avant correction des scores de questionnaires |
-| `staging-apply-grant-parity.ts`, `staging-apply-grant-parity-v2.ts` | parité des GRANT staging / production |
-| `staging-apply-securite-lot1.ts` | suppression de politiques RLS fantômes |
-| `staging-fix-acces-participant-pour.ts` | correction de `acces_participant_pour()` |
-| `staging-renseigner-titre-praticien.ts` | titre du praticien de démo |
-| `staging-restaurer-etat-prod-tm6.ts` | reproduction d'un état de production pour un test |
+| `staging-renseigner-titre-praticien.ts` | titre du praticien de démo (cité par `e2e/helpers.ts`) |
 | `staging-sonde-idor-patient.ts` | épreuve des contrôles anti-IDOR des routes patient |
+
+Neuf scripts déjà appliqués ont été retirés le 2026-11-17 (nettoyage, lot 3) :
+codes d'accès (attribution, régénération), renouvellement des contrats
+expirés, décompte des questionnaires incomplets, parité des GRANT, politiques
+RLS fantômes, `acces_participant_pour()`, fixture `tm6_variantes`. Ils restent
+lisibles dans l'historique git (`git log --diff-filter=D -- scripts/`).

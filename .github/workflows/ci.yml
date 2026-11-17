@@ -9,7 +9,7 @@ jobs:
   # Vérifications statiques : toujours exécutées, ne dépendent d'aucun
   # environnement de staging. Volontairement SANS `npm run lint` (erreurs
   # de lint pré-existantes, hors périmètre de la consolidation — voir
-  # docs/archive/AUDIT.md et docs/PLAN-BETA.md).
+  # docs/archive/AUDIT.md et docs/archive/PLAN-BETA.md).
   # Serveur de la cible Clever Cloud (clevercloud/serveur) : il exécute les
   # routes api/ et les Edge Functions sans les modifier. Job à part, en Node 22 :
   # le serveur lit directement le TypeScript des fonctions (Node >= 22.18), ce
@@ -242,7 +242,7 @@ jobs:
       # STAGING_DATABASE_URL : la connexion Postgres directe n'est joignable
       # qu'en IPv6, que les runners GitHub n'ont pas (ENETUNREACH — même
       # limitation que le bloc « Findings structurels » du harnais, voir
-      # docs/PLAN-BETA.md). Le script porte le même garde-fou anti-production
+      # docs/archive/PLAN-BETA.md). Le script porte le même garde-fou anti-production
       # que les autres scripts de staging.
       SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
       SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}

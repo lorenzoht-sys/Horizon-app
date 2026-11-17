@@ -70,7 +70,7 @@ export default withSentry(async function handler(req: any, res: any) {
 // `praticien_id` à NULL, et comme toutes les policies de ces tables filtrent
 // sur `praticien_id = auth.uid()`, plus AUCUN compte authentifié ne peut
 // jamais les relire. Donnée légalement conservée, pratiquement perdue, sans
-// le moindre signal. Voir docs/PLAN-BETA.md.
+// le moindre signal. Voir docs/archive/PLAN-BETA.md.
 // La désactivation passe donc par un bannissement du compte auth, qui est
 // réversible et ne touche à aucune donnée.
 //

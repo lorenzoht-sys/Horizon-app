@@ -1,6 +1,6 @@
 // Garde-fous du prompt envoyé à l'API Anthropic depuis api/claude.ts.
 //
-// Ferme les points 4 et 5 de docs/PLAN-BETA.md §4, qui nommaient déjà ce
+// Ferme les points 4 et 5 de docs/archive/PLAN-BETA.md §4, qui nommaient déjà ce
 // fichier (`api/_lib/guard.ts`) sans qu'il existe sur `main`.
 //
 // ── Pourquoi ce n'est PAS une copie de garde-prompt.ts ──────────────────

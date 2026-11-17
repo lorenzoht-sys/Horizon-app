@@ -7,7 +7,7 @@
 //      réponse — `user_metadata`, `identities`, `recovery_sent_at`… Le test
 //      compare l'ENSEMBLE EXACT des clés produites, il ne vérifie pas
 //      l'absence de quelques champs choisis : une liste d'interdits en
-//      oublie toujours un (règle de méthode, docs/PLAN-BETA.md).
+//      oublie toujours un (règle de méthode, docs/archive/PLAN-BETA.md).
 //
 //   2. LE BANNISSEMENT EXPIRÉ. `banned_until` est une date, pas un booléen.
 //      Traiter sa seule présence comme « désactivé » afficherait comme tel

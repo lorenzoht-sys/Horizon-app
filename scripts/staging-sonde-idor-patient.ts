@@ -16,7 +16,7 @@
 //   - ROUGE : le même appel avec un identifiant emprunté à un AUTRE
 //             bénéficiaire, qui doit être refusé (404).
 // Un contrôle qu'on n'a jamais vu refuser ne prouve rien — corollaire
-// « prouver que le contrôle peut échouer » de docs/PLAN-BETA.md.
+// « prouver que le contrôle peut échouer » de docs/archive/PLAN-BETA.md.
 //
 // Les handlers sont appelés EN PROCESS (faux req/res), pas via HTTP : aucun
 // déploiement de Preview nécessaire, et le code exercé est exactement celui du
@@ -27,7 +27,7 @@
 //
 // Écrit sur staging (seances_patient, retours_seance) et nettoie dans un bloc
 // finally. Le nettoyage a lieu AUSSI au démarrage : une suite qui écrit dans
-// une base partagée nettoie AVANT, pas seulement après (docs/PLAN-BETA.md).
+// une base partagée nettoie AVANT, pas seulement après (docs/archive/PLAN-BETA.md).
 
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';

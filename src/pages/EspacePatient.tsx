@@ -102,7 +102,7 @@ export default function EspacePatient() {
         // status === 0 : patientFetchMe a catché une erreur réseau (fetch qui
         // rejette), pas une réponse du serveur. Rien à voir avec le code du
         // bénéficiaire — le renvoyer le ressaisir sur /patient serait
-        // trompeur (voir docs/PLAN-BETA.md, lot EspacePatient). Toute autre
+        // trompeur (voir docs/archive/PLAN-BETA.md, lot EspacePatient). Toute autre
         // valeur (401, 403, 500…) est une vraie réponse serveur, traitée
         // comme avant.
         if (result.status === 0) {

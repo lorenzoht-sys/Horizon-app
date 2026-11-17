@@ -11,7 +11,7 @@
 // filtrent sur praticien_id = auth.uid(), plus aucun compte authentifié ne
 // peut jamais les relire. Donnée légalement conservée, pratiquement perdue,
 // sans le moindre signal. La désactivation est réversible et ne touche à
-// aucune donnée. Voir docs/PLAN-BETA.md.
+// aucune donnée. Voir docs/archive/PLAN-BETA.md.
 //
 // ── Aucune donnée clinique n'est affichée ni même chargée ───────────────
 // Cette page ne parle que de comptes. Le rôle admin ne donne aucun accès
