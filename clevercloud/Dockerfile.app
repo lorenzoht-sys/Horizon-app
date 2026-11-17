@@ -25,6 +25,10 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY . .
+# `npm prune --omit=dev` ne garde que les `dependencies` de package.json, c'est-à-
+# dire ce que le serveur charge (≈ 150 Mo) ; les bibliothèques du front sont en
+# devDependencies, déjà empaquetées par Vite dans dist/. Vérifié en CI par
+# clevercloud/scripts/verifier-dependances.mjs (job serveur-clevercloud).
 RUN npm run build \
  && npx tsc -p clevercloud/tsconfig.api-build.json \
  && npm prune --omit=dev

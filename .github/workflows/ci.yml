@@ -28,6 +28,14 @@ jobs:
       # Scripts de migration (nettoyeur de dump, copie des PDF vers Cellar).
       # repetition-http et repetition-jwks ont besoin de PostgREST : job suivant.
       - run: node --test clevercloud/scripts/nettoyer-dump.test.mjs clevercloud/scripts/copier-factures.test.mjs
+      # Même élagage que clevercloud/Dockerfile.app : le serveur doit tourner
+      # avec les seules `dependencies` (front en devDependencies depuis le
+      # lot 2 du nettoyage). En dernier : après le prune, plus de devDependencies.
+      - name: Le serveur tourne avec les seules dépendances de production
+        run: |
+          npx tsc -p clevercloud/tsconfig.api-build.json
+          npm prune --omit=dev
+          node clevercloud/scripts/verifier-dependances.mjs
 
   # Répétition à blanc de la cible HDS : le schéma du dépôt est reconstruit sur
   # un PostgreSQL 17 STANDARD (sans Supabase), puis lu et écrit par le chemin
