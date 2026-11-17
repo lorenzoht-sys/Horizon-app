@@ -1,0 +1,31 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "api/**/*.ts",
+    "!api/**/_*.ts",
+    "clevercloud/serveur/serveur.mjs",
+    "clevercloud/scripts/*.mjs",
+    "scripts/**/*.{ts,mjs,js}",
+    "e2e/**/*.ts",
+    "tests/**/*.ts",
+    "supabase/functions/*/index.ts"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "api/**/*.ts",
+    "clevercloud/**/*.mjs",
+    "scripts/**/*.{ts,mjs,js}",
+    "e2e/**/*.ts",
+    "tests/**/*.ts",
+    "supabase/functions/**/*.ts"
+  ],
+  "ignoreFiles": [
+    "src/pages/RegisterPage.tsx"
+  ],
+  "ignoreDependencies": [
+    "buffer"
+  ],
+  "ignoreBinaries": [
+    "tsx"
+  ]
+}
