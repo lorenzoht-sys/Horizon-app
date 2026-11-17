@@ -140,6 +140,16 @@ jobs:
 
       - run: npm ci
       - run: npm run build
+      # Suivi du nettoyage (docs/NETTOYAGE.md) : poids du front affiché dans
+      # le résumé du job, et inventaire du code mort. Informatifs pour
+      # l'instant (ne font pas échouer la CI) : à rendre bloquants une fois
+      # les lots 1 à 3 terminés.
+      - name: Poids du front
+        run: |
+          { echo '```'; npm run -s poids; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Inventaire du code mort (informatif)
+        continue-on-error: true
+        run: npm run nettoyage:inventaire -- --include files,dependencies,unlisted,binaries,unresolved
       - run: npm run typecheck:api
       - run: npm run typecheck:e2e
 

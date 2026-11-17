@@ -12,6 +12,7 @@ leur cible (`assertStagingTarget`) et exigent `--apply`.
 | `run-harnais-local.mjs` | `npm run test:security` : harnais RLS contre staging |
 | `verifier-resultat-harnais.mjs` | CI, job `audit` : décide du succès à partir du rapport du harnais |
 | `seed-staging.sql` | jeu de données fictif de staging (comptes de démo) |
+| `mesurer-poids.mjs` | `npm run poids` (et CI) : poids du front construit, voir `docs/NETTOYAGE.md` |
 | `cartographie.mjs` | génère `docs/CARTOGRAPHIE-DONNEES.md` ; à relancer après un chantier de structure |
 
 ## Outils de staging (à la demande)

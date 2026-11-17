@@ -15,7 +15,9 @@
     "test:unit:ci": "vitest run --exclude **/tests/security/** --exclude **/tests/db/**",
     "test:db": "vitest run tests/db",
     "test:security": "node scripts/run-harnais-local.mjs",
-    "test:clever": "node --test clevercloud/serveur/*.test.mjs clevercloud/scripts/*.test.mjs"
+    "test:clever": "node --test clevercloud/serveur/*.test.mjs clevercloud/scripts/*.test.mjs",
+    "nettoyage:inventaire": "npx --yes knip@5.88.1",
+    "poids": "node scripts/mesurer-poids.mjs"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
@@ -25,7 +27,6 @@
     "@supabase/supabase-js": "^2.106.2",
     "@types/leaflet": "^1.9.21",
     "@types/qrcode": "^1.5.6",
-    "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.5.0",
     "buffer": "^6.0.3",
     "date-fns": "^4.2.1",
