@@ -8,7 +8,6 @@ import ParticipantCard from '../components/participant/ParticipantCard';
 import { contratsDesBeneficiairesActifs, filtrerParNom } from '../lib/archivage';
 import { FadeInCard } from '../components/ui/FadeInCard';
 import { motion } from 'framer-motion';
-import ImportExcelModal from '../components/import/ImportExcelModal';
 import PageWrapper from '../components/layout/PageWrapper';
 import { Plus, Search, Users, BarChart3, FileSpreadsheet, CalendarDays, MapPin, ChevronRight, NotebookPen, AlertCircle, Building2, Archive } from 'lucide-react';
 import { useJournalSeance } from '../hooks/useJournalSeance';
@@ -22,6 +21,9 @@ import CarteStructure from '../components/structures/CarteStructure';
 import ModalCreationStructure from '../components/structures/ModalCreationStructure';
 
 const MiniMap = lazy(() => import('../components/map/MiniMap'));
+// Import Excel chargé à l'ouverture de la fenêtre : la bibliothèque xlsx
+// (≈ 410 Ko) sortait sinon dans le paquet initial (nettoyage, lot 1).
+const ImportExcelModal = lazy(() => import('../components/import/ImportExcelModal'));
 
 type DashTab = 'tous' | 'independants' | 'structures';
 
@@ -723,7 +725,11 @@ export default function Dashboard() {
 
 
       {/* Modal import Excel */}
-      {showImport && <ImportExcelModal onClose={() => setShowImport(false)} participants={participants} addParticipant={addParticipant} />}
+      {showImport && (
+        <Suspense fallback={null}>
+          <ImportExcelModal onClose={() => setShowImport(false)} participants={participants} addParticipant={addParticipant} />
+        </Suspense>
+      )}
 
       {/* Modal création structure */}
       {showCreateStructure && (

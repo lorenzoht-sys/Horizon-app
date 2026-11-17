@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { Link } from 'react-router-dom';
 import L from 'leaflet';
+import '../../lib/leafletInit';
 import type { Participant, TagPatient } from '../../types';
 import { TAG_CONFIG, getPriorityTag } from '../../data/profiles';
 import { libelleAge } from '../../lib/age';

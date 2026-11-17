@@ -6,7 +6,7 @@ import { X, Download, Loader } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Contrat, Participant } from '../../types';
 import type { ContratPDFData } from '../export/ContratPDF';
-import { exportContratPDF } from '../../utils/exportContratPDF';
+import { exportContratPDF } from '../../utils/pdfALaDemande';
 
 function formatDateFR(iso: string): string {
   const [y, m, d] = iso.split('-');

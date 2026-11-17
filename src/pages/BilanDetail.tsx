@@ -8,7 +8,7 @@ import PageWrapper from '../components/layout/PageWrapper';
 import RadarChart from '../components/charts/RadarChart';
 import ComparisonTable from '../components/charts/ComparisonTable';
 import { calculerNotesAuto } from '../components/export/FicheBilanPDF';
-import { exportFicheBilanPDF, exportFicheBilanBeneficiairePDF } from '../utils/exportPDF';
+import { exportFicheBilanPDF, exportFicheBilanBeneficiairePDF } from '../utils/pdfALaDemande';
 import { ArrowLeft, Calendar, MessageSquare, StickyNote, Target, AlertTriangle, FileText, TrendingUp, Share2 } from 'lucide-react';
 type CleResultatPartageable = 'equilibre' | 'force' | 'handGrip' | 'mobilite' | 'endurance';
 import { EtatPartageBilan } from '../components/bilan/EtatPartageBeneficiaire';
