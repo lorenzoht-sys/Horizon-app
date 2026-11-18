@@ -54,15 +54,21 @@ decrire('Suivi de la facturation des séances : états et motifs', () => {
     expect(await generer(c.contratId, M.periode)).toMatch(/Aucun tarif applicable/);
   });
 
-  it('à corriger « mois déjà facturé » : séance réalisée après la validation de la facture du mois', async () => {
+  it('séance réalisée après la validation de la facture du mois : en préparation dans une facture complémentaire', async () => {
     const p = await pro();
     const M = moisDuTest();
     const c = await creerContrat(p, M, { seances: [{ jour: 5 }] });
     const f = (await lignesDe(c.contratId, M.periode)).factures[0];
     expect((await p.client.rpc('valider_facture', { p_facture_id: f.id })).error).toBeNull();
     const tardive = await seance(p, c.participantId, c.contratId, M.jour(20));
-    expect(de(await suivi(p, M.periode), tardive)).toMatchObject({ etat: 'a_facturer', motif: 'mois_deja_facture' });
-    expect(await generer(c.contratId, M.periode)).toBe(f.id);   // la facture émise est renvoyée telle quelle
+    // Avant 20261118100000 : « à corriger », motif « mois déjà facturé », facturée nulle part.
+    expect(de(await suivi(p, M.periode), tardive)).toMatchObject({ etat: 'en_preparation', motif: null });
+    const complementaire = await generer(c.contratId, M.periode);
+    expect(complementaire).not.toBe(f.id);
+    const v = await p.client.rpc('valider_facture', { p_facture_id: complementaire });
+    expect(v.error).toBeNull();
+    expect(de(await suivi(p, M.periode), tardive)).toMatchObject({ etat: 'facturee', numero: v.data });
+    expect(de(await suivi(p, M.periode), c.seanceIds[0])).toMatchObject({ etat: 'facturee', numero: (await lignesDe(c.contratId, M.periode)).factures.find(x => x.id === f.id)?.numero });
   });
 
   it('à corriger « en attente » : brouillon retiré, la séance attend le prochain calcul ; il la reprend', async () => {

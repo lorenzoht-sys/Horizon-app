@@ -126,7 +126,8 @@ erDiagram
 |---|---|
 | Numéro `AAAA-NNNN`, par praticien, remis à 1 chaque année, sans trou, sûr en concurrence | Ligne de `compteurs_facture` incrémentée par `INSERT … ON CONFLICT DO UPDATE` (verrou de ligne tenu jusqu'au commit). Pas de séquence Postgres : non transactionnelle, elle laisserait des trous. |
 | Un brouillon, supprimé ou non, ne consomme aucun numéro | Le numéro n'est attribué qu'à la validation. |
-| Une seule facture vivante par contrat et par mois | Index unique partiel `factures_une_vivante_par_contrat_periode` (hors `annulee`). |
+| Un seul brouillon par contrat et par mois (plusieurs factures émises possibles : facture complémentaire) | Index unique partiel `factures_un_brouillon_par_contrat_periode` (20261118100000 ; remplace `factures_une_vivante_par_contrat_periode`). |
+| Une séance n'est jamais portée par deux factures vivantes ; un forfait n'a jamais de complément | Trigger `factures_complementaire_controle`, à la validation |
 | Facture validée immuable, non supprimable, sans retour au brouillon | Trigger `factures_inalterables` |
 | Paiement immuable, correction par ligne négative sans dépasser l'encaissé | Triggers `paiements_immuables` et `paiements_controle` ; droits UPDATE/DELETE retirés ; policies SELECT + INSERT |
 | Pas de facture créée directement validée, pas de faux numéro | Trigger `factures_controle_insertion` + variable locale posée par `valider_facture` |
@@ -148,9 +149,11 @@ erDiagram
   (`src/lib/tarifsContrats.ts`) ; un test compare les deux. Aucun repli silencieux : une
   séance sans tarif applicable fait échouer la génération en nommant la date.
 - **Mode forfait** : une ligne, `montant_forfait`, sans séance. Pas de prorata.
-- **Idempotent** : relancée, elle recalcule le même brouillon (jamais un second) ; si la
-  facture du mois est déjà émise, elle la renvoie intacte ; s'il n'y a plus rien à
-  facturer, le brouillon disparaît et elle renvoie `NULL`.
+- **Idempotent** : relancée, elle recalcule le même brouillon (jamais un second). Une facture
+  émise n'est jamais touchée : les séances du mois qu'aucune facture vivante ne porte vont dans
+  un brouillon complémentaire (voir « Facture complémentaire ») ; s'il n'y a plus rien à
+  facturer, le brouillon disparaît et elle renvoie la facture émise du mois (la plus récente),
+  sinon `NULL`.
 - Circuit `classique` : `part_client = total` (TTC), `part_urssaf = 0`.
 
 ## TVA — hypothèse à confirmer avec l'expert-comptable
@@ -344,9 +347,9 @@ tests `tests/db/facturation-progressive.spec.ts`.
   l'erreur (`[facturation] contrat … : Aucun tarif applicable…`).
 - **Le brouillon est le reflet automatique des séances.** Un recalcul reconstruit ses lignes : il n'existe donc
   aucun champ montant libre. On corrige en éditant **la séance ou le tarif**, jamais la facture.
-- **Une facture émise n'est jamais touchée** : `generer_brouillon_facture` la renvoie telle quelle. Limite
-  connue, antérieure : une séance réalisée APRÈS la validation de la facture du mois n'est facturée nulle part
-  (une seule facture vivante par contrat et par mois).
+- **Une facture émise n'est jamais touchée** : une séance réalisée (ou rattachée au contrat) APRÈS la validation
+  de la facture du mois part dans une facture complémentaire (voir plus bas). Avant le 2026-11-18, elle n'était
+  facturée nulle part.
 - **Validation à partir du 1er du mois suivant** : le trigger `factures_validation_apres_le_mois` refuse le
   passage brouillon → validée d'une facture avant le 1er du mois suivant son mois de prestation (date civile
   Paris), avec le message « Facture de MM/AAAA : validation possible à partir du JJ/MM/AAAA ». Il refuse aussi le
@@ -361,6 +364,27 @@ tests `tests/db/facturation-progressive.spec.ts`.
   « Tout valider »). Une section « En cours » montre, en lecture seule, le brouillon du mois courant avec son total
   « à ce jour » et la date d'ouverture de la validation. Même règle côté interface (`estValidable`,
   `src/lib/facturesAValider.ts`), mais la base reste seule juge.
+
+## Facture complémentaire (2026-11-18)
+
+Décision 5 du 2026-10-20, à faire confirmer par l'expert-comptable de Pierre. Migration
+`20261118100000_facture_complementaire.sql`, tests `tests/db/facturation.spec.ts` (« Facture complémentaire »).
+
+- **Quand** : une séance réalisée après la validation de la facture de son mois, ou une séance ancienne
+  rattachée à son contrat après coup (séances créées sans contrat avant #200). Le trigger de séance prépare
+  aussitôt un brouillon du même contrat et du même mois, qui ne porte que ces séances (et leurs frais de
+  déplacement). Il se valide comme les autres dans « Factures à valider » et reçoit son propre numéro.
+- **Aucune table ni colonne** : c'est une facture ordinaire. L'index d'unicité ne porte plus que sur le
+  brouillon : un seul en préparation par contrat et par mois, plusieurs factures émises possibles.
+- **Forfait** : jamais de complément. Bénéficiaire SAP : toujours exclu.
+- **Garde à la validation** (`factures_complementaire_controle`) : refuse une facture dont une séance est
+  déjà portée par une autre facture vivante, et une facture complémentaire sans séance. Aucun numéro consommé.
+- **Tâche du 1er** : un contrat à la séance déjà facturé pour le mois écoulé est rappelé ; la base prépare un
+  complément s'il y a lieu, sinon renvoie la facture émise (comptée « déjà existante », pas de notification).
+- **Rattrapage à la migration** : les mois déjà facturés qui ont des séances réalisées non facturées reçoivent
+  leur brouillon complémentaire (journal : « N brouillon(s) complémentaire(s) préparé(s) »).
+- **« Refaire la facture du mois »** : reste proposé sur une facture annulée tant qu'aucune facture du même
+  contrat et du même mois n'a été émise depuis l'annulation (`peutRefaireFacture`).
 
 ## Génération et écrans praticien (étapes 3 et 4)
 

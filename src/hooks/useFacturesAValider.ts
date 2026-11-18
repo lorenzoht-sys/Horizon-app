@@ -229,14 +229,17 @@ export function useFacturesValidees() {
     return { ok: true, numero: String(r.numero ?? ''), total: Number(r.total ?? 0), origineAnnulee: r.origine_annulee === true, aRembourser: Number(r.a_rembourser ?? 0) };
   }, []);
 
-  /** « Refaire la facture du mois » (PR 9) : après une annulation totale, recrée le brouillon depuis les séances libérées. */
+  /**
+   * « Refaire la facture du mois » (PR 9) : après une annulation totale, recrée le brouillon depuis les séances libérées.
+   * Rien à refaire : la base renvoie NULL, ou une facture déjà émise du mois (facture complémentaire, 20261118100000).
+   */
   const refaireFacture = useCallback(async (contratId: string, periode: string): Promise<{ ok: true; cree: boolean } | { erreur: string }> => {
     if (!supabase) return { erreur: 'Base de données indisponible' };
     const { data, error } = await supabase.rpc('generer_brouillon_facture', { p_contrat_id: contratId, p_periode: periode });
     if (error) return { erreur: error.message };
     setVersion(v => v + 1);
-    return { ok: true, cree: data != null };
-  }, []);
+    return { ok: true, cree: data != null && !factures.some(f => f.id === data) };
+  }, [factures]);
 
   return { factures, chargement, erreur, marquerPayee, envoyer, creerAvoir, refaireFacture };
 }

@@ -729,8 +729,10 @@ decrire('Calcul du brouillon', () => {
   it('est idempotente aussi après validation : renvoie la facture émise, intacte', async () => {
     await transaction(async c => {
       const v = await factureValidee(c);
-      await creerSeance(c, v.pro, v.ct, '2026-03-24');   // séance réalisée après coup
       expect(await generer(c, v.ct.contratId, '2026-03-01')).toBe(v.factureId);
+      // Une séance réalisée après coup va dans une facture complémentaire (20261118100000) : l'émise ne bouge pas.
+      await creerSeance(c, v.pro, v.ct, '2026-03-24');
+      expect(await generer(c, v.ct.contratId, '2026-03-01')).not.toBe(v.factureId);
       expect(await lignes(c, v.factureId)).toHaveLength(1);
       const [f] = await q(c, `SELECT statut, numero, total::float8 AS total FROM public.factures WHERE id = $1`, [v.factureId]);
       expect(f).toEqual({ statut: 'validee', numero: v.numero, total: 45 });
@@ -770,15 +772,16 @@ decrire('Unicité contrat / période', () => {
       const pro = await creerPraticien(c);
       const ct = await creerContrat(c, pro);
       await c.query(insererBrouillon, [pro, ct.contratId, ct.participantId, '2026-03-01']);
-      await refus(c, insererBrouillon, [pro, ct.contratId, ct.participantId, '2026-03-01'], /factures_une_vivante_par_contrat_periode/);
+      await refus(c, insererBrouillon, [pro, ct.contratId, ct.participantId, '2026-03-01'], /factures_un_brouillon_par_contrat_periode/);
       await c.query(insererBrouillon, [pro, ct.contratId, ct.participantId, '2026-04-01']);   // autre mois : ok
     });
   });
 
-  it('refuse un brouillon quand une facture émise existe déjà pour ce mois', async () => {
+  it('accepte un brouillon (complémentaire) quand une facture émise existe déjà pour ce mois, mais un seul', async () => {
     await transaction(async c => {
       const v = await factureValidee(c);
-      await refus(c, insererBrouillon, [v.pro, v.ct.contratId, v.ct.participantId, '2026-03-01'], /factures_une_vivante_par_contrat_periode/);
+      await c.query(insererBrouillon, [v.pro, v.ct.contratId, v.ct.participantId, '2026-03-01']);
+      await refus(c, insererBrouillon, [v.pro, v.ct.contratId, v.ct.participantId, '2026-03-01'], /factures_un_brouillon_par_contrat_periode/);
     });
   });
 
@@ -808,6 +811,135 @@ decrire('Unicité contrat / période', () => {
 });
 
 // ───────────────────────────── RLS ─────────────────────────────
+
+// ───────────────────────────── facture complémentaire ─────────────────────────────
+// Migration 20261118100000 : une séance réalisée après la validation de la facture de son mois est
+// facturée par une facture complémentaire du même mois (décision 5 du 2026-10-20).
+
+decrire('Facture complémentaire', () => {
+  const brouillonsDuMois = (c: Client, contratId: string, periode: string) =>
+    q(c, `SELECT id FROM public.factures WHERE contrat_id = $1 AND periode = $2 AND type = 'facture' AND statut = 'brouillon'`, [contratId, periode]);
+
+  it('une séance tardive part d\'elle-même dans un brouillon complémentaire, avec ses seuls frais, puis son propre numéro', async () => {
+    await transaction(async c => {
+      const annee = await anneeEmission(c);
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro, { tarifs: [{ debut: '2026-01-01', tarif: 50, frais: 5 }] });
+      await creerSeance(c, pro, ct, '2026-03-03');
+      await creerSeance(c, pro, ct, '2026-03-10');
+      const a = (await generer(c, ct.contratId, '2026-03-01'))!;
+      expect(await valider(c, a)).toBe(`${annee}-0001`);
+
+      // Trigger de séance : aucun appel explicite, le brouillon complémentaire existe déjà.
+      const tardive = await creerSeance(c, pro, ct, '2026-03-24');
+      const [b] = await brouillonsDuMois(c, ct.contratId, '2026-03-01');
+      expect(b).toBeDefined();
+      expect(await generer(c, ct.contratId, '2026-03-01')).toBe(b.id);   // idempotente : le même brouillon
+      expect(await lignes(c, b.id)).toEqual([
+        expect.objectContaining({ seance_id: tardive, montant: 50 }),
+        expect.objectContaining({ libelle: 'Frais de déplacement : 1 × 5 €', montant: 5 }),
+      ]);
+      expect(await montants(c, b.id)).toMatchObject({ ht: 55, ttc: 55 });
+
+      expect(await valider(c, b.id)).toBe(`${annee}-0002`);
+      expect(await lignes(c, a)).toHaveLength(3);                          // 2 séances + frais, intacte
+      expect(await montants(c, a)).toMatchObject({ ttc: 110 });
+      // Plus rien à facturer : la facture émise la plus récente, aucun nouveau brouillon.
+      expect(await generer(c, ct.contratId, '2026-03-01')).toBe(b.id);
+      expect(await brouillonsDuMois(c, ct.contratId, '2026-03-01')).toHaveLength(0);
+    });
+  });
+
+  it('un rattachement tardif au contrat (séance créée sans contrat) est rattrapé de la même façon', async () => {
+    await transaction(async c => {
+      const v = await factureValidee(c);
+      const sansContrat = await creerSeance(c, v.pro, { ...v.ct, contratId: null as unknown as string }, '2026-03-17');
+      expect(await brouillonsDuMois(c, v.ct.contratId, '2026-03-01')).toHaveLength(0);
+      await c.query(`UPDATE public.seances SET contrat_id = $1 WHERE id = $2`, [v.ct.contratId, sansContrat]);
+      const [b] = await brouillonsDuMois(c, v.ct.contratId, '2026-03-01');
+      expect((await lignes(c, b.id)).map(l => l.seance_id)).toEqual([sansContrat]);
+    });
+  });
+
+  it('refuse de valider une facture qui reprend une séance déjà facturée (double facturation)', async () => {
+    await transaction(async c => {
+      const v = await factureValidee(c);
+      await creerSeance(c, v.pro, v.ct, '2026-03-24');
+      const [b] = await brouillonsDuMois(c, v.ct.contratId, '2026-03-01');
+      // Écriture directe d'une ligne pointant la séance déjà portée par la facture émise.
+      await c.query(`INSERT INTO public.lignes_facture (facture_id, seance_id, libelle, quantite, prix_unitaire, montant)
+                     VALUES ($1, $2, 'Séance du 10/03/2026', 1, 45, 45)`, [b.id, v.seanceId]);
+      await refus(c, `SELECT public.valider_facture($1)`, [b.id], /Séance déjà facturée : Séance du 10\/03\/2026 \(facture n° /);
+      // Rien n'a été consommé : le brouillon recalculé se valide avec le numéro suivant.
+      expect(await generer(c, v.ct.contratId, '2026-03-01')).toBe(b.id);
+      const annee = await anneeEmission(c);
+      expect(await valider(c, b.id)).toBe(`${annee}-0002`);
+    });
+  });
+
+  it('forfait : jamais de complément, et un brouillon écrit à la main pour le même mois ne se valide pas', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro, { mode: 'forfait', forfait: 200 });
+      const f = (await generer(c, ct.contratId, '2026-03-01'))!;
+      await valider(c, f);
+      expect(await generer(c, ct.contratId, '2026-03-01')).toBe(f);
+      expect(await brouillonsDuMois(c, ct.contratId, '2026-03-01')).toHaveLength(0);
+
+      const [b] = await q(c, `INSERT INTO public.factures (praticien_id, contrat_id, participant_id, periode) VALUES ($1, $2, $3, '2026-03-01') RETURNING id`,
+        [pro, ct.contratId, ct.participantId]);
+      await c.query(`INSERT INTO public.lignes_facture (facture_id, libelle, quantite, prix_unitaire, montant) VALUES ($1, 'Forfait mensuel — mars 2026', 1, 200, 200)`, [b.id]);
+      await c.query(`UPDATE public.factures SET total_ht = 200, total = 200, part_client = 200 WHERE id = $1`, [b.id]);
+      await refus(c, `SELECT public.valider_facture($1)`, [b.id], /Facture de 03\/2026 déjà émise \(n° .*\) : une facture complémentaire ne porte que des séances/);
+    });
+  });
+
+  it('une séance tardive sans tarif applicable n\'empêche pas la saisie ; la génération le signale', async () => {
+    await transaction(async c => {
+      const pro = await creerPraticien(c);
+      const ct = await creerContrat(c, pro, { tarifs: [{ debut: '2026-01-01', fin: '2026-03-15', tarif: 45 }] });
+      await creerSeance(c, pro, ct, '2026-03-10');
+      await valider(c, (await generer(c, ct.contratId, '2026-03-01'))!);
+      await creerSeance(c, pro, ct, '2026-03-24');   // aucun tarif après le 15 : la saisie passe
+      expect(await brouillonsDuMois(c, ct.contratId, '2026-03-01')).toHaveLength(0);
+      await refus(c, `SELECT public.generer_brouillon_facture($1, '2026-03-01')`, [ct.contratId], /Aucun tarif applicable pour la ou les séances du 24\/03\/2026/);
+      // Le tarif créé ensuite rattrape la séance (trigger des tarifs).
+      await c.query(`INSERT INTO public.tarifs_contrats (contrat_id, tarif_seance, frais_deplacement, date_debut_validite) VALUES ($1, 50, 0, '2026-03-16')`, [ct.contratId]);
+      expect(await brouillonsDuMois(c, ct.contratId, '2026-03-01')).toHaveLength(1);
+    });
+  });
+
+  it('bénéficiaire SAP : pas de complément, la facture émise est renvoyée', async () => {
+    await transaction(async c => {
+      const v = await factureValidee(c);
+      await c.query(`UPDATE public.participants SET beneficiaire_sap = true WHERE id = $1`, [v.ct.participantId]);
+      await creerSeance(c, v.pro, v.ct, '2026-03-24');
+      expect(await generer(c, v.ct.contratId, '2026-03-01')).toBe(v.factureId);
+      expect(await brouillonsDuMois(c, v.ct.contratId, '2026-03-01')).toHaveLength(0);
+    });
+  });
+
+  it('avoir total sur la première facture : « Refaire » reprend ses séances, la complémentaire reste intacte', async () => {
+    await transaction(async c => {
+      const v = await factureValidee(c);
+      const tardive = await creerSeance(c, v.pro, v.ct, '2026-03-24');
+      const [b] = await brouillonsDuMois(c, v.ct.contratId, '2026-03-01');
+      await valider(c, b.id);
+
+      const [l] = await q(c, `SELECT id FROM public.lignes_facture WHERE facture_id = $1`, [v.factureId]);
+      await commeUtilisateur(c, v.pro);
+      await q(c, `SELECT public.creer_avoir($1, $2::jsonb, NULL, 'Erreur de tarif', 45)`, [v.factureId, JSON.stringify([{ ligne_id: l.id, quantite: 1 }])]);
+      await retourPostgres(c);
+      const [a] = await q(c, `SELECT statut FROM public.factures WHERE id = $1`, [v.factureId]);
+      expect(a.statut).toBe('annulee');
+
+      const refait = (await generer(c, v.ct.contratId, '2026-03-01'))!;
+      expect(refait).not.toBe(b.id);
+      expect((await lignes(c, refait)).map(x => x.seance_id)).toEqual([v.seanceId]);
+      expect((await lignes(c, b.id)).map(x => x.seance_id)).toEqual([tardive]);
+    });
+  });
+});
 
 decrire('RLS : un praticien ne voit et ne gère que ses factures ; l\'admin lit tout', () => {
   it('cloisonne les factures, lignes et paiements entre praticiens', async () => {

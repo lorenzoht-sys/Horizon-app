@@ -23,6 +23,7 @@ import {
   type FactureValidee,
   avoirsDe,
   peutCreerAvoir,
+  peutRefaireFacture,
   lireProfil,
   presentationApercu,
   messageValidationLisible,
@@ -370,5 +371,26 @@ describe('avoirs dans la liste des factures validées (PR 9)', () => {
   it('avoirsDe : les avoirs de la facture, et seulement eux', () => {
     const liste = [f({}), f({ id: 'a1', type: 'avoir', factureOrigineId: 'f' }), f({ id: 'a2', type: 'avoir', factureOrigineId: 'g' }), f({ id: 'g' })];
     expect(avoirsDe('f', liste).map(a => a.id)).toEqual(['a1']);
+  });
+  describe('peutRefaireFacture (facture complémentaire, 20261118100000)', () => {
+    const annulee = f({ id: 'a', statut: 'annulee', dateEmission: '2026-10-02' });
+    const avoir = f({ id: 'av', type: 'avoir', factureOrigineId: 'a', dateEmission: '2026-11-05' });
+    it('seulement sur une facture annulée, jamais un avoir', () => {
+      expect(peutRefaireFacture(f({}), [f({})])).toBe(false);
+      expect(peutRefaireFacture(f({ type: 'avoir', statut: 'annulee' }), [])).toBe(false);
+      expect(peutRefaireFacture(annulee, [annulee, avoir])).toBe(true);
+    });
+    it('une complémentaire émise AVANT l\'annulation ne masque pas le bouton', () => {
+      const complementaire = f({ id: 'b', numero: '2026-0005', dateEmission: '2026-11-03' });
+      expect(peutRefaireFacture(annulee, [annulee, avoir, complementaire])).toBe(true);
+    });
+    it('la facture refaite (émise le jour de l\'annulation ou après) le masque', () => {
+      expect(peutRefaireFacture(annulee, [annulee, avoir, f({ id: 'c', dateEmission: '2026-11-05' })])).toBe(false);
+      expect(peutRefaireFacture(annulee, [annulee, avoir, f({ id: 'c', dateEmission: '2026-11-20' })])).toBe(false);
+    });
+    it('une facture d\'un autre contrat ou d\'un autre mois ne compte pas', () => {
+      expect(peutRefaireFacture(annulee, [annulee, avoir, f({ id: 'c', contratId: 'autre', dateEmission: '2026-11-20' })])).toBe(true);
+      expect(peutRefaireFacture(annulee, [annulee, avoir, f({ id: 'c', periode: '2026-10-01', dateEmission: '2026-11-20' })])).toBe(true);
+    });
   });
 });

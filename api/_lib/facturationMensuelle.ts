@@ -16,7 +16,11 @@
 //   - il RECALCULE les brouillons existants du mois écoulé, pour que celui que le praticien va
 //     valider reflète exactement les séances d'aujourd'hui, même si le trigger a échoué ou si une
 //     séance a été ajoutée par un chemin qui l'aurait contourné ;
-//   - il n'écrase JAMAIS une facture émise.
+//   - il n'écrase JAMAIS une facture émise ;
+//   - facture complémentaire (migration 20261118100000) : un contrat à la séance dont la facture du
+//     mois est déjà émise est quand même rappelé. Si une séance du mois n'est portée par aucune
+//     facture (réalisée ou rattachée au contrat après la validation), la base prépare un brouillon
+//     complémentaire ; sinon elle renvoie la facture émise, comptée « déjà existante ».
 // Le brouillon est le reflet automatique des séances : un recalcul reconstruit ses lignes. On le
 // corrige en éditant la séance ou le tarif, jamais la facture (décision du 2026-10-09).
 //
@@ -40,9 +44,10 @@
 //
 // ── Idempotence ─────────────────────────────────────────────────────────────────────────────
 // Pas de doublon possible : generer_brouillon_facture recalcule le brouillon existant au lieu d'en
-// créer un second (une seule facture vivante par contrat et par mois). Une facture ÉMISE est
-// écartée avant tout appel. Relancer la tâche recalcule les mêmes brouillons au même résultat et ne
-// renotifie rien (hors le 1er, voir plus haut).
+// créer un second (un seul brouillon par contrat et par mois). Une facture ÉMISE n'est jamais
+// touchée : seul un forfait déjà émis est écarté avant l'appel (jamais de complément), les autres
+// reçoivent au plus un brouillon complémentaire. Relancer la tâche recalcule les mêmes brouillons au
+// même résultat et ne renotifie rien (hors le 1er, voir plus haut).
 //
 // ── Isolation des échecs ────────────────────────────────────────────────────────────────────
 // Un contrat qui échoue (typiquement : séance sans tarif applicable, la fonction refuse de
@@ -125,7 +130,7 @@ export interface BilanFacturationMensuelle {
   /** Mois facturé, AAAA-MM. */
   mois: string;
   contratsExamines: number;
-  /** Contrats écartés car leur facture du mois est déjà ÉMISE (jamais retouchée). */
+  /** Contrats dont la facture du mois est déjà ÉMISE (jamais retouchée) et qui n'ont rien de plus à facturer. */
   dejaExistants: number;
   /** Contrats facturables sans aucune séance à facturer ce mois-là : rien n'est créé. */
   sansSeance: number;
@@ -206,10 +211,10 @@ export async function genererBrouillonsDuMois(
 
   // Factures « vivantes » du mois : un brouillon se RECALCULE (facture progressive), une facture émise
   // n'est jamais touchée.
-  const existantes = await lireToutesLesLignes<{ contrat_id: string; statut: string }>((de, a) =>
+  const existantes = await lireToutesLesLignes<{ id: string; contrat_id: string; statut: string }>((de, a) =>
     supabase
       .from('factures')
-      .select('contrat_id, statut')
+      .select('id, contrat_id, statut')
       .eq('periode', periode)
       .eq('type', 'facture')
       .neq('statut', 'annulee')
@@ -217,15 +222,18 @@ export async function genererBrouillonsDuMois(
       .range(de, a),
   );
   const avecBrouillon = new Set(existantes.filter(f => f.statut === 'brouillon').map(f => f.contrat_id));
+  const emises = new Set(existantes.filter(f => f.statut !== 'brouillon').map(f => f.id));
   const dejaEmises = new Set(existantes.filter(f => f.statut !== 'brouillon').map(f => f.contrat_id));
+  // Forfait déjà émis : jamais de complément, aucun appel. À la séance : appel, la base décide.
+  const forfaitEmis = (c: ContratCandidat) => c.mode_facturation === 'forfait' && dejaEmises.has(c.id);
   const cibles = contrats
-    .filter(c => !dejaEmises.has(c.id))
+    .filter(c => !forfaitEmis(c))
     .map(c => ({ contrat: c, recalcul: avecBrouillon.has(c.id) }));
 
   const bilan: BilanFacturationMensuelle = {
     mois: periode.slice(0, 7),
     contratsExamines: contrats.length,
-    dejaExistants: contrats.filter(c => dejaEmises.has(c.id)).length,
+    dejaExistants: contrats.filter(forfaitEmis).length,
     sansSeance: 0,
     brouillonsCrees: 0,
     brouillonsRecalcules: 0,
@@ -247,9 +255,11 @@ export async function genererBrouillonsDuMois(
         bilan.erreurs.push({ contratId, erreur: String(r.reason?.message ?? r.reason).slice(0, 300) });
       } else if (r.value.error) {
         bilan.erreurs.push({ contratId, erreur: r.value.error.message.slice(0, 300) });
-      } else if (r.value.data == null) {
+      } else if (r.value.data == null || emises.has(r.value.data as string)) {
+        // NULL, ou la facture déjà émise du mois : rien (de plus) à facturer.
         if (recalcul) bilan.brouillonsSupprimes++;
-        else bilan.sansSeance++;
+        else if (r.value.data == null) bilan.sansSeance++;
+        else bilan.dejaExistants++;
       } else if (recalcul) {
         bilan.brouillonsRecalcules++;
         idsRecalcules.push(r.value.data as string);

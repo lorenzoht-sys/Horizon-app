@@ -6,7 +6,7 @@ import PageWrapper from '../components/layout/PageWrapper';
 import ModalCreerAvoir from '../components/factures/ModalCreerAvoir';
 import { telechargerPdfFacture, useFacturesValidees } from '../hooks/useFacturesAValider';
 import { aRembourser, type Choix } from '../lib/avoirs';
-import { MOYENS_PAIEMENT, avoirsDe, dateCivileParis, emailPlausible, formaterDate, formaterEuro, libellePeriode, peutCreerAvoir, peutEnvoyer, peutMarquerPayee, type FactureValidee } from '../lib/facturesAValider';
+import { MOYENS_PAIEMENT, avoirsDe, dateCivileParis, emailPlausible, formaterDate, formaterEuro, libellePeriode, peutCreerAvoir, peutEnvoyer, peutMarquerPayee, peutRefaireFacture, type FactureValidee } from '../lib/facturesAValider';
 
 // Factures validées (numérotées, verrouillées) : liste volontairement minimale (facturation,
 // étape 3). Elle sert de destination à « Les retrouver » après une validation. Étape 5 : le PDF se
@@ -133,9 +133,8 @@ export default function FacturesPage() {
             const avoirs = f.type === 'facture' ? avoirsDe(f.id, factures) : [];
             const origine = f.type === 'avoir' ? factures.find(o => o.id === f.factureOrigineId) : undefined;
             const rembourser = avoirs.length > 0 ? aRembourser(f.paye, f.total, avoirs.reduce((t, a) => t + a.total, 0)) : 0;
-            // Refaire : facture annulée dont le mois n'a pas déjà une autre facture émise dans la liste.
-            const peutRefaire = f.type === 'facture' && f.statut === 'annulee'
-              && !factures.some(o => o.type === 'facture' && o.statut !== 'annulee' && o.contratId === f.contratId && o.periode === f.periode);
+            // Refaire : facture annulée dont les séances n'ont pas été refacturées depuis l'annulation.
+            const peutRefaire = peutRefaireFacture(f, factures);
             return (
               <li key={f.id} data-testid="facture-validee" className="flex items-start justify-between gap-3 p-4 text-sm">
                 <div className="min-w-0">

@@ -120,8 +120,8 @@ export function premierJourMoisSuivant(periode: string): string {
 
 /**
  * Un brouillon se valide à partir du 1er du mois SUIVANT son mois de prestation (facture progressive,
- * 2026-10-09) : il n'existe qu'une facture par contrat et par mois, valider avant la fin du mois
- * ferait perdre les séances suivantes. Même règle que le trigger de base
+ * 2026-10-09) : valider avant la fin du mois obligerait à une facture complémentaire pour chaque
+ * séance suivante (20261118100000). Même règle que le trigger de base
  * factures_validation_apres_le_mois, qui reste seul juge ; ici on évite de proposer un bouton voué
  * au refus.
  */
@@ -331,6 +331,19 @@ export function peutCreerAvoir(f: Pick<FactureValidee, 'type' | 'statut'>): bool
 /** Avoirs émis d'une facture, lus dans la liste déjà chargée (les avoirs y figurent comme les factures). */
 export function avoirsDe(factureId: string, liste: FactureValidee[]): FactureValidee[] {
   return liste.filter(a => a.type === 'avoir' && a.factureOrigineId === factureId);
+}
+
+/**
+ * « Refaire la facture du mois » (PR 9) : sur une facture annulée, tant que ses séances n'ont pas été
+ * refacturées. Depuis la facture complémentaire (20261118100000), un mois peut porter plusieurs factures
+ * vivantes : seule une facture du même contrat et du même mois émise à partir du jour de l'annulation
+ * (date du dernier avoir) est la facture refaite. Une complémentaire émise avant ne masque plus le bouton.
+ */
+export function peutRefaireFacture(f: FactureValidee, liste: FactureValidee[]): boolean {
+  if (f.type !== 'facture' || f.statut !== 'annulee') return false;
+  const annulation = avoirsDe(f.id, liste).reduce((d, a) => (a.dateEmission > d ? a.dateEmission : d), f.dateEmission);
+  return !liste.some(o => o.type === 'facture' && o.statut !== 'annulee' && o.id !== f.id
+    && o.contratId === f.contratId && o.periode === f.periode && o.dateEmission >= annulation);
 }
 
 /** « Envoyer » / « Renvoyer » par e-mail (PR 8) : toute facture ou tout avoir émis, sauf annulé. */
