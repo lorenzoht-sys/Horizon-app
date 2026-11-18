@@ -133,21 +133,27 @@ decrire('Facture progressive : le brouillon suit les séances et les tarifs', ()
     expect(apres.factures.map(f => f.id)).toEqual(avant.factures.map(f => f.id));   // brouillon intact (périmé), pas supprimé
   });
 
-  it('ne touche JAMAIS une facture émise : une séance tardive ne la modifie pas et ne crée pas de seconde facture', async () => {
+  it('ne touche JAMAIS une facture émise : une séance tardive part dans une facture complémentaire (20261118100000)', async () => {
     const mois = moisDuTest();
     const p = await pro();
     const c = await creerContrat(p, mois, { seances: [{ jour: 3 }, { jour: 10 }] });
     const brouillon = (await brouillons(c.contratId, mois.periode)).factures[0];
     const r = await p.client.rpc('valider_facture', { p_facture_id: brouillon.id });
     expect(r.error).toBeNull();
-    const emise = await brouillons(c.contratId, mois.periode);
+    const lignesDeLaFacture = (id: string) =>
+      pg(cl => cl.query(`SELECT libelle, montant::float8 AS montant FROM public.lignes_facture WHERE facture_id = $1 ORDER BY libelle`, [id])).then(x => x.rows);
+    const emise = await lignesDeLaFacture(brouillon.id);
 
     await ajouterSeance(c, p.id, mois.jour(20));
+    // Tarif utilisé par la facture émise : verrouillé (tarifs_utilises_inalterables), la mise à jour est refusée.
     await pg(cl => cl.query(`UPDATE public.tarifs_contrats SET tarif_seance = 99 WHERE contrat_id = $1`, [c.contratId])).catch(() => {});
     const apres = await brouillons(c.contratId, mois.periode);
-    expect(apres.factures).toHaveLength(1);
-    expect(apres.factures[0]).toMatchObject({ id: brouillon.id, statut: 'validee', total: 90 });
-    expect(apres.lignes).toEqual(emise.lignes);
+    expect(apres.factures).toHaveLength(2);
+    expect(apres.factures.find(f => f.id === brouillon.id)).toMatchObject({ statut: 'validee', total: 90 });
+    expect(await lignesDeLaFacture(brouillon.id)).toEqual(emise);
+    const complementaire = apres.factures.find(f => f.id !== brouillon.id)!;
+    expect(complementaire).toMatchObject({ statut: 'brouillon', total: 45, numero: null });
+    expect(await lignesDeLaFacture(complementaire.id)).toEqual([expect.objectContaining({ libelle: expect.stringMatching(/^Séance du 20\//), montant: 45 })]);
   });
 
   it('un contrat au forfait n\'est pas recalculé par une séance, et un mois futur ne produit aucun brouillon', async () => {
