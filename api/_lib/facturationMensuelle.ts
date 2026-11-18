@@ -17,10 +17,8 @@
 //     valider reflète exactement les séances d'aujourd'hui, même si le trigger a échoué ou si une
 //     séance a été ajoutée par un chemin qui l'aurait contourné ;
 //   - il n'écrase JAMAIS une facture émise ;
-//   - facture complémentaire (migration 20261118100000) : un contrat à la séance dont la facture du
-//     mois est déjà émise est quand même rappelé. Si une séance du mois n'est portée par aucune
-//     facture (réalisée ou rattachée au contrat après la validation), la base prépare un brouillon
-//     complémentaire ; sinon elle renvoie la facture émise, comptée « déjà existante ».
+//   - un contrat à la séance déjà facturé est rappelé : la base prépare au besoin une facture
+//     complémentaire (20261118100000), sinon renvoie la facture émise (« déjà existante »).
 // Le brouillon est le reflet automatique des séances : un recalcul reconstruit ses lignes. On le
 // corrige en éditant la séance ou le tarif, jamais la facture (décision du 2026-10-09).
 //

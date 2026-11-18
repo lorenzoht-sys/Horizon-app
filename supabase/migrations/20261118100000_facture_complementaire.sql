@@ -1,66 +1,19 @@
--- ════════════════════════════════════════════════════════════════════════════
--- Facture complémentaire : une séance réalisée APRÈS la validation de la facture
--- de son mois est facturée par une nouvelle facture du même mois
--- ════════════════════════════════════════════════════════════════════════════
+-- Facture complémentaire (décision 5 du 2026-10-20, docs/FACTURATION.md) : une séance réalisée ou
+-- rattachée à son contrat APRÈS la validation de la facture de son mois n'était facturée nulle part.
+-- Elle part désormais dans une seconde facture du même contrat et du même mois. Aucune table ni colonne.
 --
--- Décision 5 du 2026-10-20 (docs/FACTURATION.md, à faire confirmer par l'expert-comptable de Pierre) :
--- « séance réalisée après validation de la facture du mois : facture complémentaire ». Jusqu'ici la
--- limite était documentée : une seule facture vivante par contrat et par mois, donc une séance
--- tardive n'était facturée NULLE PART (suivi des séances : « à corriger », motif « mois déjà
--- facturé »). Signalé de nouveau par Pierre le 2026-11-14 : les séances créées sans contrat (corrigé
--- par #200), rattachées ensuite à leur contrat, tombent toutes dans ce cas pour les mois validés.
---
--- Aucune table, aucune colonne. Une facture complémentaire est une facture ordinaire (type
--- 'facture', même contrat, même mois, son propre numéro) qui ne porte que les séances que les
--- autres factures vivantes du mois ne portent pas. C'est déjà ce que calcule
--- generer_brouillon_facture : elle exclut toute séance portée par une autre facture vivante.
---
--- 1. Unicité : l'index « une facture vivante par contrat et par mois » devient « un BROUILLON par
---    contrat et par mois ». Plusieurs factures émises peuvent donc coexister pour un mois ; il n'y a
---    toujours qu'un brouillon en préparation, que generer_brouillon_facture retrouve et recalcule.
--- 2. generer_brouillon_facture : corps repris À L'IDENTIQUE de 20261022100000 (dernière définition :
---    frais en ligne distincte, garde SAP, règle des bilans), seule la recherche de l'existant change :
---      * le brouillon du mois est recalculé comme avant ;
---      * une facture émise n'empêche plus de préparer un brouillon pour les séances qu'elle ne porte
---        pas (mode séance uniquement) ;
---      * forfait : une facture émise suffit, jamais de complément (le forfait ne dépend pas des
---        séances) ;
---      * rien de nouveau à facturer : la fonction renvoie, comme avant, la facture émise du mois (la
---        plus récente), sinon NULL. Les appelants (tâche du 1er, « Refaire la facture du mois »,
---        tests) gardent donc le même contrat.
---    Changement voulu : une séance tardive sans tarif applicable fait maintenant échouer la génération
---    (elle était ignorée en silence). Le trigger de séance avale l'erreur, comme pour un brouillon.
--- 3. Trigger factures_complementaire_controle (BEFORE, brouillon -> émise, type 'facture') : garde les
---    deux garanties que portait l'ancien index, au moment où elles comptent, la validation :
---      * aucune séance de la facture n'est déjà portée par une autre facture vivante (pas de double
---        facturation, quel que soit le chemin d'écriture des lignes) ;
---      * si une facture du même contrat et du même mois est déjà émise, celle-ci doit porter au moins
---        une séance (un forfait ne se facture jamais deux fois).
---    Trigger et non test dans valider_facture : même raison que factures_validation_apres_le_mois
---    (20261011100000), cette fonction est redéfinie en entier à chaque étape. L'exception annule la
---    transaction : aucun numéro consommé.
--- 4. Rattrapage : pour chaque contrat et chaque mois écoulé qui a déjà une facture émise et des
---    séances réalisées facturables qu'aucune facture vivante ne porte, recalculer_brouillon_mois()
---    prépare le brouillon complémentaire (mêmes règles que le trigger de séance, erreurs avalées et
---    journalisées). Ce sont des BROUILLONS : sans numéro, ni PDF, ni envoi, ils attendent la
---    validation de Pierre dans « Factures à valider ». Rien d'autre n'est écrit.
---
--- Hors périmètre : bénéficiaires SAP (exclus de la génération), présentation du PDF (une facture
--- complémentaire est une facture ordinaire, avec son numéro et les dates de ses séances).
--- Privilèges : aucune table créée ; fonction de trigger retirée à PUBLIC, anon et authenticated.
--- Idempotente, transactionnelle, bloc de contrôle final.
+-- 1. L'unicité porte sur le brouillon (un par contrat et par mois), plus sur la facture émise.
+-- 2. generer_brouillon_facture (corps de 20261022100000, seule la recherche de l'existant change) :
+--    complète une facture émise en mode séance ; forfait jamais ; rien de plus à facturer -> renvoie
+--    la facture émise du mois, comme avant.
+-- 3. Garde à la validation (trigger, car valider_facture est redéfinie en entier à chaque étape) :
+--    pas de séance facturée deux fois, pas de complément sans séance.
+-- 4. Rattrapage des mois déjà validés : brouillons seulement, à valider par le praticien.
 
 BEGIN;
 
--- ═══ MARQUEUR DE CIBLE (est_staging) ═══════════════════════════════════════
--- Ce fichier refuse de s'exécuter sur la PRODUCTION tant que la valeur
--- ci-dessous vaut 'staging'. Pour la prod, APRÈS le go et la recette staging :
--- remplacer À LA MAIN 'staging' par 'production' sur la ligne v_cible.
---
--- Repère du staging : la structure de démo de scripts/seed-staging.sql
--- (jeton staging-token-demo-0001) ou les comptes de démo du seed, absents de
--- la prod. Une base sans aucun praticien (base locale, job CI) est acceptée
--- avec la cible 'staging'.
+-- ═══ MARQUEUR DE CIBLE (est_staging) : pour la prod, après la recette, remplacer À LA MAIN
+-- 'staging' par 'production' sur la ligne v_cible. Base sans praticien (CI) acceptée en 'staging'.
 DO $cible$
 DECLARE
   v_cible       text := 'staging';  -- ⚠️ 'staging' | 'production' — À CHANGER À LA MAIN POUR LA PROD
@@ -82,8 +35,7 @@ END
 $cible$;
 
 -- ─── 1. Unicité : un brouillon par contrat et par mois ─────────────────────
--- Créé AVANT de retirer l'ancien index : les données existantes le respectent forcément (au plus une
--- facture vivante, donc au plus un brouillon, par contrat et par mois).
+-- Créé avant de retirer l'ancien : les données le respectent déjà (au plus une facture vivante par mois).
 CREATE UNIQUE INDEX IF NOT EXISTS factures_un_brouillon_par_contrat_periode
   ON public.factures (contrat_id, periode) WHERE type = 'facture' AND statut = 'brouillon';
 DROP INDEX IF EXISTS public.factures_une_vivante_par_contrat_periode;
@@ -124,8 +76,7 @@ BEGIN
     RAISE EXCEPTION 'Contrat sans praticien';
   END IF;
 
-  -- Facture complémentaire (20261118100000) : le brouillon du mois (un au plus, index
-  -- factures_un_brouillon_par_contrat_periode) et la dernière facture émise du mois, s'il y en a.
+  -- Le brouillon du mois (un au plus) et la dernière facture émise du mois.
   SELECT id INTO v_id FROM public.factures
   WHERE contrat_id = c.id AND periode = v_debut AND type = 'facture' AND statut = 'brouillon';
   SELECT id INTO v_emise FROM public.factures
@@ -264,8 +215,7 @@ DECLARE
   v_detail text;
   v_numero text;
 BEGIN
-  -- Pas de double facturation : aucune séance de cette facture n'est portée par une autre facture
-  -- vivante (brouillon compris : deux validations simultanées se refusent l'une l'autre).
+  -- Brouillons compris : deux validations simultanées de la même séance se refusent l'une l'autre.
   SELECT string_agg(DISTINCT l.libelle || ' (' || coalesce('facture n° ' || f2.numero, 'autre brouillon') || ')', ', ')
     INTO v_detail
     FROM public.lignes_facture l
@@ -276,7 +226,7 @@ BEGIN
     RAISE EXCEPTION 'Séance déjà facturée : %', v_detail;
   END IF;
 
-  -- Facture complémentaire : seulement pour des séances (un forfait ne se facture jamais deux fois).
+  -- Un forfait ne se facture jamais deux fois.
   SELECT f2.numero INTO v_numero
     FROM public.factures f2
    WHERE f2.contrat_id = NEW.contrat_id AND f2.periode = NEW.periode AND f2.type = 'facture'
@@ -322,8 +272,7 @@ BEGIN
                         WHERE l.seance_id = s.id AND f.type = 'facture' AND f.statut <> 'annulee')
      ORDER BY 1, 2
   LOOP
-    -- Mêmes règles que le trigger de séance (statut et dates du contrat, SAP, mois futur exclu) ;
-    -- une erreur (séance sans tarif) est journalisée et laisse la séance « à corriger ».
+    -- Règles du trigger de séance ; une erreur (sans tarif) est journalisée, la séance reste « à corriger ».
     PERFORM public.recalculer_brouillon_mois(r.contrat_id, r.mois);
   END LOOP;
   SELECT count(*) INTO v_apres FROM public.factures WHERE type = 'facture' AND statut = 'brouillon';
@@ -350,7 +299,6 @@ BEGIN
      OR position('c.mode_facturation = ''forfait'' AND v_emise IS NOT NULL' IN v_src) = 0 THEN
     RAISE EXCEPTION 'Facture complémentaire : generer_brouillon_facture n''a pas la recherche brouillon / facture émise';
   END IF;
-  -- Ce que les définitions précédentes avaient ajouté doit être toujours là.
   IF position('Frais de déplacement : ' IN v_src) = 0 OR position('1, t.tarif_seance, t.tarif_seance' IN v_src) = 0 THEN
     RAISE EXCEPTION 'Facture complémentaire : generer_brouillon_facture a perdu la ligne distincte des frais (20261022100000)';
   END IF;
@@ -381,14 +329,12 @@ BEGIN
     RAISE EXCEPTION 'Facture complémentaire : la fonction de contrôle est exécutable par PUBLIC, anon ou authenticated';
   END IF;
 
-  -- Les gardes des étapes précédentes, sur les mêmes transitions, sont toujours actives.
   IF (SELECT count(*) FROM pg_trigger
        WHERE tgrelid = 'public.factures'::regclass AND NOT tgisinternal AND tgenabled = 'O'
          AND tgname IN ('factures_inalterables', 'factures_validation_apres_le_mois', 'factures_avoir_controle', 'factures_avoir_effets')) <> 4 THEN
     RAISE EXCEPTION 'Facture complémentaire : une garde de facturation antérieure est absente ou désactivée';
   END IF;
 
-  -- Aucune séance n'est portée par deux factures vivantes (le rattrapage n'en a pas créé).
   IF EXISTS (SELECT 1 FROM public.lignes_facture l JOIN public.factures f ON f.id = l.facture_id
               WHERE l.seance_id IS NOT NULL AND f.type = 'facture' AND f.statut <> 'annulee'
               GROUP BY l.seance_id HAVING count(DISTINCT f.id) > 1) THEN
