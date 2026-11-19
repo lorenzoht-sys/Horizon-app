@@ -12,6 +12,7 @@ import { getContreIndications } from '../../../lib/anamnese';
 import { URLS_MOBILE } from '../../../lib/routesMobile';
 import { contratsDesBeneficiairesActifs } from '../../../lib/archivage';
 import { C, formatDateCourt, formatDateLong, usePraticienSettings } from './communs';
+import { GuideDemarrage } from '../../../components/demarrage/GuideDemarrage';
 
 export function ouvrirMaps(adresse: string) {
   window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}`, '_blank');
@@ -138,6 +139,9 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
       </div>
 
       <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 22 }}>
+
+        {/* ── PRISE EN MAIN (compte récent, tant qu'il n'est pas fermé) ── */}
+        <GuideDemarrage mobile />
 
         {/* ── PROCHAINE SÉANCE ──────────────────────────────────── */}
         {prochaineSeance && (() => {

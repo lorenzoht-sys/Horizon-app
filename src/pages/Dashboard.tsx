@@ -19,6 +19,7 @@ import { AnimatedNumber } from '../components/ui/AnimatedNumber';
 import { chargerAssiduite7Jours, chargerRetoursParBeneficiaire, ressentisPreoccupants } from '../lib/suiviBeneficiaire';
 import CarteStructure from '../components/structures/CarteStructure';
 import ModalCreationStructure from '../components/structures/ModalCreationStructure';
+import { GuideDemarrage } from '../components/demarrage/GuideDemarrage';
 
 const MiniMap = lazy(() => import('../components/map/MiniMap'));
 // Import Excel chargé à l'ouverture de la fenêtre : la bibliothèque xlsx
@@ -157,6 +158,11 @@ export default function Dashboard() {
           >
             {participantsActifs.length} bénéficiaire{participantsActifs.length !== 1 ? 's' : ''} actuellement suivi{participantsActifs.length !== 1 ? 's' : ''}
           </p>
+        </div>
+
+        {/* Guide de prise en main : ne s'affiche que pour un compte récent qui ne l'a pas fermé. */}
+        <div className="mb-8 empty:hidden">
+          <GuideDemarrage />
         </div>
 
         {/* Onglets + accès à la page des archivés */}
