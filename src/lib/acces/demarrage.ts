@@ -39,9 +39,10 @@ export const lireProfilDemarrage = (praticienId: string) =>
     .eq('id', praticienId)
     .maybeSingle();
 
-// Lue et écrite à part : tant que la migration 20261119100000 n'est pas appliquée,
-// la colonne n'existe pas et la requête échoue. Le reste du guide doit fonctionner
-// quand même (l'état vit alors dans la copie locale, src/hooks/useDemarrage.ts).
+// Lue et écrite à part des comptages : si la colonne manque (migration
+// 20261119100000 pas encore appliquée), seule cette requête échoue, en 400, et le
+// guide se replie sur la copie locale (src/hooks/useDemarrage.ts). Ce repli est un
+// filet, pas un mode normal : la migration doit précéder le code.
 export const lireEtatGuide = (praticienId: string) =>
   clientSupabase().from('praticiens').select('demarrage').eq('id', praticienId).maybeSingle();
 

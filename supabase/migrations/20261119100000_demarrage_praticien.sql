@@ -14,9 +14,11 @@
 -- seulement la forme (un objet) et la taille.
 --
 -- Privilèges : aucune table créée ; la colonne suit les droits de praticiens.
--- Idempotente. Tant qu'elle n'est pas appliquée, l'écran garde l'état du guide
--- dans le navigateur (src/hooks/useDemarrage.ts) : l'ordre de mise en ligne
--- code / migration est donc libre.
+-- Idempotente. À appliquer AVANT le déploiement du code (staging, puis
+-- production) : sans la colonne, la lecture de l'état du guide répond 400. Le
+-- guide reste utilisable (repli sur le navigateur, src/hooks/useDemarrage.ts),
+-- mais la console affiche l'erreur et les tests de fumée mobile la refusent
+-- (constaté sur la CI de la PR #209, 19/11/2026).
 
 ALTER TABLE public.praticiens
   ADD COLUMN IF NOT EXISTS demarrage jsonb NOT NULL DEFAULT '{}'::jsonb;

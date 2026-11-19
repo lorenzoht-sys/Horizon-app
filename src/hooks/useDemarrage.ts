@@ -27,9 +27,9 @@ import { abonnerInstallation, applicationInstalleeIci } from '../lib/installatio
 // Guide de démarrage du praticien connecté (voir src/lib/demarrage.ts).
 //
 // L'état du guide (fermé, rouvert, application installée) vit dans
-// praticiens.demarrage, avec une copie locale : elle prend le relais tant que la
-// migration 20261119100000 n'est pas appliquée et évite tout clignotement au
-// chargement. Les étapes, elles, sont recalculées à chaque affichage et au
+// praticiens.demarrage, avec une copie locale : filet si la base ne répond pas
+// (hors ligne, ou migration 20261119100000 absente, ce qui ne doit pas arriver :
+// elle précède le code). Les étapes, elles, sont recalculées à chaque affichage et au
 // retour sur l'onglet : on ne les stocke jamais.
 
 interface Donnees {
