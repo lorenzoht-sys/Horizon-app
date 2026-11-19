@@ -10,6 +10,7 @@ import {
 } from '../../lib/demarrage';
 import { AnneauProgression } from './AnneauProgression';
 import { ICONE_ETAPE } from './iconeEtape';
+import { TexteGeste } from './TexteGeste';
 
 // Carte « Prise en main » : affichage seul, sans requête ni navigation (le
 // conteneur GuideDemarrage s'en charge). Une seule carte pour le bureau et le
@@ -28,13 +29,15 @@ interface Props {
   /** Champs manquants du profil de facturation (profilFacturationManquant). */
   manquesFacturation?: string[];
   mobile?: boolean;
+  /** Étapes faites au passage précédent, si une étape vient d'être réussie. */
+  faitesAvant?: number;
   onAction: (etape: Etape) => void;
   onMasquer: () => void;
 }
 
 const EASE = [0.25, 0.1, 0.25, 1] as const;
 
-export function CarteDemarrage({ etapes, progression, prenom, manquesFacturation = [], mobile = false, onAction, onMasquer }: Props) {
+export function CarteDemarrage({ etapes, progression, prenom, manquesFacturation = [], mobile = false, faitesAvant, onAction, onMasquer }: Props) {
   const reduit = useReducedMotion();
   const [listeOuverte, setListeOuverte] = useState(!mobile);
   const [selectionId, setSelectionId] = useState<Etape['id'] | null>(null);
@@ -85,6 +88,7 @@ export function CarteDemarrage({ etapes, progression, prenom, manquesFacturation
           <AnneauProgression
             faites={progression.faites}
             total={progression.total}
+            depuis={faitesAvant}
             taille={mobile ? 56 : 72}
             epaisseur={mobile ? 6 : 7}
           />
@@ -322,7 +326,7 @@ function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mobile, o
                   >
                     {i + 1}
                   </span>
-                  <span><Gras texte={geste} /></span>
+                  <span><TexteGeste texte={geste} /></span>
                 </li>
               ))}
             </ol>
@@ -357,19 +361,6 @@ function BoutonAction({ etape, onAction, pleineLargeur = false }: { etape: Etape
       {etape.bloqueePar ? 'Ajouter un bénéficiaire' : etape.action}
       <ArrowRight size={16} aria-hidden="true" className="transition-transform group-hover:translate-x-0.5" />
     </button>
-  );
-}
-
-/** Met en gras les libellés de boutons entre « » : c'est ce que l'œil doit retrouver à l'écran. */
-function Gras({ texte }: { texte: string }) {
-  const morceaux = texte.split(/(« [^»]+ »)/g);
-  return (
-    <>
-      {morceaux.map((m, i) => (m.startsWith('« ')
-        // Espaces insécables collées aux guillemets : jamais de « seul en fin de ligne.
-        ? <strong key={i} className="font-semibold" style={{ color: 'var(--color-ink)', background: 'rgba(255,255,255,0.75)', borderRadius: 4, padding: '0 3px' }}>{m.replace('« ', '«\u00A0').replace(' »', '\u00A0»')}</strong>
-        : <span key={i}>{m}</span>))}
-    </>
   );
 }
 

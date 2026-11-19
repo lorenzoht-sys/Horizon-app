@@ -7,13 +7,16 @@ interface Props {
   epaisseur?: number;
   /** Sur fond sombre (en-tête mobile) : piste claire, texte blanc. */
   surFondSombre?: boolean;
+  /** Étapes faites au passage précédent : l'anneau avance de là, sous les yeux du praticien. */
+  depuis?: number;
 }
 
-export function AnneauProgression({ faites, total, taille = 72, epaisseur = 7, surFondSombre = false }: Props) {
+export function AnneauProgression({ faites, total, taille = 72, epaisseur = 7, surFondSombre = false, depuis }: Props) {
   const reduit = useReducedMotion();
   const rayon = (taille - epaisseur) / 2;
   const circonference = 2 * Math.PI * rayon;
   const ratio = total === 0 ? 1 : faites / total;
+  const ratioDepart = depuis === undefined || total === 0 ? 0 : depuis / total;
 
   return (
     <div
@@ -35,9 +38,9 @@ export function AnneauProgression({ faites, total, taille = 72, epaisseur = 7, s
           cx={taille / 2} cy={taille / 2} r={rayon} fill="none"
           stroke="var(--color-teal)" strokeWidth={epaisseur} strokeLinecap="round"
           strokeDasharray={circonference}
-          initial={{ strokeDashoffset: reduit ? circonference * (1 - ratio) : circonference }}
+          initial={{ strokeDashoffset: reduit ? circonference * (1 - ratio) : circonference * (1 - ratioDepart) }}
           animate={{ strokeDashoffset: circonference * (1 - ratio) }}
-          transition={{ duration: reduit ? 0 : 0.9, ease: [0.25, 0.1, 0.25, 1] }}
+          transition={{ duration: reduit ? 0 : 0.9, delay: depuis === undefined || reduit ? 0 : 0.35, ease: [0.25, 0.1, 0.25, 1] }}
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center" aria-hidden="true">

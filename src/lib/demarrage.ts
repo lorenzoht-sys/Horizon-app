@@ -106,6 +106,42 @@ const ETAPES: Omit<Etape, 'faite' | 'bloqueePar'>[] = [
 
 export const NOMBRE_ETAPES = ETAPES.length;
 
+/** Titre et rang d'une étape, sans rien savoir du compte (encart compagnon). */
+export function reperesEtape(id: IdEtape): { titre: string; numero: number; total: number } {
+  const i = ETAPES.findIndex(e => e.id === id);
+  return { titre: ETAPES[i].titre, numero: i + 1, total: ETAPES.length };
+}
+
+/**
+ * Le guide passe l'étape en cours dans l'état de navigation (navigate(url, { state })),
+ * pour que l'encart compagnon accompagne le praticien sur la page d'arrivée.
+ * L'état de navigation peut venir d'ailleurs : on ne garde qu'un identifiant connu.
+ */
+export function etapeDepuisNavigation(etat: unknown): IdEtape | null {
+  if (!etat || typeof etat !== 'object') return null;
+  const id = (etat as { demarrage?: unknown }).demarrage;
+  return typeof id === 'string' && ETAPES.some(e => e.id === id) ? (id as IdEtape) : null;
+}
+
+/**
+ * Étapes faites depuis le dernier passage, pour féliciter une fois et une seule.
+ * Premier passage (rien de mémorisé) : on ne félicite pas ce qui était déjà fait
+ * avant que le guide existe.
+ */
+export function etapesNouvellementFaites(vuesAvant: IdEtape[] | null, faitesMaintenant: IdEtape[]): IdEtape[] {
+  if (!vuesAvant) return [];
+  return faitesMaintenant.filter(id => !vuesAvant.includes(id));
+}
+
+export function messageBravo(nouvelles: IdEtape[], prochaine: Etape | null): { titre: string; description?: string } | null {
+  if (nouvelles.length === 0) return null;
+  if (!prochaine) return { titre: 'Bravo, tout est prêt !', description: 'Horizon est configuré pour votre activité.' };
+  const titre = nouvelles.length === 1
+    ? `Étape réussie : ${reperesEtape(nouvelles[0]).titre.charAt(0).toLowerCase()}${reperesEtape(nouvelles[0]).titre.slice(1)}`
+    : `${nouvelles.length} étapes réussies`;
+  return { titre, description: `Prochaine étape : ${prochaine.titre.charAt(0).toLowerCase()}${prochaine.titre.slice(1)}.` };
+}
+
 const BLOCAGE_SANS_BENEFICIAIRE = 'Ajoutez d’abord un bénéficiaire.';
 
 export function calculerEtapes(e: EntreesDemarrage): Etape[] {

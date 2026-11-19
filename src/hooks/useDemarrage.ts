@@ -16,11 +16,13 @@ import { lireProfil, profilFacturationManquant } from '../lib/facturesAValider';
 import {
   calculerEtapes,
   doitAfficherGuide,
+  etapesNouvellementFaites,
   fusionnerEtats,
   lireEtatDemarrage,
   progression as calculerProgression,
   type CompteursDemarrage,
   type EtatDemarrage,
+  type IdEtape,
 } from '../lib/demarrage';
 import { abonnerInstallation, applicationInstalleeIci } from '../lib/installationPwa';
 
@@ -43,6 +45,29 @@ interface Donnees {
 }
 
 const cleLocale = (id: string) => `horizon:demarrage:${id}`;
+// Étapes déjà constatées faites, pour ne féliciter qu'une fois. Par appareil :
+// au pire, une même étape est félicitée une fois sur l'ordinateur et une fois
+// sur le téléphone, ce qui reste juste.
+const cleVues = (id: string) => `horizon:demarrage:vues:${id}`;
+
+function lireVues(id: string): IdEtape[] | null {
+  try {
+    const brut: unknown = JSON.parse(localStorage.getItem(cleVues(id)) ?? 'null');
+    return Array.isArray(brut) ? brut.filter((v): v is IdEtape => typeof v === 'string') : null;
+  } catch {
+    return null;
+  }
+}
+
+function ecrireVues(id: string, vues: IdEtape[]) {
+  try { localStorage.setItem(cleVues(id), JSON.stringify(vues)); } catch { /* sans conséquence */ }
+}
+
+export interface Bravo {
+  nouvelles: IdEtape[];
+  /** Nombre d'étapes faites avant : l'anneau part de là pour avancer sous les yeux. */
+  faitesAvant: number;
+}
 
 function lireLocal(id: string): EtatDemarrage {
   try {
@@ -109,6 +134,7 @@ export function useDemarrage() {
   const [chargement, setChargement] = useState(true);
   const [etatLocal, setEtatLocal] = useState<EtatDemarrage>({});
   const [installeeIci, setInstalleeIci] = useState(applicationInstalleeIci);
+  const [bravo, setBravo] = useState<Bravo | null>(null);
   const enCours = useRef(false);
 
   const rafraichir = useCallback(async () => {
@@ -120,6 +146,15 @@ export function useDemarrage() {
         const local = lireLocal(d.praticienId);
         setEtatLocal(local);
         setDonnees(d);
+        const faites = calculerEtapes({
+          compteurs: d.compteurs,
+          profilFacturationComplet: d.profilFacturationComplet,
+          applicationInstallee: applicationInstalleeIci() || Boolean(fusionnerEtats(d.etatBase, local).applicationInstallee),
+        }).filter(e => e.faite).map(e => e.id);
+        const vues = lireVues(d.praticienId);
+        ecrireVues(d.praticienId, faites);
+        const nouvelles = etapesNouvellementFaites(vues, faites);
+        if (nouvelles.length > 0) setBravo({ nouvelles, faitesAvant: faites.length - nouvelles.length });
         // Lancée depuis l'écran d'accueil : on le retient pour les autres appareils
         // (le poste de bureau ne peut pas le constater lui-même).
         const etat = fusionnerEtats(d.etatBase, local);
@@ -192,6 +227,8 @@ export function useDemarrage() {
     etapes,
     progression,
     dernierBeneficiaireId: donnees?.dernierBeneficiaireId ?? null,
+    bravo,
+    rafraichir,
     manquesFacturation: donnees?.manquesFacturation ?? [],
     masquer: () => enregistrer({ masque: true, reaffiche: false }),
     reafficher: () => enregistrer({ masque: false, reaffiche: true }),

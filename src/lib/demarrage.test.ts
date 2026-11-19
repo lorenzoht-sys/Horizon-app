@@ -4,13 +4,17 @@ import {
   NOMBRE_ETAPES,
   calculerEtapes,
   destinationEtape,
+  etapeDepuisNavigation,
+  etapesNouvellementFaites,
   doitAfficherGuide,
   fusionnerEtats,
   guideEtape,
   lireEtatDemarrage,
+  messageBravo,
   messageProgression,
   phraseManquesFacturation,
   progression,
+  reperesEtape,
   type EntreesDemarrage,
 } from './demarrage';
 
@@ -214,5 +218,41 @@ describe('messageProgression', () => {
     expect(messageProgression(p(6), null)).toBe('Plus qu’une étape.');
     expect(messageProgression(p(7), 'Pierre')).toBe('Bravo Pierre, tout est prêt.');
     expect(messageProgression(p(7), null)).toBe('Bravo, tout est prêt.');
+  });
+});
+
+describe('encart compagnon', () => {
+  it('ne reprend qu’une étape connue dans l’état de navigation', () => {
+    expect(etapeDepuisNavigation({ demarrage: 'bilan' })).toBe('bilan');
+    expect(etapeDepuisNavigation({ demarrage: 'inconnue' })).toBeNull();
+    expect(etapeDepuisNavigation({ programmeGenereIA: {} })).toBeNull();
+    expect(etapeDepuisNavigation(null)).toBeNull();
+    expect(etapeDepuisNavigation('bilan')).toBeNull();
+  });
+
+  it('donne le titre et le rang de l’étape', () => {
+    expect(reperesEtape('bilan')).toEqual({ titre: 'Réaliser un premier bilan', numero: 3, total: 7 });
+  });
+});
+
+describe('bravo', () => {
+  it('premier passage : on ne félicite pas ce qui était fait avant le guide', () => {
+    expect(etapesNouvellementFaites(null, ['compte', 'beneficiaire'])).toEqual([]);
+  });
+
+  it('félicite seulement ce qui vient d’être fait', () => {
+    expect(etapesNouvellementFaites(['compte'], ['compte', 'bilan'])).toEqual(['bilan']);
+    expect(etapesNouvellementFaites(['compte', 'bilan'], ['compte', 'bilan'])).toEqual([]);
+  });
+
+  it('message sobre, avec la suite', () => {
+    const etapes = calculerEtapes({ ...VIDE, compteurs: { ...VIDE.compteurs, beneficiaires: 1, bilans: 1 } });
+    expect(messageBravo(['bilan'], progression(etapes).prochaine)).toEqual({
+      titre: 'Étape réussie : réaliser un premier bilan',
+      description: 'Prochaine étape : planifier une séance.',
+    });
+    expect(messageBravo(['bilan', 'seance'], progression(etapes).prochaine)?.titre).toBe('2 étapes réussies');
+    expect(messageBravo([], progression(etapes).prochaine)).toBeNull();
+    expect(messageBravo(['application'], null)?.titre).toBe('Bravo, tout est prêt !');
   });
 });

@@ -8,6 +8,7 @@ import { setCurrentUserId, loadAllBrouillonsFromSupabase } from './hooks/useBrou
 import { useDevice } from './hooks/useDevice';
 import AppMobile from './pages/mobile/AppMobile';
 import BarreNavigationMobile from './components/layout/BarreNavigationMobile';
+import { CompagnonEtape } from './components/demarrage/CompagnonEtape';
 import { estRouteInterfaceUnique } from './lib/routesMobile';
 import { effacerTousEtatsSession } from './lib/etatSession';
 import { useDeconnexionInactivite } from './hooks/useDeconnexionInactivite';
@@ -142,6 +143,8 @@ function DesktopContent({ onLogout }: { onLogout: () => void }) {
       <div className="md:hidden">
         <BarreNavigationMobile />
       </div>
+      {/* Guide de prise en main : accompagne le praticien sur la page d'une étape (xl seulement). */}
+      <CompagnonEtape />
     </div>
   );
 }
