@@ -19,7 +19,6 @@ import { useContrats } from '../hooks/useContrats';
 import { useStructures } from '../hooks/useStructures';
 import { useAgenda } from '../hooks/useAgenda';
 import SectionBilansAuto from '../components/participant/SectionBilansAuto';
-import { useJournalSeance } from '../hooks/useJournalSeance';
 import { useCompteRenduSeance } from '../hooks/useCompteRenduSeance';
 import { getBrouillon } from '../hooks/useBrouillonBilan';
 import PageWrapper from '../components/layout/PageWrapper';
@@ -129,7 +128,6 @@ export default function ParticipantProfile() {
   const { structures } = useStructures();
   const { seances } = useAgenda();
   const { coursCollectifs, participations: participationsCours, loading: chargementCours } = useCoursCollectifs();
-  useJournalSeance(); // conservé pour ne pas casser le hook
   const navigate = useNavigate();
   const settings = chargerSettingsPraticien();
 
