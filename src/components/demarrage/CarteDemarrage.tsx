@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { ArrowRight, Check, ChevronDown, Clock, Lock, PartyPopper, X } from 'lucide-react';
-import { messageProgression, type Etape, type Progression } from '../../lib/demarrage';
+import { AlertCircle, ArrowRight, Check, ChevronDown, Clock, Lightbulb, Lock, PartyPopper, X } from 'lucide-react';
+import {
+  guideEtape,
+  messageProgression,
+  phraseManquesFacturation,
+  type Etape,
+  type Progression,
+} from '../../lib/demarrage';
 import { AnneauProgression } from './AnneauProgression';
 import { ICONE_ETAPE } from './iconeEtape';
 
@@ -9,11 +15,18 @@ import { ICONE_ETAPE } from './iconeEtape';
 // conteneur GuideDemarrage s'en charge). Une seule carte pour le bureau et le
 // téléphone : sur téléphone la liste des étapes est repliée par défaut, pour
 // laisser la journée du praticien visible sans défiler.
+//
+// Pédagogie (19/11/2026, « que tous les professionnels comprennent ») : cliquer
+// une étape de la liste ne fait pas changer de page, elle l'ouvre dans le
+// panneau du haut, avec pourquoi c'est utile et les gestes à faire. Le praticien
+// lit d'abord, puis agit avec le bouton. Jamais de saut dans l'inconnu.
 
 interface Props {
   etapes: Etape[];
   progression: Progression;
   prenom: string | null;
+  /** Champs manquants du profil de facturation (profilFacturationManquant). */
+  manquesFacturation?: string[];
   mobile?: boolean;
   onAction: (etape: Etape) => void;
   onMasquer: () => void;
@@ -21,10 +34,19 @@ interface Props {
 
 const EASE = [0.25, 0.1, 0.25, 1] as const;
 
-export function CarteDemarrage({ etapes, progression, prenom, mobile = false, onAction, onMasquer }: Props) {
+export function CarteDemarrage({ etapes, progression, prenom, manquesFacturation = [], mobile = false, onAction, onMasquer }: Props) {
   const reduit = useReducedMotion();
   const [listeOuverte, setListeOuverte] = useState(!mobile);
+  const [selectionId, setSelectionId] = useState<Etape['id'] | null>(null);
   const { prochaine, termine } = progression;
+  // Étape choisie dans la liste, tant qu'elle reste à faire ; sinon la prochaine.
+  const affichee = etapes.find(e => e.id === selectionId && !e.faite) ?? prochaine;
+
+  function choisir(etape: Etape) {
+    setSelectionId(etape.id);
+    // Sur téléphone, le panneau est au-dessus de la liste : on y ramène le regard.
+    if (mobile) document.getElementById('etape-detaillee')?.scrollIntoView({ behavior: reduit ? 'auto' : 'smooth', block: 'center' });
+  }
 
   return (
     <motion.section
@@ -112,9 +134,19 @@ export function CarteDemarrage({ etapes, progression, prenom, mobile = false, on
         </div>
       )}
 
-      {/* ── Prochaine étape ─────────────────────────────────────── */}
-      {prochaine && (
-        <ProchaineEtape etape={prochaine} mobile={mobile} onAction={onAction} />
+      {/* ── Étape détaillée : prochaine, ou choisie dans la liste ─── */}
+      {affichee && (
+        <EtapeDetaillee
+          key={affichee.id}
+          etape={affichee}
+          numero={etapes.indexOf(affichee) + 1}
+          total={etapes.length}
+          estProchaine={affichee.id === prochaine?.id}
+          manques={affichee.id === 'facturation' ? phraseManquesFacturation(manquesFacturation) : null}
+          mobile={mobile}
+          onAction={onAction}
+          onRetour={() => setSelectionId(null)}
+        />
       )}
 
       {/* ── Toutes les étapes ───────────────────────────────────── */}
@@ -154,9 +186,9 @@ export function CarteDemarrage({ etapes, progression, prenom, mobile = false, on
                     key={etape.id}
                     etape={etape}
                     numero={i + 1}
-                    estProchaine={prochaine?.id === etape.id}
+                    estAffichee={affichee?.id === etape.id}
                     mobile={mobile}
-                    onAction={onAction}
+                    onChoisir={choisir}
                   />
                 ))}
               </motion.ol>
@@ -181,67 +213,168 @@ function BoutonFermer({ onClick, pleineLargeur = false }: { onClick: () => void;
   );
 }
 
-function ProchaineEtape({ etape, mobile, onAction }: { etape: Etape; mobile: boolean; onAction: (e: Etape) => void }) {
+function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mobile, onAction, onRetour }: {
+  etape: Etape;
+  numero: number;
+  total: number;
+  estProchaine: boolean;
+  manques: string | null;
+  mobile: boolean;
+  onAction: (e: Etape) => void;
+  onRetour: () => void;
+}) {
+  const reduit = useReducedMotion();
   const Icone = ICONE_ETAPE[etape.id];
+  const guide = guideEtape(etape.id, mobile);
+  // Ordinateur : les gestes sont visibles d'emblée. Téléphone : repliés, pour ne
+  // pas repousser la journée trop bas ; un bouton clair les déplie.
+  const [gestesOuverts, setGestesOuverts] = useState(!mobile);
+
   return (
-    <div
-      className="relative flex"
+    <motion.div
+      id="etape-detaillee"
+      initial={reduit ? false : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: EASE }}
+      className="relative"
       style={{
         marginTop: mobile ? 14 : 20,
         borderRadius: 16,
         background: 'linear-gradient(135deg, #F1FAF7 0%, #E6F5F1 100%)',
         border: '1px solid rgba(43,184,154,0.22)',
-        padding: mobile ? 14 : '16px 18px',
-        gap: mobile ? 12 : 16,
-        flexDirection: mobile ? 'column' : 'row',
-        alignItems: mobile ? 'stretch' : 'center',
+        padding: mobile ? 14 : '18px 20px',
       }}
     >
-      <div className="flex min-w-0 flex-1 items-start" style={{ gap: 14 }}>
-        <span
-          aria-hidden="true"
-          className="flex flex-shrink-0 items-center justify-center bg-white"
-          style={{ width: 44, height: 44, borderRadius: 12, boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(43,184,154,0.12)' }}
-        >
-          <Icone size={20} style={{ color: 'var(--color-teal-dark)' }} />
-        </span>
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
-            <span className="font-bold uppercase" style={{ fontSize: 10.5, letterSpacing: '0.08em', color: 'var(--color-teal-dark)' }}>
-              Prochaine étape
-            </span>
-            {etape.duree && (
-              <span
-                className="inline-flex items-center gap-1 rounded-full bg-white"
-                style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-ink-2)', padding: '2px 8px' }}
-              >
-                <Clock size={11} aria-hidden="true" /> {etape.duree}
+      <div className="flex" style={{ gap: mobile ? 12 : 16, flexDirection: mobile ? 'column' : 'row', alignItems: mobile ? 'stretch' : 'flex-start' }}>
+        <div className="flex min-w-0 flex-1 items-start" style={{ gap: 14 }}>
+          <span
+            aria-hidden="true"
+            className="flex flex-shrink-0 items-center justify-center bg-white"
+            style={{ width: 44, height: 44, borderRadius: 12, boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(43,184,154,0.12)' }}
+          >
+            <Icone size={20} style={{ color: 'var(--color-teal-dark)' }} />
+          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
+              <span className="font-bold uppercase" style={{ fontSize: 10.5, letterSpacing: '0.08em', color: 'var(--color-teal-dark)' }}>
+                {estProchaine ? 'Prochaine étape' : `Étape ${numero} sur ${total}`}
               </span>
-            )}
-          </div>
-          <div className="font-heading font-bold" style={{ fontSize: 15.5, color: 'var(--color-ink)', marginTop: 3 }}>
-            {etape.titre}
-          </div>
-          <div style={{ fontSize: 13, color: 'var(--color-ink-2)', marginTop: 2, lineHeight: 1.45 }}>
-            {etape.bloqueePar ?? etape.apport}
+              {etape.duree && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-white"
+                  style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-ink-2)', padding: '2px 8px' }}
+                >
+                  <Clock size={11} aria-hidden="true" /> {etape.duree}
+                </span>
+              )}
+            </div>
+            <h3 className="m-0 font-heading font-bold" style={{ fontSize: 15.5, color: 'var(--color-ink)', marginTop: 3 }}>
+              {etape.titre}
+            </h3>
+            <p className="m-0" style={{ fontSize: 13, color: 'var(--color-ink-2)', marginTop: 3, lineHeight: 1.5 }}>
+              {guide.pourquoi}
+            </p>
           </div>
         </div>
+        {!mobile && <BoutonAction etape={etape} onAction={onAction} />}
       </div>
-      <button
-        type="button"
-        onClick={() => onAction(etape)}
-        className="group inline-flex flex-shrink-0 items-center justify-center gap-2 rounded-[10px] bg-teal text-white transition-all hover:bg-teal-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 focus-visible:ring-offset-2"
-        style={{ padding: '11px 18px', fontSize: 14, fontWeight: 700, boxShadow: 'var(--shadow-teal)' }}
-      >
-        {etape.bloqueePar ? 'Ajouter un bénéficiaire' : etape.action}
-        <ArrowRight size={16} aria-hidden="true" className="transition-transform group-hover:translate-x-0.5" />
-      </button>
-    </div>
+
+      {/* Ce qui bloque, dit simplement, avant les gestes. */}
+      {(etape.bloqueePar || manques) && (
+        <div
+          role="note"
+          className="flex items-start bg-white"
+          style={{ gap: 8, marginTop: 12, borderRadius: 10, padding: '9px 12px', fontSize: 12.5, color: 'var(--color-ink)', border: '1px solid #F3E3BF' }}
+        >
+          <AlertCircle size={15} aria-hidden="true" className="mt-px flex-shrink-0" style={{ color: '#B7791F' }} />
+          <span>{etape.bloqueePar ?? manques}</span>
+        </div>
+      )}
+
+      {/* Comment faire : les gestes, avec les libellés exacts des boutons. */}
+      {!etape.bloqueePar && (
+        <div style={{ marginTop: 12 }}>
+          {mobile && (
+            <button
+              type="button"
+              onClick={() => setGestesOuverts(o => !o)}
+              aria-expanded={gestesOuverts}
+              className="flex w-full items-center justify-between rounded-lg text-teal-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+              style={{ padding: '2px 0', fontSize: 13, fontWeight: 700 }}
+            >
+              <span className="inline-flex items-center gap-1.5"><Lightbulb size={14} aria-hidden="true" /> Comment faire ?</span>
+              <ChevronDown size={16} aria-hidden="true" style={{ transition: 'transform .2s', transform: gestesOuverts ? 'rotate(180deg)' : 'none' }} />
+            </button>
+          )}
+          {!mobile && (
+            <div className="inline-flex items-center gap-1.5 text-teal-dark" style={{ fontSize: 12, fontWeight: 700 }}>
+              <Lightbulb size={13} aria-hidden="true" /> Comment faire
+            </div>
+          )}
+          {gestesOuverts && (
+            <ol className="m-0 list-none p-0" style={{ marginTop: 8, display: 'grid', gap: 7 }}>
+              {guide.gestes.map((geste, i) => (
+                <li key={i} className="flex items-start" style={{ gap: 10, fontSize: 13, color: 'var(--color-ink)', lineHeight: 1.5 }}>
+                  <span
+                    aria-hidden="true"
+                    className="flex flex-shrink-0 items-center justify-center rounded-full bg-white tabular-nums"
+                    style={{ width: 20, height: 20, fontSize: 11, fontWeight: 800, color: 'var(--color-teal-dark)', border: '1px solid rgba(43,184,154,0.35)', marginTop: 1 }}
+                  >
+                    {i + 1}
+                  </span>
+                  <span><Gras texte={geste} /></span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
+
+      {mobile && <div style={{ marginTop: 14 }}><BoutonAction etape={etape} onAction={onAction} pleineLargeur /></div>}
+
+      {!estProchaine && (
+        <button
+          type="button"
+          onClick={onRetour}
+          className="mt-3 rounded text-ink-2 underline-offset-2 hover:text-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+          style={{ fontSize: 12.5, fontWeight: 600 }}
+        >
+          Revenir à la prochaine étape
+        </button>
+      )}
+    </motion.div>
   );
 }
 
-function LigneEtape({ etape, numero, estProchaine, mobile, onAction }: {
-  etape: Etape; numero: number; estProchaine: boolean; mobile: boolean; onAction: (e: Etape) => void;
+function BoutonAction({ etape, onAction, pleineLargeur = false }: { etape: Etape; onAction: (e: Etape) => void; pleineLargeur?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onAction(etape)}
+      className={`group inline-flex flex-shrink-0 items-center justify-center gap-2 rounded-[10px] bg-teal text-white transition-all hover:bg-teal-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 focus-visible:ring-offset-2 ${pleineLargeur ? 'w-full' : ''}`}
+      style={{ padding: '11px 18px', fontSize: 14, fontWeight: 700, boxShadow: 'var(--shadow-teal)' }}
+    >
+      {etape.bloqueePar ? 'Ajouter un bénéficiaire' : etape.action}
+      <ArrowRight size={16} aria-hidden="true" className="transition-transform group-hover:translate-x-0.5" />
+    </button>
+  );
+}
+
+/** Met en gras les libellés de boutons entre « » : c'est ce que l'œil doit retrouver à l'écran. */
+function Gras({ texte }: { texte: string }) {
+  const morceaux = texte.split(/(« [^»]+ »)/g);
+  return (
+    <>
+      {morceaux.map((m, i) => (m.startsWith('« ')
+        // Espaces insécables collées aux guillemets : jamais de « seul en fin de ligne.
+        ? <strong key={i} className="font-semibold" style={{ color: 'var(--color-ink)', background: 'rgba(255,255,255,0.75)', borderRadius: 4, padding: '0 3px' }}>{m.replace('« ', '«\u00A0').replace(' »', '\u00A0»')}</strong>
+        : <span key={i}>{m}</span>))}
+    </>
+  );
+}
+
+function LigneEtape({ etape, numero, estAffichee, mobile, onChoisir }: {
+  etape: Etape; numero: number; estAffichee: boolean; mobile: boolean; onChoisir: (e: Etape) => void;
 }) {
   const Icone = ICONE_ETAPE[etape.id];
   const bloquee = Boolean(etape.bloqueePar);
@@ -254,7 +387,7 @@ function LigneEtape({ etape, numero, estProchaine, mobile, onAction }: {
         className={`min-w-0 flex-1 ${mobile ? 'leading-snug' : 'truncate'}`}
         style={{
           fontSize: 13.5,
-          fontWeight: estProchaine ? 700 : 500,
+          fontWeight: estAffichee ? 700 : 500,
           color: etape.faite ? 'var(--color-ink-3)' : 'var(--color-ink)',
         }}
       >
@@ -273,8 +406,8 @@ function LigneEtape({ etape, numero, estProchaine, mobile, onAction }: {
     gap: 10,
     padding: '9px 10px',
     borderRadius: 10,
-    // Pas de fond inline hors « prochaine » : il écraserait le survol (hover:bg-surface-2).
-    ...(estProchaine ? { background: 'rgba(43,184,154,0.06)' } : {}),
+    // Pas de fond inline hors étape affichée : il écraserait le survol (hover:bg-surface-2).
+    ...(estAffichee ? { background: 'rgba(43,184,154,0.08)' } : {}),
   };
 
   return (
@@ -284,8 +417,9 @@ function LigneEtape({ etape, numero, estProchaine, mobile, onAction }: {
       ) : (
         <button
           type="button"
-          onClick={() => onAction(etape)}
-          title={etape.bloqueePar ?? etape.apport}
+          onClick={() => onChoisir(etape)}
+          aria-current={estAffichee ? 'step' : undefined}
+          aria-controls="etape-detaillee"
           className="flex w-full items-center text-left transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
           style={style}
         >

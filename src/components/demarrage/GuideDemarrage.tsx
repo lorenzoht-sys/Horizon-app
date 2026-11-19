@@ -35,6 +35,7 @@ export function GuideDemarrage({ mobile = false }: { mobile?: boolean }) {
         etapes={guide.etapes}
         progression={guide.progression}
         prenom={chargerSettingsPraticien().prenom || null}
+        manquesFacturation={guide.manquesFacturation}
         mobile={mobile}
         onAction={agir}
         onMasquer={masquer}

@@ -36,6 +36,7 @@ interface Donnees {
   praticienId: string;
   compteurs: CompteursDemarrage;
   profilFacturationComplet: boolean;
+  manquesFacturation: string[];
   compteCreeLe: string | null;
   dernierBeneficiaireId: string | null;
   etatBase: EtatDemarrage | null;
@@ -85,6 +86,7 @@ async function charger(): Promise<Donnees | null> {
   }
 
   const ligneProfil = (profil.data as Record<string, unknown> | null) ?? null;
+  const manquesFacturation = profilFacturationManquant(lireProfil(ligneProfil));
   return {
     praticienId: id,
     compteurs: {
@@ -93,7 +95,8 @@ async function charger(): Promise<Donnees | null> {
       seances: (seances.count ?? 0) + (cours.count ?? 0),
       programmes: programmes.count ?? 0,
     },
-    profilFacturationComplet: profilFacturationManquant(lireProfil(ligneProfil)).length === 0,
+    profilFacturationComplet: manquesFacturation.length === 0,
+    manquesFacturation,
     compteCreeLe: typeof ligneProfil?.created_at === 'string' ? ligneProfil.created_at : null,
     dernierBeneficiaireId: (dernier.data as { id?: string } | null)?.id ?? null,
     // Colonne absente (migration pas encore appliquée) : on s'en remet à la copie locale.
@@ -176,8 +179,9 @@ export function useDemarrage() {
 
   const progression = useMemo(() => etapes && calculerProgression(etapes), [etapes]);
 
-  const visible = Boolean(etapes) && doitAfficherGuide({
+  const visible = Boolean(progression) && doitAfficherGuide({
     etat,
+    termine: Boolean(progression?.termine),
     compteCreeLe: donnees?.compteCreeLe ?? null,
     maintenant: new Date(),
   });
@@ -188,6 +192,7 @@ export function useDemarrage() {
     etapes,
     progression,
     dernierBeneficiaireId: donnees?.dernierBeneficiaireId ?? null,
+    manquesFacturation: donnees?.manquesFacturation ?? [],
     masquer: () => enregistrer({ masque: true, reaffiche: false }),
     reafficher: () => enregistrer({ masque: false, reaffiche: true }),
     declarerApplicationInstallee: () => enregistrer({ applicationInstallee: true }),

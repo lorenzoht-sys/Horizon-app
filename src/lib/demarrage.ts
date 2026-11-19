@@ -50,8 +50,6 @@ export interface EntreesDemarrage {
 export interface Etape {
   id: IdEtape;
   titre: string;
-  /** Ce que l'étape apporte, en une phrase : c'est elle qui donne envie de cliquer. */
-  apport: string;
   /** Durée indicative, affichée tant que l'étape reste à faire. */
   duree: string | null;
   /** Libellé du bouton d'action. */
@@ -65,49 +63,42 @@ const ETAPES: Omit<Etape, 'faite' | 'bloqueePar'>[] = [
   {
     id: 'compte',
     titre: 'Créer votre compte',
-    apport: 'Votre identité et votre SIRET figurent sur les documents que vous générez.',
     duree: null,
     action: 'Voir mon profil',
   },
   {
     id: 'beneficiaire',
     titre: 'Ajouter votre premier bénéficiaire',
-    apport: 'Sa fiche réunit coordonnées, santé, bilans, séances et documents.',
     duree: '2 min',
     action: 'Ajouter un bénéficiaire',
   },
   {
     id: 'bilan',
     titre: 'Réaliser un premier bilan',
-    apport: 'Des tests normés, comparés aux valeurs de référence, pour suivre l’évolution.',
     duree: '5 min',
     action: 'Commencer un bilan',
   },
   {
     id: 'seance',
     titre: 'Planifier une séance',
-    apport: 'Votre semaine et vos tournées au même endroit, synchronisables avec votre agenda.',
     duree: '1 min',
     action: 'Ouvrir l’agenda',
   },
   {
     id: 'programme',
     titre: 'Créer un programme d’exercices',
-    apport: 'Votre bénéficiaire le suit chez lui depuis son espace, et vous voyez ce qu’il a fait.',
     duree: '3 min',
     action: 'Créer un programme',
   },
   {
     id: 'facturation',
     titre: 'Compléter votre profil de facturation',
-    apport: 'Les mentions obligatoires de vos factures, saisies une seule fois.',
     duree: '3 min',
     action: 'Compléter',
   },
   {
     id: 'application',
     titre: 'Installer Horizon sur votre téléphone',
-    apport: 'Un accès en un geste depuis l’écran d’accueil, même en tournée.',
     duree: '1 min',
     action: 'Voir comment',
   },
@@ -166,25 +157,134 @@ export function progression(etapes: Etape[]): Progression {
 }
 
 /**
- * Au-delà de cet âge, un compte n'est plus « nouveau » : le guide ne s'impose
- * pas aux praticiens déjà installés le jour de sa mise en ligne. Ils peuvent
- * toujours le rouvrir depuis Paramètres.
+ * Le guide s'adresse à TOUS les praticiens, y compris ceux inscrits avant sa
+ * mise en ligne (décision du 19/11/2026 : « que tous les professionnels
+ * comprennent »). Seule exception : un compte ancien qui a déjà tout fait
+ * n'a rien à apprendre, on ne lui montre pas une carte de félicitations
+ * surgie de nulle part.
  */
 export const AGE_MAX_COMPTE_JOURS = 45;
 
 export function doitAfficherGuide(params: {
   etat: EtatDemarrage;
+  termine: boolean;
   compteCreeLe: string | null;
   maintenant: Date;
 }): boolean {
-  const { etat, compteCreeLe, maintenant } = params;
+  const { etat, termine, compteCreeLe, maintenant } = params;
   if (etat.masque) return false;
-  if (etat.reaffiche) return true;
+  if (etat.reaffiche || !termine) return true;
   if (!compteCreeLe) return true;
   const cree = new Date(compteCreeLe);
   if (Number.isNaN(cree.getTime())) return true;
   const ageJours = (maintenant.getTime() - cree.getTime()) / 86_400_000;
   return ageJours <= AGE_MAX_COMPTE_JOURS;
+}
+
+// ── Contenu pédagogique ──────────────────────────────────────────────────
+// Écrit pour un praticien qui n'a jamais utilisé de logiciel de ce type :
+// des phrases courtes, les libellés EXACTS des boutons entre « », et ce qui
+// est obligatoire dit clairement (relevé dans le code des écrans le 19/11/2026 ;
+// à mettre à jour si un libellé change). Le mobile a parfois d'autres écrans,
+// d'où deux jeux de gestes.
+
+export interface GuideEtape {
+  /** Pourquoi c'est utile, en une ou deux phrases. */
+  pourquoi: string;
+  /** Les gestes à faire, dans l'ordre. */
+  gestes: string[];
+}
+
+export function guideEtape(id: IdEtape, mobile: boolean): GuideEtape {
+  switch (id) {
+    case 'compte':
+      return {
+        pourquoi: 'Votre nom, votre profession et votre SIRET figurent sur les bilans, comptes rendus et factures que vous remettez.',
+        gestes: [
+          'Ouvrez « Paramètres » pour vérifier votre identité professionnelle.',
+          'Ajoutez votre logo : il apparaîtra sur vos documents PDF.',
+        ],
+      };
+    case 'beneficiaire':
+      return {
+        pourquoi: 'Tout part de la fiche : bilans, séances, programme et factures s’y rattachent. Vous pourrez la compléter plus tard.',
+        gestes: mobile
+          ? [
+              'Saisissez le prénom, le nom et la date de naissance.',
+              'Lisez au bénéficiaire le texte d’information, puis indiquez son consentement : il est obligatoire.',
+              'Touchez « Créer le bénéficiaire ».',
+            ]
+          : [
+              'Rubrique « Identité & Coordonnées » : le prénom, le nom et la date de naissance suffisent pour commencer.',
+              'Rubrique « Objectifs & Organisation » : indiquez le nombre de séances par semaine et leur durée, c’est obligatoire.',
+              'Au « Récapitulatif », cochez « Le bénéficiaire a été informé et a consenti », puis cliquez sur « Créer la fiche ».',
+            ],
+      };
+    case 'bilan':
+      return {
+        pourquoi: 'Le premier bilan sert de point de départ : les suivants s’y comparent et l’évolution se lit d’un coup d’œil.',
+        gestes: [
+          mobile
+            ? 'Choisissez le bénéficiaire, puis touchez « Commencer le bilan ».'
+            : 'Choisissez les tests adaptés à la personne, puis cliquez sur « Valider ». Ils seront reproposés aux bilans suivants.',
+          'Avancez étape par étape. Les tests chronométrés ont leur chronomètre intégré : « Démarrer ».',
+          'Terminez par « Enregistrer le bilan ».',
+        ],
+      };
+    case 'seance':
+      return {
+        pourquoi: 'L’agenda réunit séances, bilans et cours collectifs. Il peut aussi s’afficher dans votre agenda habituel (Google, iPhone).',
+        gestes: [
+          mobile
+            ? 'Touchez « + Nouvelle séance ».'
+            : 'Cliquez sur « + Nouvelle séance », ou directement sur un créneau libre du calendrier.',
+          'Choisissez le bénéficiaire, la date et l’heure. Sans contrat, la séance n’est simplement pas facturée.',
+          'Validez avec « Créer la séance ».',
+        ],
+      };
+    case 'programme':
+      return {
+        pourquoi: 'Entre deux séances, votre bénéficiaire retrouve ses exercices dans son espace, et vous voyez ce qu’il a réalisé.',
+        gestes: [
+          mobile
+            ? 'Sur la fiche du bénéficiaire, touchez « Programme » : l’assistant de création s’ouvre.'
+            : 'Cliquez sur « Créer un programme ».',
+          'Donnez-lui un nom, puis ajoutez des exercices depuis la « Bibliothèque » ou créez les vôtres.',
+          'Avancez jusqu’au « Récapitulatif », puis « Sauvegarder et partager ».',
+        ],
+      };
+    case 'facturation':
+      return {
+        pourquoi: 'Sans ces mentions obligatoires, une facture ne peut pas être validée. Vous ne les saisissez qu’une fois.',
+        gestes: [
+          'Indiquez votre forme juridique et votre régime de TVA.',
+          'Vérifiez l’adresse de facturation : à défaut, celle de votre profil est utilisée.',
+          'Cliquez sur « Enregistrer » : le message « Profil complet » confirme que tout est prêt.',
+        ],
+      };
+    case 'application':
+      return {
+        pourquoi: 'Horizon s’ouvre alors comme une application, en plein écran, sans chercher l’adresse dans le navigateur.',
+        gestes: mobile
+          ? ['« Voir comment » affiche les trois gestes pour iPhone ou Android.']
+          : [
+              '« Voir comment » affiche un QR code : scannez-le avec l’appareil photo de votre téléphone.',
+              'Suivez ensuite les trois gestes indiqués pour iPhone ou Android.',
+            ],
+      };
+  }
+}
+
+/**
+ * Ce qui manque au profil de facturation, en phrase. Le SIRET et le nom se
+ * saisissent dans Paramètres (identité), pas sur la page de facturation :
+ * on le précise pour ne pas laisser le praticien chercher.
+ */
+export function phraseManquesFacturation(manquants: string[]): string | null {
+  if (manquants.length === 0) return null;
+  const liste = manquants.join(', ');
+  const identite = manquants.some(m => m === 'SIRET' || m === 'nom');
+  return `Il manque encore : ${liste}.${identite ? ' Le SIRET et le nom se renseignent dans « Paramètres ».' : ''}`;
 }
 
 export type Destination =

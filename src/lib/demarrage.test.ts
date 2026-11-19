@@ -6,8 +6,10 @@ import {
   destinationEtape,
   doitAfficherGuide,
   fusionnerEtats,
+  guideEtape,
   lireEtatDemarrage,
   messageProgression,
+  phraseManquesFacturation,
   progression,
   type EntreesDemarrage,
 } from './demarrage';
@@ -82,26 +84,71 @@ describe('progression', () => {
 describe('doitAfficherGuide', () => {
   const maintenant = new Date('2026-11-19T12:00:00Z');
   const ilYa = (jours: number) => new Date(maintenant.getTime() - jours * 86_400_000).toISOString();
+  const base = { etat: {}, termine: false, maintenant };
 
-  it('affiché pour un compte récent', () => {
-    expect(doitAfficherGuide({ etat: {}, compteCreeLe: ilYa(2), maintenant })).toBe(true);
+  it('affiché à tous les praticiens qui n’ont pas fini, même inscrits depuis longtemps', () => {
+    expect(doitAfficherGuide({ ...base, compteCreeLe: ilYa(2) })).toBe(true);
+    expect(doitAfficherGuide({ ...base, compteCreeLe: ilYa(400) })).toBe(true);
   });
 
-  it('pas imposé aux comptes installés avant sa mise en ligne', () => {
-    expect(doitAfficherGuide({ etat: {}, compteCreeLe: ilYa(AGE_MAX_COMPTE_JOURS + 1), maintenant })).toBe(false);
+  it('compte récent qui a tout fait : la carte de félicitations reste jusqu’à fermeture', () => {
+    expect(doitAfficherGuide({ ...base, termine: true, compteCreeLe: ilYa(3) })).toBe(true);
   });
 
-  it('rouvert depuis Paramètres : affiché même sur un compte ancien', () => {
-    expect(doitAfficherGuide({ etat: { reaffiche: true }, compteCreeLe: ilYa(400), maintenant })).toBe(true);
+  it('compte ancien qui a déjà tout fait : pas de félicitations surgies de nulle part', () => {
+    expect(doitAfficherGuide({ ...base, termine: true, compteCreeLe: ilYa(AGE_MAX_COMPTE_JOURS + 1) })).toBe(false);
+  });
+
+  it('rouvert depuis Paramètres : affiché même terminé sur un compte ancien', () => {
+    expect(doitAfficherGuide({ ...base, termine: true, etat: { reaffiche: true }, compteCreeLe: ilYa(400) })).toBe(true);
   });
 
   it('masqué l’emporte sur tout', () => {
-    expect(doitAfficherGuide({ etat: { masque: true, reaffiche: true }, compteCreeLe: ilYa(1), maintenant })).toBe(false);
+    expect(doitAfficherGuide({ ...base, etat: { masque: true, reaffiche: true }, compteCreeLe: ilYa(1) })).toBe(false);
   });
 
   it('date de création absente ou illisible : affiché plutôt que perdu', () => {
-    expect(doitAfficherGuide({ etat: {}, compteCreeLe: null, maintenant })).toBe(true);
-    expect(doitAfficherGuide({ etat: {}, compteCreeLe: 'pas une date', maintenant })).toBe(true);
+    expect(doitAfficherGuide({ ...base, termine: true, compteCreeLe: null })).toBe(true);
+    expect(doitAfficherGuide({ ...base, termine: true, compteCreeLe: 'pas une date' })).toBe(true);
+  });
+});
+
+describe('guideEtape', () => {
+  const IDS = ['compte', 'beneficiaire', 'bilan', 'seance', 'programme', 'facturation', 'application'] as const;
+
+  it('chaque étape explique pourquoi et comment, sur ordinateur comme sur téléphone', () => {
+    for (const id of IDS) {
+      for (const mobile of [false, true]) {
+        const g = guideEtape(id, mobile);
+        expect(g.pourquoi.length).toBeGreaterThan(20);
+        expect(g.gestes.length).toBeGreaterThanOrEqual(1);
+        expect(g.gestes.length).toBeLessThanOrEqual(3);
+      }
+    }
+  });
+
+  it('dit ce qui est obligatoire à la création d’une fiche (sinon le praticien reste bloqué)', () => {
+    const bureau = guideEtape('beneficiaire', false).gestes.join(' ');
+    expect(bureau).toContain('nombre de séances par semaine');
+    expect(bureau).toContain('Le bénéficiaire a été informé et a consenti');
+    expect(guideEtape('beneficiaire', true).gestes.join(' ')).toContain('consentement');
+  });
+
+  it('les gestes mobiles ne renvoient pas vers des écrans du bureau', () => {
+    expect(guideEtape('programme', true).gestes[0]).toContain('fiche du bénéficiaire');
+    expect(guideEtape('bilan', true).gestes[0]).toContain('Commencer le bilan');
+  });
+});
+
+describe('phraseManquesFacturation', () => {
+  it('rien ne manque : rien à dire', () => {
+    expect(phraseManquesFacturation([])).toBeNull();
+  });
+
+  it('liste les manques et indique où saisir le SIRET', () => {
+    expect(phraseManquesFacturation(['SIRET', 'adresse']))
+      .toBe('Il manque encore : SIRET, adresse. Le SIRET et le nom se renseignent dans « Paramètres ».');
+    expect(phraseManquesFacturation(['régime de TVA'])).toBe('Il manque encore : régime de TVA.');
   });
 });
 
