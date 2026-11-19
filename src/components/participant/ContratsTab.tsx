@@ -651,7 +651,7 @@ export default function ContratsTab({ participantId }: Props) {
               <div className="text-xs text-gray-400 italic mb-3">{contrat.notes}</div>
             )}
 
-            <SectionTarifContrat contratId={contrat.id} />
+            <SectionTarifContrat contratId={contrat.id} dateDebutContrat={contrat.dateDebut} />
             <SectionPayeurContrat contratId={contrat.id} />
 
             {/* Point A : un contrat peut s'écarter du choix du profil de facturation (ex. une structure

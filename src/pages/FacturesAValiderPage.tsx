@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AlertTriangle, ArrowRight, Check, Loader } from 'lucide-react';
 import PageWrapper from '../components/layout/PageWrapper';
+import BandeauControleMois from '../components/factures/BandeauControleMois';
+import { ajouterMois, moisCourantParis } from '../lib/chiffreAffaires';
 import { useFacturesAValider } from '../hooks/useFacturesAValider';
 import {
   adresseBeneficiaireManquante,
@@ -152,6 +154,8 @@ export default function FacturesAValiderPage() {
 
   return (
     <PageWrapper>
+      <BandeauControleMois mois={ajouterMois(moisCourantParis(), -1)} />
+      <BandeauControleMois mois={moisCourantParis()} />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-5">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Factures à valider</h1>
@@ -186,7 +190,7 @@ export default function FacturesAValiderPage() {
             data-testid="lien-suivi-seances"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-primary border border-primary/30 hover:bg-primary/5 px-3 py-2 rounded-xl"
           >
-            Suivi des séances <ArrowRight size={14} />
+            Contrôle du mois <ArrowRight size={14} />
           </Link>
           {validables.length > 1 && (
             <button

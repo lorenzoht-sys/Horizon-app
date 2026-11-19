@@ -20,6 +20,9 @@ test.describe('Création d\'un contrat de suivi', () => {
     await jours.getByRole('button', { name: 'Lun', exact: true }).click();
     await jours.getByRole('button', { name: 'Jeu', exact: true }).click();
 
+    // Tarif obligatoire depuis le 2026-11-19 (contrat sans tarif = séances jamais facturées).
+    await page.getByTestId('contrat-tarif-seance').fill('45');
+
     try {
       await page.getByRole('button', { name: 'Créer le contrat et générer les séances' }).click();
 

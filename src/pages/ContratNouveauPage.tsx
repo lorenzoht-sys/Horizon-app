@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
+import { fermerEtCreerNouvelleVersion } from '../hooks/useTarifsContrat';
 import { useAgenda } from '../hooks/useAgenda';
 import PageWrapper from '../components/layout/PageWrapper';
 import { ArrowLeft, Check, Calendar, Hash, AlertTriangle } from 'lucide-react';
@@ -61,6 +62,10 @@ export default function ContratNouveauPage() {
   const [nbSeancesPrescrites, setNbSeancesPrescrites] = useState(12);
   const [notes, setNotes] = useState('');
   const [exclureTournee, setExclureTournee] = useState(false);
+  // Tarif saisi avec le contrat, valable dès son début (2026-11-19) : un contrat créé sans tarif
+  // laissait ses premières séances sans facture (factures d'octobre manquantes).
+  const [tarifSeance, setTarifSeance] = useState('');
+  const [fraisDeplacement, setFraisDeplacement] = useState('0');
   // Jours de séance — obligatoire, même longueur que nbSeancesSemaine (voir
   // validerNouveauContrat). Persisté sur contrats.jours_fixe : source
   // exclusive du motif hebdomadaire pour le renouvellement automatique
@@ -139,9 +144,19 @@ export default function ContratNouveauPage() {
       toast.error(erreurValidation);
       return;
     }
+    const tarif = parseFloat(tarifSeance.replace(',', '.'));
+    const frais = fraisDeplacement.trim() === '' ? 0 : parseFloat(fraisDeplacement.replace(',', '.'));
+    if (!Number.isFinite(tarif) || tarif <= 0) {
+      toast.error('Indiquez le tarif par séance : sans tarif, les séances ne peuvent pas être facturées');
+      return;
+    }
+    if (!Number.isFinite(frais) || frais < 0) {
+      toast.error('Frais de déplacement invalides');
+      return;
+    }
 
     try {
-      await creerContrat({
+      const contrat = await creerContrat({
         participantId: participant.id,
         dateDebut,
         dateFin: dateFinEffective,
@@ -156,6 +171,8 @@ export default function ContratNouveauPage() {
         exclureTournee,
       });
 
+      const tarifEnregistre = await fermerEtCreerNouvelleVersion(contrat.id, null, tarif, frais, dateDebut);
+      if (!tarifEnregistre) toast.warning('Contrat créé, mais le tarif n\'a pas été enregistré : ajoutez-le dans l\'onglet Contrats.');
       toast.success('Contrat créé. Allez sur Agenda pour générer votre planning.');
       navigate(`/participant/${participant.id}`);
     } catch (err) {
@@ -480,6 +497,27 @@ export default function ContratNouveauPage() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Tarif */}
+          <div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="block text-xs text-gray-500 mb-1.5">Tarif par séance (€) *</span>
+                <input type="number" min={0} step="0.01" inputMode="decimal" required
+                  data-testid="contrat-tarif-seance"
+                  value={tarifSeance} onChange={e => setTarifSeance(e.target.value)} placeholder="45"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary" />
+              </label>
+              <label className="block">
+                <span className="block text-xs text-gray-500 mb-1.5">Frais de déplacement (€)</span>
+                <input type="number" min={0} step="0.01" inputMode="decimal"
+                  data-testid="contrat-frais-deplacement"
+                  value={fraisDeplacement} onChange={e => setFraisDeplacement(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary" />
+              </label>
+            </div>
+            <p className="text-xs text-gray-400 mt-1.5">Appliqué dès le début du contrat. Modifiable ensuite dans l'onglet Contrats.</p>
           </div>
 
           {/* Exclusion de la tournée */}

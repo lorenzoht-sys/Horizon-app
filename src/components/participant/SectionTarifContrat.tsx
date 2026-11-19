@@ -13,14 +13,15 @@ function formatDateCourt(date: string): string {
  * mobile ni espace bénéficiaire.
  *
  * Affiche la version en vigueur et permet d'en ouvrir une nouvelle à une date
- * d'effet choisie, par défaut aujourd'hui en heure de Paris (jamais de
+ * d'effet choisie, par défaut aujourd'hui en heure de Paris, ou le début du
+ * contrat pour un premier tarif (jamais de
  * modification d'une ligne existante — voir fermerEtCreerNouvelleVersion,
  * src/hooks/useTarifsContrat.ts), plus un historique consultable des versions
  * closes. Les séances à partir de la date d'effet sont recalculées dans les
  * brouillons de facture (trigger de base) ; une facture validée ne change pas.
  */
-export default function SectionTarifContrat({ contratId }: { contratId: string }) {
-  const { versionActuelle, historique, loading, modifierTarif } = useTarifsContrat(contratId);
+export default function SectionTarifContrat({ contratId, dateDebutContrat }: { contratId: string; dateDebutContrat: string }) {
+  const { versions, versionActuelle, historique, loading, modifierTarif, couvrirDebutContrat } = useTarifsContrat(contratId);
   const [editing, setEditing] = useState(false);
   const [showHistorique, setShowHistorique] = useState(false);
   const [tarifSeance, setTarifSeance] = useState('');
@@ -31,7 +32,9 @@ export default function SectionTarifContrat({ contratId }: { contratId: string }
   function ouvrirEdition() {
     setTarifSeance(versionActuelle ? String(versionActuelle.tarifSeance) : '');
     setFraisDeplacement(versionActuelle ? String(versionActuelle.fraisDeplacement) : '0');
-    setDateEffet(dateCivileParis());
+    // Premier tarif : depuis le début du contrat (2026-11-19). Daté du jour, il laissait les séances
+    // d'avant sans tarif, donc sans facture (factures d'octobre manquantes).
+    setDateEffet(versionActuelle ? dateCivileParis() : dateDebutContrat);
     setEditing(true);
   }
 
@@ -45,6 +48,15 @@ export default function SectionTarifContrat({ contratId }: { contratId: string }
     const ok = await modifierTarif(t, f, dateEffet);
     setSaving(false);
     if (ok) { setEditing(false); toast.success(`Tarif mis à jour à partir du ${formatDateCourt(dateEffet)}`); }
+  }
+
+  const premiere = [...versions].sort((a, b) => a.dateDebutValidite.localeCompare(b.dateDebutValidite))[0];
+
+  async function couvrir() {
+    setSaving(true);
+    const ok = await couvrirDebutContrat(dateDebutContrat);
+    setSaving(false);
+    if (ok) toast.success(`Tarif appliqué depuis le ${formatDateCourt(dateDebutContrat)}`);
   }
 
   if (loading) return null;
@@ -66,8 +78,19 @@ export default function SectionTarifContrat({ contratId }: { contratId: string }
               <span className="text-xs text-gray-400"> · depuis le {formatDateCourt(versionActuelle.dateDebutValidite)}</span>
             </div>
           ) : (
-            <div className="text-sm text-gray-400 italic">
-              Aucun tarif défini pour ce contrat — le tarif par défaut du praticien s'applique.
+            <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2" data-testid="tarif-absent">
+              Aucun tarif : les séances de ce contrat ne peuvent pas être facturées.
+            </div>
+          )}
+
+          {premiere && premiere.dateDebutValidite > dateDebutContrat && (
+            <div className="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2" data-testid="tarif-ecart-debut">
+              Le tarif commence le {formatDateCourt(premiere.dateDebutValidite)}, après le début du contrat ({formatDateCourt(dateDebutContrat)}) :
+              les séances d'avant ne peuvent pas être facturées.
+              <button type="button" onClick={couvrir} disabled={saving} data-testid="tarif-couvrir-debut"
+                className="block mt-1.5 font-medium text-primary hover:underline disabled:opacity-50">
+                Appliquer {totalFactureSeance(premiere).toFixed(2)} € depuis le début du contrat
+              </button>
             </div>
           )}
 
@@ -130,7 +153,7 @@ export default function SectionTarifContrat({ contratId }: { contratId: string }
               type="date"
               data-testid="tarif-date-effet"
               value={dateEffet}
-              min={versionActuelle?.dateDebutValidite}
+              min={versionActuelle?.dateDebutValidite ?? dateDebutContrat}
               onChange={e => setDateEffet(e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm mt-0.5 focus:outline-none focus:border-primary"
             />
