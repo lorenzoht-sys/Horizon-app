@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import type { TarifContrat } from '../types';
 import { supabase } from '../lib/supabase';
 import { dbToTarifContrat, tarifContratToDb } from '../lib/mappers';
-import { dateCivileParis, messageErreurTarif, planChangementTarif } from '../lib/tarifsContrats';
+import { dateCivileParis, jourPrecedent, messageErreurTarif, planChangementTarif } from '../lib/tarifsContrats';
 
 /**
  * Charge les versions de tarif d'un contrat, triées de la plus récente à la
@@ -112,5 +112,30 @@ export function useTarifsContrat(contratId: string | undefined) {
     return ok;
   }
 
-  return { versions, versionActuelle, historique, loading, modifierTarif, recharger };
+  /**
+   * Le premier tarif commence après le début du contrat (cas d'octobre 2026 : tarif saisi en novembre à la
+   * date du jour) : ajoute une version close qui couvre l'écart, aux mêmes montants que ce premier tarif.
+   * Aucune ligne existante n'est modifiée ; les brouillons de la période sont recalculés par la base.
+   */
+  async function couvrirDebutContrat(dateDebutContrat: string): Promise<boolean> {
+    if (!contratId || !supabase) return false;
+    const premiere = [...versions].sort((a, b) => a.dateDebutValidite.localeCompare(b.dateDebutValidite))[0];
+    if (!premiere || premiere.dateDebutValidite <= dateDebutContrat) return false;
+    const { error } = await supabase.from('tarifs_contrats').insert(tarifContratToDb({
+      contratId,
+      tarifSeance: premiere.tarifSeance,
+      fraisDeplacement: premiere.fraisDeplacement,
+      dateDebutValidite: dateDebutContrat,
+      dateFinValidite: jourPrecedent(premiere.dateDebutValidite),
+    }));
+    if (error) {
+      console.error('Erreur ajout du tarif du début de contrat:', error);
+      toast.error(messageErreurTarif(error.message));
+      return false;
+    }
+    await recharger();
+    return true;
+  }
+
+  return { versions, versionActuelle, historique, loading, modifierTarif, couvrirDebutContrat, recharger };
 }

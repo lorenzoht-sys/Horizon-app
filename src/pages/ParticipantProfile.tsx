@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { chargerSettingsPraticien } from '../lib/settingsPraticien';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { ArrowLeft, Pencil, FileText, TrendingUp, Download, Trash2, Dumbbell, MapPin, RefreshCw, ClipboardList, Mic, ExternalLink, LayoutTemplate, Archive, ArchiveRestore, Bot, Phone, Navigation, ChevronDown } from 'lucide-react';
 import { useParticipants } from '../hooks/useParticipants';
@@ -145,7 +145,11 @@ export default function ParticipantProfile() {
   const [ouvertureEspacePatient, setOuvertureEspacePatient] = useState(false);
   const [showModeleModal, setShowModeleModal] = useState(false);
   const [voirTousExercices, setVoirTousExercices] = useState(false);
-  const [activeTab, setActiveTab]           = useState<TabId>('bilans');
+  // ?onglet=contrats : accès direct depuis le contrôle de la facturation (2026-11-19).
+  const [params] = useSearchParams();
+  const ongletDemande = params.get('onglet');
+  const [activeTab, setActiveTab]           = useState<TabId>(
+    (['bilans', 'contrats', 'cours', 'assiduite', 'documents', 'rappels'] as TabId[]).includes(ongletDemande as TabId) ? ongletDemande as TabId : 'bilans');
   const [seancesStats, setSeancesStats]     = useState<SeancePatientStat[]>([]);
   const [retours, setRetours]               = useState<RetourSeance[]>([]);
 

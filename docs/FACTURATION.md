@@ -362,6 +362,28 @@ tests `tests/db/facturation-progressive.spec.ts`.
   « à ce jour » et la date d'ouverture de la validation. Même règle côté interface (`estValidable`,
   `src/lib/facturesAValider.ts`), mais la base reste seule juge.
 
+## Contrôle du mois et tarif dès le début du contrat (2026-11-19)
+
+Incident : deux factures d'octobre 2026 manquaient sans aucun signal. Cause : contrats créés sans tarif,
+puis premier tarif saisi en novembre à la date du jour. Les séances d'octobre n'avaient aucun tarif
+applicable et `generer_brouillon_facture` refusait le mois (28 séances d'octobre, 11 contrats). Les deux
+dossiers signalés ont été corrigés en production le 2026-11-19 (premier tarif avancé au début du contrat,
+séance du 30/10 rattachée à son contrat), les autres attendent la décision de Pierre.
+
+Pour que ça ne se reproduise pas (aucun changement de base) :
+- **Création de contrat** : tarif par séance obligatoire, frais de déplacement facultatifs ; la première
+  version de tarif part de la date de début du contrat.
+- **Onglet Contrats** : un premier tarif part par défaut du début du contrat ; un contrat sans tarif, ou dont
+  le tarif commence après son début, est signalé, avec « Appliquer … depuis le début du contrat » (ajoute une
+  version close sur l'écart, aux mêmes montants, sans toucher aux versions existantes).
+- **Contrôle de la facturation** (`/factures/seances?mois=AAAA-MM-01`, `src/lib/controleFacturation.ts`) :
+  chaque bénéficiaire du mois est « prêt », « à vérifier » (séances passées non confirmées, tarif incomplet)
+  ou « bloqué » (séance réalisée non facturable : sans contrat, sans tarif…), avec un lien vers la
+  correction. Les séances passées restées « planifiées » se confirment d'un clic (réalisée ou annulée) ;
+  une séance n'est jamais considérée réalisée parce que sa date est passée.
+- **Factures à valider** : un bandeau résume, pour le mois écoulé et le mois courant, les dossiers bloqués,
+  les séances à confirmer et les contrats incomplets.
+
 ## Génération et écrans praticien (étapes 3 et 4)
 
 - **Génération** : voir « Facture progressive » ci-dessous. La tâche `facturation` de `/api/cron/rappels`

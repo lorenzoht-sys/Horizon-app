@@ -49,7 +49,7 @@ export const LIBELLES_MOTIF: Record<MotifSeance, string> = {
   sans_contrat: 'Séance sans contrat : rattachez-la à un contrat',
   contrat_a_venir: 'Contrat « à venir » : pas encore facturable',
   hors_periode_contrat: 'Le contrat ne couvre pas ce mois',
-  sans_tarif: 'Aucun tarif à cette date : créez une version de tarif',
+  sans_tarif: 'Impossible de préparer la facture : aucun tarif renseigné dans le contrat à cette date',
   mois_deja_facture: 'Réalisée après la validation de la facture du mois',
   en_attente: 'En attente : reprise au prochain calcul',
 };

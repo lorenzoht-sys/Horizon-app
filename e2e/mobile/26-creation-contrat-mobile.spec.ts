@@ -66,6 +66,9 @@ test.describe('Création d\'un contrat sur mobile (route fusionnée /contrat/nou
       await jours.getByRole('button', { name: 'Lun', exact: true }).click();
       await jours.getByRole('button', { name: 'Jeu', exact: true }).click();
 
+      // Tarif obligatoire depuis le 2026-11-19 (contrat sans tarif = séances jamais facturées).
+      await page.getByTestId('contrat-tarif-seance').fill('45');
+
       // Note unique : sert de marqueur pour la vérification ET le nettoyage.
       await page.getByPlaceholder(/séances prescrites par le Dr/).fill(marqueur);
 
