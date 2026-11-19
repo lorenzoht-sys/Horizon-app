@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Save, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import PageWrapper from '../components/layout/PageWrapper';
 import { SectionApplication } from '../components/pwa/PWAComponents';
+import { SectionPriseEnMain } from './parametres/SectionPriseEnMain';
 import { supabase } from '../lib/supabase';
 import { lirePraticien } from '../lib/acces/praticien';
 import { utilisateurCourant } from '../lib/session';
@@ -391,6 +392,9 @@ export default function SettingsPage() {
               <ArrowRight size={16} className="text-gray-400 flex-shrink-0" />
             </Link>
           </section>
+
+          {/* ── Prise en main : rouvrir le guide du tableau de bord ── */}
+          <SectionPriseEnMain />
 
           {/* ── Application (PWA) ── */}
           <section>
