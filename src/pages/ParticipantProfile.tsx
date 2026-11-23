@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { chargerSettingsPraticien } from '../lib/settingsPraticien';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { ArrowLeft, Pencil, FileText, TrendingUp, Download, Trash2, Dumbbell, MapPin, RefreshCw, ClipboardList, Mic, ExternalLink, LayoutTemplate, Archive, ArchiveRestore, Bot, Phone, Navigation, ChevronDown, Mail, ShieldCheck, Clock, Building2, Eye } from 'lucide-react';
 import { echeanceBilan } from '../lib/tableauDeBord';
@@ -137,7 +137,13 @@ export default function ParticipantProfile() {
   const [confirmDelete, setConfirmDelete]   = useState(false);
   const [confirmDeleteProg, setConfirmDeleteProg] = useState(false);
   const [pdfProgrammeEnCours, setPdfProgrammeEnCours] = useState(false);
-  const [showDictee, setShowDictee]         = useState(false);
+  // « Dicter une séance » depuis le tableau de bord (23/11/2026) : la fiche s'ouvre avec la dictée.
+  // L'état de navigation est vidé aussitôt, pour qu'un retour arrière ne la rouvre pas.
+  const location = useLocation();
+  const [showDictee, setShowDictee]         = useState(() => (location.state as { ouvrir?: string } | null)?.ouvrir === 'dictee');
+  useEffect(() => {
+    if ((location.state as { ouvrir?: string } | null)?.ouvrir === 'dictee') navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, location.pathname, navigate]);
   const [geocoding, setGeocoding]           = useState(false);
   const [exportingDossier, setExportingDossier] = useState(false);
   const [showProfilPicker, setShowProfilPicker] = useState(false);

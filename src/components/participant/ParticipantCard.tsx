@@ -18,6 +18,8 @@ interface Props {
   assiduite?: number | null;
   /** « Jeu. 26 · 09:00 », déjà mis en forme ; null : aucun rendez-vous prévu. */
   prochainRendezVous?: string | null;
+  /** Objectif personnel noté au bilan (tableau de bord V1) : on parle d'une personne, pas d'un dossier. */
+  objectif?: string | null;
   /** Présent : le menu « ··· » propose « Archiver ». */
   onArchiver?: () => void;
 }
@@ -36,9 +38,10 @@ const POINT_NIVEAU: Record<Niveau, string> = {
 
 const PASTILLE_ECHEANCE: Record<EtatEcheance, { fond: string; texte: string }> = {
   a_jour:  { fond: '#E6F5F1', texte: '#147A64' },
-  bientot: { fond: '#FEF5E7', texte: '#A8650A' },
-  retard:  { fond: '#FEF0EF', texte: '#C0392B' },
-  initial: { fond: '#FEF5E7', texte: '#A8650A' },
+  // Teintes de texte foncées (23/11/2026) : #A8650A sur fond orange clair restait sous 4,5:1.
+  bientot: { fond: '#FEF5E7', texte: '#8A5300' },
+  retard:  { fond: '#FEF0EF', texte: '#B42318' },
+  initial: { fond: '#FEF5E7', texte: '#8A5300' },
 };
 
 function couleursAssiduite(taux: number): { barre: string; texte: string } {
@@ -47,7 +50,7 @@ function couleursAssiduite(taux: number): { barre: string; texte: string } {
   return { barre: '#E8544A', texte: '#C0392B' };
 }
 
-export default function ParticipantCard({ participant, structureNom, assiduite, prochainRendezVous, onArchiver }: Props) {
+export default function ParticipantCard({ participant, structureNom, assiduite, prochainRendezVous, objectif, onArchiver }: Props) {
   const [menuOuvert, setMenuOuvert] = useState(false);
   const aujourdhui = new Date().toISOString().slice(0, 10);
   const dernierBilan = [...participant.bilans].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
@@ -116,6 +119,12 @@ export default function ParticipantCard({ participant, structureNom, assiduite, 
           </div>
         )}
       </div>
+
+      {objectif && (
+        <p className="m-0 text-[13px] leading-snug line-clamp-2" style={{ color: '#3D4C5A' }}>
+          Objectif : « {objectif} »
+        </p>
+      )}
 
       {resultats.length > 0 ? (
         <div className="grid grid-cols-4 gap-1.5" aria-label="Résultats du dernier bilan">

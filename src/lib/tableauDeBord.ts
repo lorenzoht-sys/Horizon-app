@@ -156,7 +156,7 @@ export function bornesSemaine(aujourdhui: string): { lundi: string; dimanche: st
 // une ligne et une action par point. Ordre : ce qui bloque la facture, puis ce qui concerne la
 // santé, puis l'administratif.
 
-export type TypeATraiter = 'seances' | 'ressentis' | 'brouillon' | 'contrat' | 'contrat_jours';
+export type TypeATraiter = 'seances' | 'ressentis' | 'brouillon' | 'contrat' | 'contrat_jours' | 'douleur' | 'relancer';
 
 export interface ElementATraiter {
   cle: string;
@@ -218,4 +218,226 @@ export function elementsATraiter(e: EntreesATraiter): ElementATraiter[] {
     });
   }
   return liste;
+}
+
+// ── Tableau de bord V1 (maquette validée par Lorenzo le 23/11/2026, après-midi) ─────────────
+// Ton voulu : humain, qui donne envie, pédagogique. Les fonctions ci-dessous fabriquent les
+// phrases et les listes ; l'écran ne fait que les afficher.
+
+/** Minutes entre deux heures « HH:MM » du même jour (négatif si `a` est avant `de`). */
+export function minutesEntre(de: string, a: string): number {
+  const m = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
+  return m(a) - m(de);
+}
+
+/** « dans 25 min », « dans 2 h 10 », « dans 3 h » ; « maintenant » à moins de 5 minutes. */
+export function libelleDelai(minutes: number): string {
+  if (minutes < 5) return 'maintenant';
+  if (minutes < 60) return `dans ${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const reste = minutes % 60;
+  return reste === 0 ? `dans ${h} h` : `dans ${h} h ${String(reste).padStart(2, '0')}`;
+}
+
+/** Délai affiché pour un rendez-vous : « dans 2 h 10 » aujourd'hui, sinon « demain », « jeudi »… */
+export function delaiRendezVous(s: Pick<Seance, 'date' | 'heureDebut'>, aujourdhui: string, maintenant: string): string {
+  const ecart = ecartJours(aujourdhui, s.date);
+  if (ecart === 0) return libelleDelai(minutesEntre(maintenant, s.heureDebut.slice(0, 5)));
+  if (ecart === 1) return 'demain';
+  const d = new Date(`${s.date}T12:00:00`);
+  if (ecart < 7) return d.toLocaleDateString('fr-FR', { weekday: 'long' });
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+}
+
+/** Prochain rendez-vous individuel, tous bénéficiaires confondus (séance ou bilan planifié). */
+export function prochainRendezVous(seances: readonly Seance[], aujourdhui: string, maintenant: string): Seance | null {
+  return seances
+    .filter(s => s.statut === 'planifiee' && !!s.participantId
+      && (s.date > aujourdhui || (s.date === aujourdhui && s.heureDebut.slice(0, 5) >= maintenant)))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.heureDebut.localeCompare(b.heureDebut))[0] ?? null;
+}
+
+export interface ResumeJournee {
+  nbRendezVous: number;
+  /** Délai avant le prochain rendez-vous du jour, null s'il n'y en a plus. */
+  prochainDans: string | null;
+  nbAConfirmer: number;
+  nbBilansAujourdhui: number;
+}
+
+/**
+ * La phrase sous « Bonjour » : la journée racontée en une ou deux phrases, au lieu d'une rangée
+ * de chiffres. Exemple : « Une journée bien remplie : 4 rendez-vous, le prochain dans 2 h 10.
+ * 2 séances attendent juste votre confirmation. »
+ */
+export function phraseDuJour(r: ResumeJournee): string {
+  const phrases: string[] = [];
+  if (r.nbRendezVous === 0) {
+    phrases.push('Aucun rendez-vous aujourd’hui : un bon moment pour préparer vos bilans et vos programmes.');
+  } else {
+    const debut = r.nbRendezVous >= 4 ? 'Une journée bien remplie : ' : 'Aujourd’hui : ';
+    const rdv = `${r.nbRendezVous} rendez-vous`;
+    const suite = r.prochainDans
+      ? (r.prochainDans === 'maintenant' ? ', le prochain commence maintenant' : `, le prochain ${r.prochainDans}`)
+      : ', tous passés';
+    phrases.push(`${debut}${rdv}${suite}.`);
+  }
+  if (r.nbBilansAujourdhui > 0) {
+    phrases.push(r.nbBilansAujourdhui === 1 ? 'Un bilan est prévu aujourd’hui.' : `${r.nbBilansAujourdhui} bilans sont prévus aujourd’hui.`);
+  }
+  if (r.nbAConfirmer > 0) {
+    phrases.push(r.nbAConfirmer === 1
+      ? 'Une séance attend juste votre confirmation.'
+      : `${r.nbAConfirmer} séances attendent juste votre confirmation.`);
+  }
+  return phrases.join(' ');
+}
+
+export interface ContexteBeneficiaire {
+  /** Objectif personnel noté au bilan (le plus récent qui en a un). */
+  objectif: string | null;
+  /** Points de vigilance du dernier bilan. */
+  vigilance: string | null;
+}
+
+/** Ce qu'il faut avoir en tête avant de voir quelqu'un, tiré de ses bilans. */
+export function contexteBeneficiaire(bilans: readonly Pick<Bilan, 'date' | 'pointsVigilance' | 'profilEnrichi'>[]): ContexteBeneficiaire {
+  const tries = [...bilans].sort((a, b) => b.date.localeCompare(a.date));
+  const objectif = tries.map(b => b.profilEnrichi?.objectifsPersonnels?.trim()).find(o => !!o) ?? null;
+  const vigilance = tries[0]?.pointsVigilance?.trim() || null;
+  return { objectif, vigilance };
+}
+
+export interface Progres {
+  test: string;
+  /** « −4 s », « +90 m », « +5 » */
+  delta: string;
+  /** Ce que ça veut dire, en mots simples. */
+  sens: string;
+}
+
+interface MesureProgres {
+  test: string;
+  lire: (b: Bilan) => number | null;
+  unite: string;
+  plusPetitEstMieux: boolean;
+  /** Écart minimal pour parler de progrès (au-delà de la variation d'un jour à l'autre). */
+  seuil: number;
+  /** Poids pour choisir le progrès le plus parlant quand il y en a plusieurs. */
+  echelle: number;
+  sens: string;
+}
+
+const MESURES_PROGRES: MesureProgres[] = [
+  { test: 'au TUG', lire: b => b.tug3m, unite: ' s', plusPetitEstMieux: true, seuil: 1, echelle: 4,
+    sens: 'Se lever et marcher 3 m plus vite : moins de risque de chute.' },
+  { test: 'levers de chaise', lire: b => b.chairStand30, unite: '', plusPetitEstMieux: false, seuil: 2, echelle: 4,
+    sens: 'Des jambes plus fortes, en 30 secondes.' },
+  { test: 'au TM6', lire: b => { const t = resultatTm6(b.tm6); return t.type === 'distance' ? t.valeur : null; },
+    unite: ' m', plusPetitEstMieux: false, seuil: 25, echelle: 80, sens: 'Plus loin en 6 minutes de marche qu’au départ.' },
+  { test: 'de force de main', lire: b => b.handGrip?.droite ?? null, unite: ' kg', plusPetitEstMieux: false, seuil: 2, echelle: 5,
+    sens: 'Plus de force pour porter, ouvrir, se tenir.' },
+];
+
+function formaterEcart(ecart: number, unite: string): string {
+  const arrondi = Math.round(ecart * 10) / 10;
+  const texte = String(Math.abs(arrondi)).replace('.', ',');
+  return `${arrondi < 0 ? '−' : '+'}${texte}${unite}`;
+}
+
+/**
+ * Le progrès le plus parlant entre le premier et le dernier bilan, ou null s'il n'y a pas
+ * deux bilans comparables ou aucun progrès net. Ne montre jamais un recul : ce bloc est fait
+ * pour encourager, les reculs restent visibles sur la fiche (profil fonctionnel).
+ */
+export function progresDepuisInitial(bilans: readonly Bilan[]): Progres | null {
+  if (bilans.length < 2) return null;
+  const tries = [...bilans].sort((a, b) => a.date.localeCompare(b.date));
+  let meilleur: { score: number; progres: Progres } | null = null;
+  for (const m of MESURES_PROGRES) {
+    const premier = tries.map(m.lire).find(v => v != null) ?? null;
+    const dernier = [...tries].reverse().map(m.lire).find(v => v != null) ?? null;
+    if (premier == null || dernier == null) continue;
+    const ecart = dernier - premier;
+    const gain = m.plusPetitEstMieux ? -ecart : ecart;
+    if (gain < m.seuil) continue;
+    const score = gain / m.echelle;
+    if (!meilleur || score > meilleur.score) {
+      meilleur = { score, progres: { test: m.test, delta: formaterEcart(ecart, m.unite), sens: m.sens } };
+    }
+  }
+  return meilleur?.progres ?? null;
+}
+
+const RANG_ECHEANCE: Record<EtatEcheance, number> = { retard: 0, initial: 1, bientot: 2, a_jour: 3 };
+
+export interface BilanAPrevoir {
+  participantId: string;
+  etat: EtatEcheance;
+  libelle: string;
+  /** « Bilan initial », « 3e bilan » */
+  type: string;
+}
+
+/** Les prochains bilans, du plus urgent au plus lointain. */
+export function prochainsBilans(
+  participants: readonly { id: string; bilans: readonly Pick<Bilan, 'date'>[] }[],
+  aujourdhui: string,
+  combien = 4,
+): BilanAPrevoir[] {
+  return participants
+    .map(p => {
+      const e = echeanceBilan(p.bilans, aujourdhui);
+      const rang = p.bilans.length + 1;
+      return { participantId: p.id, etat: e.etat, libelle: e.libelle, type: rang === 1 ? 'Bilan initial' : `${rang}e bilan`, dernier: [...p.bilans].map(b => b.date).sort().at(-1) ?? '' };
+    })
+    .sort((a, b) => RANG_ECHEANCE[a.etat] - RANG_ECHEANCE[b.etat] || a.dernier.localeCompare(b.dernier))
+    .slice(0, combien)
+    .map(({ participantId, etat, libelle, type }) => ({ participantId, etat, libelle, type }));
+}
+
+export interface ResumeFactures {
+  aValider: number;
+  enRetard: number;
+  nonReglees: number;
+}
+
+/**
+ * Compteurs des factures en attente, en lecture seule (le tableau de bord ne modifie rien).
+ * « À valider » : brouillons dont le mois est terminé (même règle que la page Factures à valider).
+ */
+export function resumeFactures(
+  nbBrouillonsValidables: number,
+  validees: readonly { type: string; statut: string }[],
+): ResumeFactures {
+  const factures = validees.filter(f => f.type === 'facture');
+  return {
+    aValider: nbBrouillonsValidables,
+    enRetard: factures.filter(f => f.statut === 'en_retard').length,
+    nonReglees: factures.filter(f => f.statut === 'validee' || f.statut === 'envoyee').length,
+  };
+}
+
+export interface Astuce {
+  cle: string;
+  texte: string;
+  action: string;
+  lien: string;
+}
+
+/** Une astuce à la fois, qu'on peut écarter : on apprend Horizon en s'en servant. */
+export const ASTUCES: Astuce[] = [
+  { cle: 'dictee', texte: 'Juste après une séance, ouvrez la fiche et touchez « Dicter une séance » : parlez deux minutes, Horizon rédige le compte rendu.', action: 'Voir mes bénéficiaires', lien: '/#beneficiaires' },
+  { cle: 'comparaison', texte: 'Dès le deuxième bilan, « Évolution » sur la fiche montre les progrès test par test : un bon support à montrer à la personne et à son médecin.', action: 'Voir mes bénéficiaires', lien: '/#beneficiaires' },
+  { cle: 'bibliotheque', texte: 'Vos programmes partent de la bibliothèque d’exercices : enregistrez un programme comme modèle pour le réutiliser en un clic.', action: 'Ouvrir la bibliothèque', lien: '/bibliotheque' },
+  { cle: 'espace', texte: 'Chaque bénéficiaire peut retrouver son programme sur son téléphone, avec un code d’accès : « Espace bénéficiaire » sur sa fiche.', action: 'Voir mes bénéficiaires', lien: '/#beneficiaires' },
+  { cle: 'factures', texte: 'Les factures se préparent seules à partir des séances réalisées : confirmez vos séances, puis validez-les en début de mois.', action: 'Ouvrir les factures', lien: '/factures/a-valider' },
+];
+
+/** L'astuce du jour : change chaque jour, saute celles déjà écartées ; null quand tout est vu. */
+export function astuceDuJour(aujourdhui: string, ecartees: ReadonlySet<string>): Astuce | null {
+  const restantes = ASTUCES.filter(a => !ecartees.has(a.cle));
+  if (restantes.length === 0) return null;
+  const jour = Math.floor(jourUtc(aujourdhui) / JOUR_MS);
+  return restantes[jour % restantes.length];
 }
