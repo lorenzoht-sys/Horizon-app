@@ -189,6 +189,9 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
     ENDO_TESTS.filter(k => testPonctuelRenseigne(form, k)));
   const { variantes } = useTm6Variantes();
   const [showModalVariante, setShowModalVariante] = useState(false);
+  // Minute du chrono en cours de passation : la ligne « Minute N » correspondante est mise en
+  // évidence pour savoir où saisir sans chercher (demande de Pierre, 23/11/2026).
+  const [minuteChrono, setMinuteChrono] = useState<number | null>(null);
   const tm6 = form.tm6;
   const setTm6 = (patch: Partial<typeof tm6>) => update({ tm6: { ...tm6, ...patch } });
   // Tableau chronologique unique — ancien format converti à la lecture, sans perte
@@ -343,6 +346,7 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
             <Tm6ChronoWidget
               dureeMode={dureeModeEff}
               dureeCibleSecondes={tm6.dureeCibleSecondes ?? 360}
+              onMinuteEnCours={setMinuteChrono}
               onTerminer={result => setTm6({
                 dureeReelleSecondes: result.dureeReelleSecondes,
                 nbPauses: result.nbPauses,
@@ -395,8 +399,13 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
                 <div className="px-3 py-2 text-center border-l border-gray-200">SpO₂ (%)</div>
                 <div />
               </div>
-              {mesures.map((m, i) => (
-                <div key={i} className={`grid grid-cols-[minmax(0,1.6fr)_1fr_1fr_2rem] gap-0 ${i % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'} border-b border-gray-100 last:border-b-0`}>
+              {mesures.map((m, i) => {
+                // Rang de la ligne parmi les lignes « minute » (le libellé est modifiable, le rang non).
+                const rangMinute = m.kind === 'minute' ? mesures.slice(0, i + 1).filter(x => x.kind === 'minute').length : null;
+                const enCours = rangMinute !== null && rangMinute === minuteChrono;
+                return (
+                <div key={i} aria-current={enCours ? 'step' : undefined}
+                  className={`grid grid-cols-[minmax(0,1.6fr)_1fr_1fr_2rem] gap-0 ${enCours ? 'bg-primary/10 ring-2 ring-inset ring-primary' : i % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'} border-b border-gray-100 last:border-b-0`}>
                   <div className="px-2 py-1.5 flex items-center">
                     <input type="text" value={m.label ?? ''} aria-label={`Moment de la mesure ${i + 1}`}
                       onChange={e => setMesure(i, { label: e.target.value })}
@@ -424,7 +433,8 @@ export default function Step3_EnduranceMemory({ form, update, previous, testsAct
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
             <div className="flex flex-wrap gap-2 mt-2">
               <button type="button" onClick={ajouterMinute}
