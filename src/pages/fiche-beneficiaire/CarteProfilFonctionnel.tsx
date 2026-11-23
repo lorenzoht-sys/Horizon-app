@@ -42,6 +42,9 @@ export const TESTS_TABLEAU: {
   { label: 'Doigts-sol',  normeKey: 'souplesse',          unite: ' cm',   lower: false, getVal: (b: Bilan) => b.souplesse.valeur },
   { label: 'Mémoire',     normeKey: 'memoire',            unite: '/5',    lower: false, getVal: (b: Bilan) => b.memoire.scoreImmediat },
   { label: 'Épaules',     normeKey: 'apley',             unite: '/4',    lower: false, getVal: (b: Bilan) => b.apley?.score ?? null },
+  // Scratch Test en cm (23/11/2026) : pas de norme validée, donc pas de point de couleur.
+  { label: 'Épaules D dessus', normeKey: 'apleyCm',      unite: ' cm',   lower: false, getVal: (b: Bilan) => b.apley?.cmDroiteDessus ?? null },
+  { label: 'Épaules G dessus', normeKey: 'apleyCm',      unite: ' cm',   lower: false, getVal: (b: Bilan) => b.apley?.cmGaucheDessus ?? null },
   { label: 'Tinetti POMA', normeKey: 'tinetti',          unite: '/28',   lower: false, getVal: tinettiVal, getExtra: tinettiExtra },
 ];
 
@@ -174,7 +177,7 @@ export function CarteProfilFonctionnel({ participant, bilans }: {
     // val === null : résultat non comparable (TM6 en pas/tours) — extra porte alors seul le
     // résultat réel, à la place de la valeur en mètres qui n'existe pas pour ce bilan.
     const valDisplay = val !== null
-      ? `${test.normeKey === 'souplesse' && val > 0 ? '+' : ''}${val}${test.unite}`
+      ? `${(test.normeKey === 'souplesse' || test.normeKey === 'apleyCm') && val > 0 ? '+' : ''}${val}${test.unite}`
       : null;
     return (
       <div className="flex items-center gap-2 py-2 border-b border-gray-100 last:border-0">

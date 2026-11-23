@@ -114,7 +114,8 @@ function computeEvolution(initial: number | null, dernier: number | null, lower:
   return `${sign}${Math.round(diff * 10) / 10} (${better ? 'favorable' : 'à surveiller'})`;
 }
 
-type Statut = 'ok' | 'attention' | 'travail';
+// « sans_norme » : mesure affichée sans jugement (Scratch Test en cm, aucune norme validée).
+type Statut = 'ok' | 'attention' | 'travail' | 'sans_norme';
 
 function getStatutTest(key: string, val: number): Statut {
   const normes: Record<string, (v: number) => Statut> = {
@@ -128,16 +129,18 @@ function getStatutTest(key: string, val: number): Statut {
     // Mêmes paliers que NORMES_SCORING.apley (norms.ts) : 3,5/4 et plus = amplitude normale.
     apley:      v => v >= 3.5 ? 'ok' : v >= 2.5 ? 'attention' : 'travail',
   };
+  if (key === 'sans_norme') return 'sans_norme';
   return normes[key]?.(val) ?? 'attention';
 }
 
 const STATUT_LABEL: Record<Statut, string> = {
-  ok: 'Normal', attention: 'À surveiller', travail: 'À travailler',
+  ok: 'Normal', attention: 'À surveiller', travail: 'À travailler', sans_norme: '—',
 };
 const STATUT_COLOR: Record<Statut, { bg: string; fg: string }> = {
   ok:        { bg: GREEN_BG,  fg: GREEN  },
   attention: { bg: ORANGE_BG, fg: ORANGE },
   travail:   { bg: RED_BG,    fg: RED    },
+  sans_norme: { bg: '#F2F6F8',  fg: '#3D4C5A' },
 };
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
@@ -373,6 +376,8 @@ export default function DossierPDF({
         : 'Test 6 minutes (m)',
       '>= 400 m', 'tm6', distanceTm6(dernierBilan.tm6), distanceTm6(bilanInitial?.tm6), false),
     mkRow(`${TEST_LABELS.apley} (/4)`, '>= 3,5/4', 'apley', dernierBilan.apley?.score ?? null, bilanInitial?.apley?.score ?? null, false),
+    mkRow('Épaules, main droite au-dessus (cm)', '—', 'sans_norme', dernierBilan.apley?.cmDroiteDessus ?? null, bilanInitial?.apley?.cmDroiteDessus ?? null, false),
+    mkRow('Épaules, main gauche au-dessus (cm)', '—', 'sans_norme', dernierBilan.apley?.cmGaucheDessus ?? null, bilanInitial?.apley?.cmGaucheDessus ?? null, false),
     (() => {
       const tDernier = computeTinettiScores(dernierBilan.tinetti);
       const tInitial = computeTinettiScores(bilanInitial?.tinetti);

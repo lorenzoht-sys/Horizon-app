@@ -79,6 +79,8 @@ const TESTS: {
   // Ajouté aux tableaux le 23/11/2026. Gardé hors du résumé IA pour ne rien ajouter à ce qui
   // part chez le sous-traitant IA avant la décision HDS (claude/migration-hds.md).
   { key: 'apley',       label: TEST_LABELS.apley, getVal: (b: Bilan) => b.apley?.score,         unite: '/4',   lower: false, horsResumeIA: true },
+  { key: 'apleyCmD',    label: 'Épaules — main D dessus', getVal: (b: Bilan) => b.apley?.cmDroiteDessus, unite: ' cm', lower: false, horsResumeIA: true },
+  { key: 'apleyCmG',    label: 'Épaules — main G dessus', getVal: (b: Bilan) => b.apley?.cmGaucheDessus, unite: ' cm', lower: false, horsResumeIA: true },
   { key: 'tm6',         label: 'TM6',            getVal: (b: Bilan) => distanceTm6(b.tm6),     unite: ' m',   lower: false },
   { key: 'memoireImm',  label: 'Mémoire imm.',   getVal: (b: Bilan) => b.memoire.scoreImmediat,  unite: '/5',   lower: false },
   { key: 'memoireDif',  label: 'Mémoire dif.',   getVal: (b: Bilan) => b.memoire.scoreDiffere,   unite: '/5',   lower: false },

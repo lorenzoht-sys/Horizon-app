@@ -33,6 +33,13 @@ export default function ComparisonTable({ current, previous }: Props) {
     ...(current.apley?.score != null || previous?.apley?.score != null
       ? [{ label: TEST_LABELS.apley, unit: '/4', current: current.apley?.score ?? null, delta: d.apleyScore }]
       : []),
+    // Mesure en cm (deux positions, gardées séparément) : mêmes règles d'apparition.
+    ...(current.apley?.cmDroiteDessus != null || previous?.apley?.cmDroiteDessus != null
+      ? [{ label: 'Épaules — main droite au-dessus', unit: 'cm', current: current.apley?.cmDroiteDessus ?? null, delta: d.apleyCmD }]
+      : []),
+    ...(current.apley?.cmGaucheDessus != null || previous?.apley?.cmGaucheDessus != null
+      ? [{ label: 'Épaules — main gauche au-dessus', unit: 'cm', current: current.apley?.cmGaucheDessus ?? null, delta: d.apleyCmG }]
+      : []),
     // TMC en pas : ligne dédiée, avec l'unité du mode (jamais « 0 m »)
     ...(resultatTm6(current.tm6).type === 'pas'
       ? [{ label: `TM6 — ${resultatTm6(current.tm6).modeLabel}`, unit: 'pas', current: resultatTm6(current.tm6).valeur, delta: d.tm6Pas, warning: d.tm6DureeMismatch ? 'Durées de test différentes — comparaison indicative' : null }]
