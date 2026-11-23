@@ -101,22 +101,20 @@ describe('bornesSemaine', () => {
 });
 
 describe('elementsATraiter', () => {
-  const vide = { nbSeancesNonConfirmees: 0, ressentis: [], brouillons: [], contratsARenouveler: [], contratsSansJours: [] };
+  const vide = { ressentis: [], brouillons: [], contratsARenouveler: [], contratsSansJours: [] };
   it('ne montre rien quand tout est à jour', () => {
     expect(elementsATraiter(vide)).toEqual([]);
   });
-  it('regroupe les points dans l’ordre facture, santé, administratif', () => {
+  it('regroupe les points dans l’ordre santé, administratif', () => {
     const l = elementsATraiter({
-      nbSeancesNonConfirmees: 2,
       ressentis: [{ id: 'r', nom: 'A B' }],
       brouillons: [{ participantId: 'b', nom: 'C D', etape: 1 }],
       contratsARenouveler: [{ participantId: 'c', nom: 'E F', joursRestants: 1 }],
       contratsSansJours: [{ participantId: 'j', nom: 'G H' }],
     });
-    expect(l.map(x => x.type)).toEqual(['seances', 'ressentis', 'brouillon', 'contrat', 'contrat_jours']);
-    expect(l[0]).toMatchObject({ titre: '2 séances à confirmer', lien: '/factures/seances' });
-    expect(l[1].gravite).toBe('haute');
-    expect(l[2].detail).toBe('C D · arrêté à l’étape 2');
-    expect(l[3].detail).toBe('E F · dans 1 jour');
+    expect(l.map(x => x.type)).toEqual(['ressentis', 'brouillon', 'contrat', 'contrat_jours']);
+    expect(l[0].gravite).toBe('haute');
+    expect(l[1].detail).toBe('C D · arrêté à l’étape 2');
+    expect(l[2].detail).toBe('E F · dans 1 jour');
   });
 });
