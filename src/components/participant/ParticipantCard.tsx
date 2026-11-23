@@ -16,11 +16,11 @@ interface Props {
   structureNom?: string;
   /** Part des exercices du programme faits sur 7 jours (null : aucun exercice prévu). */
   assiduite?: number | null;
-  /** « Jeu. 26 · 09:00 », déjà mis en forme ; null : aucun rendez-vous prévu. */
+  /** « Jeu. 26 · 09:00 », déjà mis en forme ; null : aucun rendez-vous prévu. */
   prochainRendezVous?: string | null;
   /** Objectif personnel noté au bilan (tableau de bord V1) : on parle d'une personne, pas d'un dossier. */
   objectif?: string | null;
-  /** Présent : le menu « ··· » propose « Archiver ». */
+  /** Présent : le menu « ··· » propose « Archiver ». */
   onArchiver?: () => void;
 }
 
@@ -122,7 +122,7 @@ export default function ParticipantCard({ participant, structureNom, assiduite, 
 
       {objectif && (
         <p className="m-0 text-[13px] leading-snug line-clamp-2" style={{ color: '#3D4C5A' }}>
-          Objectif : « {objectif} »
+          Objectif : « {objectif} »
         </p>
       )}
 

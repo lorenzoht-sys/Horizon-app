@@ -81,6 +81,22 @@ body::after {
 /* ── PWA safe-area ── */
 body { padding-bottom: env(safe-area-inset-bottom); }
 
+/* ── Téléphone : la page ne bouge pas sur les côtés (demande de Lorenzo, 23/11/2026) ──
+   - overflow-x: clip coupe tout débordement horizontal sans casser position: sticky
+     (contrairement à overflow: hidden) ; overscroll-behavior-x évite le rebond latéral.
+   - iOS zoome sur un champ dont le texte fait moins de 16 px, puis laisse la page glisser
+     de côté : sur écran tactile, les champs sont donc à 16 px au moins. Les zones qui
+     défilent horizontalement (onglets) gardent leur propre défilement. */
+html, body {
+  overflow-x: clip;
+  overscroll-behavior-x: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+@media (pointer: coarse) {
+  input, textarea, select { font-size: max(16px, 1em) !important; }
+}
+
 /* ── Sidebar navigation — Variante C ── */
 .sidebar-nav-item {
   display: flex;
