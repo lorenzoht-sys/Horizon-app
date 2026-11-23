@@ -11,13 +11,13 @@ import type { Seance } from '../types';
  * Au-delà, elle bascule dans le rappel « à confirmer » : une séance oubliée ne bloque jamais
  * l'accueil, et ne disparaît pas non plus sans avoir été confirmée (sinon elle n'entre pas dans
  * la facture du mois).
+ *
+ * Retour de Pierre du 23/11/2026 : une séance non traitée reste visible tant qu'elle n'est pas
+ * marquée réalisée, annulée ou reportée. La fenêtre de 60 jours du rappel est donc retirée.
  */
 
 /** Délai après la fin prévue pendant lequel une séance non clôturée reste en avant. */
 export const DELAI_GARDE_MINUTES = 60;
-
-/** Fenêtre du rappel : au-delà, le contrôle de la facturation du mois prend le relais. */
-export const FENETRE_RAPPEL_JOURS = 60;
 
 function enMinutes(heure: string): number {
   const [h, m] = heure.split(':').map(Number);
@@ -43,16 +43,13 @@ export function seancePrincipale(
 }
 
 /**
- * Séances passées toujours « planifiées » : jours précédents (dans la fenêtre) et séances du
- * jour terminées depuis plus d'une heure. Les plus récentes d'abord.
+ * Séances passées toujours « planifiées » : tous les jours précédents, sans limite de date, et
+ * les séances du jour terminées depuis plus d'une heure. Les plus récentes d'abord.
  */
 export function seancesAConfirmer(seances: Seance[], aujourdhui: string, maintenant: string): Seance[] {
-  const debut = new Date(`${aujourdhui}T12:00:00`);
-  debut.setDate(debut.getDate() - FENETRE_RAPPEL_JOURS);
-  const dateMin = debut.toISOString().slice(0, 10);
   return seances
     .filter(s => s.statut === 'planifiee' && (
-      (s.date < aujourdhui && s.date >= dateMin) ||
+      s.date < aujourdhui ||
       (s.date === aujourdhui && !encoreEnAvant(s, maintenant))
     ))
     .sort((a, b) => b.date.localeCompare(a.date) || enMinutes(b.heureDebut) - enMinutes(a.heureDebut));

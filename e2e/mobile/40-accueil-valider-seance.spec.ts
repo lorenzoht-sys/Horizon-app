@@ -73,6 +73,8 @@ test.describe.serial('Accueil mobile — valider une séance, séances à confir
     const voirPlus = page.getByRole('button', { name: /^Voir les \d+ autres$/ });
     if (!(await bouton.isVisible()) && await voirPlus.isVisible()) await voirPlus.click();
     await bouton.click();
+    await expect(page.getByRole('alertdialog', { name: 'Confirmer que cette séance a bien été réalisée ?' })).toBeVisible();
+    await page.getByRole('button', { name: 'Confirmer', exact: true }).click();
     await expect(page.getByText('Séance marquée comme réalisée')).toBeVisible({ timeout: 10000 });
 
     const { data: apres } = await admin!.from('seances').select('statut').eq('id', seance.id).single();
@@ -113,6 +115,7 @@ test.describe.serial('Accueil mobile — valider une séance, séances à confir
     }
     await expect(carte.getByText(nomComplet)).toBeVisible();
     await valider.click();
+    await page.getByRole('button', { name: 'Confirmer', exact: true }).click();
     await expect(page.getByText('Séance marquée comme réalisée')).toBeVisible({ timeout: 10000 });
 
     const { data: apres } = await admin!.from('seances').select('statut').eq('id', seance.id).single();

@@ -25,6 +25,7 @@ import {
 import { formatDateCourt, usePraticienSettings } from './communs';
 import { GuideDemarrage } from '../../../components/demarrage/GuideDemarrage';
 import { seancePrincipale, seancesAConfirmer } from '../../../lib/accueilSeances';
+import { DialogueConfirmation } from '../../../components/ui/DialogueConfirmation';
 
 export function ouvrirMaps(adresse: string) {
   window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}`, '_blank');
@@ -90,6 +91,8 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
   const [ecartees, setEcartees] = useState<ReadonlySet<string>>(new Set());
   const [validationEnCours, setValidationEnCours] = useState<string | null>(null);
   const [toutesAConfirmer, setToutesAConfirmer] = useState(false);
+  // Geste en attente de confirmation (retour de Pierre du 23/11/2026).
+  const [aConfirmerGeste, setAConfirmerGeste] = useState<{ seance: Seance; statut: 'realisee' | 'annulee' } | null>(null);
   const [retours, setRetours] = useState<Record<string, { borgRpe: number; bienEtre: number }[]>>({});
   const retoursCharges = useRef(false);
   const [astucesEcartees, setAstucesEcartees] = useState<Set<string>>(lireAstucesEcartees);
@@ -150,10 +153,18 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
   const astuce = astuceDuJour(today, astucesEcartees);
   const ressentis = participantsActifs.filter(p => ressentisPreoccupants(retours[p.id] ?? []));
 
-  async function cloturer(seance: Seance, statut: 'realisee' | 'annulee') {
+  // Les boutons demandent d'abord confirmation ; l'écriture n'a lieu qu'après « Confirmer ».
+  function cloturer(seance: Seance, statut: 'realisee' | 'annulee') {
+    setAConfirmerGeste({ seance, statut });
+  }
+
+  async function cloturerConfirme() {
+    if (!aConfirmerGeste) return;
+    const { seance, statut } = aConfirmerGeste;
     setValidationEnCours(seance.id);
     const ok = await modifierSeance(seance.id, { statut });
     setValidationEnCours(null);
+    setAConfirmerGeste(null);
     if (ok) toast.success(statut === 'realisee' ? 'Séance marquée comme réalisée' : 'Séance marquée comme annulée');
     else toast.error('La séance n’a pas pu être enregistrée. Réessayez dans un instant.');
   }
@@ -311,7 +322,7 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
         {aConfirmer.length > 0 && (
           <section aria-labelledby="m-confirmer" style={CARTE} className="flex flex-col gap-2.5">
             <Titre id="m-confirmer" droite={<Pastille ton="orange">{aConfirmer.length}</Pastille>}>À confirmer</Titre>
-            <p className="m-0 text-[13px]" style={{ color: AIDE }}>Un geste par séance, et votre facture du mois est juste.</p>
+            <p className="m-0 text-[13px]" style={{ color: AIDE }}>Un geste par séance, et votre facture du mois est juste. Elles restent ici tant qu’elles ne sont ni réalisées ni annulées.</p>
             {(toutesAConfirmer ? aConfirmer : aConfirmer.slice(0, A_CONFIRMER_VISIBLES)).map(sc => {
               const p = participants.find(x => x.id === sc.participantId);
               const occupe = validationEnCours === sc.id;
@@ -486,6 +497,22 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
           </aside>
         )}
       </div>
+
+      {aConfirmerGeste && (() => {
+        const p = participants.find(x => x.id === aConfirmerGeste.seance.participantId);
+        const quand = `${formatDateCourt(aConfirmerGeste.seance.date)} · ${aConfirmerGeste.seance.heureDebut.slice(0, 5)}`;
+        const realisee = aConfirmerGeste.statut === 'realisee';
+        return (
+          <DialogueConfirmation
+            titre={realisee ? 'Confirmer que cette séance a bien été réalisée ?' : 'Confirmer que cette séance n’a pas eu lieu ?'}
+            message={`${nomDe(p)}, ${quand}. ${realisee ? 'Elle entrera dans la facture du mois.' : 'Elle sera marquée annulée et ne sera pas facturée.'}`}
+            libelleConfirmer={realisee ? 'Confirmer' : 'Confirmer l’annulation'}
+            enCours={validationEnCours === aConfirmerGeste.seance.id}
+            onConfirmer={() => void cloturerConfirme()}
+            onAnnuler={() => setAConfirmerGeste(null)}
+          />
+        );
+      })()}
 
       {coursSelectionne && (
         <ModalPresenceCoursCollectif

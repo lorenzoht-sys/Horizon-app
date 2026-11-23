@@ -58,7 +58,7 @@ describe('seancesAConfirmer', () => {
     expect(seancesAConfirmer([matin], JOUR, '11:00').map(s => s.id)).toEqual(['matin']);
   });
 
-  it('ne remonte pas au-delà de la fenêtre de rappel', () => {
-    expect(seancesAConfirmer([seance('trop-vieille', '2026-08-01', '10:00', '11:00')], JOUR, '08:00')).toEqual([]);
+  it('garde une séance oubliée, même ancienne, tant qu’elle n’est pas traitée (retour de Pierre)', () => {
+    expect(seancesAConfirmer([seance('ancienne', '2026-08-01', '10:00', '11:00')], JOUR, '08:00').map(s => s.id)).toEqual(['ancienne']);
   });
 });
