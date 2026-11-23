@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useParticipants } from '../../../hooks/useParticipants';
 import { useAgenda } from '../../../hooks/useAgenda';
@@ -13,6 +14,7 @@ import { URLS_MOBILE } from '../../../lib/routesMobile';
 import { contratsDesBeneficiairesActifs } from '../../../lib/archivage';
 import { C, formatDateCourt, formatDateLong, usePraticienSettings } from './communs';
 import { GuideDemarrage } from '../../../components/demarrage/GuideDemarrage';
+import { seancePrincipale, seancesAConfirmer } from '../../../lib/accueilSeances';
 
 export function ouvrirMaps(adresse: string) {
   window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}`, '_blank');
@@ -28,7 +30,7 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
   // `participants` (tous) sert aux recherches par identifiant ; les compteurs et listes du
   // quotidien n'utilisent que les actifs — un archivé n'est plus suivi.
   const { participants, participantsActifs } = useParticipants();
-  const { seances: allSeances, seancesDuJour } = useAgenda();
+  const { seances: allSeances, seancesDuJour, modifierSeance } = useAgenda();
   // Alerte « contrat fin proche » (équivalent mobile du Dashboard) : un bénéficiaire archivé
   // n'est plus suivi, son contrat n'appelle aucune action (cf. lib/archivage.ts, Dashboard.tsx).
   const { contratsARenouveler: contratsARenouvelerTous } = useContrats();
@@ -75,8 +77,22 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
   );
 
   const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  const prochaineSeance = seances.find(s => s.statut === 'planifiee' && s.heureDebut >= currentTimeStr)
-    ?? seances.find(s => s.statut === 'planifiee');
+  // Séances écartées à la main (« Passer à la suivante ») : le temps de la session seulement,
+  // rien n'est écrit en base. Règles de choix : src/lib/accueilSeances.ts.
+  const [ecartees, setEcartees] = useState<ReadonlySet<string>>(new Set());
+  const [rappelOuvert, setRappelOuvert] = useState(false);
+  const [validationEnCours, setValidationEnCours] = useState<string | null>(null);
+  const prochaineSeance = seancePrincipale(seances, currentTimeStr, ecartees);
+  const suivanteExiste = prochaineSeance !== null
+    && seancePrincipale(seances, currentTimeStr, new Set([...ecartees, prochaineSeance.id])) !== null;
+  const aConfirmer = seancesAConfirmer(allSeances, today, currentTimeStr);
+
+  async function cloturer(seance: Seance, statut: 'realisee' | 'annulee') {
+    setValidationEnCours(seance.id);
+    const ok = await modifierSeance(seance.id, { statut });
+    setValidationEnCours(null);
+    if (ok) toast.success(statut === 'realisee' ? 'Séance marquée comme réalisée' : 'Séance marquée comme annulée');
+  }
 
   // Timeline du jour : séances individuelles et cours collectifs mêlés,
   // triés par heure — un cours collectif n'a pas de bénéficiaire unique, il
@@ -155,7 +171,9 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
             <div style={{ background: 'white', borderRadius: 18, boxShadow: '0 4px 16px rgba(13,43,43,0.10)', overflow: 'hidden', display: 'flex' }}>
               <span aria-hidden="true" style={{ width: 6, background: cat?.couleur ?? C.primary, flexShrink: 0 }} />
               <div style={{ padding: 16, flex: 1, minWidth: 0 }}>
-                <div style={{ ...titreSection, color: C.primary, marginBottom: 8 }}>Prochaine séance</div>
+                <div style={{ ...titreSection, color: C.primary, marginBottom: 8 }}>
+                  {prochaineSeance.heureDebut.slice(0, 5) <= currentTimeStr ? 'Séance en cours' : 'Prochaine séance'}
+                </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
                   <span style={{ fontSize: 26, fontWeight: 800, color: C.text, lineHeight: 1 }}>{prochaineSeance.heureDebut}</span>
                   <span style={{ fontSize: 16, fontWeight: 700, color: C.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p?.prenom} {p?.nom}</span>
@@ -177,7 +195,11 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
                     ⚠️ {contreIndDetail}
                   </div>
                 )}
-                <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                <button onClick={() => cloturer(prochaineSeance, 'realisee')} disabled={validationEnCours === prochaineSeance.id}
+                  style={{ width: '100%', marginTop: 14, padding: '13px', background: C.green, border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 800, color: 'white', cursor: 'pointer', opacity: validationEnCours === prochaineSeance.id ? 0.6 : 1 }}>
+                  ✓ Marquer comme réalisée
+                </button>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   {adresse && (
                     <button onClick={() => ouvrirMaps(adresse)}
                       style={{ flex: 1, padding: '11px', background: 'white', border: `1.5px solid ${C.primary}`, borderRadius: 10, fontSize: 13, fontWeight: 700, color: C.primary, cursor: 'pointer' }}>
@@ -189,10 +211,63 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
                     📋 Fiche →
                   </button>
                 </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 10 }}>
+                  <button onClick={() => navigate(URLS_MOBILE.agendaJour(prochaineSeance.date))}
+                    style={{ background: 'none', border: 'none', padding: '4px 0', fontSize: 12, fontWeight: 700, color: C.muted, cursor: 'pointer' }}>
+                    Modifier ou annuler
+                  </button>
+                  {suivanteExiste && (
+                    <button onClick={() => setEcartees(prev => new Set([...prev, prochaineSeance.id]))}
+                      style={{ background: 'none', border: 'none', padding: '4px 0', fontSize: 12, fontWeight: 700, color: C.primary, cursor: 'pointer' }}>
+                      Passer à la suivante →
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           );
         })()}
+
+        {/* ── SÉANCES PASSÉES À CONFIRMER ───────────────────────── */}
+        {aConfirmer.length > 0 && (
+          <div style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 14, overflow: 'hidden' }}>
+            <button onClick={() => setRappelOuvert(o => !o)} aria-expanded={rappelOuvert}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13, fontWeight: 700, color: '#92400E' }}>
+              <span style={{ flex: 1 }}>
+                {aConfirmer.length} séance{aConfirmer.length > 1 ? 's' : ''} passée{aConfirmer.length > 1 ? 's' : ''} à confirmer
+              </span>
+              <i className={`ti ${rappelOuvert ? 'ti-chevron-up' : 'ti-chevron-down'}`} style={{ fontSize: 16 }} />
+            </button>
+            {rappelOuvert && (
+              <div style={{ background: 'white' }}>
+                <div style={{ padding: '0 14px 10px', fontSize: 12, color: '#92400E', background: '#FFFBEB' }}>
+                  Une séance non confirmée n'entre pas dans la facture du mois.
+                </div>
+                {aConfirmer.map(sc => {
+                  const p = participants.find(x => x.id === sc.participantId);
+                  const occupe = validationEnCours === sc.id;
+                  return (
+                    <div key={sc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderTop: '1px solid #F0F4F4' }}>
+                      <button onClick={() => navigate(URLS_MOBILE.agendaJour(sc.date))}
+                        style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}>
+                        <div style={{ fontSize: 12, color: C.muted }}>{formatDateCourt(sc.date)} · {sc.heureDebut.slice(0, 5)}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p?.prenom} {p?.nom}</div>
+                      </button>
+                      <button onClick={() => cloturer(sc, 'realisee')} disabled={occupe} aria-label={`Réalisée : ${p?.prenom ?? ''} ${p?.nom ?? ''}, ${formatDateCourt(sc.date)}`}
+                        style={{ padding: '8px 10px', background: C.green, border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, color: 'white', cursor: 'pointer', opacity: occupe ? 0.6 : 1 }}>
+                        Réalisée
+                      </button>
+                      <button onClick={() => cloturer(sc, 'annulee')} disabled={occupe} aria-label={`Annulée : ${p?.prenom ?? ''} ${p?.nom ?? ''}, ${formatDateCourt(sc.date)}`}
+                        style={{ padding: '8px 10px', background: 'white', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 12, fontWeight: 700, color: C.muted, cursor: 'pointer', opacity: occupe ? 0.6 : 1 }}>
+                        Annulée
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── TIMELINE ou ÉTAT VIDE ─────────────────────────────── */}
         {itemsJour.length === 0 ? (
