@@ -37,6 +37,21 @@ export function useEvenementsAgenda() {
     return nouveau;
   }
 
+  // Mise à jour de la ligne existante (même id) : l'UID iCal « evenement-<id> » ne change pas,
+  // Google Agenda met donc à jour l'événement au lieu d'en créer un second.
+  async function modifierEvenement(id: string, data: Omit<EvenementAgenda, 'id'>): Promise<boolean> {
+    if (supabase) {
+      const { error } = await supabase.from('evenements_agenda').update(evenementAgendaToDb(data)).eq('id', id);
+      if (error) {
+        console.error('Erreur modification événement agenda:', error);
+        toast.error("Impossible de modifier l'événement.");
+        return false;
+      }
+    }
+    setEvenements(prev => prev.map(e => (e.id === id ? { ...data, id } : e)));
+    return true;
+  }
+
   async function supprimerEvenement(id: string) {
     if (supabase) {
       const { error } = await supabase.from('evenements_agenda').delete().eq('id', id);
@@ -49,5 +64,5 @@ export function useEvenementsAgenda() {
     setEvenements(prev => prev.filter(e => e.id !== id));
   }
 
-  return { evenements, creerEvenement, supprimerEvenement };
+  return { evenements, creerEvenement, modifierEvenement, supprimerEvenement };
 }

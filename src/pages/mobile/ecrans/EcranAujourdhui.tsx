@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useParticipants } from '../../../hooks/useParticipants';
 import { useAgenda } from '../../../hooks/useAgenda';
@@ -36,7 +37,7 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
   const { settings: praticienSettings } = usePraticienSettings();
   const {
     coursCollectifs, participationsDuCours,
-    modifierStatutCours, mettreAJourParticipation,
+    modifierStatutCours, modifierCours, mettreAJourParticipation,
   } = useCoursCollectifs();
   const [coursSelectionneId, setCoursSelectionneId] = useState<string | null>(null);
   // Couleurs de catégorie du praticien (les mêmes que dans l'agenda) et accès à l'agenda.
@@ -322,6 +323,11 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
           participants={participants}
           onMettreAJourParticipation={(participationId, patch) => mettreAJourParticipation(participationId, patch)}
           onModifierStatutCours={async statut => modifierStatutCours(coursSelectionne.id, statut)}
+          onModifierCours={async patch => {
+            const ok = await modifierCours(coursSelectionne.id, patch);
+            if (ok) toast.success('Cours modifié');
+            return ok;
+          }}
           onClose={() => setCoursSelectionneId(null)}
         />
       )}

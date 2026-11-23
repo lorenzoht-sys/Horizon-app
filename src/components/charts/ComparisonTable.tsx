@@ -2,6 +2,7 @@ import type { Bilan } from '../../types';
 import { useBilanDelta } from '../../hooks/useBilanDelta';
 import { TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react';
 import { distanceTm6, resultatTm6 } from '../../lib/tm6';
+import { TEST_LABELS } from '../../data/profiles';
 
 interface Props {
   current: Bilan;
@@ -26,7 +27,19 @@ export default function ComparisonTable({ current, previous }: Props) {
     { label: 'HandGrip D', unit: 'kg', current: current.handGrip.droite, delta: d.handGripDroite },
     { label: 'HandGrip G', unit: 'kg', current: current.handGrip.gauche, delta: d.handGripGauche },
     { label: 'TUG 3m', unit: 's', current: current.tug3m, delta: d.tug3m },
-    { label: 'Souplesse', unit: 'cm', current: current.souplesse.valeur, delta: d.souplesse },
+    { label: TEST_LABELS.souplesse, unit: 'cm', current: current.souplesse.valeur, delta: d.souplesse },
+    // Ligne présente seulement si l'un des deux bilans a fait le test : c'est un test ponctuel,
+    // une ligne « — / — » permanente laisserait croire à un résultat perdu.
+    ...(current.apley?.score != null || previous?.apley?.score != null
+      ? [{ label: TEST_LABELS.apley, unit: '/4', current: current.apley?.score ?? null, delta: d.apleyScore }]
+      : []),
+    // Mesure en cm (deux positions, gardées séparément) : mêmes règles d'apparition.
+    ...(current.apley?.cmDroiteDessus != null || previous?.apley?.cmDroiteDessus != null
+      ? [{ label: 'Épaules — main droite au-dessus', unit: 'cm', current: current.apley?.cmDroiteDessus ?? null, delta: d.apleyCmD }]
+      : []),
+    ...(current.apley?.cmGaucheDessus != null || previous?.apley?.cmGaucheDessus != null
+      ? [{ label: 'Épaules — main gauche au-dessus', unit: 'cm', current: current.apley?.cmGaucheDessus ?? null, delta: d.apleyCmG }]
+      : []),
     // TMC en pas : ligne dédiée, avec l'unité du mode (jamais « 0 m »)
     ...(resultatTm6(current.tm6).type === 'pas'
       ? [{ label: `TM6 — ${resultatTm6(current.tm6).modeLabel}`, unit: 'pas', current: resultatTm6(current.tm6).valeur, delta: d.tm6Pas, warning: d.tm6DureeMismatch ? 'Durées de test différentes — comparaison indicative' : null }]

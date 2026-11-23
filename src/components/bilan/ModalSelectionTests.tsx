@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Check, AlertTriangle } from 'lucide-react';
 import type { Participant, TestKey } from '../../types';
 import { computeDefauts } from '../../lib/testsParDefaut';
+import { TEST_LABELS } from '../../data/profiles';
 
 interface TestInfo {
   key: TestKey;
@@ -15,8 +16,10 @@ const TESTS_INFO: TestInfo[] = [
   { key: 'chairStand', label: 'Chair Stand 30s',              description: 'Lever de chaise répété — force des membres inférieurs',           categorie: 'physique'  },
   { key: 'handGrip',   label: 'Hand Grip',                   description: 'Dynamomètre — force de préhension, marqueur sarcopénie (EWGSOP2)', categorie: 'physique'  },
   { key: 'tug',        label: 'TUG 3m',                      description: 'Timed Up & Go — mobilité fonctionnelle et risque de chute (HAS)', categorie: 'physique'  },
-  { key: 'souplesse',  label: 'Souplesse scapulaire',         description: 'Distance doigts/pieds — flexibilité postérieure',                 categorie: 'physique'  },
-  { key: 'apley',      label: 'Apley Scratch Test',           description: 'Amplitude épaule en 4 niveaux — mobilité du membre supérieur',    categorie: 'physique'  },
+  // « Souplesse scapulaire » jusqu'au 23/11/2026 : faux, ce test mesure la flexion avant du tronc
+  // (signalé par Pierre). Le test des épaules est l'Apley, juste en dessous.
+  { key: 'souplesse',  label: TEST_LABELS.souplesse,          description: 'Flexion avant du tronc, jambes tendues — souplesse de la chaîne postérieure', categorie: 'physique'  },
+  { key: 'apley',      label: TEST_LABELS.apley,              description: 'Mains rapprochées derrière le dos, 4 niveaux par côté — mobilité des épaules', categorie: 'physique'  },
   { key: 'tinetti',    label: 'Tinetti (POMA)',               description: 'Grille équilibre & marche gériatrique — score /28 (HAS chutes)', categorie: 'physique'  },
   { key: 'berg',       label: 'Berg Balance Scale',           description: 'Grille 14 items, score /56 — gold standard risque de chute',      categorie: 'physique'  },
   { key: 'marche10m',  label: 'Test de marche 10 m',         description: 'Vitesse de marche habituelle & max (m/s) — mobilité fonctionnelle', categorie: 'physique' },

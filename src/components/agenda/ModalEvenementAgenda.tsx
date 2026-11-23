@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { X, Trash2 } from 'lucide-react';
+import { X, Trash2, Pencil } from 'lucide-react';
 import type { EvenementAgenda } from '../../types';
 import { formatDate, LABEL_TYPE_EVENEMENT } from '../../lib/agendaCommun';
 
-export default function ModalEvenementAgenda({ evenement, onDelete, onClose }: {
+export default function ModalEvenementAgenda({ evenement, onEdit, onDelete, onClose }: {
   evenement: EvenementAgenda;
+  onEdit: () => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
@@ -66,6 +67,10 @@ export default function ModalEvenementAgenda({ evenement, onDelete, onClose }: {
           <button onClick={onClose}
             className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
             Fermer
+          </button>
+          <button onClick={onEdit}
+            className="flex-1 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-dark transition-colors flex items-center justify-center gap-1.5">
+            <Pencil size={14} /> Modifier l'événement
           </button>
         </div>
 
