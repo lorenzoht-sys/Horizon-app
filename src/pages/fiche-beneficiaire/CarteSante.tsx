@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Pencil } from 'lucide-react';
 import type { Bilan, Participant } from '../../types';
 import { formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../../lib/anamnese';
 
@@ -18,28 +19,29 @@ export function CarteSante({ participant, bilanInitial, onModifier }: {
   const contactsSante = participant.anamnese?.autonomie?.contactsSante ?? [];
 
   const lignes = ([
-    participant.pathologie && { icon: '🏥', texte: participant.pathologie },
-    participant.antecedentsMedicaux && { icon: '📋', texte: participant.antecedentsMedicaux },
-    participant.antecedentsChirurgicaux && { icon: '✂️', texte: participant.antecedentsChirurgicaux },
-    participant.allergies && { icon: '⚠️', texte: `Allergies : ${participant.allergies}` },
-    profil?.douleursNiveau != null && { icon: '🔴', texte: `Douleur habituelle : ${profil.douleursNiveau}/10` },
-    profil?.douleursLocalisation && { icon: '📍', texte: profil.douleursLocalisation },
-    profil?.chutes12mois != null && { icon: '⚡', texte: `Chutes / 12 mois : ${profil.chutes12mois}` },
-    profil?.objectifsPersonnels && { icon: '🎯', texte: profil.objectifsPersonnels },
+    participant.pathologie && { icon: 'Pathologie', texte: participant.pathologie },
+    participant.antecedentsMedicaux && { icon: 'Antécédents', texte: participant.antecedentsMedicaux },
+    participant.antecedentsChirurgicaux && { icon: 'Chirurgie', texte: participant.antecedentsChirurgicaux },
+    participant.allergies && { icon: 'Allergies', texte: participant.allergies },
+    profil?.douleursNiveau != null && { icon: 'Douleur', texte: `${profil.douleursNiveau}/10 habituellement` },
+    profil?.douleursLocalisation && { icon: 'Où', texte: profil.douleursLocalisation },
+    profil?.chutes12mois != null && { icon: 'Chutes', texte: `${profil.chutes12mois} sur les 12 derniers mois` },
+    profil?.objectifsPersonnels && { icon: 'Son objectif', texte: `« ${profil.objectifsPersonnels} »` },
   ] as ({ icon: string; texte: string } | false)[]).filter((l): l is { icon: string; texte: string } => Boolean(l));
 
   const hasContent = lignes.length > 0 || traitementsActifs.length > 0 || traitementsArretes.length > 0 || antecedents.length > 0 || contactsSante.length > 0;
   if (!hasContent) return null;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200/60 p-4 shadow-sm">
+    <div className="bg-white rounded-[18px] p-4 sm:p-5 shadow-sm" style={{ border: '1px solid #E2EEEE' }}>
       <div className="flex items-center justify-between mb-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">Profil de santé</div>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-ink-2)' }}>Profil de santé</div>
         <button
           onClick={onModifier}
-          className="text-[12px] text-gray-400 hover:text-primary flex items-center gap-1 transition-colors"
+          className="text-[12px] font-semibold hover:text-primary flex items-center gap-1 transition-colors"
+          style={{ color: 'var(--color-ink-2)' }}
         >
-          ✏️ Modifier
+          <Pencil size={12} aria-hidden="true" /> Modifier
         </button>
       </div>
 
@@ -47,8 +49,9 @@ export function CarteSante({ participant, bilanInitial, onModifier }: {
       {lignes.length > 0 && (
         <div className="space-y-2 mb-4">
           {lignes.slice(0, 6).map((l, i) => (
-            <div key={i} className="flex gap-2 text-[13px] text-gray-600 leading-relaxed">
-              <span className="flex-shrink-0">{l.icon}</span>
+            // Libellé écrit au lieu d'un émoji (23/11/2026) : plus lisible, et pareil sur tous les téléphones.
+            <div key={i} className="flex gap-2 text-[13px] leading-relaxed" style={{ color: '#3D4C5A' }}>
+              <span className="flex-shrink-0 font-bold" style={{ color: 'var(--color-ink)' }}>{l.icon}</span>
               <span>{l.texte}</span>
             </div>
           ))}

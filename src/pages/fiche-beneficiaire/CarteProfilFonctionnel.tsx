@@ -206,11 +206,13 @@ export function CarteProfilFonctionnel({ participant, bilans }: {
           </div>
         )}
         {note !== null && dotColor && (
-          <div className="flex gap-1 mt-2.5" role="img" aria-label={`Niveau ${note} sur 5 (${dotLabel}) ; la norme commence au niveau 4`}>
+          <div className="relative flex gap-1 mt-2.5" role="img" aria-label={`Niveau ${note} sur 5 (${dotLabel}) ; la norme commence au niveau 4`}>
             {[1, 2, 3, 4, 5].map(cran => (
-              <span key={cran} className="h-1.5 flex-1 rounded-full"
-                style={{ background: cran <= note ? dotColor : '#E6EEF0', outline: cran === 4 ? '1.5px solid #1A2332' : undefined, outlineOffset: 1 }} />
+              <span key={cran} className="h-1.5 flex-1 rounded-full" style={{ background: cran <= note ? dotColor : '#E6EEF0' }} />
             ))}
+            {/* Repère de la norme : un trait fin juste avant le 4e cran (relecture visuelle du
+                23/11/2026 : le cran entouré se lisait comme un bouton). */}
+            <span aria-hidden="true" className="absolute -top-1 -bottom-1 w-0.5 rounded-full" style={{ left: 'calc(60% - 1px)', background: '#1A2332' }} />
           </div>
         )}
         {normeText && val !== null && (

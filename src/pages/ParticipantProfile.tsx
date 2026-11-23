@@ -990,7 +990,7 @@ export default function ParticipantProfile() {
             );
           })()}
           {programmeActif.objectif && (
-            <div className="mt-2 text-[12px] text-gray-500 italic">🎯 {programmeActif.objectif}</div>
+            <div className="mt-2 text-[12px] italic" style={{ color: 'var(--color-ink-2)' }}>Objectif : {programmeActif.objectif}</div>
           )}
         </div>
       ) : (
