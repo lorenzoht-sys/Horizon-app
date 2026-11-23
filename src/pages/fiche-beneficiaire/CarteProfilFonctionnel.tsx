@@ -166,10 +166,10 @@ export function CarteProfilFonctionnel({ participant, bilans }: {
     return { test, val, note, progression, extra };
   }).filter((x): x is NonNullable<typeof x> => x !== null);
 
-  // Pair tests into 2 columns
-  const leftTests = testsAvecValeur.filter((_, i) => i % 2 === 0);
-  const rightTests = testsAvecValeur.filter((_, i) => i % 2 === 1);
 
+  // Tuile d'un test (refonte du 23/11/2026) : valeur en grand, niveau en toutes lettres, et une
+  // jauge en cinq crans (la note /5 de norms.ts), la norme commençant au 4e. On voit l'écart à la
+  // norme sans lire de chiffre ; les seuils restent écrits dessous.
   function TestRow({ test, val, note, progression, extra }: typeof testsAvecValeur[0]) {
     const dotColor = note !== null ? noteToDot(note) : null;
     const dotLabel = note !== null ? noteToLabel(note) : '';
@@ -180,42 +180,54 @@ export function CarteProfilFonctionnel({ participant, bilans }: {
       ? `${(test.normeKey === 'souplesse' || test.normeKey === 'apleyCm') && val > 0 ? '+' : ''}${val}${test.unite}`
       : null;
     return (
-      <div className="flex items-center gap-2 py-2 border-b border-gray-100 last:border-0">
-        <span className="text-[12px] text-gray-400 w-[82px] flex-shrink-0 truncate">{test.label}</span>
-        <div className="flex-1 min-w-0">
-          {valDisplay && <span className="text-[13px] font-semibold text-gray-800">{valDisplay}</span>}
-          {extra && (
-            <div
-              className={valDisplay
-                ? 'text-[10px] text-orange-600 leading-none mt-0.5 truncate'
-                : 'text-[13px] font-semibold text-gray-800 truncate'}
-              title={extra}
-            >
-              {extra}
-            </div>
-          )}
-          {normeText && val !== null && (
-            <div className="text-[10px] text-gray-400 leading-none mt-0.5">{normeText}</div>
+      <div className="rounded-[14px] p-3.5" style={{ background: '#FAFCFD', border: '1px solid #EEF4F4' }}>
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-[12px] font-bold text-gray-500 leading-tight">{test.label}</span>
+          {note !== null && dotColor && (
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0"
+              style={{ background: `${dotColor}1F`, color: note >= 4 ? '#147A64' : note === 3 ? '#8A5300' : '#B42318' }}>
+              {dotLabel}
+            </span>
           )}
         </div>
-        {dotColor && (
-          <span
-            title={dotLabel}
-            className="w-2 h-2 rounded-full flex-shrink-0"
-            style={{ background: dotColor }}
-          />
+        <div className="flex items-baseline gap-2 mt-1.5">
+          {valDisplay && <span className="text-[20px] font-extrabold text-gray-900 leading-none">{valDisplay}</span>}
+          {progression !== null && (
+            <span className={`text-[12px] font-bold ${progression > 0 ? 'text-green-600' : progression < 0 ? 'text-red-500' : 'text-gray-400'}`}
+              title={progression > 0 ? 'En progrès depuis le bilan initial' : progression < 0 ? 'En recul depuis le bilan initial' : 'Stable depuis le bilan initial'}>
+              {progression > 0 ? '↑' : progression < 0 ? '↓' : '='}
+            </span>
+          )}
+        </div>
+        {extra && (
+          <div
+            className={valDisplay
+              ? 'text-[11px] text-orange-700 leading-snug mt-1 truncate'
+              : 'text-[15px] font-bold text-gray-800 truncate mt-1'}
+            title={extra}
+          >
+            {extra}
+          </div>
         )}
-        {progression !== null && (
-          <span className={`text-[11px] font-bold flex-shrink-0 ${progression > 0 ? 'text-green-600' : progression < 0 ? 'text-red-500' : 'text-gray-400'}`}>
-            {progression > 0 ? '↑' : progression < 0 ? '↓' : '='}
-          </span>
+        {note !== null && dotColor && (
+          <div className="relative flex gap-1 mt-2.5" role="img" aria-label={`Niveau ${note} sur 5 (${dotLabel}) ; la norme commence au niveau 4`}>
+            {[1, 2, 3, 4, 5].map(cran => (
+              <span key={cran} className="h-1.5 flex-1 rounded-full" style={{ background: cran <= note ? dotColor : '#E6EEF0' }} />
+            ))}
+            {/* Repère de la norme : un trait fin juste avant le 4e cran (relecture visuelle du
+                23/11/2026 : le cran entouré se lisait comme un bouton). */}
+            <span aria-hidden="true" className="absolute -top-1 -bottom-1 w-0.5 rounded-full" style={{ left: 'calc(60% - 1px)', background: '#1A2332' }} />
+          </div>
+        )}
+        {normeText && val !== null && (
+          <div className="text-[11px] text-gray-500 mt-1.5">Norme {normeText}</div>
         )}
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200/60 p-4 shadow-sm">
+    <div className="bg-white rounded-[18px] p-4 sm:p-5 shadow-sm" style={{ border: '1px solid #E2EEEE' }}>
       <div className="flex items-center justify-between mb-3">
         <SectionLabel>Profil fonctionnel</SectionLabel>
         {initial !== current && (
@@ -225,15 +237,9 @@ export function CarteProfilFonctionnel({ participant, bilans }: {
         )}
       </div>
 
-      {/* Test grid 2 colonnes */}
-      {/* Une colonne sur téléphone : à deux, libellé et valeur se chevauchaient. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-0">
-        <div className="sm:pr-4 sm:border-r border-gray-100">
-          {leftTests.map((item, i) => <TestRow key={i} {...item} />)}
-        </div>
-        <div className="sm:pl-4">
-          {rightTests.map((item, i) => <TestRow key={i} {...item} />)}
-        </div>
+      {/* Tuiles : une colonne sur téléphone, deux ou trois au-delà. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+        {testsAvecValeur.map((item, i) => <TestRow key={i} {...item} />)}
       </div>
 
       {/* Légende */}

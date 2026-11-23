@@ -28,7 +28,7 @@ test.describe('Rappels automatiques - réglages praticien', () => {
     await loginPraticien(page);
     await ouvrirFicheParticipant(page, `${env.patientPrenom} ${env.patientNom}`);
 
-    await page.getByRole('button', { name: '🔔 Rappels' }).click();
+    await page.getByRole('button', { name: 'Rappels' }).click();
 
     // Indicateur du nombre d'appareils abonnés (0 ou plus).
     await expect(page.getByText(/appareil.*abonné/)).toBeVisible();
