@@ -769,7 +769,7 @@ export default function ParticipantProfile() {
         </div>
 
         {/* Actions (refonte du 23/11/2026) : trois actions du quotidien en avant, le reste dans
-            « Plus ». Avant : huit boutons de même poids sur une ligne. Appeler et Itinéraire
+            « Autres actions ». Avant : huit boutons de même poids sur une ligne. Appeler et Itinéraire
             restent visibles sur téléphone, où l'on part en visite. */}
         <div className="px-4 sm:px-5 py-3" style={{ borderTop: '1px solid #EEF4F4' }}>
           <div className="flex items-center gap-2 flex-wrap">
@@ -825,7 +825,8 @@ export default function ParticipantProfile() {
                 className="flex items-center gap-1 bg-white text-[13px] font-semibold px-3.5 py-2 rounded-[10px] hover:bg-gray-50 transition-colors"
                 style={{ border: '1.5px solid #E2EEEE' }}
               >
-                Plus <ChevronDown size={14} aria-hidden="true" />
+                {/* « Autres actions » et non « Plus » : la barre de navigation mobile a déjà un bouton « Plus ». */}
+                Autres actions <ChevronDown size={14} aria-hidden="true" />
               </button>
               {plusOuvert && (
                 <div role="menu" className="absolute left-0 top-full mt-1.5 bg-white rounded-xl shadow-xl z-50 py-1.5 w-64 border border-gray-100">
