@@ -88,16 +88,18 @@ export default withSentry(async function handler(req: any, res: any) {
     // message de motivation et `suivi_semaines`, le suivi déclaré par le bénéficiaire. Le portail
     // n'affiche que le titre (ou le nom), l'objectif, la date et le statut actif.
     //
-    // Bénéficiaires archivés (même audit) : un ancien bénéficiaire n'est plus accompagné, la
-    // structure n'a plus à voir son suivi. Le dossier reste entier côté praticien.
+    // Bénéficiaires archivés (retour de Pierre du 23/11/2026) : ils restent visibles de la
+    // structure, dans une rubrique « Accompagnements terminés », avec exactement les mêmes
+    // colonnes qu'un bénéficiaire suivi. Seul le drapeau `archive` est ajouté, pour les classer :
+    // l'archivage ne donne accès à rien de plus, et le portail reste en lecture seule (la
+    // structure ne peut ni réactiver ni modifier le statut).
     supabase.from('participants')
       .select(
-        'id, prenom, nom, date_naissance, date_creation, structure_id, ' +
+        'id, prenom, nom, date_naissance, date_creation, structure_id, archive, ' +
         'bilans(id, date, equilibre_droite, chair_stand_30, hand_grip_droite, tug_3m, tm6_distance_metres), ' +
         'programmes(id, titre, nom, objectif, actif, date_creation)'
       )
-      .eq('structure_id', structure.id)
-      .eq('archive', false),
+      .eq('structure_id', structure.id),
   ]);
 
   const participants = participantsRes.data ?? [];

@@ -175,7 +175,7 @@ test.describe('Portail structure', () => {
       ).toBe(true);
 
       const autorisees = [
-        'bilans', 'date_creation', 'date_naissance', 'id', 'nom', 'prenom',
+        'archive', 'bilans', 'date_creation', 'date_naissance', 'id', 'nom', 'prenom',
         'programmes', 'structure_id',
       ];
       for (const p of body.participants) {
@@ -211,7 +211,9 @@ test.describe('Portail structure', () => {
     }
   });
 
-  test("un bénéficiaire archivé n'est plus visible de la structure", async ({ request }) => {
+  // Retour de Pierre du 23/11/2026 : un bénéficiaire archivé reste visible, classé « accompagnement
+  // terminé », avec les mêmes colonnes qu'avant (aucune information en plus).
+  test('un bénéficiaire archivé reste visible, marqué comme accompagnement terminé', async ({ request }) => {
     const admin = clientAdminTest();
     test.skip(!admin, 'SUPABASE_TEST_SERVICE_ROLE_KEY non défini (voir e2e/README.md) — impossible de créer la fixture structure');
 
@@ -220,13 +222,17 @@ test.describe('Portail structure', () => {
       const lire = async () => {
         const res = await request.get('/api/structure/data', { headers: { 'x-structure-token': fixture.token } });
         expect(res.status()).toBe(200);
-        return ((await res.json()).participants as { id: string }[]).map(p => p.id);
+        return ((await res.json()).participants as { id: string; archive: boolean }[]).find(p => p.id === fixture.participantId);
       };
-      expect(await lire()).toContain(fixture.participantId);
+      expect((await lire())?.archive).toBe(false);
 
       const { error } = await admin!.from('participants').update({ archive: true }).eq('id', fixture.participantId);
       if (error) throw new Error(`Archivage (fixture e2e) échoué : ${error.message}`);
-      expect(await lire()).not.toContain(fixture.participantId);
+      const archive = await lire();
+      expect(archive?.archive).toBe(true);
+      expect(Object.keys(archive as object).sort()).toEqual([
+        'archive', 'bilans', 'date_creation', 'date_naissance', 'id', 'nom', 'prenom', 'programmes', 'structure_id',
+      ]);
     } finally {
       await nettoyerFixtureStructure(admin!, fixture);
     }
