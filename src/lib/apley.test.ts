@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { apleyRenseigne, calculerScoreApley, lignesApley, scoreNiveauApley } from './apley';
+import { apleyRenseigne, apleyEnNiveaux, calculerScoreApley, ecartCmApley, formaterCmApley, lignesApley, scoreNiveauApley, sensCmApley } from './apley';
 
 const vide = { haut_d: null, haut_g: null, bas_d: null, bas_g: null, score: null, notes: '' };
 
@@ -45,5 +45,32 @@ describe('lignesApley', () => {
   });
   it('ne produit rien pour un test absent', () => {
     expect(lignesApley(undefined)).toEqual([]);
+  });
+});
+
+describe('Scratch Test en centimètres signés', () => {
+  it('écrit la valeur et son sens, comme convenu avec Pierre', () => {
+    expect(formaterCmApley(-12)).toBe('−12 cm');
+    expect(formaterCmApley(0)).toBe('0 cm');
+    expect(formaterCmApley(4.5)).toBe('+4,5 cm');
+    expect(sensCmApley(-12)).toBe('les doigts ne se touchent pas');
+    expect(sensCmApley(0)).toBe('les doigts se touchent');
+    expect(sensCmApley(4)).toBe('les doigts se chevauchent');
+  });
+  it('garde les deux positions séparées et calcule l’écart', () => {
+    const a = { haut_d: null, haut_g: null, bas_d: null, bas_g: null, score: null, notes: '', cmDroiteDessus: -12, cmGaucheDessus: 3 };
+    expect(apleyRenseigne(a)).toBe(true);
+    expect(ecartCmApley(a)).toBe(15);
+    expect(lignesApley(a)).toEqual([
+      'Main droite au-dessus, gauche en dessous : −12 cm (les doigts ne se touchent pas)',
+      'Main gauche au-dessus, droite en dessous : +3 cm (les doigts se chevauchent)',
+      'Écart entre les deux positions : 15 cm',
+    ]);
+  });
+  it('ne touche pas aux anciens bilans saisis en niveaux', () => {
+    const ancien = { haut_d: 'neck', haut_g: null, bas_d: null, bas_g: null, score: 3, notes: '' };
+    expect(apleyEnNiveaux(ancien)).toBe(true);
+    expect(ecartCmApley(ancien)).toBeNull();
+    expect(lignesApley(ancien)).toEqual(['Haut, côté droit : Atteint la nuque (légèrement limité)']);
   });
 });

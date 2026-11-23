@@ -57,9 +57,43 @@ export function calculerScoreApley(a: Pick<ApleyResultat, CoteApley>): number | 
   return Math.round(scores.reduce((x, y) => x + y, 0) / scores.length * 10) / 10;
 }
 
-/** Le test a-t-il un résultat (au moins un côté coché ou une note) ? */
+/** Le test a-t-il un résultat (une mesure en cm, un côté coché ou une note) ? */
 export function apleyRenseigne(a: ApleyResultat | null | undefined): a is ApleyResultat {
-  return a != null && (COTES.some(c => a[c] != null) || a.score != null || !!a.notes?.trim());
+  return a != null && (a.cmDroiteDessus != null || a.cmGaucheDessus != null
+    || COTES.some(c => a[c] != null) || a.score != null || !!a.notes?.trim());
+}
+
+// ── Mesure en centimètres (convention validée par Pierre le 23/11/2026) ─────────────────────
+
+export const POSITIONS_APLEY = [
+  { cle: 'cmDroiteDessus', libelle: 'Main droite au-dessus, gauche en dessous', court: 'Épaules, main D dessus' },
+  { cle: 'cmGaucheDessus', libelle: 'Main gauche au-dessus, droite en dessous', court: 'Épaules, main G dessus' },
+] as const;
+
+export type CleCmApley = typeof POSITIONS_APLEY[number]['cle'];
+
+/** « −12 cm », « 0 cm », « +4 cm » (signe moins typographique, virgule décimale). */
+export function formaterCmApley(v: number): string {
+  const texte = String(Math.abs(v)).replace('.', ',');
+  return v > 0 ? `+${texte} cm` : v < 0 ? `−${texte} cm` : '0 cm';
+}
+
+/** Ce que veut dire la valeur, en mots : rappel de la convention à chaque lecture. */
+export function sensCmApley(v: number): string {
+  if (v < 0) return 'les doigts ne se touchent pas';
+  if (v === 0) return 'les doigts se touchent';
+  return 'les doigts se chevauchent';
+}
+
+/** Écart entre les deux positions (asymétrie), `null` si une des deux manque. */
+export function ecartCmApley(a: ApleyResultat | null | undefined): number | null {
+  if (a?.cmDroiteDessus == null || a.cmGaucheDessus == null) return null;
+  return Math.round(Math.abs(a.cmDroiteDessus - a.cmGaucheDessus) * 10) / 10;
+}
+
+/** Un ancien bilan saisi en niveaux (avant la mesure en cm) ? */
+export function apleyEnNiveaux(a: ApleyResultat | null | undefined): boolean {
+  return a != null && COTES.some(c => a[c] != null);
 }
 
 /**
@@ -68,8 +102,14 @@ export function apleyRenseigne(a: ApleyResultat | null | undefined): a is ApleyR
  */
 export function lignesApley(a: ApleyResultat | null | undefined): string[] {
   if (!a) return [];
-  return COTES.flatMap(c => {
+  const cm = POSITIONS_APLEY.flatMap(p => {
+    const v = a[p.cle];
+    return v != null ? [`${p.libelle} : ${formaterCmApley(v)} (${sensCmApley(v)})`] : [];
+  });
+  const ecart = ecartCmApley(a);
+  if (ecart != null && ecart > 0) cm.push(`Écart entre les deux positions : ${String(ecart).replace('.', ',')} cm`);
+  return [...cm, ...COTES.flatMap(c => {
     const niveau = niveauxDuCote(c).find(n => n.key === a[c]);
     return niveau ? [`${LIBELLES_COTES[c]} : ${niveau.label} (${niveau.sub})`] : [];
-  });
+  })];
 }

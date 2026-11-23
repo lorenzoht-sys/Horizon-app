@@ -64,6 +64,8 @@ export function useBilanDelta(current: Bilan, previous: Bilan | null) {
       false,
     ),
     apleyScore: calcDelta(current.apley?.score ?? null, p?.apley?.score ?? null, false),
+    apleyCmD: calcDelta(current.apley?.cmDroiteDessus ?? null, p?.apley?.cmDroiteDessus ?? null, false),
+    apleyCmG: calcDelta(current.apley?.cmGaucheDessus ?? null, p?.apley?.cmGaucheDessus ?? null, false),
     tinettiScore: calcDelta(
       tinettiCur?.complet ? tinettiCur.scoreTotal : null,
       tinettiPrev?.complet ? tinettiPrev.scoreTotal : null,

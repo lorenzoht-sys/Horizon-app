@@ -183,7 +183,7 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
             <View style={S.cellRow}>
               <Cellule
                 titre={TEST_LABELS.apley}
-                unite={bilan.apley.score != null ? `${bilan.apley.score}/4` : '—'}
+                unite={bilan.apley.cmDroiteDessus != null || bilan.apley.cmGaucheDessus != null ? 'cm' : bilan.apley.score != null ? `${bilan.apley.score}/4` : '—'}
                 body={[...lignesApley(bilan.apley), bilan.apley.notes?.trim() ? `Notes : ${bilan.apley.notes.trim()}` : null]
                   .filter(Boolean).join('\n') || 'Test incomplet'}
               />

@@ -35,7 +35,8 @@ interface TestCfg {
    * invisible (ligne "—" ou carte disparue) alors que le test avait bien été réalisé.
    */
   getRawDisplay?: (b: Bilan) => string | null;
-  cat: (v: number) => 'g' | 'o' | 'r';
+  /** Absent : pas de norme validée (Scratch Test en cm) ; la valeur s'affiche sans couleur. */
+  cat?: (v: number) => 'g' | 'o' | 'r';
   score: (v: number) => number;
   /**
    * Affiché, mais exclu du score global. Ajouté le 23/11/2026 pour la souplesse des épaules :
@@ -84,6 +85,20 @@ const TESTS: TestCfg[] = [
     score: v => clamp((v - 1) / 3 * 100),
     horsScoreGlobal: true,
   },
+  // Scratch Test en cm signés (23/11/2026) : une ligne par position, sans couleur de norme
+  // (aucune norme validée par Pierre) et hors score global.
+  {
+    key: 'apleyCmD', label: 'Épaules — main droite au-dessus', unit: 'cm', lowerBetter: false,
+    getValue: b => b.apley?.cmDroiteDessus,
+    score: v => clamp((v + 30) / 40 * 100),
+    horsScoreGlobal: true,
+  },
+  {
+    key: 'apleyCmG', label: 'Épaules — main gauche au-dessus', unit: 'cm', lowerBetter: false,
+    getValue: b => b.apley?.cmGaucheDessus,
+    score: v => clamp((v + 30) / 40 * 100),
+    horsScoreGlobal: true,
+  },
   {
     key: 'tm6', label: 'TM6', unit: 'm', lowerBetter: false,
     getValue: b => distanceTm6(b.tm6),
@@ -101,6 +116,8 @@ const TESTS: TestCfg[] = [
     score: v => clamp(100 - Math.abs(v - 11) * 12),
   },
 ];
+
+const NEUTRE = { bg: '#F2F6F8', text: '#1A2332' };
 
 const CAT = {
   g: { bg: '#E1F5EE', text: '#085041' },
@@ -221,7 +238,7 @@ function Heatmap({ bilans }: Props) {
                       </td>
                     );
                   }
-                  const col = CAT[t.cat(v)];
+                  const col = t.cat ? CAT[t.cat(v)] : NEUTRE;
                   return (
                     <td key={i} className="text-center py-1 px-1.5">
                       <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold"
