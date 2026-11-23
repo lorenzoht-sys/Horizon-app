@@ -77,7 +77,7 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
   const { contratsARenouveler: contratsARenouvelerTous } = useContrats();
   const contratsARenouveler = contratsDesBeneficiairesActifs(contratsARenouvelerTous, participants);
   const { settings: praticienSettings } = usePraticienSettings();
-  const { coursCollectifs, participationsDuCours, modifierStatutCours, mettreAJourParticipation } = useCoursCollectifs();
+  const { coursCollectifs, participationsDuCours, modifierStatutCours, modifierCours, mettreAJourParticipation } = useCoursCollectifs();
   const { categories } = useCategoriesSeance();
   // Factures : lecture seule, pour la ligne « Factures ».
   const { brouillons: brouillonsFactures } = useFacturesAValider();
@@ -492,6 +492,11 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
           participants={participants}
           onMettreAJourParticipation={(participationId, patch) => mettreAJourParticipation(participationId, patch)}
           onModifierStatutCours={async statut => modifierStatutCours(coursSelectionne.id, statut)}
+          onModifierCours={async patch => {
+            const ok = await modifierCours(coursSelectionne.id, patch);
+            if (ok) toast.success('Cours modifié');
+            return ok;
+          }}
           onClose={() => setCoursSelectionneId(null)}
         />
       )}
