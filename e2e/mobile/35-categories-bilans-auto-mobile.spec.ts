@@ -236,8 +236,11 @@ test.describe.serial('Agenda mobile — catégories, objectif, bilans automatiqu
     // ── Accueil refait : progression du jour + bilans à venir ──
     await page.goto('/');
     await expect(page.getByText(/Bonjour /)).toBeVisible();
-    await expect(page.getByRole('progressbar', { name: 'Séances du jour réalisées' })).toBeVisible();
-    await expect(page.getByText('Bilans à venir')).toBeVisible();
+    // La barre de progression du jour n'apparaît plus qu'avec au moins une séance du jour
+    // (accueil V1, 23/11/2026) : ce test n'en crée aucune aujourd'hui.
+    // « Bilans à venir » est devenu « Bilans à prévoir » (accueil V1, 23/11/2026) : les bilans déjà
+    // planifiés y passent en premier.
+    await expect(page.getByRole('heading', { name: 'Bilans à prévoir' })).toBeVisible();
     await expect(page.getByText(nomComplet).first()).toBeVisible();
 
     // ── Carte de l'agenda : le bouton Bilan porte l'identifiant de la séance ──

@@ -1,320 +1,518 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { Check, ChevronRight, MapPin } from 'lucide-react';
 import { useParticipants } from '../../../hooks/useParticipants';
 import { useAgenda } from '../../../hooks/useAgenda';
 import { useContrats } from '../../../hooks/useContrats';
 import { useCoursCollectifs } from '../../../hooks/useCoursCollectifs';
 import { useCategoriesSeance } from '../../../hooks/useCategoriesSeance';
+import { useFacturesAValider, useFacturesValidees } from '../../../hooks/useFacturesAValider';
 import ModalPresenceCoursCollectif from '../../../components/agenda/ModalPresenceCoursCollectif';
-import type { CoursCollectif, Seance } from '../../../types';
+import { Pastille, type TonPastille } from '../../../components/ui/Carte';
+import type { CoursCollectif, Participant, Seance } from '../../../types';
 import { LABEL_TYPE } from '../../../lib/agendaCommun';
 import { getContreIndications } from '../../../lib/anamnese';
 import { URLS_MOBILE } from '../../../lib/routesMobile';
 import { contratsDesBeneficiairesActifs } from '../../../lib/archivage';
-import { C, formatDateCourt, formatDateLong, usePraticienSettings } from './communs';
+import { chargerRetoursParBeneficiaire, ressentisPreoccupants } from '../../../lib/suiviBeneficiaire';
+import { dateCivileParis, separerBrouillons } from '../../../lib/facturesAValider';
+import { niveauBienEtre, niveauEffort } from '../../../lib/ressentiCours';
+import {
+  astuceDuJour, contexteBeneficiaire, delaiRendezVous, echeanceBilan, libelleRendezVous, phraseDuJour,
+  prochainRendezVous, progresDepuisInitial, resumeFactures, type EtatEcheance,
+} from '../../../lib/tableauDeBord';
+import { formatDateCourt, usePraticienSettings } from './communs';
 import { GuideDemarrage } from '../../../components/demarrage/GuideDemarrage';
+import { seancePrincipale, seancesAConfirmer } from '../../../lib/accueilSeances';
+import { DialogueConfirmation } from '../../../components/ui/DialogueConfirmation';
 
 export function ouvrirMaps(adresse: string) {
   window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}`, '_blank');
 }
 
-// La barre du bas vit dans components/layout/BarreNavigationMobile.tsx : elle
-// est partagée avec le cadre commun, qui la montre sous 768 px sur les écrans
-// fusionnés (la fiche bénéficiaire).
+// Accueil mobile V1 (maquette validée par Lorenzo le 23/11/2026) : même ordre et mêmes mots que
+// le tableau de bord sur ordinateur, en une colonne. Prochain rendez-vous (avec l'objectif de la
+// personne), séances à confirmer, la journée, bilans, factures, une bonne nouvelle, une astuce.
+// Avant : en-tête sombre, tuiles de chiffres, bandeau jaune replié pour les séances à confirmer.
+//
+// La barre du bas vit dans components/layout/BarreNavigationMobile.tsx : elle est partagée avec
+// le cadre commun, qui la montre sous 768 px sur les écrans fusionnés (la fiche bénéficiaire).
 
-// ── EcranAujourdhui ───────────────────────────────────────────────────────────
+const AVATAR_COLORS = ['#2BB89A', '#1D9E9E', '#7D3C98', '#E67E22', '#C2187A', '#1A7F5A'];
+const ENCRE = 'var(--color-ink)';
+const AIDE = 'var(--color-ink-2)';
+const SECONDAIRE = '#3D4C5A';
+const VERT_ACTION = '#1A9A7F';
+const VERT_TEXTE = '#147A64';
+const CARTE: React.CSSProperties = { background: 'white', border: '1px solid #E2EEEE', borderRadius: 20, padding: 16 };
+const A_CONFIRMER_VISIBLES = 4;
+
+// Astuces écartées : même clé que sur ordinateur (Dashboard.tsx), propre au navigateur.
+const CLE_ASTUCES = 'horizon.astucesEcartees';
+function lireAstucesEcartees(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(CLE_ASTUCES) ?? '[]') as string[]); } catch { return new Set(); }
+}
+
+function dateDuJour(d: Date): string {
+  const texte = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return texte.charAt(0).toUpperCase() + texte.slice(1);
+}
+
+function Titre({ id, children, droite }: { id: string; children: React.ReactNode; droite?: React.ReactNode }) {
+  return (
+    <div className="flex justify-between items-center gap-3 mb-1">
+      <h2 id={id} className="m-0 font-extrabold" style={{ fontSize: 16, color: ENCRE }}>{children}</h2>
+      {droite}
+    </div>
+  );
+}
+
+const TON_ECHEANCE: Record<EtatEcheance, TonPastille> = { retard: 'rouge', initial: 'orange', bientot: 'orange', a_jour: 'neutre' };
 
 export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => void; onNaviguerSaisie?: () => void }) {
-  // `participants` (tous) sert aux recherches par identifiant ; les compteurs et listes du
-  // quotidien n'utilisent que les actifs — un archivé n'est plus suivi.
+  // `participants` (tous) sert aux recherches par identifiant ; les listes du quotidien
+  // n'utilisent que les actifs — un archivé n'est plus suivi.
   const { participants, participantsActifs } = useParticipants();
-  const { seances: allSeances, seancesDuJour } = useAgenda();
-  // Alerte « contrat fin proche » (équivalent mobile du Dashboard) : un bénéficiaire archivé
-  // n'est plus suivi, son contrat n'appelle aucune action (cf. lib/archivage.ts, Dashboard.tsx).
+  const { seances: allSeances, seancesDuJour, modifierSeance } = useAgenda();
   const { contratsARenouveler: contratsARenouvelerTous } = useContrats();
   const contratsARenouveler = contratsDesBeneficiairesActifs(contratsARenouvelerTous, participants);
   const { settings: praticienSettings } = usePraticienSettings();
-  const {
-    coursCollectifs, participationsDuCours,
-    modifierStatutCours, modifierCours, mettreAJourParticipation,
-  } = useCoursCollectifs();
-  const [coursSelectionneId, setCoursSelectionneId] = useState<string | null>(null);
-  // Couleurs de catégorie du praticien (les mêmes que dans l'agenda) et accès à l'agenda.
+  const { coursCollectifs, participationsDuCours, modifierStatutCours, modifierCours, mettreAJourParticipation } = useCoursCollectifs();
   const { categories } = useCategoriesSeance();
+  // Factures : lecture seule, pour la ligne « Factures ».
+  const { brouillons: brouillonsFactures } = useFacturesAValider();
+  const { factures } = useFacturesValidees();
   const navigate = useNavigate();
-  const today = new Date().toISOString().slice(0, 10);
+
+  const [coursSelectionneId, setCoursSelectionneId] = useState<string | null>(null);
+  // Séances écartées à la main (« Passer à la suivante ») : le temps de la session seulement,
+  // rien n'est écrit en base. Règles de choix : src/lib/accueilSeances.ts.
+  const [ecartees, setEcartees] = useState<ReadonlySet<string>>(new Set());
+  const [validationEnCours, setValidationEnCours] = useState<string | null>(null);
+  const [toutesAConfirmer, setToutesAConfirmer] = useState(false);
+  // Geste en attente de confirmation (retour de Pierre du 23/11/2026).
+  const [aConfirmerGeste, setAConfirmerGeste] = useState<{ seance: Seance; statut: 'realisee' | 'annulee' } | null>(null);
+  const [retours, setRetours] = useState<Record<string, { borgRpe: number; bienEtre: number }[]>>({});
+  const retoursCharges = useRef(false);
+  const [astucesEcartees, setAstucesEcartees] = useState<Set<string>>(lireAstucesEcartees);
+
+  useEffect(() => {
+    if (participantsActifs.length === 0 || retoursCharges.current) return;
+    retoursCharges.current = true;
+    void chargerRetoursParBeneficiaire(participantsActifs.map(p => p.id)).then(setRetours);
+  }, [participantsActifs]);
+
+  const maintenant = new Date();
+  const today = dateCivileParis(maintenant);
+  const currentTimeStr = `${String(maintenant.getHours()).padStart(2, '0')}:${String(maintenant.getMinutes()).padStart(2, '0')}`;
+  const actifs = new Set(participantsActifs.map(p => p.id));
   const seances = seancesDuJour(today);
   const nbRealisees = seances.filter(s => s.statut === 'realisee').length;
   const categorieDe = (sc: Seance) => categories.find(c => c.id === sc.categorieId);
-  // Échéances : les 3 prochains bilans planifiés (posés à la main ou automatiquement) à partir de demain.
-  const bilansAVenir = allSeances
-    .filter(sc => sc.type !== 'seance' && sc.statut === 'planifiee' && sc.date > today)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.heureDebut.localeCompare(b.heureDebut))
-    .slice(0, 3);
-  // Même filtre que l'agenda desktop (AgendaV2Page) : un cours annulé ne
-  // doit pas apparaître dans la timeline du jour.
+  const nomDe = (p: Participant | undefined) => (p ? `${p.prenom} ${p.nom}` : 'Bénéficiaire');
+
+  const principale = seancePrincipale(seances, currentTimeStr, ecartees);
+  const suivanteExiste = principale !== null
+    && seancePrincipale(seances, currentTimeStr, new Set([...ecartees, principale.id])) !== null;
+  // Plus rien aujourd'hui : on annonce le prochain rendez-vous des jours suivants.
+  const plusTard = principale ? null : prochainRendezVous(allSeances.filter(s => actifs.has(s.participantId)), today, currentTimeStr);
+  const rdv = principale ?? plusTard;
+  const aConfirmer = seancesAConfirmer(allSeances, today, currentTimeStr)
+    .filter(s => actifs.has(s.participantId))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.heureDebut.localeCompare(a.heureDebut));
+
   const coursDuJour = coursCollectifs
     .filter(c => c.date === today && c.statut !== 'annule')
     .sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
   const coursSelectionne = coursCollectifs.find(c => c.id === coursSelectionneId) ?? null;
-  const prenom = praticienSettings.prenom || 'Praticien';
 
-  const now = new Date();
-  const lundiOffset = now.getDay() === 0 ? -6 : 1 - now.getDay();
-  const lundi = new Date(now); lundi.setDate(now.getDate() + lundiOffset);
-  const dim = new Date(lundi); dim.setDate(lundi.getDate() + 6);
-  const seancesSemaine = allSeances.filter(s =>
-    s.date >= lundi.toISOString().slice(0, 10) &&
-    s.date <= dim.toISOString().slice(0, 10) &&
-    s.statut !== 'annulee'
-  );
+  // Bilans : d'abord ceux déjà planifiés (date dans l'agenda), puis ceux à prévoir (85 jours, même
+  // règle que l'ordinateur ; l'accueil comptait jusqu'ici 90 jours).
+  const bilansPlanifies = allSeances
+    .filter(sc => sc.type !== 'seance' && sc.statut === 'planifiee' && sc.date > today && actifs.has(sc.participantId))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.heureDebut.localeCompare(b.heureDebut))
+    .slice(0, 3);
+  const dejaPlanifies = new Set(bilansPlanifies.map(b => b.participantId));
+  const bilansAPrevoir = participantsActifs
+    .filter(p => !dejaPlanifies.has(p.id))
+    .map(p => ({ p, e: echeanceBilan(p.bilans, today) }))
+    .filter(x => x.e.etat === 'retard' || x.e.etat === 'initial')
+    .slice(0, 2);
 
-  const il90jFmt = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10); })();
-  const bilansAFaire = participantsActifs.filter(p =>
-    p.bilans.length === 0 || p.bilans.every(b => b.date < il90jFmt)
-  );
+  const resume = resumeFactures(separerBrouillons(brouillonsFactures, today).validables.length, factures);
+  const detailFactures = [
+    resume.aValider > 0 && `${resume.aValider} à valider`,
+    resume.enRetard > 0 && `${resume.enRetard} en retard de paiement`,
+    resume.nonReglees > 0 && `${resume.nonReglees} pas encore réglée${resume.nonReglees > 1 ? 's' : ''}`,
+  ].filter(Boolean).join(' · ');
 
-  const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  const prochaineSeance = seances.find(s => s.statut === 'planifiee' && s.heureDebut >= currentTimeStr)
-    ?? seances.find(s => s.statut === 'planifiee');
+  const bonneNouvelle = participantsActifs
+    .map(p => ({ p, g: progresDepuisInitial(p.bilans) }))
+    .find(x => x.g !== null);
+  const astuce = astuceDuJour(today, astucesEcartees);
+  const ressentis = participantsActifs.filter(p => ressentisPreoccupants(retours[p.id] ?? []));
 
-  // Timeline du jour : séances individuelles et cours collectifs mêlés,
-  // triés par heure — un cours collectif n'a pas de bénéficiaire unique, il
-  // ne peut donc pas rejoindre `seances` telle quelle.
+  // Les boutons demandent d'abord confirmation ; l'écriture n'a lieu qu'après « Confirmer ».
+  function cloturer(seance: Seance, statut: 'realisee' | 'annulee') {
+    setAConfirmerGeste({ seance, statut });
+  }
+
+  async function cloturerConfirme() {
+    if (!aConfirmerGeste) return;
+    const { seance, statut } = aConfirmerGeste;
+    setValidationEnCours(seance.id);
+    const ok = await modifierSeance(seance.id, { statut });
+    setValidationEnCours(null);
+    setAConfirmerGeste(null);
+    if (ok) toast.success(statut === 'realisee' ? 'Séance marquée comme réalisée' : 'Séance marquée comme annulée');
+    else toast.error('La séance n’a pas pu être enregistrée. Réessayez dans un instant.');
+  }
+
+  function ecarterAstuce(cle: string) {
+    const suivantes = new Set(astucesEcartees).add(cle);
+    setAstucesEcartees(suivantes);
+    try { localStorage.setItem(CLE_ASTUCES, JSON.stringify([...suivantes])); } catch { /* stockage indisponible */ }
+  }
+
+  // Timeline du jour : séances individuelles et cours collectifs mêlés, triés par heure.
   type ItemJour =
-    | { kind: 'seance'; heureDebut: string; seance: typeof seances[number] }
+    | { kind: 'seance'; heureDebut: string; seance: Seance }
     | { kind: 'cours'; heureDebut: string; cours: CoursCollectif; nbInscrits: number };
   const itemsJour: ItemJour[] = [
     ...seances.map(seance => ({ kind: 'seance' as const, heureDebut: seance.heureDebut, seance })),
-    ...coursDuJour.map(cours => ({
-      kind: 'cours' as const,
-      heureDebut: cours.heureDebut,
-      cours,
-      nbInscrits: participationsDuCours(cours.id).length,
-    })),
+    ...coursDuJour.map(cours => ({ kind: 'cours' as const, heureDebut: cours.heureDebut, cours, nbInscrits: participationsDuCours(cours.id).length })),
   ].sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
 
-  // Tuile de chiffre (accueil) : icône Tabler dans une pastille teintée, chiffre en grand, libellé.
-  const Tuile = ({ icone, valeur, libelle, couleur = C.primary }: { icone: string; valeur: number; libelle: string; couleur?: string }) => (
-    <div style={{ background: 'white', borderRadius: 16, padding: '14px 14px', boxShadow: '0 2px 10px rgba(13,43,43,0.06)', display: 'flex', alignItems: 'center', gap: 12 }}>
-      <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 12, background: `${couleur}1F`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <i className={`ti ${icone}`} style={{ fontSize: 20, color: couleur }} />
-      </span>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 24, fontWeight: 800, color: couleur === C.primary ? C.text : couleur, lineHeight: 1 }}>{valeur}</div>
-        <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{libelle}</div>
-      </div>
-    </div>
-  );
-  const titreSection: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.08em' };
-  const pastilleCategorie = (c: { nom: string; couleur: string }) => (
-    <span style={{ background: `${c.couleur}22`, color: C.text, border: `1px solid ${c.couleur}`, borderRadius: 8, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{c.nom}</span>
-  );
+  const prenom = praticienSettings.prenom?.trim();
+  const phrase = phraseDuJour({
+    nbRendezVous: seances.length + coursDuJour.length,
+    prochainDans: principale && principale.heureDebut.slice(0, 5) > currentTimeStr ? delaiRendezVous(principale, today, currentTimeStr) : null,
+    nbAConfirmer: aConfirmer.length,
+    nbBilansAujourdhui: seances.filter(s => s.type !== 'seance' && s.statut === 'planifiee' && s.heureDebut.slice(0, 5) > currentTimeStr).length,
+  });
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F0F4F4' }}>
+    <div style={{ minHeight: '100vh', background: '#EEF4F7' }}>
+      <div className="flex flex-col gap-4" style={{ padding: 'calc(env(safe-area-inset-top, 20px) + 18px) 16px 24px' }}>
 
-      {/* ── HEADER ─────────────────────────────────────────────── */}
-      <div style={{ background: C.dark, borderRadius: '0 0 24px 24px', paddingTop: 'calc(env(safe-area-inset-top, 44px) + 18px)', paddingLeft: 20, paddingRight: 20, paddingBottom: 22 }}>
-        <img src="/logo-horizon.png?v=2" alt="Horizon" style={{ height: 22, marginBottom: 14 }}
-          onError={e => { (e.target as HTMLImageElement).src = '/logo-horizon.svg'; }} />
-        <div style={{ fontSize: 24, fontWeight: 800, color: 'white', lineHeight: 1.2 }}>Bonjour {prenom}</div>
-        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginTop: 4, textTransform: 'capitalize' }}>{formatDateLong(new Date())}</div>
-
-        {/* Progression de la journée : séances faites / séances du jour. */}
-        <div style={{ marginTop: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 7 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>
-              {seances.length} séance{seances.length !== 1 ? 's' : ''} aujourd'hui
-            </span>
-            {seances.length > 0 && (
-              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>{nbRealisees} faite{nbRealisees !== 1 ? 's' : ''}</span>
-            )}
-          </div>
-          <div role="progressbar" aria-valuemin={0} aria-valuemax={seances.length} aria-valuenow={nbRealisees} aria-label="Séances du jour réalisées"
-            style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.15)', overflow: 'hidden' }}>
-            <div style={{ width: seances.length ? `${(nbRealisees / seances.length) * 100}%` : '0%', height: '100%', background: C.primary, borderRadius: 3, transition: 'width .3s' }} />
-          </div>
-        </div>
-      </div>
-
-      <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 22 }}>
-
-        {/* ── PRISE EN MAIN (compte récent, tant qu'il n'est pas fermé) ── */}
-        <GuideDemarrage mobile />
-
-        {/* ── PROCHAINE SÉANCE ──────────────────────────────────── */}
-        {prochaineSeance && (() => {
-          const p = participants.find(x => x.id === prochaineSeance.participantId);
-          const ciInfo = p ? getContreIndications(p) : { actif: false, detail: null };
-          const contreIndDetail = ciInfo.detail ?? undefined;
-          const hasCI = ciInfo.actif;
-          const adresse = [p?.adresseRue, p?.adresseVille].filter(Boolean).join(', ');
-          const cat = categorieDe(prochaineSeance);
-          return (
-            <div style={{ background: 'white', borderRadius: 18, boxShadow: '0 4px 16px rgba(13,43,43,0.10)', overflow: 'hidden', display: 'flex' }}>
-              <span aria-hidden="true" style={{ width: 6, background: cat?.couleur ?? C.primary, flexShrink: 0 }} />
-              <div style={{ padding: 16, flex: 1, minWidth: 0 }}>
-                <div style={{ ...titreSection, color: C.primary, marginBottom: 8 }}>Prochaine séance</div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                  <span style={{ fontSize: 26, fontWeight: 800, color: C.text, lineHeight: 1 }}>{prochaineSeance.heureDebut}</span>
-                  <span style={{ fontSize: 16, fontWeight: 700, color: C.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p?.prenom} {p?.nom}</span>
-                </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                  {cat ? pastilleCategorie(cat) : prochaineSeance.type !== 'seance' && (
-                    <span style={{ background: '#EDE9FE', color: '#6D28D9', borderRadius: 8, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{LABEL_TYPE[prochaineSeance.type]}</span>
-                  )}
-                  <span style={{ fontSize: 12, color: C.muted }}>{prochaineSeance.dureeMinutes} min</span>
-                </div>
-                {prochaineSeance.objectif && (
-                  <div style={{ fontSize: 13, color: C.text, marginTop: 8 }}>🎯 {prochaineSeance.objectif}</div>
-                )}
-                {adresse && (
-                  <div style={{ fontSize: 13, color: 'var(--color-ink-2)', marginTop: 8 }}>📍 {adresse}</div>
-                )}
-                {hasCI && contreIndDetail && (
-                  <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '7px 10px', marginTop: 10, fontSize: 12, color: '#B91C1C', fontWeight: 600 }}>
-                    ⚠️ {contreIndDetail}
-                  </div>
-                )}
-                <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                  {adresse && (
-                    <button onClick={() => ouvrirMaps(adresse)}
-                      style={{ flex: 1, padding: '11px', background: 'white', border: `1.5px solid ${C.primary}`, borderRadius: 10, fontSize: 13, fontWeight: 700, color: C.primary, cursor: 'pointer' }}>
-                      🗺️ Itinéraire
-                    </button>
-                  )}
-                  <button onClick={() => p && onVoirFiche(p.id)}
-                    style={{ flex: 1, padding: '11px', background: C.primary, border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, color: 'white', cursor: 'pointer' }}>
-                    📋 Fiche →
-                  </button>
-                </div>
+        {/* ── EN-TÊTE ─────────────────────────────────────────────── */}
+        <header>
+          {/* Majuscule écrite dans le texte, pas en CSS : l'e2e mobile 30 repère le libellé du jour
+              de l'agenda par un texte qui commence par « lundi », « mardi »… en minuscule. */}
+          <p className="m-0 text-[13px] font-bold" style={{ color: VERT_TEXTE }}>{dateDuJour(maintenant)}</p>
+          <h1 className="m-0 mt-0.5 font-extrabold" style={{ fontSize: 26, color: ENCRE }}>
+            {prenom ? `Bonjour ${prenom}` : 'Bonjour et bienvenue'}
+          </h1>
+          <p className="m-0 mt-1.5 text-sm leading-relaxed" style={{ color: SECONDAIRE }}>{phrase}</p>
+          {seances.length > 0 && (
+            <div className="mt-3">
+              <div className="flex justify-between text-xs mb-1.5" style={{ color: AIDE }}>
+                <span>Séances du jour</span><span>{nbRealisees} faite{nbRealisees !== 1 ? 's' : ''} sur {seances.length}</span>
+              </div>
+              <div role="progressbar" aria-valuemin={0} aria-valuemax={seances.length} aria-valuenow={nbRealisees} aria-label="Séances du jour réalisées"
+                className="h-1.5 rounded-full overflow-hidden" style={{ background: '#DCE8EC' }}>
+                <div className="h-full rounded-full transition-[width]" style={{ width: `${(nbRealisees / seances.length) * 100}%`, background: VERT_ACTION }} />
               </div>
             </div>
+          )}
+        </header>
+
+        {/* ── PRISE EN MAIN (tant qu'il reste une étape) ─────────── */}
+        <GuideDemarrage mobile />
+
+        {/* ── PROCHAIN RENDEZ-VOUS ────────────────────────────────── */}
+        {rdv && (() => {
+          const p = participants.find(x => x.id === rdv.participantId);
+          const ciInfo = p ? getContreIndications(p) : { actif: false, detail: null };
+          const adresse = [p?.adresseRue, p?.adresseVille].filter(Boolean).join(', ');
+          const cat = categorieDe(rdv);
+          const contexte = contexteBeneficiaire(p?.bilans ?? []);
+          const dernier = p ? retours[p.id]?.[0] : undefined;
+          const bienEtre = dernier ? niveauBienEtre(dernier.bienEtre) : null;
+          const effort = dernier ? niveauEffort(dernier.borgRpe) : null;
+          const enCours = !!principale && rdv.heureDebut.slice(0, 5) <= currentTimeStr;
+          return (
+            <section aria-labelledby="m-prochain" className="flex flex-col gap-3" style={{ background: '#E3F4EF', border: '1px solid #C6E8DE', borderRadius: 20, padding: 16 }}>
+              <div className="flex justify-between items-center gap-2">
+                <h2 id="m-prochain" className="m-0 text-[13px] font-extrabold" style={{ color: VERT_TEXTE }}>
+                  {enCours ? 'Séance en cours' : 'Votre prochain rendez-vous'}
+                </h2>
+                {!enCours && (
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-white" style={{ color: VERT_TEXTE }}>
+                    {delaiRendezVous(rdv, today, currentTimeStr)}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <span aria-hidden="true" className="w-[46px] h-[46px] rounded-full text-white text-base font-extrabold flex items-center justify-center flex-shrink-0"
+                  style={{ background: cat?.couleur ?? AVATAR_COLORS[(p?.id.charCodeAt(0) ?? 0) % AVATAR_COLORS.length] }}>
+                  {p ? `${p.prenom[0] ?? ''}${p.nom[0] ?? ''}`.toUpperCase() : '?'}
+                </span>
+                <div className="min-w-0">
+                  <div className="text-lg font-extrabold truncate" style={{ color: ENCRE }}>{nomDe(p)}</div>
+                  <div className="text-[13px]" style={{ color: SECONDAIRE }}>
+                    {libelleRendezVous(rdv, today)} · {cat?.nom ?? LABEL_TYPE[rdv.type]} · {rdv.dureeMinutes} min
+                  </div>
+                </div>
+              </div>
+
+              {(rdv.objectif || contexte.objectif || contexte.vigilance || bienEtre || effort) && (
+                <div className="bg-white rounded-[14px] px-3 py-2.5 text-[13px] flex flex-col gap-1.5" style={{ color: ENCRE }}>
+                  {rdv.objectif && <div><strong style={{ color: VERT_TEXTE }}>Objectif de la séance</strong> · {rdv.objectif}</div>}
+                  {contexte.objectif && <div><strong style={{ color: VERT_TEXTE }}>Son objectif</strong> · « {contexte.objectif} »</div>}
+                  {contexte.vigilance && <div><strong style={{ color: '#8A5300' }}>À garder en tête</strong> · {contexte.vigilance}</div>}
+                  {(bienEtre || effort) && (
+                    <div><strong style={{ color: SECONDAIRE }}>La dernière fois</strong> · {[bienEtre && `se sentait « ${bienEtre.label.toLowerCase()} »`, effort && `effort « ${effort.label.toLowerCase()} »`].filter(Boolean).join(', ')}</div>
+                  )}
+                </div>
+              )}
+
+              {ciInfo.actif && ciInfo.detail && (
+                <div className="rounded-[12px] px-3 py-2 text-xs font-semibold" style={{ background: '#FEF0EF', color: '#B42318' }}>
+                  Contre-indication : {ciInfo.detail}
+                </div>
+              )}
+
+              {adresse && (
+                <p className="m-0 flex items-center gap-1.5 text-[13px]" style={{ color: SECONDAIRE }}>
+                  <MapPin size={14} aria-hidden="true" style={{ color: VERT_TEXTE }} /> {adresse}
+                </p>
+              )}
+
+              {/* Seulement une fois la séance commencée : avant, le bouton invitait à valider une
+                  séance qui n'avait pas encore eu lieu. */}
+              {principale && enCours && (
+                <button type="button" onClick={() => cloturer(principale, 'realisee')} disabled={validationEnCours === principale.id}
+                  className="w-full h-12 rounded-[12px] text-[15px] font-extrabold text-white disabled:opacity-60" style={{ background: VERT_ACTION }}>
+                  ✓ Marquer comme réalisée
+                </button>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => p && onVoirFiche(p.id)} className="h-12 rounded-[12px] bg-white text-sm font-bold" style={{ border: '1.5px solid #B5DDD2', color: ENCRE }}>
+                  Préparer
+                </button>
+                {adresse ? (
+                  <button type="button" onClick={() => ouvrirMaps(adresse)} className="h-12 rounded-[12px] bg-white text-sm font-bold" style={{ border: '1.5px solid #B5DDD2', color: ENCRE }}>
+                    Itinéraire
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => navigate(URLS_MOBILE.agendaJour(rdv.date))} className="h-12 rounded-[12px] bg-white text-sm font-bold" style={{ border: '1.5px solid #B5DDD2', color: ENCRE }}>
+                    Agenda
+                  </button>
+                )}
+              </div>
+              {principale && (
+                <div className="flex justify-between gap-2">
+                  <button type="button" onClick={() => navigate(URLS_MOBILE.agendaJour(principale.date))} className="h-11 text-[13px] font-bold" style={{ color: SECONDAIRE }}>
+                    Modifier ou annuler
+                  </button>
+                  {suivanteExiste && (
+                    <button type="button" onClick={() => setEcartees(prev => new Set([...prev, principale.id]))} className="h-11 text-[13px] font-bold" style={{ color: VERT_TEXTE }}>
+                      Passer à la suivante →
+                    </button>
+                  )}
+                </div>
+              )}
+            </section>
           );
         })()}
 
-        {/* ── TIMELINE ou ÉTAT VIDE ─────────────────────────────── */}
-        {itemsJour.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '28px 20px', background: 'white', borderRadius: 18, boxShadow: '0 2px 10px rgba(13,43,43,0.06)' }}>
-            <i className="ti ti-calendar-off" style={{ fontSize: 48, color: '#BDD0D0', display: 'block', marginBottom: 12 }} />
-            <div style={{ fontSize: 16, fontWeight: 600, color: '#7A9A9A', marginBottom: 6 }}>Aucune séance aujourd'hui</div>
-            <div style={{ fontSize: 13, color: C.muted }}>Profitez-en pour avancer sur vos bilans</div>
-          </div>
-        ) : (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <div style={titreSection}>Aujourd'hui</div>
-              <button onClick={() => navigate(URLS_MOBILE.agenda)}
-                style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, fontWeight: 700, color: C.primary, cursor: 'pointer' }}>
-                Agenda →
+        {/* ── SÉANCES À CONFIRMER ─────────────────────────────────── */}
+        {aConfirmer.length > 0 && (
+          <section aria-labelledby="m-confirmer" style={CARTE} className="flex flex-col gap-2.5">
+            <Titre id="m-confirmer" droite={<Pastille ton="orange">{aConfirmer.length}</Pastille>}>À confirmer</Titre>
+            <p className="m-0 text-[13px]" style={{ color: AIDE }}>Un geste par séance, et votre facture du mois est juste. Elles restent ici tant qu’elles ne sont ni réalisées ni annulées.</p>
+            {(toutesAConfirmer ? aConfirmer : aConfirmer.slice(0, A_CONFIRMER_VISIBLES)).map(sc => {
+              const p = participants.find(x => x.id === sc.participantId);
+              const occupe = validationEnCours === sc.id;
+              const quand = `${formatDateCourt(sc.date)} · ${sc.heureDebut.slice(0, 5)}`;
+              return (
+                <div key={sc.id} className="flex flex-col gap-2 pt-2.5" style={{ borderTop: '1px solid #EEF4F4' }}>
+                  <div>
+                    <div className="text-sm font-bold" style={{ color: ENCRE }}>{nomDe(p)}</div>
+                    <div className="text-xs" style={{ color: AIDE }}>{quand} · {LABEL_TYPE[sc.type]}</div>
+                    {sc.absenceSignaleeLe && <div className="text-xs font-semibold mt-0.5" style={{ color: '#8A5300' }}>Absence signalée par le bénéficiaire</div>}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button type="button" onClick={() => cloturer(sc, 'realisee')} disabled={occupe}
+                      aria-label={`Marquer comme réalisée : ${nomDe(p)}, ${quand}`}
+                      className="flex-1 h-12 rounded-[12px] text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-60" style={{ background: '#E6F5F1', color: VERT_TEXTE }}>
+                      <Check size={16} aria-hidden="true" /> Marquer comme réalisée
+                    </button>
+                    <button type="button" onClick={() => cloturer(sc, 'annulee')} disabled={occupe}
+                      aria-label={`Annulée : ${nomDe(p)}, ${quand}`}
+                      className="h-12 px-3 rounded-[12px] bg-white text-[13px] font-bold disabled:opacity-60" style={{ border: '1px solid #E2EEEE', color: SECONDAIRE }}>
+                      Annulée
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {aConfirmer.length > A_CONFIRMER_VISIBLES && (
+              <button type="button" onClick={() => setToutesAConfirmer(t => !t)} className="h-11 text-[13px] font-bold self-start" style={{ color: VERT_TEXTE }}>
+                {toutesAConfirmer ? 'Réduire' : `Voir les ${aConfirmer.length - A_CONFIRMER_VISIBLES} autres`}
               </button>
-            </div>
-            <div style={{ background: 'white', borderRadius: 18, overflow: 'hidden', boxShadow: '0 2px 10px rgba(13,43,43,0.06)' }}>
-              {itemsJour.map((item, index) => {
-                const isLast = index === itemsJour.length - 1;
+            )}
+          </section>
+        )}
+
+        {/* ── AUJOURD'HUI ─────────────────────────────────────────── */}
+        <section aria-labelledby="m-jour" style={CARTE}>
+          <Titre id="m-jour" droite={
+            <button type="button" onClick={() => navigate(URLS_MOBILE.agenda)} className="h-11 text-[13px] font-bold" style={{ color: VERT_TEXTE }}>Agenda →</button>
+          }>Aujourd’hui</Titre>
+          {itemsJour.length === 0 ? (
+            <p className="m-0 py-3 text-sm" style={{ color: SECONDAIRE }}>Aucune séance aujourd’hui : un bon moment pour préparer les bilans de la semaine.</p>
+          ) : (
+            <ul className="list-none m-0 p-0">
+              {itemsJour.map((item, i) => {
+                const bord = { borderTop: i === 0 ? 'none' : '1px solid #EEF4F4' };
                 if (item.kind === 'cours') {
                   const { cours, nbInscrits } = item;
                   return (
-                    <div key={`cours-${cours.id}`}>
-                      <div onClick={() => setCoursSelectionneId(cours.id)}
-                        style={{ display: 'flex', alignItems: 'stretch', gap: 12, padding: '12px 16px', cursor: 'pointer', background: '#F6F0FF' }}>
-                        <span aria-hidden="true" style={{ width: 4, borderRadius: 2, background: '#7C3AED', flexShrink: 0 }} />
-                        <span style={{ fontSize: 13, fontWeight: 700, color: C.text, flexShrink: 0, width: 40 }}>{cours.heureDebut}</span>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: C.text, flex: 1, minWidth: 0 }}>
-                          👥 {cours.titre}
-                          <span style={{ fontSize: 11, fontWeight: 500, color: '#7C3AED' }}> · {nbInscrits} inscrit{nbInscrits !== 1 ? 's' : ''}</span>
+                    <li key={`cours-${cours.id}`} style={bord}>
+                      <button type="button" onClick={() => setCoursSelectionneId(cours.id)} className="w-full flex items-center gap-2.5 py-2.5 text-left">
+                        <span className="w-[46px] text-sm font-extrabold" style={{ color: ENCRE }}>{cours.heureDebut.slice(0, 5)}</span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm font-bold truncate" style={{ color: ENCRE }}>{cours.titre}</span>
+                          <span className="block text-xs" style={{ color: AIDE }}>Cours collectif · {nbInscrits} inscrit{nbInscrits !== 1 ? 's' : ''}</span>
                         </span>
-                        <i className="ti ti-chevron-right" style={{ fontSize: 15, color: '#D0DCDC', alignSelf: 'center' }} />
-                      </div>
-                      {!isLast && <div style={{ height: 1, background: '#F0F4F4', marginLeft: 16 }} />}
-                    </div>
+                        <ChevronRight size={16} aria-hidden="true" style={{ color: AIDE }} />
+                      </button>
+                    </li>
                   );
                 }
-                const seance = item.seance;
-                const p = participants.find(x => x.id === seance.participantId);
-                const estEnCours = seance.heureDebut <= currentTimeStr && seance.heureFin > currentTimeStr;
-                const faite = seance.statut === 'realisee';
-                const cat = categorieDe(seance);
+                const s = item.seance;
+                const p = participants.find(x => x.id === s.participantId);
+                const cat = categorieDe(s);
+                const faite = s.statut === 'realisee';
+                const passee = !faite && s.heureFin.slice(0, 5) <= currentTimeStr;
+                const enCours = !faite && !passee && s.heureDebut.slice(0, 5) <= currentTimeStr;
+                const estProchaine = !faite && !passee && !enCours && principale?.id === s.id;
+                const [ton, libelle]: [TonPastille, string] = faite ? ['vert', 'Réalisée'] : passee ? ['orange', 'À confirmer'] : enCours ? ['plein', 'En cours'] : estProchaine ? ['plein', 'Prochaine'] : ['neutre', 'À venir'];
                 return (
-                  <div key={seance.id}>
-                    <div onClick={() => p && onVoirFiche(p.id)}
-                      style={{ display: 'flex', alignItems: 'stretch', gap: 12, padding: '12px 16px', cursor: p ? 'pointer' : 'default', background: estEnCours ? '#F0FAFA' : 'white' }}>
-                      <span aria-hidden="true" style={{ width: 4, borderRadius: 2, background: cat?.couleur ?? '#B8C7C7', flexShrink: 0, opacity: faite ? 0.5 : 1 }} />
-                      <div style={{ flexShrink: 0, width: 40 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{seance.heureDebut}</div>
-                        <div style={{ fontSize: 11, color: C.muted }}>{seance.heureFin}</div>
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: estEnCours ? 700 : 600, color: C.text, textDecoration: faite ? 'line-through' : 'none', opacity: faite ? 0.6 : 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {p?.prenom} {p?.nom}
-                        </div>
-                        {(cat || seance.type !== 'seance') && (
-                          <div style={{ marginTop: 3 }}>
-                            {cat ? pastilleCategorie(cat) : (
-                              <span style={{ background: '#EDE9FE', color: '#6D28D9', borderRadius: 8, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{LABEL_TYPE[seance.type]}</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      {faite ? (
-                        <i className="ti ti-circle-check" aria-label="Réalisée" style={{ fontSize: 20, color: C.green, alignSelf: 'center' }} />
-                      ) : estEnCours ? (
-                        <span style={{ background: C.primary, color: 'white', borderRadius: 8, padding: '3px 8px', fontSize: 11, fontWeight: 700, alignSelf: 'center' }}>En cours</span>
-                      ) : (
-                        <i className="ti ti-chevron-right" style={{ fontSize: 15, color: '#D0DCDC', alignSelf: 'center' }} />
-                      )}
-                    </div>
-                    {!isLast && <div style={{ height: 1, background: '#F0F4F4', marginLeft: 16 }} />}
-                  </div>
+                  <li key={s.id} style={bord}>
+                    <button type="button" onClick={() => p && onVoirFiche(p.id)} className="w-full flex items-center gap-2.5 py-2.5 text-left">
+                      <span className="w-[46px] text-sm font-extrabold" style={{ color: estProchaine || enCours ? VERT_ACTION : faite || passee ? AIDE : ENCRE }}>{s.heureDebut.slice(0, 5)}</span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-bold truncate" style={{ color: ENCRE }}>{nomDe(p)}</span>
+                        <span className="block text-xs truncate" style={{ color: AIDE }}>{[cat?.nom ?? LABEL_TYPE[s.type], p?.adresseVille].filter(Boolean).join(' · ')}</span>
+                      </span>
+                      <Pastille ton={ton}>{libelle}</Pastille>
+                    </button>
+                  </li>
                 );
               })}
-            </div>
-          </div>
-        )}
+            </ul>
+          )}
+        </section>
 
-        {/* ── BILANS À VENIR ────────────────────────────────────── */}
-        {bilansAVenir.length > 0 && (
-          <div>
-            <div style={{ ...titreSection, marginBottom: 10 }}>Bilans à venir</div>
-            <div style={{ background: 'white', borderRadius: 18, overflow: 'hidden', boxShadow: '0 2px 10px rgba(13,43,43,0.06)' }}>
-              {bilansAVenir.map((b, i) => {
+        {/* ── BILANS ──────────────────────────────────────────────── */}
+        {(bilansPlanifies.length > 0 || bilansAPrevoir.length > 0) && (
+          <section aria-labelledby="m-bilans" style={CARTE}>
+            <Titre id="m-bilans">Bilans à prévoir</Titre>
+            <ul className="list-none m-0 p-0">
+              {bilansPlanifies.map((b, i) => {
                 const p = participants.find(x => x.id === b.participantId);
-                const cat = categorieDe(b);
                 return (
-                  <button key={b.id} onClick={() => navigate(URLS_MOBILE.agendaJour(b.date))}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'none', border: 'none', borderTop: i === 0 ? 'none' : '1px solid #F0F4F4', cursor: 'pointer', textAlign: 'left' }}>
-                    <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: '50%', background: cat?.couleur ?? '#8B5CF6', flexShrink: 0 }} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: C.text, flexShrink: 0, width: 56 }}>{formatDateCourt(b.date)}</span>
-                    <span style={{ fontSize: 14, color: C.text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p?.prenom} {p?.nom}</span>
-                    <i className="ti ti-chevron-right" style={{ fontSize: 15, color: '#D0DCDC' }} />
-                  </button>
+                  <li key={b.id} style={{ borderTop: i === 0 ? 'none' : '1px solid #EEF4F4' }}>
+                    <button type="button" onClick={() => navigate(URLS_MOBILE.agendaJour(b.date))} className="w-full flex items-center gap-2.5 py-2.5 text-left">
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-bold truncate" style={{ color: ENCRE }}>{nomDe(p)}</span>
+                        <span className="block text-xs" style={{ color: AIDE }}>{LABEL_TYPE[b.type]} planifié</span>
+                      </span>
+                      <Pastille ton="neutre">{libelleRendezVous(b, today)}</Pastille>
+                    </button>
+                  </li>
                 );
               })}
+              {bilansAPrevoir.map(({ p, e }, i) => (
+                <li key={p.id} style={{ borderTop: i === 0 && bilansPlanifies.length === 0 ? 'none' : '1px solid #EEF4F4' }}>
+                  <button type="button" onClick={() => onVoirFiche(p.id)} className="w-full flex items-center gap-2.5 py-2.5 text-left">
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-bold truncate" style={{ color: ENCRE }}>{nomDe(p)}</span>
+                      <span className="block text-xs" style={{ color: AIDE }}>{e.etat === 'initial' ? 'Bilan initial' : 'Pas encore planifié'}</span>
+                    </span>
+                    <Pastille ton={TON_ECHEANCE[e.etat]}>{e.etat === 'initial' ? 'À faire' : e.libelle}</Pastille>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* ── FACTURES (lecture seule) ────────────────────────────── */}
+        {detailFactures && (
+          <button type="button" onClick={() => navigate(resume.aValider > 0 ? '/factures/a-valider' : '/factures')}
+            className="flex items-center gap-3 text-left" style={{ ...CARTE, padding: '14px 16px' }}>
+            <span className="flex-1">
+              <span className="block font-extrabold" style={{ fontSize: 16, color: ENCRE }}>Factures</span>
+              <span className="block text-[13px]" style={{ color: SECONDAIRE }}>{detailFactures}</span>
+            </span>
+            <ChevronRight size={18} aria-hidden="true" style={{ color: AIDE }} />
+          </button>
+        )}
+
+        {/* ── À SURVEILLER ────────────────────────────────────────── */}
+        {(ressentis.length > 0 || contratsARenouveler.length > 0) && (
+          <section aria-labelledby="m-surveiller" style={CARTE} className="flex flex-col gap-1">
+            <Titre id="m-surveiller">À surveiller</Titre>
+            {ressentis.map(p => (
+              <button key={p.id} type="button" onClick={() => onVoirFiche(p.id)} className="min-h-11 flex items-center gap-2 text-left text-[13px]" style={{ color: ENCRE }}>
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#E8544A' }} aria-hidden="true" />
+                {p.prenom} {p.nom} : 3 séances difficiles de suite (effort ou fatigue). Prendre des nouvelles ?
+              </button>
+            ))}
+            {contratsARenouveler.map(c => {
+              const p = participants.find(x => x.id === c.participantId);
+              return (
+                <button key={c.id} type="button" onClick={() => p && onVoirFiche(p.id)} className="min-h-11 flex items-center gap-2 text-left text-[13px]" style={{ color: ENCRE }}>
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#F0A429' }} aria-hidden="true" />
+                  Contrat de {nomDe(p)} : se termine le {formatDateCourt(c.dateFin)}
+                </button>
+              );
+            })}
+          </section>
+        )}
+
+        {/* ── UNE BONNE NOUVELLE ──────────────────────────────────── */}
+        {bonneNouvelle?.g && (
+          <section aria-labelledby="m-progres" style={CARTE} className="flex flex-col gap-1.5">
+            <Titre id="m-progres">Une bonne nouvelle</Titre>
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="text-[26px] font-extrabold" style={{ color: VERT_TEXTE }}>{bonneNouvelle.g.delta}</span>
+              <span className="text-sm font-bold" style={{ color: ENCRE }}>{nomDe(bonneNouvelle.p)}, {bonneNouvelle.g.test}</span>
             </div>
-          </div>
+            <p className="m-0 text-[13px]" style={{ color: SECONDAIRE }}>Depuis son bilan initial. {bonneNouvelle.g.sens} À lui dire à la prochaine séance !</p>
+          </section>
         )}
 
-        {/* ── CHIFFRES ──────────────────────────────────────────── */}
-        <div>
-          <div style={{ ...titreSection, marginBottom: 10 }}>En un coup d'œil</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <Tuile icone="ti-users" valeur={participantsActifs.length} libelle="bénéficiaires actifs" />
-            <Tuile icone="ti-calendar-week" valeur={seancesSemaine.length} libelle="cette semaine" />
-            <Tuile icone="ti-clipboard-check" valeur={bilansAFaire.length} libelle="bilans à faire" />
-            <Tuile icone="ti-clock-exclamation" valeur={contratsARenouveler.length} libelle="contrat fin proche" couleur={contratsARenouveler.length > 0 ? '#F59E0B' : C.primary} />
-          </div>
-        </div>
-
-        {/* ── ALERTES ───────────────────────────────────────────── */}
-        {contratsARenouveler.length > 0 && (
-          <div style={{ background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 14, padding: '12px 14px', fontSize: 13, color: '#92400E', fontWeight: 600 }}>
-            ⏰ {contratsARenouveler.length} contrat{contratsARenouveler.length > 1 ? 's' : ''} à renouveler bientôt
-          </div>
+        {/* ── LE SAVIEZ-VOUS ? ────────────────────────────────────── */}
+        {astuce && (
+          <aside aria-labelledby="m-astuce" className="flex flex-col gap-2" style={{ background: '#FFFBF2', border: '1px solid #F4E3C2', borderRadius: 20, padding: 16 }}>
+            <h2 id="m-astuce" className="m-0 text-[13px] font-extrabold" style={{ color: '#8A5300' }}>Le saviez-vous ?</h2>
+            <p className="m-0 text-sm leading-relaxed" style={{ color: ENCRE }}>{astuce.texte}</p>
+            <button type="button" onClick={() => ecarterAstuce(astuce.cle)} className="self-start h-11 text-[13px] font-semibold" style={{ color: AIDE }}>Compris</button>
+          </aside>
         )}
-
       </div>
+
+      {aConfirmerGeste && (() => {
+        const p = participants.find(x => x.id === aConfirmerGeste.seance.participantId);
+        const quand = `${formatDateCourt(aConfirmerGeste.seance.date)} · ${aConfirmerGeste.seance.heureDebut.slice(0, 5)}`;
+        const realisee = aConfirmerGeste.statut === 'realisee';
+        return (
+          <DialogueConfirmation
+            titre={realisee ? 'Confirmer que cette séance a bien été réalisée ?' : 'Confirmer que cette séance n’a pas eu lieu ?'}
+            message={`${nomDe(p)}, ${quand}. ${realisee ? 'Elle entrera dans la facture du mois.' : 'Elle sera marquée annulée et ne sera pas facturée.'}`}
+            libelleConfirmer={realisee ? 'Confirmer' : 'Confirmer l’annulation'}
+            enCours={validationEnCours === aConfirmerGeste.seance.id}
+            onConfirmer={() => void cloturerConfirme()}
+            onAnnuler={() => setAConfirmerGeste(null)}
+          />
+        );
+      })()}
 
       {coursSelectionne && (
         <ModalPresenceCoursCollectif
