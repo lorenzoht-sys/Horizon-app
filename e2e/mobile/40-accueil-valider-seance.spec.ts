@@ -66,15 +66,18 @@ test.describe.serial('Accueil mobile — valider une séance, séances à confir
 
     await loginPraticien(page);
     await page.goto('/');
-    const rappel = page.getByRole('button', { name: /séances? passées? à confirmer/ });
-    await expect(rappel).toBeVisible({ timeout: 15000 });
-    await rappel.click();
-    await page.getByRole('button', { name: new RegExp(`^Réalisée : ${nomComplet}`) }).click();
+    // Accueil V1 (23/11/2026) : le bloc « À confirmer » est ouvert d'emblée ; au-delà de 4 séances,
+    // « Voir les N autres » déplie le reste (le staging partagé en a souvent plus).
+    await expect(page.getByRole('heading', { name: 'À confirmer' })).toBeVisible({ timeout: 15000 });
+    const bouton = page.getByRole('button', { name: new RegExp(`^Marquer comme réalisée : ${nomComplet}`) });
+    const voirPlus = page.getByRole('button', { name: /^Voir les \d+ autres$/ });
+    if (!(await bouton.isVisible()) && await voirPlus.isVisible()) await voirPlus.click();
+    await bouton.click();
     await expect(page.getByText('Séance marquée comme réalisée')).toBeVisible({ timeout: 10000 });
 
     const { data: apres } = await admin!.from('seances').select('statut').eq('id', seance.id).single();
     expect(apres?.statut).toBe('realisee');
-    await expect(page.getByRole('button', { name: new RegExp(`^Réalisée : ${nomComplet}`) })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: new RegExp(`^Marquer comme réalisée : ${nomComplet}`) })).toHaveCount(0);
   });
 
   test('la séance en cours reste sur la carte et se marque réalisée depuis l\'accueil', async ({ page }) => {
@@ -96,7 +99,8 @@ test.describe.serial('Accueil mobile — valider une séance, séances à confir
     await expect(valider).toBeVisible({ timeout: 15000 });
     // Le staging partagé peut avoir d'autres séances du jour avant la nôtre : on les écarte à la
     // main (« Passer à la suivante »), ce qui teste aussi ce bouton.
-    const carte = valider.locator('xpath=ancestor::div[1]');
+    // Carte du prochain rendez-vous (accueil V1) : la section titrée « Séance en cours » ou « Votre prochain rendez-vous ».
+    const carte = page.locator('section[aria-labelledby="m-prochain"]');
     for (let i = 0; i < 40 && !(await carte.getByText(nomComplet).isVisible()); i++) {
       await page.getByRole('button', { name: 'Passer à la suivante →' }).click();
     }

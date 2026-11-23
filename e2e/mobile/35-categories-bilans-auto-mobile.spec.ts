@@ -237,7 +237,9 @@ test.describe.serial('Agenda mobile — catégories, objectif, bilans automatiqu
     await page.goto('/');
     await expect(page.getByText(/Bonjour /)).toBeVisible();
     await expect(page.getByRole('progressbar', { name: 'Séances du jour réalisées' })).toBeVisible();
-    await expect(page.getByText('Bilans à venir')).toBeVisible();
+    // « Bilans à venir » est devenu « Bilans à prévoir » (accueil V1, 23/11/2026) : les bilans déjà
+    // planifiés y passent en premier.
+    await expect(page.getByRole('heading', { name: 'Bilans à prévoir' })).toBeVisible();
     await expect(page.getByText(nomComplet).first()).toBeVisible();
 
     // ── Carte de l'agenda : le bouton Bilan porte l'identifiant de la séance ──
