@@ -130,17 +130,3 @@ export function useStructures() {
     recharger: charger,
   };
 }
-
-// Accès public : vérification token (sans auth)
-export async function verifierTokenStructure(token: string): Promise<{
-  id: string; nom: string; actif: boolean; praticienId: string;
-} | null> {
-  if (!supabase) return null;
-  const { data, error } = await supabase
-    .from('structures')
-    .select('id, nom, actif, praticien_id')
-    .eq('token_acces', token)
-    .single();
-  if (error || !data || !data.actif) return null;
-  return { id: data.id, nom: data.nom, actif: data.actif, praticienId: data.praticien_id };
-}

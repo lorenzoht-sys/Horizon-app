@@ -91,6 +91,21 @@ async function creerFixtureStructure(admin: SupabaseClient, marqueur: string): P
           tm6_distance_metres: 350,
         });
       if (bilanErr) throw new Error(`Création bilan (fixture e2e) échouée : ${bilanErr.message}`);
+      // Programme avec un suivi déclaré par le bénéficiaire : le test de colonnes vérifie que ni
+      // les exercices ni ce suivi ne partent vers le portail (audit du 23/11/2026).
+      const { error: programmeErr } = await admin
+        .from('programmes')
+        .insert({
+          participant_id: participant.id,
+          praticien_id: praticien.id,
+          date_debut: new Date().toISOString().slice(0, 10),
+          titre: 'Programme E2E',
+          objectif: 'Équilibre',
+          exercices: [{ nom: 'Exercice E2E' }],
+          suivi_semaines: [{ semaine: 1, note: 'suivi E2E' }],
+          actif: true,
+        });
+      if (programmeErr) throw new Error(`Création programme (fixture e2e) échouée : ${programmeErr.message}`);
     } catch (err) {
       await admin.from('participants').delete().eq('id', participant.id);
       throw err;
@@ -183,6 +198,35 @@ test.describe('Portail structure', () => {
       for (const b of bilans) {
         expect(Object.keys(b as object).sort()).toEqual(bilanAutorisees);
       }
+
+      // Programmes : ce que le portail affiche, rien d'autre (ni exercices ni suivi déclaré).
+      const programmeAutorisees = ['actif', 'date_creation', 'id', 'nom', 'objectif', 'titre'];
+      const programmes = body.participants.flatMap((p: { programmes?: unknown[] }) => p.programmes ?? []);
+      expect(programmes.length, 'fixture structure e2e sans programme — cette partie du test ne prouverait rien').toBeGreaterThan(0);
+      for (const pr of programmes) {
+        expect(Object.keys(pr as object).sort()).toEqual(programmeAutorisees);
+      }
+    } finally {
+      await nettoyerFixtureStructure(admin!, fixture);
+    }
+  });
+
+  test("un bénéficiaire archivé n'est plus visible de la structure", async ({ request }) => {
+    const admin = clientAdminTest();
+    test.skip(!admin, 'SUPABASE_TEST_SERVICE_ROLE_KEY non défini (voir e2e/README.md) — impossible de créer la fixture structure');
+
+    const fixture = await creerFixtureStructure(admin!, `portail-archive-${Date.now()}`);
+    try {
+      const lire = async () => {
+        const res = await request.get('/api/structure/data', { headers: { 'x-structure-token': fixture.token } });
+        expect(res.status()).toBe(200);
+        return ((await res.json()).participants as { id: string }[]).map(p => p.id);
+      };
+      expect(await lire()).toContain(fixture.participantId);
+
+      const { error } = await admin!.from('participants').update({ archive: true }).eq('id', fixture.participantId);
+      if (error) throw new Error(`Archivage (fixture e2e) échoué : ${error.message}`);
+      expect(await lire()).not.toContain(fixture.participantId);
     } finally {
       await nettoyerFixtureStructure(admin!, fixture);
     }

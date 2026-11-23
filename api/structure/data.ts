@@ -83,13 +83,21 @@ export default withSentry(async function handler(req: any, res: any) {
     // (PortailStructure.tsx:60-62). Le côté gauche n'est donc pas exposé. Si
     // le portail vient à l'afficher, il faudra l'ajouter ici ET dans la liste
     // autorisée du test e2e — c'est précisément ce que ce test impose.
+    //
+    // Programmes (audit du 23/11/2026) : `programmes(*)` envoyait aussi les exercices, le
+    // message de motivation et `suivi_semaines`, le suivi déclaré par le bénéficiaire. Le portail
+    // n'affiche que le titre (ou le nom), l'objectif, la date et le statut actif.
+    //
+    // Bénéficiaires archivés (même audit) : un ancien bénéficiaire n'est plus accompagné, la
+    // structure n'a plus à voir son suivi. Le dossier reste entier côté praticien.
     supabase.from('participants')
       .select(
         'id, prenom, nom, date_naissance, date_creation, structure_id, ' +
         'bilans(id, date, equilibre_droite, chair_stand_30, hand_grip_droite, tug_3m, tm6_distance_metres), ' +
-        'programmes(*)'
+        'programmes(id, titre, nom, objectif, actif, date_creation)'
       )
-      .eq('structure_id', structure.id),
+      .eq('structure_id', structure.id)
+      .eq('archive', false),
   ]);
 
   const participants = participantsRes.data ?? [];
