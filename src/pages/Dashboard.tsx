@@ -29,6 +29,7 @@ import { CarteProgres } from '../components/tableau-de-bord/CarteProgres';
 import { CarteAstuce } from '../components/tableau-de-bord/CarteAstuce';
 import { LigneASurveiller } from '../components/tableau-de-bord/LigneASurveiller';
 import { ChoixBeneficiaire } from '../components/tableau-de-bord/ChoixBeneficiaire';
+import { DialogueConfirmation } from '../components/ui/DialogueConfirmation';
 import type { Participant, Seance } from '../types';
 import {
   astuceDuJour, contexteBeneficiaire, delaiRendezVous, elementsATraiter, libelleRendezVous, phraseDuJour,
@@ -93,6 +94,8 @@ export default function Dashboard() {
   const [retours, setRetours] = useState<Record<string, { borgRpe: number; bienEtre: number }[]>>({});
   const retoursCharges = useRef(false);
   const [confirmationEnCours, setConfirmationEnCours] = useState<string | null>(null);
+  // « Confirmer que cette séance a bien été réalisée ? » (retour de Pierre du 23/11/2026).
+  const [aValider, setAValider] = useState<Seance | null>(null);
   const [actionRapide, setActionRapide] = useState<ActionRapide | null>(null);
   const [astucesEcartees, setAstucesEcartees] = useState<Set<string>>(lireAstucesEcartees);
   // Heure courante, rafraîchie chaque minute : « dans 2 h 10 » et l'état des séances avancent seuls.
@@ -154,8 +157,14 @@ export default function Dashboard() {
     setConfirmationEnCours(s.id);
     const ok = await modifierSeance(s.id, { statut: 'realisee' });
     setConfirmationEnCours(null);
+    setAValider(null);
     if (ok) toast.success('Séance marquée comme réalisée : elle entrera dans la facture du mois.');
     else toast.error('La séance n’a pas pu être enregistrée. Réessayez dans un instant.');
+  }
+
+  function nomDeSeance(s: Seance): string {
+    const p = participants.find(x => x.id === s.participantId);
+    return p ? `${p.prenom} ${p.nom}` : 'Bénéficiaire';
   }
 
   function ecarterAstuce(cle: string) {
@@ -301,7 +310,7 @@ export default function Dashboard() {
           {/* Ce qui attend un geste */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-[18px] items-start">
             <CarteAConfirmer seances={aConfirmer} participants={participants} aujourdhui={aujourdhui}
-              enCours={confirmationEnCours} onMarquerRealisee={s => void marquerRealisee(s)} />
+              enCours={confirmationEnCours} onMarquerRealisee={s => setAValider(s)} />
             <CarteProchainsBilans bilans={bilansAPrevoir} participants={participants} />
             <CarteFactures resume={resume} chargement={chargementBrouillons || chargementFactures} />
           </div>
@@ -458,6 +467,16 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {aValider && (
+        <DialogueConfirmation
+          titre="Confirmer que cette séance a bien été réalisée ?"
+          message={`${nomDeSeance(aValider)}, ${libelleRendezVous(aValider, dateCivileParis(maintenant))}. Elle entrera dans la facture du mois.`}
+          enCours={confirmationEnCours === aValider.id}
+          onConfirmer={() => void marquerRealisee(aValider)}
+          onAnnuler={() => setAValider(null)}
+        />
       )}
 
       {actionRapide && (
