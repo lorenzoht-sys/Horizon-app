@@ -4,6 +4,8 @@ import { NORMES_SCORING, calculerNote } from '../../data/norms';
 import { PdfHeader, PdfFooter, type PdfPraticienSettings } from './PdfShared';
 import { getContreIndications } from '../../lib/anamnese';
 import { computeTinettiScores, tinettiRisque } from '../../data/tinetti';
+import { TEST_LABELS } from '../../data/profiles';
+import { apleyRenseigne, lignesApley } from '../../lib/apley';
 import { libelleAge } from '../../lib/age';
 import { distanceTm6, resultatTm6 } from '../../lib/tm6';
 
@@ -151,7 +153,7 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
             <Cellule titre="Endurance" unite={resultatTm6(tm6).valeur != null ? (resultatTm6(tm6).type === 'distance' ? `${resultatTm6(tm6).valeur} M` : resultatTm6(tm6).texte.toUpperCase()) : '— M'} body={`O2 : ${tm6.spo2Avant ?? '—'} / ${tm6.spo2Apres ?? '—'} / ${tm6.spo22min ?? '—'}  ·  FC : ${tm6.fcAvant ?? '—'} / ${tm6.fcApres ?? '—'} Bpm${tm6.borgRPE != null ? `\nRessenti effort (Borg) : ${tm6.borgRPE}/20 — ${borgRPEInterp(tm6.borgRPE)}` : ''}${tm6DureePausesTexte(tm6)}`} />
           </View>
           <View style={S.cellRow}>
-            <Cellule titre="Souplesse" unite={`${sVal} Cm`} />
+            <Cellule titre={TEST_LABELS.souplesse} unite={`${sVal} Cm`} />
             <View style={S.cellSpacer} />
             <Cellule titre="Mobilité" unite={`${tug3m ?? '—'} Sec`} />
           </View>
@@ -173,6 +175,17 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
                 body={tinettiScores.complet
                   ? `Équilibre : ${tinettiScores.scoreEquilibre}/16  ·  Marche : ${tinettiScores.scoreMarche}/12\n${tinettiRisque(tinettiScores.scoreTotal).label}`
                   : 'Test incomplet'}
+              />
+            </View>
+          )}
+
+          {apleyRenseigne(bilan.apley) && (
+            <View style={S.cellRow}>
+              <Cellule
+                titre={TEST_LABELS.apley}
+                unite={bilan.apley.score != null ? `${bilan.apley.score}/4` : '—'}
+                body={[...lignesApley(bilan.apley), bilan.apley.notes?.trim() ? `Notes : ${bilan.apley.notes.trim()}` : null]
+                  .filter(Boolean).join('\n') || 'Test incomplet'}
               />
             </View>
           )}
