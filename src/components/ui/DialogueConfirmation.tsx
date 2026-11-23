@@ -15,7 +15,9 @@ export function DialogueConfirmation({ titre, message, libelleConfirmer = 'Confi
   const confirmer = useRef<HTMLButtonElement>(null);
   useEffect(() => { confirmer.current?.focus(); }, []);
   return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={onAnnuler}>
+    // z-index au-dessus de la barre de navigation mobile (zIndex 100, BarreNavigationMobile.tsx) :
+    // à 60, la barre recouvrait les boutons de la fenêtre sur téléphone (vu en e2e le 23/11/2026).
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-black/40" onClick={onAnnuler}>
       <div role="alertdialog" aria-modal="true" aria-labelledby="dialogue-confirmation-titre"
         className="w-full max-w-sm bg-white rounded-[20px] shadow-2xl p-5 flex flex-col gap-3"
         onClick={e => e.stopPropagation()}
