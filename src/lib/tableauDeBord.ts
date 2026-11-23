@@ -131,13 +131,14 @@ export function libelleRendezVous(s: Pick<Seance, 'date' | 'heureDebut'>, aujour
   return `${d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} · ${heure}`;
 }
 
-/** Séances passées restées « planifiées » (60 jours) : elles n'entrent pas dans la facture. */
+/**
+ * Séances passées restées « planifiées » : elles n'entrent pas dans la facture. Sans limite de
+ * date (retour de Pierre du 23/11/2026) : une séance reste à confirmer tant qu'elle n'est ni
+ * réalisée ni annulée.
+ */
 export function seancesNonConfirmees(seances: readonly Seance[], aujourdhui: string, maintenant: string): Seance[] {
-  const debut = new Date(`${aujourdhui}T12:00:00`);
-  debut.setDate(debut.getDate() - 60);
-  const dateMin = debut.toISOString().slice(0, 10);
   return seances.filter(s => s.statut === 'planifiee' && (
-    (s.date < aujourdhui && s.date >= dateMin) || (s.date === aujourdhui && s.heureFin.slice(0, 5) < maintenant)
+    s.date < aujourdhui || (s.date === aujourdhui && s.heureFin.slice(0, 5) < maintenant)
   ));
 }
 
