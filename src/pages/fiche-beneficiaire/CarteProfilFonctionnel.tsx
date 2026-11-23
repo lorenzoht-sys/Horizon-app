@@ -38,9 +38,10 @@ export const TESTS_TABLEAU: {
   { label: 'HandGrip D',  normeKey: 'handGrip',          unite: ' kg',   lower: false, getVal: (b: Bilan) => b.handGrip.droite },
   { label: 'TUG 3m',      normeKey: 'tug3m',             unite: 's',     lower: true,  getVal: (b: Bilan) => b.tug3m },
   { label: 'TM6',         normeKey: 'tm6Distance',        unite: ' m',    lower: false, getVal: (b: Bilan) => distanceTm6(b.tm6), getExtra: tm6Extra },
-  { label: 'Souplesse',   normeKey: 'souplesse',          unite: ' cm',   lower: false, getVal: (b: Bilan) => b.souplesse.valeur },
+  // Libellés courts (colonne de 82 px) ; les noms complets sont dans TEST_LABELS (profiles.ts).
+  { label: 'Doigts-sol',  normeKey: 'souplesse',          unite: ' cm',   lower: false, getVal: (b: Bilan) => b.souplesse.valeur },
   { label: 'Mémoire',     normeKey: 'memoire',            unite: '/5',    lower: false, getVal: (b: Bilan) => b.memoire.scoreImmediat },
-  { label: 'Apley Scratch', normeKey: 'apley',           unite: '/4',    lower: false, getVal: (b: Bilan) => b.apley?.score ?? null },
+  { label: 'Épaules',     normeKey: 'apley',             unite: '/4',    lower: false, getVal: (b: Bilan) => b.apley?.score ?? null },
   { label: 'Tinetti POMA', normeKey: 'tinetti',          unite: '/28',   lower: false, getVal: tinettiVal, getExtra: tinettiExtra },
 ];
 
@@ -173,7 +174,7 @@ export function CarteProfilFonctionnel({ participant, bilans }: {
     // val === null : résultat non comparable (TM6 en pas/tours) — extra porte alors seul le
     // résultat réel, à la place de la valeur en mètres qui n'existe pas pour ce bilan.
     const valDisplay = val !== null
-      ? `${test.label === 'Souplesse' && val > 0 ? '+' : ''}${val}${test.unite}`
+      ? `${test.normeKey === 'souplesse' && val > 0 ? '+' : ''}${val}${test.unite}`
       : null;
     return (
       <div className="flex items-center gap-2 py-2 border-b border-gray-100 last:border-0">

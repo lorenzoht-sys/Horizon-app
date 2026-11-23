@@ -14,6 +14,7 @@ import { getAuthHeader } from '../lib/supabase';
 import type { Bilan, Participant } from '../types';
 import { toast } from 'sonner';
 import { distanceTm6 } from '../lib/tm6';
+import { TEST_LABELS } from '../data/profiles';
 import { calculerAge, libelleAge } from '../lib/age';
 import { construirePromptResumeEvolution } from '../utils/promptComparaison';
 import { identiteDe, reinsererIdentite } from '../utils/pseudonymiserIA';
@@ -63,14 +64,21 @@ function normaliser(key: keyof typeof NORMS, valeur: number | null | undefined):
 
 // ── Tests à afficher dans le tableau ─────────────────────────────────────────
 
-const TESTS = [
+const TESTS: {
+  key: string; label: string; getVal: (b: Bilan) => number | null | undefined; unite: string; lower: boolean;
+  /** Affiché dans les tableaux mais pas envoyé au résumé IA (voir l'entrée « apley »). */
+  horsResumeIA?: boolean;
+}[] = [
   { key: 'equilibreD',  label: 'Équilibre D',    getVal: (b: Bilan) => b.equilibre.droite,       unite: 's',    lower: false },
   { key: 'equilibreG',  label: 'Équilibre G',    getVal: (b: Bilan) => b.equilibre.gauche,       unite: 's',    lower: false },
   { key: 'chairStand',  label: 'Chair Stand',    getVal: (b: Bilan) => b.chairStand30,           unite: ' rép.', lower: false },
   { key: 'handGripD',   label: 'HandGrip D',     getVal: (b: Bilan) => b.handGrip.droite,        unite: ' kg',  lower: false },
   { key: 'handGripG',   label: 'HandGrip G',     getVal: (b: Bilan) => b.handGrip.gauche,        unite: ' kg',  lower: false },
   { key: 'tug',         label: 'TUG 3m',         getVal: (b: Bilan) => b.tug3m,                  unite: 's',    lower: true  },
-  { key: 'souplesse',   label: 'Souplesse',      getVal: (b: Bilan) => b.souplesse.valeur,       unite: ' cm',  lower: false },
+  { key: 'souplesse',   label: TEST_LABELS.souplesse, getVal: (b: Bilan) => b.souplesse.valeur,  unite: ' cm',  lower: false },
+  // Ajouté aux tableaux le 23/11/2026. Gardé hors du résumé IA pour ne rien ajouter à ce qui
+  // part chez le sous-traitant IA avant la décision HDS (claude/migration-hds.md).
+  { key: 'apley',       label: TEST_LABELS.apley, getVal: (b: Bilan) => b.apley?.score,         unite: '/4',   lower: false, horsResumeIA: true },
   { key: 'tm6',         label: 'TM6',            getVal: (b: Bilan) => distanceTm6(b.tm6),     unite: ' m',   lower: false },
   { key: 'memoireImm',  label: 'Mémoire imm.',   getVal: (b: Bilan) => b.memoire.scoreImmediat,  unite: '/5',   lower: false },
   { key: 'memoireDif',  label: 'Mémoire dif.',   getVal: (b: Bilan) => b.memoire.scoreDiffere,   unite: '/5',   lower: false },
@@ -228,6 +236,7 @@ function ResumeIA({ participant, bilans }: { participant: Participant; bilans: B
       const nbMois = differenceInMonths(new Date(dernier.date), new Date(premier.date));
 
       const deltasTexte = TESTS
+        .filter(t => !t.horsResumeIA)
         .map(t => {
           const v0 = t.getVal(premier);
           const vN = t.getVal(dernier);

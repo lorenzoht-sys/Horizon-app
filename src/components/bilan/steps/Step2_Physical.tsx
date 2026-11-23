@@ -11,6 +11,10 @@ import BergTest from '../BergTest';
 import AdlTest from '../AdlTest';
 import { computeBergScore } from '../../../data/berg';
 import { computeTinettiScores } from '../../../data/tinetti';
+import {
+  NIVEAUX_HAUT, NIVEAUX_BAS, apleyRenseigne, calculerScoreApley, scoreNiveauApley,
+  type CoteApley, type NiveauApley,
+} from '../../../lib/apley';
 
 // ── Badge résultat unifié ─────────────────────────────────────────────────────
 type BadgeCouleur = 'vert' | 'orange' | 'rouge';
@@ -151,10 +155,7 @@ const PHYSICAL_TESTS: TestKey[] = ['equilibre', 'chairStand', 'handGrip', 'tug',
  */
 function testPonctuelRenseigne(form: BilanForm, key: TestKey): boolean {
   switch (key) {
-    case 'apley': {
-      const a = form.apley;
-      return a != null && (a.haut_d != null || a.haut_g != null || a.bas_d != null || a.bas_g != null || a.score != null || !!a.notes);
-    }
+    case 'apley':   return apleyRenseigne(form.apley);
     case 'tinetti': return computeTinettiScores(form.tinetti) != null;
     case 'eva':     return form.douleurEva != null;
     case 'berg':    return computeBergScore(form.berg) != null;
@@ -164,23 +165,8 @@ function testPonctuelRenseigne(form: BilanForm, key: TestKey): boolean {
   }
 }
 
-// ─── Apley's Scratch Test (corps uniquement — header géré en externe) ─────────
-const SCORE_HAUT: Record<string, number> = { shoulder: 4, neck: 3, top: 2, below: 1 };
-const SCORE_BAS:  Record<string, number> = { scapula: 4, mid_back: 3, low_back: 2, buttocks: 1 };
-
-const HAUT_OPTS = [
-  { key: 'shoulder', label: "Touche l'épaule opposée",     sub: 'normal' },
-  { key: 'neck',     label: 'Atteint la nuque',             sub: 'légèrement limité' },
-  { key: 'top',      label: 'Atteint le sommet de la tête', sub: 'modérément limité' },
-  { key: 'below',    label: 'Ne dépasse pas le sommet',     sub: 'très limité' },
-];
-const BAS_OPTS = [
-  { key: 'scapula',  label: "Atteint l'omoplate opposée",  sub: 'normal' },
-  { key: 'mid_back', label: 'Atteint le milieu du dos',    sub: 'légèrement limité' },
-  { key: 'low_back', label: 'Atteint le bas du dos',       sub: 'modérément limité' },
-  { key: 'buttocks', label: 'Atteint seulement les fesses', sub: 'très limité' },
-];
-
+// ─── Souplesse des épaules (Apley Scratch Test) — corps uniquement, header géré en externe ─
+// Niveaux et score : src/lib/apley.ts, partagés avec les PDF et les comparaisons.
 type ApleyVal = NonNullable<BilanForm['apley']>;
 
 function ApleyTest({ value, onChange }: { value: ApleyVal | undefined; onChange: (v: ApleyVal) => void }) {
@@ -188,29 +174,20 @@ function ApleyTest({ value, onChange }: { value: ApleyVal | undefined; onChange:
 
   function upd(patch: Partial<ApleyVal>) {
     const next = { ...v, ...patch };
-    const scores = [
-      next.haut_d ? SCORE_HAUT[next.haut_d] : null,
-      next.haut_g ? SCORE_HAUT[next.haut_g] : null,
-      next.bas_d  ? SCORE_BAS[next.bas_d]   : null,
-      next.bas_g  ? SCORE_BAS[next.bas_g]   : null,
-    ].filter((s): s is number => s !== null);
-    next.score = scores.length > 0
-      ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10
-      : null;
-    onChange(next);
+    onChange({ ...next, score: calculerScoreApley(next) });
   }
 
-  const sh = v.haut_d ? SCORE_HAUT[v.haut_d] : null;
-  const gh = v.haut_g ? SCORE_HAUT[v.haut_g] : null;
-  const sb = v.bas_d  ? SCORE_BAS[v.bas_d]   : null;
-  const gb = v.bas_g  ? SCORE_BAS[v.bas_g]   : null;
+  const sh = scoreNiveauApley('haut_d', v.haut_d);
+  const gh = scoreNiveauApley('haut_g', v.haut_g);
+  const sb = scoreNiveauApley('bas_d', v.bas_d);
+  const gb = scoreNiveauApley('bas_g', v.bas_g);
   const asym = (sh !== null && gh !== null && Math.abs(sh - gh) > 1)
             || (sb !== null && gb !== null && Math.abs(sb - gb) > 1);
 
-  function RadioGroup({ side, opts }: {
-    side: 'haut_d' | 'haut_g' | 'bas_d' | 'bas_g';
-    opts: typeof HAUT_OPTS;
-  }) {
+  // Appelée comme une fonction, pas comme <RadioGroup /> : un composant déclaré ici changeait
+  // d'identité à chaque rendu, et React démontait puis remontait les quatre groupes de boutons
+  // à chaque case cochée ou lettre tapée dans les notes.
+  function groupeNiveaux(side: CoteApley, opts: NiveauApley[]) {
     const labelId = `apley-${side}-label`;
     const sideLabel = side.endsWith('d') ? 'Droit' : 'Gauche';
     return (
@@ -240,16 +217,16 @@ function ApleyTest({ value, onChange }: { value: ApleyVal | undefined; onChange:
         <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wide mb-1">Mouvement haut — abduction + rotation externe</p>
         <p className="text-[11px] text-gray-400 italic mb-3">"Passez la main derrière la tête vers l'épaule opposée"</p>
         <div className="grid grid-cols-2 gap-4">
-          <RadioGroup side="haut_d" opts={HAUT_OPTS} />
-          <RadioGroup side="haut_g" opts={HAUT_OPTS} />
+          {groupeNiveaux('haut_d', NIVEAUX_HAUT)}
+          {groupeNiveaux('haut_g', NIVEAUX_HAUT)}
         </div>
       </div>
       <div className="p-3 bg-gray-50 rounded-xl mb-3 border border-gray-100">
         <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wide mb-1">Mouvement bas — adduction + rotation interne</p>
         <p className="text-[11px] text-gray-400 italic mb-3">"Passez la main dans le dos vers l'épaule opposée"</p>
         <div className="grid grid-cols-2 gap-4">
-          <RadioGroup side="bas_d" opts={BAS_OPTS} />
-          <RadioGroup side="bas_g" opts={BAS_OPTS} />
+          {groupeNiveaux('bas_d', NIVEAUX_BAS)}
+          {groupeNiveaux('bas_g', NIVEAUX_BAS)}
         </div>
       </div>
       {asym && (
@@ -429,7 +406,7 @@ export default function Step2_Physical({ form, update, previous, testsActifs, be
       {/* Souplesse */}
       {active.includes('souplesse') && (
         <section className="bg-white rounded-xl border border-gray-200 p-5">
-          <CardHeader title="Souplesse — flexion avant" subtitle="Distance doigts-pieds — flexibilité des ischio-jambiers" badge={badgeSouplesse}>
+          <CardHeader title={TEST_LABELS.souplesse} subtitle="Flexion avant, jambes tendues : du bout des doigts au sol (debout) ou aux orteils (assis)" badge={badgeSouplesse}>
             <DeltaIndicator delta={d.souplesse} unit="cm" />
           </CardHeader>
           <div className="flex gap-2 mb-3" role="group" aria-label="Méthode de mesure">
@@ -451,7 +428,7 @@ export default function Step2_Physical({ form, update, previous, testsActifs, be
       {/* Apley's Scratch Test */}
       {active.includes('apley') && (
         <section className="bg-white rounded-xl border border-gray-200 p-5">
-          <CardHeader title="Apley Scratch Test" subtitle="Amplitude épaule — abduction et rotation (score /4)" badge={badgeApley}>
+          <CardHeader title={TEST_LABELS.apley} subtitle="Amplitude des épaules — abduction et rotation (score /4)" badge={badgeApley}>
             <DeltaIndicator delta={d.apleyScore} unit="/4" />
           </CardHeader>
           <ApleyTest value={form.apley} onChange={v => update({ apley: v })} />
