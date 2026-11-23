@@ -53,6 +53,11 @@ function lireAstucesEcartees(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem(CLE_ASTUCES) ?? '[]') as string[]); } catch { return new Set(); }
 }
 
+function dateDuJour(d: Date): string {
+  const texte = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return texte.charAt(0).toUpperCase() + texte.slice(1);
+}
+
 function Titre({ id, children, droite }: { id: string; children: React.ReactNode; droite?: React.ReactNode }) {
   return (
     <div className="flex justify-between items-center gap-3 mb-1">
@@ -182,9 +187,9 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
 
         {/* ── EN-TÊTE ─────────────────────────────────────────────── */}
         <header>
-          <p className="m-0 text-[13px] font-bold first-letter:uppercase" style={{ color: VERT_TEXTE }}>
-            {maintenant.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
+          {/* Majuscule écrite dans le texte, pas en CSS : l'e2e mobile 30 repère le libellé du jour
+              de l'agenda par un texte qui commence par « lundi », « mardi »… en minuscule. */}
+          <p className="m-0 text-[13px] font-bold" style={{ color: VERT_TEXTE }}>{dateDuJour(maintenant)}</p>
           <h1 className="m-0 mt-0.5 font-extrabold" style={{ fontSize: 26, color: ENCRE }}>
             {prenom ? `Bonjour ${prenom}` : 'Bonjour et bienvenue'}
           </h1>

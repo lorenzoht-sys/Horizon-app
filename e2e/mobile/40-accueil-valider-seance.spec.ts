@@ -101,8 +101,15 @@ test.describe.serial('Accueil mobile — valider une séance, séances à confir
     // main (« Passer à la suivante »), ce qui teste aussi ce bouton.
     // Carte du prochain rendez-vous (accueil V1) : la section titrée « Séance en cours » ou « Votre prochain rendez-vous ».
     const carte = page.locator('section[aria-labelledby="m-prochain"]');
-    for (let i = 0; i < 40 && !(await carte.getByText(nomComplet).isVisible()); i++) {
-      await page.getByRole('button', { name: 'Passer à la suivante →' }).click();
+    // On attend que la carte affiche soit notre bénéficiaire, soit « Passer à la suivante » : la
+    // liste des bénéficiaires peut arriver après celle des séances, le nom s'affiche alors un
+    // instant plus tard (vu en CI le 23/11/2026).
+    const nom = carte.getByText(nomComplet);
+    const passer = page.getByRole('button', { name: 'Passer à la suivante →' });
+    for (let i = 0; i < 40; i++) {
+      await expect(nom.or(passer).first()).toBeVisible({ timeout: 10000 });
+      if (await nom.isVisible()) break;
+      await passer.click();
     }
     await expect(carte.getByText(nomComplet)).toBeVisible();
     await valider.click();
