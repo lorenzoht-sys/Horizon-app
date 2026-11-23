@@ -190,7 +190,7 @@ export default function Dashboard() {
   const participantProchain = prochain ? participants.find(p => p.id === prochain.participantId) ?? null : null;
   const prochainAujourdhui = prochain && prochain.date === aujourdhui ? prochain : null;
   const aConfirmer = seancesNonConfirmees(seances, aujourdhui, heure).filter(s => actifs.has(s.participantId));
-  const nbBilansAujourdhui = journee.filter(s => s.type !== 'seance' && s.statut === 'planifiee').length;
+  const nbBilansAujourdhui = journee.filter(s => s.type !== 'seance' && s.statut === 'planifiee' && s.heureDebut.slice(0, 5) > heure).length;
 
   const bilansAPrevoir = prochainsBilans(participantsActifs, aujourdhui);
   const resume = resumeFactures(separerBrouillons(brouillonsFactures, aujourdhui).validables.length, factures);
@@ -224,7 +224,7 @@ export default function Dashboard() {
   if (aRelancer.length > 0) {
     aSurveiller.push({
       cle: 'relancer', type: 'relancer', gravite: 'normale',
-      titre: `${aRelancer.length} sans séance depuis 3 semaines`,
+      titre: aRelancer.length === 1 ? 'Sans séance depuis 3 semaines' : `${aRelancer.length} bénéficiaires sans séance depuis 3 semaines`,
       detail: aRelancer.slice(0, 2).map(p => `${p.prenom} ${p.nom}`).join(', ') + (aRelancer.length > 2 ? '…' : ''),
       action: 'Planifier', lien: '/agenda-v2',
     });
@@ -240,8 +240,8 @@ export default function Dashboard() {
           {/* En-tête : la journée racontée en une phrase, et les actions rapides. */}
           <header className="flex flex-wrap items-end justify-between gap-4">
             <div className="max-w-[640px]">
-              <p className="m-0 text-[13px] font-bold first-letter:uppercase" style={{ color: '#147A64' }}>
-                {maintenant.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              <p className="m-0 text-[13px] font-bold" style={{ color: '#147A64' }}>
+                {(d => d.charAt(0).toUpperCase() + d.slice(1))(maintenant.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))}
               </p>
               <h1 className="font-heading font-extrabold m-0 mt-0.5" style={{ fontSize: 28, color: 'var(--color-ink)', letterSpacing: '-0.3px' }}>
                 {prenomPraticien ? `Bonjour ${prenomPraticien}` : 'Bonjour'}
@@ -313,7 +313,7 @@ export default function Dashboard() {
             </div>
             {astuce && (
               <div className="lg:col-span-4 flex flex-col [&>aside]:flex-1">
-                <CarteAstuce astuce={astuce} onEcarter={() => ecarterAstuce(astuce.cle)} />
+                <CarteAstuce astuce={astuce} onEcarter={() => ecarterAstuce(astuce.cle)} onAction={a => { if (a === 'dictee') setActionRapide('dictee'); }} />
               </div>
             )}
           </div>

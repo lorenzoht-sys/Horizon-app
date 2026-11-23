@@ -262,6 +262,7 @@ export interface ResumeJournee {
   /** Délai avant le prochain rendez-vous du jour, null s'il n'y en a plus. */
   prochainDans: string | null;
   nbAConfirmer: number;
+  /** Bilans du jour encore à venir (un bilan passé non confirmé est compté dans nbAConfirmer). */
   nbBilansAujourdhui: number;
 }
 
@@ -427,7 +428,8 @@ export interface Astuce {
 
 /** Une astuce à la fois, qu'on peut écarter : on apprend Horizon en s'en servant. */
 export const ASTUCES: Astuce[] = [
-  { cle: 'dictee', texte: 'Juste après une séance, ouvrez la fiche et touchez « Dicter une séance » : parlez deux minutes, Horizon rédige le compte rendu.', action: 'Voir mes bénéficiaires', lien: '/#beneficiaires' },
+  // lien « action:dictee » : le tableau de bord ouvre directement « Dicter une séance : pour qui ? ».
+  { cle: 'dictee', texte: 'Juste après une séance, touchez « Dicter une séance » et parlez deux minutes : Horizon rédige le compte rendu et coche les exercices faits.', action: 'Essayer maintenant', lien: 'action:dictee' },
   { cle: 'comparaison', texte: 'Dès le deuxième bilan, « Évolution » sur la fiche montre les progrès test par test : un bon support à montrer à la personne et à son médecin.', action: 'Voir mes bénéficiaires', lien: '/#beneficiaires' },
   { cle: 'bibliotheque', texte: 'Vos programmes partent de la bibliothèque d’exercices : enregistrez un programme comme modèle pour le réutiliser en un clic.', action: 'Ouvrir la bibliothèque', lien: '/bibliotheque' },
   { cle: 'espace', texte: 'Chaque bénéficiaire peut retrouver son programme sur son téléphone, avec un code d’accès : « Espace bénéficiaire » sur sa fiche.', action: 'Voir mes bénéficiaires', lien: '/#beneficiaires' },
