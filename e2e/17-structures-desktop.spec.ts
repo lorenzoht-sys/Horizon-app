@@ -19,7 +19,7 @@ test.describe('Structures — onglet desktop de Dashboard.tsx (extraction CarteS
     await loginPraticien(page);
 
     await page.goto('/');
-    await page.getByRole('button', { name: /🏢 Structures/ }).click();
+    await page.getByRole('button', { name: /^Structures \(/ }).click();
 
     let structureUrl: string | null = null;
     try {
@@ -43,7 +43,7 @@ test.describe('Structures — onglet desktop de Dashboard.tsx (extraction CarteS
       // bord, l'onglet Structures doit retrouver la structure fraîchement
       // créée, rendue par le composant CarteStructure désormais externe. ──
       await page.goto('/');
-      await page.getByRole('button', { name: /🏢 Structures/ }).click();
+      await page.getByRole('button', { name: /^Structures \(/ }).click();
       await expect(page.getByText(nomStructure)).toBeVisible();
       await expect(page.getByRole('button', { name: /Voir les bénéficiaires/ }).first()).toBeVisible();
 

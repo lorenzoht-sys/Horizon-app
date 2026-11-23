@@ -156,7 +156,6 @@ export default function Dashboard() {
     })),
     contratsSansJours: contratsSansJours.map(c => ({ participantId: c.participantId, nom: nomDe(c.participantId) })),
   });
-  const viaStructure = participantsActifs.length - independants.length;
 
   return (
     <>
@@ -230,7 +229,9 @@ export default function Dashboard() {
             {([
               ['tous', `Tous les actifs (${participantsActifs.length})`],
               ['independants', `Sans structure (${independants.length})`],
-              ['structures', `Via une structure (${viaStructure})`],
+              // Ce filtre affiche les structures elles-mêmes (cartes EHPAD, associations), pas des
+              // bénéficiaires : il garde donc le nom « Structures » et leur nombre (e2e 17).
+              ['structures', `Structures (${structures.length})`],
             ] as [DashTab, string][]).map(([tab, label]) => (
               <button
                 key={tab}
