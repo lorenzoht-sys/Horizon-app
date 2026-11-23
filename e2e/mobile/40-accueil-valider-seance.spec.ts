@@ -66,10 +66,12 @@ test.describe.serial('Accueil mobile — valider une séance, séances à confir
 
     await loginPraticien(page);
     await page.goto('/');
-    const rappel = page.getByRole('button', { name: /séances? passées? à confirmer/ });
-    await expect(rappel).toBeVisible({ timeout: 15000 });
-    await rappel.click();
+    // Le rappel est ouvert d'emblée (retour de Pierre du 23/11/2026), et chaque geste demande
+    // une confirmation avant d'écrire.
+    await expect(page.getByRole('button', { name: /séances? passées? à confirmer/ })).toBeVisible({ timeout: 15000 });
     await page.getByRole('button', { name: new RegExp(`^Réalisée : ${nomComplet}`) }).click();
+    await expect(page.getByRole('alertdialog', { name: 'Confirmer que cette séance a bien été réalisée ?' })).toBeVisible();
+    await page.getByRole('button', { name: 'Confirmer', exact: true }).click();
     await expect(page.getByText('Séance marquée comme réalisée')).toBeVisible({ timeout: 10000 });
 
     const { data: apres } = await admin!.from('seances').select('statut').eq('id', seance.id).single();
@@ -97,11 +99,18 @@ test.describe.serial('Accueil mobile — valider une séance, séances à confir
     // Le staging partagé peut avoir d'autres séances du jour avant la nôtre : on les écarte à la
     // main (« Passer à la suivante »), ce qui teste aussi ce bouton.
     const carte = valider.locator('xpath=ancestor::div[1]');
-    for (let i = 0; i < 40 && !(await carte.getByText(nomComplet).isVisible()); i++) {
-      await page.getByRole('button', { name: 'Passer à la suivante →' }).click();
+    // On attend le nom ou « Passer à la suivante » : la liste des bénéficiaires peut arriver après
+    // celle des séances (vu en CI le 23/11/2026).
+    const nom = carte.getByText(nomComplet);
+    const passer = page.getByRole('button', { name: 'Passer à la suivante →' });
+    for (let i = 0; i < 40; i++) {
+      await expect(nom.or(passer).first()).toBeVisible({ timeout: 10000 });
+      if (await nom.isVisible()) break;
+      await passer.click();
     }
     await expect(carte.getByText(nomComplet)).toBeVisible();
     await valider.click();
+    await page.getByRole('button', { name: 'Confirmer', exact: true }).click();
     await expect(page.getByText('Séance marquée comme réalisée')).toBeVisible({ timeout: 10000 });
 
     const { data: apres } = await admin!.from('seances').select('statut').eq('id', seance.id).single();
