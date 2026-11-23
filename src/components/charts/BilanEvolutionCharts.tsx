@@ -1,5 +1,6 @@
 import type { Bilan } from '../../types';
 import { distanceTm6, resultatTm6 } from '../../lib/tm6';
+import { TEST_LABELS } from '../../data/profiles';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -34,8 +35,15 @@ interface TestCfg {
    * invisible (ligne "—" ou carte disparue) alors que le test avait bien été réalisé.
    */
   getRawDisplay?: (b: Bilan) => string | null;
-  cat: (v: number) => 'g' | 'o' | 'r';
+  /** Absent : pas de norme validée (Scratch Test en cm) ; la valeur s'affiche sans couleur. */
+  cat?: (v: number) => 'g' | 'o' | 'r';
   score: (v: number) => number;
+  /**
+   * Affiché, mais exclu du score global. Ajouté le 23/11/2026 pour la souplesse des épaules :
+   * Pierre demande qu'un test ajouté aux restitutions ne change pas les notes existantes sans
+   * règle de calcul validée.
+   */
+  horsScoreGlobal?: boolean;
 }
 
 const TESTS: TestCfg[] = [
@@ -64,10 +72,32 @@ const TESTS: TestCfg[] = [
     score: v => clamp(v / 30 * 100),
   },
   {
-    key: 'soup', label: 'Souplesse', unit: 'cm', lowerBetter: false,
+    key: 'soup', label: TEST_LABELS.souplesse, unit: 'cm', lowerBetter: false,
     getValue: b => b.souplesse.valeur,
     cat: v => v > 5 ? 'g' : v >= -5 ? 'o' : 'r',
     score: v => clamp((v + 30) / 50 * 100),
+  },
+  {
+    key: 'apley', label: TEST_LABELS.apley, unit: '/4', lowerBetter: false,
+    getValue: b => b.apley?.score,
+    // Paliers de NORMES_SCORING.apley (norms.ts).
+    cat: v => v >= 3.5 ? 'g' : v >= 2.5 ? 'o' : 'r',
+    score: v => clamp((v - 1) / 3 * 100),
+    horsScoreGlobal: true,
+  },
+  // Scratch Test en cm signés (23/11/2026) : une ligne par position, sans couleur de norme
+  // (aucune norme validée par Pierre) et hors score global.
+  {
+    key: 'apleyCmD', label: 'Épaules — main droite au-dessus', unit: 'cm', lowerBetter: false,
+    getValue: b => b.apley?.cmDroiteDessus,
+    score: v => clamp((v + 30) / 40 * 100),
+    horsScoreGlobal: true,
+  },
+  {
+    key: 'apleyCmG', label: 'Épaules — main gauche au-dessus', unit: 'cm', lowerBetter: false,
+    getValue: b => b.apley?.cmGaucheDessus,
+    score: v => clamp((v + 30) / 40 * 100),
+    horsScoreGlobal: true,
   },
   {
     key: 'tm6', label: 'TM6', unit: 'm', lowerBetter: false,
@@ -87,6 +117,8 @@ const TESTS: TestCfg[] = [
   },
 ];
 
+const NEUTRE = { bg: '#F2F6F8', text: '#1A2332' };
+
 const CAT = {
   g: { bg: '#E1F5EE', text: '#085041' },
   o: { bg: '#FAEEDA', text: '#633806' },
@@ -105,6 +137,7 @@ function barColor(idx: number, last: number): string {
 
 function calcGlobalScore(b: Bilan): number {
   const scores = TESTS
+    .filter(t => !t.horsScoreGlobal)
     .map(t => { const v = t.getValue(b); return v != null ? t.score(v) : null; })
     .filter((s): s is number => s !== null);
   if (!scores.length) return 0;
@@ -205,7 +238,7 @@ function Heatmap({ bilans }: Props) {
                       </td>
                     );
                   }
-                  const col = CAT[t.cat(v)];
+                  const col = t.cat ? CAT[t.cat(v)] : NEUTRE;
                   return (
                     <td key={i} className="text-center py-1 px-1.5">
                       <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold"

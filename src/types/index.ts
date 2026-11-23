@@ -74,6 +74,14 @@ export interface Bilan {
     bas_g: string | null;
     score: number | null;
     notes: string;
+    /**
+     * Mesure en centimètres signés (demande de Pierre, 23/11/2026) : négatif si les doigts ne se
+     * touchent pas, 0 s'ils se touchent, positif s'ils se chevauchent. Deux positions, gardées
+     * séparément. Absentes des bilans saisis avant : leurs niveaux (haut_d…) restent tels quels,
+     * jamais convertis (aucune correspondance fiable entre niveau et centimètres).
+     */
+    cmDroiteDessus?: number | null;
+    cmGaucheDessus?: number | null;
   };
   tinetti?: TinettiData;
   berg?: BergData | null;

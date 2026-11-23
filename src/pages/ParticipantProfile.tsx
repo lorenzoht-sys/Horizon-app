@@ -3,7 +3,8 @@ import { chargerSettingsPraticien } from '../lib/settingsPraticien';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useParams, Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { ArrowLeft, Pencil, FileText, TrendingUp, Download, Trash2, Dumbbell, MapPin, RefreshCw, ClipboardList, Mic, ExternalLink, LayoutTemplate, Archive, ArchiveRestore, Bot, Phone, Navigation, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Pencil, FileText, TrendingUp, Download, Trash2, Dumbbell, MapPin, RefreshCw, ClipboardList, Mic, ExternalLink, LayoutTemplate, Archive, ArchiveRestore, Bot, Phone, Navigation, ChevronDown, Mail, ShieldCheck, Clock, Building2, Eye } from 'lucide-react';
+import { echeanceBilan } from '../lib/tableauDeBord';
 import { useParticipants } from '../hooks/useParticipants';
 import { useProgramme } from '../hooks/useProgramme';
 import { useProgrammeV2 } from '../hooks/useProgrammeV2';
@@ -132,6 +133,7 @@ export default function ParticipantProfile() {
   const settings = chargerSettingsPraticien();
 
   const [menuOuvert, setMenuOuvert]         = useState(false);
+  const [plusOuvert, setPlusOuvert]         = useState(false);
   const [confirmDelete, setConfirmDelete]   = useState(false);
   const [confirmDeleteProg, setConfirmDeleteProg] = useState(false);
   const [pdfProgrammeEnCours, setPdfProgrammeEnCours] = useState(false);
@@ -203,8 +205,6 @@ export default function ParticipantProfile() {
   const today          = new Date().toISOString().slice(0, 10);
   const imc            = participant.taille && participant.poids
     ? Math.round((participant.poids / ((participant.taille / 100) ** 2)) * 10) / 10 : null;
-  const joursDepuisBilan = latestBilan
-    ? Math.floor((Date.now() - new Date(latestBilan.date).getTime()) / 86400000) : Infinity;
   const prochaineSeance = seances
     .filter(s => s.participantId === participant.id && s.statut === 'planifiee' && s.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date))[0] ?? null;
@@ -500,10 +500,10 @@ export default function ParticipantProfile() {
   const TABS: { id: TabId; label: string; count?: number }[] = [
     { id: 'bilans',    label: 'Historique bilans',   count: participant.bilans.length },
     { id: 'contrats',  label: 'Contrats de suivi',   count: contratsCount },
-    { id: 'cours',     label: '👥 Cours collectifs',  count: entreesCours.length > 0 ? entreesCours.length : undefined },
-    { id: 'assiduite', label: alerteRessentis ? '📊 Assiduité ⚠' : '📊 Assiduité', count: seancesStats.length > 0 ? seancesStats.length : undefined },
-    { id: 'documents', label: '📄 Documents' },
-    { id: 'rappels',   label: '🔔 Rappels' },
+    { id: 'cours',     label: 'Cours collectifs',  count: entreesCours.length > 0 ? entreesCours.length : undefined },
+    { id: 'assiduite', label: alerteRessentis ? 'Assiduité ⚠' : 'Assiduité', count: seancesStats.length > 0 ? seancesStats.length : undefined },
+    { id: 'documents', label: 'Documents' },
+    { id: 'rappels',   label: 'Rappels' },
   ];
 
   return (
@@ -513,7 +513,7 @@ export default function ParticipantProfile() {
       </Link>
 
       {/* ── HEADER BLANC ───────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200/50 shadow-sm mb-4">
+      <div className="bg-white rounded-[20px] shadow-sm mb-4" style={{ border: '1px solid #E2EEEE' }}>
         <div className="px-4 sm:px-5 pt-5 pb-4">
 
           {/* Ligne 1 : avatar + nom + badges + menu */}
@@ -595,14 +595,14 @@ export default function ParticipantProfile() {
                       className="hover:text-gray-800 transition-colors"
                       style={{ whiteSpace: 'nowrap', display: 'inline-block', maxWidth: '100%' }}
                     >
-                      📞 {participant.telephone}
+                      <Phone size={12} className="inline -mt-0.5 mr-1" style={{ color: 'var(--color-teal)' }} aria-hidden="true" />{participant.telephone}
                     </a>
                   </>
                 )}
                 {participant.email && (
                   <>
                     <span className="text-gray-300">·</span>
-                    <span>✉️ {participant.email}</span>
+                    <span className="inline-flex items-center gap-1"><Mail size={12} style={{ color: 'var(--color-teal)' }} aria-hidden="true" />{participant.email}</span>
                   </>
                 )}
                 {hasAddress && (
@@ -614,7 +614,7 @@ export default function ParticipantProfile() {
                       rel="noopener noreferrer"
                       className="hover:text-gray-800 transition-colors inline-flex items-center gap-1"
                     >
-                      📍 {participant.adresseRue}, {participant.adresseCodePostal} {participant.adresseVille}
+                      <MapPin size={12} style={{ color: 'var(--color-teal)' }} aria-hidden="true" />{participant.adresseRue}, {participant.adresseCodePostal} {participant.adresseVille}
                       {participant.coordonnees
                         ? <MapPin size={10} className="text-green-500" />
                         : !geocoding
@@ -626,38 +626,50 @@ export default function ParticipantProfile() {
                 )}
                 {participant.rgpd?.consentementObtenu && (
                   <><span className="text-gray-300">·</span>
-                  <span className="text-[12px]" style={{ color: '#0F6E56' }}>
-                    ✅ RGPD {METHODE_LABEL[participant.rgpd.methodeConsentement] ?? ''}
+                  <span className="text-[12px] inline-flex items-center gap-1" style={{ color: '#0F6E56' }}>
+                    <ShieldCheck size={12} aria-hidden="true" /> Consentement {METHODE_LABEL[participant.rgpd.methodeConsentement] ?? ''}
                   </span></>
                 )}
               </div>
 
-              {/* Barre de progression bilan en cours */}
-              {brouillon && (
-                <button
-                  onClick={() => handleAction('nouveau_bilan')}
-                  className="mt-2 inline-flex items-center gap-2.5 hover:opacity-80 transition-opacity"
-                >
-                  <span className="text-[12px] text-gray-500">Bilan en cours</span>
-                  <span className="w-[140px] h-1 rounded-full overflow-hidden" style={{ background: '#E6F8F8' }}>
-                    <span className="h-full rounded-full block" style={{ width: `${brouillon.completionPct}%`, background: 'var(--color-teal)' }} />
-                  </span>
-                  <span className="text-[12px] font-semibold" style={{ color: 'var(--color-teal)' }}>{brouillon.completionPct}%</span>
-                  <span className="text-[12px] text-gray-400">· Reprendre →</span>
-                </button>
-              )}
-
-              {/* Badge dernier bilan */}
-              {joursDepuisBilan > 85 && (
-                <div className="mt-1.5 inline-flex items-center gap-1 text-[12px] font-semibold px-2.5 py-0.5 rounded-full" style={{ background: '#FFF7E6', color: '#B45309' }}>
-                  ⏰ Bilan à planifier ({joursDepuisBilan}j)
-                </div>
-              )}
-              {latestBilan && joursDepuisBilan <= 85 && (
-                <div className="mt-1.5 text-[12px] text-gray-400">
-                  Dernier bilan : {formatDate(latestBilan.date)}
-                </div>
-              )}
+              {/* Échéances (refonte du 23/11/2026) : bilan à prévoir et bilan commencé, sur une
+                  ligne et dans les mêmes pastilles. Même règle de 85 jours que le tableau de bord. */}
+              {(() => {
+                const echeance = echeanceBilan(participant.bilans, today);
+                const aPrevoir = echeance.etat === 'retard' || echeance.etat === 'initial' || echeance.etat === 'bientot';
+                if (!aPrevoir && !brouillon && !latestBilan) return null;
+                return (
+                  <div className="mt-2.5 flex flex-wrap gap-2">
+                    {aPrevoir ? (
+                      <button
+                        onClick={() => navigate('/agenda-v2')}
+                        className="inline-flex items-center gap-2 text-[12px] font-bold px-3 py-1.5 rounded-[10px] hover:opacity-90 transition-opacity"
+                        style={echeance.etat === 'bientot' ? { background: '#E6F5F1', color: '#147A64' } : { background: '#FEF5E7', color: '#8A5300' }}
+                      >
+                        <Clock size={13} aria-hidden="true" />
+                        {echeance.etat === 'initial' ? 'Bilan initial à faire' : `Prochain bilan : ${echeance.libelle.toLowerCase()}`}
+                      </button>
+                    ) : latestBilan && (
+                      <span className="inline-flex items-center gap-2 text-[12px] font-semibold px-3 py-1.5 rounded-[10px]" style={{ background: '#F5F9FB', color: 'var(--color-ink-2)' }}>
+                        <Clock size={13} aria-hidden="true" />
+                        Dernier bilan : {formatDate(latestBilan.date)} · prochain {echeance.libelle.toLowerCase()}
+                      </span>
+                    )}
+                    {brouillon && (
+                      <button
+                        onClick={() => handleAction('nouveau_bilan')}
+                        className="inline-flex items-center gap-2.5 text-[12px] font-bold px-3 py-1.5 rounded-[10px] hover:opacity-90 transition-opacity"
+                        style={{ background: '#F5F9FB', color: 'var(--color-ink)' }}
+                      >
+                        <span className="w-[60px] h-1.5 rounded-full overflow-hidden" style={{ background: '#E2EEEE' }} aria-hidden="true">
+                          <span className="h-full rounded-full block" style={{ width: `${Math.max(brouillon.completionPct, 8)}%`, background: 'var(--color-teal)' }} />
+                        </span>
+                        Bilan commencé, étape {brouillon.etapeActuelle + 1} · Reprendre →
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Structure de rattachement */}
               {participant.structureId && (() => {
@@ -669,7 +681,7 @@ export default function ParticipantProfile() {
                       className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full hover:opacity-80 transition-opacity"
                       style={{ background: '#EEF2FF', color: '#4F46E5' }}
                     >
-                      🏢 {str.nom}
+                      <Building2 size={11} aria-hidden="true" /> {str.nom}
                     </Link>
                   </div>
                 ) : null;
@@ -762,44 +774,39 @@ export default function ParticipantProfile() {
           </div>
         </div>
 
-        {/* Séparateur + boutons d'action */}
-        <div className="border-t border-gray-100 px-4 sm:px-5 py-3">
+        {/* Actions (refonte du 23/11/2026) : trois actions du quotidien en avant, le reste dans
+            « Autres actions ». Avant : huit boutons de même poids sur une ligne. Appeler et Itinéraire
+            restent visibles sur téléphone, où l'on part en visite. */}
+        <div className="px-4 sm:px-5 py-3" style={{ borderTop: '1px solid #EEF4F4' }}>
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Groupe 1 : primaires */}
             <button
               onClick={() => handleAction('nouveau_bilan')}
-              className="flex items-center gap-1.5 text-white text-[13px] font-semibold px-3.5 py-[7px] rounded-lg transition-colors hover:opacity-90"
-              style={{ background: 'var(--color-teal)' }}
+              className="flex items-center gap-1.5 text-white text-[13px] font-bold px-4 py-2 rounded-[10px] transition-colors hover:opacity-90"
+              style={{ background: 'var(--color-teal)', boxShadow: '0 4px 14px rgba(43,184,154,0.28)' }}
             >
               + Nouveau bilan
             </button>
             <button
               onClick={() => setShowDictee(true)}
-              className="flex items-center gap-1.5 bg-white border border-gray-200 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1.5 bg-white text-[13px] font-semibold px-3.5 py-2 rounded-[10px] hover:bg-gray-50 transition-colors"
+              style={{ border: '1.5px solid #E2EEEE' }}
             >
-              <Mic size={13} style={{ color: 'var(--color-teal)' }} /> Dicter séance
+              <Mic size={14} style={{ color: 'var(--color-teal)' }} aria-hidden="true" /> Dicter une séance
             </button>
-            {/* Desktop seulement (chantier « retrait de l'Assistant de la
-                navigation mobile ») : l'assistant sort du périmètre mobile,
-                ce bouton était l'un de ses deux points d'entrée sur téléphone
-                (avec la barre de navigation, retiré séparément). Le state
-                {{patientId}} reste utile ici pour AssistantPage (desktop) ;
-                l'URL ne sert plus qu'à cet usage desktop désormais. */}
             <button
-              onClick={() => navigate(`/assistant?beneficiaire=${encodeURIComponent(participant.id)}`, { state: { patientId: participant.id } })}
-              className="hidden md:flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors"
+              onClick={() => handleAction('programme')}
+              className="flex items-center gap-1.5 bg-white text-[13px] font-semibold px-3.5 py-2 rounded-[10px] hover:bg-gray-50 transition-colors"
+              style={{ border: '1.5px solid #E2EEEE' }}
             >
-              <Bot size={13} /> Assistant
+              <Dumbbell size={14} style={{ color: 'var(--color-teal)' }} aria-hidden="true" /> Programme
             </button>
-            {/* Boutons terrain : sur téléphone seulement, où l'on appelle et
-                où l'on part en visite. Sur desktop, le téléphone et l'adresse
-                restent des liens dans la ligne d'informations. */}
             {participant.telephone && (
               <a
                 href={`tel:${participant.telephone}`}
-                className="md:hidden flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg"
+                className="md:hidden flex items-center gap-1.5 bg-white text-[13px] font-semibold px-3.5 py-2 rounded-[10px]"
+                style={{ border: '1.5px solid #E2EEEE' }}
               >
-                <Phone size={13} style={{ color: 'var(--color-teal)' }} /> Appeler
+                <Phone size={14} style={{ color: 'var(--color-teal)' }} aria-hidden="true" /> Appeler
               </a>
             )}
             {hasAddress && (
@@ -807,60 +814,62 @@ export default function ParticipantProfile() {
                 href={`https://maps.google.com/?q=${encodeURIComponent(`${participant.adresseRue}, ${participant.adresseCodePostal} ${participant.adresseVille}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="md:hidden flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg"
+                className="md:hidden flex items-center gap-1.5 bg-white text-[13px] font-semibold px-3.5 py-2 rounded-[10px]"
+                style={{ border: '1.5px solid #E2EEEE' }}
               >
-                <Navigation size={13} style={{ color: 'var(--color-teal)' }} /> Itinéraire
+                <Navigation size={14} style={{ color: 'var(--color-teal)' }} aria-hidden="true" /> Itinéraire
               </a>
             )}
 
-            {/* Groupe 2 : secondaires */}
-            {participant.bilans.length >= 2 && (
+            <div className="relative" onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setPlusOuvert(false); }}>
               <button
-                onClick={() => handleAction('evolution')}
-                className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors"
+                type="button"
+                onClick={() => setPlusOuvert(v => !v)}
+                onKeyDown={e => { if (e.key === 'Escape') setPlusOuvert(false); }}
+                aria-expanded={plusOuvert}
+                aria-haspopup="menu"
+                className="flex items-center gap-1 bg-white text-[13px] font-semibold px-3.5 py-2 rounded-[10px] hover:bg-gray-50 transition-colors"
+                style={{ border: '1.5px solid #E2EEEE' }}
               >
-                <TrendingUp size={13} /> Évolution
+                {/* « Autres actions » et non « Plus » : la barre de navigation mobile a déjà un bouton « Plus ». */}
+                Autres actions <ChevronDown size={14} aria-hidden="true" />
               </button>
-            )}
-            <button
-              onClick={handleExportDossier}
-              // Désactivé tant que les cours se chargent (comme le PDF du programme) : cliquer trop tôt
-              // produirait un dossier SANS les cours, sans le moindre message.
-              disabled={exportingDossier || chargementCours}
-              className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              <FileText size={13} />
-              {exportingDossier ? 'PDF…' : 'Dossier'}
-            </button>
-            <button
-              onClick={() => handleAction('programme')}
-              className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 text-[13px] font-medium px-3.5 py-[7px] rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <Dumbbell size={13} /> Programme
-            </button>
-
-            {/* Groupe 3 : ghost, poussé à droite */}
-            <div className="ml-auto flex items-center gap-1">
-              <button
-                onClick={() => handleAction('nouveau_contrat')}
-                className="flex items-center gap-1.5 text-gray-400 text-[13px] font-medium px-3 py-[7px] rounded-lg hover:bg-gray-100 hover:text-gray-600 transition-colors"
-              >
-                <ClipboardList size={13} /> Contrat
-              </button>
-              <button
-                onClick={() => setShowEspacePatient(true)}
-                className="flex items-center gap-1.5 text-gray-400 text-[13px] font-medium px-3 py-[7px] rounded-lg hover:bg-gray-100 hover:text-gray-600 transition-colors"
-              >
-                Espace bénéficiaire
-              </button>
-              <button
-                onClick={handleVoirEspacePatient}
-                disabled={ouvertureEspacePatient}
-                title="Ouvrir l'espace bénéficiaire de ce participant dans un nouvel onglet"
-                className="flex items-center gap-1.5 text-gray-400 text-[13px] font-medium px-3 py-[7px] rounded-lg hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50"
-              >
-                <ExternalLink size={13} /> {ouvertureEspacePatient ? 'Ouverture…' : "Voir l'espace bénéficiaire"}
-              </button>
+              {plusOuvert && (
+                <div role="menu" className="absolute left-0 top-full mt-1.5 bg-white rounded-xl shadow-xl z-50 py-1.5 w-64 border border-gray-100">
+                  {/* Assistant : ordinateur seulement (retiré du périmètre mobile). */}
+                  <button role="menuitem" type="button"
+                    onClick={() => { setPlusOuvert(false); navigate(`/assistant?beneficiaire=${encodeURIComponent(participant.id)}`, { state: { patientId: participant.id } }); }}
+                    className="hidden md:flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                    <Bot size={14} aria-hidden="true" /> Assistant
+                  </button>
+                  {participant.bilans.length >= 2 && (
+                    <button role="menuitem" type="button" onClick={() => { setPlusOuvert(false); handleAction('evolution'); }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                      <TrendingUp size={14} aria-hidden="true" /> Évolution
+                    </button>
+                  )}
+                  {/* Désactivé tant que les cours se chargent : le dossier sortirait SANS les cours. */}
+                  <button role="menuitem" type="button" disabled={exportingDossier || chargementCours}
+                    onClick={() => { setPlusOuvert(false); void handleExportDossier(); }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 text-left disabled:opacity-50">
+                    <FileText size={14} aria-hidden="true" /> {exportingDossier ? 'Dossier PDF…' : 'Dossier PDF'}
+                  </button>
+                  <button role="menuitem" type="button" onClick={() => { setPlusOuvert(false); handleAction('nouveau_contrat'); }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                    <ClipboardList size={14} aria-hidden="true" /> Contrat
+                  </button>
+                  <button role="menuitem" type="button" onClick={() => { setPlusOuvert(false); setShowEspacePatient(true); }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                    <Eye size={14} aria-hidden="true" /> Espace bénéficiaire (code d’accès)
+                  </button>
+                  <button role="menuitem" type="button" disabled={ouvertureEspacePatient}
+                    title="Ouvrir l'espace bénéficiaire de ce participant dans un nouvel onglet"
+                    onClick={() => { setPlusOuvert(false); void handleVoirEspacePatient(); }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 text-left disabled:opacity-50">
+                    <ExternalLink size={14} aria-hidden="true" /> {ouvertureEspacePatient ? 'Ouverture…' : "Voir l'espace bénéficiaire"}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -981,7 +990,7 @@ export default function ParticipantProfile() {
             );
           })()}
           {programmeActif.objectif && (
-            <div className="mt-2 text-[12px] text-gray-500 italic">🎯 {programmeActif.objectif}</div>
+            <div className="mt-2 text-[12px] italic" style={{ color: 'var(--color-ink-2)' }}>Objectif : {programmeActif.objectif}</div>
           )}
         </div>
       ) : (

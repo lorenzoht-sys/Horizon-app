@@ -11,6 +11,11 @@ import BergTest from '../BergTest';
 import AdlTest from '../AdlTest';
 import { computeBergScore } from '../../../data/berg';
 import { computeTinettiScores } from '../../../data/tinetti';
+import {
+  NIVEAUX_HAUT, NIVEAUX_BAS, apleyRenseigne, calculerScoreApley, scoreNiveauApley,
+  POSITIONS_APLEY, apleyEnNiveaux, ecartCmApley, formaterCmApley, sensCmApley,
+  type CoteApley, type NiveauApley, type CleCmApley,
+} from '../../../lib/apley';
 
 // ── Badge résultat unifié ─────────────────────────────────────────────────────
 type BadgeCouleur = 'vert' | 'orange' | 'rouge';
@@ -151,10 +156,7 @@ const PHYSICAL_TESTS: TestKey[] = ['equilibre', 'chairStand', 'handGrip', 'tug',
  */
 function testPonctuelRenseigne(form: BilanForm, key: TestKey): boolean {
   switch (key) {
-    case 'apley': {
-      const a = form.apley;
-      return a != null && (a.haut_d != null || a.haut_g != null || a.bas_d != null || a.bas_g != null || a.score != null || !!a.notes);
-    }
+    case 'apley':   return apleyRenseigne(form.apley);
     case 'tinetti': return computeTinettiScores(form.tinetti) != null;
     case 'eva':     return form.douleurEva != null;
     case 'berg':    return computeBergScore(form.berg) != null;
@@ -164,53 +166,56 @@ function testPonctuelRenseigne(form: BilanForm, key: TestKey): boolean {
   }
 }
 
-// ─── Apley's Scratch Test (corps uniquement — header géré en externe) ─────────
-const SCORE_HAUT: Record<string, number> = { shoulder: 4, neck: 3, top: 2, below: 1 };
-const SCORE_BAS:  Record<string, number> = { scapula: 4, mid_back: 3, low_back: 2, buttocks: 1 };
-
-const HAUT_OPTS = [
-  { key: 'shoulder', label: "Touche l'épaule opposée",     sub: 'normal' },
-  { key: 'neck',     label: 'Atteint la nuque',             sub: 'légèrement limité' },
-  { key: 'top',      label: 'Atteint le sommet de la tête', sub: 'modérément limité' },
-  { key: 'below',    label: 'Ne dépasse pas le sommet',     sub: 'très limité' },
-];
-const BAS_OPTS = [
-  { key: 'scapula',  label: "Atteint l'omoplate opposée",  sub: 'normal' },
-  { key: 'mid_back', label: 'Atteint le milieu du dos',    sub: 'légèrement limité' },
-  { key: 'low_back', label: 'Atteint le bas du dos',       sub: 'modérément limité' },
-  { key: 'buttocks', label: 'Atteint seulement les fesses', sub: 'très limité' },
-];
-
+// ─── Souplesse des épaules (Apley Scratch Test) — corps uniquement, header géré en externe ─
+// Niveaux et score : src/lib/apley.ts, partagés avec les PDF et les comparaisons.
 type ApleyVal = NonNullable<BilanForm['apley']>;
+
+// Champ en centimètres signés : texte libre (virgule acceptée, ce qu'un champ « number » refuse
+// sous Chrome) et bouton « − / + » pour changer le signe, le pavé numérique des téléphones
+// n'ayant souvent pas de touche moins.
+function ChampCmSigne({ id, valeur, onChange, lire }: {
+  id: string; valeur: number | null; onChange: (v: number | null) => void; lire: (t: string) => number | null;
+}) {
+  const [texte, setTexte] = useState(valeur != null ? String(valeur).replace('.', ',') : '');
+  const [derniere, setDerniere] = useState(valeur);
+  // Valeur changée de l'extérieur (bouton de signe, reprise d'un brouillon) : on resynchronise.
+  if (valeur !== derniere) {
+    setDerniere(valeur);
+    if (lire(texte) !== valeur) setTexte(valeur != null ? String(valeur).replace('.', ',') : '');
+  }
+  return (
+    <>
+      <button type="button" aria-label="Changer le signe (négatif ou positif)"
+        onClick={() => { if (valeur != null && valeur !== 0) onChange(-valeur); else setTexte(t => t.startsWith('-') ? t.slice(1) : `-${t}`); }}
+        className="w-11 h-10 rounded-lg border border-gray-200 bg-white text-sm font-bold text-gray-700 hover:bg-gray-50">− / +</button>
+      <input id={id} type="text" inputMode="decimal" autoComplete="off"
+        value={texte}
+        onChange={e => { setTexte(e.target.value); const n = lire(e.target.value); setDerniere(n); onChange(n); }}
+        placeholder="ex. −12"
+        className="w-24 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+    </>
+  );
+}
 
 function ApleyTest({ value, onChange }: { value: ApleyVal | undefined; onChange: (v: ApleyVal) => void }) {
   const v: ApleyVal = value ?? { haut_d: null, haut_g: null, bas_d: null, bas_g: null, score: null, notes: '' };
 
   function upd(patch: Partial<ApleyVal>) {
     const next = { ...v, ...patch };
-    const scores = [
-      next.haut_d ? SCORE_HAUT[next.haut_d] : null,
-      next.haut_g ? SCORE_HAUT[next.haut_g] : null,
-      next.bas_d  ? SCORE_BAS[next.bas_d]   : null,
-      next.bas_g  ? SCORE_BAS[next.bas_g]   : null,
-    ].filter((s): s is number => s !== null);
-    next.score = scores.length > 0
-      ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10
-      : null;
-    onChange(next);
+    onChange({ ...next, score: calculerScoreApley(next) });
   }
 
-  const sh = v.haut_d ? SCORE_HAUT[v.haut_d] : null;
-  const gh = v.haut_g ? SCORE_HAUT[v.haut_g] : null;
-  const sb = v.bas_d  ? SCORE_BAS[v.bas_d]   : null;
-  const gb = v.bas_g  ? SCORE_BAS[v.bas_g]   : null;
+  const sh = scoreNiveauApley('haut_d', v.haut_d);
+  const gh = scoreNiveauApley('haut_g', v.haut_g);
+  const sb = scoreNiveauApley('bas_d', v.bas_d);
+  const gb = scoreNiveauApley('bas_g', v.bas_g);
   const asym = (sh !== null && gh !== null && Math.abs(sh - gh) > 1)
             || (sb !== null && gb !== null && Math.abs(sb - gb) > 1);
 
-  function RadioGroup({ side, opts }: {
-    side: 'haut_d' | 'haut_g' | 'bas_d' | 'bas_g';
-    opts: typeof HAUT_OPTS;
-  }) {
+  // Appelée comme une fonction, pas comme <RadioGroup /> : un composant déclaré ici changeait
+  // d'identité à chaque rendu, et React démontait puis remontait les quatre groupes de boutons
+  // à chaque case cochée ou lettre tapée dans les notes.
+  function groupeNiveaux(side: CoteApley, opts: NiveauApley[]) {
     const labelId = `apley-${side}-label`;
     const sideLabel = side.endsWith('d') ? 'Droit' : 'Gauche';
     return (
@@ -234,27 +239,83 @@ function ApleyTest({ value, onChange }: { value: ApleyVal | undefined; onChange:
     );
   }
 
+  // Mesure en cm signés (23/11/2026, demande de Pierre) : deux positions, gardées séparément.
+  // Les niveaux (haut/bas, droit/gauche) ne s'affichent plus que pour un bilan déjà saisi ainsi :
+  // ses résultats restent intacts, sans conversion.
+  const anciensNiveaux = apleyEnNiveaux(v);
+  const ecart = ecartCmApley(v);
+
+  function lireCm(texte: string): number | null {
+    const t = texte.trim().replace(',', '.').replace('−', '-');
+    if (t === '' || t === '-') return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? Math.max(-60, Math.min(60, Math.round(n * 10) / 10)) : null;
+  }
+
   return (
     <div>
+      <div className="p-3 rounded-xl mb-3" style={{ background: '#FFFBF2', border: '1px solid #F4E3C2' }}>
+        <p className="text-xs font-bold mb-1" style={{ color: '#8A5300' }}>Comment noter, pour chaque position</p>
+        <ul className="m-0 pl-4 text-xs leading-relaxed" style={{ color: '#3D4C5A' }}>
+          <li><strong>Valeur négative</strong> : les doigts ne se touchent pas (ex. −12 cm)</li>
+          <li><strong>0 cm</strong> : les doigts se touchent</li>
+          <li><strong>Valeur positive</strong> : les doigts se chevauchent (ex. +4 cm)</li>
+        </ul>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        {POSITIONS_APLEY.map(p => {
+          const val = v[p.cle as CleCmApley] ?? null;
+          const id = `apley-${p.cle}`;
+          return (
+            <div key={p.cle} className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+              <label htmlFor={id} className="block text-xs font-bold text-gray-700 mb-0.5">{p.libelle}</label>
+              <p className="m-0 mb-2 text-[11px] text-gray-500">
+                {p.cle === 'cmDroiteDessus'
+                  ? 'Bras droit par-dessus l’épaule, bras gauche par le bas du dos.'
+                  : 'Bras gauche par-dessus l’épaule, bras droit par le bas du dos.'}
+              </p>
+              <div className="flex items-center gap-2">
+                <ChampCmSigne id={id} valeur={val} onChange={n => upd({ [p.cle]: n } as Partial<ApleyVal>)} lire={lireCm} />
+                <span className="text-sm text-gray-600">cm</span>
+              </div>
+              {val != null && (
+                <p className="m-0 mt-1.5 text-xs font-semibold" style={{ color: '#147A64' }}>{formaterCmApley(val)} : {sensCmApley(val)}</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {ecart != null && ecart > 0 && (
+        <p className="m-0 mb-3 text-xs" style={{ color: '#3D4C5A' }}>
+          Écart entre les deux positions : <strong>{String(ecart).replace('.', ',')} cm</strong>
+        </p>
+      )}
+      {anciensNiveaux && (
+        <details className="mb-3">
+          <summary className="text-xs font-semibold text-gray-600 cursor-pointer">Saisie précédente en niveaux (conservée telle quelle)</summary>
+          <div className="mt-2">
       <div className="p-3 bg-gray-50 rounded-xl mb-3 border border-gray-100">
         <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wide mb-1">Mouvement haut — abduction + rotation externe</p>
         <p className="text-[11px] text-gray-400 italic mb-3">"Passez la main derrière la tête vers l'épaule opposée"</p>
         <div className="grid grid-cols-2 gap-4">
-          <RadioGroup side="haut_d" opts={HAUT_OPTS} />
-          <RadioGroup side="haut_g" opts={HAUT_OPTS} />
+          {groupeNiveaux('haut_d', NIVEAUX_HAUT)}
+          {groupeNiveaux('haut_g', NIVEAUX_HAUT)}
         </div>
       </div>
       <div className="p-3 bg-gray-50 rounded-xl mb-3 border border-gray-100">
         <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wide mb-1">Mouvement bas — adduction + rotation interne</p>
         <p className="text-[11px] text-gray-400 italic mb-3">"Passez la main dans le dos vers l'épaule opposée"</p>
         <div className="grid grid-cols-2 gap-4">
-          <RadioGroup side="bas_d" opts={BAS_OPTS} />
-          <RadioGroup side="bas_g" opts={BAS_OPTS} />
+          {groupeNiveaux('bas_d', NIVEAUX_BAS)}
+          {groupeNiveaux('bas_g', NIVEAUX_BAS)}
         </div>
       </div>
+          </div>
+        </details>
+      )}
       {asym && (
         <div className="p-2.5 bg-yellow-50 border border-yellow-200 rounded-lg mb-3 text-xs font-semibold text-yellow-800">
-          ⚠️ Asymétrie D/G à surveiller
+          Asymétrie droite/gauche à surveiller (niveaux)
         </div>
       )}
       <div>
@@ -429,7 +490,7 @@ export default function Step2_Physical({ form, update, previous, testsActifs, be
       {/* Souplesse */}
       {active.includes('souplesse') && (
         <section className="bg-white rounded-xl border border-gray-200 p-5">
-          <CardHeader title="Souplesse — flexion avant" subtitle="Distance doigts-pieds — flexibilité des ischio-jambiers" badge={badgeSouplesse}>
+          <CardHeader title={TEST_LABELS.souplesse} subtitle="Flexion avant, jambes tendues : du bout des doigts au sol (debout) ou aux orteils (assis)" badge={badgeSouplesse}>
             <DeltaIndicator delta={d.souplesse} unit="cm" />
           </CardHeader>
           <div className="flex gap-2 mb-3" role="group" aria-label="Méthode de mesure">
@@ -451,7 +512,7 @@ export default function Step2_Physical({ form, update, previous, testsActifs, be
       {/* Apley's Scratch Test */}
       {active.includes('apley') && (
         <section className="bg-white rounded-xl border border-gray-200 p-5">
-          <CardHeader title="Apley Scratch Test" subtitle="Amplitude épaule — abduction et rotation (score /4)" badge={badgeApley}>
+          <CardHeader title={TEST_LABELS.apley} subtitle="Deux positions, mesurées en centimètres" badge={badgeApley}>
             <DeltaIndicator delta={d.apleyScore} unit="/4" />
           </CardHeader>
           <ApleyTest value={form.apley} onChange={v => update({ apley: v })} />

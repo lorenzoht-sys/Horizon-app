@@ -51,7 +51,9 @@ test.describe('Création d\'un contrat sur mobile (route fusionnée /contrat/nou
       await page.goto(participantUrl);
       await page.waitForLoadState('networkidle');
 
-      await page.getByRole('button', { name: 'Contrat', exact: true }).click();
+      // Depuis la refonte de la fiche (23/11/2026), « Contrat » est rangé dans le menu « Autres actions ».
+      await page.getByRole('button', { name: 'Autres actions', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Contrat', exact: true }).click();
       // Route fusionnée : on atteint le formulaire, pas l'écran
       // « Bientôt en version mobile » (ce que faisait ecranMobileDepuisUrl
       // avant ce chantier — voir routesMobile.test.ts).

@@ -211,8 +211,6 @@ export default function Dashboard() {
 
   const brouillonsBilan = getAllBrouillons().filter(b => actifs.has(b.participantId));
   const aSurveiller = elementsATraiter({
-    // Les séances à confirmer ont leur propre bloc.
-    nbSeancesNonConfirmees: 0,
     ressentis: participantsActifs.filter(p => ressentisPreoccupants(retours[p.id] ?? [])).map(p => ({ id: p.id, nom: `${p.prenom} ${p.nom}` })),
     brouillons: brouillonsBilan.map(b => ({ participantId: b.participantId, nom: nomDe(b.participantId), etape: b.etapeActuelle })),
     contratsARenouveler: contratsARenouveler.map(c => ({

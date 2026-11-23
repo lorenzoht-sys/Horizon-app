@@ -8,7 +8,7 @@ import { resultatTm6 } from './tm6';
  */
 
 /** Règle historique du tableau de bord : un bilan est « à faire » 85 jours après le dernier. */
-export const JOURS_AVANT_BILAN = 85;
+const JOURS_AVANT_BILAN = 85;
 
 const JOUR_MS = 86_400_000;
 
@@ -54,7 +54,7 @@ export function bilanAFaire(bilans: readonly Pick<Bilan, 'date'>[], aujourdhui: 
 export type Niveau = 'norme' | 'surveiller' | 'difficulte';
 
 /** Même lecture que le profil fonctionnel : note 4-5 dans la norme, 3 à surveiller, 1-2 en difficulté. */
-export function niveauDeNote(note: 1 | 2 | 3 | 4 | 5): Niveau {
+function niveauDeNote(note: 1 | 2 | 3 | 4 | 5): Niveau {
   if (note >= 4) return 'norme';
   if (note === 3) return 'surveiller';
   return 'difficulte';
@@ -152,12 +152,12 @@ export function bornesSemaine(aujourdhui: string): { lundi: string; dimanche: st
   return { lundi: iso(lundi), dimanche: iso(dimanche) };
 }
 
-// ── « À traiter » ────────────────────────────────────────────────────────────
-// Remplace les bandeaux empilés (contrats, ressentis, bilans en cours) par une seule liste,
-// une ligne et une action par point. Ordre : ce qui bloque la facture, puis ce qui concerne la
-// santé, puis l'administratif.
+// ── « À surveiller » ─────────────────────────────────────────────────────────
+// Remplace les bandeaux empilés (contrats, ressentis, bilans en cours) par une seule ligne de
+// pastilles, une action par point. Ordre : la santé, puis l'administratif. Les séances à
+// confirmer ont leur propre bloc.
 
-export type TypeATraiter = 'seances' | 'ressentis' | 'brouillon' | 'contrat' | 'contrat_jours' | 'douleur' | 'relancer';
+type TypeATraiter = 'ressentis' | 'brouillon' | 'contrat' | 'contrat_jours' | 'douleur' | 'relancer';
 
 export interface ElementATraiter {
   cle: string;
@@ -171,7 +171,6 @@ export interface ElementATraiter {
 }
 
 export interface EntreesATraiter {
-  nbSeancesNonConfirmees: number;
   ressentis: { id: string; nom: string }[];
   brouillons: { participantId: string; nom: string; etape: number }[];
   contratsARenouveler: { participantId: string; nom: string; joursRestants: number }[];
@@ -180,15 +179,6 @@ export interface EntreesATraiter {
 
 export function elementsATraiter(e: EntreesATraiter): ElementATraiter[] {
   const liste: ElementATraiter[] = [];
-  if (e.nbSeancesNonConfirmees > 0) {
-    const n = e.nbSeancesNonConfirmees;
-    liste.push({
-      cle: 'seances', type: 'seances', gravite: 'normale',
-      titre: `${n} séance${n > 1 ? 's' : ''} à confirmer`,
-      detail: 'Passée(s) mais encore « planifiée(s) » : hors facture tant qu’elle(s) ne sont pas confirmée(s)',
-      action: 'Confirmer', lien: '/factures/seances',
-    });
-  }
   for (const r of e.ressentis) {
     liste.push({
       cle: `ressentis-${r.id}`, type: 'ressentis', gravite: 'haute',
@@ -226,7 +216,7 @@ export function elementsATraiter(e: EntreesATraiter): ElementATraiter[] {
 // phrases et les listes ; l'écran ne fait que les afficher.
 
 /** Minutes entre deux heures « HH:MM » du même jour (négatif si `a` est avant `de`). */
-export function minutesEntre(de: string, a: string): number {
+function minutesEntre(de: string, a: string): number {
   const m = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
   return m(a) - m(de);
 }

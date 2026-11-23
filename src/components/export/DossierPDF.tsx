@@ -16,6 +16,7 @@ import {
 import { TYPES_ANTECEDENT_LABELS } from '../../types';
 import { PdfFooter, LOGO_H } from './PdfShared';
 import { computeTinettiScores } from '../../data/tinetti';
+import { TEST_LABELS } from '../../data/profiles';
 import { libelleAge } from '../../lib/age';
 import { distanceTm6 } from '../../lib/tm6';
 import { presenceConstatee, syntheseCoursRealises, libelleSyntheseCours, type EntreeCours } from '../../lib/coursCollectifs';
@@ -113,7 +114,8 @@ function computeEvolution(initial: number | null, dernier: number | null, lower:
   return `${sign}${Math.round(diff * 10) / 10} (${better ? 'favorable' : 'à surveiller'})`;
 }
 
-type Statut = 'ok' | 'attention' | 'travail';
+// « sans_norme » : mesure affichée sans jugement (Scratch Test en cm, aucune norme validée).
+type Statut = 'ok' | 'attention' | 'travail' | 'sans_norme';
 
 function getStatutTest(key: string, val: number): Statut {
   const normes: Record<string, (v: number) => Statut> = {
@@ -124,17 +126,21 @@ function getStatutTest(key: string, val: number): Statut {
     souplesse:  v => v >= 10 ? 'ok' : v >= 0  ? 'attention' : 'travail',
     tm6:        v => v >= 500 ? 'ok' : v >= 350 ? 'attention' : 'travail',
     tinetti:    v => v >= 24  ? 'ok' : v >= 19  ? 'attention' : 'travail',
+    // Mêmes paliers que NORMES_SCORING.apley (norms.ts) : 3,5/4 et plus = amplitude normale.
+    apley:      v => v >= 3.5 ? 'ok' : v >= 2.5 ? 'attention' : 'travail',
   };
+  if (key === 'sans_norme') return 'sans_norme';
   return normes[key]?.(val) ?? 'attention';
 }
 
 const STATUT_LABEL: Record<Statut, string> = {
-  ok: 'Normal', attention: 'À surveiller', travail: 'À travailler',
+  ok: 'Normal', attention: 'À surveiller', travail: 'À travailler', sans_norme: '—',
 };
 const STATUT_COLOR: Record<Statut, { bg: string; fg: string }> = {
   ok:        { bg: GREEN_BG,  fg: GREEN  },
   attention: { bg: ORANGE_BG, fg: ORANGE },
   travail:   { bg: RED_BG,    fg: RED    },
+  sans_norme: { bg: '#F2F6F8',  fg: '#3D4C5A' },
 };
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
@@ -363,12 +369,15 @@ export default function DossierPDF({
     mkRow('Force de préhension G (kg)', '>= 20 kg', 'handGrip', dernierBilan.handGrip.gauche,        bilanInitial?.handGrip.gauche ?? null,        false),
     mkRow('Équilibre unipodal D (s)', '>= 40 s',  'equilibre',  dernierBilan.equilibre.droite,       bilanInitial?.equilibre.droite ?? null,       false),
     mkRow('Équilibre unipodal G (s)', '>= 40 s',  'equilibre',  dernierBilan.equilibre.gauche,       bilanInitial?.equilibre.gauche ?? null,       false),
-    mkRow('Souplesse (cm)',       '>= 10 cm',   'souplesse',  dernierBilan.souplesse.valeur,       bilanInitial?.souplesse.valeur ?? null,       false),
+    mkRow(`${TEST_LABELS.souplesse} (cm)`, '>= 10 cm', 'souplesse',  dernierBilan.souplesse.valeur,       bilanInitial?.souplesse.valeur ?? null,       false),
     mkRow(
       dernierBilan.tm6.dureeReelleSecondes != null && dernierBilan.tm6.dureeReelleSecondes !== 360
         ? `Test marche ${Math.round(dernierBilan.tm6.dureeReelleSecondes / 6) / 10} min, non standard (m)`
         : 'Test 6 minutes (m)',
       '>= 400 m', 'tm6', distanceTm6(dernierBilan.tm6), distanceTm6(bilanInitial?.tm6), false),
+    mkRow(`${TEST_LABELS.apley} (/4)`, '>= 3,5/4', 'apley', dernierBilan.apley?.score ?? null, bilanInitial?.apley?.score ?? null, false),
+    mkRow('Épaules, main droite au-dessus (cm)', '—', 'sans_norme', dernierBilan.apley?.cmDroiteDessus ?? null, bilanInitial?.apley?.cmDroiteDessus ?? null, false),
+    mkRow('Épaules, main gauche au-dessus (cm)', '—', 'sans_norme', dernierBilan.apley?.cmGaucheDessus ?? null, bilanInitial?.apley?.cmGaucheDessus ?? null, false),
     (() => {
       const tDernier = computeTinettiScores(dernierBilan.tinetti);
       const tInitial = computeTinettiScores(bilanInitial?.tinetti);
