@@ -81,7 +81,7 @@ describe('libelleRendezVous', () => {
 });
 
 describe('seancesNonConfirmees', () => {
-  it('séances passées encore planifiées, sur 60 jours', () => {
+  it('séances passées encore planifiées, sans limite de date (retour de Pierre)', () => {
     const r = seancesNonConfirmees([
       seance('hier', '2026-11-22', '10:00'),
       seance('faite', '2026-11-22', '11:00', 'realisee'),
@@ -89,7 +89,7 @@ describe('seancesNonConfirmees', () => {
       seance('matin', JOUR, '08:00'),
       seance('plus-tard', JOUR, '15:00'),
     ], JOUR, '12:00');
-    expect(r.map(s => s.id).sort()).toEqual(['hier', 'matin']);
+    expect(r.map(s => s.id).sort()).toEqual(['hier', 'matin', 'vieille']);
   });
 });
 
