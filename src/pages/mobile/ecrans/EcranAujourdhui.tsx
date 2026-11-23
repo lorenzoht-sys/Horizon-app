@@ -178,7 +178,7 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
     nbRendezVous: seances.length + coursDuJour.length,
     prochainDans: principale && principale.heureDebut.slice(0, 5) > currentTimeStr ? delaiRendezVous(principale, today, currentTimeStr) : null,
     nbAConfirmer: aConfirmer.length,
-    nbBilansAujourdhui: seances.filter(s => s.type !== 'seance' && s.statut === 'planifiee').length,
+    nbBilansAujourdhui: seances.filter(s => s.type !== 'seance' && s.statut === 'planifiee' && s.heureDebut.slice(0, 5) > currentTimeStr).length,
   });
 
   return (
@@ -269,7 +269,9 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
                 </p>
               )}
 
-              {principale && (
+              {/* Seulement une fois la séance commencée : avant, le bouton invitait à valider une
+                  séance qui n'avait pas encore eu lieu. */}
+              {principale && enCours && (
                 <button type="button" onClick={() => cloturer(principale, 'realisee')} disabled={validationEnCours === principale.id}
                   className="w-full h-12 rounded-[12px] text-[15px] font-extrabold text-white disabled:opacity-60" style={{ background: VERT_ACTION }}>
                   ✓ Marquer comme réalisée
