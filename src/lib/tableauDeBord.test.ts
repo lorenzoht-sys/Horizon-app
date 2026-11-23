@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Bilan, Seance } from '../types';
 import {
   echeanceBilan, bilanAFaire, resultatsCles, prochaineSeance, libelleRendezVous,
-  seancesNonConfirmees, bornesSemaine, elementsATraiter,
+  seancesNonConfirmees, bornesSemaine, elementsATraiter, regrouperASurveiller,
 } from './tableauDeBord';
 
 const JOUR = '2026-11-23'; // lundi
@@ -116,5 +116,20 @@ describe('elementsATraiter', () => {
     expect(l[0].gravite).toBe('haute');
     expect(l[1].detail).toBe('C D · arrêté à l’étape 2');
     expect(l[2].detail).toBe('E F · dans 1 jour');
+  });
+});
+
+describe('regrouperASurveiller', () => {
+  it('une pastille par type, la santé d’abord, avec le nombre accordé', () => {
+    const l = elementsATraiter({
+      ressentis: [{ id: 'r', nom: 'A B' }],
+      brouillons: [{ participantId: 'b1', nom: 'C D', etape: 1 }, { participantId: 'b2', nom: 'E F', etape: 2 }],
+      contratsARenouveler: [{ participantId: 'c', nom: 'G H', joursRestants: 3 }],
+      contratsSansJours: [],
+    });
+    const g = regrouperASurveiller(l);
+    expect(g.map(x => x.libelle)).toEqual(['1 bénéficiaire aux ressentis dégradés', '2 bilans commencés', '1 contrat bientôt terminé']);
+    expect(g[0].gravite).toBe('haute');
+    expect(g[1].elements.map(e => e.lien)).toEqual(['/participant/b1/bilan/new', '/participant/b2/bilan/new']);
   });
 });
