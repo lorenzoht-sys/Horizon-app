@@ -4,22 +4,44 @@ import { useParticipants } from '../hooks/useParticipants';
 import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import { useStructures } from '../hooks/useStructures';
+import { useFacturesAValider, useFacturesValidees } from '../hooks/useFacturesAValider';
+import { useJournalSeance } from '../hooks/useJournalSeance';
 import ParticipantCard from '../components/participant/ParticipantCard';
 import { contratsDesBeneficiairesActifs, filtrerParNom } from '../lib/archivage';
-import { FadeInCard } from '../components/ui/FadeInCard';
-import { motion } from 'framer-motion';
 import PageWrapper from '../components/layout/PageWrapper';
-import { Plus, Search, Users, BarChart3, FileSpreadsheet, CalendarDays, MapPin, ChevronRight, NotebookPen, AlertCircle, Building2, Archive } from 'lucide-react';
-import { useJournalSeance } from '../hooks/useJournalSeance';
-import { RESSENTI_CONFIG } from '../components/journal/NoteSeanceModal';
+import { Plus, Search, Users, FileSpreadsheet, Building2, ClipboardList, Mic, CalendarPlus } from 'lucide-react';
 import { getAllBrouillons } from '../hooks/useBrouillonBilan';
 import { toast } from 'sonner';
 import { DashboardSkeleton } from '../components/skeletons/DashboardSkeleton';
-import { AnimatedNumber } from '../components/ui/AnimatedNumber';
-import { chargerAssiduite7Jours, chargerRetoursParBeneficiaire, ressentisPreoccupants } from '../lib/suiviBeneficiaire';
+import { chargerRetoursParBeneficiaire, ressentisPreoccupants } from '../lib/suiviBeneficiaire';
+import { dateCivileParis, separerBrouillons } from '../lib/facturesAValider';
+import { utilisateurCourant } from '../lib/session';
+import { lirePraticien } from '../lib/acces/praticien';
 import CarteStructure from '../components/structures/CarteStructure';
 import ModalCreationStructure from '../components/structures/ModalCreationStructure';
 import { GuideDemarrage } from '../components/demarrage/GuideDemarrage';
+import { CarteProchainRendezVous } from '../components/tableau-de-bord/CarteProchainRendezVous';
+import { CarteJournee } from '../components/tableau-de-bord/CarteJournee';
+import { CarteAConfirmer } from '../components/tableau-de-bord/CarteAConfirmer';
+import { CarteProchainsBilans } from '../components/tableau-de-bord/CarteProchainsBilans';
+import { CarteFactures } from '../components/tableau-de-bord/CarteFactures';
+import { CarteProgres } from '../components/tableau-de-bord/CarteProgres';
+import { CarteAstuce } from '../components/tableau-de-bord/CarteAstuce';
+import { LigneASurveiller } from '../components/tableau-de-bord/LigneASurveiller';
+import { ChoixBeneficiaire } from '../components/tableau-de-bord/ChoixBeneficiaire';
+import type { Participant, Seance } from '../types';
+import {
+  astuceDuJour, contexteBeneficiaire, delaiRendezVous, elementsATraiter, libelleRendezVous, phraseDuJour,
+  prochainRendezVous, prochaineSeance, prochainsBilans, progresDepuisInitial, resumeFactures, seancesNonConfirmees,
+  type Progres,
+} from '../lib/tableauDeBord';
+
+// Tableau de bord V1 (maquette validée par Lorenzo le 23/11/2026, canevas « dashboard
+// professionnel : analyse, direction graphique, V1 »). Consigne : un outil métier du quotidien,
+// humain, qui donne envie et qui explique. Ordre de la page : la journée (prochain rendez-vous,
+// rendez-vous du jour), ce qui attend un geste (séances à confirmer, bilans, factures), ce qui
+// avance (progrès, astuce), ce qui est à surveiller, puis les bénéficiaires.
+// Remplace la refonte du matin même (PR #217), écartée par Lorenzo au profit de cette version.
 
 const MiniMap = lazy(() => import('../components/map/MiniMap'));
 // Import Excel chargé à l'ouverture de la fenêtre : la bibliothèque xlsx
@@ -27,26 +49,91 @@ const MiniMap = lazy(() => import('../components/map/MiniMap'));
 const ImportExcelModal = lazy(() => import('../components/import/ImportExcelModal'));
 
 type DashTab = 'tous' | 'independants' | 'structures';
+type ActionRapide = 'bilan' | 'dictee';
+
+// Astuces écartées (« Plus tard ») : propres à ce navigateur, sans écriture en base avant la
+// migration HDS. Le stockage peut être indisponible (navigation privée) : on retombe sur rien.
+const CLE_ASTUCES = 'horizon.astucesEcartees';
+function lireAstucesEcartees(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(CLE_ASTUCES) ?? '[]') as string[]); } catch { return new Set(); }
+}
+function ecrireAstucesEcartees(cles: Set<string>) {
+  try { localStorage.setItem(CLE_ASTUCES, JSON.stringify([...cles])); } catch { /* stockage indisponible */ }
+}
+
+function heureLocale(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+const BOUTON_SECONDAIRE = 'flex items-center gap-2 h-[42px] px-3.5 rounded-[11px] bg-white text-[13px] font-bold hover:bg-gray-50 transition-colors';
+const STYLE_SECONDAIRE = { border: '1.5px solid #D5E4E6', color: 'var(--color-ink)' };
 
 export default function Dashboard() {
-  // participants : liste complète, ne sert plus qu'à construire les vues
-  // ci-dessous. participantsActifs (exclut les archivés) est la SEULE vue de
-  // cet écran "du quotidien" : compteurs, KPI et grille. Les archivés ont
-  // leur propre page (/archives) — ils ne se mélangent jamais aux actifs ici.
+  // participantsActifs (exclut les archivés) est la seule population de cet écran du quotidien :
+  // les archivés ont leur page (/archives).
   const { participants, participantsActifs, participantsArchives, loading: participantsLoading, addParticipant, archiverParticipant } = useParticipants();
-  const { seancesDuJour, patientsARelancer, seances } = useAgenda();
+  const { seancesDuJour, seances, modifierSeance, patientsARelancer } = useAgenda();
+  const { notes } = useJournalSeance();
   const { contratsARenouveler: contratsARenouvelerTous, contratsSansJours: contratsSansJoursTous } = useContrats();
-  // Alertes du praticien : un bénéficiaire archivé n'est plus suivi, ses contrats n'appellent aucune
-  // action (ils ne sont pas modifiés pour autant : ni statut, ni date de fin).
+  // Un bénéficiaire archivé n'est plus suivi : ses contrats n'appellent aucune action.
   const contratsARenouveler = contratsDesBeneficiairesActifs(contratsARenouvelerTous, participants);
   const contratsSansJours = contratsDesBeneficiairesActifs(contratsSansJoursTous, participants);
   const { structures, creerStructure } = useStructures();
-  const { notes } = useJournalSeance();
+  // Factures : lecture seule, pour les compteurs du bloc « Factures en attente ».
+  const { brouillons: brouillonsFactures, chargement: chargementBrouillons } = useFacturesAValider();
+  const { factures, chargement: chargementFactures } = useFacturesValidees();
+  const [prenomPraticien, setPrenomPraticien] = useState('');
   const [search, setSearch] = useState('');
   const [showImport, setShowImport] = useState(false);
-  // Archivage depuis une carte : confirmation avant d'écrire, pour éviter un clic accidentel.
   const [aArchiver, setAArchiver] = useState<{ id: string; nom: string } | null>(null);
   const [archivageEnCours, setArchivageEnCours] = useState(false);
+  const [showCreateStructure, setShowCreateStructure] = useState(false);
+  const [activeTab, setActiveTab] = useState<DashTab>('tous');
+  const [minLoadDone, setMinLoadDone] = useState(false);
+  const [retours, setRetours] = useState<Record<string, { borgRpe: number; bienEtre: number }[]>>({});
+  const retoursCharges = useRef(false);
+  const [confirmationEnCours, setConfirmationEnCours] = useState<string | null>(null);
+  const [actionRapide, setActionRapide] = useState<ActionRapide | null>(null);
+  const [astucesEcartees, setAstucesEcartees] = useState<Set<string>>(lireAstucesEcartees);
+  // Heure courante, rafraîchie chaque minute : « dans 2 h 10 » et l'état des séances avancent seuls.
+  const [maintenant, setMaintenant] = useState(() => new Date());
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const t = setTimeout(() => setMinLoadDone(true), 900);
+    const minute = setInterval(() => setMaintenant(new Date()), 60_000);
+    return () => { clearTimeout(t); clearInterval(minute); };
+  }, []);
+
+  useEffect(() => {
+    // « Bonjour Pierre » : même lecture que le menu (Sidebar). Sans prénom, « Bonjour » seul.
+    let annule = false;
+    void (async () => {
+      const user = await utilisateurCourant();
+      if (!user || annule) return;
+      const { data } = await lirePraticien(user.id, 'prenom');
+      const prenom = (data as { prenom?: string | null } | null)?.prenom?.trim() ?? '';
+      if (!annule) setPrenomPraticien(prenom);
+    })();
+    return () => { annule = true; };
+  }, []);
+
+  useEffect(() => {
+    if (participantsLoading || participants.length === 0 || retoursCharges.current) return;
+    retoursCharges.current = true;
+    // Ressentis récents : alerte « à surveiller » et « la dernière fois » du prochain rendez-vous.
+    // Bénéficiaires suivis uniquement (un archivé peut encore saisir des retours depuis son espace).
+    const ids = participants.filter(p => !p.archive).map(p => p.id);
+    if (ids.length > 0) void chargerRetoursParBeneficiaire(ids).then(setRetours);
+  }, [participants, participantsLoading]);
+
+  useEffect(() => {
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab as DashTab);
+      navigate('/', { replace: true, state: {} });
+    }
+  }, [location.state, navigate]);
 
   async function confirmerArchivage() {
     if (!aArchiver || archivageEnCours) return;
@@ -62,682 +149,333 @@ export default function Dashboard() {
       setArchivageEnCours(false);
     }
   }
-  const [showCreateStructure, setShowCreateStructure] = useState(false);
-  const [activeTab, setActiveTab] = useState<DashTab>('tous');
-  const [minLoadDone, setMinLoadDone] = useState(false);
-  const [assiduite, setAssiduite] = useState<Record<string, { nb: number; taux: number | null; derniere: string | null }>>({});
-  const assiduiteLoaded = useRef(false);
-  const [patientsASurveiller, setPatientsASurveiller] = useState<{ id: string; prenom: string; nom: string }[]>([]);
-  const retoursSurvLoaded = useRef(false);
-  const navigate = useNavigate();
-  const location = useLocation();
 
-  useEffect(() => {
-    const t = setTimeout(() => setMinLoadDone(true), 900);
-    return () => clearTimeout(t);
-  }, []);
+  async function marquerRealisee(s: Seance) {
+    setConfirmationEnCours(s.id);
+    const ok = await modifierSeance(s.id, { statut: 'realisee' });
+    setConfirmationEnCours(null);
+    if (ok) toast.success('Séance marquée comme réalisée : elle entrera dans la facture du mois.');
+    else toast.error('La séance n’a pas pu être enregistrée. Réessayez dans un instant.');
+  }
 
-  useEffect(() => {
-    if (assiduiteLoaded.current) return;
-    assiduiteLoaded.current = true;
-    void chargerAssiduite7Jours().then(setAssiduite);
-  }, []);
+  function ecarterAstuce(cle: string) {
+    const suivantes = new Set(astucesEcartees).add(cle);
+    setAstucesEcartees(suivantes);
+    ecrireAstucesEcartees(suivantes);
+  }
 
-  useEffect(() => {
-    if (participantsLoading || participants.length === 0 || retoursSurvLoaded.current) return;
-    retoursSurvLoaded.current = true;
-    async function loadRetoursSurveillance() {
-      // Alerte « à surveiller » : bénéficiaires suivis uniquement (un archivé peut encore
-      // saisir des retours depuis son espace, ce n'est plus au praticien de le surveiller).
-      const ids = participants.filter(p => !p.archive).map(p => p.id);
-      if (ids.length === 0) return;
-      const parBeneficiaire = await chargerRetoursParBeneficiaire(ids);
-      const alertes: { id: string; prenom: string; nom: string }[] = [];
-      for (const [pid, retours] of Object.entries(parBeneficiaire)) {
-        if (!ressentisPreoccupants(retours)) continue;
-        const p = participants.find(x => x.id === pid);
-        if (p) alertes.push({ id: p.id, prenom: p.prenom, nom: p.nom });
-      }
-      setPatientsASurveiller(alertes);
-    }
-    void loadRetoursSurveillance();
-  }, [participants, participantsLoading]);
-
-  useEffect(() => {
-    if (location.state?.activeTab) {
-      setActiveTab(location.state.activeTab as DashTab);
-      navigate('/', { replace: true, state: {} });
-    }
-  }, [location.state, navigate]);
-
-  // Grille : actifs uniquement. Plus de bascule « Afficher les archivés » qui
-  // mélangeait les deux populations dans la même liste.
-  const independants = participantsActifs.filter(p => !p.structureId);
-
-  const filtered = filtrerParNom(independants, search);
-
-  const filteredTous = filtrerParNom(participantsActifs, search);
-
-  const listeFiltered = activeTab === 'tous' ? filteredTous : filtered;
-
-  const needsBilan = participantsActifs.filter(p => {
-    const last = p.bilans.at(-1);
-    if (!last) return true;
-    // Comparaison en chaînes ISO (YYYY-MM-DD) pour éviter les décalages
-    // d'un jour selon le fuseau horaire de l'utilisateur.
-    const il85j = new Date(); il85j.setDate(il85j.getDate() - 85);
-    return last.date < il85j.toISOString().slice(0, 10);
-  }).length;
-
-  const thisMonthBilans = participants.reduce((acc, p) => {
-    return acc + p.bilans.filter(b => {
-      const d = new Date(b.date);
-      const now = new Date();
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    }).length;
-  }, 0);
+  function choisirPour(p: Participant) {
+    const action = actionRapide;
+    setActionRapide(null);
+    if (action === 'bilan') navigate(`/participant/${p.id}/bilan/new`);
+    // La fiche ouvre la dictée d'elle-même (ParticipantProfile lit state.ouvrir).
+    if (action === 'dictee') navigate(`/participant/${p.id}`, { state: { ouvrir: 'dictee' } });
+  }
 
   if (participantsLoading || !minLoadDone) {
     return <PageWrapper><DashboardSkeleton /></PageWrapper>;
   }
 
+  // ── Données de la page ────────────────────────────────────────────────────
+  const aujourdhui = dateCivileParis(maintenant);
+  const heure = heureLocale(maintenant);
+  const nomDe = (id: string) => {
+    const p = participants.find(x => x.id === id);
+    return p ? `${p.prenom} ${p.nom}` : 'Bénéficiaire';
+  };
+  const actifs = new Set(participantsActifs.map(p => p.id));
+
+  const journee = seancesDuJour(aujourdhui).filter(s => s.statut !== 'annulee');
+  const prochain = prochainRendezVous(seances.filter(s => actifs.has(s.participantId)), aujourdhui, heure);
+  const participantProchain = prochain ? participants.find(p => p.id === prochain.participantId) ?? null : null;
+  const prochainAujourdhui = prochain && prochain.date === aujourdhui ? prochain : null;
+  const aConfirmer = seancesNonConfirmees(seances, aujourdhui, heure).filter(s => actifs.has(s.participantId));
+  const nbBilansAujourdhui = journee.filter(s => s.type !== 'seance' && s.statut === 'planifiee').length;
+
+  const bilansAPrevoir = prochainsBilans(participantsActifs, aujourdhui);
+  const resume = resumeFactures(separerBrouillons(brouillonsFactures, aujourdhui).validables.length, factures);
+  const progres = participantsActifs
+    .map(p => ({ participant: p, progres: progresDepuisInitial(p.bilans) }))
+    .filter((x): x is { participant: Participant; progres: Progres } => x.progres !== null)
+    .slice(0, 3);
+  const astuce = astuceDuJour(aujourdhui, astucesEcartees);
+
+  const brouillonsBilan = getAllBrouillons().filter(b => actifs.has(b.participantId));
+  const aSurveiller = elementsATraiter({
+    // Les séances à confirmer ont leur propre bloc.
+    nbSeancesNonConfirmees: 0,
+    ressentis: participantsActifs.filter(p => ressentisPreoccupants(retours[p.id] ?? [])).map(p => ({ id: p.id, nom: `${p.prenom} ${p.nom}` })),
+    brouillons: brouillonsBilan.map(b => ({ participantId: b.participantId, nom: nomDe(b.participantId), etape: b.etapeActuelle })),
+    contratsARenouveler: contratsARenouveler.map(c => ({
+      participantId: c.participantId, nom: nomDe(c.participantId),
+      joursRestants: Math.max(0, Math.ceil((new Date(c.dateFin).getTime() - maintenant.getTime()) / 86400000)),
+    })),
+    contratsSansJours: contratsSansJours.map(c => ({ participantId: c.participantId, nom: nomDe(c.participantId) })),
+  });
+  // Repris de l'ancien tableau de bord (widget « Dernières notes » et ligne « sans séance depuis
+  // plus de 3 semaines ») : deux signaux utiles, ramenés à une pastille chacun.
+  for (const n of notes.filter(x => x.date === aujourdhui && x.alertes.douleurSignalee && actifs.has(x.participantId))) {
+    aSurveiller.unshift({
+      cle: `douleur-${n.id}`, type: 'douleur', gravite: 'haute',
+      titre: 'Douleur signalée aujourd’hui', detail: nomDe(n.participantId), action: 'Voir', lien: `/participant/${n.participantId}`,
+    });
+  }
+  const aRelancer = patientsARelancer(21).filter(p => actifs.has(p.id));
+  if (aRelancer.length > 0) {
+    aSurveiller.push({
+      cle: 'relancer', type: 'relancer', gravite: 'normale',
+      titre: `${aRelancer.length} sans séance depuis 3 semaines`,
+      detail: aRelancer.slice(0, 2).map(p => `${p.prenom} ${p.nom}`).join(', ') + (aRelancer.length > 2 ? '…' : ''),
+      action: 'Planifier', lien: '/agenda-v2',
+    });
+  }
+
+  const independants = participantsActifs.filter(p => !p.structureId);
+  const listeFiltered = filtrerParNom(activeTab === 'tous' ? participantsActifs : independants, search);
+
   return (
     <>
       <PageWrapper>
-        {/* En-tête de page */}
-        <div className="mb-8">
-          <h1
-            className="font-heading font-semibold m-0"
-            style={{ fontSize: 24, color: 'var(--color-ink)', lineHeight: 1.2 }}
-          >
-            Tableau de bord
-          </h1>
-          <p
-            className="mt-1 m-0"
-            style={{ fontFamily: 'var(--font-sans)', fontSize: 14, color: 'var(--color-ink-2)' }}
-          >
-            {participantsActifs.length} bénéficiaire{participantsActifs.length !== 1 ? 's' : ''} actuellement suivi{participantsActifs.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-
-        {/* Guide de prise en main : ne s'affiche que pour un compte récent qui ne l'a pas fermé. */}
-        <div className="mb-8 empty:hidden">
-          <GuideDemarrage />
-        </div>
-
-        {/* Onglets + accès à la page des archivés */}
-        <div className="flex flex-wrap items-center gap-3 mb-6">
-        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-          {([
-            ['tous', `👥 Bénéficiaires actifs (${participantsActifs.length})`],
-            ['independants', `🏠 Indépendants (${independants.length})`],
-            ['structures', `🏢 Structures (${structures.length})`],
-          ] as [DashTab, string][]).map(([tab, label]) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === tab ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <Link
-          to="/archives"
-          className="px-4 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-600 hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors"
-        >
-          🗄️ Bénéficiaires archivés ({participantsArchives.length})
-        </Link>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <FadeInCard delay={0}>
-          <div
-            className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all"
-            style={{ border: '1px solid #E2EEEE', padding: 24 }}
-          >
-            <div
-              className="inline-flex p-2.5 rounded-xl mb-4"
-              style={{ background: 'var(--color-teal-light)' }}
-            >
-              <Users size={18} style={{ color: 'var(--color-teal)' }} />
+        <div className="flex flex-col gap-5">
+          {/* En-tête : la journée racontée en une phrase, et les actions rapides. */}
+          <header className="flex flex-wrap items-end justify-between gap-4">
+            <div className="max-w-[640px]">
+              <p className="m-0 text-[13px] font-bold first-letter:uppercase" style={{ color: '#147A64' }}>
+                {maintenant.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
+              <h1 className="font-heading font-extrabold m-0 mt-0.5" style={{ fontSize: 28, color: 'var(--color-ink)', letterSpacing: '-0.3px' }}>
+                {prenomPraticien ? `Bonjour ${prenomPraticien}` : 'Bonjour'}
+              </h1>
+              <p className="m-0 mt-1.5 text-[15px] leading-relaxed" style={{ color: '#3D4C5A' }}>
+                {phraseDuJour({
+                  nbRendezVous: journee.length,
+                  prochainDans: prochainAujourdhui ? delaiRendezVous(prochainAujourdhui, aujourdhui, heure) : null,
+                  nbAConfirmer: aConfirmer.length,
+                  nbBilansAujourdhui,
+                })}
+              </p>
             </div>
-            <div
-              className="font-heading font-bold"
-              style={{ fontSize: 28, color: 'var(--color-ink)', lineHeight: 1.2 }}
-            >
-              <AnimatedNumber value={participantsActifs.length} duration={0.8} />
-            </div>
-            <div
-              className="mt-1 font-semibold uppercase"
-              style={{ fontSize: 12, color: 'var(--color-ink-2)', letterSpacing: '0.5px', fontFamily: 'var(--font-sans)' }}
-            >
-              Bénéficiaires actifs
-            </div>
-          </div>
-          </FadeInCard>
-
-          <FadeInCard delay={0.05}>
-          <div
-            className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all"
-            style={{ border: '1px solid #E2EEEE', padding: 24 }}
-          >
-            <div
-              className="inline-flex p-2.5 rounded-xl mb-4"
-              style={{ background: 'var(--color-teal-light)' }}
-            >
-              <BarChart3 size={18} style={{ color: 'var(--color-teal)' }} />
-            </div>
-            <div
-              className="font-heading font-bold"
-              style={{ fontSize: 28, color: 'var(--color-ink)', lineHeight: 1.2 }}
-            >
-              <AnimatedNumber value={thisMonthBilans} duration={1.0} />
-            </div>
-            <div
-              className="mt-1 font-semibold uppercase"
-              style={{ fontSize: 12, color: 'var(--color-ink-2)', letterSpacing: '0.5px', fontFamily: 'var(--font-sans)' }}
-            >
-              Bilans ce mois
-            </div>
-          </div>
-          </FadeInCard>
-
-          <FadeInCard delay={0.10}>
-          <div
-            className="rounded-2xl shadow-sm hover:shadow-md transition-all"
-            style={{
-              border: `1px solid ${needsBilan > 0 ? 'rgba(243,156,18,0.30)' : 'var(--color-border)'}`,
-              background: needsBilan > 0 ? 'rgba(243,156,18,0.05)' : '#FFFFFF',
-              padding: 24,
-            }}
-          >
-            <div
-              className="inline-flex p-2.5 rounded-xl mb-4"
-              style={{ background: needsBilan > 0 ? 'rgba(243,156,18,0.12)' : 'var(--color-teal-light)' }}
-            >
-              <AlertCircle size={18} style={{ color: needsBilan > 0 ? '#F39C12' : 'var(--color-teal)' }} />
-            </div>
-            <div
-              className="font-heading font-bold"
-              style={{ fontSize: 28, color: needsBilan > 0 ? '#F39C12' : 'var(--color-ink)', lineHeight: 1.2 }}
-            >
-              <AnimatedNumber value={needsBilan} duration={0.6} />
-            </div>
-            <div
-              className="mt-1 font-semibold uppercase"
-              style={{ fontSize: 12, color: 'var(--color-ink-2)', letterSpacing: '0.5px', fontFamily: 'var(--font-sans)' }}
-            >
-              Bilans à faire
-            </div>
-          </div>
-          </FadeInCard>
-        </div>
-
-        {/* Alertes contrats à renouveler */}
-        {contratsARenouveler.length > 0 && (
-          <div className="mb-6 bg-orange-50 border border-orange-200 rounded-2xl px-5 py-4">
-            <div className="text-xs font-semibold text-orange-700 uppercase tracking-wide mb-2">
-              ⚠️ {contratsARenouveler.length} contrat{contratsARenouveler.length > 1 ? 's' : ''} se termine{contratsARenouveler.length > 1 ? 'nt' : ''} bientôt
-            </div>
-            <div className="space-y-1">
-              {contratsARenouveler.map(c => {
-                const p = participants.find(x => x.id === c.participantId);
-                const joursRestants = Math.ceil((new Date(c.dateFin).getTime() - Date.now()) / 86400000);
-                return (
-                  <div key={c.id} className="flex items-center justify-between text-sm">
-                    <span className="text-orange-800">
-                      <span className="font-medium">{p ? `${p.prenom} ${p.nom}` : '—'}</span>
-                      {' '}— dans {joursRestants} jour{joursRestants > 1 ? 's' : ''}
-                    </span>
-                    {p && (
-                      <Link
-                        to={`/participant/${p.id}/contrat/nouveau`}
-                        className="text-xs text-orange-700 underline hover:text-orange-900 font-medium"
-                      >
-                        Renouveler →
-                      </Link>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Contrats sans date de fin bloqués faute de jours de séance
-            renseignés : le cron (api/cron/rappels.ts, tâche « renouvellement ») ne les
-            renouvelle jamais dans cet état, indéfiniment jusqu'à correction —
-            signalé ici plutôt que seulement dans les logs du cron. */}
-        {contratsSansJours.length > 0 && (
-          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4">
-            <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-2">
-              ⚠️ {contratsSansJours.length} contrat{contratsSansJours.length > 1 ? 's' : ''} sans date de fin sans jours de séance renseignés
-            </div>
-            <div className="space-y-1">
-              {contratsSansJours.map(c => {
-                const p = participants.find(x => x.id === c.participantId);
-                return (
-                  <div key={c.id} className="flex items-center justify-between text-sm">
-                    <span className="text-amber-800">
-                      <span className="font-medium">{p ? `${p.prenom} ${p.nom}` : '—'}</span>
-                      {' '}— ne se renouvellera pas tant que les jours ne sont pas complétés
-                    </span>
-                    {p && (
-                      <Link
-                        to={`/participant/${p.id}`}
-                        className="text-xs text-amber-700 underline hover:text-amber-900 font-medium"
-                      >
-                        Compléter →
-                      </Link>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Alertes ressentis — À surveiller */}
-        {patientsASurveiller.length > 0 && (
-          <div className="mb-6 bg-red-light border border-red-200 rounded-2xl px-5 py-4">
-            <div className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-2">
-              ⚠️ {patientsASurveiller.length} bénéficiaire{patientsASurveiller.length > 1 ? 's' : ''} à surveiller — ressentis dégradés
-            </div>
-            <div className="space-y-1">
-              {patientsASurveiller.map(p => (
-                <div key={p.id} className="flex items-center justify-between text-sm">
-                  <span className="text-red-800 font-medium">{p.prenom} {p.nom}</span>
-                  <Link
-                    to={`/participant/${p.id}`}
-                    className="text-xs text-red-700 underline hover:text-red-900 font-medium"
-                  >
-                    Voir les Ressentis →
-                  </Link>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-red-600 mt-2">
-              3 séances consécutives avec effort ≥ 8/10 ou bien-être ≥ 4/5 (Fatigué / Épuisé)
-            </p>
-          </div>
-        )}
-
-        {/* Contenu selon onglet actif */}
-        {activeTab === 'structures' ? (
-          <>
-            <div className="flex justify-end mb-4">
-              <button
-                onClick={() => setShowCreateStructure(true)}
-                className="flex items-center gap-2 text-white text-sm font-semibold px-4 py-2.5 bg-primary rounded-xl hover:bg-dark transition-colors"
-              >
-                <Plus size={16} /> Créer une structure
+            <div role="group" aria-label="Actions rapides" className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setActionRapide('bilan')} className={BOUTON_SECONDAIRE} style={STYLE_SECONDAIRE}>
+                <ClipboardList size={16} style={{ color: '#1A9A7F' }} aria-hidden="true" /> Nouveau bilan
+              </button>
+              <button type="button" onClick={() => setActionRapide('dictee')} className={BOUTON_SECONDAIRE} style={STYLE_SECONDAIRE}>
+                <Mic size={16} style={{ color: '#1A9A7F' }} aria-hidden="true" /> Dicter une séance
+              </button>
+              <Link to="/agenda-v2" className={BOUTON_SECONDAIRE} style={STYLE_SECONDAIRE}>
+                <CalendarPlus size={16} style={{ color: '#1A9A7F' }} aria-hidden="true" /> Planifier
+              </Link>
+              <button type="button" onClick={() => setShowImport(true)} className={BOUTON_SECONDAIRE} style={STYLE_SECONDAIRE}>
+                <FileSpreadsheet size={16} style={{ color: '#1A9A7F' }} aria-hidden="true" /> Import Excel
+              </button>
+              <button type="button" onClick={() => navigate('/participants/nouveau')}
+                className="flex items-center gap-2 h-[42px] px-4 rounded-[11px] text-white text-[13px] font-bold hover:opacity-90"
+                style={{ background: '#1A9A7F', boxShadow: '0 4px 14px rgba(26,154,127,0.28)' }}>
+                <Plus size={16} aria-hidden="true" /> Nouveau bénéficiaire
               </button>
             </div>
-            {structures.length === 0 ? (
-              <div className="text-center py-20 text-gray-400">
-                <Building2 size={56} className="mx-auto mb-4 opacity-20" />
-                <p className="font-medium text-lg">Aucune structure</p>
-                <p className="text-sm mt-1">Créez une structure pour regrouper vos bénéficiaires d'EHPAD, centres...</p>
+          </header>
+
+          {/* Guide de prise en main, replié en une ligne : il ne s'affiche que s'il reste une étape. */}
+          <div className="empty:hidden">
+            <GuideDemarrage replie />
+          </div>
+
+          {/* La journée */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-[18px]">
+            <div className="lg:col-span-5 flex flex-col [&>section]:flex-1">
+              <CarteProchainRendezVous
+                seance={prochain}
+                participant={participantProchain}
+                contexte={contexteBeneficiaire(participantProchain?.bilans ?? [])}
+                dernierRessenti={participantProchain ? retours[participantProchain.id]?.[0] ?? null : null}
+                delai={prochain ? delaiRendezVous(prochain, aujourdhui, heure) : ''}
+                quand={prochain ? libelleRendezVous(prochain, aujourdhui) : ''}
+              />
+            </div>
+            <div className="lg:col-span-7 flex flex-col [&>section]:flex-1">
+              <CarteJournee seances={journee} participants={participants} maintenant={heure} prochaineId={prochainAujourdhui?.id ?? null} />
+            </div>
+          </div>
+
+          {/* Ce qui attend un geste */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-[18px] items-start">
+            <CarteAConfirmer seances={aConfirmer} participants={participants} aujourdhui={aujourdhui}
+              enCours={confirmationEnCours} onMarquerRealisee={s => void marquerRealisee(s)} />
+            <CarteProchainsBilans bilans={bilansAPrevoir} participants={participants} />
+            <CarteFactures resume={resume} chargement={chargementBrouillons || chargementFactures} />
+          </div>
+
+          {/* Ce qui avance : les progrès, et une astuce pour apprendre en faisant */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-[18px]">
+            <div className={`${astuce ? 'lg:col-span-8' : 'lg:col-span-12'} flex flex-col [&>section]:flex-1`}>
+              <CarteProgres progres={progres} />
+            </div>
+            {astuce && (
+              <div className="lg:col-span-4 flex flex-col [&>aside]:flex-1">
+                <CarteAstuce astuce={astuce} onEcarter={() => ecarterAstuce(astuce.cle)} />
+              </div>
+            )}
+          </div>
+
+          <LigneASurveiller elements={aSurveiller} />
+
+          {/* Bénéficiaires suivis */}
+          <section id="beneficiaires" aria-labelledby="titre-beneficiaires" className="flex flex-col gap-3.5 scroll-mt-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3.5 flex-wrap">
+                <h2 id="titre-beneficiaires" className="m-0 font-heading font-extrabold text-[19px]" style={{ color: 'var(--color-ink)' }}>
+                  Bénéficiaires suivis <span className="font-semibold" style={{ color: 'var(--color-ink-2)' }}>({participantsActifs.length})</span>
+                </h2>
+                <div role="group" aria-label="Filtrer les bénéficiaires" className="flex gap-1 rounded-xl p-1 w-fit" style={{ background: '#E3ECEF' }}>
+                  {([
+                    ['tous', 'Tous'],
+                    ['independants', `Sans structure (${independants.length})`],
+                    // Ce filtre affiche les structures elles-mêmes (cartes EHPAD, associations), pas des
+                    // bénéficiaires : il garde donc le nom « Structures » et leur nombre (e2e 17).
+                    ['structures', `Structures (${structures.length})`],
+                  ] as [DashTab, string][]).map(([tab, label]) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      aria-pressed={activeTab === tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`px-3 h-[34px] rounded-[9px] text-[13px] transition-colors ${activeTab === tab ? 'bg-white text-primary-dark font-bold shadow-sm' : 'font-semibold hover:text-dark'}`}
+                      style={activeTab === tab ? undefined : { color: 'var(--color-ink-2)' }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {activeTab !== 'structures' && (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="relative">
+                    <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-ink-2)' }} aria-hidden="true" />
+                    <input
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                      placeholder="Rechercher un bénéficiaire…"
+                      aria-label="Rechercher un bénéficiaire"
+                      className="w-64 bg-white focus:outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/15 transition-all"
+                      style={{ height: 40, paddingLeft: 40, paddingRight: 14, border: '1.5px solid #E2EEEE', borderRadius: 10, fontSize: 14, color: 'var(--color-ink)' }}
+                    />
+                  </div>
+                  <Link to="/archives" className="text-[13px] font-bold text-primary-dark hover:underline">
+                    Archivés ({participantsArchives.length})
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            {activeTab === 'structures' ? (
+              <>
+                <div className="flex justify-between items-center gap-3 flex-wrap">
+                  <p className="m-0 text-sm" style={{ color: 'var(--color-ink-2)' }}>
+                    {structures.length} structure{structures.length !== 1 ? 's' : ''} partenaire{structures.length !== 1 ? 's' : ''} (EHPAD, associations…)
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateStructure(true)}
+                    className="flex items-center gap-2 text-white text-sm font-bold h-[42px] px-4 rounded-[11px] hover:opacity-90"
+                    style={{ background: '#1A9A7F' }}
+                  >
+                    <Plus size={16} aria-hidden="true" /> Créer une structure
+                  </button>
+                </div>
+                {structures.length === 0 ? (
+                  <div className="text-center py-16 rounded-[20px]" style={{ border: '1.5px dashed #D5E4E6' }}>
+                    <Building2 size={40} className="mx-auto mb-3" style={{ color: '#9DAFC0' }} aria-hidden="true" />
+                    <p className="m-0 font-bold text-base" style={{ color: 'var(--color-ink)' }}>Aucune structure pour l’instant</p>
+                    <p className="m-0 mt-1 text-sm" style={{ color: '#3D4C5A' }}>Créez une structure pour regrouper les bénéficiaires d’un EHPAD, d’un centre ou d’une association.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {structures.map(s => {
+                      const patientsStr = participants.filter(p => p.structureId === s.id);
+                      const seancesStr = seances.filter(se => patientsStr.some(p => p.id === se.participantId) && se.statut === 'realisee');
+                      const derniere = seancesStr.sort((a, b) => b.date.localeCompare(a.date))[0]?.date;
+                      return (
+                        <CarteStructure key={s.id} structure={s} nbPatients={patientsStr.filter(p => !p.archive).length} derniereSeance={derniere} />
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            ) : listeFiltered.length === 0 ? (
+              <div className="text-center py-16 rounded-[20px]" style={{ border: '1.5px dashed #D5E4E6' }}>
+                <Users size={40} className="mx-auto mb-3" style={{ color: '#9DAFC0' }} aria-hidden="true" />
+                <p className="m-0 font-bold text-base" style={{ color: 'var(--color-ink)' }}>{search ? 'Aucun bénéficiaire trouvé' : 'Aucun bénéficiaire pour l’instant'}</p>
+                <p className="m-0 mt-1 text-sm" style={{ color: '#3D4C5A' }}>{search ? 'Essayez un autre nom.' : 'Ajoutez votre premier bénéficiaire : son bilan initial apparaîtra dans « Prochains bilans ».'}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {structures.map(s => {
-                  const patientsStr = participants.filter(p => p.structureId === s.id);
-                  const seancesStr = seances.filter(se => patientsStr.some(p => p.id === se.participantId) && se.statut === 'realisee');
-                  const derniere = seancesStr.sort((a: any, b: any) => b.date.localeCompare(a.date))[0]?.date;
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {listeFiltered.map(p => {
+                  const rdv = prochaineSeance(seances, p.id, aujourdhui, heure);
                   return (
-                    <CarteStructure
-                      key={s.id}
-                      structure={s}
-                      nbPatients={patientsStr.filter(p => !p.archive).length}
-                      derniereSeance={derniere}
+                    <ParticipantCard
+                      key={p.id}
+                      participant={p}
+                      structureNom={p.structureId ? structures.find(s => s.id === p.structureId)?.nom : undefined}
+                      objectif={contexteBeneficiaire(p.bilans).objectif}
+                      prochainRendezVous={rdv ? libelleRendezVous(rdv, aujourdhui) : null}
+                      onArchiver={() => setAArchiver({ id: p.id, nom: `${p.prenom} ${p.nom}` })}
                     />
                   );
                 })}
               </div>
             )}
-          </>
-        ) : (
-          <>
-            {/* Toolbar participants */}
-            <div className="flex items-center gap-3 mb-6 flex-wrap">
-              <div className="relative flex-1 min-w-48">
-                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-ink-3)' }} />
-                <input
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="Rechercher un participant..."
-                  className="w-full transition-all focus:outline-none"
-                  style={{
-                    paddingLeft: 40, paddingRight: 16, paddingTop: 11, paddingBottom: 11,
-                    background: 'var(--color-bg)', border: '1.5px solid #E2EEEE',
-                    borderRadius: 10, fontSize: 14, fontFamily: 'var(--font-sans)', color: 'var(--color-ink)',
-                  }}
-                  onFocus={e => { e.target.style.borderColor = 'var(--color-teal)'; e.target.style.boxShadow = '0 0 0 3px rgba(43,191,191,0.12)'; }}
-                  onBlur={e => { e.target.style.borderColor = 'var(--color-border)'; e.target.style.boxShadow = 'none'; }}
-                />
-              </div>
-              <motion.button
-                onClick={() => setShowImport(true)}
-                className="flex items-center gap-2 text-sm font-medium"
-                style={{ padding: '10px 20px', background: 'transparent', border: '1.5px solid var(--color-teal)', borderRadius: 10, color: 'var(--color-teal)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
-                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.1 }}
-              >
-                <FileSpreadsheet size={16} />
-                <span className="hidden sm:inline">Import Excel</span>
-              </motion.button>
-              <motion.button
-                onClick={() => navigate('/participants/nouveau')}
-                className="flex items-center gap-2 text-white text-sm font-semibold"
-                style={{ padding: '10px 20px', background: 'var(--color-teal)', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'var(--font-sans)' }}
-                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.1 }}
-              >
-                <Plus size={16} /> Nouveau participant
-              </motion.button>
+          </section>
+
+          {/* Carte — en bas de page */}
+          {participants.some(p => p.coordonnees) && (
+            <div>
+              <Suspense fallback={<div className="h-[260px] bg-gray-100 rounded-2xl animate-pulse" />}>
+                <MiniMap participants={participants} />
+              </Suspense>
             </div>
-
-            {/* Grid participants */}
-            {listeFiltered.length === 0 ? (
-              <div className="text-center py-20 text-gray-400">
-                <Users size={56} className="mx-auto mb-4 opacity-20" />
-                <p className="font-medium text-lg">Aucun participant trouvé</p>
-                <p className="text-sm mt-1">{search ? 'Essayez un autre nom' : 'Commencez par ajouter un participant'}</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {listeFiltered.map((p, i) => (
-                  <FadeInCard key={p.id} delay={0.15 + i * 0.05}>
-                    <div className="flex flex-col gap-1.5">
-                      <ParticipantCard
-                        participant={p}
-                        structureNom={p.structureId ? structures.find(s => s.id === p.structureId)?.nom : undefined}
-                      />
-                      <div className="flex justify-end px-1">
-                        <button
-                          type="button"
-                          onClick={() => setAArchiver({ id: p.id, nom: `${p.prenom} ${p.nom}` })}
-                          aria-label={`Archiver ${p.prenom} ${p.nom}`}
-                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-primary border border-gray-200 hover:border-primary/40 px-2.5 py-1 rounded-lg transition-colors"
-                        >
-                          <Archive size={12} /> Archiver
-                        </button>
-                      </div>
-                    </div>
-                  </FadeInCard>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {aArchiver && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Confirmer l'archivage">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-              <h2 className="font-heading font-bold text-dark text-lg">Archiver {aArchiver.nom} ?</h2>
-              <p className="text-sm text-gray-600">
-                Cette personne quittera la liste des bénéficiaires actifs. Son dossier (bilans, séances, programmes,
-                historique, facturation) est entièrement conservé, et vous pourrez la réactiver depuis « Bénéficiaires archivés ».
-              </p>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={confirmerArchivage}
-                  disabled={archivageEnCours}
-                  className="flex-1 bg-primary text-white rounded-xl py-2.5 font-semibold text-sm hover:bg-dark transition-colors disabled:opacity-60"
-                >
-                  {archivageEnCours ? 'Archivage…' : 'Archiver'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAArchiver(null)}
-                  disabled={archivageEnCours}
-                  className="px-5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors text-sm"
-                >
-                  Annuler
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Widget agenda */}
-        {(() => {
-          const today = new Date().toISOString().slice(0, 10);
-          const seancesAujourdhui = seancesDuJour(today);
-          const aRelancer = patientsARelancer(21);
-          if (seancesAujourdhui.length === 0 && aRelancer.length === 0) return null;
-          return (
-            <FadeInCard delay={0.25}>
-            <div className="mt-8 bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <CalendarDays size={18} className="text-primary" />
-                  <h2 className="font-heading font-semibold text-dark">Prochaines séances</h2>
-                </div>
-                <Link to="/agenda-v2" className="text-xs text-primary hover:text-dark flex items-center gap-1 transition-colors">
-                  Voir l'agenda <ChevronRight size={14} />
-                </Link>
-              </div>
-
-              {seancesAujourdhui.length > 0 ? (
-                <div className="space-y-2 mb-3">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                    Aujourd'hui — {seancesAujourdhui.length} séance{seancesAujourdhui.length > 1 ? 's' : ''}
-                  </p>
-                  {seancesAujourdhui.slice(0, 4).map(s => {
-                    const p = participants.find(x => x.id === s.participantId);
-                    return (
-                      <div key={s.id} className="flex items-center gap-3 py-1">
-                        <span className="text-sm font-semibold text-primary w-14 flex-shrink-0">{s.heureDebut}</span>
-                        <span className="text-sm font-medium text-dark">{p ? `${p.prenom} ${p.nom}` : '—'}</span>
-                        {p?.adresseVille && (
-                          <span className="text-xs text-gray-400 flex items-center gap-1">
-                            <MapPin size={11} />{p.adresseVille}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400 mb-3">Aucune séance planifiée aujourd'hui.</p>
-              )}
-
-              {aRelancer.length > 0 && (
-                <p className="text-xs text-warning font-medium">
-                  ⚠️ {aRelancer.length} bénéficiaire{aRelancer.length > 1 ? 's' : ''} sans séance depuis plus de 3 semaines
-                </p>
-              )}
-            </div>
-            </FadeInCard>
-          );
-        })()}
-
-        {/* Widget bilans en cours (brouillons) */}
-        {(() => {
-          const brouillons = getAllBrouillons();
-          if (brouillons.length === 0) return null;
-          return (
-            <FadeInCard delay={0.30}>
-            <div className="mt-6 bg-white rounded-2xl border border-amber-200 p-5 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-base">📋</span>
-                <h2 className="font-heading font-semibold text-dark">
-                  Bilans en cours
-                  <span className="ml-2 bg-amber-100 text-amber-700 text-xs font-bold px-2 py-0.5 rounded-full">{brouillons.length}</span>
-                </h2>
-              </div>
-              <div className="space-y-2">
-                {brouillons.map(b => {
-                  const p = participants.find(x => x.id === b.participantId);
-                  const mins = Math.floor((Date.now() - new Date(b.dateDerniereModif).getTime()) / 60000);
-                  const modifLabel = mins < 60 ? `il y a ${mins} min` : mins < 1440 ? `il y a ${Math.floor(mins / 60)}h` : `il y a ${Math.floor(mins / 1440)}j`;
-                  return (
-                    <div key={b.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-dark truncate">
-                          {p ? `${p.prenom} ${p.nom}` : 'Bénéficiaire inconnu'}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          {b.completionPct}% complété · Étape {b.etapeActuelle + 1} · {modifLabel}
-                        </div>
-                        <div className="h-1 bg-gray-100 rounded-full mt-1.5 w-24 overflow-hidden">
-                          <motion.div
-                            className="h-full rounded-full bg-amber-400"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${b.completionPct}%` }}
-                            transition={{ duration: 0.8, delay: 0.4, ease: [0.25, 0.1, 0.25, 1] as const }}
-                          />
-                        </div>
-                      </div>
-                      {p && (
-                        <Link
-                          to={`/participant/${p.id}/bilan/new`}
-                          className="ml-3 flex-shrink-0 bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-amber-100 transition-colors"
-                        >
-                          Reprendre →
-                        </Link>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            </FadeInCard>
-          );
-        })()}
-
-        {/* Widget assiduité programmes */}
-        {Object.keys(assiduite).length > 0 && (() => {
-          const lignes = Object.entries(assiduite)
-            .map(([pid, stats]) => {
-              const p = participants.find(x => x.id === pid);
-              return p ? { p, ...stats } : null;
-            })
-            .filter(Boolean)
-            .sort((a, b) => (b!.nb ?? 0) - (a!.nb ?? 0))
-            .slice(0, 6) as { p: (typeof participants)[0]; nb: number; taux: number | null; derniere: string | null }[];
-          if (lignes.length === 0) return null;
-          const alertes = lignes.filter(l => l.taux !== null && l.taux < 50);
-          return (
-            <FadeInCard delay={0.32}>
-            <div className="mt-6 bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">📊</span>
-                  <h2 className="font-heading font-semibold text-dark">Assiduité programmes</h2>
-                </div>
-                <span className="text-xs text-gray-400">Cette semaine</span>
-              </div>
-              <div className="space-y-2">
-                {lignes.map(({ p, nb, taux, derniere }) => {
-                  const couleur = taux === null ? '#94A3B8' : taux >= 70 ? '#16A34A' : taux >= 50 ? '#EA580C' : '#DC2626';
-                  const dateLabel = derniere
-                    ? new Date(derniere + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
-                    : null;
-                  return (
-                    <Link key={p.id} to={`/participant/${p.id}`} className="flex items-center gap-3 py-1.5 hover:bg-gray-50 rounded-lg px-1 -mx-1 transition-colors">
-                      <span className="text-sm font-semibold text-dark w-36 truncate flex-shrink-0">{p.prenom} {p.nom}</span>
-                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${taux ?? 0}%`, background: couleur, transition: 'width 0.6s ease' }} />
-                      </div>
-                      <span className="text-xs font-bold w-9 text-right flex-shrink-0" style={{ color: couleur }}>
-                        {taux !== null ? `${taux}%` : '—'}
-                      </span>
-                      <span className="text-[11px] text-gray-400 w-20 text-right flex-shrink-0">
-                        {nb} séance{nb > 1 ? 's' : ''}{dateLabel ? ` · ${dateLabel}` : ''}
-                      </span>
-                    </Link>
-                  );
-                })}
-              </div>
-              {alertes.length > 0 && (
-                <div className="mt-3 rounded-xl bg-red-light border border-red-200 px-3 py-2 text-xs text-red-700 font-medium">
-                  📉 {alertes.length} bénéficiaire{alertes.length > 1 ? 's' : ''} avec un taux de réalisation &lt; 50% cette semaine
-                </div>
-              )}
-            </div>
-            </FadeInCard>
-          );
-        })()}
-
-        {/* Widget journal — dernières notes */}
-        {(() => {
-          const today = new Date().toISOString().slice(0, 10);
-          const notesAujourdhui = notes
-            .filter(n => n.date === today)
-            .sort((a, b) => b.heureDebut.localeCompare(a.heureDebut));
-          if (notesAujourdhui.length === 0) return null;
-          const alertesDouleur = notesAujourdhui.filter(n => n.alertes.douleurSignalee);
-          return (
-            <FadeInCard delay={0.35}>
-            <div className="mt-8 bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <NotebookPen size={18} className="text-secondary" />
-                  <h2 className="font-heading font-semibold text-dark">Dernières notes</h2>
-                </div>
-                <span className="text-xs text-gray-400">
-                  Aujourd'hui — {notesAujourdhui.length} note{notesAujourdhui.length > 1 ? 's' : ''}
-                </span>
-              </div>
-              <div className="space-y-2 mb-3">
-                {notesAujourdhui.slice(0, 5).map(note => {
-                  const p = participants.find(x => x.id === note.participantId);
-                  const r = note.ressenti ? RESSENTI_CONFIG[note.ressenti] : null;
-                  return (
-                    <div key={note.id} className="flex items-center gap-3 py-1">
-                      <span className="text-sm font-medium text-dark flex-shrink-0 w-28 truncate">
-                        {p ? `${p.prenom} ${p.nom[0]}.` : '—'}
-                      </span>
-                      {r && <span className="text-xs flex-shrink-0">{r.emoji} {r.label}</span>}
-                      {note.note && (
-                        <span className="text-xs text-gray-400 truncate flex-1">
-                          "{note.note.length > 45 ? note.note.slice(0, 45) + '…' : note.note}"
-                        </span>
-                      )}
-                      {p && (
-                        <Link to={`/participant/${p.id}`} className="text-xs text-primary hover:text-dark flex-shrink-0 flex items-center gap-1 transition-colors">
-                          Fiche <ChevronRight size={11} />
-                        </Link>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              {alertesDouleur.length > 0 && (
-                <div className="bg-red-light border border-red-200 rounded-xl px-3 py-2 text-xs text-red-700 font-medium">
-                  ⚠️ {alertesDouleur.length} alerte{alertesDouleur.length > 1 ? 's' : ''} douleur signalée{alertesDouleur.length > 1 ? 's' : ''} aujourd'hui
-                </div>
-              )}
-            </div>
-            </FadeInCard>
-          );
-        })()}
-
-        {/* Widget carte — en bas de page */}
-        {participants.some(p => p.coordonnees) && (
-          <div className="mt-8">
-            <Suspense fallback={<div className="h-[260px] bg-gray-100 rounded-2xl animate-pulse" />}>
-              <MiniMap participants={participants} />
-            </Suspense>
-          </div>
-        )}
+          )}
+        </div>
       </PageWrapper>
 
+      {aArchiver && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Confirmer l'archivage">
+          <div className="bg-white rounded-[20px] shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h2 className="font-heading font-extrabold text-lg m-0" style={{ color: 'var(--color-ink)' }}>Archiver {aArchiver.nom} ?</h2>
+            <p className="text-sm m-0" style={{ color: '#3D4C5A' }}>
+              Cette personne quittera la liste des bénéficiaires suivis. Son dossier (bilans, séances, programmes,
+              historique, facturation) est entièrement conservé, et vous pourrez la réactiver depuis « Archivés ».
+            </p>
+            <div className="flex gap-3">
+              <button type="button" onClick={confirmerArchivage} disabled={archivageEnCours}
+                className="flex-1 text-white rounded-[11px] h-[42px] font-bold text-sm hover:opacity-90 disabled:opacity-60" style={{ background: '#1A9A7F' }}>
+                {archivageEnCours ? 'Archivage…' : 'Archiver'}
+              </button>
+              <button type="button" onClick={() => setAArchiver(null)} disabled={archivageEnCours}
+                className="px-5 rounded-[11px] text-sm font-bold hover:bg-gray-50" style={{ border: '1.5px solid #D5E4E6', color: '#3D4C5A' }}>
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* Modal import Excel */}
+      {actionRapide && (
+        <ChoixBeneficiaire
+          titre={actionRapide === 'bilan' ? 'Nouveau bilan : pour qui ?' : 'Dicter une séance : pour qui ?'}
+          participants={participantsActifs}
+          suggeres={[...new Set(journee.map(s => s.participantId))]}
+          onChoisir={choisirPour}
+          onFermer={() => setActionRapide(null)}
+        />
+      )}
+
       {showImport && (
         <Suspense fallback={null}>
           <ImportExcelModal onClose={() => setShowImport(false)} participants={participants} addParticipant={addParticipant} />
         </Suspense>
       )}
 
-      {/* Modal création structure */}
       {showCreateStructure && (
         <ModalCreationStructure
           onClose={() => setShowCreateStructure(false)}

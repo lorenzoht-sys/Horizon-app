@@ -12,6 +12,6 @@ test.describe('Connexion praticien', () => {
     // démarrer à froid. Ce test est sorti « flaky » le 2026-08-27 (échec
     // puis succès au second essai) avec le délai par défaut de 5 s — un
     // test intermittent ne vaut guère mieux qu'un test absent.
-    await expect(page.getByRole('button', { name: /Nouveau participant/ })).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('button', { name: /Nouveau bénéficiaire/ })).toBeVisible({ timeout: 20000 });
   });
 });

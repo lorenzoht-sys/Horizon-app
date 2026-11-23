@@ -207,11 +207,21 @@ export async function loadAllBrouillonsFromSupabase(praticienId: string): Promis
       // localStorage prioritaire : ne restaurer que ce qui est absent
       const existing = getBrouillon(row.participant_id);
       if (!existing) {
-        sauvegarderBrouillon(
-          row.participant_id,
-          row.etape_actuelle,
-          row.donnees as Partial<BilanForm>
-        );
+        // Dates et avancement d'origine, pas ceux de la restauration : passer par
+        // sauvegarderBrouillon datait chaque brouillon de la connexion, d'où « il y a 0 min »
+        // sur tous les bilans en cours du tableau de bord (constaté le 23/11/2026).
+        const donnees = row.donnees as Partial<BilanForm>;
+        const brouillon: BrouillonBilan = {
+          id: row.id ?? uuidv4(),
+          participantId: row.participant_id,
+          dateCreation: row.created_at ?? new Date().toISOString(),
+          dateDerniereModif: row.updated_at ?? row.created_at ?? new Date().toISOString(),
+          etapeActuelle: row.etape_actuelle ?? 0,
+          data: donnees,
+          completionPct: calculerCompletion(donnees),
+          estTermine: false,
+        };
+        localStorage.setItem(cle(row.participant_id), JSON.stringify(brouillon));
       }
     }
   } catch { /* non bloquant */ }
