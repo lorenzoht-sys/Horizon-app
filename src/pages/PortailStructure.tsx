@@ -255,6 +255,8 @@ export default function PortailStructure() {
   const [loading, setLoading] = useState(true);
   const [erreur, setErreur] = useState(false);
   const [tab, setTab] = useState<Tab>('patients');
+  // Accompagnements terminés : repliés par défaut, la vue principale reste aux personnes suivies.
+  const [voirTermines, setVoirTermines] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Participant | null>(null);
   const [moisFilter, setMoisFilter] = useState(new Date().toISOString().slice(0, 7));
 
@@ -433,15 +435,21 @@ export default function PortailStructure() {
     .filter(f => f.periode_annee === new Date().getFullYear() && f.statut === 'envoyee')
     .reduce((s: number, f: any) => s + Number(f.montant_total), 0);
 
+  // Bénéficiaires suivis / accompagnements terminés (archivés côté praticien). Les chiffres et la
+  // progression portent sur les personnes suivies ; l'historique des séances et des documents
+  // garde tout le monde, comme avant.
+  const suivis = participants.filter(p => !p.archive);
+  const termines = participants.filter(p => p.archive);
+
   // Statistiques pour le résumé (colonne gauche desktop)
   const now = new Date();
   const moisCourant = now.toISOString().slice(0, 7);
   const seancesMoisCount = seances.filter(s => s.date.startsWith(moisCourant) && s.statut === 'realisee').length;
-  const tauxPresenceMois = participants.length > 0 ? Math.round((seancesMoisCount / (participants.length * 4)) * 100) : 0;
-  const bilansAFaireCount = participants.filter(p => statutPatient(p, []).label === 'Bilan à faire').length;
+  const tauxPresenceMois = suivis.length > 0 ? Math.round((seancesMoisCount / (suivis.length * 4)) * 100) : 0;
+  const bilansAFaireCount = suivis.filter(p => statutPatient(p, []).label === 'Bilan à faire').length;
 
   const TABS: { id: Tab; label: string }[] = [
-    { id: 'patients',    label: `👥 Mes bénéficiaires (${participants.length})` },
+    { id: 'patients',    label: `👥 Mes bénéficiaires (${suivis.length})` },
     { id: 'seances',     label: '📅 Séances' },
     { id: 'progression', label: '📈 Progression' },
     { id: 'documents',   label: '📄 Documents' },
@@ -506,7 +514,7 @@ export default function PortailStructure() {
           Résumé {fmtMois(now.getMonth() + 1, now.getFullYear())}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, color: C.dark }}>
-          <div>👥 {participants.length} bénéficiaire{participants.length !== 1 ? 's' : ''} suivi{participants.length !== 1 ? 's' : ''}</div>
+          <div>👥 {suivis.length} bénéficiaire{suivis.length !== 1 ? 's' : ''} suivi{suivis.length !== 1 ? 's' : ''}</div>
           <div>📅 {seancesMoisCount} séance{seancesMoisCount !== 1 ? 's' : ''} réalisée{seancesMoisCount !== 1 ? 's' : ''}</div>
           <div>📊 {tauxPresenceMois}% taux de présence</div>
           <div>⚠️ {bilansAFaireCount} bilan{bilansAFaireCount !== 1 ? 's' : ''} à faire</div>
@@ -545,21 +553,9 @@ export default function PortailStructure() {
     </aside>
   );
 
-  // ── Contenu de l'onglet actif ────────────────────────────────────────────
-  const tabContent = (
-    <>
-        {/* Onglet Patients */}
-        {tab === 'patients' && (
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
-              {participants.length} bénéficiaire{participants.length !== 1 ? 's' : ''} suivis
-            </div>
-            {participants.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 20px', color: C.muted }}>
-                Aucun bénéficiaire rattaché à cette structure.
-              </div>
-            ) : (
-              participants.map(p => {
+  // Carte d'un bénéficiaire (onglet Bénéficiaires). `termine` : accompagnement terminé (archivé
+  // par le praticien), même contenu, avec un statut explicite (retour de Pierre du 23/11/2026).
+  const cartePatient = (p: Participant, termine: boolean) => {
                 const seancesP = seances.filter(s => s.participantId === p.id && s.statut === 'realisee');
                 const statut = statutPatient(p, seancesP);
                 const sortedBilans = [...p.bilans].sort((a, b) => a.date.localeCompare(b.date));
@@ -588,9 +584,15 @@ export default function PortailStructure() {
                           </div>
                         </div>
                       </div>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: statut.color, background: `${statut.color}18`, padding: '3px 8px', borderRadius: 20, whiteSpace: 'nowrap' }}>
-                        {statut.emoji} {statut.label}
-                      </span>
+                      {termine ? (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#3D4C5A', background: '#F2F6F8', padding: '3px 8px', borderRadius: 20, whiteSpace: 'nowrap' }}>
+                          Accompagnement terminé
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: statut.color, background: `${statut.color}18`, padding: '3px 8px', borderRadius: 20, whiteSpace: 'nowrap' }}>
+                          {statut.emoji} {statut.label}
+                        </span>
+                      )}
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -619,7 +621,40 @@ export default function PortailStructure() {
                     </button>
                   </div>
                 );
-              })
+  };
+
+  // ── Contenu de l'onglet actif ────────────────────────────────────────────
+  const tabContent = (
+    <>
+        {/* Onglet Patients */}
+        {tab === 'patients' && (
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+              {suivis.length} bénéficiaire{suivis.length !== 1 ? 's' : ''} suivi{suivis.length !== 1 ? 's' : ''}
+            </div>
+            {suivis.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: C.muted }}>
+                {termines.length > 0 ? 'Aucun bénéficiaire suivi en ce moment.' : 'Aucun bénéficiaire rattaché à cette structure.'}
+              </div>
+            ) : (
+              suivis.map(p => cartePatient(p, false))
+            )}
+            {termines.length > 0 && (
+              <div style={{ marginTop: 18 }}>
+                <button type="button" onClick={() => setVoirTermines(v => !v)} aria-expanded={voirTermines}
+                  style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', border: `1px solid ${C.border}`, borderRadius: 14, padding: '12px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.dark }}>
+                  <span>Accompagnements terminés ({termines.length})</span>
+                  <span style={{ color: '#3D4C5A' }}>{voirTermines ? 'Masquer' : 'Afficher'}</span>
+                </button>
+                {voirTermines && (
+                  <div style={{ marginTop: 10 }}>
+                    <p style={{ fontSize: 12, color: '#3D4C5A', margin: '0 0 10px' }}>
+                      Personnes dont l'accompagnement est terminé. Leur historique reste consultable ici, sans modification possible.
+                    </p>
+                    {termines.map(p => cartePatient(p, true))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -710,12 +745,12 @@ export default function PortailStructure() {
               Progression de vos bénéficiaires
             </div>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>Données basées sur les bilans fonctionnels</div>
-            {participants.length === 0 ? (
+            {suivis.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px', color: C.muted }}>
                 Aucun bénéficiaire rattaché à cette structure.
               </div>
             ) : (
-              participants.map(p => {
+              suivis.map(p => {
                 const sortedB = [...p.bilans].sort((a, b) => a.date.localeCompare(b.date));
                 const ini = sortedB[0] ?? null;
                 const act = sortedB[sortedB.length - 1] ?? null;
