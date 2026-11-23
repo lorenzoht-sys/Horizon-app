@@ -15,6 +15,7 @@ import ModalCreerSeanceManuelle from '../../../components/agenda/ModalCreerSeanc
 import ModalEditSeance from '../../../components/agenda/ModalEditSeance';
 import ModalChoixSerie from '../../../components/agenda/ModalChoixSerie';
 import ModalEvenementAgenda from '../../../components/agenda/ModalEvenementAgenda';
+import ModalNouvelEvenement from '../../../components/agenda/ModalNouvelEvenement';
 import NoteSeanceModal from '../../../components/journal/NoteSeanceModal';
 import type { CoursCollectif, Participant, Seance, EvenementAgenda, CategorieSeance } from '../../../types';
 import { calculerFutures, planEditerUnique, planEditerSerie, planSupprimerUnique, planSupprimerSerie, planActionSurSelection, avecInfosDeLaReference, executerOperations, optionsPorteePourAction, type MiseAJourSeance } from '../../../lib/planificationManuelle';
@@ -125,12 +126,12 @@ export function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
   const { contrats } = useContrats();
   const { seances, modifierSeance, supprimerSeance, creerSeance, detecterConflits } = useAgenda();
   const { indisposDuJour } = useIndispos();
-  const { evenements, supprimerEvenement } = useEvenementsAgenda();
+  const { evenements, modifierEvenement, supprimerEvenement } = useEvenementsAgenda();
   const { categories, creerCategorie, modifierCategorie, supprimerCategorie, definirCategorieBilan } = useCategoriesSeance();
   const [categoriesOuvert, setCategoriesOuvert] = useState(false);
   const navigate = useNavigate();
   const {
-    coursCollectifs, modifierStatutCours, mettreAJourParticipation, participationsDuCours,
+    coursCollectifs, modifierStatutCours, modifierCours, mettreAJourParticipation, participationsDuCours,
     recharger: rechargerCoursCollectifs,
   } = useCoursCollectifs();
 
@@ -249,6 +250,7 @@ export function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
   const [coursSelectionneId, setCoursSelectionneId] = useState<string | null>(null);
   const coursSelectionne = coursCollectifs.find(c => c.id === coursSelectionneId) ?? null;
   const [evenementEdite, setEvenementEdite] = useState<EvenementAgenda | null>(null);
+  const [evenementEnModification, setEvenementEnModification] = useState<EvenementAgenda | null>(null);
   const [choixSerie, setChoixSerie] = useState<ChoixSerie | null>(null);
   const [choixSerieLoading, setChoixSerieLoading] = useState(false);
 
@@ -604,6 +606,11 @@ export function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
             if (ok) toast.success('Statut du cours mis à jour');
             return ok;
           }}
+          onModifierCours={async patch => {
+            const ok = await modifierCours(coursSelectionne.id, patch);
+            if (ok) toast.success('Cours modifié');
+            return ok;
+          }}
           onClose={() => setCoursSelectionneId(null)}
         />
       )}
@@ -611,12 +618,26 @@ export function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
       {evenementEdite && (
         <ModalEvenementAgenda
           evenement={evenementEdite}
+          onEdit={() => { setEvenementEnModification(evenementEdite); setEvenementEdite(null); }}
           onDelete={async () => {
             await supprimerEvenement(evenementEdite.id);
             toast.success('Événement supprimé');
             setEvenementEdite(null);
           }}
           onClose={() => setEvenementEdite(null)}
+        />
+      )}
+
+      {evenementEnModification && (
+        <ModalNouvelEvenement
+          initial={evenementEnModification}
+          onCreer={async data => {
+            if (await modifierEvenement(evenementEnModification.id, data)) {
+              toast.success('Événement modifié');
+              setEvenementEnModification(null);
+            }
+          }}
+          onCancel={() => setEvenementEnModification(null)}
         />
       )}
 

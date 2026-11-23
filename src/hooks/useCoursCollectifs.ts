@@ -23,6 +23,8 @@ interface CreerCoursCollectifData {
 // Chargement eager des deux tables (cours + participations) : l'agenda a
 // besoin de l'ensemble pour afficher le nombre de participants par carte,
 // même pattern que useContrats.ts (liste complète chargée une fois).
+export type ModificationCours = Pick<CoursCollectif, 'titre' | 'date' | 'heureDebut' | 'dureeMinutes'>;
+
 export function useCoursCollectifs() {
   const [coursCollectifs, setCoursCollectifs] = useState<CoursCollectif[]>([]);
   const [participations, setParticipations] = useState<ParticipationCoursCollectif[]>([]);
@@ -108,6 +110,28 @@ export function useCoursCollectifs() {
     return true;
   }
 
+  /**
+   * Corrige l'intitulé, la date, l'heure ou la durée d'un cours (23/11/2026, demande de Pierre :
+   * jusque-là il fallait annuler et recréer). Participants, structure et mode de facturation ne
+   * sont pas modifiables ici : ils engagent les inscriptions et la facturation.
+   */
+  async function modifierCours(coursId: string, patch: ModificationCours): Promise<boolean> {
+    if (!supabase) return false;
+    const { error } = await supabase.from('cours_collectifs').update({
+      titre: patch.titre,
+      date: patch.date,
+      heure_debut: patch.heureDebut,
+      duree_minutes: patch.dureeMinutes,
+    }).eq('id', coursId);
+    if (error) {
+      console.error('Erreur modification cours collectif:', error);
+      toast.error('Erreur : ' + error.message);
+      return false;
+    }
+    setCoursCollectifs(prev => prev.map(c => c.id === coursId ? { ...c, ...patch } : c));
+    return true;
+  }
+
   async function mettreAJourParticipation(
     participationId: string,
     patch: { statutPresence?: StatutPresenceCours; ressentiBorg?: number | null; ressentiBienetre?: number | null; notes?: string | null },
@@ -148,6 +172,7 @@ export function useCoursCollectifs() {
     loading,
     creerCoursCollectif,
     modifierStatutCours,
+    modifierCours,
     mettreAJourParticipation,
     participationsDuCours,
     recharger: charger,

@@ -147,7 +147,7 @@ export default function AgendaV2Page() {
   const { participants, participantsActifs } = useParticipants();
   const { contrats, contratActifDeParticipant } = useContrats();
   const { indisposDuJour } = useIndispos();
-  const { evenements, creerEvenement, supprimerEvenement } = useEvenementsAgenda();
+  const { evenements, creerEvenement, modifierEvenement, supprimerEvenement } = useEvenementsAgenda();
   // Catégories de séance du praticien (couleur de l'agenda), partagées avec le mobile par la base.
   const { categories, creerCategorie, modifierCategorie, supprimerCategorie, definirCategorieBilan } = useCategoriesSeance();
   const [categoriesOuvert, setCategoriesOuvert] = useState(false);
@@ -159,7 +159,7 @@ export default function AgendaV2Page() {
   // quelle (aucune logique de zone redupliquée ici).
   const { zones, zoneDePatient } = useZones();
   const {
-    coursCollectifs, participations: participationsCoursCollectifs, creerCoursCollectif, modifierStatutCours,
+    coursCollectifs, participations: participationsCoursCollectifs, creerCoursCollectif, modifierStatutCours, modifierCours,
     mettreAJourParticipation, participationsDuCours, recharger: rechargerCoursCollectifs,
   } = useCoursCollectifs();
   const { structures } = useStructures();
@@ -167,6 +167,7 @@ export default function AgendaV2Page() {
 
   const [seanceEditee, setSeanceEditee] = useState<Seance | null>(null);
   const [evenementEdite, setEvenementEdite] = useState<EvenementAgenda | null>(null);
+  const [evenementEnModification, setEvenementEnModification] = useState<EvenementAgenda | null>(null);
   const [nouvelEvenementOuvert, setNouvelEvenementOuvert] = useState(false);
   const [nouveauCoursCollectifOuvert, setNouveauCoursCollectifOuvert] = useState(false);
   const [coursCollectifSelectionne, setCoursCollectifSelectionne] = useState<CoursCollectif | null>(null);
@@ -943,12 +944,26 @@ export default function AgendaV2Page() {
       {evenementEdite && (
         <ModalEvenementAgenda
           evenement={evenementEdite}
+          onEdit={() => { setEvenementEnModification(evenementEdite); setEvenementEdite(null); }}
           onDelete={async () => {
             await supprimerEvenement(evenementEdite.id);
             toast.success('Événement supprimé');
             setEvenementEdite(null);
           }}
           onClose={() => setEvenementEdite(null)}
+        />
+      )}
+
+      {evenementEnModification && (
+        <ModalNouvelEvenement
+          initial={evenementEnModification}
+          onCreer={async data => {
+            if (await modifierEvenement(evenementEnModification.id, data)) {
+              toast.success('Événement modifié');
+              setEvenementEnModification(null);
+            }
+          }}
+          onCancel={() => setEvenementEnModification(null)}
         />
       )}
 
@@ -978,6 +993,14 @@ export default function AgendaV2Page() {
             if (ok) {
               setCoursCollectifSelectionne(prev => prev ? { ...prev, statut } : prev);
               toast.success('Statut du cours mis à jour');
+            }
+            return ok;
+          }}
+          onModifierCours={async patch => {
+            const ok = await modifierCours(coursCollectifSelectionne.id, patch);
+            if (ok) {
+              setCoursCollectifSelectionne(prev => prev ? { ...prev, ...patch } : prev);
+              toast.success('Cours modifié');
             }
             return ok;
           }}
