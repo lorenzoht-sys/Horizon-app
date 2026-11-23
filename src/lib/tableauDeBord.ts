@@ -434,3 +434,41 @@ export function astuceDuJour(aujourdhui: string, ecartees: ReadonlySet<string>):
   const jour = Math.floor(jourUtc(aujourdhui) / JOUR_MS);
   return restantes[jour % restantes.length];
 }
+
+// ── Regroupement de « À surveiller » (retour de Lorenzo du 23/11/2026) ─────────────────────
+// Avec une vingtaine de bénéficiaires, une pastille par personne remplissait quatre lignes. On
+// affiche une pastille par type (« 5 bilans commencés »), qui se déplie sur la liste des noms.
+
+const LIBELLES_GROUPE: Record<TypeATraiter, [string, string]> = {
+  ressentis: ['bénéficiaire aux ressentis dégradés', 'bénéficiaires aux ressentis dégradés'],
+  douleur: ['douleur signalée aujourd’hui', 'douleurs signalées aujourd’hui'],
+  brouillon: ['bilan commencé', 'bilans commencés'],
+  contrat: ['contrat bientôt terminé', 'contrats bientôt terminés'],
+  contrat_jours: ['contrat sans jours de séance', 'contrats sans jours de séance'],
+  relancer: ['bénéficiaire sans séance depuis 3 semaines', 'bénéficiaires sans séance depuis 3 semaines'],
+};
+
+// Santé d'abord, puis l'administratif.
+const ORDRE_GROUPES: TypeATraiter[] = ['douleur', 'ressentis', 'brouillon', 'contrat', 'contrat_jours', 'relancer'];
+
+export interface GroupeASurveiller {
+  type: TypeATraiter;
+  gravite: 'haute' | 'normale';
+  /** « 5 bilans commencés », « 1 contrat bientôt terminé » */
+  libelle: string;
+  elements: ElementATraiter[];
+}
+
+export function regrouperASurveiller(elements: readonly ElementATraiter[]): GroupeASurveiller[] {
+  return ORDRE_GROUPES.flatMap(type => {
+    const du = elements.filter(e => e.type === type);
+    if (du.length === 0) return [];
+    const [un, plusieurs] = LIBELLES_GROUPE[type];
+    return [{
+      type,
+      gravite: du.some(e => e.gravite === 'haute') ? 'haute' as const : 'normale' as const,
+      libelle: `${du.length} ${du.length > 1 ? plusieurs : un}`,
+      elements: du,
+    }];
+  });
+}

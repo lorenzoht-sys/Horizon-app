@@ -228,12 +228,11 @@ export default function Dashboard() {
     });
   }
   const aRelancer = patientsARelancer(21).filter(p => actifs.has(p.id));
-  if (aRelancer.length > 0) {
+  for (const p of aRelancer) {
     aSurveiller.push({
-      cle: 'relancer', type: 'relancer', gravite: 'normale',
-      titre: aRelancer.length === 1 ? 'Sans séance depuis 3 semaines' : `${aRelancer.length} bénéficiaires sans séance depuis 3 semaines`,
-      detail: aRelancer.slice(0, 2).map(p => `${p.prenom} ${p.nom}`).join(', ') + (aRelancer.length > 2 ? '…' : ''),
-      action: 'Planifier', lien: '/agenda-v2',
+      cle: `relancer-${p.id}`, type: 'relancer', gravite: 'normale',
+      titre: 'Sans séance depuis 3 semaines', detail: `${p.prenom} ${p.nom}`,
+      action: 'Voir', lien: `/participant/${p.id}`,
     });
   }
 
