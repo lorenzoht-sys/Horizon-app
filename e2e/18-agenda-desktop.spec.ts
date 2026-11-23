@@ -105,7 +105,7 @@ test.describe('Agenda desktop (/agenda-v2) — baseline avant extraction des mod
     test.skip(!admin, 'SUPABASE_TEST_SERVICE_ROLE_KEY non défini (voir e2e/README.md) — impossible de créer le bénéficiaire dédié');
   });
 
-  test('changer de vue, créer/éditer/déplacer/supprimer une séance manuelle, créer/consulter/supprimer un événement', async ({ page }) => {
+  test('changer de vue, créer/éditer/déplacer/supprimer une séance manuelle, créer/consulter/modifier/supprimer un événement', async ({ page }) => {
     test.setTimeout(60000);
     // Date et heure dérivées de l'horloge (minute près) : staging accumule de
     // très nombreuses séances de test résiduelles à des créneaux ronds
@@ -337,6 +337,25 @@ test.describe('Agenda desktop (/agenda-v2) — baseline avant extraction des mod
       await evenementCarte.click();
       const modaleEvenementDetail = page.locator('.rounded-2xl.shadow-xl.max-w-md');
       await expect(modaleEvenementDetail.getByText(titreEvenement)).toBeVisible();
+
+      // Modifier l'événement existant (23/11/2026) : nouvel horaire, même ligne en base.
+      await modaleEvenementDetail.getByRole('button', { name: "Modifier l'événement" }).click();
+      await expect(page.getByRole('heading', { name: "Modifier l'événement" })).toBeVisible();
+      const modaleModification = page.locator('.rounded-2xl.shadow-xl.max-w-md');
+      await expect(modaleModification.getByPlaceholder('Ex : Réunion équipe, Mme Dupont (prospect)…')).toHaveValue(titreEvenement);
+      await modaleModification.locator('input[type="time"]').nth(0).fill('15:00');
+      await modaleModification.locator('input[type="time"]').nth(1).fill('16:30');
+      await modaleModification.getByRole('button', { name: 'Enregistrer' }).click();
+      await expect(page.getByText('Événement modifié')).toBeVisible({ timeout: 10000 });
+      const { data: apresModification } = await admin!.from('evenements_agenda')
+        .select('id, heure_debut, heure_fin').eq('praticien_id', praticienId).eq('titre', titreEvenement);
+      expect(apresModification, 'modifier ne crée pas de doublon').toHaveLength(1);
+      expect(apresModification![0].id).toBe(evenementId);
+      expect(String(apresModification![0].heure_debut)).toMatch(/^15:00/);
+      expect(String(apresModification![0].heure_fin)).toMatch(/^16:30/);
+      await evenementCarte.click();
+      await expect(modaleEvenementDetail.getByText(/15:00 à 16:30/)).toBeVisible();
+
       await page.locator('button.text-red').first().click();
       await page.getByRole('button', { name: 'Supprimer' }).click();
       await expect(page.getByText('Événement supprimé')).toBeVisible({ timeout: 10000 });

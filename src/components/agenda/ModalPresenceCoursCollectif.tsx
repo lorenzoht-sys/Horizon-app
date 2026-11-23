@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Users, Check, Mic, MicOff } from 'lucide-react';
+import { X, Users, Check, Mic, MicOff, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { NIVEAUX_EFFORT, NIVEAUX_BIEN_ETRE } from '../../lib/ressentiCours';
 import { resumeAnnonces, libelleResumeAnnonces } from '../../lib/coursCollectifs';
 import PastilleAnnonce from './PastilleAnnonce';
+import type { ModificationCours } from '../../hooks/useCoursCollectifs';
 import type { CoursCollectif, ParticipationCoursCollectif, Participant, StatutPresenceCours, StatutCoursCollectif } from '../../types';
 
 const LABEL_PRESENCE: Record<StatutPresenceCours, string> = {
@@ -193,6 +194,60 @@ function LigneParticipant({ participation, statutCours, participant, onSauvegard
   );
 }
 
+// Correction de l'intitulé, de la date, de l'heure et de la durée d'un cours, sans le recréer.
+function FormulaireModifCours({ cours, onEnregistrer, onAnnuler }: {
+  cours: CoursCollectif;
+  onEnregistrer: (patch: ModificationCours) => Promise<boolean>;
+  onAnnuler: () => void;
+}) {
+  const [titre, setTitre] = useState(cours.titre);
+  const [date, setDate] = useState(cours.date);
+  const [heureDebut, setHeureDebut] = useState(cours.heureDebut.slice(0, 5));
+  const [dureeMinutes, setDureeMinutes] = useState(cours.dureeMinutes);
+  const [enCours, setEnCours] = useState(false);
+  const valide = titre.trim() !== '' && date !== '' && heureDebut !== '' && dureeMinutes > 0;
+  const champ = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary';
+
+  async function enregistrer() {
+    if (!valide) return;
+    setEnCours(true);
+    const ok = await onEnregistrer({ titre: titre.trim(), date, heureDebut, dureeMinutes });
+    setEnCours(false);
+    if (ok) onAnnuler();
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-gray-200 p-3 space-y-3" data-testid="modifier-cours">
+      <div>
+        <label htmlFor="cours-titre" className="block text-xs text-gray-500 mb-1">Intitulé</label>
+        <input id="cours-titre" type="text" value={titre} onChange={e => setTitre(e.target.value)} className={champ} />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <label htmlFor="cours-date" className="block text-xs text-gray-500 mb-1">Date</label>
+          <input id="cours-date" type="date" value={date} onChange={e => setDate(e.target.value)} className={champ} />
+        </div>
+        <div>
+          <label htmlFor="cours-heure" className="block text-xs text-gray-500 mb-1">Début</label>
+          <input id="cours-heure" type="time" step={60} value={heureDebut} onChange={e => setHeureDebut(e.target.value)} className={champ} />
+        </div>
+        <div>
+          <label htmlFor="cours-duree" className="block text-xs text-gray-500 mb-1">Durée (min)</label>
+          <input id="cours-duree" type="number" min={5} max={480} step={5} value={dureeMinutes}
+            onChange={e => setDureeMinutes(Number(e.target.value))} className={champ} />
+        </div>
+      </div>
+      <p className="text-xs text-gray-400">Les participants inscrits sont conservés et voient la nouvelle date dans leur espace.</p>
+      <div className="flex gap-2">
+        <button type="button" onClick={onAnnuler}
+          className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Annuler</button>
+        <button type="button" onClick={enregistrer} disabled={!valide || enCours}
+          className="flex-1 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-dark disabled:opacity-50">Enregistrer</button>
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   cours: CoursCollectif;
   participations: ParticipationCoursCollectif[];
@@ -205,10 +260,12 @@ interface Props {
   programmeNom?: string;
   onMettreAJourParticipation: (participationId: string, patch: PatchParticipation) => Promise<boolean>;
   onModifierStatutCours: (statut: StatutCoursCollectif) => Promise<boolean>;
+  onModifierCours: (patch: ModificationCours) => Promise<boolean>;
   onClose: () => void;
 }
 
-export default function ModalPresenceCoursCollectif({ cours, participations, participants, programmeNom, onMettreAJourParticipation, onModifierStatutCours, onClose }: Props) {
+export default function ModalPresenceCoursCollectif({ cours, participations, participants, programmeNom, onMettreAJourParticipation, onModifierStatutCours, onModifierCours, onClose }: Props) {
+  const [edition, setEdition] = useState(false);
   const participantMap = new Map(participants.map(p => [p.id, p]));
   const badge = STATUT_COURS_BADGE[cours.statut];
   // Réponses annoncées par les bénéficiaires : à venir seulement (après le cours, la présence
@@ -245,7 +302,17 @@ export default function ModalPresenceCoursCollectif({ cours, participations, par
           {cours.programmeCommunId && (
             <span className="text-xs text-gray-500">· {programmeNom ?? 'Programme non accessible'}</span>
           )}
+          {cours.statut !== 'annule' && !edition && (
+            <button type="button" onClick={() => setEdition(true)}
+              className="ml-auto flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+              <Pencil size={12} /> Modifier
+            </button>
+          )}
         </div>
+
+        {edition && (
+          <FormulaireModifCours cours={cours} onEnregistrer={onModifierCours} onAnnuler={() => setEdition(false)} />
+        )}
 
         {cours.statut === 'planifie' && participations.length > 0 && (
           <div
