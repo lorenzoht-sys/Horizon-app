@@ -49,7 +49,7 @@ export default function ParticipantFormPage() {
 
       <div className="mb-6">
         <h1 className="font-heading font-bold text-dark text-2xl">
-          {participant ? `Modifier ${participant.prenom} ${participant.nom}` : 'Nouveau participant'}
+          {participant ? `Modifier ${participant.prenom} ${participant.nom}` : 'Nouveau bénéficiaire'}
         </h1>
         <p className="text-gray-500 text-sm mt-1">
           {participant
