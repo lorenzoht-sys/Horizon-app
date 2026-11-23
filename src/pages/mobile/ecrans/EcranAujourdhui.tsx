@@ -199,7 +199,7 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
         {/* ── EN-TÊTE ─────────────────────────────────────────────── */}
         <header>
           {/* Majuscule écrite dans le texte, pas en CSS : l'e2e mobile 30 repère le libellé du jour
-              de l'agenda par un texte qui commence par « lundi », « mardi »… en minuscule. */}
+              de l'agenda par un texte qui commence par « lundi », « mardi »… en minuscule. */}
           <p className="m-0 text-[13px] font-bold" style={{ color: VERT_TEXTE }}>{dateDuJour(maintenant)}</p>
           <h1 className="m-0 mt-0.5 font-extrabold" style={{ fontSize: 26, color: ENCRE }}>
             {prenom ? `Bonjour ${prenom}` : 'Bonjour et bienvenue'}
@@ -260,10 +260,10 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
               {(rdv.objectif || contexte.objectif || contexte.vigilance || bienEtre || effort) && (
                 <div className="bg-white rounded-[14px] px-3 py-2.5 text-[13px] flex flex-col gap-1.5" style={{ color: ENCRE }}>
                   {rdv.objectif && <div><strong style={{ color: VERT_TEXTE }}>Objectif de la séance</strong> · {rdv.objectif}</div>}
-                  {contexte.objectif && <div><strong style={{ color: VERT_TEXTE }}>Son objectif</strong> · « {contexte.objectif} »</div>}
+                  {contexte.objectif && <div><strong style={{ color: VERT_TEXTE }}>Son objectif</strong> · « {contexte.objectif} »</div>}
                   {contexte.vigilance && <div><strong style={{ color: '#8A5300' }}>À garder en tête</strong> · {contexte.vigilance}</div>}
                   {(bienEtre || effort) && (
-                    <div><strong style={{ color: SECONDAIRE }}>La dernière fois</strong> · {[bienEtre && `se sentait « ${bienEtre.label.toLowerCase()} »`, effort && `effort « ${effort.label.toLowerCase()} »`].filter(Boolean).join(', ')}</div>
+                    <div><strong style={{ color: SECONDAIRE }}>La dernière fois</strong> · {[bienEtre && `se sentait « ${bienEtre.label.toLowerCase()} »`, effort && `effort « ${effort.label.toLowerCase()} »`].filter(Boolean).join(', ')}</div>
                   )}
                 </div>
               )}

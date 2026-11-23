@@ -17,9 +17,9 @@ export function CarteProchainRendezVous({ seance, participant, contexte, dernier
   participant: Participant | null;
   contexte: ContexteBeneficiaire;
   dernierRessenti: { borgRpe: number; bienEtre: number } | null;
-  /** « dans 2 h 10 », « demain »… */
+  /** « dans 2 h 10 », « demain »… */
   delai: string;
-  /** « Aujourd’hui · 14:30 » */
+  /** « Aujourd’hui · 14:30 » */
   quand: string;
 }) {
   if (!seance || !participant) {
@@ -42,12 +42,12 @@ export function CarteProchainRendezVous({ seance, participant, contexte, dernier
   const effort = dernierRessenti ? niveauEffort(dernierRessenti.borgRpe) : null;
   const lignes: { cle: string; titre: string; couleur: string; texte: string }[] = [];
   if (seance.objectif?.trim()) lignes.push({ cle: 'seance', titre: 'Objectif de la séance', couleur: '#147A64', texte: seance.objectif.trim() });
-  if (contexte.objectif) lignes.push({ cle: 'objectif', titre: 'Son objectif', couleur: '#147A64', texte: `« ${contexte.objectif} »` });
+  if (contexte.objectif) lignes.push({ cle: 'objectif', titre: 'Son objectif', couleur: '#147A64', texte: `« ${contexte.objectif} »` });
   if (contexte.vigilance) lignes.push({ cle: 'vigilance', titre: 'À garder en tête', couleur: '#8A5300', texte: contexte.vigilance });
   if (bienEtre || effort) {
     lignes.push({
       cle: 'ressenti', titre: 'La dernière fois', couleur: '#3D4C5A',
-      texte: [bienEtre && `se sentait « ${bienEtre.label.toLowerCase()} »`, effort && `effort « ${effort.label.toLowerCase()} »`].filter(Boolean).join(', '),
+      texte: [bienEtre && `se sentait « ${bienEtre.label.toLowerCase()} »`, effort && `effort « ${effort.label.toLowerCase()} »`].filter(Boolean).join(', '),
     });
   }
 
