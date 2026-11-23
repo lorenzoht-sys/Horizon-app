@@ -2,7 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 
 // Chrono TM6 : le minuteur tourne en continu même pendant les pauses.
 // Une pause enregistre son heure de début (au clic Pause) et sa durée
-// (calculée au clic Reprendre). Le temps affiché est le temps réel écoulé.
+// (calculée au clic Reprendre).
+//
+// Affichage croissant (00:00 → 06:00) depuis le 23/11/2026, à la demande de Pierre : il relève
+// FC et SpO₂ à chaque minute et doit voir le temps écoulé, pas le temps restant. Le compte à
+// rebours d'origine obligeait à convertir de tête (« 03:20 restant » = 3e minute).
 
 interface Tm6ChronoResult {
   dureeReelleSecondes: number;
@@ -15,6 +19,11 @@ interface Props {
   dureeMode: 'fixe' | 'libre';
   dureeCibleSecondes: number;
   onTerminer: (result: Tm6ChronoResult) => void;
+  /**
+   * Minute en cours (1 pour 00:00-00:59…), `null` hors passation. Sert au tableau des mesures
+   * pour mettre en évidence la ligne à remplir. Appelé seulement quand la minute change.
+   */
+  onMinuteEnCours?: (minute: number | null) => void;
 }
 
 type Status = 'idle' | 'running' | 'paused' | 'done';
@@ -49,7 +58,7 @@ function playBeep() {
   }
 }
 
-export default function Tm6ChronoWidget({ dureeMode, dureeCibleSecondes, onTerminer }: Props) {
+export default function Tm6ChronoWidget({ dureeMode, dureeCibleSecondes, onTerminer, onMinuteEnCours }: Props) {
   const [status, setStatus] = useState<Status>('idle');
   const [elapsedSecondes, setElapsedSecondes] = useState(0);
   const [pausesDetail, setPausesDetail] = useState<{ debutSecondes: number; dureeSecondes: number }[]>([]);
@@ -127,6 +136,10 @@ export default function Tm6ChronoWidget({ dureeMode, dureeCibleSecondes, onTermi
 
   useEffect(() => () => clearTimer(), []);
 
+  const enPassation = status === 'running' || status === 'paused';
+  const minuteEnCours = enPassation ? Math.floor(elapsedSecondes / 60) + 1 : null;
+  useEffect(() => { onMinuteEnCours?.(minuteEnCours); }, [minuteEnCours, onMinuteEnCours]);
+
   useEffect(() => {
     if (status === 'running' || status === 'paused') {
       window.onbeforeunload = () => '';
@@ -138,9 +151,7 @@ export default function Tm6ChronoWidget({ dureeMode, dureeCibleSecondes, onTermi
     };
   }, [status]);
 
-  const tempsAffiche = dureeMode === 'fixe'
-    ? Math.max(0, dureeCibleSecondes - elapsedSecondes)
-    : elapsedSecondes;
+  const nbMinutesCible = Math.ceil(dureeCibleSecondes / 60);
   const tempsEcoule = dureeMode === 'fixe' && elapsedSecondes >= dureeCibleSecondes;
 
   // Durée de la pause en cours (le chrono tourne donc elapsed continue de monter)
@@ -153,8 +164,17 @@ export default function Tm6ChronoWidget({ dureeMode, dureeCibleSecondes, onTermi
     <div style={{ background: 'var(--color-ink)' }} className="rounded-xl p-4 flex flex-col items-center gap-3">
       {/* Temps principal */}
       <div style={{ fontFamily: 'monospace', color: 'white', fontSize: 40, fontWeight: 700, letterSpacing: 2 }}>
-        {formatMMSS(tempsAffiche)}
+        {formatMMSS(elapsedSecondes)}
+        {dureeMode === 'fixe' && (
+          <span style={{ fontSize: 18, fontWeight: 500, opacity: 0.6, letterSpacing: 1 }}> / {formatMMSS(dureeCibleSecondes)}</span>
+        )}
       </div>
+
+      {minuteEnCours !== null && !tempsEcoule && (
+        <span className="text-sm font-semibold text-white/80" aria-live="polite">
+          {dureeMode === 'fixe' ? `Minute ${minuteEnCours} sur ${nbMinutesCible}` : `Minute ${minuteEnCours}`}
+        </span>
+      )}
 
       {/* Indicateur pause en cours */}
       {status === 'paused' && (
@@ -166,7 +186,7 @@ export default function Tm6ChronoWidget({ dureeMode, dureeCibleSecondes, onTermi
       {/* Signal fin de temps */}
       {tempsEcoule && status !== 'done' && (
         <span className="text-green-400 text-sm font-semibold animate-pulse">
-          Temps écoulé — appuyez sur Terminer
+          Fin du test ({formatMMSS(dureeCibleSecondes)}) — appuyez sur Terminer
         </span>
       )}
 

@@ -148,7 +148,7 @@ export default function FicheBilanPDF({ bilan, participant, notes, settings }: P
           <View style={S.cellRow}>
             <Cellule titre="Force" unite={`${cs ?? '—'} Reps`} body={`Main D : ${hg.droite ?? '—'} Kg  ·  Main G : ${hg.gauche ?? '—'} Kg`} />
             <View style={S.cellSpacer} />
-            <Cellule titre="Endurance" unite={resultatTm6(tm6).valeur != null ? (resultatTm6(tm6).type === 'distance' ? `${resultatTm6(tm6).valeur} M` : resultatTm6(tm6).texte.toUpperCase()) : '— M'} body={`O2 : ${tm6.spo2Avant ?? '—'} / ${tm6.spo2Apres ?? '—'} / ${tm6.spo22min ?? '—'}  ·  FC : ${tm6.fcAvant ?? '—'} / ${tm6.fcApres ?? '—'} Bpm${tm6.borgRPE != null ? `\nRessenti effort (Borg) : ${tm6.borgRPE}/20 — ${borgRPEInterp(tm6.borgRPE)}` : ''}${tm6DureePausesTexte(tm6)}`} />
+            <Cellule titre="Endurance" unite={resultatTm6(tm6).valeur != null ? (resultatTm6(tm6).type === 'distance' ? `${resultatTm6(tm6).valeur} M` : resultatTm6(tm6).texte.toUpperCase()) : '— M'} body={`FC : ${tm6.fcAvant ?? '—'} / ${tm6.fcApres ?? '—'} Bpm  ·  SpO2 : ${tm6.spo2Avant ?? '—'} / ${tm6.spo2Apres ?? '—'} / ${tm6.spo22min ?? '—'} %${tm6.borgRPE != null ? `\nRessenti effort (Borg) : ${tm6.borgRPE}/20 — ${borgRPEInterp(tm6.borgRPE)}` : ''}${tm6DureePausesTexte(tm6)}`} />
           </View>
           <View style={S.cellRow}>
             <Cellule titre="Souplesse" unite={`${sVal} Cm`} />
