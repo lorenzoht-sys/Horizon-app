@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { utilisateurCourant } from '../lib/session';
 import {
-  ajouterMois,
-  caParMoisCle,
   lireLigneCA,
   lireSaisie,
   plageHistorique,
@@ -90,24 +88,29 @@ export function useChiffreAffaires(mois: string) {
 }
 
 /**
- * CA total par mois (« AAAA-MM » → montant HT) de l'année civile en cours, plus le mois précédent si on
- * est en janvier : alimente les cartes et le graphique de « Mes stats ». Remplace l'ancienne saisie
- * locale (localStorage), supprimée le 2026-10-09.
+ * Lignes de CA (mois × bénéficiaire, HT) des 12 derniers mois, mois en cours compris : alimente « Mes
+ * stats » (évolution, origine du CA, détail par structure). Remplace le 2026-11-24 useCaAnneeEnCours,
+ * qui ne couvrait que l'année civile et ne gardait que les totaux par mois. Même fonction SQL, même
+ * règle : factures émises au mois de la prestation + CA externe ; le mois en cours, lui, vit surtout
+ * dans les brouillons (lus à part, voir useFacturesAValider).
  */
-export function useCaAnneeEnCours(): Record<string, number> {
-  const [caParMois, setCaParMois] = useState<Record<string, number>>({});
+export function useCaDouzeMois(): { lignes: LigneCA[]; chargement: boolean } {
+  const [lignes, setLignes] = useState<LigneCA[]>([]);
+  const [chargement, setChargement] = useState(true);
   useEffect(() => {
     let annule = false;
     (async () => {
-      if (!supabase) return;
+      if (!supabase) { setChargement(false); return; }
       const maintenant = new Date();
-      const janvier = `${maintenant.getFullYear()}-01-01`;
-      const { data, error } = await supabase.rpc('chiffre_affaires_mensuel', { p_debut: ajouterMois(janvier, -1), p_fin: `${maintenant.getFullYear()}-12-01` });
+      const mois = `${maintenant.getFullYear()}-${String(maintenant.getMonth() + 1).padStart(2, '0')}-01`;
+      const { debut, fin } = plageHistorique(mois, 12);
+      const { data, error } = await supabase.rpc('chiffre_affaires_mensuel', { p_debut: debut, p_fin: fin });
       if (annule) return;
-      if (error) { console.error('[useCaAnneeEnCours] lecture :', error); return; }
-      setCaParMois(caParMoisCle(((data ?? []) as Record<string, unknown>[]).map(lireLigneCA)));
+      if (error) console.error('[useCaDouzeMois] lecture :', error);
+      else setLignes(((data ?? []) as Record<string, unknown>[]).map(lireLigneCA));
+      setChargement(false);
     })();
     return () => { annule = true; };
   }, []);
-  return caParMois;
+  return { lignes, chargement };
 }

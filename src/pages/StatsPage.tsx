@@ -3,11 +3,11 @@ import { chargerSettingsPraticien } from '../lib/settingsPraticien';
 import type { ReactNode } from 'react';
 import {
   ResponsiveContainer, ComposedChart, BarChart, Bar, Cell, Line, LineChart,
-  PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip,
+  XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 import {
   Edit3, ChevronDown, ChevronUp, CheckCircle, RefreshCw, ClipboardList, FileClock,
-  CalendarX2, UserRoundX, Target,
+  CalendarX2, UserRoundX, Target, AlertTriangle,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import PageWrapper from '../components/layout/PageWrapper';
@@ -16,27 +16,33 @@ import { contratsDesBeneficiairesActifs, separerParArchivage } from '../lib/arch
 import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import { useStatsPro, type StatsPro } from '../hooks/useStatsPro';
-import { useCaAnneeEnCours } from '../hooks/useChiffreAffaires';
+import { useCaDouzeMois } from '../hooks/useChiffreAffaires';
+import { useFacturesAValider, useFacturesValidees } from '../hooks/useFacturesAValider';
+import { useStructures } from '../hooks/useStructures';
 import { useFactures } from '../hooks/useFactures';
 import { EBAUCHE_FACTURATION_VISIBLE } from '../lib/featuresFacturation';
 import type { Participant, Contrat } from '../types';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import { cleanTextPdf } from '../utils/pdfText';
-import { chargerTarifsContrat } from '../hooks/useTarifsContrat';
+import { chargerTarifsContrat, useTarifsDesContrats } from '../hooks/useTarifsContrat';
 import { trouverTarifApplicable, totalFactureSeance, dateCivileParis } from '../lib/tarifsContrats';
 import { useCoursCollectifs } from '../hooks/useCoursCollectifs';
 import { datesCoursCollectifsIndividuelFacturables } from '../lib/coursCollectifs';
 import { bilanAFaire, echeanceBilan } from '../lib/tableauDeBord';
 import {
-  presenceRecente, seancesMoisADate, seancesParSemaine, assiduiteParBeneficiaire,
-  resultatsParTest, categorieBeneficiaire, CATEGORIES, taux,
+  presenceRecente, activiteMoisADate, semaines as calculerSemaines, assiduiteParBeneficiaire, resultatsParTest,
+  caParMois as calculerCaParMois, encaissements, valeurSeances, annulations as calculerAnnulations, sourcesCA,
+  partPremierBeneficiaire, portefeuille as calculerPortefeuille, parStructure, derniersMois, moisDecale,
+  minutesRealisees, formaterHeures, ajouterJours,
 } from '../lib/statistiques';
 
-// Page « Mes stats » refondue le 2026-11-24 : chiffres recalculés (taux de présence sur les
-// seules séances passées, comparaison à date égale), couleurs de la charte (vert Horizon au lieu
-// du bleu), alertes fusionnées en un bloc « À faire » aux mêmes seuils que l'accueil, kilométrage
-// et projection retirés (ils reposaient sur des valeurs inventées). Calculs : lib/statistiques.ts.
+// Page « Mes stats » refondue le 2026-11-24 pour l'enseignant APA indépendant qui travaille aussi
+// pour des structures : ce qui rentre (le mois en cours vit dans les brouillons), ce qui reste dû, le
+// temps passé, ce que rapporte une heure, ce que coûtent les annulations, d'où vient le CA, et un
+// tableau par structure. Chiffres de l'ancienne page corrigés (présence, progrès), kilométrage et
+// projection inventés retirés, alertes fusionnées en « À faire » aux règles de l'accueil.
+// Calculs : lib/statistiques.ts. Aucune table ni migration : seulement des lectures existantes.
 
 const MOIS_COURTS = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
 const MOIS_LONGS  = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
@@ -489,7 +495,7 @@ function Carte({ titre, sousTitre, droite, children, className = '' }: {
   className?: string;
 }) {
   return (
-    <section className={`bg-white rounded-2xl border border-gray-100 shadow-sm p-5 min-w-0 ${className}`}>
+    <section className={`bg-white rounded-2xl border border-gray-100 shadow-sm p-5 min-w-0 flex flex-col ${className}`}>
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="min-w-0">
           <h2 className="text-sm font-bold text-gray-900 m-0">{titre}</h2>
@@ -537,7 +543,7 @@ function ChiffreCle({ libelle, valeur, detail, valeurs, children }: {
   libelle: string;
   valeur: string;
   detail?: ReactNode;
-  valeurs: (number | null)[];
+  valeurs?: (number | null)[];
   children?: ReactNode;
 }) {
   return (
@@ -548,12 +554,31 @@ function ChiffreCle({ libelle, valeur, detail, valeurs, children }: {
       </div>
       {detail && <div className="text-xs mt-2 text-gray-500">{detail}</div>}
       {children}
-      <div className="mt-auto pt-3"><Tendance valeurs={valeurs} /></div>
+      {valeurs && <div className="mt-auto pt-3"><Tendance valeurs={valeurs} /></div>}
     </div>
   );
 }
 
 const euros = (v: number) => `${Math.round(v).toLocaleString('fr-FR')} €`;
+
+function TitreSection({ children, detail }: { children: ReactNode; detail?: string }) {
+  return (
+    <div className="flex items-baseline gap-3 mt-8 mb-3">
+      <h2 className="m-0 text-xs font-bold uppercase tracking-wider" style={{ color: ENCRE_2 }}>{children}</h2>
+      {detail && <span className="text-xs text-gray-400">{detail}</span>}
+    </div>
+  );
+}
+
+function Mini({ libelle, valeur, detail, ton }: { libelle: string; valeur: string; detail?: string; ton?: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-xs text-gray-500">{libelle}</div>
+      <div className="font-heading font-extrabold text-xl leading-tight mt-1" style={{ color: ton ?? '#1A2332' }}>{valeur}</div>
+      {detail && <div className="text-xs text-gray-400 mt-0.5">{detail}</div>}
+    </div>
+  );
+}
 
 // ─── Objectifs ────────────────────────────────────────────────────────────────
 //
@@ -697,65 +722,6 @@ function SectionAFaire({ groupes }: {
   );
 }
 
-// ─── Graphiques ──────────────────────────────────────────────────────────────
-
-function GraphiqueCA({ caParMois, objectif, annee, moisActuel }: {
-  caParMois: Record<string, number>;
-  objectif: number;
-  annee: number;
-  moisActuel: number;
-}) {
-  // Migré de chart.js vers recharts (2026-11-09, allègement pré-HDS). Les mois à venir restent
-  // vides (null) plutôt qu'à 0 € : une barre absente n'est pas un mois sans chiffre d'affaires.
-  const data = MOIS_COURTS.map((mois, i) => ({
-    mois,
-    ca: i <= moisActuel ? (caParMois[`${annee}-${String(i + 1).padStart(2, '0')}`] ?? 0) : null,
-    objectif: objectif > 0 ? objectif : null,
-  }));
-  return (
-    <div style={{ height: 240 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
-          <CartesianGrid vertical={false} stroke="rgba(0,0,0,0.05)" />
-          <XAxis dataKey="mois" tick={{ fontSize: 11, fill: ENCRE_2 }} tickLine={false} axisLine={false} />
-          <YAxis tick={{ fontSize: 11, fill: ENCRE_3 }} tickFormatter={v => `${Number(v).toLocaleString('fr-FR')}`} tickLine={false} axisLine={false} width={48} />
-          <Tooltip
-            cursor={{ fill: 'rgba(43,184,154,0.06)' }}
-            formatter={(value, name) => [value === null || value === undefined ? '—' : euros(Number(value)), name]}
-          />
-          <Bar dataKey="ca" name="Chiffre d'affaires" radius={[6, 6, 0, 0]} maxBarSize={34} isAnimationActive={false}>
-            {data.map((_, i) => <Cell key={i} fill={i === moisActuel ? VERT : VERT_PALE} />)}
-          </Bar>
-          {objectif > 0 && (
-            <Line dataKey="objectif" name="Objectif mensuel" type="linear" stroke={AMBRE} strokeDasharray="5 4"
-              strokeWidth={1.5} dot={false} activeDot={false} isAnimationActive={false} />
-          )}
-        </ComposedChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-function GraphiqueSeances({ semaines }: { semaines: { libelle: string; realisees: number; annulees: number }[] }) {
-  return (
-    <div style={{ height: 240 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={semaines} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
-          <CartesianGrid vertical={false} stroke="rgba(0,0,0,0.05)" />
-          <XAxis dataKey="libelle" tick={{ fontSize: 10, fill: ENCRE_2 }} tickLine={false} axisLine={false} interval={1} />
-          <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: ENCRE_3 }} tickLine={false} axisLine={false} width={28} />
-          <Tooltip cursor={{ fill: 'rgba(43,184,154,0.06)' }} labelFormatter={l => `Semaine du ${l}`} />
-          <Bar dataKey="realisees" name="Réalisées" stackId="s" fill={VERT} maxBarSize={22} isAnimationActive={false}>
-            {/* Semaine en cours, incomplète : plus pâle. */}
-            {semaines.map((_, i) => <Cell key={i} fill={i === semaines.length - 1 ? VERT_PALE : VERT} />)}
-          </Bar>
-          <Bar dataKey="annulees" name="Annulées" stackId="s" fill={ROUGE_PALE} radius={[5, 5, 0, 0]} maxBarSize={22} isAnimationActive={false} />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
 // ─── Résultats des bilans ────────────────────────────────────────────────────
 
 function SectionResultats({ participants }: { participants: Participant[] }) {
@@ -832,54 +798,173 @@ function SectionAssiduite({ lignes, nomDe }: {
   );
 }
 
-// ─── Répartition ─────────────────────────────────────────────────────────────
 
-const COULEURS_CATEGORIES = [VERT, ENCRE_2, AMBRE, '#7FD3BF', '#C9D3DC'];
+// ─── Argent : graphique et origine du CA ─────────────────────────────────────
 
-function SectionRepartition({ participants }: { participants: Participant[] }) {
-  const comptes = new Map(CATEGORIES.map(c => [c, 0]));
-  for (const p of participants) {
-    try {
-      const c = categorieBeneficiaire(p);
-      comptes.set(c, (comptes.get(c) ?? 0) + 1);
-    } catch {
-      comptes.set('Autre', (comptes.get('Autre') ?? 0) + 1);
-    }
-  }
-  const data = CATEGORIES
-    .map((label, i) => ({ label, valeur: comptes.get(label) ?? 0, couleur: COULEURS_CATEGORIES[i] }))
-    .filter(d => d.valeur > 0);
-  if (data.length === 0) {
-    return <p className="text-sm text-gray-400 m-0 py-4">Aucun bénéficiaire suivi.</p>;
-  }
-  const total = participants.length;
+function GraphiqueCA({ mois, objectif, moisCourant }: {
+  mois: { mois: string; facture: number; enPreparation: number }[];
+  objectif: number;
+  moisCourant: string;
+}) {
+  const data = mois.map(m => ({
+    ...m,
+    libelle: MOIS_COURTS[Number(m.mois.slice(5, 7)) - 1] + (m.mois.slice(5, 7) === '01' ? ` ${m.mois.slice(2, 4)}` : ''),
+    objectif: objectif > 0 ? objectif : null,
+  }));
   return (
-    <div className="flex items-center gap-5">
-      <div className="relative flex-shrink-0" style={{ width: 112, height: 112 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={data} dataKey="valeur" nameKey="label" innerRadius="68%" outerRadius="100%"
-              stroke="#fff" strokeWidth={2} isAnimationActive={false}>
-              {data.map(d => <Cell key={d.label} fill={d.couleur} />)}
-            </Pie>
-            <Tooltip formatter={(value, name) => [`${value} bénéficiaire${Number(value) > 1 ? 's' : ''}`, name]} />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="font-heading font-extrabold text-gray-900 text-xl leading-none">{total}</span>
-          <span className="text-[10px] text-gray-400 mt-0.5">suivis</span>
+    <div style={{ height: 240 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+          <CartesianGrid vertical={false} stroke="rgba(0,0,0,0.05)" />
+          <XAxis dataKey="libelle" tick={{ fontSize: 11, fill: ENCRE_2 }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 11, fill: ENCRE_3 }} tickFormatter={v => `${Number(v).toLocaleString('fr-FR')}`} tickLine={false} axisLine={false} width={48} />
+          <Tooltip cursor={{ fill: 'rgba(43,184,154,0.06)' }} formatter={(value, name) => [euros(Number(value ?? 0)), name]} />
+          <Bar dataKey="facture" name="Facturé" stackId="ca" fill={VERT} maxBarSize={34} isAnimationActive={false}>
+            {data.map(d => <Cell key={d.mois} fill={d.mois === moisCourant ? VERT_FONCE : VERT} />)}
+          </Bar>
+          <Bar dataKey="enPreparation" name="En préparation (brouillons)" stackId="ca" fill={VERT_PALE} radius={[6, 6, 0, 0]} maxBarSize={34} isAnimationActive={false} />
+          {objectif > 0 && (
+            <Line dataKey="objectif" name="Objectif mensuel" type="linear" stroke={AMBRE} strokeDasharray="5 4"
+              strokeWidth={1.5} dot={false} activeDot={false} isAnimationActive={false} />
+          )}
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function SectionSourcesCA({ sources, partPremier }: {
+  sources: { cle: string; libelle: string; montant: number; part: number; beneficiaires: number }[];
+  partPremier: number | null;
+}) {
+  if (sources.length === 0) {
+    return <p className="text-sm text-gray-400 m-0 py-4">Aucune facture émise sur les 12 derniers mois.</p>;
+  }
+  const dominante = sources.find(s => s.part >= 50 && s.cle !== 'particuliers');
+  return (
+    <div className="flex flex-col gap-3 flex-1">
+      {sources.slice(0, 6).map(s => (
+        <div key={s.cle}>
+          <div className="flex justify-between items-baseline gap-2 text-xs mb-1.5">
+            <span className="text-gray-700 font-medium truncate">{s.libelle}
+              <span className="text-gray-400 font-normal"> · {s.beneficiaires} bénéf.</span>
+            </span>
+            <span className="flex-shrink-0"><span className="font-semibold text-gray-800">{euros(s.montant)}</span>
+              <span className="text-gray-400"> · {s.part} %</span></span>
+          </div>
+          <div className="h-2 rounded-full overflow-hidden" style={{ background: GRIS }}>
+            <div className="h-full rounded-full" style={{ width: `${Math.max(2, s.part)}%`, background: s.cle === 'particuliers' ? ENCRE_2 : VERT }} />
+          </div>
         </div>
+      ))}
+      <div className="mt-auto pt-2 space-y-1.5">
+        {dominante && (
+          <p className="m-0 text-xs flex items-start gap-1.5" style={{ color: '#B7791F' }}>
+            <AlertTriangle size={13} className="flex-shrink-0 mt-px" />
+            {dominante.libelle} pèse {dominante.part} % de votre chiffre d'affaires : une dépendance à surveiller.
+          </p>
+        )}
+        {partPremier !== null && (
+          <p className="m-0 text-xs text-gray-500">Votre premier bénéficiaire représente {partPremier} % du CA.</p>
+        )}
       </div>
-      <ul className="flex-1 space-y-2 m-0 p-0 list-none min-w-0">
-        {data.map(d => (
-          <li key={d.label} className="flex items-center gap-2 text-xs">
-            <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: d.couleur }} />
-            <span className="text-gray-600 flex-1 truncate">{d.label}</span>
-            <span className="font-semibold text-gray-800">{d.valeur}</span>
-            <span className="text-gray-400 w-9 text-right">{Math.round((d.valeur / total) * 100)} %</span>
-          </li>
-        ))}
-      </ul>
+    </div>
+  );
+}
+
+// ─── Temps ───────────────────────────────────────────────────────────────────
+
+function GraphiqueTemps({ semaines }: { semaines: { libelle: string; heures: number; heuresAnnulees: number }[] }) {
+  return (
+    <div style={{ height: 240 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={semaines} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+          <CartesianGrid vertical={false} stroke="rgba(0,0,0,0.05)" />
+          <XAxis dataKey="libelle" tick={{ fontSize: 10, fill: ENCRE_2 }} tickLine={false} axisLine={false} interval={1} />
+          <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: ENCRE_3 }} tickLine={false} axisLine={false} width={28} unit=" h" />
+          <Tooltip cursor={{ fill: 'rgba(43,184,154,0.06)' }} labelFormatter={l => `Semaine du ${l}`}
+            formatter={(value, name) => [formaterHeures(Number(value ?? 0) * 60), name]} />
+          <Bar dataKey="heures" name="Heures réalisées" stackId="h" fill={VERT} maxBarSize={22} isAnimationActive={false}>
+            {semaines.map((_, i) => <Cell key={i} fill={i === semaines.length - 1 ? VERT_PALE : VERT} />)}
+          </Bar>
+          <Bar dataKey="heuresAnnulees" name="Heures annulées" stackId="h" fill={ROUGE_PALE} radius={[5, 5, 0, 0]} maxBarSize={22} isAnimationActive={false} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function SectionAnnulations({ a, manqueAGagner }: {
+  a: { annulees: number; total: number; minutesPerdues: number; motifs: { motif: string; libelle: string; n: number }[] };
+  manqueAGagner: { montant: number; sansTarif: number };
+}) {
+  if (a.total === 0) return <p className="text-sm text-gray-400 m-0 py-4">Pas encore de séance passée sur la période.</p>;
+  const tauxAnnulation = Math.round((a.annulees / a.total) * 100);
+  const max = Math.max(1, ...a.motifs.map(m => m.n));
+  return (
+    <div className="flex flex-col gap-4 flex-1">
+      <div className="grid grid-cols-3 gap-3">
+        <Mini libelle="Annulées" valeur={`${tauxAnnulation} %`} detail={`${a.annulees} sur ${a.total}`} ton={tauxAnnulation >= 15 ? ROUGE : undefined} />
+        <Mini libelle="Heures perdues" valeur={formaterHeures(a.minutesPerdues)} />
+        <Mini libelle="Non facturé" valeur={euros(manqueAGagner.montant)}
+          detail={manqueAGagner.sansTarif > 0 ? `${manqueAGagner.sansTarif} sans tarif` : 'au tarif du contrat'} />
+      </div>
+      {a.motifs.length > 0 && (
+        <div className="space-y-2">
+          {a.motifs.slice(0, 5).map(m => (
+            <div key={m.motif} className="flex items-center gap-2 text-xs">
+              <span className="w-40 flex-shrink-0 truncate text-gray-600">{m.libelle}</span>
+              <span className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: GRIS }}>
+                <span className="block h-full rounded-full" style={{ width: `${(m.n / max) * 100}%`, background: m.motif === 'non_renseigne' ? ENCRE_3 : ROUGE_PALE }} />
+              </span>
+              <span className="w-6 text-right font-semibold text-gray-700">{m.n}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Par structure ───────────────────────────────────────────────────────────
+
+function TableauStructures({ lignes }: {
+  lignes: { cle: string; libelle: string; beneficiaires: number; minutesMois: number; coursMois: number; presence: number | null; ca12Mois: number }[];
+}) {
+  const th = 'text-left text-xs font-medium text-gray-500 py-2 px-3 whitespace-nowrap';
+  const td = 'py-2.5 px-3 text-sm text-gray-800 whitespace-nowrap';
+  return (
+    <div className="overflow-x-auto -mx-2">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-gray-100">
+            <th className={th}>Origine</th>
+            <th className={`${th} text-right`}>Bénéficiaires suivis</th>
+            <th className={`${th} text-right`}>Heures ce mois</th>
+            <th className={`${th} text-right`}>Cours collectifs ce mois</th>
+            <th className={`${th} text-right`}>Présence 90 j</th>
+            <th className={`${th} text-right`}>CA 12 mois (HT)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lignes.map(l => (
+            <tr key={l.cle} className="border-b border-gray-50 last:border-0">
+              <td className={`${td} font-medium`}>
+                {l.cle === 'particuliers'
+                  ? l.libelle
+                  : <Link to={`/structures/${l.cle}`} className="text-gray-800 hover:text-primary no-underline">{l.libelle}</Link>}
+              </td>
+              <td className={`${td} text-right`}>{l.beneficiaires}</td>
+              <td className={`${td} text-right`}>{l.minutesMois > 0 ? formaterHeures(l.minutesMois) : '—'}</td>
+              <td className={`${td} text-right`}>{l.cle === 'particuliers' ? '' : l.coursMois || '—'}</td>
+              <td className={`${td} text-right`} style={{ color: l.presence !== null && l.presence < SEUIL_ASSIDUITE ? AMBRE : undefined }}>
+                {l.presence === null ? '—' : `${l.presence} %`}
+              </td>
+              <td className={`${td} text-right font-semibold`}>{l.ca12Mois > 0 ? euros(l.ca12Mois) : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -890,6 +975,10 @@ function dateCourte(jour: string): string {
   return new Date(`${jour}T12:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 
+function moisLong(cle: string): string {
+  return MOIS_LONGS[Number(cle.slice(5, 7)) - 1].toLowerCase();
+}
+
 export default function StatsPage() {
   const { participants: rawParticipants } = useParticipants();
   const { seances: rawSeances, patientsARelancer } = useAgenda();
@@ -898,16 +987,26 @@ export default function StatsPage() {
     contratsARenouveler: contratsARenouvelerTous, contratsSansJours: contratsSansJoursTous,
   } = useContrats();
   const { statsPro, sauvegarder } = useStatsPro();
-  // CA réel (factures validées + CA externe saisi), en HT : remplace l'ancienne saisie locale.
-  const caParMois = useCaAnneeEnCours();
+  const { lignes: lignesCA } = useCaDouzeMois();
+  const { brouillons } = useFacturesAValider();
+  const { factures } = useFacturesValidees();
+  const { structures } = useStructures();
+  const { coursCollectifs } = useCoursCollectifs();
   const [objectifsOuverts, setObjectifsOuverts] = useState(false);
 
   const participants = rawParticipants ?? [];
   const seances = rawSeances ?? [];
   const contrats = rawContrats ?? [];
+  const cours = coursCollectifs ?? [];
 
-  // Bénéficiaires suivis (non archivés) : base de tous les blocs, sauf le CA qui vient des factures
-  // et les résultats des bilans, qui gardent tout l'historique.
+  const aujourdhui = dateCivileParis();
+  const annee = Number(aujourdhui.slice(0, 4));
+  const cleMois = aujourdhui.slice(0, 7);
+  const moisIndex = Number(aujourdhui.slice(5, 7)) - 1;
+  const clePrec = moisDecale(cleMois, -1);
+
+  // Bénéficiaires suivis (non archivés) pour l'action et le suivi ; le CA et les résultats des
+  // bilans gardent tout l'historique.
   const suivis = separerParArchivage(participants).actifs;
   const idsSuivis = new Set(suivis.map(p => p.id));
   const seancesSuivies = seances.filter(s => idsSuivis.has(s.participantId));
@@ -915,31 +1014,48 @@ export default function StatsPage() {
   const nomDe = (id: string) => parId.get(id) ?? null;
   const nomComplet = (id: string) => { const p = parId.get(id); return p ? `${p.prenom} ${p.nom}` : '—'; };
 
-  const aujourdhui = dateCivileParis();
-  const annee = Number(aujourdhui.slice(0, 4));
-  const moisIndex = Number(aujourdhui.slice(5, 7)) - 1;
-  const cleMois = aujourdhui.slice(0, 7);
-  const clePrec = moisIndex === 0 ? `${annee - 1}-12` : `${annee}-${String(moisIndex).padStart(2, '0')}`;
+  // ── Argent
+  const douzeMois = derniersMois(aujourdhui, 12);
+  const ca = calculerCaParMois(lignesCA, brouillons, douzeMois);
+  const caCourant = ca[ca.length - 1];
+  const caMoisPrec = ca[ca.length - 2];
+  const prevues = seances.filter(s => s.statut === 'planifiee' && s.date > aujourdhui && s.date.startsWith(cleMois));
+  const debut90 = ajouterJours(aujourdhui, -90);
+  const annulees90 = seances.filter(s => s.statut === 'annulee' && s.date >= debut90 && s.date < aujourdhui);
+  const tarifs = useTarifsDesContrats([...prevues, ...annulees90].map(s => s.contratId).filter((x): x is string => !!x));
+  const valeurPrevue = valeurSeances(prevues, tarifs);
+  const finDeMoisEstimee = caCourant.total + valeurPrevue.montant;
+  const enc = encaissements(factures, aujourdhui);
+  const brouillonsAValider = brouillons.filter(b => b.periode.slice(0, 7) < cleMois);
+  const montantAValider = brouillonsAValider.reduce((t, b) => t + b.totalHt, 0);
 
-  // CA (HT)
-  const caMois = caParMois[cleMois] ?? 0;
-  const caPrecedent = caParMois[clePrec];
-  const caAnnuel = Object.entries(caParMois).filter(([k]) => k.startsWith(`${annee}-`)).reduce((s, [, v]) => s + v, 0);
-  // Tendances sur les périodes terminées : le mois et la semaine en cours, incomplets, feraient
-  // toujours plonger la courbe.
-  const caTendance = Array.from({ length: moisIndex }, (_, i) => caParMois[`${annee}-${String(i + 1).padStart(2, '0')}`] ?? 0);
+  // Ce que rapporte une heure : sur les mois terminés (le mois en cours n'est ni fini ni facturé).
+  const revenuHoraire = (m: string) => {
+    const min = minutesRealisees(seances, cours, `${m}-01`, `${m}-31`);
+    const total = ca.find(x => x.mois === m)?.total ?? 0;
+    return min > 0 && total > 0 ? total / (min / 60) : null;
+  };
+  const minutesMoisPrec = minutesRealisees(seances, cours, `${clePrec}-01`, `${clePrec}-31`);
+  const horairePrec = revenuHoraire(clePrec);
+  const horaireTendance = douzeMois.slice(-7, -1).map(revenuHoraire);
 
-  // Séances
-  const { mois: seancesMois, moisPrecedent: seancesMoisPrec } = seancesMoisADate(seances, aujourdhui);
-  const ecartSeances = seancesMois - seancesMoisPrec;
-  const aVenirCeMois = seances.filter(s => s.statut === 'planifiee' && s.date > aujourdhui && s.date.startsWith(cleMois)).length;
-  const semaines = seancesParSemaine(seances, aujourdhui);
+  const sources = sourcesCA(lignesCA, participants, structures);
+  const partPremier = partPremierBeneficiaire(lignesCA);
 
-  // Présence (30 jours, séances passées seulement)
+  // ── Temps
+  const activite = activiteMoisADate(seances, cours, aujourdhui);
+  const ecartMinutes = activite.minutes - activite.minutesMoisPrecedent;
+  const sem = calculerSemaines(seances, cours, aujourdhui);
   const presence = presenceRecente(seances, aujourdhui);
-  const presenceTendance = semaines.slice(0, -1).map(s => taux(s.realisees, s.annulees));
+  const annul = calculerAnnulations(seances, aujourdhui);
+  const manqueAGagner = valeurSeances(annulees90, tarifs);
 
-  // À faire : mêmes règles que l'accueil (Dashboard.tsx)
+  // ── Bénéficiaires
+  const pf = calculerPortefeuille(contrats, aujourdhui);
+  const avecContrat = suivis.filter(p => contratActifDeParticipant(p.id));
+  const bilansAJour = avecContrat.filter(p => !bilanAFaire(p.bilans, aujourdhui)).length;
+
+  // ── À faire : mêmes règles que l'accueil (Dashboard.tsx)
   const contratsARenouveler = contratsDesBeneficiairesActifs(contratsARenouvelerTous, participants);
   const contratsSansJours = contratsDesBeneficiairesActifs(contratsSansJoursTous, participants);
   const groupesAFaire = [
@@ -965,34 +1081,44 @@ export default function StatsPage() {
     },
   ];
 
-  const patientsActifs = participants.filter(p => contratActifDeParticipant(p.id)).length;
+  const lignesStructures = structures.length > 0
+    ? parStructure({ structures, suivis, seances, cours, lignes: lignesCA, participants, aujourdhui })
+    : [];
 
   return (
     <PageWrapper>
       {/* ── En-tête ────────────────────────────────────────────────── */}
-      <header className="flex flex-wrap items-end justify-between gap-4 mb-6">
+      <header className="flex flex-wrap items-end justify-between gap-4 mb-2">
         <div>
           <p className="m-0 text-[13px] font-bold" style={{ color: '#147A64' }}>{MOIS_LONGS[moisIndex]} {annee}</p>
           <h1 className="font-heading font-extrabold m-0 mt-0.5 text-gray-900" style={{ fontSize: 28, letterSpacing: '-0.3px' }}>
             Mes statistiques
           </h1>
           <p className="m-0 mt-1 text-sm text-gray-500">
-            {suivis.length} bénéficiaire{suivis.length > 1 ? 's' : ''} suivi{suivis.length > 1 ? 's' : ''} · {patientsActifs} avec un contrat actif
+            {pf.actifs} bénéficiaire{pf.actifs > 1 ? 's' : ''} avec un contrat actif
+            {structures.length > 0 && <> · {structures.length} structure{structures.length > 1 ? 's' : ''}</>}
           </p>
         </div>
         <FormulaireObjectifs statsPro={statsPro} onSave={sauvegarder} ouvert={objectifsOuverts} setOuvert={setObjectifsOuverts} />
       </header>
 
       {/* ── Chiffres clés ──────────────────────────────────────────── */}
-      <div className="grid gap-4 mb-5 sm:grid-cols-3">
+      <TitreSection detail="Montants HT sauf « À encaisser » (TTC)">Ce mois-ci</TitreSection>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <ChiffreCle
-          libelle={`Chiffre d'affaires de ${MOIS_LONGS[moisIndex].toLowerCase()} (HT)`}
-          valeur={euros(caMois)}
-          detail={caPrecedent !== undefined ? `${MOIS_LONGS[moisIndex === 0 ? 11 : moisIndex - 1]} : ${euros(caPrecedent)}` : null}
-          valeurs={caTendance}
+          libelle={`Réalisé en ${moisLong(cleMois)}`}
+          valeur={euros(caCourant.total)}
+          detail={
+            <>
+              Fin de mois estimée : <span className="font-semibold text-gray-700">{euros(finDeMoisEstimee)}</span>
+              {valeurPrevue.valorisees > 0 && <> avec {valeurPrevue.valorisees} séance{valeurPrevue.valorisees > 1 ? 's' : ''} prévue{valeurPrevue.valorisees > 1 ? 's' : ''}</>}
+              {valeurPrevue.sansTarif > 0 && <span style={{ color: '#B7791F' }}> · {valeurPrevue.sansTarif} sans tarif, non comptée{valeurPrevue.sansTarif > 1 ? 's' : ''}</span>}
+            </>
+          }
+          valeurs={ca.slice(0, -1).map(m => m.total)}
         >
           {statsPro.objectifMensuel > 0
-            ? <JaugeObjectif realise={caMois} objectif={statsPro.objectifMensuel} libelle="Objectif du mois" />
+            ? <JaugeObjectif realise={caCourant.total} objectif={statsPro.objectifMensuel} libelle="Objectif du mois" />
             : (
               <button onClick={() => setObjectifsOuverts(true)}
                 className="mt-3 self-start inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
@@ -1002,46 +1128,62 @@ export default function StatsPage() {
         </ChiffreCle>
 
         <ChiffreCle
-          libelle={`Séances réalisées en ${MOIS_LONGS[moisIndex].toLowerCase()}`}
-          valeur={String(seancesMois)}
+          libelle="À encaisser"
+          valeur={euros(enc.resteDu)}
+          detail={enc.nbAttente > 0
+            ? `${enc.nbAttente} facture${enc.nbAttente > 1 ? 's' : ''} émise${enc.nbAttente > 1 ? 's' : ''} non réglée${enc.nbAttente > 1 ? 's' : ''}`
+            : 'Toutes vos factures émises sont réglées'}
+        >
+          <div className="mt-2 space-y-1 text-xs">
+            {enc.nbEnRetard > 0 && (
+              <Link to="/factures" className="block font-medium hover:underline" style={{ color: ROUGE }}>
+                dont {euros(enc.enRetard)} en retard ({enc.nbEnRetard} facture{enc.nbEnRetard > 1 ? 's' : ''})
+              </Link>
+            )}
+            {brouillonsAValider.length > 0 && (
+              <Link to="/factures/a-valider" className="block font-medium hover:underline" style={{ color: '#B7791F' }}>
+                + {euros(montantAValider)} à valider ({brouillonsAValider.length} brouillon{brouillonsAValider.length > 1 ? 's' : ''})
+              </Link>
+            )}
+            {enc.delaiMoyen !== null && <div className="text-gray-500">Payé en {enc.delaiMoyen} jours en moyenne</div>}
+          </div>
+        </ChiffreCle>
+
+        <ChiffreCle
+          libelle={`Heures de séance en ${moisLong(cleMois)}`}
+          valeur={formaterHeures(activite.minutes)}
           detail={
             <>
-              {ecartSeances === 0
+              {ecartMinutes === 0
                 ? 'Autant que le mois dernier à la même date'
                 : (
                   <>
-                    <span className="font-semibold" style={{ color: ecartSeances > 0 ? VERT_FONCE : undefined }}>
-                      {ecartSeances > 0 ? '+' : '−'}{Math.abs(ecartSeances)}
-                    </span>{' '}
-                    par rapport au mois dernier à la même date
+                    <span className="font-semibold" style={{ color: ecartMinutes > 0 ? VERT_FONCE : undefined }}>
+                      {ecartMinutes > 0 ? '+' : '−'}{formaterHeures(Math.abs(ecartMinutes))}
+                    </span>{' '}par rapport au mois dernier à la même date
                   </>
                 )}
-              {aVenirCeMois > 0 && <> · {aVenirCeMois} à venir</>}
+              {activite.minutesPrevues > 0 && <> · {formaterHeures(activite.minutesPrevues)} encore prévues</>}
             </>
           }
-          valeurs={semaines.slice(0, -1).map(s => s.realisees)}
+          valeurs={sem.slice(0, -1).map(s => s.heures)}
         />
 
         <ChiffreCle
-          libelle="Présence sur 30 jours"
-          valeur={presence.taux === null ? '—' : `${presence.taux} %`}
-          detail={presence.taux === null
-            ? 'Aucune séance passée sur la période'
-            : `${presence.annulees} annulation${presence.annulees > 1 ? 's' : ''} sur ${presence.realisees + presence.annulees} séances`}
-          valeurs={presenceTendance}
-        >
-          {presence.nonPointees > 0 && (
-            <Link to="/agenda" className="mt-2 text-xs font-medium hover:underline" style={{ color: '#B7791F' }}>
-              {presence.nonPointees} séance{presence.nonPointees > 1 ? 's' : ''} passée{presence.nonPointees > 1 ? 's' : ''} à pointer
-            </Link>
-          )}
-        </ChiffreCle>
+          libelle="Ce que rapporte une heure de séance"
+          valeur={horairePrec === null ? '—' : `${Math.round(horairePrec)} €/h`}
+          detail={horairePrec === null
+            ? `Pas assez de données pour ${moisLong(clePrec)}`
+            : `En ${moisLong(clePrec)} : ${euros(caMoisPrec.total)} pour ${formaterHeures(minutesMoisPrec)} de séance, trajets non comptés`}
+          valeurs={horaireTendance}
+        />
       </div>
 
-      {/* ── À faire ────────────────────────────────────────────────── */}
-      <SectionAFaire groupes={groupesAFaire} />
+      <div className="mt-5">
+        <SectionAFaire groupes={groupesAFaire} />
+      </div>
 
-      {/* ── Factures à envoyer ─────────────────────────────────────── */}
+      {/* ── Factures à envoyer (ancienne ébauche) ──────────────────── */}
       {/* Ancienne ébauche masquée le 2026-10-05 (voir lib/featuresFacturation.ts). Ne pas
           monter SectionFactures suffit à couper aussi sa génération automatique, qui
           écrivait dans factures_suivi à chaque ouverture de cette page. */}
@@ -1054,49 +1196,88 @@ export default function StatsPage() {
         />
       )}
 
-      {/* ── Graphiques ─────────────────────────────────────────────── */}
-      <div className="grid gap-4 mb-5 lg:grid-cols-5">
+      {/* ── Chiffre d'affaires ─────────────────────────────────────── */}
+      <TitreSection detail="12 derniers mois, HT">Chiffre d'affaires</TitreSection>
+      <div className="grid gap-4 lg:grid-cols-5">
         <Carte
           className="lg:col-span-3"
-          titre={`Chiffre d'affaires ${annee} (HT)`}
+          titre="Par mois"
           sousTitre={<Legende elements={[
-            { libelle: 'Réalisé', couleur: VERT },
+            { libelle: 'Facturé', couleur: VERT },
+            { libelle: 'En préparation', couleur: VERT_PALE },
             ...(statsPro.objectifMensuel > 0 ? [{ libelle: 'Objectif mensuel', couleur: AMBRE, pointille: true }] : []),
           ]} />}
           droite={
             <div className="text-right flex-shrink-0">
-              <div className="text-xs text-gray-400">Depuis janvier</div>
-              <div className="text-sm font-bold text-gray-900">{euros(caAnnuel)}</div>
-              {statsPro.objectifAnnuel > 0 && (
-                <div className="text-xs text-gray-400">sur {euros(statsPro.objectifAnnuel)} ({Math.round((caAnnuel / statsPro.objectifAnnuel) * 100)} %)</div>
+              <div className="text-xs text-gray-400">Sur 12 mois</div>
+              <div className="text-sm font-bold text-gray-900">{euros(ca.reduce((t, m) => t + m.total, 0))}</div>
+              {statsPro.objectifAnnuel > 0 && (() => {
+                const depuisJanvier = ca.filter(m => m.mois.startsWith(`${annee}-`)).reduce((t, m) => t + m.total, 0);
+                return <div className="text-xs text-gray-400">{annee} : {euros(depuisJanvier)} sur {euros(statsPro.objectifAnnuel)} ({Math.round((depuisJanvier / statsPro.objectifAnnuel) * 100)} %)</div>;
+              })()}
+            </div>
+          }
+        >
+          <ErrorBoundary>
+            <GraphiqueCA mois={ca} objectif={statsPro.objectifMensuel ?? 0} moisCourant={cleMois} />
+          </ErrorBoundary>
+        </Carte>
+
+        <Carte className="lg:col-span-2" titre="D'où il vient" sousTitre="Factures émises, par origine des bénéficiaires">
+          <SectionSourcesCA sources={sources} partPremier={partPremier} />
+        </Carte>
+      </div>
+
+      {/* ── Temps ──────────────────────────────────────────────────── */}
+      <TitreSection detail="Séances individuelles et cours collectifs">Votre temps</TitreSection>
+      <div className="grid gap-4 lg:grid-cols-5">
+        <Carte
+          className="lg:col-span-3"
+          titre="Heures de séance par semaine"
+          sousTitre={<Legende elements={[
+            { libelle: 'Réalisées', couleur: VERT }, { libelle: 'Annulées', couleur: ROUGE_PALE }, { libelle: 'Semaine en cours', couleur: VERT_PALE },
+          ]} />}
+          droite={
+            <div className="text-right flex-shrink-0">
+              <div className="text-xs text-gray-400">Présence sur 30 jours</div>
+              <div className="text-sm font-bold text-gray-900">{presence.taux === null ? '—' : `${presence.taux} %`}</div>
+              {presence.nonPointees > 0 && (
+                <Link to="/agenda" className="text-xs font-medium hover:underline" style={{ color: '#B7791F' }}>
+                  {presence.nonPointees} séance{presence.nonPointees > 1 ? 's' : ''} à pointer
+                </Link>
               )}
             </div>
           }
         >
           <ErrorBoundary>
-            <GraphiqueCA caParMois={caParMois} objectif={statsPro.objectifMensuel ?? 0} annee={annee} moisActuel={moisIndex} />
+            <GraphiqueTemps semaines={sem} />
           </ErrorBoundary>
         </Carte>
 
-        <Carte
-          className="lg:col-span-2"
-          titre="Séances par semaine"
-          sousTitre={<Legende elements={[
-            { libelle: 'Réalisées', couleur: VERT }, { libelle: 'Annulées', couleur: ROUGE_PALE }, { libelle: 'Semaine en cours', couleur: VERT_PALE },
-          ]} />}
-        >
-          <ErrorBoundary>
-            <GraphiqueSeances semaines={semaines} />
-          </ErrorBoundary>
+        <Carte className="lg:col-span-2" titre="Annulations" sousTitre="Séances individuelles des 90 derniers jours">
+          <SectionAnnulations a={annul} manqueAGagner={manqueAGagner} />
         </Carte>
       </div>
 
-      {/* ── Bilans, assiduité, répartition ─────────────────────────── */}
-      <div className="grid gap-4 mb-5 md:grid-cols-2 xl:grid-cols-3">
-        <Carte titre="Résultats des bilans" sousTitre="Entre le premier et le dernier bilan de chaque bénéficiaire">
-          <ErrorBoundary>
-            <SectionResultats participants={participants} />
-          </ErrorBoundary>
+      {/* ── Bénéficiaires ──────────────────────────────────────────── */}
+      <TitreSection detail="Bénéficiaires suivis">Vos bénéficiaires</TitreSection>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <Carte titre="Portefeuille" sousTitre="Sur les 90 derniers jours">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+            <Mini libelle="Contrat actif" valeur={String(pf.actifs)} />
+            <Mini libelle="Ancienneté moyenne" valeur={pf.ancienneteMois === null ? '—' : `${pf.ancienneteMois} mois`} />
+            <Mini libelle="Arrivées" valeur={`+${pf.arrivees}`} ton={pf.arrivees > 0 ? VERT_FONCE : undefined} detail="premier contrat" />
+            <Mini libelle="Fins de suivi" valeur={String(pf.departs)} detail="dernier contrat terminé" />
+          </div>
+          <div className="mt-5 pt-4 border-t border-gray-100">
+            <div className="flex justify-between text-xs mb-1.5">
+              <span className="text-gray-600">Bilans à jour (moins de 85 jours)</span>
+              <span className="font-semibold text-gray-800">{bilansAJour} sur {avecContrat.length}</span>
+            </div>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: GRIS }}>
+              <div className="h-full rounded-full" style={{ width: `${avecContrat.length > 0 ? (bilansAJour / avecContrat.length) * 100 : 0}%`, background: VERT }} />
+            </div>
+          </div>
         </Carte>
 
         <Carte titre="Assiduité à surveiller" sousTitre={`Moins de ${SEUIL_ASSIDUITE} % de présence sur 90 jours`}>
@@ -1105,12 +1286,22 @@ export default function StatsPage() {
           </ErrorBoundary>
         </Carte>
 
-        <Carte titre="Répartition des bénéficiaires" sousTitre="Bénéficiaires suivis">
+        <Carte titre="Résultats des bilans" sousTitre="Entre le premier et le dernier bilan de chaque bénéficiaire">
           <ErrorBoundary>
-            <SectionRepartition participants={suivis} />
+            <SectionResultats participants={participants} />
           </ErrorBoundary>
         </Carte>
       </div>
+
+      {/* ── Structures ─────────────────────────────────────────────── */}
+      {lignesStructures.length > 0 && (
+        <>
+          <TitreSection detail="Pour rendre compte à chaque structure">Par structure</TitreSection>
+          <Carte titre="Activité par origine" sousTitre="Heures et cours du mois en cours, présence sur 90 jours, CA facturé sur 12 mois" className="mb-5">
+            <TableauStructures lignes={lignesStructures} />
+          </Carte>
+        </>
+      )}
     </PageWrapper>
   );
 }
