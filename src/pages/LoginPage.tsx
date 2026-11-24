@@ -53,8 +53,10 @@ export default function LoginPage({ onLogin }: Props) {
       <AuthLeftPanel />
 
       {/* ── Panneau droit — formulaire ─────────────────────────────── */}
+      {/* Colonne : la carte, puis les liens légaux dessous. En ligne (défaut de flex), les
+          liens se plaçaient à droite de la carte, coincés contre le bord (2026-11-24). */}
       <div className="login-right-panel" style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         padding: '32px 48px 32px 16px',
       }}>
         <div style={{
