@@ -50,7 +50,7 @@ export default function AuthLeftPanel() {
         </h1>
 
         <p style={{ fontSize: 16, color: '#5a7a72', marginTop: 22, fontWeight: 400, lineHeight: 1.65, maxWidth: 400 }}>
-          Bilans fonctionnels, programmes et comptes-rendus centralisés — pour les enseignants en APA libéral.
+          Bilans fonctionnels, programmes, espace bénéficiaire et factures, réunis pour les enseignants en APA.
         </p>
 
         {/* Chips flottants */}
@@ -77,7 +77,7 @@ export default function AuthLeftPanel() {
             background: '#0f2e2a', borderRadius: 16, padding: '14px 18px',
             boxShadow: '0 8px 32px rgba(15,46,42,0.22)',
           }}>
-            <p style={{ fontSize: 10.5, fontWeight: 600, color: 'rgba(255,255,255,0.42)', letterSpacing: '0.09em', textTransform: 'uppercase' }}>Chair Stand</p>
+            <p style={{ fontSize: 10.5, fontWeight: 600, color: 'rgba(255,255,255,0.42)', letterSpacing: '0.09em', textTransform: 'uppercase' }}>Lever de chaise</p>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 6 }}>
               <span style={{ fontSize: 32, fontWeight: 800, color: '#fff', letterSpacing: '-1.5px', lineHeight: 1 }}>12</span>
               <span style={{ fontSize: 13, color: '#0d9488', fontWeight: 600 }}>rép.</span>
@@ -107,7 +107,9 @@ export default function AuthLeftPanel() {
             </div>
           </div>
 
-          {/* Chip 4 — IA */}
+          {/* Chip 4 — comparaison entre bilans. Remplace l'ancienne pastille « Synthèse IA »
+              (2026-11-24, décision de Lorenzo : aucune mention de l'IA tant que l'assistant
+              n'est pas confirmé, sujet sensible pour les données de santé). */}
           <div className="login-chip-4" style={{
             position: 'absolute', top: 138, left: 256,
             background: '#e6f4f2', borderRadius: 14, padding: '11px 14px',
@@ -118,29 +120,30 @@ export default function AuthLeftPanel() {
               <div style={{ width: 18, height: 18, borderRadius: 6, background: '#0d9488', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5h6M4.5 1.5v6" stroke="white" strokeWidth="1.6" strokeLinecap="round" /></svg>
               </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#0d9488', letterSpacing: '0.02em' }}>Synthèse IA</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#0d9488', letterSpacing: '0.02em' }}>Depuis le bilan initial</span>
             </div>
-            <p style={{ fontSize: 11, color: '#0f2e2a', lineHeight: 1.55, fontWeight: 400 }}>Équilibre statique à travailler en priorité.</p>
+            <p style={{ fontSize: 11, color: '#0f2e2a', lineHeight: 1.55, fontWeight: 400 }}>+5 levers de chaise, TUG −3 s.</p>
           </div>
 
         </div>
       </div>
 
-      {/* Stats footer */}
+      {/* Repères vérifiables (2026-11-24) : remplacent des chiffres inventés
+          (127 bénéficiaires, 48 bilans/mois, 4.9 ★) qu'aucune donnée ne justifiait. */}
       <div className="login-stats-fadein" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
         <div style={{ paddingRight: 28 }}>
-          <p style={{ fontSize: 24, fontWeight: 800, color: '#0f2e2a', letterSpacing: '-0.8px', lineHeight: 1 }}>127</p>
-          <p style={{ fontSize: 10.5, fontWeight: 600, color: '#94a3b8', marginTop: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>bénéficiaires suivis</p>
+          <p style={{ fontSize: 24, fontWeight: 800, color: '#0f2e2a', letterSpacing: '-0.8px', lineHeight: 1 }}>13</p>
+          <p style={{ fontSize: 10.5, fontWeight: 600, color: '#94a3b8', marginTop: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>tests de bilan intégrés</p>
         </div>
         <div style={{ width: 1, height: 36, background: '#cdd8d2' }} />
         <div style={{ padding: '0 28px' }}>
-          <p style={{ fontSize: 24, fontWeight: 800, color: '#0f2e2a', letterSpacing: '-0.8px', lineHeight: 1 }}>48</p>
-          <p style={{ fontSize: 10.5, fontWeight: 600, color: '#94a3b8', marginTop: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>bilans / mois</p>
+          <p style={{ fontSize: 24, fontWeight: 800, color: '#0f2e2a', letterSpacing: '-0.8px', lineHeight: 1 }}>150+</p>
+          <p style={{ fontSize: 10.5, fontWeight: 600, color: '#94a3b8', marginTop: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>exercices</p>
         </div>
         <div style={{ width: 1, height: 36, background: '#cdd8d2' }} />
         <div style={{ paddingLeft: 28 }}>
-          <p style={{ fontSize: 24, fontWeight: 800, color: '#0d9488', letterSpacing: '-0.8px', lineHeight: 1 }}>4.9 ★</p>
-          <p style={{ fontSize: 10.5, fontWeight: 600, color: '#94a3b8', marginTop: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>satisfaction</p>
+          <p style={{ fontSize: 24, fontWeight: 800, color: '#0d9488', letterSpacing: '-0.8px', lineHeight: 1 }}>Europe</p>
+          <p style={{ fontSize: 10.5, fontWeight: 600, color: '#94a3b8', marginTop: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>données chiffrées</p>
         </div>
       </div>
 
