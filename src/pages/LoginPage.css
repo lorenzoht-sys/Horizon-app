@@ -81,7 +81,9 @@
   .login-panel-left { display: none !important; }
   .login-right-panel {
     padding: 24px 16px !important;
-    align-items: flex-start !important;
+    /* Colonne depuis le 2026-11-24 : la carte en haut, pleine largeur, liens dessous. */
+    justify-content: flex-start !important;
+    align-items: stretch !important;
     padding-top: 40px !important;
   }
 }
