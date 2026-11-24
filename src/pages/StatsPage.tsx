@@ -812,7 +812,7 @@ function GraphiqueCA({ mois, objectif, moisCourant }: {
     objectif: objectif > 0 ? objectif : null,
   }));
   return (
-    <div style={{ height: 240 }}>
+    <div style={{ height: 240 }} data-testid="graphique">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
           <CartesianGrid vertical={false} stroke="rgba(0,0,0,0.05)" />
@@ -876,7 +876,7 @@ function SectionSourcesCA({ sources, partPremier }: {
 
 function GraphiqueTemps({ semaines }: { semaines: { libelle: string; heures: number; heuresAnnulees: number }[] }) {
   return (
-    <div style={{ height: 240 }}>
+    <div style={{ height: 240 }} data-testid="graphique">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={semaines} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
           <CartesianGrid vertical={false} stroke="rgba(0,0,0,0.05)" />
