@@ -3,7 +3,7 @@ import type { Bilan, Seance, TarifContrat } from '../types';
 import {
   ajouterJours, lundiDe, moisDecale, derniersMois, formaterHeures, presenceRecente, activiteMoisADate,
   semaines, caParMois, encaissements, valeurSeances, annulations, sourcesCA, partPremierBeneficiaire,
-  portefeuille, parStructure, assiduiteParBeneficiaire, resultatsParTest,
+  portefeuille, parStructure, assiduiteParBeneficiaire, resultatsParTest, phrasesDuMois,
 } from './statistiques';
 
 const JOUR = '2026-11-24'; // mardi
@@ -226,5 +226,28 @@ describe('resultatsParTest', () => {
   });
   it('omet les tests sans bénéficiaire comparable', () => {
     expect(resultatsParTest([{ bilans: [bilan('2026-01-01', { tug3m: 10 })] }])).toEqual([]);
+  });
+});
+
+describe('phrasesDuMois', () => {
+  // toLocaleString('fr-FR') sépare les milliers par une espace fine insécable.
+  const lire = (p: string[]) => p.map(x => x.replace(/\u202f/g, ' '));
+  const base = { mois: 'novembre', minutes: 600, minutesMoisPrecedent: 500, realise: 2560, objectif: 4000, presence: 91, progressent: 3, arrivees: 1 };
+  it('raconte un bon mois', () => {
+    expect(lire(phrasesDuMois(base))).toEqual([
+      'Novembre avance bien : 10 h de séance et 2 560 € déjà réalisés, soit 64 % de votre objectif.',
+      'Vos bénéficiaires sont fidèles au rendez-vous : 91 % de présence sur 30 jours.',
+      '3 bénéficiaires ont progressé à leur dernier bilan, et 1 nouvelle personne vous a rejoint en 3 mois.',
+    ]);
+  });
+  it('dit une baisse avec une piste, sans objectif ni progrès', () => {
+    expect(lire(phrasesDuMois({ ...base, minutesMoisPrecedent: 900, objectif: 0, presence: 70, progressent: 0, arrivees: 0 }))).toEqual([
+      'Novembre est un peu plus calme que le mois dernier : 10 h de séance et 2 560 € déjà réalisés.',
+      'La présence a baissé (70 % sur 30 jours) : un petit message aux absents aide souvent à renouer.',
+    ]);
+  });
+  it('accueille un mois qui commence', () => {
+    expect(phrasesDuMois({ ...base, minutes: 0, presence: null, progressent: 0, arrivees: 0 }))
+      .toEqual(['Novembre commence : vos premières séances vont s’afficher ici.']);
   });
 });

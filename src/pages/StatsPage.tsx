@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import {
   Edit3, ChevronDown, ChevronUp, CheckCircle, RefreshCw, ClipboardList, FileClock,
-  CalendarX2, UserRoundX, Target, AlertTriangle,
+  CalendarX2, UserRoundX, Target, AlertTriangle, Sparkles,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import PageWrapper from '../components/layout/PageWrapper';
@@ -29,12 +29,12 @@ import { chargerTarifsContrat, useTarifsDesContrats } from '../hooks/useTarifsCo
 import { trouverTarifApplicable, totalFactureSeance, dateCivileParis } from '../lib/tarifsContrats';
 import { useCoursCollectifs } from '../hooks/useCoursCollectifs';
 import { datesCoursCollectifsIndividuelFacturables } from '../lib/coursCollectifs';
-import { bilanAFaire, echeanceBilan } from '../lib/tableauDeBord';
+import { bilanAFaire, echeanceBilan, progresDepuisInitial, type Progres } from '../lib/tableauDeBord';
 import {
   presenceRecente, activiteMoisADate, semaines as calculerSemaines, assiduiteParBeneficiaire, resultatsParTest,
   caParMois as calculerCaParMois, encaissements, valeurSeances, annulations as calculerAnnulations, sourcesCA,
   partPremierBeneficiaire, portefeuille as calculerPortefeuille, parStructure, derniersMois, moisDecale,
-  minutesRealisees, formaterHeures, ajouterJours,
+  minutesRealisees, formaterHeures, ajouterJours, phrasesDuMois,
 } from '../lib/statistiques';
 
 // Page « Mes stats » refondue le 2026-11-24 pour l'enseignant APA indépendant qui travaille aussi
@@ -709,7 +709,7 @@ function SectionAFaire({ groupes }: {
       <div className="rounded-2xl border px-5 py-3.5 mb-5 flex items-center gap-3 text-sm font-medium"
         style={{ background: '#E6F5F1', borderColor: VERT_PALE, color: VERT_FONCE }}>
         <CheckCircle size={18} />
-        Rien à rattraper : bilans, contrats et séances sont à jour.
+        Rien à rattraper : bilans, contrats et séances sont à jour. Bien joué !
       </div>
     );
   }
@@ -727,7 +727,7 @@ function SectionAFaire({ groupes }: {
 function SectionResultats({ participants }: { participants: Participant[] }) {
   const resultats = resultatsParTest(participants);
   if (resultats.length === 0) {
-    return <p className="text-sm text-gray-400 m-0 py-4">Il faut au moins deux bilans d'un même bénéficiaire pour voir des résultats.</p>;
+    return <p className="text-sm text-gray-400 m-0 py-4">Les résultats apparaîtront dès le deuxième bilan d'un bénéficiaire : Horizon compare chaque test au premier.</p>;
   }
   return (
     <div className="space-y-3.5">
@@ -763,12 +763,12 @@ function SectionAssiduite({ lignes, nomDe }: {
 }) {
   const aSurveiller = lignes.filter(l => l.taux < SEUIL_ASSIDUITE).slice(0, 6);
   if (lignes.length === 0) {
-    return <p className="text-sm text-gray-400 m-0 py-4">Pas encore assez de séances passées pour mesurer l'assiduité.</p>;
+    return <p className="text-sm text-gray-400 m-0 py-4">L'assiduité se mesurera après quelques séances passées.</p>;
   }
   if (aSurveiller.length === 0) {
     return (
       <p className="text-sm m-0 py-4" style={{ color: VERT_FONCE }}>
-        Tous vos bénéficiaires viennent à au moins {SEUIL_ASSIDUITE} % de leurs séances.
+        Tout le monde est fidèle au rendez-vous : chacun vient à au moins {SEUIL_ASSIDUITE} % de ses séances.
       </p>
     );
   }
@@ -838,7 +838,7 @@ function SectionSourcesCA({ sources, partPremier }: {
   partPremier: number | null;
 }) {
   if (sources.length === 0) {
-    return <p className="text-sm text-gray-400 m-0 py-4">Aucune facture émise sur les 12 derniers mois.</p>;
+    return <p className="text-sm text-gray-400 m-0 py-4">Vos premières factures émises montreront ici d'où vient votre chiffre d'affaires.</p>;
   }
   const dominante = sources.find(s => s.part >= 50 && s.cle !== 'particuliers');
   return (
@@ -969,6 +969,53 @@ function TableauStructures({ lignes }: {
   );
 }
 
+// ─── Le mois en quelques mots ────────────────────────────────────────────────
+
+function BandeauDuMois({ prenom, phrases, progres }: {
+  prenom: string;
+  phrases: string[];
+  progres: { participant: Participant; progres: Progres }[];
+}) {
+  return (
+    <section className="rounded-3xl p-6 mt-5 grid gap-5 lg:grid-cols-5 items-center"
+      style={{ background: 'linear-gradient(135deg, #E6F5F1 0%, #F3FAF8 60%, #FFFFFF 100%)', border: `1px solid ${VERT_PALE}` }}>
+      <div className="lg:col-span-3">
+        <div className="flex items-center gap-2 text-sm font-bold" style={{ color: '#147A64' }}>
+          <Sparkles size={16} />
+          {prenom ? `Bonjour ${prenom}, voici votre mois` : 'Votre mois en quelques mots'}
+        </div>
+        <div className="mt-2 space-y-1.5">
+          {phrases.map((p, i) => (
+            <p key={i} className={`m-0 leading-relaxed ${i === 0 ? 'text-[17px] font-semibold text-gray-900' : 'text-[15px]'}`} style={i === 0 ? undefined : { color: '#3D4C5A' }}>{p}</p>
+          ))}
+        </div>
+      </div>
+      {progres.length > 0 && (
+        <div className="lg:col-span-2">
+          <div className="text-xs font-semibold mb-2" style={{ color: ENCRE_2 }}>Ils ont progressé ces 3 derniers mois</div>
+          <ul className="list-none m-0 p-0 grid gap-2">
+            {progres.map(({ participant: p, progres: g }) => (
+              <li key={p.id}>
+                <Link to={`/participant/${p.id}/comparaison`} className="flex items-center gap-3 bg-white rounded-2xl px-3.5 py-2.5 no-underline shadow-sm hover:shadow transition-shadow">
+                  <span className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ background: '#E6F5F1', color: VERT_FONCE }}>
+                    {(p.prenom?.[0] ?? '?').toUpperCase()}{(p.nom?.[0] ?? '?').toUpperCase()}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm text-gray-800 truncate">
+                      <span className="font-semibold">{p.prenom}</span> : <span className="font-extrabold" style={{ color: '#147A64' }}>{g.delta}</span> {g.test}
+                    </span>
+                    <span className="block text-xs text-gray-500 truncate">{g.sens}</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 function dateCourte(jour: string): string {
@@ -1055,6 +1102,19 @@ export default function StatsPage() {
   const avecContrat = suivis.filter(p => contratActifDeParticipant(p.id));
   const bilansAJour = avecContrat.filter(p => !bilanAFaire(p.bilans, aujourdhui)).length;
 
+  // Le mois en quelques mots : les progrès RÉCENTS (dernier bilan de moins de 90 jours), pour ne pas
+  // répéter l'accueil, qui montre les progrès depuis le bilan initial sans condition de date.
+  const progresRecents = suivis
+    .filter(p => p.bilans.some(b => b.date.slice(0, 10) >= debut90))
+    .map(p => ({ participant: p, progres: progresDepuisInitial(p.bilans) }))
+    .filter((x): x is { participant: Participant; progres: Progres } => x.progres !== null);
+  const phrases = phrasesDuMois({
+    mois: moisLong(cleMois), minutes: activite.minutes, minutesMoisPrecedent: activite.minutesMoisPrecedent,
+    realise: caCourant.total, objectif: statsPro.objectifMensuel ?? 0, presence: presence.taux,
+    progressent: progresRecents.length, arrivees: pf.arrivees,
+  });
+  const prenomPraticien = (chargerSettingsPraticien().prenom ?? '').trim();
+
   // ── À faire : mêmes règles que l'accueil (Dashboard.tsx)
   const contratsARenouveler = contratsDesBeneficiairesActifs(contratsARenouvelerTous, participants);
   const contratsSansJours = contratsDesBeneficiairesActifs(contratsSansJoursTous, participants);
@@ -1101,6 +1161,8 @@ export default function StatsPage() {
         </div>
         <FormulaireObjectifs statsPro={statsPro} onSave={sauvegarder} ouvert={objectifsOuverts} setOuvert={setObjectifsOuverts} />
       </header>
+
+      <BandeauDuMois prenom={prenomPraticien} phrases={phrases} progres={progresRecents.slice(0, 3)} />
 
       {/* ── Chiffres clés ──────────────────────────────────────────── */}
       <TitreSection detail="Montants HT sauf « À encaisser » (TTC)">Ce mois-ci</TitreSection>

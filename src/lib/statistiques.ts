@@ -528,3 +528,50 @@ export function resultatsParTest(participants: readonly Pick<Participant, 'bilan
     .filter(r => r.total > 0)
     .sort((a, b) => b.total - a.total || b.progressent / b.total - a.progressent / a.total);
 }
+
+// ─── Le mois en quelques mots ────────────────────────────────────────────────
+
+/**
+ * Le mois raconté en deux ou trois phrases, sur le ton de l'accueil (2026-11-24, demande de Lorenzo :
+ * « un côté humain, sympa »). Encourageant mais honnête : une baisse se dit, avec une piste, jamais
+ * avec un reproche. Ne parle que de ce qui est connu (pas d'objectif : pas de pourcentage).
+ */
+export function phrasesDuMois(m: {
+  /** « novembre » */
+  mois: string;
+  minutes: number;
+  minutesMoisPrecedent: number;
+  realise: number;
+  objectif: number;
+  presence: number | null;
+  progressent: number;
+  arrivees: number;
+}): string[] {
+  const phrases: string[] = [];
+  const heures = formaterHeures(m.minutes);
+  const euros = `${Math.round(m.realise).toLocaleString('fr-FR')} €`;
+  const elan = m.minutes === 0
+    ? `${m.mois.charAt(0).toUpperCase()}${m.mois.slice(1)} commence : vos premières séances vont s’afficher ici.`
+    : m.minutes >= m.minutesMoisPrecedent
+      ? `${m.mois.charAt(0).toUpperCase()}${m.mois.slice(1)} avance bien : ${heures} de séance et ${euros} déjà réalisés.`
+      : `${m.mois.charAt(0).toUpperCase()}${m.mois.slice(1)} est un peu plus calme que le mois dernier : ${heures} de séance et ${euros} déjà réalisés.`;
+  phrases.push(m.objectif > 0 && m.minutes > 0
+    ? `${elan.slice(0, -1)}, soit ${Math.round((m.realise / m.objectif) * 100)} % de votre objectif.`
+    : elan);
+  if (m.presence !== null) {
+    phrases.push(m.presence >= 90
+      ? `Vos bénéficiaires sont fidèles au rendez-vous : ${m.presence} % de présence sur 30 jours.`
+      : m.presence >= 80
+        ? `${m.presence} % de présence sur 30 jours : un bon rythme.`
+        : `La présence a baissé (${m.presence} % sur 30 jours) : un petit message aux absents aide souvent à renouer.`);
+  }
+  if (m.progressent > 0 || m.arrivees > 0) {
+    const bouts: string[] = [];
+    if (m.progressent > 0) bouts.push(m.progressent > 1
+      ? `${m.progressent} bénéficiaires ont progressé à leur dernier bilan`
+      : '1 bénéficiaire a progressé à son dernier bilan');
+    if (m.arrivees > 0) bouts.push(`${m.arrivees} nouvelle${m.arrivees > 1 ? 's' : ''} personne${m.arrivees > 1 ? 's' : ''} vous ${m.arrivees > 1 ? 'ont' : 'a'} rejoint en 3 mois`);
+    phrases.push(`${bouts.join(', et ')}.`.replace(/^./, c => c.toUpperCase()));
+  }
+  return phrases;
+}
