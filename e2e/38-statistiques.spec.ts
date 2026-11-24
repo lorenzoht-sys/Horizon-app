@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { skipUnlessPraticien, loginPraticien } from './helpers.js';
 
-// Page « Mon tableau de bord » (/stats). Ajouté le 2026-11-11 : la page
+// Page « Mes statistiques » (/stats, titre « Mon tableau de bord » jusqu'au 2026-11-24, PR #225). Ajouté le 2026-11-11 : la page
 // n'avait aucun test alors que ses trois graphiques changeaient de
 // bibliothèque (chart.js → recharts, PR #174). Le test ne dépend pas de la
 // bibliothèque : il vérifie que des graphiques sont tracés, qu'aucune erreur
@@ -20,10 +20,11 @@ test.describe('Tableau de bord du praticien', () => {
 
     await loginPraticien(page);
     await page.goto('/stats');
-    await expect(page.getByRole('heading', { name: 'Mon tableau de bord' })).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('heading', { name: 'Mes statistiques' })).toBeVisible({ timeout: 20000 });
 
-    // chart.js trace dans un <canvas>, recharts dans un <svg class="recharts-surface">.
-    const graphiques = page.locator('canvas, svg.recharts-surface');
+    // Les grands graphiques (data-testid="graphique") : depuis la PR #225, les chiffres clés portent
+    // aussi de petites courbes de tendance (36 px de haut), exclues de ce contrôle de taille.
+    const graphiques = page.locator('[data-testid="graphique"] svg.recharts-surface');
     await expect(graphiques.first()).toBeVisible({ timeout: 20000 });
     expect(await graphiques.count()).toBeGreaterThanOrEqual(2);
     for (const boite of await graphiques.evaluateAll(els => els.map(el => el.getBoundingClientRect()).map(r => ({ l: r.width, h: r.height })))) {

@@ -139,3 +139,31 @@ export function useTarifsContrat(contratId: string | undefined) {
 
   return { versions, versionActuelle, historique, loading, modifierTarif, couvrirDebutContrat, recharger };
 }
+
+/**
+ * Versions de tarif de plusieurs contrats, en une requête (« Mes stats », 2026-11-24 : valeur des
+ * séances prévues du mois et manque à gagner des annulations). Lecture seule, sous la RLS du praticien.
+ */
+export function useTarifsDesContrats(contratIds: readonly string[]): Record<string, TarifContrat[]> {
+  const [tarifs, setTarifs] = useState<Record<string, TarifContrat[]>>({});
+  const cle = [...new Set(contratIds)].sort().join(',');
+  useEffect(() => {
+    let annule = false;
+    (async () => {
+      const ids = cle ? cle.split(',') : [];
+      if (!supabase || ids.length === 0) { setTarifs({}); return; }
+      const { data, error } = await supabase
+        .from('tarifs_contrats')
+        .select('*')
+        .in('contrat_id', ids)
+        .order('date_debut_validite', { ascending: false });
+      if (annule) return;
+      if (error) { console.error('[useTarifsDesContrats] lecture :', error); return; }
+      const parContrat: Record<string, TarifContrat[]> = {};
+      for (const t of (data ?? []).map(dbToTarifContrat)) (parContrat[t.contratId] ??= []).push(t);
+      setTarifs(parContrat);
+    })();
+    return () => { annule = true; };
+  }, [cle]);
+  return tarifs;
+}

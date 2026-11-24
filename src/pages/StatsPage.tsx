@@ -2,30 +2,63 @@ import { useState, useEffect, Component, useCallback } from 'react';
 import { chargerSettingsPraticien } from '../lib/settingsPraticien';
 import type { ReactNode } from 'react';
 import {
-  ResponsiveContainer, ComposedChart, Bar, Cell, Line, AreaChart, Area,
-  PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ComposedChart, BarChart, Bar, Cell, Line, LineChart,
+  XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
-import { TrendingUp, TrendingDown, Edit3, ChevronDown, ChevronUp, CheckCircle, RefreshCw } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import {
+  Edit3, ChevronDown, ChevronUp, CheckCircle, RefreshCw, ClipboardList, FileClock,
+  CalendarX2, UserRoundX, Target, AlertTriangle, Sparkles,
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
 import PageWrapper from '../components/layout/PageWrapper';
 import { useParticipants } from '../hooks/useParticipants';
 import { contratsDesBeneficiairesActifs, separerParArchivage } from '../lib/archivage';
 import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import { useStatsPro, type StatsPro } from '../hooks/useStatsPro';
-import { useCaAnneeEnCours } from '../hooks/useChiffreAffaires';
+import { useCaDouzeMois } from '../hooks/useChiffreAffaires';
+import { useFacturesAValider, useFacturesValidees } from '../hooks/useFacturesAValider';
+import { useStructures } from '../hooks/useStructures';
 import { useFactures } from '../hooks/useFactures';
 import { EBAUCHE_FACTURATION_VISIBLE } from '../lib/featuresFacturation';
 import type { Participant, Contrat } from '../types';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import { cleanTextPdf } from '../utils/pdfText';
-import { chargerTarifsContrat } from '../hooks/useTarifsContrat';
-import { trouverTarifApplicable, totalFactureSeance } from '../lib/tarifsContrats';
+import { chargerTarifsContrat, useTarifsDesContrats } from '../hooks/useTarifsContrat';
+import { trouverTarifApplicable, totalFactureSeance, dateCivileParis } from '../lib/tarifsContrats';
 import { useCoursCollectifs } from '../hooks/useCoursCollectifs';
 import { datesCoursCollectifsIndividuelFacturables } from '../lib/coursCollectifs';
-import { distanceTm6 } from '../lib/tm6';
-import { calculerAge } from '../lib/age';
+import { bilanAFaire, echeanceBilan, progresDepuisInitial, type Progres } from '../lib/tableauDeBord';
+import {
+  presenceRecente, activiteMoisADate, semaines as calculerSemaines, assiduiteParBeneficiaire, resultatsParTest,
+  caParMois as calculerCaParMois, encaissements, valeurSeances, annulations as calculerAnnulations, sourcesCA,
+  partPremierBeneficiaire, portefeuille as calculerPortefeuille, parStructure, derniersMois, moisDecale,
+  minutesRealisees, formaterHeures, ajouterJours, phrasesDuMois,
+} from '../lib/statistiques';
+
+// Page « Mes stats » refondue le 2026-11-24 pour l'enseignant APA indépendant qui travaille aussi
+// pour des structures : ce qui rentre (le mois en cours vit dans les brouillons), ce qui reste dû, le
+// temps passé, ce que rapporte une heure, ce que coûtent les annulations, d'où vient le CA, et un
+// tableau par structure. Chiffres de l'ancienne page corrigés (présence, progrès), kilométrage et
+// projection inventés retirés, alertes fusionnées en « À faire » aux règles de l'accueil.
+// Calculs : lib/statistiques.ts. Aucune table ni migration : seulement des lectures existantes.
+
+const MOIS_COURTS = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
+const MOIS_LONGS  = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+
+// Couleurs de la charte (src/styles/tokens.css), en dur pour Recharts qui ne lit pas les variables CSS.
+const VERT = '#2BB89A';
+const VERT_PALE = '#BFE8DD';
+const VERT_FONCE = '#1A9A7F';
+const ENCRE_2 = '#5A6B7A';
+const ENCRE_3 = '#9DAFC0';
+const AMBRE = '#F0A429';
+const ROUGE = '#E8544A';
+const ROUGE_PALE = '#F6C3BF';
+const GRIS = '#E5EAEF';
+
+// ─── ErrorBoundary ────────────────────────────────────────────────────────────
 
 // ─── ErrorBoundary ────────────────────────────────────────────────────────────
 
@@ -52,47 +85,7 @@ class ErrorBoundary extends Component<
   }
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const MOIS_COURTS = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
-const MOIS_LONGS  = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-
-function moisKey(annee: number, mois: number) {
-  return `${annee}-${String(mois + 1).padStart(2, '0')}`;
-}
-
-function todayKey() {
-  return new Date().toISOString().slice(0, 7);
-}
-
-function moisPrecedentKey(key: string): string {
-  const [y, m] = key.split('-').map(Number);
-  return m === 1
-    ? `${y - 1}-12`
-    : `${y}-${String(m - 1).padStart(2, '0')}`;
-}
-
-
-function getLast12Weeks(): { label: string; debut: Date; fin: Date }[] {
-  const result: { label: string; debut: Date; fin: Date }[] = [];
-  const today = new Date();
-  for (let i = 11; i >= 0; i--) {
-    const fin = new Date(today);
-    fin.setDate(today.getDate() - i * 7);
-    fin.setHours(23, 59, 59, 999);
-    const debut = new Date(fin);
-    debut.setDate(fin.getDate() - 6);
-    debut.setHours(0, 0, 0, 0);
-    const jan1 = new Date(debut.getFullYear(), 0, 1);
-    const weekNum = Math.ceil(((debut.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
-    result.push({ label: `S${weekNum}`, debut, fin });
-  }
-  return result;
-}
-
-function formatMoisAnnee(d: Date) {
-  return `${MOIS_LONGS[d.getMonth()]} ${d.getFullYear()}`;
-}
+// ─── Ancienne ébauche de facturation (masquée, voir EBAUCHE_FACTURATION_VISIBLE) ─
 
 // ─── Helpers supplémentaires ─────────────────────────────────────────────────
 
@@ -186,473 +179,6 @@ function exportFacturePDF(data: {
   doc.text('Règlement à réception. Service à la Personne — Attestation disponible sur demande.', 20, y);
 
   doc.save(`Facture_${data.nomPatient.replace(/\s+/g, '_')}_${data.periode.replace(/\s+/g, '_')}.pdf`);
-}
-
-// ─── MetricCard ───────────────────────────────────────────────────────────────
-
-function MetricCard({ label, valeur, delta, deltaPositif }: {
-  label: string;
-  valeur: string;
-  delta?: string | null;
-  deltaPositif?: boolean | null;
-}) {
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
-      <div className="text-xs text-gray-500 font-medium mb-1.5">{label}</div>
-      <div className="text-2xl font-semibold text-gray-900 leading-none">{valeur}</div>
-      {delta && (
-        <div className="text-xs mt-2 font-medium"
-          style={{
-            color: deltaPositif === null || deltaPositif === undefined
-              ? '#6B7280'
-              : deltaPositif ? '#1D9E75' : '#E85050',
-          }}>
-          {delta}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Objectifs ────────────────────────────────────────────────────────────────
-//
-// Le CA n'est plus saisi ici (champ « Saisir mon CA » supprimé le 2026-10-09 : c'était une saisie locale,
-// dans le navigateur, sans lien avec les bénéficiaires ni les factures). Il vient de la facturation (factures
-// validées, HT) et des saisies de CA externe de la page /factures/ca. Ne reste ici que les objectifs.
-
-function FormulaireObjectifs({ statsPro, onSave }: {
-  statsPro: StatsPro;
-  onSave: (s: StatsPro) => void;
-}) {
-  const [ouvert, setOuvert] = useState(false);
-  const [objMensuel, setObjMensuel] = useState(statsPro.objectifMensuel ?? 0);
-  const [objAnnuel, setObjAnnuel] = useState(statsPro.objectifAnnuel ?? 0);
-
-  useEffect(() => {
-    setObjMensuel(statsPro.objectifMensuel);
-    setObjAnnuel(statsPro.objectifAnnuel);
-  }, [statsPro]);
-
-  return (
-    <div>
-      <button
-        onClick={() => setOuvert(o => !o)}
-        className="flex items-center gap-2 text-sm font-medium text-primary border border-primary/30 hover:bg-primary/5 px-3 py-2 rounded-xl transition-colors"
-      >
-        <Edit3 size={14} />
-        Mes objectifs
-        {ouvert ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-      </button>
-
-      {ouvert && (
-        <div className="mt-3 bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-3">
-          <div className="space-y-2">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Objectifs (HT)</p>
-            {[
-              { label: 'Objectif mensuel', val: objMensuel, set: setObjMensuel },
-              { label: 'Objectif annuel',  val: objAnnuel,  set: setObjAnnuel  },
-            ].map(({ label, val, set }) => (
-              <div key={label} className="flex items-center gap-2">
-                <label className="text-xs text-gray-500 w-32 flex-shrink-0">{label}</label>
-                <input
-                  type="number" value={val} min={0}
-                  onChange={e => set(parseInt(e.target.value) || 0)}
-                  className="w-32 border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-primary"
-                />
-                <span className="text-xs text-gray-400">€</span>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-gray-500">
-            Le CA affiché vient de vos factures validées et de votre CA externe :{' '}
-            <Link to="/factures/ca" className="text-primary font-medium hover:underline">suivre mon chiffre d'affaires</Link>.
-          </p>
-          <button
-            onClick={() => {
-              onSave({ objectifMensuel: objMensuel, objectifAnnuel: objAnnuel });
-              setOuvert(false);
-            }}
-            className="w-full py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors mt-1"
-          >
-            Enregistrer
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Graphique CA mensuel ─────────────────────────────────────────────────────
-
-function GraphiqueCA({ statsPro, caParMois }: { statsPro: StatsPro; caParMois: Record<string, number> }) {
-  const annee = new Date().getFullYear();
-  const moisActuel = new Date().getMonth();
-
-  let caData: (number | null)[] = Array(12).fill(null);
-  try {
-    caData = Array.from({ length: 12 }, (_, i) => {
-      const v = caParMois[moisKey(annee, i)];
-      return v !== undefined ? v : null;
-    });
-  } catch {
-    caData = Array(12).fill(null);
-  }
-
-  // Migré de chart.js vers recharts (2026-11-09, allègement pré-HDS) : une
-  // seule bibliothèque de graphiques dans le bundle. Rendu équivalent :
-  // barres (mois en cours foncé) + objectif mensuel en pointillés.
-  const objectif = statsPro.objectifMensuel ?? 0;
-  const data = MOIS_COURTS.map((mois, i) => ({ mois, ca: caData[i], objectif }));
-  const euros = (v: unknown) => `${Number(v).toLocaleString('fr-FR')}€`;
-
-  return (
-    <div style={{ height: 220 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-          <CartesianGrid vertical={false} stroke="rgba(0,0,0,0.05)" />
-          <XAxis dataKey="mois" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-          <YAxis tick={{ fontSize: 11 }} tickFormatter={euros} tickLine={false} axisLine={false} width={56} />
-          <Tooltip
-            formatter={(value: any, name: any) =>
-              value !== null && value !== undefined
-                ? [`${Number(value).toLocaleString('fr-FR')} €`, name]
-                : ['Non renseigné', name]
-            }
-          />
-          <Bar dataKey="ca" name="CA (€)" radius={[5, 5, 5, 5]} isAnimationActive={false}>
-            {data.map((_, i) => (
-              <Cell key={i} fill={i === moisActuel ? '#1A5F9E' : '#B5D4F4'} />
-            ))}
-          </Bar>
-          <Line
-            dataKey="objectif" name="Objectif mensuel" type="linear"
-            stroke="#F59E0B" strokeDasharray="5 4" strokeWidth={1.5}
-            dot={false} activeDot={false} isAnimationActive={false}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-// ─── Graphique séances hebdomadaires ─────────────────────────────────────────
-
-function GraphiqueSeances({ seances }: { seances: any[] }) {
-  const semaines = getLast12Weeks();
-  let seancesData: number[] = Array(12).fill(0);
-  try {
-    seancesData = semaines.map(s =>
-      (seances ?? []).filter(seance =>
-        seance.statut === 'realisee' &&
-        new Date(seance.date) >= s.debut &&
-        new Date(seance.date) <= s.fin
-      ).length
-    );
-  } catch {
-    seancesData = Array(12).fill(0);
-  }
-
-  const data = semaines.map((s, i) => ({ semaine: s.label, seances: seancesData[i] }));
-
-  return (
-    <div style={{ height: 220 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-          <CartesianGrid vertical={false} stroke="rgba(0,0,0,0.05)" />
-          <XAxis dataKey="semaine" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-          <YAxis domain={[0, 'auto']} allowDecimals={false} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={32} />
-          <Tooltip />
-          <Area
-            type="monotone" dataKey="seances" name="Séances réalisées"
-            stroke="#1A5F9E" fill="rgba(26,95,158,0.08)" fillOpacity={1}
-            dot={{ r: 3, fill: '#1A5F9E', strokeWidth: 0 }} isAnimationActive={false}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-// ─── Section Alertes ─────────────────────────────────────────────────────────
-
-interface Alerte {
-  type: 'rouge' | 'orange' | 'bleu';
-  emoji: string;
-  texte: string;
-  action: string;
-  href: string;
-}
-
-function SectionAlertes({
-  participants, seances, contrats, contratActif,
-}: {
-  participants: Participant[];
-  seances: any[];
-  contrats: any[];
-  contratActif: (id: string) => any;
-}) {
-  const today = new Date().toISOString().slice(0, 10);
-  const now = new Date();
-  const dans30j = new Date(now); dans30j.setDate(now.getDate() + 30);
-  const il90j = new Date(now);   il90j.setDate(now.getDate() - 90);
-  const il14j = new Date(now);   il14j.setDate(now.getDate() - 14);
-  // Comparaisons en chaînes ISO (YYYY-MM-DD) plutôt qu'en objets Date :
-  // évite les décalages d'un jour selon le fuseau horaire de l'utilisateur.
-  const dans30jStr = dans30j.toISOString().slice(0, 10);
-  const il90jStr = il90j.toISOString().slice(0, 10);
-  const il14jStr = il14j.toISOString().slice(0, 10);
-
-  const alertes: Alerte[] = [];
-
-  // 🔴 Factures en retard → géré via useFactures dans SectionFactures (ici on recalcule sommairement)
-  // (nb calculé depuis la liste des factures n'est pas accessible ici — on skip pour ne pas dupliquer le hook)
-
-  // 🟡 Bilans > 3 mois (90 jours)
-  const bilansEnRetard = participants.filter(p => {
-    const last = p.bilans.at(-1);
-    if (!last) return true; // aucun bilan
-    return last.date < il90jStr;
-  });
-  if (bilansEnRetard.length > 0) {
-    alertes.push({
-      type: 'orange',
-      emoji: '🟡',
-      texte: `${bilansEnRetard.length} bilan${bilansEnRetard.length > 1 ? 's' : ''} à faire (> 3 mois)`,
-      action: 'Voir les bénéficiaires',
-      href: '/',
-    });
-  }
-
-  // 🟡 Contrats expirant dans 30 jours
-  const contratsExpirants = contrats.filter(c => {
-    if (c.statut !== 'actif' || c.dureeIndeterminee) return false;
-    const fin = c.dateFin;
-    return fin >= today && fin <= dans30jStr;
-  });
-  if (contratsExpirants.length > 0) {
-    alertes.push({
-      type: 'orange',
-      emoji: '🟡',
-      texte: `${contratsExpirants.length} contrat${contratsExpirants.length > 1 ? 's' : ''} expirant${contratsExpirants.length > 1 ? '' : ''} ce mois`,
-      action: 'Voir les contrats',
-      href: '/',
-    });
-  }
-
-  // 🟡 Contrats sans date de fin bloqués faute de jours de séance renseignés
-  // — le cron (api/cron/rappels.ts, tâche « renouvellement ») ne les renouvelle jamais
-  // dans cet état, indéfiniment jusqu'à correction.
-  const contratsSansJours = contrats.filter(c =>
-    c.statut === 'actif' && c.dureeIndeterminee && (c.joursFixe?.length ?? 0) === 0
-  );
-  if (contratsSansJours.length > 0) {
-    alertes.push({
-      type: 'orange',
-      emoji: '🟡',
-      texte: `${contratsSansJours.length} contrat${contratsSansJours.length > 1 ? 's' : ''} sans date de fin sans jours de séance renseignés — ne se renouvelle${contratsSansJours.length > 1 ? 'nt' : ''} pas`,
-      action: 'Voir les contrats',
-      href: '/',
-    });
-  }
-
-  // 🔵 Patients sans séance depuis > 14 jours
-  const patientsInactifs = participants.filter(p => {
-    if (!contratActif(p.id)) return false;
-    const derniereSeance = seances
-      .filter(s => s.participantId === p.id && s.statut === 'realisee')
-      .sort((a: any, b: any) => b.date.localeCompare(a.date))[0];
-    if (!derniereSeance) return true;
-    return derniereSeance.date < il14jStr;
-  });
-  if (patientsInactifs.length > 0) {
-    alertes.push({
-      type: 'bleu',
-      emoji: '🔵',
-      texte: `${patientsInactifs.length} bénéficiaire${patientsInactifs.length > 1 ? 's' : ''} sans séance depuis > 2 semaines`,
-      action: 'Voir les bénéficiaires',
-      href: '/',
-    });
-  }
-
-  if (alertes.length === 0) {
-    return (
-      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mb-4 flex items-center gap-3">
-        <div className="text-2xl">✅</div>
-        <div className="text-sm font-medium text-emerald-800">Tout est à jour — aucune alerte active !</div>
-      </div>
-    );
-  }
-
-  const nbRouges  = alertes.filter(a => a.type === 'rouge').length;
-  const COLOR: Record<Alerte['type'], string> = {
-    rouge:  'border-red-200 bg-red-light',
-    orange: 'border-amber-200 bg-amber-50',
-    bleu:   'border-blue-100 bg-blue-50',
-  };
-  const TEXT: Record<Alerte['type'], string> = {
-    rouge: 'text-red-700', orange: 'text-amber-700', bleu: 'text-blue-700',
-  };
-  const LINK: Record<Alerte['type'], string> = {
-    rouge: 'text-red-500 hover:text-red-700', orange: 'text-amber-600 hover:text-amber-800', bleu: 'text-blue-500 hover:text-blue-700',
-  };
-
-  return (
-    <div className={`rounded-2xl border p-4 mb-4 ${nbRouges > 0 ? 'border-red-200 bg-red-light' : 'border-amber-200 bg-amber-50'}`}>
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-base">⚠️</span>
-        <div className="text-sm font-bold text-gray-900">
-          {alertes.length} alerte{alertes.length > 1 ? 's' : ''} à traiter
-        </div>
-        {nbRouges > 0 && (
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-light text-red-700">
-            {nbRouges} urgente{nbRouges > 1 ? 's' : ''}
-          </span>
-        )}
-      </div>
-      <div className="space-y-2">
-        {alertes.map((a, i) => (
-          <div key={i} className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 border ${COLOR[a.type]}`}>
-            <div className={`text-sm font-medium ${TEXT[a.type]}`}>
-              {a.emoji} {a.texte}
-            </div>
-            <a href={a.href} className={`text-xs font-semibold flex-shrink-0 underline ${LINK[a.type]}`}>
-              {a.action} →
-            </a>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Section Santé du portefeuille ──────────────────────────────────────────
-
-function SectionSantePortefeuille({
-  participants, seances, contrats, contratActif,
-}: {
-  participants: Participant[];
-  seances: any[];
-  contrats: any[];
-  contratActif: (id: string) => any;
-}) {
-  const navigate = useNavigate();
-  const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-  const il90j = new Date(now);   il90j.setDate(now.getDate() - 90);
-  const il14j = new Date(now);   il14j.setDate(now.getDate() - 14);
-  const dans30j = new Date(now); dans30j.setDate(now.getDate() + 30);
-  // Comparaisons en chaînes ISO (YYYY-MM-DD) plutôt qu'en objets Date :
-  // évite les décalages d'un jour selon le fuseau horaire de l'utilisateur.
-  const il90jStr = il90j.toISOString().slice(0, 10);
-  const il14jStr = il14j.toISOString().slice(0, 10);
-  const dans30jStr = dans30j.toISOString().slice(0, 10);
-
-  const bilansEnRetard = participants
-    .map(p => {
-      const last = [...p.bilans].sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
-      const enRetard = !last || last.date < il90jStr;
-      return enRetard ? { p, dernierBilan: last?.date ?? null } : null;
-    })
-    .filter(Boolean) as { p: Participant; dernierBilan: string | null }[];
-
-  const contratsExpirants = contrats
-    .filter(c => c.statut === 'actif' && !c.dureeIndeterminee && c.dateFin >= today && c.dateFin <= dans30jStr)
-    .map(c => ({
-      contrat: c,
-      patient: participants.find(p => p.id === c.participantId),
-    }))
-    .filter(x => x.patient);
-
-  const patientsInactifs = participants
-    .filter(p => !!contratActif(p.id))
-    .map(p => {
-      const derniere = seances
-        .filter(s => s.participantId === p.id && s.statut === 'realisee')
-        .sort((a: any, b: any) => b.date.localeCompare(a.date))[0] ?? null;
-      const inactif = !derniere || derniere.date < il14jStr;
-      return inactif ? { p, derniereSeance: derniere?.date ?? null } : null;
-    })
-    .filter(Boolean) as { p: Participant; derniereSeance: string | null }[];
-
-  const patientsActifs = participants.filter(p => !!contratActif(p.id)).length;
-
-  const rowCls = 'flex items-center justify-between gap-3 py-2.5 border-b border-gray-50 last:border-0 group cursor-pointer hover:bg-gray-50/50 rounded-lg px-1 -mx-1 transition-colors';
-  const btnCls = 'text-xs font-semibold text-primary opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0';
-
-  if (bilansEnRetard.length + contratsExpirants.length + patientsInactifs.length === 0) {
-    return null; // Tout va bien, on n'affiche pas la section
-  }
-
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-4">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-base">🏥</span>
-        <div className="text-sm font-bold text-gray-900">Santé du portefeuille</div>
-        <div className="text-xs text-gray-400">{patientsActifs} bénéficiaire{patientsActifs !== 1 ? 's' : ''} actif{patientsActifs !== 1 ? 's' : ''}</div>
-      </div>
-
-      {bilansEnRetard.length > 0 && (
-        <div className="mb-5">
-          <div className="text-xs font-bold text-orange-700 uppercase tracking-wide mb-2">
-            🟡 Bilans en retard (&gt; 3 mois) — {bilansEnRetard.length}
-          </div>
-          {bilansEnRetard.map(({ p, dernierBilan }) => (
-            <div key={p.id} className={rowCls} onClick={() => navigate(`/participant/${p.id}`)}>
-              <div>
-                <span className="text-sm font-medium text-gray-800">{p.prenom} {p.nom}</span>
-                <span className="text-xs text-gray-400 ml-2">
-                  {dernierBilan
-                    ? `Dernier bilan : ${new Date(dernierBilan + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`
-                    : 'Aucun bilan'}
-                </span>
-              </div>
-              <span className={btnCls}>Faire bilan →</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {contratsExpirants.length > 0 && (
-        <div className="mb-5">
-          <div className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-2">
-            🟡 Contrats expirant ce mois — {contratsExpirants.length}
-          </div>
-          {contratsExpirants.map(({ contrat, patient }) => (
-            <div key={contrat.id} className={rowCls} onClick={() => navigate(`/participant/${patient!.id}`)}>
-              <div>
-                <span className="text-sm font-medium text-gray-800">{patient!.prenom} {patient!.nom}</span>
-                <span className="text-xs text-gray-400 ml-2">
-                  Expire le {new Date(contrat.dateFin + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                </span>
-              </div>
-              <span className={btnCls}>Renouveler →</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {patientsInactifs.length > 0 && (
-        <div>
-          <div className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">
-            🔵 Bénéficiaires inactifs (&gt; 2 semaines) — {patientsInactifs.length}
-          </div>
-          {patientsInactifs.map(({ p, derniereSeance }) => (
-            <div key={p.id} className={rowCls} onClick={() => navigate(`/participant/${p.id}`)}>
-              <div>
-                <span className="text-sm font-medium text-gray-800">{p.prenom} {p.nom}</span>
-                <span className="text-xs text-gray-400 ml-2">
-                  {derniereSeance
-                    ? `Dernière séance : ${new Date(derniereSeance + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`
-                    : 'Aucune séance'}
-                </span>
-              </div>
-              <span className={btnCls}>Contacter →</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 // ─── Section Factures ────────────────────────────────────────────────────────
@@ -959,387 +485,767 @@ function SectionFactures({
   );
 }
 
-// ─── Section Kilométrage ──────────────────────────────────────────────────────
+// ─── Briques ─────────────────────────────────────────────────────────────────
 
-function SectionKilometrage({ seances }: {
-  seances: any[];
-  participants?: Participant[];
+function Carte({ titre, sousTitre, droite, children, className = '' }: {
+  titre: string;
+  sousTitre?: ReactNode;
+  droite?: ReactNode;
+  children: ReactNode;
+  className?: string;
 }) {
-  const BAREME_KM = 0.41; // barème 2026
-  const now = new Date();
-  const moisKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-
-  // Calcul simplifié : on groupe par ville du participant (approximation)
-  // Dans une implémentation complète, on utiliserait les zones géographiques
-  const seancesMois = seances.filter(s => s.date.startsWith(moisKey) && s.statut === 'realisee');
-
-  // Estimation distance si pas de coordonnées : 10 km aller-retour par défaut
-  const DISTANCE_DEFAUT_KM = 10;
-  const kmTotal = seancesMois.length * DISTANCE_DEFAUT_KM;
-  const indemnite = kmTotal * BAREME_KM;
-
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-      <div className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
-        🚗 Kilométrage — {MOIS_LONGS[now.getMonth()]} {now.getFullYear()}
-      </div>
-
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="bg-gray-50 rounded-xl p-3 text-center">
-          <div className="text-xl font-bold text-gray-800">{seancesMois.length}</div>
-          <div className="text-xs text-gray-500 mt-0.5">séances à domicile</div>
+    <section className={`bg-white rounded-2xl border border-gray-100 shadow-sm p-5 min-w-0 flex flex-col ${className}`}>
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="min-w-0">
+          <h2 className="text-sm font-bold text-gray-900 m-0">{titre}</h2>
+          {sousTitre && <div className="text-xs text-gray-500 mt-0.5">{sousTitre}</div>}
         </div>
-        <div className="bg-gray-50 rounded-xl p-3 text-center">
-          <div className="text-xl font-bold text-primary">{kmTotal} km</div>
-          <div className="text-xs text-gray-500 mt-0.5">estimés ce mois</div>
-        </div>
-        <div className="bg-emerald-50 rounded-xl p-3 text-center">
-          <div className="text-xl font-bold text-emerald-700">{indemnite.toFixed(0)} €</div>
-          <div className="text-xs text-emerald-600 mt-0.5">déduction estimée</div>
-        </div>
+        {droite}
       </div>
-
-      <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-3 py-2">
-        <span className="font-medium">Barème 2026 :</span> {BAREME_KM}€/km · Basé sur {DISTANCE_DEFAUT_KM} km moyen par séance
-        <br />
-        ⚠️ Estimation indicative — à valider avec votre comptable
-      </div>
-    </div>
+      {children}
+    </section>
   );
 }
 
-// ─── Progression par test ─────────────────────────────────────────────────────
-
-const LABELS_TESTS: Record<string, string> = {
-  equilibre:  'Équilibre',
-  force:      'Force (CS30)',
-  handGrip:   'Force grip',
-  mobilite:   'Mobilité (TUG)',
-  souplesse:  'Souplesse',
-  endurance:  'Endurance',
-  memoire:    'Mémoire',
-};
-
-function calcDeltaPct(vi: number | null, va: number | null, lowerIsBetter = false): number | null {
-  if (!vi || !va || vi === 0) return null;
-  const d = lowerIsBetter ? ((vi - va) / vi) * 100 : ((va - vi) / vi) * 100;
-  return Math.round(d);
-}
-
-function SectionProgression({ participants }: { participants: Participant[] }) {
-  let rows: { key: string; label: string; moy: number | null; n: number }[] = [];
-  try {
-    const progressions: Record<string, number[]> = {
-      equilibre: [], force: [], handGrip: [], mobilite: [], souplesse: [], endurance: [], memoire: [],
-    };
-
-    (participants ?? []).forEach(p => {
-      try {
-        const bilans = [...(p.bilans ?? [])].sort((a, b) => a.date.localeCompare(b.date));
-        if (bilans.length < 2) return;
-        const ini = bilans[0];
-        const act = bilans[bilans.length - 1];
-
-        const pushIf = (key: string, v: number | null) => { if (v !== null) progressions[key].push(v); };
-
-        const eqI = ((ini.equilibre?.droite ?? 0) + (ini.equilibre?.gauche ?? 0)) / 2;
-        const eqA = ((act.equilibre?.droite ?? 0) + (act.equilibre?.gauche ?? 0)) / 2;
-        pushIf('equilibre', calcDeltaPct(eqI, eqA));
-        pushIf('force',     calcDeltaPct(ini.chairStand30, act.chairStand30));
-        const hgI = ((ini.handGrip?.droite ?? 0) + (ini.handGrip?.gauche ?? 0)) / 2;
-        const hgA = ((act.handGrip?.droite ?? 0) + (act.handGrip?.gauche ?? 0)) / 2;
-        pushIf('handGrip',  calcDeltaPct(hgI, hgA));
-        pushIf('mobilite',  calcDeltaPct(ini.tug3m, act.tug3m, true));
-        pushIf('souplesse', calcDeltaPct(ini.souplesse?.valeur, act.souplesse?.valeur));
-        pushIf('endurance', calcDeltaPct(distanceTm6(ini.tm6), distanceTm6(act.tm6)));
-        const memI = ini.memoire?.dubois?.scoreMIS ?? ((ini.memoire?.scoreImmediat ?? 0) + (ini.memoire?.scoreDiffere ?? 0));
-        const memA = act.memoire?.dubois?.scoreMIS ?? ((act.memoire?.scoreImmediat ?? 0) + (act.memoire?.scoreDiffere ?? 0));
-        pushIf('memoire', calcDeltaPct(memI, memA));
-      } catch {
-        // patient ignoré si ses données sont corrompues
-      }
-    });
-
-    rows = Object.entries(progressions)
-      .map(([key, vals]) => ({
-        key,
-        label: LABELS_TESTS[key],
-        moy: vals.length > 0 ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null,
-        n: vals.length,
-      }))
-      .filter(r => r.moy !== null);
-  } catch {
-    rows = [];
-  }
-
-  if (rows.length === 0) {
-    return <p className="text-xs text-gray-400 italic py-4">Pas encore assez de bilans pour calculer les progressions.</p>;
-  }
-
+function Legende({ elements }: { elements: { libelle: string; couleur: string; pointille?: boolean }[] }) {
   return (
-    <div className="space-y-2.5">
-      {rows.sort((a, b) => (b.moy ?? 0) - (a.moy ?? 0)).map(r => {
-        const pct = r.moy!;
-        const color = pct >= 10 ? '#1D9E75' : pct >= 0 ? '#F59E0B' : '#E85050';
-        const barW = Math.min(100, Math.abs(pct));
-        return (
-          <div key={r.key}>
-            <div className="flex justify-between text-xs mb-1">
-              <span className="text-gray-700 font-medium">{r.label}</span>
-              <span className="font-semibold" style={{ color }}>
-                {pct > 0 ? '+' : ''}{pct}% <span className="text-gray-400 font-normal">({r.n} bénéficiaire{r.n > 1 ? 's' : ''})</span>
-              </span>
-            </div>
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div style={{ width: `${barW}%`, background: color }} className="h-full rounded-full transition-all" />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Top assiduité ────────────────────────────────────────────────────────────
-
-function SectionAssiduite({ participants, seances, contratActif }: {
-  participants: Participant[];
-  seances: any[];
-  contratActif: (id: string) => any;
-}) {
-  let tops: { p: Participant; realisees: number; planifiees: number; taux: number }[] = [];
-  try {
-    tops = (participants ?? [])
-      .map(p => {
-        try {
-          const contrat = contratActif(p.id);
-          const seancesPt = (seances ?? []).filter(s => s.participantId === p.id);
-          const planifiees = contrat
-            ? seancesPt.filter(s => s.contratId === contrat.id).length
-            : seancesPt.length;
-          const realisees = contrat
-            ? seancesPt.filter(s => s.contratId === contrat.id && s.statut === 'realisee').length
-            : seancesPt.filter(s => s.statut === 'realisee').length;
-          if (planifiees === 0) return null;
-          const taux = Math.round((realisees / planifiees) * 100);
-          return { p, realisees, planifiees, taux };
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean)
-      .sort((a, b) => b!.taux - a!.taux)
-      .slice(0, 5) as { p: Participant; realisees: number; planifiees: number; taux: number }[];
-  } catch {
-    tops = [];
-  }
-
-  if (tops.length === 0) {
-    return <p className="text-xs text-gray-400 italic py-4">Aucune séance enregistrée.</p>;
-  }
-
-  return (
-    <div className="space-y-1">
-      {tops.map(({ p, realisees, planifiees, taux }) => (
-        <div key={p.id} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-            style={{ background: '#1A5F9E', fontSize: 10 }}>
-            {(p.prenom?.[0] ?? '?').toUpperCase()}{(p.nom?.[0] ?? '?').toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-gray-800 truncate">{p.prenom} {p.nom}</div>
-            <div className="text-xs text-gray-400">{realisees}/{planifiees} séances</div>
-          </div>
-          <span className="text-sm font-semibold flex-shrink-0"
-            style={{ color: taux >= 80 ? '#1D9E75' : '#F59E0B' }}>
-            {taux}%
-          </span>
-        </div>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+      {elements.map(e => (
+        <span key={e.libelle} className="inline-flex items-center gap-1.5">
+          {e.pointille
+            ? <span className="inline-block w-4 border-t-2 border-dashed" style={{ borderColor: e.couleur }} />
+            : <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: e.couleur }} />}
+          {e.libelle}
+        </span>
       ))}
     </div>
   );
 }
 
-// ─── Répartition patients ─────────────────────────────────────────────────────
+/** Petite courbe sans axes sous un chiffre clé : la tendance, pas le détail. */
+function Tendance({ valeurs }: { valeurs: (number | null)[] }) {
+  if (valeurs.filter(v => v !== null).length < 2) return <div style={{ height: 36 }} />;
+  const data = valeurs.map((v, i) => ({ i, v }));
+  return (
+    <div style={{ height: 36 }} aria-hidden>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 4, right: 2, left: 2, bottom: 4 }}>
+          <YAxis hide domain={['dataMin', 'dataMax']} />
+          <Line dataKey="v" type="monotone" stroke={VERT} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
-function SectionRepartition({ participants }: { participants: Participant[] }) {
-  let filteredLabels: string[] = [];
-  let filteredData: number[] = [];
-  const counts: Record<string, number> = {
-    'Sénior': 0, 'Post-op': 0, 'Chronique': 0, 'Adulte blessé': 0, 'Autre': 0,
-  };
+function ChiffreCle({ libelle, valeur, detail, valeurs, children }: {
+  libelle: string;
+  valeur: string;
+  detail?: ReactNode;
+  valeurs?: (number | null)[];
+  children?: ReactNode;
+}) {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col min-w-0">
+      <div className="text-xs font-medium text-gray-500">{libelle}</div>
+      <div className="font-heading font-extrabold text-gray-900 leading-none mt-2" style={{ fontSize: 30, letterSpacing: '-0.5px' }}>
+        {valeur}
+      </div>
+      {detail && <div className="text-xs mt-2 text-gray-500">{detail}</div>}
+      {children}
+      {valeurs && <div className="mt-auto pt-3"><Tendance valeurs={valeurs} /></div>}
+    </div>
+  );
+}
 
-  try {
-    (participants ?? []).forEach(p => {
-      try {
-        const tags = p.tags ?? [];
-        if (tags.includes('post_op'))              counts['Post-op']++;
-        else if (tags.includes('senior'))          counts['Sénior']++;
-        else if (tags.includes('chronique'))       counts['Chronique']++;
-        else if (tags.includes('adulte_blessure')) counts['Adulte blessé']++;
-        else {
-          const age = calculerAge(p.dateNaissance);
-          const ctx = (p.contexteClinic ?? '').toLowerCase();
-          if (ctx.includes('pth') || ctx.includes('opér') || ctx.includes('post-op')) counts['Post-op']++;
-          else if (age !== null && age >= 65) counts['Sénior']++;
-          else counts['Autre']++;
-        }
-      } catch {
-        counts['Autre']++;
-      }
-    });
-  } catch {
-    // counts reste à zéro
-  }
+const euros = (v: number) => `${Math.round(v).toLocaleString('fr-FR')} €`;
 
-  filteredLabels = Object.keys(counts).filter(k => counts[k] > 0);
-  filteredData   = filteredLabels.map(k => counts[k]);
-  const COLORS = ['#1A5F9E','var(--color-teal)','#F59E0B','#1D9E75','#888780'];
+function TitreSection({ children, detail }: { children: ReactNode; detail?: string }) {
+  return (
+    <div className="flex items-baseline gap-3 mt-8 mb-3">
+      <h2 className="m-0 text-xs font-bold uppercase tracking-wider" style={{ color: ENCRE_2 }}>{children}</h2>
+      {detail && <span className="text-xs text-gray-400">{detail}</span>}
+    </div>
+  );
+}
 
-  if (filteredData.length === 0) {
-    return <p className="text-xs text-gray-400 italic py-4">Aucun bénéficiaire enregistré.</p>;
-  }
+function Mini({ libelle, valeur, detail, ton }: { libelle: string; valeur: string; detail?: string; ton?: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-xs text-gray-500">{libelle}</div>
+      <div className="font-heading font-extrabold text-xl leading-tight mt-1" style={{ color: ton ?? '#1A2332' }}>{valeur}</div>
+      {detail && <div className="text-xs text-gray-400 mt-0.5">{detail}</div>}
+    </div>
+  );
+}
 
-  const total = filteredData.reduce((a, b) => a + b, 0);
+// ─── Objectifs ────────────────────────────────────────────────────────────────
+//
+// Le CA n'est plus saisi ici (champ « Saisir mon CA » supprimé le 2026-10-09 : c'était une saisie locale,
+// dans le navigateur, sans lien avec les bénéficiaires ni les factures). Il vient de la facturation (factures
+// validées, HT) et des saisies de CA externe de la page /factures/ca. Ne reste ici que les objectifs.
 
-  const data = filteredLabels.map((label, i) => ({ label, valeur: filteredData[i] }));
+function FormulaireObjectifs({ statsPro, onSave, ouvert, setOuvert }: {
+  statsPro: StatsPro;
+  onSave: (s: StatsPro) => void;
+  ouvert: boolean;
+  setOuvert: (o: boolean) => void;
+}) {
+  const [objMensuel, setObjMensuel] = useState(statsPro.objectifMensuel ?? 0);
+  const [objAnnuel, setObjAnnuel] = useState(statsPro.objectifAnnuel ?? 0);
+
+  useEffect(() => {
+    setObjMensuel(statsPro.objectifMensuel);
+    setObjAnnuel(statsPro.objectifAnnuel);
+  }, [statsPro]);
 
   return (
-    <div className="flex items-center gap-4">
-      <div style={{ width: 110, height: 110, flexShrink: 0 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data} dataKey="valeur" nameKey="label"
-              innerRadius="65%" outerRadius="100%" stroke="none" isAnimationActive={false}
-            >
-              {data.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
-            </Pie>
-            <Tooltip
-              formatter={(value: any, name: any) =>
-                [`${value} bénéficiaire${Number(value) > 1 ? 's' : ''}`, name]
-              }
-            />
-          </PieChart>
-        </ResponsiveContainer>
+    <div className="relative">
+      <button
+        onClick={() => setOuvert(!ouvert)}
+        className="flex items-center gap-2 text-sm font-medium text-primary border border-primary/30 hover:bg-primary/5 px-3 py-2 rounded-xl transition-colors"
+      >
+        <Edit3 size={14} />
+        Mes objectifs
+        {ouvert ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </button>
+
+      {ouvert && (
+        <div className="absolute right-0 top-full mt-2 z-20 w-80 bg-white border border-gray-200 shadow-lg rounded-2xl p-4 space-y-3">
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider m-0">Objectifs de chiffre d'affaires (HT)</p>
+          {[
+            { label: 'Par mois', val: objMensuel, set: setObjMensuel },
+            { label: 'Par an',   val: objAnnuel,  set: setObjAnnuel  },
+          ].map(({ label, val, set }) => (
+            <label key={label} className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 w-20 flex-shrink-0">{label}</span>
+              <input
+                type="number" value={val} min={0}
+                onChange={e => set(parseInt(e.target.value) || 0)}
+                className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-primary"
+              />
+              <span className="text-xs text-gray-400">€</span>
+            </label>
+          ))}
+          <p className="text-xs text-gray-500 m-0">
+            Le CA affiché vient de vos factures validées et de votre CA externe :{' '}
+            <Link to="/factures/ca" className="text-primary font-medium hover:underline">suivre mon chiffre d'affaires</Link>.
+          </p>
+          <button
+            onClick={() => {
+              onSave({ objectifMensuel: objMensuel, objectifAnnuel: objAnnuel });
+              setOuvert(false);
+            }}
+            className="w-full py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
+          >
+            Enregistrer
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function JaugeObjectif({ realise, objectif, libelle }: { realise: number; objectif: number; libelle: string }) {
+  const pct = Math.round((realise / objectif) * 100);
+  return (
+    <div className="mt-3">
+      <div className="flex justify-between text-xs mb-1">
+        <span className="text-gray-500">{libelle} : {euros(objectif)}</span>
+        <span className="font-semibold" style={{ color: pct >= 100 ? VERT_FONCE : ENCRE_2 }}>{pct} %</span>
       </div>
-      <div className="flex-1 space-y-1.5">
-        {filteredLabels.map((l, i) => (
-          <div key={l} className="flex items-center gap-2 text-xs">
-            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: COLORS[i] }} />
-            <span className="text-gray-600 flex-1">{l}</span>
-            <span className="font-semibold text-gray-800">{counts[l]}</span>
-            <span className="text-gray-400">({Math.round((counts[l] / total) * 100)}%)</span>
-          </div>
-        ))}
+      <div className="h-2 rounded-full overflow-hidden" style={{ background: GRIS }}>
+        <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct)}%`, background: VERT }} />
       </div>
     </div>
   );
 }
 
+// ─── À faire ─────────────────────────────────────────────────────────────────
+
+interface LigneAFaire { id: string; nom: string; detail: string }
+
+function GroupeAFaire({ icone, titre, lignes, couleur }: {
+  icone: ReactNode;
+  titre: string;
+  lignes: LigneAFaire[];
+  couleur: string;
+}) {
+  const [tout, setTout] = useState(false);
+  const visibles = tout ? lignes : lignes.slice(0, 4);
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="flex items-center justify-center w-7 h-7 rounded-lg" style={{ background: `${couleur}1A`, color: couleur }}>{icone}</span>
+        <span className="text-sm font-semibold text-gray-800">{titre}</span>
+        <span className="text-xs font-bold px-1.5 py-0.5 rounded-md" style={{ background: `${couleur}1A`, color: couleur }}>{lignes.length}</span>
+      </div>
+      <ul className="m-0 p-0 list-none">
+        {visibles.map(l => (
+          <li key={l.id}>
+            <Link to={`/participant/${l.id}`} className="flex items-baseline justify-between gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-gray-50 no-underline">
+              <span className="text-sm text-gray-800 truncate">{l.nom}</span>
+              <span className="text-xs text-gray-400 flex-shrink-0">{l.detail}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {lignes.length > 4 && (
+        <button onClick={() => setTout(t => !t)} className="text-xs font-medium text-primary mt-1 hover:underline">
+          {tout ? 'Réduire' : `Voir les ${lignes.length - 4} autres`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SectionAFaire({ groupes }: {
+  groupes: { cle: string; icone: ReactNode; titre: string; lignes: LigneAFaire[]; couleur: string }[];
+}) {
+  const nonVides = groupes.filter(g => g.lignes.length > 0);
+  if (nonVides.length === 0) {
+    return (
+      <div className="rounded-2xl border px-5 py-3.5 mb-5 flex items-center gap-3 text-sm font-medium"
+        style={{ background: '#E6F5F1', borderColor: VERT_PALE, color: VERT_FONCE }}>
+        <CheckCircle size={18} />
+        Rien à rattraper : bilans, contrats et séances sont à jour. Bien joué !
+      </div>
+    );
+  }
+  return (
+    <Carte titre="À faire" sousTitre="Bénéficiaires suivis, mêmes règles que l'accueil" className="mb-5">
+      <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
+        {nonVides.map(g => <GroupeAFaire key={g.cle} icone={g.icone} titre={g.titre} lignes={g.lignes} couleur={g.couleur} />)}
+      </div>
+    </Carte>
+  );
+}
+
+// ─── Résultats des bilans ────────────────────────────────────────────────────
+
+function SectionResultats({ participants }: { participants: Participant[] }) {
+  const resultats = resultatsParTest(participants);
+  if (resultats.length === 0) {
+    return <p className="text-sm text-gray-400 m-0 py-4">Les résultats apparaîtront dès le deuxième bilan d'un bénéficiaire : Horizon compare chaque test au premier.</p>;
+  }
+  return (
+    <div className="space-y-3.5">
+      {resultats.map(r => (
+        <div key={r.cle} title={`Stable : ${r.seuilTexte} entre le premier et le dernier bilan`}>
+          <div className="flex justify-between items-baseline gap-2 text-xs mb-1.5">
+            <span className="text-gray-700 font-medium truncate">{r.libelle}</span>
+            <span className="text-gray-500 flex-shrink-0">
+              <span className="font-semibold" style={{ color: VERT_FONCE }}>{r.progressent}</span> sur {r.total} progresse{r.progressent > 1 ? 'nt' : ''}
+            </span>
+          </div>
+          <div className="flex h-2 rounded-full overflow-hidden gap-px" style={{ background: GRIS }}>
+            {r.progressent > 0 && <div style={{ width: `${(r.progressent / r.total) * 100}%`, background: VERT }} />}
+            {r.stables > 0 && <div style={{ width: `${(r.stables / r.total) * 100}%`, background: '#CBD5DE' }} />}
+            {r.reculent > 0 && <div style={{ width: `${(r.reculent / r.total) * 100}%`, background: ROUGE }} />}
+          </div>
+        </div>
+      ))}
+      <div className="pt-1"><Legende elements={[
+        { libelle: 'Progresse', couleur: VERT }, { libelle: 'Stable', couleur: '#CBD5DE' }, { libelle: 'Recule', couleur: ROUGE },
+      ]} /></div>
+    </div>
+  );
+}
+
+// ─── Assiduité à surveiller ──────────────────────────────────────────────────
+
+const SEUIL_ASSIDUITE = 80;
+
+function SectionAssiduite({ lignes, nomDe }: {
+  lignes: { participantId: string; realisees: number; annulees: number; taux: number }[];
+  nomDe: (id: string) => { prenom: string; nom: string } | null;
+}) {
+  const aSurveiller = lignes.filter(l => l.taux < SEUIL_ASSIDUITE).slice(0, 6);
+  if (lignes.length === 0) {
+    return <p className="text-sm text-gray-400 m-0 py-4">L'assiduité se mesurera après quelques séances passées.</p>;
+  }
+  if (aSurveiller.length === 0) {
+    return (
+      <p className="text-sm m-0 py-4" style={{ color: VERT_FONCE }}>
+        Tout le monde est fidèle au rendez-vous : chacun vient à au moins {SEUIL_ASSIDUITE} % de ses séances.
+      </p>
+    );
+  }
+  return (
+    <ul className="m-0 p-0 list-none">
+      {aSurveiller.map(l => {
+        const p = nomDe(l.participantId);
+        if (!p) return null;
+        const total = l.realisees + l.annulees;
+        return (
+          <li key={l.participantId}>
+            <Link to={`/participant/${l.participantId}`} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-lg hover:bg-gray-50 no-underline">
+              <span className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                style={{ background: '#E6F5F1', color: VERT_FONCE }}>
+                {(p.prenom?.[0] ?? '?').toUpperCase()}{(p.nom?.[0] ?? '?').toUpperCase()}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-medium text-gray-800 truncate">{p.prenom} {p.nom}</span>
+                <span className="block text-xs text-gray-400">{l.annulees} annulée{l.annulees > 1 ? 's' : ''} sur {total}</span>
+              </span>
+              <span className="text-sm font-semibold flex-shrink-0" style={{ color: l.taux < 60 ? ROUGE : AMBRE }}>{l.taux} %</span>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+
+// ─── Argent : graphique et origine du CA ─────────────────────────────────────
+
+function GraphiqueCA({ mois, objectif, moisCourant }: {
+  mois: { mois: string; facture: number; enPreparation: number }[];
+  objectif: number;
+  moisCourant: string;
+}) {
+  const data = mois.map(m => ({
+    ...m,
+    libelle: MOIS_COURTS[Number(m.mois.slice(5, 7)) - 1] + (m.mois.slice(5, 7) === '01' ? ` ${m.mois.slice(2, 4)}` : ''),
+    objectif: objectif > 0 ? objectif : null,
+  }));
+  return (
+    <div style={{ height: 240 }} data-testid="graphique">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+          <CartesianGrid vertical={false} stroke="rgba(0,0,0,0.05)" />
+          <XAxis dataKey="libelle" tick={{ fontSize: 11, fill: ENCRE_2 }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 11, fill: ENCRE_3 }} tickFormatter={v => `${Number(v).toLocaleString('fr-FR')}`} tickLine={false} axisLine={false} width={48} />
+          <Tooltip cursor={{ fill: 'rgba(43,184,154,0.06)' }} formatter={(value, name) => [euros(Number(value ?? 0)), name]} />
+          <Bar dataKey="facture" name="Facturé" stackId="ca" fill={VERT} maxBarSize={34} isAnimationActive={false}>
+            {data.map(d => <Cell key={d.mois} fill={d.mois === moisCourant ? VERT_FONCE : VERT} />)}
+          </Bar>
+          <Bar dataKey="enPreparation" name="En préparation (brouillons)" stackId="ca" fill={VERT_PALE} radius={[6, 6, 0, 0]} maxBarSize={34} isAnimationActive={false} />
+          {objectif > 0 && (
+            <Line dataKey="objectif" name="Objectif mensuel" type="linear" stroke={AMBRE} strokeDasharray="5 4"
+              strokeWidth={1.5} dot={false} activeDot={false} isAnimationActive={false} />
+          )}
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function SectionSourcesCA({ sources, partPremier }: {
+  sources: { cle: string; libelle: string; montant: number; part: number; beneficiaires: number }[];
+  partPremier: number | null;
+}) {
+  if (sources.length === 0) {
+    return <p className="text-sm text-gray-400 m-0 py-4">Vos premières factures émises montreront ici d'où vient votre chiffre d'affaires.</p>;
+  }
+  const dominante = sources.find(s => s.part >= 50 && s.cle !== 'particuliers');
+  return (
+    <div className="flex flex-col gap-3 flex-1">
+      {sources.slice(0, 6).map(s => (
+        <div key={s.cle}>
+          <div className="flex justify-between items-baseline gap-2 text-xs mb-1.5">
+            <span className="text-gray-700 font-medium truncate">{s.libelle}
+              <span className="text-gray-400 font-normal"> · {s.beneficiaires} bénéf.</span>
+            </span>
+            <span className="flex-shrink-0"><span className="font-semibold text-gray-800">{euros(s.montant)}</span>
+              <span className="text-gray-400"> · {s.part} %</span></span>
+          </div>
+          <div className="h-2 rounded-full overflow-hidden" style={{ background: GRIS }}>
+            <div className="h-full rounded-full" style={{ width: `${Math.max(2, s.part)}%`, background: s.cle === 'particuliers' ? ENCRE_2 : VERT }} />
+          </div>
+        </div>
+      ))}
+      <div className="mt-auto pt-2 space-y-1.5">
+        {dominante && (
+          <p className="m-0 text-xs flex items-start gap-1.5" style={{ color: '#B7791F' }}>
+            <AlertTriangle size={13} className="flex-shrink-0 mt-px" />
+            {dominante.libelle} pèse {dominante.part} % de votre chiffre d'affaires : une dépendance à surveiller.
+          </p>
+        )}
+        {partPremier !== null && (
+          <p className="m-0 text-xs text-gray-500">Votre premier bénéficiaire représente {partPremier} % du CA.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Temps ───────────────────────────────────────────────────────────────────
+
+function GraphiqueTemps({ semaines }: { semaines: { libelle: string; heures: number; heuresAnnulees: number }[] }) {
+  return (
+    <div style={{ height: 240 }} data-testid="graphique">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={semaines} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+          <CartesianGrid vertical={false} stroke="rgba(0,0,0,0.05)" />
+          <XAxis dataKey="libelle" tick={{ fontSize: 10, fill: ENCRE_2 }} tickLine={false} axisLine={false} interval={1} />
+          <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: ENCRE_3 }} tickLine={false} axisLine={false} width={28} unit=" h" />
+          <Tooltip cursor={{ fill: 'rgba(43,184,154,0.06)' }} labelFormatter={l => `Semaine du ${l}`}
+            formatter={(value, name) => [formaterHeures(Number(value ?? 0) * 60), name]} />
+          <Bar dataKey="heures" name="Heures réalisées" stackId="h" fill={VERT} maxBarSize={22} isAnimationActive={false}>
+            {semaines.map((_, i) => <Cell key={i} fill={i === semaines.length - 1 ? VERT_PALE : VERT} />)}
+          </Bar>
+          <Bar dataKey="heuresAnnulees" name="Heures annulées" stackId="h" fill={ROUGE_PALE} radius={[5, 5, 0, 0]} maxBarSize={22} isAnimationActive={false} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function SectionAnnulations({ a, manqueAGagner }: {
+  a: { annulees: number; total: number; minutesPerdues: number; motifs: { motif: string; libelle: string; n: number }[] };
+  manqueAGagner: { montant: number; sansTarif: number };
+}) {
+  if (a.total === 0) return <p className="text-sm text-gray-400 m-0 py-4">Pas encore de séance passée sur la période.</p>;
+  const tauxAnnulation = Math.round((a.annulees / a.total) * 100);
+  const max = Math.max(1, ...a.motifs.map(m => m.n));
+  return (
+    <div className="flex flex-col gap-4 flex-1">
+      <div className="grid grid-cols-3 gap-3">
+        <Mini libelle="Annulées" valeur={`${tauxAnnulation} %`} detail={`${a.annulees} sur ${a.total}`} ton={tauxAnnulation >= 15 ? ROUGE : undefined} />
+        <Mini libelle="Heures perdues" valeur={formaterHeures(a.minutesPerdues)} />
+        <Mini libelle="Non facturé" valeur={euros(manqueAGagner.montant)}
+          detail={manqueAGagner.sansTarif > 0 ? `${manqueAGagner.sansTarif} sans tarif` : 'au tarif du contrat'} />
+      </div>
+      {a.motifs.length > 0 && (
+        <div className="space-y-2">
+          {a.motifs.slice(0, 5).map(m => (
+            <div key={m.motif} className="flex items-center gap-2 text-xs">
+              <span className="w-40 flex-shrink-0 truncate text-gray-600">{m.libelle}</span>
+              <span className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: GRIS }}>
+                <span className="block h-full rounded-full" style={{ width: `${(m.n / max) * 100}%`, background: m.motif === 'non_renseigne' ? ENCRE_3 : ROUGE_PALE }} />
+              </span>
+              <span className="w-6 text-right font-semibold text-gray-700">{m.n}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Par structure ───────────────────────────────────────────────────────────
+
+function TableauStructures({ lignes }: {
+  lignes: { cle: string; libelle: string; beneficiaires: number; minutesMois: number; coursMois: number; presence: number | null; ca12Mois: number }[];
+}) {
+  const th = 'text-left text-xs font-medium text-gray-500 py-2 px-3 whitespace-nowrap';
+  const td = 'py-2.5 px-3 text-sm text-gray-800 whitespace-nowrap';
+  return (
+    <div className="overflow-x-auto -mx-2">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-gray-100">
+            <th className={th}>Origine</th>
+            <th className={`${th} text-right`}>Bénéficiaires suivis</th>
+            <th className={`${th} text-right`}>Heures ce mois</th>
+            <th className={`${th} text-right`}>Cours collectifs ce mois</th>
+            <th className={`${th} text-right`}>Présence 90 j</th>
+            <th className={`${th} text-right`}>CA 12 mois (HT)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lignes.map(l => (
+            <tr key={l.cle} className="border-b border-gray-50 last:border-0">
+              <td className={`${td} font-medium`}>
+                {l.cle === 'particuliers'
+                  ? l.libelle
+                  : <Link to={`/structures/${l.cle}`} className="text-gray-800 hover:text-primary no-underline">{l.libelle}</Link>}
+              </td>
+              <td className={`${td} text-right`}>{l.beneficiaires}</td>
+              <td className={`${td} text-right`}>{l.minutesMois > 0 ? formaterHeures(l.minutesMois) : '—'}</td>
+              <td className={`${td} text-right`}>{l.cle === 'particuliers' ? '' : l.coursMois || '—'}</td>
+              <td className={`${td} text-right`} style={{ color: l.presence !== null && l.presence < SEUIL_ASSIDUITE ? AMBRE : undefined }}>
+                {l.presence === null ? '—' : `${l.presence} %`}
+              </td>
+              <td className={`${td} text-right font-semibold`}>{l.ca12Mois > 0 ? euros(l.ca12Mois) : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Le mois en quelques mots ────────────────────────────────────────────────
+
+function BandeauDuMois({ prenom, phrases, progres }: {
+  prenom: string;
+  phrases: string[];
+  progres: { participant: Participant; progres: Progres }[];
+}) {
+  return (
+    <section className="rounded-3xl p-6 mt-5 grid gap-5 lg:grid-cols-5 items-center"
+      style={{ background: 'linear-gradient(135deg, #E6F5F1 0%, #F3FAF8 60%, #FFFFFF 100%)', border: `1px solid ${VERT_PALE}` }}>
+      <div className="lg:col-span-3">
+        <div className="flex items-center gap-2 text-sm font-bold" style={{ color: '#147A64' }}>
+          <Sparkles size={16} />
+          {prenom ? `Bonjour ${prenom}, voici votre mois` : 'Votre mois en quelques mots'}
+        </div>
+        <div className="mt-2 space-y-1.5">
+          {phrases.map((p, i) => (
+            <p key={i} className={`m-0 leading-relaxed ${i === 0 ? 'text-[17px] font-semibold text-gray-900' : 'text-[15px]'}`} style={i === 0 ? undefined : { color: '#3D4C5A' }}>{p}</p>
+          ))}
+        </div>
+      </div>
+      {progres.length > 0 && (
+        <div className="lg:col-span-2">
+          <div className="text-xs font-semibold mb-2" style={{ color: ENCRE_2 }}>Ils ont progressé ces 3 derniers mois</div>
+          <ul className="list-none m-0 p-0 grid gap-2">
+            {progres.map(({ participant: p, progres: g }) => (
+              <li key={p.id}>
+                <Link to={`/participant/${p.id}/comparaison`} className="flex items-center gap-3 bg-white rounded-2xl px-3.5 py-2.5 no-underline shadow-sm hover:shadow transition-shadow">
+                  <span className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ background: '#E6F5F1', color: VERT_FONCE }}>
+                    {(p.prenom?.[0] ?? '?').toUpperCase()}{(p.nom?.[0] ?? '?').toUpperCase()}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm text-gray-800 truncate">
+                      <span className="font-semibold">{p.prenom}</span> : <span className="font-extrabold" style={{ color: '#147A64' }}>{g.delta}</span> {g.test}
+                    </span>
+                    <span className="block text-xs text-gray-500 truncate">{g.sens}</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ─── Page principale ──────────────────────────────────────────────────────────
+
+function dateCourte(jour: string): string {
+  return new Date(`${jour}T12:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
+function moisLong(cle: string): string {
+  return MOIS_LONGS[Number(cle.slice(5, 7)) - 1].toLowerCase();
+}
 
 export default function StatsPage() {
   const { participants: rawParticipants } = useParticipants();
-  const { seances: rawSeances } = useAgenda();
-  const { contratActifDeParticipant, contrats: rawContrats } = useContrats();
+  const { seances: rawSeances, patientsARelancer } = useAgenda();
+  const {
+    contratActifDeParticipant, contrats: rawContrats,
+    contratsARenouveler: contratsARenouvelerTous, contratsSansJours: contratsSansJoursTous,
+  } = useContrats();
   const { statsPro, sauvegarder } = useStatsPro();
-  // CA réel (factures validées + CA externe saisi), en HT : remplace l'ancienne saisie locale.
-  const caParMois = useCaAnneeEnCours();
+  const { lignes: lignesCA } = useCaDouzeMois();
+  const { brouillons } = useFacturesAValider();
+  const { factures } = useFacturesValidees();
+  const { structures } = useStructures();
+  const { coursCollectifs } = useCoursCollectifs();
+  const [objectifsOuverts, setObjectifsOuverts] = useState(false);
 
   const participants = rawParticipants ?? [];
   const seances = rawSeances ?? [];
   const contrats = rawContrats ?? [];
+  const cours = coursCollectifs ?? [];
 
-  // Sections d'ALERTES (bilans en retard, contrats qui expirent, sans jours, sans séance) : bénéficiaires
-  // suivis uniquement. Les statistiques et la facturation, elles, gardent tout le monde.
-  const participantsSuivis = separerParArchivage(participants).actifs;
-  const contratsSuivis = contratsDesBeneficiairesActifs(contrats, participants);
+  const aujourdhui = dateCivileParis();
+  const annee = Number(aujourdhui.slice(0, 4));
+  const cleMois = aujourdhui.slice(0, 7);
+  const moisIndex = Number(aujourdhui.slice(5, 7)) - 1;
+  const clePrec = moisDecale(cleMois, -1);
 
-  const now = new Date();
-  const moisActuelKey = todayKey();
-  const moisPrecKey   = moisPrecedentKey(moisActuelKey);
+  // Bénéficiaires suivis (non archivés) pour l'action et le suivi ; le CA et les résultats des
+  // bilans gardent tout l'historique.
+  const suivis = separerParArchivage(participants).actifs;
+  const idsSuivis = new Set(suivis.map(p => p.id));
+  const seancesSuivies = seances.filter(s => idsSuivis.has(s.participantId));
+  const parId = new Map(participants.map(p => [p.id, p]));
+  const nomDe = (id: string) => parId.get(id) ?? null;
+  const nomComplet = (id: string) => { const p = parId.get(id); return p ? `${p.prenom} ${p.nom}` : '—'; };
 
-  const caMois      = caParMois[moisActuelKey] ?? 0;
-  const caPrecedent = caParMois[moisPrecKey] ?? 0;
-  const deltaCaPct  = caPrecedent > 0 ? Math.round(((caMois - caPrecedent) / caPrecedent) * 100) : null;
-  const caAnnuel    = Object.entries(caParMois)
-    .filter(([k]) => k.startsWith(now.getFullYear().toString()))
-    .reduce((s, [, v]) => s + v, 0);
+  // ── Argent
+  const douzeMois = derniersMois(aujourdhui, 12);
+  const ca = calculerCaParMois(lignesCA, brouillons, douzeMois);
+  const caCourant = ca[ca.length - 1];
+  const caMoisPrec = ca[ca.length - 2];
+  const prevues = seances.filter(s => s.statut === 'planifiee' && s.date > aujourdhui && s.date.startsWith(cleMois));
+  const debut90 = ajouterJours(aujourdhui, -90);
+  const annulees90 = seances.filter(s => s.statut === 'annulee' && s.date >= debut90 && s.date < aujourdhui);
+  const tarifs = useTarifsDesContrats([...prevues, ...annulees90].map(s => s.contratId).filter((x): x is string => !!x));
+  const valeurPrevue = valeurSeances(prevues, tarifs);
+  const finDeMoisEstimee = caCourant.total + valeurPrevue.montant;
+  const enc = encaissements(factures, aujourdhui);
+  const brouillonsAValider = brouillons.filter(b => b.periode.slice(0, 7) < cleMois);
+  const montantAValider = brouillonsAValider.reduce((t, b) => t + b.totalHt, 0);
 
-  const seancesMois = seances.filter(s =>
-    s.date.startsWith(moisActuelKey) && s.statut === 'realisee'
-  ).length;
-  const seancesTotal = seances.filter(s => s.date.startsWith(moisActuelKey)).length;
-  const annulations  = seancesTotal - seancesMois;
-  const tauxPresence = seancesTotal > 0 ? Math.round((seancesMois / seancesTotal) * 100) : 0;
+  // Ce que rapporte une heure : sur les mois terminés (le mois en cours n'est ni fini ni facturé).
+  const revenuHoraire = (m: string) => {
+    const min = minutesRealisees(seances, cours, `${m}-01`, `${m}-31`);
+    const total = ca.find(x => x.mois === m)?.total ?? 0;
+    return min > 0 && total > 0 ? total / (min / 60) : null;
+  };
+  const minutesMoisPrec = minutesRealisees(seances, cours, `${clePrec}-01`, `${clePrec}-31`);
+  const horairePrec = revenuHoraire(clePrec);
+  const horaireTendance = douzeMois.slice(-7, -1).map(revenuHoraire);
 
-  const patientsActifs = participants.filter(p => contratActifDeParticipant(p.id)).length;
+  const sources = sourcesCA(lignesCA, participants, structures);
+  const partPremier = partPremierBeneficiaire(lignesCA);
 
-  const pct = statsPro.objectifMensuel > 0
-    ? Math.round((caMois / statsPro.objectifMensuel) * 100) : 0;
-  const badgeLabel  = pct >= 100 ? 'Objectif atteint ✓' : pct >= 80 ? 'Bonne dynamique' : pct >= 50 ? 'En cours' : 'À accélérer';
-  const badgeColor  = pct >= 80 ? { bg: '#E8F7F1', text: '#1D9E75' } : pct >= 50 ? { bg: '#FEF3C7', text: '#92400E' } : { bg: '#FEE2E2', text: '#B91C1C' };
+  // ── Temps
+  const activite = activiteMoisADate(seances, cours, aujourdhui);
+  const ecartMinutes = activite.minutes - activite.minutesMoisPrecedent;
+  const sem = calculerSemaines(seances, cours, aujourdhui);
+  const presence = presenceRecente(seances, aujourdhui);
+  const annul = calculerAnnulations(seances, aujourdhui);
+  const manqueAGagner = valeurSeances(annulees90, tarifs);
+
+  // ── Bénéficiaires
+  const pf = calculerPortefeuille(contrats, aujourdhui);
+  const avecContrat = suivis.filter(p => contratActifDeParticipant(p.id));
+  const bilansAJour = avecContrat.filter(p => !bilanAFaire(p.bilans, aujourdhui)).length;
+
+  // Le mois en quelques mots : les progrès RÉCENTS (dernier bilan de moins de 90 jours), pour ne pas
+  // répéter l'accueil, qui montre les progrès depuis le bilan initial sans condition de date.
+  const progresRecents = suivis
+    .filter(p => p.bilans.some(b => b.date.slice(0, 10) >= debut90))
+    .map(p => ({ participant: p, progres: progresDepuisInitial(p.bilans) }))
+    .filter((x): x is { participant: Participant; progres: Progres } => x.progres !== null);
+  const phrases = phrasesDuMois({
+    mois: moisLong(cleMois), minutes: activite.minutes, minutesMoisPrecedent: activite.minutesMoisPrecedent,
+    realise: caCourant.total, objectif: statsPro.objectifMensuel ?? 0, presence: presence.taux,
+    progressent: progresRecents.length, arrivees: pf.arrivees,
+  });
+  const prenomPraticien = (chargerSettingsPraticien().prenom ?? '').trim();
+
+  // ── À faire : mêmes règles que l'accueil (Dashboard.tsx)
+  const contratsARenouveler = contratsDesBeneficiairesActifs(contratsARenouvelerTous, participants);
+  const contratsSansJours = contratsDesBeneficiairesActifs(contratsSansJoursTous, participants);
+  const groupesAFaire = [
+    {
+      cle: 'bilans', titre: 'Bilans à faire', couleur: AMBRE, icone: <ClipboardList size={15} />,
+      lignes: suivis.filter(p => bilanAFaire(p.bilans, aujourdhui))
+        .map(p => ({ id: p.id, nom: `${p.prenom} ${p.nom}`, detail: echeanceBilan(p.bilans, aujourdhui).libelle })),
+    },
+    {
+      cle: 'renouveler', titre: 'Contrats à renouveler', couleur: AMBRE, icone: <FileClock size={15} />,
+      lignes: contratsARenouveler.map(c => ({ id: c.participantId, nom: nomComplet(c.participantId), detail: `Fin le ${dateCourte(c.dateFin)}` })),
+    },
+    {
+      cle: 'sansJours', titre: 'Contrats sans jours de séance', couleur: ROUGE, icone: <CalendarX2 size={15} />,
+      lignes: contratsSansJours.map(c => ({ id: c.participantId, nom: nomComplet(c.participantId), detail: 'Ne se renouvelle pas' })),
+    },
+    {
+      cle: 'relancer', titre: 'Sans séance depuis 3 semaines', couleur: ENCRE_2, icone: <UserRoundX size={15} />,
+      lignes: patientsARelancer(21).filter(p => idsSuivis.has(p.id)).map(p => {
+        const derniere = seances.filter(s => s.participantId === p.id && s.statut === 'realisee').map(s => s.date).sort().at(-1);
+        return { id: p.id, nom: `${p.prenom} ${p.nom}`, detail: derniere ? `Dernière le ${dateCourte(derniere)}` : 'Aucune séance' };
+      }),
+    },
+  ];
+
+  const lignesStructures = structures.length > 0
+    ? parStructure({ structures, suivis, seances, cours, lignes: lignesCA, participants, aujourdhui })
+    : [];
 
   return (
     <PageWrapper>
-      {/* ── Header ─────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between mb-6">
+      {/* ── En-tête ────────────────────────────────────────────────── */}
+      <header className="flex flex-wrap items-end justify-between gap-4 mb-2">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Mon tableau de bord</h1>
-          <div className="text-sm text-gray-500 mt-0.5">
-            {formatMoisAnnee(now)} · {patientsActifs} bénéficiaire{patientsActifs > 1 ? 's' : ''} actif{patientsActifs > 1 ? 's' : ''}
-          </div>
+          <p className="m-0 text-[13px] font-bold" style={{ color: '#147A64' }}>{MOIS_LONGS[moisIndex]} {annee}</p>
+          <h1 className="font-heading font-extrabold m-0 mt-0.5 text-gray-900" style={{ fontSize: 28, letterSpacing: '-0.3px' }}>
+            Mes statistiques
+          </h1>
+          <p className="m-0 mt-1 text-sm text-gray-500">
+            {pf.actifs} bénéficiaire{pf.actifs > 1 ? 's' : ''} avec un contrat actif
+            {structures.length > 0 && <> · {structures.length} structure{structures.length > 1 ? 's' : ''}</>}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <FormulaireObjectifs statsPro={statsPro} onSave={sauvegarder} />
-          <div className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full"
-            style={{ background: badgeColor.bg, color: badgeColor.text }}>
-            {pct >= 50
-              ? <TrendingUp size={13} />
-              : <TrendingDown size={13} />}
-            {badgeLabel}
+        <FormulaireObjectifs statsPro={statsPro} onSave={sauvegarder} ouvert={objectifsOuverts} setOuvert={setObjectifsOuverts} />
+      </header>
+
+      <BandeauDuMois prenom={prenomPraticien} phrases={phrases} progres={progresRecents.slice(0, 3)} />
+
+      {/* ── Chiffres clés ──────────────────────────────────────────── */}
+      <TitreSection detail="Montants HT sauf « À encaisser » (TTC)">Ce mois-ci</TitreSection>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <ChiffreCle
+          libelle={`Réalisé en ${moisLong(cleMois)}`}
+          valeur={euros(caCourant.total)}
+          detail={
+            <>
+              Fin de mois estimée : <span className="font-semibold text-gray-700">{euros(finDeMoisEstimee)}</span>
+              {valeurPrevue.valorisees > 0 && <> avec {valeurPrevue.valorisees} séance{valeurPrevue.valorisees > 1 ? 's' : ''} prévue{valeurPrevue.valorisees > 1 ? 's' : ''}</>}
+              {valeurPrevue.sansTarif > 0 && <span style={{ color: '#B7791F' }}> · {valeurPrevue.sansTarif} sans tarif, non comptée{valeurPrevue.sansTarif > 1 ? 's' : ''}</span>}
+            </>
+          }
+          valeurs={ca.slice(0, -1).map(m => m.total)}
+        >
+          {statsPro.objectifMensuel > 0
+            ? <JaugeObjectif realise={caCourant.total} objectif={statsPro.objectifMensuel} libelle="Objectif du mois" />
+            : (
+              <button onClick={() => setObjectifsOuverts(true)}
+                className="mt-3 self-start inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
+                <Target size={13} /> Fixer un objectif
+              </button>
+            )}
+        </ChiffreCle>
+
+        <ChiffreCle
+          libelle="À encaisser"
+          valeur={euros(enc.resteDu)}
+          detail={enc.nbAttente > 0
+            ? `${enc.nbAttente} facture${enc.nbAttente > 1 ? 's' : ''} émise${enc.nbAttente > 1 ? 's' : ''} non réglée${enc.nbAttente > 1 ? 's' : ''}`
+            : 'Toutes vos factures émises sont réglées'}
+        >
+          <div className="mt-2 space-y-1 text-xs">
+            {enc.nbEnRetard > 0 && (
+              <Link to="/factures" className="block font-medium hover:underline" style={{ color: ROUGE }}>
+                dont {euros(enc.enRetard)} en retard ({enc.nbEnRetard} facture{enc.nbEnRetard > 1 ? 's' : ''})
+              </Link>
+            )}
+            {brouillonsAValider.length > 0 && (
+              <Link to="/factures/a-valider" className="block font-medium hover:underline" style={{ color: '#B7791F' }}>
+                + {euros(montantAValider)} à valider ({brouillonsAValider.length} brouillon{brouillonsAValider.length > 1 ? 's' : ''})
+              </Link>
+            )}
+            {enc.delaiMoyen !== null && <div className="text-gray-500">Payé en {enc.delaiMoyen} jours en moyenne</div>}
           </div>
-        </div>
+        </ChiffreCle>
+
+        <ChiffreCle
+          libelle={`Heures de séance en ${moisLong(cleMois)}`}
+          valeur={formaterHeures(activite.minutes)}
+          detail={
+            <>
+              {ecartMinutes === 0
+                ? 'Autant que le mois dernier à la même date'
+                : (
+                  <>
+                    <span className="font-semibold" style={{ color: ecartMinutes > 0 ? VERT_FONCE : undefined }}>
+                      {ecartMinutes > 0 ? '+' : '−'}{formaterHeures(Math.abs(ecartMinutes))}
+                    </span>{' '}par rapport au mois dernier à la même date
+                  </>
+                )}
+              {activite.minutesPrevues > 0 && <> · {formaterHeures(activite.minutesPrevues)} encore prévues</>}
+            </>
+          }
+          valeurs={sem.slice(0, -1).map(s => s.heures)}
+        />
+
+        <ChiffreCle
+          libelle="Ce que rapporte une heure de séance"
+          valeur={horairePrec === null ? '—' : `${Math.round(horairePrec)} €/h`}
+          detail={horairePrec === null
+            ? `Pas assez de données pour ${moisLong(clePrec)}`
+            : `En ${moisLong(clePrec)} : ${euros(caMoisPrec.total)} pour ${formaterHeures(minutesMoisPrec)} de séance, trajets non comptés`}
+          valeurs={horaireTendance}
+        />
       </div>
 
-      {/* ── 4 Metric cards ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-4 gap-3 mb-5">
-        <MetricCard
-          label="CA ce mois"
-          valeur={`${caMois.toLocaleString('fr-FR')} €`}
-          delta={deltaCaPct !== null ? `${deltaCaPct > 0 ? '+' : ''}${deltaCaPct}% vs mois dernier` : 'Premier mois'}
-          deltaPositif={deltaCaPct !== null ? deltaCaPct >= 0 : null}
-        />
-        <MetricCard
-          label="CA annuel"
-          valeur={`${caAnnuel.toLocaleString('fr-FR')} €`}
-          delta={`Objectif : ${statsPro.objectifAnnuel.toLocaleString('fr-FR')} €`}
-          deltaPositif={caAnnuel >= statsPro.objectifAnnuel}
-        />
-        <MetricCard
-          label="Séances ce mois"
-          valeur={seancesMois.toString()}
-          delta={`${seancesTotal} planifiée${seancesTotal > 1 ? 's' : ''}`}
-          deltaPositif={null}
-        />
-        <MetricCard
-          label="Taux de présence"
-          valeur={`${tauxPresence}%`}
-          delta={`${annulations} annulation${annulations > 1 ? 's' : ''}`}
-          deltaPositif={tauxPresence >= 85}
-        />
+      <div className="mt-5">
+        <SectionAFaire groupes={groupesAFaire} />
       </div>
 
-      {/* ── Alertes ────────────────────────────────────────────────── */}
-      <SectionAlertes
-        participants={participantsSuivis}
-        seances={seances}
-        contrats={contratsSuivis}
-        contratActif={contratActifDeParticipant}
-      />
-
-      {/* ── Factures à envoyer ─────────────────────────────────────── */}
+      {/* ── Factures à envoyer (ancienne ébauche) ──────────────────── */}
       {/* Ancienne ébauche masquée le 2026-10-05 (voir lib/featuresFacturation.ts). Ne pas
           monter SectionFactures suffit à couper aussi sa génération automatique, qui
           écrivait dans factures_suivi à chaque ouverture de cette page. */}
@@ -1352,118 +1258,112 @@ export default function StatsPage() {
         />
       )}
 
-      {/* ── Santé du portefeuille ──────────────────────────────────── */}
-      <SectionSantePortefeuille
-        participants={participantsSuivis}
-        seances={seances}
-        contrats={contratsSuivis}
-        contratActif={contratActifDeParticipant}
-      />
-
-      {/* ── Graphiques CA + Séances ─────────────────────────────────── */}
-      <div className="grid gap-4 mb-4" style={{ gridTemplateColumns: '3fr 2fr' }}>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <div className="text-sm font-semibold text-gray-800">CA mensuel {now.getFullYear()}</div>
-              <div className="text-xs text-gray-400 mt-0.5">
-                <span className="inline-block w-2 h-2 rounded-full bg-primary mr-1" />Réalisé
-                <span className="inline-block w-4 border-t-2 border-dashed border-amber-400 mx-2 -mb-px" />Objectif
-              </div>
+      {/* ── Chiffre d'affaires ─────────────────────────────────────── */}
+      <TitreSection detail="12 derniers mois, HT">Chiffre d'affaires</TitreSection>
+      <div className="grid gap-4 lg:grid-cols-5">
+        <Carte
+          className="lg:col-span-3"
+          titre="Par mois"
+          sousTitre={<Legende elements={[
+            { libelle: 'Facturé', couleur: VERT },
+            { libelle: 'En préparation', couleur: VERT_PALE },
+            ...(statsPro.objectifMensuel > 0 ? [{ libelle: 'Objectif mensuel', couleur: AMBRE, pointille: true }] : []),
+          ]} />}
+          droite={
+            <div className="text-right flex-shrink-0">
+              <div className="text-xs text-gray-400">Sur 12 mois</div>
+              <div className="text-sm font-bold text-gray-900">{euros(ca.reduce((t, m) => t + m.total, 0))}</div>
+              {statsPro.objectifAnnuel > 0 && (() => {
+                const depuisJanvier = ca.filter(m => m.mois.startsWith(`${annee}-`)).reduce((t, m) => t + m.total, 0);
+                return <div className="text-xs text-gray-400">{annee} : {euros(depuisJanvier)} sur {euros(statsPro.objectifAnnuel)} ({Math.round((depuisJanvier / statsPro.objectifAnnuel) * 100)} %)</div>;
+              })()}
             </div>
-            <div className="text-right">
-              <div className="text-xs text-gray-400">Objectif mensuel</div>
-              <div className="text-sm font-semibold text-gray-700">{(statsPro.objectifMensuel ?? 0).toLocaleString('fr-FR')} €</div>
-            </div>
-          </div>
+          }
+        >
           <ErrorBoundary>
-            <GraphiqueCA statsPro={statsPro} caParMois={caParMois} />
+            <GraphiqueCA mois={ca} objectif={statsPro.objectifMensuel ?? 0} moisCourant={cleMois} />
           </ErrorBoundary>
-        </div>
+        </Carte>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <div className="text-sm font-semibold text-gray-800 mb-1">Séances hebdomadaires</div>
-          <div className="text-xs text-gray-400 mb-3">12 dernières semaines — séances réalisées</div>
-          <ErrorBoundary>
-            <GraphiqueSeances seances={seances} />
-          </ErrorBoundary>
-        </div>
+        <Carte className="lg:col-span-2" titre="D'où il vient" sousTitre="Factures émises, par origine des bénéficiaires">
+          <SectionSourcesCA sources={sources} partPremier={partPremier} />
+        </Carte>
       </div>
 
-      {/* ── Progression + Assiduité + Répartition ──────────────────── */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <div className="text-sm font-semibold text-gray-800 mb-3">Progression moyenne par test</div>
+      {/* ── Temps ──────────────────────────────────────────────────── */}
+      <TitreSection detail="Séances individuelles et cours collectifs">Votre temps</TitreSection>
+      <div className="grid gap-4 lg:grid-cols-5">
+        <Carte
+          className="lg:col-span-3"
+          titre="Heures de séance par semaine"
+          sousTitre={<Legende elements={[
+            { libelle: 'Réalisées', couleur: VERT }, { libelle: 'Annulées', couleur: ROUGE_PALE }, { libelle: 'Semaine en cours', couleur: VERT_PALE },
+          ]} />}
+          droite={
+            <div className="text-right flex-shrink-0">
+              <div className="text-xs text-gray-400">Présence sur 30 jours</div>
+              <div className="text-sm font-bold text-gray-900">{presence.taux === null ? '—' : `${presence.taux} %`}</div>
+              {presence.nonPointees > 0 && (
+                <Link to="/agenda" className="text-xs font-medium hover:underline" style={{ color: '#B7791F' }}>
+                  {presence.nonPointees} séance{presence.nonPointees > 1 ? 's' : ''} à pointer
+                </Link>
+              )}
+            </div>
+          }
+        >
           <ErrorBoundary>
-            <SectionProgression participants={participants} />
+            <GraphiqueTemps semaines={sem} />
           </ErrorBoundary>
-        </div>
+        </Carte>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <div className="text-sm font-semibold text-gray-800 mb-3">Top assiduité</div>
-          <ErrorBoundary>
-            <SectionAssiduite
-              participants={participants}
-              seances={seances}
-              contratActif={contratActifDeParticipant}
-            />
-          </ErrorBoundary>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <div className="text-sm font-semibold text-gray-800 mb-3">Répartition bénéficiaires</div>
-          <ErrorBoundary>
-            <SectionRepartition participants={participants} />
-          </ErrorBoundary>
-          <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
-            Total : <span className="font-semibold text-gray-700">{participants.length} bénéficiaire{participants.length > 1 ? 's' : ''}</span>
-          </div>
-        </div>
+        <Carte className="lg:col-span-2" titre="Annulations" sousTitre="Séances individuelles des 90 derniers jours">
+          <SectionAnnulations a={annul} manqueAGagner={manqueAGagner} />
+        </Carte>
       </div>
 
-      {/* ── Projection + Objectif + Kilométrage ────────────────────── */}
-      <div className="grid gap-4 mb-4" style={{ gridTemplateColumns: '2fr 1fr' }}>
-        {/* Objectif + projection */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <div className="text-sm font-semibold text-gray-800 mb-3">📊 Objectif mensuel</div>
-          <div className="flex items-center gap-3 mb-3">
-            <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                style={{ width: `${Math.min(100, pct)}%`, background: pct >= 100 ? '#1D9E75' : pct >= 80 ? 'var(--color-teal)' : '#F59E0B' }}
-                className="h-full rounded-full transition-all"
-              />
-            </div>
-            <span className="text-sm font-bold text-gray-700">{pct}%</span>
+      {/* ── Bénéficiaires ──────────────────────────────────────────── */}
+      <TitreSection detail="Bénéficiaires suivis">Vos bénéficiaires</TitreSection>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <Carte titre="Portefeuille" sousTitre="Sur les 90 derniers jours">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+            <Mini libelle="Contrat actif" valeur={String(pf.actifs)} />
+            <Mini libelle="Ancienneté moyenne" valeur={pf.ancienneteMois === null ? '—' : `${pf.ancienneteMois} mois`} />
+            <Mini libelle="Arrivées" valeur={`+${pf.arrivees}`} ton={pf.arrivees > 0 ? VERT_FONCE : undefined} detail="premier contrat" />
+            <Mini libelle="Fins de suivi" valeur={String(pf.departs)} detail="dernier contrat terminé" />
           </div>
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="text-center">
-              <div className="text-lg font-bold text-gray-900">{caMois.toLocaleString('fr-FR')} €</div>
-              <div className="text-xs text-gray-400">CA ce mois</div>
+          <div className="mt-5 pt-4 border-t border-gray-100">
+            <div className="flex justify-between text-xs mb-1.5">
+              <span className="text-gray-600">Bilans à jour (moins de 85 jours)</span>
+              <span className="font-semibold text-gray-800">{bilansAJour} sur {avecContrat.length}</span>
             </div>
-            <div className="text-center">
-              <div className="text-lg font-bold text-gray-500">{(statsPro.objectifMensuel ?? 0).toLocaleString('fr-FR')} €</div>
-              <div className="text-xs text-gray-400">Objectif</div>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: GRIS }}>
+              <div className="h-full rounded-full" style={{ width: `${avecContrat.length > 0 ? (bilansAJour / avecContrat.length) * 100 : 0}%`, background: VERT }} />
             </div>
           </div>
-          {/* Projection mois suivant */}
-          {patientsActifs > 0 && (
-            <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
-              <div className="text-xs font-semibold text-blue-700 mb-0.5">
-                Projection {MOIS_COURTS[(now.getMonth() + 1) % 12]}
-              </div>
-              <div className="text-sm font-bold text-blue-800">
-                ~{(patientsActifs * (parseFloat(chargerSettingsPraticien().tarifHoraire) || 45) * 4).toLocaleString('fr-FR')} €
-              </div>
-              <div className="text-xs text-blue-500 mt-0.5">
-                Basé sur {patientsActifs} bénéficiaires actifs × ~4 séances/mois
-              </div>
-            </div>
-          )}
-        </div>
+        </Carte>
 
-        {/* Kilométrage */}
-        <SectionKilometrage seances={seances} participants={participants} />
+        <Carte titre="Assiduité à surveiller" sousTitre={`Moins de ${SEUIL_ASSIDUITE} % de présence sur 90 jours`}>
+          <ErrorBoundary>
+            <SectionAssiduite lignes={assiduiteParBeneficiaire(seancesSuivies, aujourdhui)} nomDe={nomDe} />
+          </ErrorBoundary>
+        </Carte>
+
+        <Carte titre="Résultats des bilans" sousTitre="Entre le premier et le dernier bilan de chaque bénéficiaire">
+          <ErrorBoundary>
+            <SectionResultats participants={participants} />
+          </ErrorBoundary>
+        </Carte>
       </div>
+
+      {/* ── Structures ─────────────────────────────────────────────── */}
+      {lignesStructures.length > 0 && (
+        <>
+          <TitreSection detail="Pour rendre compte à chaque structure">Par structure</TitreSection>
+          <Carte titre="Activité par origine" sousTitre="Heures et cours du mois en cours, présence sur 90 jours, CA facturé sur 12 mois" className="mb-5">
+            <TableauStructures lignes={lignesStructures} />
+          </Carte>
+        </>
+      )}
     </PageWrapper>
   );
 }
