@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronRight, MapPin } from 'lucide-react';
+import { Check, CheckCheck, ChevronRight, MapPin, PenLine } from 'lucide-react';
 import { useParticipants } from '../../../hooks/useParticipants';
 import { useAgenda } from '../../../hooks/useAgenda';
 import { useContrats } from '../../../hooks/useContrats';
@@ -26,6 +26,9 @@ import { formatDateCourt, usePraticienSettings } from './communs';
 import { GuideDemarrage } from '../../../components/demarrage/GuideDemarrage';
 import { seancePrincipale, seancesAConfirmer } from '../../../lib/accueilSeances';
 import { DialogueConfirmation } from '../../../components/ui/DialogueConfirmation';
+import { DialogueToutConfirmer } from '../../../components/tableau-de-bord/DialogueToutConfirmer';
+import { useToutConfirmer } from '../../../hooks/useToutConfirmer';
+import { DialogueMemoSeance } from '../../../components/tableau-de-bord/DialogueMemoSeance';
 
 export function ouvrirMaps(adresse: string) {
   window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}`, '_blank');
@@ -74,7 +77,7 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
   // `participants` (tous) sert aux recherches par identifiant ; les listes du quotidien
   // n'utilisent que les actifs — un archivé n'est plus suivi.
   const { participants, participantsActifs } = useParticipants();
-  const { seances: allSeances, seancesDuJour, modifierSeance } = useAgenda();
+  const { seances: allSeances, seancesDuJour, modifierSeance, marquerRealiseesEnGroupe } = useAgenda();
   const { contratsARenouveler: contratsARenouvelerTous } = useContrats();
   const contratsARenouveler = contratsDesBeneficiairesActifs(contratsARenouvelerTous, participants);
   const { settings: praticienSettings } = usePraticienSettings();
@@ -92,6 +95,7 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
   const [validationEnCours, setValidationEnCours] = useState<string | null>(null);
   const [toutesAConfirmer, setToutesAConfirmer] = useState(false);
   // Geste en attente de confirmation (retour de Pierre du 23/11/2026).
+  const [memoSeance, setMemoSeance] = useState<Seance | null>(null);
   const [aConfirmerGeste, setAConfirmerGeste] = useState<{ seance: Seance; statut: 'realisee' | 'annulee' } | null>(null);
   const [retours, setRetours] = useState<Record<string, { borgRpe: number; bienEtre: number }[]>>({});
   const retoursCharges = useRef(false);
@@ -121,6 +125,7 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
   const aConfirmer = seancesAConfirmer(allSeances, today, currentTimeStr)
     .filter(s => actifs.has(s.participantId))
     .sort((a, b) => b.date.localeCompare(a.date) || b.heureDebut.localeCompare(a.heureDebut));
+  const toutConfirmer = useToutConfirmer({ seances: aConfirmer, factures, marquer: marquerRealiseesEnGroupe });
 
   const coursDuJour = coursCollectifs
     .filter(c => c.date === today && c.statut !== 'annule')
@@ -257,16 +262,26 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
                 </div>
               </div>
 
-              {(rdv.objectif || contexte.objectif || contexte.vigilance || bienEtre || effort) && (
-                <div className="bg-white rounded-[14px] px-3 py-2.5 text-[13px] flex flex-col gap-1.5" style={{ color: ENCRE }}>
-                  {rdv.objectif && <div><strong style={{ color: VERT_TEXTE }}>Objectif de la séance</strong> · {rdv.objectif}</div>}
-                  {contexte.objectif && <div><strong style={{ color: VERT_TEXTE }}>Son objectif</strong> · « {contexte.objectif} »</div>}
-                  {contexte.vigilance && <div><strong style={{ color: '#8A5300' }}>À garder en tête</strong> · {contexte.vigilance}</div>}
-                  {(bienEtre || effort) && (
-                    <div><strong style={{ color: SECONDAIRE }}>La dernière fois</strong> · {[bienEtre && `se sentait « ${bienEtre.label.toLowerCase()} »`, effort && `effort « ${effort.label.toLowerCase()} »`].filter(Boolean).join(', ')}</div>
-                  )}
+              <div className="bg-white rounded-[14px] px-3 py-2.5 text-[13px] flex flex-col gap-1.5" style={{ color: ENCRE }}>
+                <div className="flex items-center justify-between gap-2 -my-1">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider" style={{ color: SECONDAIRE }}>Mémo</span>
+                  <button type="button" onClick={() => setMemoSeance(rdv)}
+                    className="h-10 px-2 -mr-1.5 inline-flex items-center gap-1 text-[13px] font-bold" style={{ color: VERT_TEXTE }}>
+                    <PenLine size={14} aria-hidden="true" />
+                    {rdv.objectif || rdv.notes || contexte.objectif || contexte.vigilance ? 'Modifier' : 'Ajouter une note'}
+                  </button>
                 </div>
-              )}
+                {rdv.objectif && <div><strong style={{ color: VERT_TEXTE }}>Objectif de la séance</strong> · {rdv.objectif}</div>}
+                {rdv.notes && <div className="whitespace-pre-line"><strong style={{ color: VERT_TEXTE }}>Ma note</strong> · {rdv.notes}</div>}
+                {contexte.objectif && <div><strong style={{ color: VERT_TEXTE }}>Son objectif</strong> · « {contexte.objectif} »</div>}
+                {contexte.vigilance && <div><strong style={{ color: '#8A5300' }}>À garder en tête</strong> · {contexte.vigilance}</div>}
+                {(bienEtre || effort) && (
+                  <div><strong style={{ color: SECONDAIRE }}>La dernière fois</strong> · {[bienEtre && `se sentait « ${bienEtre.label.toLowerCase()} »`, effort && `effort « ${effort.label.toLowerCase()} »`].filter(Boolean).join(', ')}</div>
+                )}
+                {!(rdv.objectif || rdv.notes || contexte.objectif || contexte.vigilance || bienEtre || effort) && (
+                  <div style={{ color: SECONDAIRE }}>Une note pour cette séance : fatigue, équilibre, ce qui a bien marché…</div>
+                )}
+              </div>
 
               {ciInfo.actif && ciInfo.detail && (
                 <div className="rounded-[12px] px-3 py-2 text-xs font-semibold" style={{ background: '#FEF0EF', color: '#B42318' }}>
@@ -297,15 +312,15 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
                     Itinéraire
                   </button>
                 ) : (
-                  <button type="button" onClick={() => navigate(URLS_MOBILE.agendaJour(rdv.date))} className="h-12 rounded-[12px] bg-white text-sm font-bold" style={{ border: '1.5px solid #B5DDD2', color: ENCRE }}>
-                    Agenda
+                  <button type="button" onClick={() => navigate(URLS_MOBILE.agendaSeance(rdv.id))} className="h-12 rounded-[12px] bg-white text-sm font-bold" style={{ border: '1.5px solid #B5DDD2', color: ENCRE }}>
+                    Gérer la séance
                   </button>
                 )}
               </div>
               {principale && (
                 <div className="flex justify-between gap-2">
-                  <button type="button" onClick={() => navigate(URLS_MOBILE.agendaJour(principale.date))} className="h-11 text-[13px] font-bold" style={{ color: SECONDAIRE }}>
-                    Modifier ou annuler
+                  <button type="button" onClick={() => navigate(URLS_MOBILE.agendaSeance(principale.id))} className="h-11 text-[13px] font-bold" style={{ color: SECONDAIRE }}>
+                    Modifier, reporter ou annuler
                   </button>
                   {suivanteExiste && (
                     <button type="button" onClick={() => setEcartees(prev => new Set([...prev, principale.id]))} className="h-11 text-[13px] font-bold" style={{ color: VERT_TEXTE }}>
@@ -323,6 +338,12 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
           <section aria-labelledby="m-confirmer" style={CARTE} className="flex flex-col gap-2.5">
             <Titre id="m-confirmer" droite={<Pastille ton="orange">{aConfirmer.length}</Pastille>}>À confirmer</Titre>
             <p className="m-0 text-[13px]" style={{ color: AIDE }}>Un geste par séance, et votre facture du mois est juste. Elles restent ici tant qu’elles ne sont ni réalisées ni annulées.</p>
+            {aConfirmer.length >= 2 && (
+              <button type="button" onClick={toutConfirmer.ouvrir}
+                className="h-12 rounded-[12px] text-sm font-bold flex items-center justify-center gap-1.5 text-white" style={{ background: VERT_ACTION }}>
+                <CheckCheck size={17} aria-hidden="true" /> Tout confirmer ({aConfirmer.length})
+              </button>
+            )}
             {(toutesAConfirmer ? aConfirmer : aConfirmer.slice(0, A_CONFIRMER_VISIBLES)).map(sc => {
               const p = participants.find(x => x.id === sc.participantId);
               const occupe = validationEnCours === sc.id;
@@ -393,7 +414,7 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
                 const [ton, libelle]: [TonPastille, string] = faite ? ['vert', 'Réalisée'] : passee ? ['orange', 'À confirmer'] : enCours ? ['plein', 'En cours'] : estProchaine ? ['plein', 'Prochaine'] : ['neutre', 'À venir'];
                 return (
                   <li key={s.id} style={bord}>
-                    <button type="button" onClick={() => p && onVoirFiche(p.id)} className="w-full flex items-center gap-2.5 py-2.5 text-left">
+                    <button type="button" onClick={() => navigate(URLS_MOBILE.agendaSeance(s.id))} className="w-full flex items-center gap-2.5 py-2.5 text-left">
                       <span className="w-[46px] text-sm font-extrabold" style={{ color: estProchaine || enCours ? VERT_ACTION : faite || passee ? AIDE : ENCRE }}>{s.heureDebut.slice(0, 5)}</span>
                       <span className="flex-1 min-w-0">
                         <span className="block text-sm font-bold truncate" style={{ color: ENCRE }}>{nomDe(p)}</span>
@@ -417,7 +438,7 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
                 const p = participants.find(x => x.id === b.participantId);
                 return (
                   <li key={b.id} style={{ borderTop: i === 0 ? 'none' : '1px solid #EEF4F4' }}>
-                    <button type="button" onClick={() => navigate(URLS_MOBILE.agendaJour(b.date))} className="w-full flex items-center gap-2.5 py-2.5 text-left">
+                    <button type="button" onClick={() => navigate(URLS_MOBILE.agendaSeance(b.id))} className="w-full flex items-center gap-2.5 py-2.5 text-left">
                       <span className="flex-1 min-w-0">
                         <span className="block text-sm font-bold truncate" style={{ color: ENCRE }}>{nomDe(p)}</span>
                         <span className="block text-xs" style={{ color: AIDE }}>{LABEL_TYPE[b.type]} planifié</span>
@@ -497,6 +518,25 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
           </aside>
         )}
       </div>
+
+      {memoSeance && (
+        <DialogueMemoSeance
+          nom={nomDe(participants.find(x => x.id === memoSeance.participantId))}
+          objectifInitial={memoSeance.objectif ?? ''}
+          noteInitiale={memoSeance.notes ?? ''}
+          onEnregistrer={async v => {
+            const ok = await modifierSeance(memoSeance.id, { objectif: v.objectif || undefined, notes: v.notes || undefined });
+            if (ok) toast.success('Mémo enregistré');
+            return ok;
+          }}
+          onAnnuler={() => setMemoSeance(null)}
+        />
+      )}
+
+      {toutConfirmer.ouvert && (
+        <DialogueToutConfirmer plan={toutConfirmer.plan} enCours={toutConfirmer.enCours} avancement={toutConfirmer.avancement}
+          onConfirmer={() => void toutConfirmer.confirmer()} onAnnuler={toutConfirmer.fermer} />
+      )}
 
       {aConfirmerGeste && (() => {
         const p = participants.find(x => x.id === aConfirmerGeste.seance.participantId);

@@ -79,9 +79,11 @@ export function EcranPlus({ onLogout, onNaviguer }: { onLogout: () => void; onNa
       {/* Carte, bibliothèque : leur URL desktop. Sous 768 px elle affiche
           l'écran « bientôt en version mobile » — et au-dessus, l'écran lui-même.
           « Agenda complet » retiré (2026-10-25) : l'agenda a son onglet dans la
-          barre du bas, qui remplace Tournée. */}
+          barre du bas, qui remplace Tournée.
+          2026-11-24 (arbitrage de Pierre) : la Carte prend la place de l'Agenda dans la barre, et
+          l'Agenda revient ici. */}
       <SectionMobile titre="Mon activité">
-        <ItemMobile icon="ti-map-pin" label="Carte bénéficiaires" onClick={() => onNaviguer('/map')} />
+        <ItemMobile icon="ti-calendar" label="Agenda" onClick={() => onNaviguer(URLS_MOBILE.agenda)} />
       </SectionMobile>
 
       {/* Section Bénéficiaires */}

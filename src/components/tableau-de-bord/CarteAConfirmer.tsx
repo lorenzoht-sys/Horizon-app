@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Check } from 'lucide-react';
+import { Check, CheckCheck } from 'lucide-react';
 import type { Participant, Seance } from '../../types';
 import { LABEL_TYPE } from '../../lib/agendaCommun';
 import { libelleRendezVous } from '../../lib/tableauDeBord';
@@ -11,13 +11,15 @@ import { Carte, Pastille } from '../ui/Carte';
 
 const VISIBLES = 3;
 
-export function CarteAConfirmer({ seances, participants, aujourdhui, enCours, onMarquerRealisee }: {
+export function CarteAConfirmer({ seances, participants, aujourdhui, enCours, onMarquerRealisee, onToutConfirmer }: {
   seances: Seance[];
   participants: Participant[];
   aujourdhui: string;
   /** Séance en cours d'enregistrement (bouton désactivé). */
   enCours: string | null;
   onMarquerRealisee: (s: Seance) => void;
+  /** « Tout confirmer » (2026-11-24) : ouvre la confirmation détaillée, à partir de 2 séances. */
+  onToutConfirmer?: () => void;
 }) {
   const triees = [...seances].sort((a, b) => b.date.localeCompare(a.date) || b.heureDebut.localeCompare(a.heureDebut));
   const affichees = triees.slice(0, VISIBLES);
@@ -69,10 +71,21 @@ export function CarteAConfirmer({ seances, participants, aujourdhui, enCours, on
           })}
         </ul>
       )}
-      {seances.length > VISIBLES && (
-        <Link to="/factures/seances" className="text-[13px] font-bold text-primary-dark hover:underline">
-          Voir les {seances.length - VISIBLES} autres
-        </Link>
+      {(seances.length > VISIBLES || (onToutConfirmer && seances.length >= 2)) && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {seances.length > VISIBLES ? (
+            <Link to="/factures/seances" className="text-[13px] font-bold text-primary-dark hover:underline">
+              Voir les {seances.length - VISIBLES} autres
+            </Link>
+          ) : <span />}
+          {onToutConfirmer && seances.length >= 2 && (
+            <button type="button" onClick={onToutConfirmer}
+              className="h-[38px] px-3.5 rounded-[10px] text-[13px] font-bold flex items-center gap-1.5 text-white hover:brightness-95"
+              style={{ background: '#1A9A7F' }}>
+              <CheckCheck size={15} aria-hidden="true" /> Tout confirmer ({seances.length})
+            </button>
+          )}
+        </div>
       )}
     </Carte>
   );

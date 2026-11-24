@@ -11,11 +11,18 @@ import { C } from './communs';
 
 // ── EcranSaisie ───────────────────────────────────────────────────────────────
 
-export function ChoixSaisie({ onPatient, onBilan }: { onPatient: () => void; onBilan: () => void }) {
+// « + » de la barre du bas : toutes les créations au même endroit (2026-11-24, retour de Pierre :
+// « Nouvelle séance » ajoutée, elle ouvre la création de l'agenda puis revient ici).
+export function ChoixSaisie({ onPatient, onBilan, onSeance }: { onPatient: () => void; onBilan: () => void; onSeance: () => void }) {
   const btn: React.CSSProperties = { width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: 16, background: 'white', border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 10, cursor: 'pointer', textAlign: 'left' };
   return (
     <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 20, paddingRight: 20, paddingBottom: 20 }}>
-      <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 20 }}>Que saisir ?</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 20 }}>Que créer ?</div>
+      <button onClick={onSeance} style={btn}>
+        <span style={{ fontSize: 28 }}>📅</span>
+        <div><div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Nouvelle séance</div><div style={{ fontSize: 12, color: C.muted }}>Planifier un rendez-vous ou un bilan</div></div>
+        <i className="ti ti-chevron-right" style={{ fontSize: 18, color: '#D0DCDC', marginLeft: 'auto' }} />
+      </button>
       <button onClick={onBilan} style={btn}>
         <span style={{ fontSize: 28 }}>📋</span>
         <div><div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Nouveau bilan</div><div style={{ fontSize: 12, color: C.muted }}>Bilan initial ou trimestriel</div></div>

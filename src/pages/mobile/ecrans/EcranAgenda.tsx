@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
 import { useParticipants } from '../../../hooks/useParticipants';
@@ -121,10 +121,19 @@ export type ItemJour =
 // `dateInitiale` (AAAA-MM-JJ, déjà validée par ecranMobileDepuisUrl) : jour
 // affiché à l'ouverture — lien /agenda?date=… de la notification push
 // « absence signalée ». Absente : aujourd'hui, comme avant.
-export function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
+// `seanceInitialeId` / `creationInitiale` / `retour` (2026-11-24, retour de Pierre) : l'accueil et
+// le « + » ouvrent ICI la fenêtre d'une séance ou la création d'une séance — mêmes fenêtres, mêmes
+// règles (séries, suppression, report) que depuis l'agenda, rien n'est dupliqué. Une fois toutes les
+// fenêtres refermées, on revient à l'écran d'origine.
+export function EcranAgenda({ dateInitiale, seanceInitialeId = null, creationInitiale = null, retour = null }: {
+  dateInitiale: string | null;
+  seanceInitialeId?: string | null;
+  creationInitiale?: 'seance' | null;
+  retour?: 'accueil' | 'saisie' | null;
+}) {
   const { participants, participantsActifs } = useParticipants();
   const { contrats } = useContrats();
-  const { seances, modifierSeance, supprimerSeance, creerSeance, detecterConflits } = useAgenda();
+  const { seances, seancesChargees, modifierSeance, supprimerSeance, creerSeance, detecterConflits } = useAgenda();
   const { indisposDuJour } = useIndispos();
   const { evenements, modifierEvenement, supprimerEvenement } = useEvenementsAgenda();
   const { categories, creerCategorie, modifierCategorie, supprimerCategorie, definirCategorieBilan } = useCategoriesSeance();
@@ -253,6 +262,36 @@ export function EcranAgenda({ dateInitiale }: { dateInitiale: string | null }) {
   const [evenementEnModification, setEvenementEnModification] = useState<EvenementAgenda | null>(null);
   const [choixSerie, setChoixSerie] = useState<ChoixSerie | null>(null);
   const [choixSerieLoading, setChoixSerieLoading] = useState(false);
+
+  // Ouverture par lien (accueil, « + ») : une seule fois, dès que les séances sont chargées.
+  const ouvertureFaite = useRef(false);
+  const [ouvertParLien, setOuvertParLien] = useState(false);
+  useEffect(() => {
+    if (ouvertureFaite.current) return;
+    if (creationInitiale === 'seance') {
+      ouvertureFaite.current = true;
+      setOuvertParLien(true);
+      setNouvelleSeanceOuverte(true);
+      return;
+    }
+    if (!seanceInitialeId || !seancesChargees) return;
+    ouvertureFaite.current = true;
+    const s = seances.find(x => x.id === seanceInitialeId);
+    if (!s) { toast.error('Cette séance est introuvable : elle a peut-être été supprimée.'); return; }
+    const [a, m, j] = s.date.split('-').map(Number);
+    setJour(new Date(a, m - 1, j));
+    setOuvertParLien(true);
+    setSeanceEditee(s);
+  }, [creationInitiale, seanceInitialeId, seancesChargees, seances]);
+  const location = useLocation();
+  useEffect(() => {
+    if (!ouvertParLien || !retour) return;
+    if (seanceEditee || nouvelleSeanceOuverte || choixSerie || noteSeanceOuverte || categoriesOuvert) return;
+    // Une action de la fenêtre a pu mener ailleurs (fiche, bilan) : on ne revient que si l'on est
+    // encore sur l'agenda.
+    if (location.pathname !== '/agenda') return;
+    navigate(retour === 'accueil' ? URLS_MOBILE.accueil : URLS_MOBILE.saisie, { replace: true });
+  }, [ouvertParLien, retour, seanceEditee, nouvelleSeanceOuverte, choixSerie, noteSeanceOuverte, categoriesOuvert, location.pathname, navigate]);
 
   // Réplique exacte de toastConflitSerie / handleEnregistrerSeance /
   // handleSupprimerSeance / handleRestaurerSeance / handleReporterSeance

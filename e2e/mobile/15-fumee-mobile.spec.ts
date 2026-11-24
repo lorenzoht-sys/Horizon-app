@@ -89,10 +89,24 @@ test.describe('Fumée mobile (390×844)', () => {
     const erreurs = ecouterErreursConsole(page);
     await loginPraticien(page);
 
-    await barreNav(page).getByRole('button', { name: 'Agenda' }).click();
+    // Agenda déplacé dans « Plus » le 2026-11-24 (la Carte prend sa place dans la barre).
+    await barreNav(page).getByRole('button', { name: 'Plus' }).click();
+    await page.getByRole('button', { name: 'Agenda', exact: true }).click();
 
     await expect(page).toHaveURL(/\/agenda$/);
     await expect(page.getByText('+ Nouvelle séance')).toBeVisible();
+    await expect(barreNav(page)).toBeVisible();
+    expect(erreurs, erreurs.join('\n')).toEqual([]);
+  });
+
+  test('onglet Carte : la carte des bénéficiaires s’ouvre sur téléphone (2026-11-24)', async ({ page }) => {
+    const erreurs = ecouterErreursConsole(page);
+    await loginPraticien(page);
+
+    await barreNav(page).getByRole('button', { name: 'Carte' }).click();
+
+    await expect(page).toHaveURL(/\/map$/);
+    await expect(page.getByRole('heading', { name: /Carte des bénéficiaires/ })).toBeVisible();
     await expect(barreNav(page)).toBeVisible();
     expect(erreurs, erreurs.join('\n')).toEqual([]);
   });

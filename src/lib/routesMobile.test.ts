@@ -127,14 +127,27 @@ describe('ecranMobileDepuisUrl', () => {
   it('écrans desktop seulement : écran « bientôt en version mobile », avec un retour sensé', () => {
     expect(ecran('/participant/p1/programme')).toEqual({ ecran: 'paysage', retour: '/participant/p1' });
     expect(ecran('/participant/p1/bilan/b9/edit')).toEqual({ ecran: 'paysage', retour: '/participant/p1' });
-    for (const p of ['/agenda-v2', '/map', '/zones', '/stats', '/admin/comptes']) {
+    for (const p of ['/agenda-v2', '/zones', '/stats', '/admin/comptes']) {
       expect(ecran(p)).toEqual({ ecran: 'paysage', retour: URLS_MOBILE.plus });
     }
+  });
+
+  it('agenda ouvert sur une séance ou sur une création, avec l’écran de retour (2026-11-24)', () => {
+    expect(ecran(URLS_MOBILE.agendaSeance('s1'))).toEqual({ ecran: 'agenda', date: null, seanceId: 's1', retour: 'accueil' });
+    expect(ecran(URLS_MOBILE.nouvelleSeance)).toEqual({ ecran: 'agenda', date: null, creation: 'seance', retour: 'saisie' });
+    expect(ecran('/agenda?seance=s1&retour=ailleurs')).toEqual({ ecran: 'agenda', date: null, seanceId: 's1' });
   });
 
   it('URL inconnue : accueil', () => {
     expect(ecran('/nimporte/quoi')).toEqual({ ecran: 'accueil' });
     expect(ecran('/?onglet=inconnu')).toEqual({ ecran: 'accueil' });
+  });
+});
+
+describe('carte des bénéficiaires (onglet de la barre depuis le 2026-11-24)', () => {
+  it('est servie par l’interface unique et allume l’onglet Carte', () => {
+    expect(estRouteInterfaceUnique('/map')).toBe(true);
+    expect(ongletDepuisUrl('/map', '')).toBe('carte');
   });
 });
 

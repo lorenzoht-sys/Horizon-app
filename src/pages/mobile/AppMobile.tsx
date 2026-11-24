@@ -62,14 +62,16 @@ export default function AppMobile({ onLogout }: Props) {
       contenu = <EcranPatients onVoirFiche={voirFiche} />;
       break;
     case 'saisie':
-      contenu = <ChoixSaisie onPatient={() => navigate(URLS_MOBILE.nouveauBeneficiaire)} onBilan={() => navigate(URLS_MOBILE.choixBeneficiaireBilan)} />;
+      contenu = <ChoixSaisie onPatient={() => navigate(URLS_MOBILE.nouveauBeneficiaire)} onBilan={() => navigate(URLS_MOBILE.choixBeneficiaireBilan)}
+        onSeance={() => navigate(URLS_MOBILE.nouvelleSeance)} />;
       break;
     case 'agenda':
       // `key` : un nouveau lien daté (seconde notification, écran déjà
       // ouvert) doit repositionner le jour — l'état initial n'est lu qu'au
       // montage. La navigation interne (flèches, vue Mois) ne touche pas
       // l'URL, donc ne remonte jamais l'écran.
-      contenu = <EcranAgenda key={ecran.date ?? ''} dateInitiale={ecran.date} />;
+      contenu = <EcranAgenda key={`${ecran.date ?? ''}|${ecran.seanceId ?? ''}|${ecran.creation ?? ''}`} dateInitiale={ecran.date}
+        seanceInitialeId={ecran.seanceId ?? null} creationInitiale={ecran.creation ?? null} retour={ecran.retour ?? null} />;
       break;
     case 'assistant':
       contenu = <EcranAssistant preSelectedPatientId={ecran.beneficiaireId} onOuvrirSettings={() => navigate(URLS_MOBILE.parametres)} />;

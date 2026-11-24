@@ -102,6 +102,43 @@ export function useAgenda() {
     return true;
   }
 
+  /**
+   * « Tout confirmer » (retour de Pierre, 2026-11-24) : passe en « réalisée » les séances données.
+   * Filtre explicite à chaque lot, jamais hérité d'une lecture : les identifiants précis ET
+   * statut = 'planifiee' (une séance annulée ou réalisée entre-temps n'est pas touchée). Par lots de
+   * 25 : chaque ligne déclenche le recalcul du brouillon de son mois (trigger de facturation).
+   * Rend le nombre de séances réellement passées en « réalisée ».
+   */
+  async function marquerRealiseesEnGroupe(ids: readonly string[], onAvancement?: (faites: number) => void): Promise<{ faites: number; echec: boolean }> {
+    let faites = 0;
+    const modifiees: string[] = [];
+    for (let i = 0; i < ids.length; i += 25) {
+      const lot = ids.slice(i, i + 25);
+      if (supabase) {
+        const { data, error } = await supabase.from('seances')
+          .update({ statut: 'realisee' })
+          .in('id', lot)
+          .eq('statut', 'planifiee')
+          .select('id');
+        if (error) {
+          console.error('Erreur confirmation groupée:', error);
+          toast.error(messageErreurSeance(error));
+          setSeances(prev => prev.map(s => modifiees.includes(s.id) ? { ...s, statut: 'realisee' } : s));
+          return { faites, echec: true };
+        }
+        const ok = ((data ?? []) as { id: string }[]).map(r => r.id);
+        modifiees.push(...ok);
+        faites += ok.length;
+      } else {
+        modifiees.push(...lot);
+        faites += lot.length;
+      }
+      onAvancement?.(faites);
+    }
+    setSeances(prev => prev.map(s => modifiees.includes(s.id) ? { ...s, statut: 'realisee' } : s));
+    return { faites, echec: false };
+  }
+
   async function supprimerSeance(id: string) {
     if (supabase) {
       const { error } = await supabase.from('seances').delete().eq('id', id);
@@ -184,6 +221,7 @@ export function useAgenda() {
     creerSeance,
     bulkCreerSeances,
     modifierSeance,
+    marquerRealiseesEnGroupe,
     supprimerSeance,
     supprimerBilanAuto,
     retirerPlanifieesLocales,
