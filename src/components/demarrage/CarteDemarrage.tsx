@@ -217,17 +217,13 @@ function BoutonFermer({ onClick, pleineLargeur = false }: { onClick: () => void;
   );
 }
 
-export function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mobile, gestesOuverts: ouvertsDOffice = false, surFondSombre = false, onAction, onRetour }: {
+function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mobile, onAction, onRetour }: {
   etape: Etape;
   numero: number;
   total: number;
   estProchaine: boolean;
   manques: string | null;
   mobile: boolean;
-  /** Premiers pas : sur téléphone aussi, le « comment faire » est ouvert d'emblée. */
-  gestesOuverts?: boolean;
-  /** Posée dans le bandeau sombre des premiers pas : carte blanche pleine, plus de relief. */
-  surFondSombre?: boolean;
   onAction: (e: Etape) => void;
   onRetour: () => void;
 }) {
@@ -236,7 +232,7 @@ export function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mo
   const guide = guideEtape(etape.id, mobile);
   // Ordinateur : les gestes sont visibles d'emblée. Téléphone : repliés, pour ne
   // pas repousser la journée trop bas ; un bouton clair les déplie.
-  const [gestesOuverts, setGestesOuverts] = useState(!mobile || ouvertsDOffice);
+  const [gestesOuverts, setGestesOuverts] = useState(!mobile);
 
   return (
     <motion.div
@@ -246,11 +242,10 @@ export function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mo
       transition={{ duration: 0.25, ease: EASE }}
       className="relative"
       style={{
-        marginTop: surFondSombre ? 0 : mobile ? 14 : 20,
+        marginTop: mobile ? 14 : 20,
         borderRadius: 16,
-        background: surFondSombre ? '#FFFFFF' : 'linear-gradient(135deg, #F1FAF7 0%, #E6F5F1 100%)',
-        border: surFondSombre ? 'none' : '1px solid rgba(43,184,154,0.22)',
-        boxShadow: surFondSombre ? '0 10px 30px rgba(0,0,0,0.18)' : undefined,
+        background: 'linear-gradient(135deg, #F1FAF7 0%, #E6F5F1 100%)',
+        border: '1px solid rgba(43,184,154,0.22)',
         padding: mobile ? 14 : '18px 20px',
       }}
     >
@@ -287,10 +282,6 @@ export function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mo
         </div>
         {!mobile && <BoutonAction etape={etape} onAction={onAction} />}
       </div>
-
-      {/* Bandeau des premiers pas sur téléphone : le bouton avant les gestes, pour qu'il reste
-          au-dessus de la barre de navigation sans défiler. */}
-      {mobile && surFondSombre && <div style={{ marginTop: 14 }}><BoutonAction etape={etape} onAction={onAction} pleineLargeur /></div>}
 
       {/* Ce qui bloque, dit simplement, avant les gestes. */}
       {(etape.bloqueePar || manques) && (
@@ -343,7 +334,7 @@ export function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mo
         </div>
       )}
 
-      {mobile && !surFondSombre && <div style={{ marginTop: 14 }}><BoutonAction etape={etape} onAction={onAction} pleineLargeur /></div>}
+      {mobile && <div style={{ marginTop: 14 }}><BoutonAction etape={etape} onAction={onAction} pleineLargeur /></div>}
 
       {!estProchaine && (
         <button

@@ -23,9 +23,7 @@ import {
   prochainRendezVous, progresDepuisInitial, resumeFactures, type EtatEcheance,
 } from '../../../lib/tableauDeBord';
 import { formatDateCourt, usePraticienSettings } from './communs';
-import { GuideDemarrageVue } from '../../../components/demarrage/GuideDemarrage';
-import { useDemarrage } from '../../../hooks/useDemarrage';
-import { PHRASE_PREMIERS_PAS } from '../../../lib/demarrage';
+import { GuideDemarrage } from '../../../components/demarrage/GuideDemarrage';
 import { seancePrincipale, seancesAConfirmer } from '../../../lib/accueilSeances';
 import { DialogueConfirmation } from '../../../components/ui/DialogueConfirmation';
 
@@ -98,9 +96,6 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
   const [retours, setRetours] = useState<Record<string, { borgRpe: number; bienEtre: number }[]>>({});
   const retoursCharges = useRef(false);
   const [astucesEcartees, setAstucesEcartees] = useState<Set<string>>(lireAstucesEcartees);
-  // Premiers pas (25/11/2026, voir enPremiersPas) : le guide mène, les blocs vides se taisent.
-  const guide = useDemarrage();
-  const premiersPas = guide.premiersPas;
 
   useEffect(() => {
     if (participantsActifs.length === 0 || retoursCharges.current) return;
@@ -190,7 +185,7 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
   ].sort((a, b) => a.heureDebut.localeCompare(b.heureDebut));
 
   const prenom = praticienSettings.prenom?.trim();
-  const phrase = premiersPas ? PHRASE_PREMIERS_PAS : phraseDuJour({
+  const phrase = phraseDuJour({
     nbRendezVous: seances.length + coursDuJour.length,
     prochainDans: principale && principale.heureDebut.slice(0, 5) > currentTimeStr ? delaiRendezVous(principale, today, currentTimeStr) : null,
     nbAConfirmer: aConfirmer.length,
@@ -224,7 +219,7 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
         </header>
 
         {/* ── PRISE EN MAIN (tant qu'il reste une étape) ─────────── */}
-        <GuideDemarrageVue guide={guide} mobile />
+        <GuideDemarrage mobile />
 
         {/* ── PROCHAIN RENDEZ-VOUS ────────────────────────────────── */}
         {rdv && (() => {
@@ -363,7 +358,6 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
         )}
 
         {/* ── AUJOURD'HUI ─────────────────────────────────────────── */}
-        {(!premiersPas || itemsJour.length > 0) && (
         <section aria-labelledby="m-jour" style={CARTE}>
           <Titre id="m-jour" droite={
             <button type="button" onClick={() => navigate(URLS_MOBILE.agenda)} className="h-11 text-[13px] font-bold" style={{ color: VERT_TEXTE }}>Agenda →</button>
@@ -413,7 +407,6 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
             </ul>
           )}
         </section>
-        )}
 
         {/* ── BILANS ──────────────────────────────────────────────── */}
         {(bilansPlanifies.length > 0 || bilansAPrevoir.length > 0) && (
@@ -496,7 +489,7 @@ export function EcranAujourdhui({ onVoirFiche }: { onVoirFiche: (id: string) => 
         )}
 
         {/* ── LE SAVIEZ-VOUS ? ────────────────────────────────────── */}
-        {astuce && !premiersPas && (
+        {astuce && (
           <aside aria-labelledby="m-astuce" className="flex flex-col gap-2" style={{ background: '#FFFBF2', border: '1px solid #F4E3C2', borderRadius: 20, padding: 16 }}>
             <h2 id="m-astuce" className="m-0 text-[13px] font-extrabold" style={{ color: '#8A5300' }}>Le saviez-vous ?</h2>
             <p className="m-0 text-sm leading-relaxed" style={{ color: ENCRE }}>{astuce.texte}</p>

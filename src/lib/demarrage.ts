@@ -210,31 +210,20 @@ export function progression(etapes: Etape[]): Progression {
 export const AGE_MAX_COMPTE_JOURS = 45;
 
 /**
- * « Premiers pas » : le guide passe au premier plan et le tableau de bord se
- * tait (25/11/2026, demande de Lorenzo : « que la personne ne soit pas perdue
- * face à la quantité d'informations »). Un compte sans aucun bilan n'a encore
- * rien à montrer dans les cartes de la journée, des factures ou des progrès :
- * elles ne feraient qu'afficher du vide autour du seul geste utile. Le mode
- * prend fin au premier bilan, moment où le tableau de bord commence à servir.
+ * « Premiers pas » (25/11/2026, demande de Lorenzo : « que la personne ne
+ * soit pas perdue ») : tant qu'aucun bilan n'est fait, la phrase d'accueil du
+ * tableau de bord renvoie au guide, et le bouton « Voir le guide » de la ligne
+ * de prise en main devient le bouton principal et brille. Le premier réflexe
+ * doit être d'ouvrir le guide. Essayés et écartés le même jour : un grand
+ * bandeau déplié d'office (« trop terne et trop voyant ») et un tableau de
+ * bord vidé de ses cartes (page qui paraissait vide).
  */
 export function enPremiersPas(params: { visible: boolean; termine: boolean; bilans: number }): boolean {
   return params.visible && !params.termine && params.bilans === 0;
 }
 
-/** Titre d'accueil du guide en premiers pas. */
-export function messageAccueil(prenom: string | null): string {
-  return prenom ? `Bienvenue ${prenom}, commençons par l’essentiel.` : 'Bienvenue, commençons par l’essentiel.';
-}
-
-/**
- * Le fil conducteur, dit une fois : les étapes ne sont pas une liste de
- * réglages mais l'histoire d'un accompagnement.
- */
-export const FIL_CONDUCTEUR =
-  'Une personne, son bilan, ses séances, son programme d’exercices : c’est le fil d’Horizon. Suivez les étapes dans l’ordre, chacune se coche toute seule.';
-
 /** Phrase sous « Bonjour » en premiers pas, à la place du résumé d'une journée encore vide. */
-export const PHRASE_PREMIERS_PAS = 'Votre espace est prêt. Le guide ci-dessous vous accompagne pas à pas.';
+export const PHRASE_PREMIERS_PAS = 'Votre espace est prêt. Ouvrez le guide juste en dessous : il vous montre chaque étape.';
 
 export function doitAfficherGuide(params: {
   etat: EtatDemarrage;

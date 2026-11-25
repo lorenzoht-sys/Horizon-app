@@ -9,7 +9,6 @@ import {
   doitAfficherGuide,
   enPremiersPas,
   fusionnerEtats,
-  messageAccueil,
   guideEtape,
   lireEtatDemarrage,
   messageBravo,
@@ -269,12 +268,5 @@ describe('enPremiersPas', () => {
   it('jamais si le guide est masqué ou terminé', () => {
     expect(enPremiersPas({ visible: false, termine: false, bilans: 0 })).toBe(false);
     expect(enPremiersPas({ visible: true, termine: true, bilans: 0 })).toBe(false);
-  });
-});
-
-describe('messageAccueil', () => {
-  it('accueille par le prénom s’il est connu', () => {
-    expect(messageAccueil('Camille')).toBe('Bienvenue Camille, commençons par l’essentiel.');
-    expect(messageAccueil(null)).toBe('Bienvenue, commençons par l’essentiel.');
   });
 });

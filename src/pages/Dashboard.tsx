@@ -77,10 +77,9 @@ export default function Dashboard() {
   const { participants, participantsActifs, participantsArchives, loading: participantsLoading, addParticipant, archiverParticipant } = useParticipants();
   const { seancesDuJour, seances, modifierSeance, patientsARelancer } = useAgenda();
   const { notes } = useJournalSeance();
-  // Premiers pas (25/11/2026) : tant qu'aucun bilan n'est fait, le guide est déplié et les cartes
-  // vides se taisent. Une carte qui a quelque chose à dire (séance prévue, à confirmer) reste.
+  // Premiers pas (25/11/2026, voir enPremiersPas) : la phrase d'accueil renvoie au guide, dont le
+  // bouton « Voir le guide » brille. Le guide est lu ici et passé à GuideDemarrageVue : un seul chargement.
   const guide = useDemarrage();
-  const premiersPas = guide.premiersPas;
   const { contratsARenouveler: contratsARenouvelerTous, contratsSansJours: contratsSansJoursTous } = useContrats();
   // Un bénéficiaire archivé n'est plus suivi : ses contrats n'appellent aucune action.
   const contratsARenouveler = contratsDesBeneficiairesActifs(contratsARenouvelerTous, participants);
@@ -259,7 +258,7 @@ export default function Dashboard() {
                 {prenomPraticien ? `Bonjour ${prenomPraticien}` : 'Bonjour'}
               </h1>
               <p className="m-0 mt-1.5 text-[15px] leading-relaxed" style={{ color: '#3D4C5A' }}>
-                {premiersPas ? PHRASE_PREMIERS_PAS : phraseDuJour({
+                {guide.premiersPas ? PHRASE_PREMIERS_PAS : phraseDuJour({
                   nbRendezVous: journee.length,
                   prochainDans: prochainAujourdhui ? delaiRendezVous(prochainAujourdhui, aujourdhui, heure) : null,
                   nbAConfirmer: aConfirmer.length,
@@ -268,9 +267,6 @@ export default function Dashboard() {
               </p>
             </div>
             <div role="group" aria-label="Actions rapides" className="flex flex-wrap gap-2">
-              {/* Sans aucun bénéficiaire, ces trois actions n'ont personne à qui s'appliquer : en premiers
-                  pas on ne garde que les deux façons d'ajouter des bénéficiaires. */}
-              {!(premiersPas && participantsActifs.length === 0) && (<>
               <button type="button" onClick={() => setActionRapide('bilan')} className={BOUTON_SECONDAIRE} style={STYLE_SECONDAIRE}>
                 <ClipboardList size={16} style={{ color: '#1A9A7F' }} aria-hidden="true" /> Nouveau bilan
               </button>
@@ -280,7 +276,6 @@ export default function Dashboard() {
               <Link to="/agenda-v2" className={BOUTON_SECONDAIRE} style={STYLE_SECONDAIRE}>
                 <CalendarPlus size={16} style={{ color: '#1A9A7F' }} aria-hidden="true" /> Planifier
               </Link>
-              </>)}
               <button type="button" onClick={() => setShowImport(true)} className={BOUTON_SECONDAIRE} style={STYLE_SECONDAIRE}>
                 <FileSpreadsheet size={16} style={{ color: '#1A9A7F' }} aria-hidden="true" /> Import Excel
               </button>
@@ -292,20 +287,12 @@ export default function Dashboard() {
             </div>
           </header>
 
-          {/* Guide de prise en main, replié en une ligne : il ne s'affiche que s'il reste une étape.
-              En premiers pas, il est déplié et c'est lui qui mène. */}
+          {/* Guide de prise en main, replié en une ligne : il ne s'affiche que s'il reste une étape. */}
           <div className="empty:hidden">
             <GuideDemarrageVue guide={guide} replie />
           </div>
 
-          {premiersPas && (
-            <p className="m-0 text-[13px] leading-relaxed" style={{ color: 'var(--color-ink-2)' }}>
-              Votre journée, vos bilans, vos factures et les progrès de vos bénéficiaires s’afficheront ici au fil de votre activité.
-            </p>
-          )}
-
           {/* La journée */}
-          {(!premiersPas || prochain || journee.length > 0) && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-[18px]">
             <div className="lg:col-span-5 flex flex-col [&>section]:flex-1">
               <CarteProchainRendezVous
@@ -321,20 +308,16 @@ export default function Dashboard() {
               <CarteJournee seances={journee} participants={participants} maintenant={heure} prochaineId={prochainAujourdhui?.id ?? null} />
             </div>
           </div>
-          )}
 
-          {/* Ce qui attend un geste. En premiers pas, seules les séances à confirmer s'il y en a. */}
-          {(!premiersPas || aConfirmer.length > 0) && (
+          {/* Ce qui attend un geste */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-[18px] items-start">
             <CarteAConfirmer seances={aConfirmer} participants={participants} aujourdhui={aujourdhui}
               enCours={confirmationEnCours} onMarquerRealisee={s => setAValider(s)} />
-            {!premiersPas && <CarteProchainsBilans bilans={bilansAPrevoir} participants={participants} />}
-            {!premiersPas && <CarteFactures resume={resume} chargement={chargementBrouillons || chargementFactures} />}
+            <CarteProchainsBilans bilans={bilansAPrevoir} participants={participants} />
+            <CarteFactures resume={resume} chargement={chargementBrouillons || chargementFactures} />
           </div>
-          )}
 
           {/* Ce qui avance : les progrès, et une astuce pour apprendre en faisant */}
-          {!premiersPas && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-[18px]">
             <div className={`${astuce ? 'lg:col-span-8' : 'lg:col-span-12'} flex flex-col [&>section]:flex-1`}>
               <CarteProgres progres={progres} />
@@ -345,12 +328,10 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-          )}
 
           <LigneASurveiller elements={aSurveiller} />
 
-          {/* Bénéficiaires suivis. En premiers pas, la liste vide n'apprend rien : le guide mène à la première fiche. */}
-          {(!premiersPas || participantsActifs.length > 0 || structures.length > 0) && (
+          {/* Bénéficiaires suivis */}
           <section id="beneficiaires" aria-labelledby="titre-beneficiaires" className="flex flex-col gap-3.5 scroll-mt-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3.5 flex-wrap">
@@ -456,7 +437,6 @@ export default function Dashboard() {
               </div>
             )}
           </section>
-          )}
 
           {/* Carte — en bas de page */}
           {participants.some(p => p.coordonnees) && (
