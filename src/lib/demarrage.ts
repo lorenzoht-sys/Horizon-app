@@ -209,6 +209,22 @@ export function progression(etapes: Etape[]): Progression {
  */
 export const AGE_MAX_COMPTE_JOURS = 45;
 
+/**
+ * « Premiers pas » (25/11/2026, demande de Lorenzo : « que la personne ne
+ * soit pas perdue ») : tant qu'aucun bilan n'est fait, la phrase d'accueil du
+ * tableau de bord renvoie au guide, et le bouton « Voir le guide » de la ligne
+ * de prise en main devient le bouton principal et brille. Le premier réflexe
+ * doit être d'ouvrir le guide. Essayés et écartés le même jour : un grand
+ * bandeau déplié d'office (« trop terne et trop voyant ») et un tableau de
+ * bord vidé de ses cartes (page qui paraissait vide).
+ */
+export function enPremiersPas(params: { visible: boolean; termine: boolean; bilans: number }): boolean {
+  return params.visible && !params.termine && params.bilans === 0;
+}
+
+/** Phrase sous « Bonjour » en premiers pas, à la place du résumé d'une journée encore vide. */
+export const PHRASE_PREMIERS_PAS = 'Votre espace est prêt. Ouvrez le guide juste en dessous : il vous montre chaque étape.';
+
 export function doitAfficherGuide(params: {
   etat: EtatDemarrage;
   termine: boolean;

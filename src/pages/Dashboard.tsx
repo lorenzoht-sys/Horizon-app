@@ -19,7 +19,9 @@ import { utilisateurCourant } from '../lib/session';
 import { lirePraticien } from '../lib/acces/praticien';
 import CarteStructure from '../components/structures/CarteStructure';
 import ModalCreationStructure from '../components/structures/ModalCreationStructure';
-import { GuideDemarrage } from '../components/demarrage/GuideDemarrage';
+import { GuideDemarrageVue } from '../components/demarrage/GuideDemarrage';
+import { useDemarrage } from '../hooks/useDemarrage';
+import { PHRASE_PREMIERS_PAS } from '../lib/demarrage';
 import { CarteProchainRendezVous } from '../components/tableau-de-bord/CarteProchainRendezVous';
 import { CarteJournee } from '../components/tableau-de-bord/CarteJournee';
 import { CarteAConfirmer } from '../components/tableau-de-bord/CarteAConfirmer';
@@ -75,6 +77,9 @@ export default function Dashboard() {
   const { participants, participantsActifs, participantsArchives, loading: participantsLoading, addParticipant, archiverParticipant } = useParticipants();
   const { seancesDuJour, seances, modifierSeance, patientsARelancer } = useAgenda();
   const { notes } = useJournalSeance();
+  // Premiers pas (25/11/2026, voir enPremiersPas) : la phrase d'accueil renvoie au guide, dont le
+  // bouton « Voir le guide » brille. Le guide est lu ici et passé à GuideDemarrageVue : un seul chargement.
+  const guide = useDemarrage();
   const { contratsARenouveler: contratsARenouvelerTous, contratsSansJours: contratsSansJoursTous } = useContrats();
   // Un bénéficiaire archivé n'est plus suivi : ses contrats n'appellent aucune action.
   const contratsARenouveler = contratsDesBeneficiairesActifs(contratsARenouvelerTous, participants);
@@ -253,7 +258,7 @@ export default function Dashboard() {
                 {prenomPraticien ? `Bonjour ${prenomPraticien}` : 'Bonjour'}
               </h1>
               <p className="m-0 mt-1.5 text-[15px] leading-relaxed" style={{ color: '#3D4C5A' }}>
-                {phraseDuJour({
+                {guide.premiersPas ? PHRASE_PREMIERS_PAS : phraseDuJour({
                   nbRendezVous: journee.length,
                   prochainDans: prochainAujourdhui ? delaiRendezVous(prochainAujourdhui, aujourdhui, heure) : null,
                   nbAConfirmer: aConfirmer.length,
@@ -284,7 +289,7 @@ export default function Dashboard() {
 
           {/* Guide de prise en main, replié en une ligne : il ne s'affiche que s'il reste une étape. */}
           <div className="empty:hidden">
-            <GuideDemarrage replie />
+            <GuideDemarrageVue guide={guide} replie />
           </div>
 
           {/* La journée */}

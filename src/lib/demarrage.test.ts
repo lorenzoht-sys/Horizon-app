@@ -7,6 +7,7 @@ import {
   etapeDepuisNavigation,
   etapesNouvellementFaites,
   doitAfficherGuide,
+  enPremiersPas,
   fusionnerEtats,
   guideEtape,
   lireEtatDemarrage,
@@ -254,5 +255,18 @@ describe('bravo', () => {
     expect(messageBravo(['bilan', 'seance'], progression(etapes).prochaine)?.titre).toBe('2 étapes réussies');
     expect(messageBravo([], progression(etapes).prochaine)).toBeNull();
     expect(messageBravo(['application'], null)?.titre).toBe('Bravo, tout est prêt !');
+  });
+});
+
+describe('enPremiersPas', () => {
+  it('tant que le guide est visible, inachevé, et qu’aucun bilan n’est fait', () => {
+    expect(enPremiersPas({ visible: true, termine: false, bilans: 0 })).toBe(true);
+  });
+  it('prend fin au premier bilan', () => {
+    expect(enPremiersPas({ visible: true, termine: false, bilans: 1 })).toBe(false);
+  });
+  it('jamais si le guide est masqué ou terminé', () => {
+    expect(enPremiersPas({ visible: false, termine: false, bilans: 0 })).toBe(false);
+    expect(enPremiersPas({ visible: true, termine: true, bilans: 0 })).toBe(false);
   });
 });

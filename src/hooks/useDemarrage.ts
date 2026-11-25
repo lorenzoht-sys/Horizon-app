@@ -16,6 +16,7 @@ import { lireProfil, profilFacturationManquant } from '../lib/facturesAValider';
 import {
   calculerEtapes,
   doitAfficherGuide,
+  enPremiersPas,
   etapesNouvellementFaites,
   fusionnerEtats,
   lireEtatDemarrage,
@@ -221,9 +222,16 @@ export function useDemarrage() {
     maintenant: new Date(),
   });
 
+  const premiersPas = enPremiersPas({
+    visible,
+    termine: Boolean(progression?.termine),
+    bilans: donnees?.compteurs.bilans ?? 0,
+  });
+
   return {
     chargement,
     visible,
+    premiersPas,
     etapes,
     progression,
     dernierBeneficiaireId: donnees?.dernierBeneficiaireId ?? null,
