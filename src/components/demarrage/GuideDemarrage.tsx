@@ -16,9 +16,20 @@ import { FenetreInstallation } from './FenetreInstallation';
 // (anneau, étape suivante, « Continuer ») et ne se déplie qu'à la demande. Déplié, il occupait le
 // haut de l'écran et repoussait la journée du praticien sous la ligne de flottaison. Le guide
 // terminé garde sa carte de félicitations, dépliée.
-export function GuideDemarrage({ mobile = false, replie = false }: { mobile?: boolean; replie?: boolean }) {
-  const navigate = useNavigate();
+//
+// Premiers pas (25/11/2026) : tant que le praticien n'a fait aucun bilan, le guide n'est jamais
+// replié et s'ouvre sur un mot d'accueil et le fil conducteur. Les écrans qui adaptent aussi
+// leur contenu à ce mode (tableau de bord, Aujourd'hui) lisent le guide eux-mêmes et le passent
+// à GuideDemarrageVue : un seul chargement des comptages.
+export type EtatGuide = ReturnType<typeof useDemarrage>;
+
+export function GuideDemarrage(props: { mobile?: boolean; replie?: boolean }) {
   const guide = useDemarrage();
+  return <GuideDemarrageVue guide={guide} {...props} />;
+}
+
+export function GuideDemarrageVue({ guide, mobile = false, replie = false }: { guide: EtatGuide; mobile?: boolean; replie?: boolean }) {
+  const navigate = useNavigate();
   const [installation, setInstallation] = useState(false);
   const [deplie, setDeplie] = useState(false);
   const bravoMontre = useRef<Bravo | null>(null);
@@ -49,7 +60,7 @@ export function GuideDemarrage({ mobile = false, replie = false }: { mobile?: bo
   }
 
   const { prochaine, termine, faites, total } = guide.progression;
-  const enLigne = replie && !deplie && !termine && prochaine !== null;
+  const enLigne = replie && !guide.premiersPas && !deplie && !termine && prochaine !== null;
 
   return (
     <>
@@ -77,6 +88,7 @@ export function GuideDemarrage({ mobile = false, replie = false }: { mobile?: bo
         manquesFacturation={guide.manquesFacturation}
         faitesAvant={guide.bravo?.faitesAvant}
         mobile={mobile}
+        accueil={guide.premiersPas}
         onAction={agir}
         onMasquer={masquer}
       />

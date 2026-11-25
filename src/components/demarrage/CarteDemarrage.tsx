@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { AlertCircle, ArrowRight, Check, ChevronDown, Clock, Lightbulb, Lock, PartyPopper, X } from 'lucide-react';
 import {
+  FIL_CONDUCTEUR,
   guideEtape,
+  messageAccueil,
   messageProgression,
   phraseManquesFacturation,
   type Etape,
@@ -31,13 +33,15 @@ interface Props {
   mobile?: boolean;
   /** Étapes faites au passage précédent, si une étape vient d'être réussie. */
   faitesAvant?: number;
+  /** Premiers pas (aucun bilan) : mot d'accueil, fil conducteur, « Comment faire » ouvert. */
+  accueil?: boolean;
   onAction: (etape: Etape) => void;
   onMasquer: () => void;
 }
 
 const EASE = [0.25, 0.1, 0.25, 1] as const;
 
-export function CarteDemarrage({ etapes, progression, prenom, manquesFacturation = [], mobile = false, faitesAvant, onAction, onMasquer }: Props) {
+export function CarteDemarrage({ etapes, progression, prenom, manquesFacturation = [], mobile = false, faitesAvant, accueil = false, onAction, onMasquer }: Props) {
   const reduit = useReducedMotion();
   const [listeOuverte, setListeOuverte] = useState(!mobile);
   const [selectionId, setSelectionId] = useState<Etape['id'] | null>(null);
@@ -105,11 +109,11 @@ export function CarteDemarrage({ etapes, progression, prenom, manquesFacturation
             className="m-0 font-heading font-bold"
             style={{ fontSize: mobile ? 16 : 19, lineHeight: 1.3, color: 'var(--color-ink)', marginTop: 3, letterSpacing: '-0.01em' }}
           >
-            {messageProgression(progression, prenom)}
+            {accueil ? messageAccueil(prenom) : messageProgression(progression, prenom)}
           </h2>
-          {!mobile && (
-            <p className="m-0" style={{ fontSize: 13, color: 'var(--color-ink-2)', marginTop: 4 }}>
-              {termine
+          {(!mobile || accueil) && (
+            <p className="m-0" style={{ fontSize: mobile ? 12.5 : 13, color: 'var(--color-ink-2)', marginTop: 4, lineHeight: 1.5, maxWidth: 620 }}>
+              {accueil ? FIL_CONDUCTEUR : termine
                 ? 'Horizon est prêt pour votre activité. Ce guide reste accessible depuis Paramètres.'
                 : 'Chaque étape se coche toute seule dès qu’elle est faite.'}
             </p>
@@ -148,6 +152,7 @@ export function CarteDemarrage({ etapes, progression, prenom, manquesFacturation
           estProchaine={affichee.id === prochaine?.id}
           manques={affichee.id === 'facturation' ? phraseManquesFacturation(manquesFacturation) : null}
           mobile={mobile}
+          gestesOuverts={accueil}
           onAction={onAction}
           onRetour={() => setSelectionId(null)}
         />
@@ -217,13 +222,15 @@ function BoutonFermer({ onClick, pleineLargeur = false }: { onClick: () => void;
   );
 }
 
-function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mobile, onAction, onRetour }: {
+function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mobile, gestesOuverts: ouvertsDOffice = false, onAction, onRetour }: {
   etape: Etape;
   numero: number;
   total: number;
   estProchaine: boolean;
   manques: string | null;
   mobile: boolean;
+  /** Premiers pas : sur téléphone aussi, le « comment faire » est ouvert d'emblée. */
+  gestesOuverts?: boolean;
   onAction: (e: Etape) => void;
   onRetour: () => void;
 }) {
@@ -232,7 +239,7 @@ function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mobile, o
   const guide = guideEtape(etape.id, mobile);
   // Ordinateur : les gestes sont visibles d'emblée. Téléphone : repliés, pour ne
   // pas repousser la journée trop bas ; un bouton clair les déplie.
-  const [gestesOuverts, setGestesOuverts] = useState(!mobile);
+  const [gestesOuverts, setGestesOuverts] = useState(!mobile || ouvertsDOffice);
 
   return (
     <motion.div
