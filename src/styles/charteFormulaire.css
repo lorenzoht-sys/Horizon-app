@@ -1,0 +1,73 @@
+/*
+ * Charte graphique appliquée aux formulaires (25/11/2026, demande de Lorenzo :
+ * « améliorer l'aspect des formulaires pour le moment »). Portée limitée à
+ * .charte-formulaire : création / modification d'un bénéficiaire et création /
+ * modification d'un bilan. Le reste de l'application ne change pas.
+ *
+ * Pourquoi des règles ici plutôt que dans chaque champ : les formulaires de
+ * bilan écrivent leurs classes à la main dans une vingtaine de fichiers. Une
+ * couche commune les met d'accord sans réécrire chaque champ ; elle disparaîtra
+ * quand la charte sera appliquée partout (voir le design system « Horizon »).
+ */
+
+.charte-formulaire {
+  /* bg-primary, text-primary, border-primary… → vert d'action (5,3:1 avec le blanc). */
+  --rgb-primary: 20 122 100;
+  /* Les boutons « Créer la fiche » / « Valider » utilisaient #27AE60 (2,9:1) :
+     la réussite passe aussi par le vert d'action. */
+  --rgb-success: 20 122 100;
+  color: var(--encre);
+}
+
+/* Champs : rayon 12 px (rounded-xl vaut 22 px dans tailwind.config.js, ce qui
+   donnait des champs en pilule). */
+.charte-formulaire :is(input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea) {
+  border-radius: 12px;
+}
+
+/* Champs : bordure visible (3,4:1 au lieu de 1,2:1), sauf champ en erreur. */
+.charte-formulaire :is(input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea):not([class*='border-red']) {
+  border-color: var(--trait-champ);
+}
+.charte-formulaire :is(input, select, textarea):focus-visible {
+  border-color: var(--vert-action);
+  outline: 2px solid var(--vert-action);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+.charte-formulaire ::placeholder {
+  color: var(--encre-2);
+  opacity: 0.8;
+}
+.charte-formulaire input[type='checkbox'],
+.charte-formulaire input[type='radio'] {
+  accent-color: var(--vert-action);
+}
+
+/* Puces de choix non sélectionnées : contour lisible. Pas les grandes cartes
+   de réponse à bord épais (Tinetti, Berg, mode du GIR) : un contour de 2 px
+   foncé les rendait lourdes ; leur surface suffit à les voir. */
+.charte-formulaire button.border-gray-200:not(.border-2),
+.charte-formulaire button.border-gray-300:not(.border-2) {
+  border-color: var(--trait-champ);
+}
+.charte-formulaire button.border-gray-200:not(.border-2):hover,
+.charte-formulaire button.border-gray-300:not(.border-2):hover {
+  border-color: var(--vert-action);
+}
+
+/* Focus clavier visible sur tous les boutons. */
+.charte-formulaire button:focus-visible {
+  outline: 2px solid var(--vert-action);
+  outline-offset: 2px;
+}
+
+/* Textes d'aide en #9CA3AF (2,5:1) → encre-2 (5,5:1). Le gris très clair reste
+   pour les décors (icônes, puces), pas pour des mots. */
+.charte-formulaire .text-gray-400,
+.charte-formulaire .text-gray-300 {
+  color: var(--encre-2);
+}
+.charte-formulaire .text-dark {
+  color: var(--encre);
+}

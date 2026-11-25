@@ -217,8 +217,8 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
       )}
 
       {/* ── Bouton génération IA ── */}
-      <div className="border border-blue-100 rounded-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-5 py-4">
+      <div className="bg-white rounded-[20px] overflow-hidden border border-[color:var(--trait)]">
+        <div className="px-5 pt-5">
           <div className="flex items-center gap-2.5 mb-1.5">
             <Brain size={18} className="text-primary" />
             <h3 className="font-semibold text-dark text-sm">Interprétation automatique par Claude AI</h3>

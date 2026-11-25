@@ -15,6 +15,23 @@
   --color-amber-light:  #FEF5E7;
   --color-border:       rgba(0, 0, 0, 0.06);
 
+  /* Couleurs Tailwind `primary` et `success` en RGB (voir tailwind.config.js).
+     Valeurs inchangées hors formulaires : #2BB89A et #27AE60. */
+  --rgb-primary:        43 184 154;
+  --rgb-success:        39 174 96;
+
+  /* Charte graphique (proposition du 25/11/2026, design system « Horizon »).
+     Appliquée d'abord aux formulaires seulement : charteFormulaire.css. */
+  --vert-horizon:       #1CA48C;
+  --vert-action:        #147A64;
+  --vert-action-appui:  #0F6E56;
+  --vert-pale:          #E6F5F1;
+  --encre:              #1A2332;
+  --encre-2:            #5A6B7A;
+  --trait:              #E2EEEE;
+  --trait-champ:        #7C8DA0;
+  --surface-douce:      #F5F9FB;
+
   /* Ombres multicouches */
   --shadow-xs:
     0 1px 2px rgba(0, 0, 0, 0.04);
