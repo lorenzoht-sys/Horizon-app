@@ -5,6 +5,7 @@ import { useDemarrage, type Bravo } from '../../hooks/useDemarrage';
 import { destinationEtape, messageBravo, type Etape } from '../../lib/demarrage';
 import { chargerSettingsPraticien } from '../../lib/settingsPraticien';
 import { CarteDemarrage } from './CarteDemarrage';
+import { ParcoursAccueil } from './ParcoursAccueil';
 import { AnneauProgression } from './AnneauProgression';
 import { FenetreInstallation } from './FenetreInstallation';
 
@@ -80,6 +81,16 @@ export function GuideDemarrageVue({ guide, mobile = false, replie = false }: { g
             {prochaine.action} →
           </button>
         </section>
+      ) : guide.premiersPas ? (
+      <ParcoursAccueil
+        etapes={guide.etapes}
+        progression={guide.progression}
+        prenom={chargerSettingsPraticien().prenom || null}
+        manquesFacturation={guide.manquesFacturation}
+        mobile={mobile}
+        onAction={agir}
+        onMasquer={masquer}
+      />
       ) : (
       <CarteDemarrage
         etapes={guide.etapes}
@@ -88,7 +99,6 @@ export function GuideDemarrageVue({ guide, mobile = false, replie = false }: { g
         manquesFacturation={guide.manquesFacturation}
         faitesAvant={guide.bravo?.faitesAvant}
         mobile={mobile}
-        accueil={guide.premiersPas}
         onAction={agir}
         onMasquer={masquer}
       />

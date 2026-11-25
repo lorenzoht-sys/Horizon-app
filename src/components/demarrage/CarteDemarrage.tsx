@@ -2,9 +2,7 @@ import { useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { AlertCircle, ArrowRight, Check, ChevronDown, Clock, Lightbulb, Lock, PartyPopper, X } from 'lucide-react';
 import {
-  FIL_CONDUCTEUR,
   guideEtape,
-  messageAccueil,
   messageProgression,
   phraseManquesFacturation,
   type Etape,
@@ -33,15 +31,13 @@ interface Props {
   mobile?: boolean;
   /** Étapes faites au passage précédent, si une étape vient d'être réussie. */
   faitesAvant?: number;
-  /** Premiers pas (aucun bilan) : mot d'accueil, fil conducteur, « Comment faire » ouvert. */
-  accueil?: boolean;
   onAction: (etape: Etape) => void;
   onMasquer: () => void;
 }
 
 const EASE = [0.25, 0.1, 0.25, 1] as const;
 
-export function CarteDemarrage({ etapes, progression, prenom, manquesFacturation = [], mobile = false, faitesAvant, accueil = false, onAction, onMasquer }: Props) {
+export function CarteDemarrage({ etapes, progression, prenom, manquesFacturation = [], mobile = false, faitesAvant, onAction, onMasquer }: Props) {
   const reduit = useReducedMotion();
   const [listeOuverte, setListeOuverte] = useState(!mobile);
   const [selectionId, setSelectionId] = useState<Etape['id'] | null>(null);
@@ -109,11 +105,11 @@ export function CarteDemarrage({ etapes, progression, prenom, manquesFacturation
             className="m-0 font-heading font-bold"
             style={{ fontSize: mobile ? 16 : 19, lineHeight: 1.3, color: 'var(--color-ink)', marginTop: 3, letterSpacing: '-0.01em' }}
           >
-            {accueil ? messageAccueil(prenom) : messageProgression(progression, prenom)}
+            {messageProgression(progression, prenom)}
           </h2>
-          {(!mobile || accueil) && (
-            <p className="m-0" style={{ fontSize: mobile ? 12.5 : 13, color: 'var(--color-ink-2)', marginTop: 4, lineHeight: 1.5, maxWidth: 620 }}>
-              {accueil ? FIL_CONDUCTEUR : termine
+          {!mobile && (
+            <p className="m-0" style={{ fontSize: 13, color: 'var(--color-ink-2)', marginTop: 4 }}>
+              {termine
                 ? 'Horizon est prêt pour votre activité. Ce guide reste accessible depuis Paramètres.'
                 : 'Chaque étape se coche toute seule dès qu’elle est faite.'}
             </p>
@@ -152,7 +148,6 @@ export function CarteDemarrage({ etapes, progression, prenom, manquesFacturation
           estProchaine={affichee.id === prochaine?.id}
           manques={affichee.id === 'facturation' ? phraseManquesFacturation(manquesFacturation) : null}
           mobile={mobile}
-          gestesOuverts={accueil}
           onAction={onAction}
           onRetour={() => setSelectionId(null)}
         />
@@ -222,7 +217,7 @@ function BoutonFermer({ onClick, pleineLargeur = false }: { onClick: () => void;
   );
 }
 
-function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mobile, gestesOuverts: ouvertsDOffice = false, onAction, onRetour }: {
+export function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mobile, gestesOuverts: ouvertsDOffice = false, surFondSombre = false, onAction, onRetour }: {
   etape: Etape;
   numero: number;
   total: number;
@@ -231,6 +226,8 @@ function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mobile, g
   mobile: boolean;
   /** Premiers pas : sur téléphone aussi, le « comment faire » est ouvert d'emblée. */
   gestesOuverts?: boolean;
+  /** Posée dans le bandeau sombre des premiers pas : carte blanche pleine, plus de relief. */
+  surFondSombre?: boolean;
   onAction: (e: Etape) => void;
   onRetour: () => void;
 }) {
@@ -249,10 +246,11 @@ function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mobile, g
       transition={{ duration: 0.25, ease: EASE }}
       className="relative"
       style={{
-        marginTop: mobile ? 14 : 20,
+        marginTop: surFondSombre ? 0 : mobile ? 14 : 20,
         borderRadius: 16,
-        background: 'linear-gradient(135deg, #F1FAF7 0%, #E6F5F1 100%)',
-        border: '1px solid rgba(43,184,154,0.22)',
+        background: surFondSombre ? '#FFFFFF' : 'linear-gradient(135deg, #F1FAF7 0%, #E6F5F1 100%)',
+        border: surFondSombre ? 'none' : '1px solid rgba(43,184,154,0.22)',
+        boxShadow: surFondSombre ? '0 10px 30px rgba(0,0,0,0.18)' : undefined,
         padding: mobile ? 14 : '18px 20px',
       }}
     >
@@ -289,6 +287,10 @@ function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mobile, g
         </div>
         {!mobile && <BoutonAction etape={etape} onAction={onAction} />}
       </div>
+
+      {/* Bandeau des premiers pas sur téléphone : le bouton avant les gestes, pour qu'il reste
+          au-dessus de la barre de navigation sans défiler. */}
+      {mobile && surFondSombre && <div style={{ marginTop: 14 }}><BoutonAction etape={etape} onAction={onAction} pleineLargeur /></div>}
 
       {/* Ce qui bloque, dit simplement, avant les gestes. */}
       {(etape.bloqueePar || manques) && (
@@ -341,7 +343,7 @@ function EtapeDetaillee({ etape, numero, total, estProchaine, manques, mobile, g
         </div>
       )}
 
-      {mobile && <div style={{ marginTop: 14 }}><BoutonAction etape={etape} onAction={onAction} pleineLargeur /></div>}
+      {mobile && !surFondSombre && <div style={{ marginTop: 14 }}><BoutonAction etape={etape} onAction={onAction} pleineLargeur /></div>}
 
       {!estProchaine && (
         <button
