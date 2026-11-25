@@ -75,8 +75,7 @@ export default function IllustrationHorizon({ className = '', oiseaux = true }: 
 
       {/* Le chemin, large au premier plan, qui s'affine vers le soleil */}
       <path
-        d="M196 240 C214 224 246 214 254 200 C260 190 268 182 280 176 C286 173 292 168 296 162
-           L299 162 C297 169 292 176 286 181 C276 189 270 198 266 208 C258 224 240 232 232 240 Z"
+        d="M196 240 C214 224 246 214 254 200 C260 190 268 182 280 176 C286 173 292 168 297.5 160.5 C297 169 292 176 286 181 C276 189 270 198 266 208 C258 224 240 232 232 240 Z"
         fill={url('chemin')}
       />
 
@@ -84,11 +83,15 @@ export default function IllustrationHorizon({ className = '', oiseaux = true }: 
       <path d="M0 214 C70 200 140 202 180 212 C196 218 204 228 208 240 H0 Z" fill={url('pres')} />
       <path d="M226 240 C254 222 320 206 400 204 V240 Z" fill={url('pres')} />
 
-      {/* La silhouette du logo, bras levés, en marche sur le chemin */}
-      <g transform="translate(276 168) scale(0.9)" fill="none" stroke="#FFF6E5" strokeLinecap="round">
-        <circle cx="0" cy="-8.5" r="3.6" fill="#FFF6E5" stroke="none" />
+      {/* La silhouette du logo, en marche sur le chemin vers le soleil.
+          25/11 : posée plus bas, là où le chemin est assez large pour elle,
+          à l'échelle de la perspective, avec son ombre au sol et une couleur
+          sombre qui ressort sur le chemin clair (en crème, elle flottait). */}
+      <ellipse cx="260" cy="207.6" rx="6.5" ry="1.4" fill="#0D5547" opacity="0.28" />
+      <g transform="translate(259.5 199.5) rotate(7) scale(0.62)" fill="none" stroke="#0F5E4F" strokeLinecap="round">
+        <circle cx="0" cy="-8.5" r="3.6" fill="#0F5E4F" stroke="none" />
         <path d="M-7 -6 Q0 3 7 -6" strokeWidth="2.6" />
-        <path d="M-5.5 8 Q0 -3 5.5 8" strokeWidth="2.6" />
+        <path d="M-5.5 12 Q0 -3 5.5 12" strokeWidth="2.6" />
       </g>
 
       <style>{`
