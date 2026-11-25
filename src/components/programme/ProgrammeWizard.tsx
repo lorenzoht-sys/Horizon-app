@@ -422,6 +422,7 @@ function ExercicePickerModal({
   const [allExercices, setAllExercices] = useState<Exercice[]>([]);
   useEffect(() => { loadExercicesPraticien().then(setAllExercices); }, []);
 
+  const materielBeneficiaire = (participant?.anamnese?.activitePhysique?.materielDisponible ?? []).filter(m => m.trim() !== '');
   const patientAge = participant?.dateNaissance ? calculerAge(participant.dateNaissance) : null;
   const isSenior = patientAge != null && patientAge >= 65;
   const suggestLabel =
@@ -464,6 +465,16 @@ function ExercicePickerModal({
             <X size={18} color="#94A3B8" />
           </button>
         </div>
+
+        {/* Matériel du bénéficiaire (compte rendu de Pierre, 25/11/2026) :
+            le retrouver ici évite de le lui redemander. Simple rappel, sans
+            filtrer les exercices (vocabulaires différents, voir
+            src/lib/libellesBibliotheque.ts). */}
+        {materielBeneficiaire.length > 0 && (
+          <div data-testid="materiel-beneficiaire" style={{ padding: '8px 20px', background: '#F6FAFA', borderBottom: '1px solid #E0EEEE', fontSize: 12, color: '#3D4C5A', flexShrink: 0 }}>
+            <span style={{ fontWeight: 700 }}>Matériel à disposition :</span> {materielBeneficiaire.join(', ')}
+          </div>
+        )}
 
         {/* Tabs */}
         <div style={{ display: 'flex', borderBottom: '1px solid #E0EEEE', flexShrink: 0 }}>

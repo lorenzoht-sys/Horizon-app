@@ -907,6 +907,8 @@ export interface AntecedentMedical {
   id: string;
   titre?: string;
   type: TypeAntecedent;
+  /** Autres catégories du même événement (fracture opérée et hospitalisée…) ; `type` reste la principale. */
+  typesAssocies?: TypeAntecedent[];
   date?: string;
   localisation?: string;
   consequence?: string;
@@ -952,7 +954,10 @@ export interface AutonomieData {
   aideADomicileTypes?: string[];
   aideADomicileFrequence?: string | null;
   aideADomicileHeures?: number | null;
+  /** Ancien choix unique, toujours écrit (résumé texte de `aidesMobilite`) pour les lectures existantes. */
   aideMarche?: string | null;
+  /** Aides à la mobilité classées de la plus utilisée à la moins utilisée (25/11/2026, jsonb, sans migration). */
+  aidesMobilite?: string[];
   gir?: GIRData | null;
   contactsSante?: ContactSante[];
 }
@@ -1015,6 +1020,8 @@ export interface CognitionData {
   suiviPsyDepuisQuand?: string;
   suiviPsyFrequence?: string | null;
   origineDemarche?: string | null;
+  /** Précision quand origineDemarche vaut « Autre » (25/11/2026). */
+  origineDemarcheDetail?: string;
 }
 
 // ── ORGANISATION DES SÉANCES ──────────────────────────────────────────────────

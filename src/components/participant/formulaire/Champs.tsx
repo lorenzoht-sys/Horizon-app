@@ -221,31 +221,29 @@ export function ChoixMultiple({
 }) {
   const selected = value ?? [];
   const predefined = selected.filter(s => options.includes(s));
-  const customs = selected.filter(s => !options.includes(s));
+  // Index des saisies libres DANS la liste complète : depuis le 25/11/2026
+  // l'ordre de la liste porte une information (priorité des objectifs,
+  // aides à la mobilité classées). L'ancienne version reconstruisait
+  // [prédéfinis, libres] à chaque frappe et perdait ce classement.
+  const indexLibres = selected.map((s, i) => (options.includes(s) ? -1 : i)).filter(i => i >= 0);
+  const customs = indexLibres.map(i => selected[i]);
 
   const toggle = (opt: string) =>
-    onChange(
-      predefined.includes(opt)
-        ? [...predefined.filter(s => s !== opt), ...customs]
-        : [...predefined, opt, ...customs]
-    );
+    onChange(predefined.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt]);
 
-  const updateCustom = (idx: number, text: string) => {
-    const next = customs.map((c, i) => (i === idx ? text : c));
-    onChange([...predefined, ...next]);
-  };
+  const updateCustom = (idx: number, text: string) =>
+    onChange(selected.map((s, i) => (i === indexLibres[idx] ? text : s)));
 
-  const removeCustom = (idx: number) => {
-    onChange([...predefined, ...customs.filter((_, i) => i !== idx)]);
-  };
+  const removeCustom = (idx: number) =>
+    onChange(selected.filter((_, i) => i !== indexLibres[idx]));
 
   const addCustom = () => {
-    onChange([...predefined, ...customs, '']);
+    onChange([...selected, '']);
   };
 
   return (
     <div>
-      <label className={CLS_LABEL}>{label}</label>
+      {label && <label className={CLS_LABEL}>{label}</label>}
       <div className="flex flex-wrap gap-2 mb-2">
         {options.map(opt => (
           <button

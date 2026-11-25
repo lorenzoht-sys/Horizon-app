@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pencil } from 'lucide-react';
 import type { Bilan, Participant } from '../../types';
-import { formatMomentsTraitement, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../../lib/anamnese';
+import { formatMomentsTraitement, getAntecedentCategories, getAntecedentIcon, getAntecedentTitre, getAntecedentSousLigne, getTraitementsActifs, getTraitementsArretes } from '../../lib/anamnese';
 
 // ── CarteSante ────────────────────────────────────────────────────────────────
 
@@ -17,16 +17,31 @@ export function CarteSante({ participant, bilanInitial, onModifier }: {
   const traitementsArretes = getTraitementsArretes(participant.traitements);
   const antecedents = participant.antecedentsMedicauxStructures ?? [];
   const contactsSante = participant.anamnese?.autonomie?.contactsSante ?? [];
+  const anamnese = participant.anamnese;
+  const cognition = anamnese?.cognition;
 
   const lignes = ([
     participant.pathologie && { icon: 'Pathologie', texte: participant.pathologie },
     participant.antecedentsMedicaux && { icon: 'Antécédents', texte: participant.antecedentsMedicaux },
     participant.antecedentsChirurgicaux && { icon: 'Chirurgie', texte: participant.antecedentsChirurgicaux },
     participant.allergies && { icon: 'Allergies', texte: participant.allergies },
-    profil?.douleursNiveau != null && { icon: 'Douleur', texte: `${profil.douleursNiveau}/10 habituellement` },
+    // Douleur et fatigue du formulaire (25/11/2026) : saisies à l'étape
+    // « Profil de santé » mais jamais affichées ; repli sur le bilan initial.
+    anamnese?.douleurQuotidienne != null
+      ? { icon: 'Douleur', texte: `${anamnese.douleurQuotidienne}/10 au quotidien` }
+      : profil?.douleursNiveau != null && { icon: 'Douleur', texte: `${profil.douleursNiveau}/10 habituellement` },
+    anamnese?.fatigueQuotidienne != null && { icon: 'Fatigue', texte: `${anamnese.fatigueQuotidienne}/10 au quotidien` },
     profil?.douleursLocalisation && { icon: 'Où', texte: profil.douleursLocalisation },
     profil?.chutes12mois != null && { icon: 'Chutes', texte: `${profil.chutes12mois} sur les 12 derniers mois` },
     profil?.objectifsPersonnels && { icon: 'Son objectif', texte: `« ${profil.objectifsPersonnels} »` },
+    cognition?.plaintesMemoire === 'oui' && {
+      icon: 'Mémoire',
+      texte: ['plaintes mémoire', cognition.plaintesMemoireDepuisQuand, cognition.plaintesMemoireSignalePar && `signalées par : ${cognition.plaintesMemoireSignalePar.toLowerCase()}`].filter(Boolean).join(' · '),
+    },
+    cognition?.suiviPsy === 'oui' && {
+      icon: 'Suivi psy',
+      texte: [cognition.suiviPsyQui, cognition.suiviPsyFrequence?.toLowerCase()].filter(Boolean).join(' · ') || 'oui',
+    },
   ] as ({ icon: string; texte: string } | false)[]).filter((l): l is { icon: string; texte: string } => Boolean(l));
 
   const hasContent = lignes.length > 0 || traitementsActifs.length > 0 || traitementsArretes.length > 0 || antecedents.length > 0 || contactsSante.length > 0;
@@ -48,7 +63,7 @@ export function CarteSante({ participant, bilanInitial, onModifier }: {
       {/* Infos textuelles */}
       {lignes.length > 0 && (
         <div className="space-y-2 mb-4">
-          {lignes.slice(0, 6).map((l, i) => (
+          {lignes.map((l, i) => (
             // Libellé écrit au lieu d'un émoji (23/11/2026) : plus lisible, et pareil sur tous les téléphones.
             <div key={i} className="flex gap-2 text-[13px] leading-relaxed" style={{ color: '#3D4C5A' }}>
               <span className="flex-shrink-0 font-bold" style={{ color: 'var(--color-ink)' }}>{l.icon}</span>
@@ -121,6 +136,9 @@ export function CarteSante({ participant, bilanInitial, onModifier }: {
                     <span className="text-[10px] text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full">Douleur liée</span>
                   )}
                 </div>
+                {(a.typesAssocies?.length ?? 0) > 0 && (
+                  <p className="text-[12px] text-gray-500 ml-5 mt-0.5">{getAntecedentCategories(a).join(' · ')}</p>
+                )}
                 {getAntecedentSousLigne(a) && (
                   <p className="text-[12px] text-gray-400 ml-5 mt-0.5">{getAntecedentSousLigne(a)}</p>
                 )}

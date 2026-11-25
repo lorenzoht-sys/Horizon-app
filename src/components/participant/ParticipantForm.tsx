@@ -8,6 +8,11 @@ import { avecConsentement, erreurConsentementCreation, normaliserRgpd } from '..
 import { formaterDateNaissanceAffichage, masquerSaisieDateNaissance, messageErreurDateNaissance, parserDateNaissanceSaisie } from '../../utils/dateNaissance';
 import { OPTIONS_FREQUENCE } from '../../lib/anamnese';
 import { Save, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Carte } from '../ui/Carte';
+import { aidesMobiliteDepuis, calculerIMC, categorieIMC, sansEmoji } from '../../lib/formulaireBeneficiaire';
+import { AidesMobiliteForm } from './formulaire/AidesMobiliteForm';
+import { ListeOrdonnee } from './formulaire/ListeOrdonnee';
 import GIRWidget from '../bilan/GIRWidget';
 import { EMPTY_SED, computeSedScore, computeFSSScore, getSedProfil, getFSSProfil, SectionSedentarite, SectionFatigue } from '../bilan/TestsAutonomie';
 import { EtatPartageQuestionnaires } from '../bilan/EtatPartageBeneficiaire';
@@ -24,12 +29,11 @@ import { CLS_INPUT, CLS_LABEL, OPTIONS_ACTIVITES } from './formulaire/communs';
 const OPTIONS_SITUATION_VIE = ['Seul(e)', 'En famille', 'EHPAD / résidence', 'Autre'];
 const OPTIONS_TYPE_AIDE_DOMICILE = ['Aide ménagère', 'Auxiliaire de vie', 'Infirmier(e)', 'Portage de repas', 'Aide-soignant(e)', 'Autre'];
 const OPTIONS_FREQUENCE_AIDE = ['Quotidienne', 'Plusieurs fois / semaine', 'Hebdomadaire', 'Ponctuelle'];
-const OPTIONS_AIDE_MARCHE = ['Aucune', 'Canne', 'Déambulateur', 'Autre'];
 const OPTIONS_REPAS = ['1', '2', '3', 'Plus de 3'];
 const OPTIONS_HYDRATATION = ['< 1L', '1 à 1,5L', '> 1,5L'];
 const OPTIONS_MATERIEL = [
   'Tapis de sol', 'Poids / haltères', 'Élastique de résistance', 'Pédalier',
-  'Step', 'Tapis de marche', 'Vélo d\'appartement', 'Déambulateur', 'Autre',
+  'Step', 'Tapis de marche', 'Vélo d\'appartement', 'Kettlebell', 'Déambulateur', 'Autre',
 ];
 
 const NUM_INPUT_CLS = 'w-36 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary';
@@ -56,6 +60,7 @@ const OPTIONS_ORIGINE_DEMARCHE = [
   '👨‍👩‍👦 Poussé par un proche',
   '✏️ Autre',
 ];
+const OPTION_ORIGINE_AUTRE = '✏️ Autre';
 
 // ─── Cognition & humeur : plaintes mémoire / suivi psychologique ──────────────
 
@@ -84,17 +89,6 @@ function validerIBAN(iban: string): boolean {
 
 function formatIBAN(raw: string): string {
   return raw.replace(/\s/g, '').replace(/(.{4})/g, '$1 ').trim();
-}
-
-// ─── IMC ──────────────────────────────────────────────────────────────────────
-
-function getCategorieIMC(imc: number): { label: string; couleur: string } {
-  if (imc < 18.5) return { label: 'Insuffisance pondérale', couleur: '#F59E0B' };
-  if (imc < 25)   return { label: 'Poids normal',           couleur: '#3B6D11' };
-  if (imc < 30)   return { label: 'Surpoids',               couleur: '#F59E0B' };
-  if (imc < 35)   return { label: 'Obésité modérée',        couleur: '#EF8C00' };
-  if (imc < 40)   return { label: 'Obésité sévère',         couleur: '#EF4444' };
-  return           { label: 'Obésité morbide',              couleur: '#991B1B' };
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -499,9 +493,12 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
   }, [form, anamnese, traitements, antecedents, rgpd, profilActivite, onCompletionChange]);
 
   // ── Calcul IMC ──────────────────────────────────────────────────
-  const t = Number(form.taille), p = Number(form.poids);
-  const imc = t > 0 && p > 0 ? Math.round((p / ((t / 100) ** 2)) * 10) / 10 : null;
-  const imcCat = imc ? getCategorieIMC(imc) : null;
+  // Compte rendu de Pierre (25/11/2026) : la classification s'affichait en
+  // couleur dès la saisie, parfois « Obésité morbide », devant le
+  // bénéficiaire. La valeur reste visible, l'interprétation est repliée.
+  const imc = calculerIMC(Number(form.taille), Number(form.poids));
+  const imcCat = imc ? categorieIMC(imc) : null;
+  const [voirInterpretationIMC, setVoirInterpretationIMC] = useState(false);
 
   // ── IBAN validation ──────────────────────────────────────────────
   const ibanClean = form.iban.replace(/\s/g, '');
@@ -509,168 +506,166 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
 
   const emailPraticien = chargerSettingsPraticien().email || 'votre email professionnel';
 
+  const aidesMobilite = aidesMobiliteDepuis(anamnese.autonomie);
+  const objectifs = profilActivite.objectifsPatient.filter(o => o.trim() !== '');
+  const materiel = (anamnese.activitePhysique?.materielDisponible ?? []).filter(m => m.trim() !== '');
+  const contactsSante = anamnese.autonomie?.contactsSante ?? [];
+
   const showAll = step === undefined;
   const Wrapper = showAll ? 'form' : 'div';
   const wrapperProps = showAll ? { onSubmit: handleSubmit } : {};
 
   // ──────────────────────────────────────────────────────────────────────────
+  // Rubriques en `Carte` (charte du tableau de bord V1) depuis le 25/11/2026.
+  // L'ordre des étapes ne change pas ; seuls les blocs SAP (étape 4 → 1),
+  // contacts professionnels (3 → 1) et taille/poids (1 → 2) ont bougé. Les
+  // données restent dans les mêmes colonnes.
   return (
-    <Wrapper {...wrapperProps} className="space-y-6">
+    <Wrapper {...wrapperProps} className="space-y-4">
 
       {(showAll || step === 1) && <>
       {/* ── IDENTITÉ ── */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={CLS_LABEL}>Prénom *</label>
-          <input name="prenom" value={form.prenom} onChange={handleChange} required placeholder="Jean" className={CLS_INPUT} />
-        </div>
-        <div>
-          <label className={CLS_LABEL}>Nom *</label>
-          <input name="nom" value={form.nom} onChange={handleChange} required placeholder="Dupont" className={CLS_INPUT} />
-        </div>
-      </div>
-      <div>
-        <label className={CLS_LABEL}>Nom de naissance <span className="text-gray-400 font-normal">(jeune fille, optionnel)</span></label>
-        <input name="nomNaissance" value={form.nomNaissance} onChange={handleChange}
-          placeholder="Martin" className={CLS_INPUT} />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={CLS_LABEL}>Date de naissance *</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            autoComplete="bday"
-            name="dateNaissance"
-            placeholder="JJ/MM/AAAA"
-            maxLength={10}
-            value={dateNaissanceSaisie}
-            onChange={handleChangeDateNaissance}
-            onBlur={handleBlurDateNaissance}
-            required
-            className={`${CLS_INPUT}${dateNaissanceErreur ? ' border-red-300 focus:border-red-400 focus:ring-red-100' : ''}`}
-          />
-          {dateNaissanceErreur && (
-            <p className="text-xs text-red-500 mt-1">{dateNaissanceErreur}</p>
-          )}
-        </div>
-        <div>
-          <label className={CLS_LABEL}>Date d'entrée *</label>
-          <input type="date" name="dateCreation" value={form.dateCreation} onChange={handleChange} required className={CLS_INPUT} />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={CLS_LABEL}>Ville de naissance <span className="text-gray-400 font-normal">(optionnel)</span></label>
-          <input name="villeNaissance" value={form.villeNaissance} onChange={handleChange}
-            placeholder="Nantes" className={CLS_INPUT} />
-        </div>
-        <div>
-          <label className={CLS_LABEL}>Code postal de naissance <span className="text-gray-400 font-normal">(optionnel)</span></label>
-          <input name="codePostalNaissance" value={form.codePostalNaissance} onChange={handleChange}
-            placeholder="44000" className={CLS_INPUT} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={CLS_LABEL}>Email</label>
-          <input type="email" name="email" value={form.email} onChange={handleChange} placeholder="jean@email.com" className={CLS_INPUT} />
-        </div>
-        <div>
-          <label className={CLS_LABEL}>Téléphone</label>
-          <input name="telephone" value={form.telephone} onChange={handleChange} placeholder="06 12 34 56 78" className={CLS_INPUT} />
-        </div>
-      </div>
-
-      {/* ── MORPHOLOGIE + IMC ── */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={CLS_LABEL}>Taille (cm)</label>
-          <input type="number" name="taille" value={form.taille} onChange={handleChange}
-            placeholder="165" min={100} max={220} className={CLS_INPUT} />
-        </div>
-        <div>
-          <label className={CLS_LABEL}>Poids (kg)</label>
-          <input type="number" name="poids" value={form.poids} onChange={handleChange}
-            placeholder="70" min={30} max={250} className={CLS_INPUT} />
-        </div>
-      </div>
-      {imc !== null && imcCat && (
-        <div className="flex items-center gap-2.5 -mt-2">
-          <span
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
-            style={{ background: `${imcCat.couleur}18`, color: imcCat.couleur, border: `1px solid ${imcCat.couleur}30` }}
-          >
-            IMC {imc} — {imcCat.label}
-          </span>
-        </div>
-      )}
-
-      {/* ── ADRESSE ── */}
-      <div>
-        <label className={CLS_LABEL}>Adresse domicile <span className="text-gray-400 font-normal">(pour la carte bénéficiaires)</span></label>
-        <input name="adresseRue" value={form.adresseRue} onChange={handleChange}
-          placeholder="12 rue des Lilas" className={`${CLS_INPUT} mb-2`} />
-        <div className="grid grid-cols-3 gap-2">
-          <input name="adresseCodePostal" value={form.adresseCodePostal} onChange={handleChange}
-            placeholder="75013"
-            className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary" />
-          <input name="adresseVille" value={form.adresseVille} onChange={handleChange}
-            placeholder="Paris"
-            className="col-span-2 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary" />
-        </div>
-      </div>
-
-      {/* ── INFORMATIONS COMPLÉMENTAIRES (accès domicile) ── */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={CLS_LABEL}>Code portail / digicode <span className="text-gray-400 font-normal">(optionnel)</span></label>
-          <input name="codePortail" value={form.codePortail} onChange={handleChange}
-            placeholder="A1234" className={CLS_INPUT} />
-        </div>
-        <div>
-          <label className={CLS_LABEL}>Personne à contacter <span className="text-gray-400 font-normal">(optionnel)</span></label>
-          <input name="personneContact" value={form.personneContact} onChange={handleChange}
-            placeholder="Marie Dupont — 06 12 34 56 78" className={CLS_INPUT} />
-        </div>
-      </div>
-      </>}
-
-      {(showAll || step === 4) && <>
-      {/* ── SAP — COORDONNÉES BANCAIRES ── */}
-      <div className="border border-yellow-200 rounded-2xl overflow-hidden">
-        <div className="bg-yellow-50 px-4 py-3 flex items-center gap-2.5">
-          <span className="text-lg">🏦</span>
+      <Carte id="rubrique-identite" titre="Identité" aide="Les informations qui permettent d'identifier le bénéficiaire.">
+        <div className="grid sm:grid-cols-2 gap-4">
           <div>
-            <div className="font-semibold text-dark text-sm">Coordonnées bancaires — Service à la Personne</div>
-            <div className="text-xs text-gray-500">Pour les attestations fiscales SAP</div>
+            <label className={CLS_LABEL}>Prénom *</label>
+            <input name="prenom" value={form.prenom} onChange={handleChange} required placeholder="Jean" className={CLS_INPUT} />
           </div>
-        </div>
-        <div className="p-4 space-y-4">
-          {/* Décision 3 du 2026-10-20 : un bénéficiaire SAP n'a aucune facture générée automatiquement. */}
           <div>
-            <div className={CLS_LABEL}>Facturation</div>
-            <div className="flex gap-2" role="radiogroup" aria-label="Facturation Hors SAP ou SAP">
-              {([[false, 'Hors SAP'], [true, 'SAP']] as const).map(([valeur, libelle]) => (
-                <button key={libelle} type="button" role="radio" aria-checked={beneficiaireSap === valeur}
-                  data-testid={valeur ? 'beneficiaire-sap' : 'beneficiaire-hors-sap'}
-                  onClick={() => setBeneficiaireSap(valeur)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${
-                    beneficiaireSap === valeur ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary/40'
-                  }`}>
-                  {libelle}
-                </button>
-              ))}
-            </div>
-            {beneficiaireSap && (
-              <p className="text-xs text-gray-500 mt-1.5">Aucune facture n'est générée automatiquement pour un bénéficiaire SAP (ses brouillons en cours sont retirés).</p>
+            <label className={CLS_LABEL}>Nom *</label>
+            <input name="nom" value={form.nom} onChange={handleChange} required placeholder="Dupont" className={CLS_INPUT} />
+          </div>
+          <div>
+            <label className={CLS_LABEL}>Date de naissance *</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="bday"
+              name="dateNaissance"
+              placeholder="JJ/MM/AAAA"
+              maxLength={10}
+              value={dateNaissanceSaisie}
+              onChange={handleChangeDateNaissance}
+              onBlur={handleBlurDateNaissance}
+              required
+              className={`${CLS_INPUT}${dateNaissanceErreur ? ' border-red-300 focus:border-red-400 focus:ring-red-100' : ''}`}
+            />
+            {dateNaissanceErreur && (
+              <p className="text-xs text-red-500 mt-1">{dateNaissanceErreur}</p>
             )}
           </div>
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
-            ⚠️ Ces informations sont nécessaires pour établir les attestations fiscales SAP. Elles sont stockées uniquement sur votre appareil.
+          <div>
+            <label className={CLS_LABEL}>Date d'entrée *</label>
+            <input type="date" name="dateCreation" value={form.dateCreation} onChange={handleChange} required className={CLS_INPUT} />
           </div>
+        </div>
+      </Carte>
 
+      {/* ── COORDONNÉES ── */}
+      <Carte id="rubrique-coordonnees" titre="Coordonnées" aide="Pour joindre le bénéficiaire et se rendre à son domicile.">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className={CLS_LABEL}>Téléphone</label>
+            <input name="telephone" value={form.telephone} onChange={handleChange} placeholder="06 12 34 56 78" className={CLS_INPUT} />
+          </div>
+          <div>
+            <label className={CLS_LABEL}>Email</label>
+            <input type="email" name="email" value={form.email} onChange={handleChange} placeholder="jean@email.com" className={CLS_INPUT} />
+          </div>
+        </div>
+        <div>
+          <label className={CLS_LABEL}>Adresse du domicile <span className="text-gray-400 font-normal">(pour la carte et les trajets)</span></label>
+          <input name="adresseRue" value={form.adresseRue} onChange={handleChange}
+            placeholder="12 rue des Lilas" className={`${CLS_INPUT} mb-2`} />
+          <div className="grid grid-cols-3 gap-2">
+            <input name="adresseCodePostal" value={form.adresseCodePostal} onChange={handleChange}
+              placeholder="75013" aria-label="Code postal" className={CLS_INPUT} />
+            <input name="adresseVille" value={form.adresseVille} onChange={handleChange}
+              placeholder="Paris" aria-label="Ville" className={`col-span-2 ${CLS_INPUT}`} />
+          </div>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className={CLS_LABEL}>Code portail / digicode <span className="text-gray-400 font-normal">(optionnel)</span></label>
+            <input name="codePortail" value={form.codePortail} onChange={handleChange}
+              placeholder="A1234" className={CLS_INPUT} />
+          </div>
+          <div>
+            <label className={CLS_LABEL}>Proche à contacter <span className="text-gray-400 font-normal">(optionnel)</span></label>
+            <input name="personneContact" value={form.personneContact} onChange={handleChange}
+              placeholder="Marie Dupont (fille) — 06 12 34 56 78" className={CLS_INPUT} />
+          </div>
+        </div>
+      </Carte>
+
+      {/* ── PROFESSIONNELS CONTACTÉS ── (déplacé de « Mode de vie », 25/11/2026 ;
+          toujours stocké dans anamnese.autonomie.contactsSante) */}
+      <Carte id="rubrique-professionnels" titre="Professionnels de santé"
+        aide="Médecin traitant, kinésithérapeute… : les personnes à qui adresser un compte rendu.">
+        <ContactsSanteForm
+          sansTitre
+          value={contactsSante}
+          onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, contactsSante: v } }))}
+        />
+      </Carte>
+
+      {/* ── SERVICE À LA PERSONNE ── (regroupé le 25/11/2026 : les champs de
+          naissance étaient à l'étape 1, le choix SAP et la banque à l'étape 4) */}
+      <Carte id="rubrique-sap" titre="Informations relatives au service à la personne"
+        aide="Tout ce qu'il faut pour inscrire le bénéficiaire au SAP et établir ses attestations fiscales.">
+        {/* Décision 3 du 2026-10-20 : un bénéficiaire SAP n'a aucune facture générée automatiquement. */}
+        <div>
+          <div className={CLS_LABEL}>Facturation</div>
+          <div className="flex gap-2" role="radiogroup" aria-label="Facturation Hors SAP ou SAP">
+            {([[false, 'Hors SAP'], [true, 'SAP']] as const).map(([valeur, libelle]) => (
+              <button key={libelle} type="button" role="radio" aria-checked={beneficiaireSap === valeur}
+                data-testid={valeur ? 'beneficiaire-sap' : 'beneficiaire-hors-sap'}
+                onClick={() => setBeneficiaireSap(valeur)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${
+                  beneficiaireSap === valeur ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary/40'
+                }`}>
+                {libelle}
+              </button>
+            ))}
+          </div>
+          {beneficiaireSap && (
+            <p className="text-xs text-gray-500 mt-1.5">Aucune facture n'est générée automatiquement pour un bénéficiaire SAP (ses brouillons en cours sont retirés).</p>
+          )}
+        </div>
+
+        <div className="pt-1">
+          <div className="text-xs font-semibold uppercase tracking-[0.06em] mb-2" style={{ color: 'var(--color-ink-2)' }}>Identité fiscale</div>
+          <div className="space-y-4">
+            <div>
+              <label className={CLS_LABEL}>Nom de naissance <span className="text-gray-400 font-normal">(si différent, optionnel)</span></label>
+              <input name="nomNaissance" value={form.nomNaissance} onChange={handleChange}
+                placeholder="Martin" className={CLS_INPUT} />
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className={CLS_LABEL}>Ville de naissance <span className="text-gray-400 font-normal">(optionnel)</span></label>
+                <input name="villeNaissance" value={form.villeNaissance} onChange={handleChange}
+                  placeholder="Nantes" className={CLS_INPUT} />
+              </div>
+              <div>
+                <label className={CLS_LABEL}>Code postal de naissance <span className="text-gray-400 font-normal">(optionnel)</span></label>
+                <input name="codePostalNaissance" value={form.codePostalNaissance} onChange={handleChange}
+                  placeholder="44000" className={CLS_INPUT} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl p-4 space-y-4" style={{ background: '#F6FAFA', border: '1px solid #E2EEEE' }}>
+          <div>
+            <div className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>Coordonnées bancaires</div>
+            {/* Le texte précédent disait « stockées uniquement sur votre appareil » :
+                c'était faux, IBAN et BIC sont en base (participants.iban/bic) et
+                dans le PDF Dossier praticien. Corrigé le 25/11/2026. */}
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-ink-2)' }}>
+              Utilisées pour le SAP. Enregistrées dans la fiche du bénéficiaire, visibles par vous seul.
+            </p>
+          </div>
           <div>
             <label className={CLS_LABEL}>IBAN</label>
             <input
@@ -679,7 +674,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
               onChange={e => setForm(f => ({ ...f, iban: e.target.value.replace(/\s/g, '').toUpperCase() }))}
               placeholder="FR76 3000 6000 0112 3456 7890 189"
               maxLength={42}
-              className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 font-mono tracking-wide ${
+              className={`w-full bg-white border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 font-mono tracking-wide ${
                 ibanClean && !ibanValide
                   ? 'border-red-300 focus:border-red-400 focus:ring-red-100'
                   : 'border-gray-200 focus:border-primary focus:ring-primary/10'
@@ -692,7 +687,6 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
               <p className="text-xs text-green-600 mt-1">✓ IBAN valide</p>
             )}
           </div>
-
           <div>
             <label className={CLS_LABEL}>BIC / SWIFT</label>
             <input
@@ -701,285 +695,309 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
               onChange={e => setForm(f => ({ ...f, bic: e.target.value.toUpperCase() }))}
               placeholder="BNPAFRPPXXX"
               maxLength={11}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 font-mono tracking-wide"
+              className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 font-mono tracking-wide"
             />
           </div>
         </div>
-      </div>
+      </Carte>
+      </>}
 
-      {/* ── RATTACHEMENT STRUCTURE ── */}
-      {structures.length > 0 && (
-        <div className="border border-gray-100 rounded-2xl overflow-hidden">
-          <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
-            <span className="text-lg">🏢</span>
-            <div>
-              <div className="font-semibold text-dark text-sm">Rattachement</div>
-              <div className="text-xs text-gray-500">Bénéficiaire indépendant ou rattaché à une structure</div>
-            </div>
+      {(showAll || step === 4) && <>
+      {/* ── RATTACHEMENT STRUCTURE ── (toujours visible depuis le 25/11/2026 :
+          masqué sans structure, un nouvel utilisateur ne le découvrait jamais) */}
+      <Carte id="rubrique-rattachement" titre="Suivi en structure ou en indépendant"
+        aide="Rattachez le bénéficiaire à une structure (EHPAD, association, centre…) si vous intervenez pour elle : ses séances et sa facturation lui seront associées.">
+        {structures.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="rattachement" checked={!structureId} onChange={() => setStructureId(undefined)} className="accent-primary" />
+              <span className="text-sm text-gray-700">Suivi en indépendant</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="rattachement" checked={!!structureId} onChange={() => setStructureId(structures[0]?.id)} className="accent-primary" />
+              <span className="text-sm text-gray-700">Rattaché à une structure</span>
+            </label>
+            {structureId && (
+              <select
+                value={structureId}
+                onChange={e => setStructureId(e.target.value)}
+                aria-label="Structure"
+                className={`mt-1 ${CLS_INPUT}`}
+              >
+                {structures.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
+              </select>
+            )}
           </div>
-          <div className="p-4">
-            <div className="flex flex-col gap-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="rattachement" checked={!structureId} onChange={() => setStructureId(undefined)} className="accent-primary" />
-                <span className="text-sm text-gray-700">Bénéficiaire indépendant</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="rattachement" checked={!!structureId} onChange={() => setStructureId(structures[0]?.id)} className="accent-primary" />
-                <span className="text-sm text-gray-700">Rattaché à une structure</span>
-              </label>
-              {structureId && (
-                <select
-                  value={structureId}
-                  onChange={e => setStructureId(e.target.value)}
-                  className="mt-1 w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
-                >
-                  {structures.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}
-                </select>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-sm text-gray-600">
+            Suivi en indépendant. Aucune structure n'est encore enregistrée :{' '}
+            <Link to="/structures" className="font-semibold text-primary hover:underline">ajouter une structure</Link>
+            {' '}pour pouvoir y rattacher vos bénéficiaires.
+          </p>
+        )}
+      </Carte>
 
       {/* ── OBJECTIFS ── */}
-      <div className="border border-gray-100 rounded-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-teal-50 to-cyan-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
-          <span className="text-lg">🎯</span>
-          <div>
-            <div className="font-semibold text-dark text-sm">Objectifs</div>
-            <div className="text-xs text-gray-500">Ce que le bénéficiaire souhaite atteindre</div>
-          </div>
-        </div>
-        <div className="p-4 space-y-4">
-          <ChoixMultiple
-            label="Objectifs du bénéficiaire"
-            options={OPTIONS_OBJECTIFS_PATIENT}
-            value={profilActivite.objectifsPatient}
-            onChange={v => setProfilActivite(p => ({ ...p, objectifsPatient: v }))}
-            avecChampLibre
-          />
-        </div>
-      </div>
+      <Carte id="rubrique-objectifs" titre="Objectifs" aide="Ce que le bénéficiaire souhaite atteindre. Le premier objectif est le plus prioritaire.">
+        <ChoixMultiple
+          label=""
+          options={OPTIONS_OBJECTIFS_PATIENT}
+          value={profilActivite.objectifsPatient}
+          onChange={v => setProfilActivite(p => ({ ...p, objectifsPatient: v }))}
+          avecChampLibre
+          placeholderCustom="Objectif personnalisé..."
+        />
+        {/* Priorité (25/11/2026) : l'ordre de objectifs_patient (jsonb) est la
+            priorité ; le PDF, l'assistant et le compte rendu structure lisent
+            déjà la liste dans cet ordre. */}
+        <ListeOrdonnee
+          titre="Ordre de priorité"
+          aide="Utilisez les flèches pour placer en premier les axes de travail principaux."
+          value={profilActivite.objectifsPatient}
+          onChange={v => setProfilActivite(p => ({ ...p, objectifsPatient: v }))}
+        />
+      </Carte>
 
       {/* ── ORGANISATION DES SÉANCES ── */}
-      <div className="border border-gray-100 rounded-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-fuchsia-50 to-pink-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
-          <span className="text-lg">📅</span>
-          <div>
-            <div className="font-semibold text-dark text-sm">Organisation des séances</div>
-            <div className="text-xs text-gray-500">Disponibilités et préférences pour planifier les séances</div>
-          </div>
-        </div>
-        <div className="p-4 space-y-4">
-          <ChoixMultiple
-            label="Jour(s) disponible(s)"
-            options={OPTIONS_JOURS_DISPONIBLES}
-            value={anamnese.organisation?.joursDisponibles ?? []}
-            onChange={v => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, joursDisponibles: v } }))}
+      <Carte id="rubrique-organisation" titre="Organisation des séances" aide="Disponibilités et préférences pour planifier les séances.">
+        <ChoixMultiple
+          label="Jour(s) disponible(s)"
+          options={OPTIONS_JOURS_DISPONIBLES}
+          value={anamnese.organisation?.joursDisponibles ?? []}
+          onChange={v => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, joursDisponibles: v } }))}
+        />
+        <div>
+          <label className={CLS_LABEL}>Créneaux horaires par jour</label>
+          <CreneauxParJourForm
+            jours={anamnese.organisation?.joursDisponibles ?? []}
+            value={anamnese.organisation?.creneauxParJour ?? {}}
+            onChange={v => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, creneauxParJour: v } }))}
           />
-          <div>
-            <label className={CLS_LABEL}>Créneaux horaires par jour</label>
-            <CreneauxParJourForm
-              jours={anamnese.organisation?.joursDisponibles ?? []}
-              value={anamnese.organisation?.creneauxParJour ?? {}}
-              onChange={v => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, creneauxParJour: v } }))}
-            />
-          </div>
-          <div>
-            <label className={CLS_LABEL}>Contraintes particulières</label>
-            <textarea
-              value={anamnese.organisation?.contraintes ?? ''}
-              onChange={e => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, contraintes: e.target.value } }))}
-              placeholder="Jamais avant 9h, accompagné le lundi..."
-              rows={2}
-              className={CLS_INPUT}
-            />
-          </div>
-          <div>
-            <label className={CLS_LABEL}>
-              Fréquence des séances{!enModification && ' *'}
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {OPTIONS_FREQUENCE.map(opt => {
-                const selected = anamnese.organisation?.nbSeancesSemaine === opt.nbSeancesSemaine
-                  && (anamnese.organisation?.periodicite ?? 'semaine') === opt.periodicite;
-                return (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => {
-                      setErreurOrganisation(null);
-                      setAnamnese(a => {
-                        const prevDurees = a.organisation?.dureesSeances ?? [];
-                        const dureesSeances = Array.from({ length: opt.nbSeancesSemaine }, (_, i) => prevDurees[i] ?? 45);
-                        return {
-                          ...a,
-                          organisation: {
-                            ...a.organisation,
-                            nbSeancesSemaine: opt.nbSeancesSemaine,
-                            periodicite: opt.periodicite,
-                            dureesSeances,
-                          },
-                        };
-                      });
-                    }}
-                    className="px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-colors text-left"
-                    style={{
-                      borderColor: selected ? '#2BBFBF' : '#D1D5DB',
-                      background: selected ? '#2BBFBF' : 'white',
-                      color: selected ? 'white' : '#374151',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-            {erreurOrganisation && (
-              <p className="text-xs text-red-500 mt-1.5">{erreurOrganisation}</p>
-            )}
-            {enModification && !anamnese.organisation?.nbSeancesSemaine && (
-              <p className="text-xs text-amber-600 mt-1.5">
-                Pensez à renseigner la fréquence des séances pour l'optimisation de tournée.
-              </p>
-            )}
-          </div>
-          {!!anamnese.organisation?.nbSeancesSemaine && (
-            <div>
-              <label className={CLS_LABEL}>Durée souhaitée par séance</label>
-              <div className="grid grid-cols-2 gap-4">
-                {(anamnese.organisation?.dureesSeances ?? []).map((duree, i) => (
-                  <div key={i}>
-                    <label className="block text-xs text-gray-500 mb-1.5">Séance {i + 1}</label>
-                    <select
-                      value={duree}
-                      onChange={e => setAnamnese(a => ({
+        </div>
+        <div>
+          <label className={CLS_LABEL}>Contraintes particulières</label>
+          <textarea
+            value={anamnese.organisation?.contraintes ?? ''}
+            onChange={e => setAnamnese(a => ({ ...a, organisation: { ...a.organisation, contraintes: e.target.value } }))}
+            placeholder="Jamais avant 9h, accompagné le lundi..."
+            rows={2}
+            className={CLS_INPUT}
+          />
+        </div>
+        <div>
+          <label className={CLS_LABEL}>
+            Fréquence des séances{!enModification && ' *'}
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {OPTIONS_FREQUENCE.map(opt => {
+              const selected = anamnese.organisation?.nbSeancesSemaine === opt.nbSeancesSemaine
+                && (anamnese.organisation?.periodicite ?? 'semaine') === opt.periodicite;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => {
+                    setErreurOrganisation(null);
+                    setAnamnese(a => {
+                      const prevDurees = a.organisation?.dureesSeances ?? [];
+                      const dureesSeances = Array.from({ length: opt.nbSeancesSemaine }, (_, i) => prevDurees[i] ?? 45);
+                      return {
                         ...a,
                         organisation: {
                           ...a.organisation,
-                          dureesSeances: (a.organisation?.dureesSeances ?? []).map((d, j) => j === i ? Number(e.target.value) : d),
+                          nbSeancesSemaine: opt.nbSeancesSemaine,
+                          periodicite: opt.periodicite,
+                          dureesSeances,
                         },
-                      }))}
-                      className={CLS_INPUT}
-                    >
-                      {OPTIONS_DUREE_SEANCE_MIN.map(d => (
-                        <option key={d} value={d}>{d} min</option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-              </div>
-            </div>
+                      };
+                    });
+                  }}
+                  className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-colors text-left ${
+                    selected ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 border-gray-200 hover:border-primary/50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          {erreurOrganisation && (
+            <p className="text-xs text-red-500 mt-1.5">{erreurOrganisation}</p>
+          )}
+          {enModification && !anamnese.organisation?.nbSeancesSemaine && (
+            <p className="text-xs text-amber-600 mt-1.5">
+              Pensez à renseigner la fréquence des séances pour l'optimisation de tournée.
+            </p>
           )}
         </div>
-      </div>
+        {!!anamnese.organisation?.nbSeancesSemaine && (
+          <div>
+            <label className={CLS_LABEL}>Durée souhaitée par séance</label>
+            <div className="grid grid-cols-2 gap-4">
+              {(anamnese.organisation?.dureesSeances ?? []).map((duree, i) => (
+                <div key={i}>
+                  <label className="block text-xs text-gray-500 mb-1.5">Séance {i + 1}</label>
+                  <select
+                    value={duree}
+                    onChange={e => setAnamnese(a => ({
+                      ...a,
+                      organisation: {
+                        ...a.organisation,
+                        dureesSeances: (a.organisation?.dureesSeances ?? []).map((d, j) => j === i ? Number(e.target.value) : d),
+                      },
+                    }))}
+                    className={CLS_INPUT}
+                  >
+                    {OPTIONS_DUREE_SEANCE_MIN.map(d => (
+                      <option key={d} value={d}>{d} min</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Carte>
       </>}
 
       {(showAll || step === 2) && <>
-      {/* ── ÉTAT DE SANTÉ GÉNÉRAL ── */}
-      <div className="border border-gray-100 rounded-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-rose-50 to-orange-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
-          <span className="text-lg">🩺</span>
+      {/* ── MORPHOLOGIE ── (taille et poids viennent de l'étape 1, 25/11/2026) */}
+      <Carte id="rubrique-morphologie" titre="Morphologie">
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <div className="font-semibold text-dark text-sm">État de santé général</div>
-            <div className="text-xs text-gray-500">Ressenti au quotidien du bénéficiaire</div>
+            <label className={CLS_LABEL}>Taille (cm)</label>
+            <input type="number" name="taille" value={form.taille} onChange={handleChange}
+              placeholder="165" min={100} max={220} className={CLS_INPUT} />
+          </div>
+          <div>
+            <label className={CLS_LABEL}>Poids (kg)</label>
+            <input type="number" name="poids" value={form.poids} onChange={handleChange}
+              placeholder="70" min={30} max={250} className={CLS_INPUT} />
           </div>
         </div>
-        <div className="p-4 space-y-4">
-          <Echelle10
-            label="Douleur quotidienne (0-10)"
-            value={anamnese.douleurQuotidienne}
-            onChange={n => setAnamnese(a => ({ ...a, douleurQuotidienne: n }))}
-          />
-          <Echelle10
-            label="Fatigue quotidienne (0-10)"
-            value={anamnese.fatigueQuotidienne}
-            onChange={n => setAnamnese(a => ({ ...a, fatigueQuotidienne: n }))}
-          />
-          <div className="border-t border-gray-100 pt-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium text-gray-700">Contre-indications à l'effort physique ?</span>
-              <ToggleOuiNon
-                value={anamnese.contreIndications}
-                onChange={v => setAnamnese(a => ({ ...a, contreIndications: v }))}
-              />
-            </div>
-            {anamnese.contreIndications === 'oui' && (
-              <textarea
-                value={anamnese.contreIndicationsDetail ?? ''}
-                onChange={e => setAnamnese(a => ({ ...a, contreIndicationsDetail: e.target.value }))}
-                placeholder="FC max 130 bpm, éviter les impacts, pas de port de charges > 5 kg..."
-                rows={2}
-                className={`mt-2 ${CLS_INPUT}`}
-              />
-            )}
-            <p className="text-xs text-gray-400 mt-1.5">Ces contre-indications seront affichées en alerte dans la fiche bénéficiaire et tous les PDFs.</p>
+        {imc !== null && imcCat && (
+          <div className="text-sm text-gray-600 flex items-center gap-3 flex-wrap">
+            <span>IMC : <span className="font-semibold text-gray-700">{imc.toLocaleString('fr-FR')}</span></span>
+            <button type="button" onClick={() => setVoirInterpretationIMC(v => !v)} aria-expanded={voirInterpretationIMC}
+              className="text-xs text-gray-500 underline underline-offset-2 hover:text-primary">
+              {voirInterpretationIMC ? "Masquer l'interprétation" : "Voir l'interprétation"}
+            </button>
+            {voirInterpretationIMC && <span className="text-xs text-gray-500">{imcCat.label} (classification OMS)</span>}
           </div>
+        )}
+      </Carte>
+
+      {/* ── ÉTAT DE SANTÉ GÉNÉRAL ── */}
+      <Carte id="rubrique-etat-sante" titre="État de santé général" aide="Ressenti au quotidien du bénéficiaire.">
+        <Echelle10
+          label="Douleur quotidienne (0-10)"
+          value={anamnese.douleurQuotidienne}
+          onChange={n => setAnamnese(a => ({ ...a, douleurQuotidienne: n }))}
+        />
+        <Echelle10
+          label="Fatigue quotidienne (0-10)"
+          value={anamnese.fatigueQuotidienne}
+          onChange={n => setAnamnese(a => ({ ...a, fatigueQuotidienne: n }))}
+        />
+        <div className="border-t border-gray-100 pt-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-gray-700">Contre-indications à l'effort physique ?</span>
+            <ToggleOuiNon
+              value={anamnese.contreIndications}
+              onChange={v => setAnamnese(a => ({ ...a, contreIndications: v }))}
+            />
+          </div>
+          {anamnese.contreIndications === 'oui' && (
+            <textarea
+              value={anamnese.contreIndicationsDetail ?? ''}
+              onChange={e => setAnamnese(a => ({ ...a, contreIndicationsDetail: e.target.value }))}
+              placeholder="FC max 130 bpm, éviter les impacts, pas de port de charges > 5 kg..."
+              rows={2}
+              className={`mt-2 ${CLS_INPUT}`}
+            />
+          )}
+          <p className="text-xs text-gray-400 mt-1.5">Ces contre-indications seront affichées en alerte dans la fiche bénéficiaire et tous les PDFs.</p>
         </div>
-      </div>
+      </Carte>
+
+      {/* ── TRAITEMENTS ── */}
+      <Carte id="rubrique-traitements" titre="Traitements médicamenteux" aide="Nom, dose et effet secondaire notable de chaque traitement en cours.">
+        <ListeTraitementsForm value={traitements} onChange={setTraitements} />
+      </Carte>
+
+      {/* ── ANTÉCÉDENTS MÉDICAUX ── */}
+      <Carte id="rubrique-antecedents" titre="Antécédents médicaux" aide="Pathologies, chirurgies, fractures, prothèses, hospitalisations, accidents…">
+        <div>
+          <label className={CLS_LABEL}>Allergies connues</label>
+          <input name="allergies" value={form.allergies} onChange={handleChange}
+            placeholder="Aspirine, latex..." className={CLS_INPUT} />
+        </div>
+        <ListeAntecedentsForm value={antecedents} onChange={setAntecedents} />
+      </Carte>
+
+      {/* ── ANTÉCÉDENTS DE CHUTES ── */}
+      <Carte id="rubrique-chutes" titre="Antécédents de chutes" aide="Nombre, période, circonstances…">
+        <ChutesForm
+          value={anamnese.chutes ?? {}}
+          onChange={chutes => setAnamnese(a => ({ ...a, chutes }))}
+        />
+      </Carte>
 
       {/* ── COGNITION & HUMEUR ── */}
-      <div className="border border-gray-100 rounded-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-violet-50 to-indigo-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
-          <span className="text-lg">🧠</span>
-          <div>
-            <div className="font-semibold text-dark text-sm">Cognition & humeur</div>
-            <div className="text-xs text-gray-500">Mémoire, suivi psychologique, motivation</div>
+      <Carte id="rubrique-cognition" titre="Cognition et humeur" aide="Mémoire, suivi psychologique, motivation.">
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-gray-700">Plaintes mémoire ?</span>
+            <ToggleOuiNon
+              value={anamnese.cognition?.plaintesMemoire}
+              onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, plaintesMemoire: v } }))}
+            />
           </div>
-        </div>
-        <div className="p-4 space-y-4">
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium text-gray-700">Plaintes mémoire ?</span>
-              <ToggleOuiNon
-                value={anamnese.cognition?.plaintesMemoire}
-                onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, plaintesMemoire: v } }))}
+          {anamnese.cognition?.plaintesMemoire === 'oui' && (
+            <div className="mt-3 space-y-3 border-t border-gray-100 pt-3">
+              <ChoixOuTexte
+                label="Depuis quand ?"
+                options={OPTIONS_DEPUIS_QUAND}
+                value={anamnese.cognition?.plaintesMemoireDepuisQuand}
+                onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, plaintesMemoireDepuisQuand: v } }))}
               />
-            </div>
-            {anamnese.cognition?.plaintesMemoire === 'oui' && (
-              <div className="mt-3 space-y-3 border-t border-gray-100 pt-3">
-                <ChoixOuTexte
-                  label="Depuis quand ?"
-                  options={OPTIONS_DEPUIS_QUAND}
-                  value={anamnese.cognition?.plaintesMemoireDepuisQuand}
-                  onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, plaintesMemoireDepuisQuand: v } }))}
-                />
-                <div>
-                  <label className={CLS_LABEL}>Dans quel contexte ?</label>
-                  <input
-                    type="text"
-                    value={anamnese.cognition?.plaintesMemoireContexte ?? ''}
-                    onChange={e => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, plaintesMemoireContexte: e.target.value } }))}
-                    placeholder="Stress, fatigue, post-opératoire..."
-                    className={CLS_INPUT}
-                  />
-                </div>
-                <ChoixUnique
-                  label="Plaintes signalées par"
-                  options={OPTIONS_SIGNALE_PAR}
-                  value={anamnese.cognition?.plaintesMemoireSignalePar}
-                  onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, plaintesMemoireSignalePar: v } }))}
+              <div>
+                <label className={CLS_LABEL}>Dans quel contexte ?</label>
+                <input
+                  type="text"
+                  value={anamnese.cognition?.plaintesMemoireContexte ?? ''}
+                  onChange={e => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, plaintesMemoireContexte: e.target.value } }))}
+                  placeholder="Stress, fatigue, post-opératoire..."
+                  className={CLS_INPUT}
                 />
               </div>
-            )}
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium text-gray-700">Suivi psychologique ?</span>
-              <ToggleOuiNon
-                value={anamnese.cognition?.suiviPsy}
-                onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsy: v } }))}
+              <ChoixUnique
+                label="Plaintes signalées par"
+                options={OPTIONS_SIGNALE_PAR}
+                value={anamnese.cognition?.plaintesMemoireSignalePar}
+                onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, plaintesMemoireSignalePar: v } }))}
               />
             </div>
-            {anamnese.cognition?.suiviPsy === 'oui' && (
-              <div className="mt-3 space-y-3 border-t border-gray-100 pt-3">
-                <ChoixUnique
-                  label="Par qui ?"
-                  options={OPTIONS_SUIVI_PSY_QUI}
-                  value={anamnese.cognition?.suiviPsyQui}
-                  onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsyQui: v } }))}
-                />
+          )}
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-gray-700">Suivi psychologique ?</span>
+            <ToggleOuiNon
+              value={anamnese.cognition?.suiviPsy}
+              onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsy: v } }))}
+            />
+          </div>
+          {anamnese.cognition?.suiviPsy === 'oui' && (
+            <div className="mt-3 space-y-3 border-t border-gray-100 pt-3">
+              <ChoixUnique
+                label="Par qui ?"
+                options={OPTIONS_SUIVI_PSY_QUI}
+                value={anamnese.cognition?.suiviPsyQui}
+                onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsyQui: v } }))}
+              />
+              <div className="grid sm:grid-cols-2 gap-3">
                 <div>
                   <label className={CLS_LABEL}>Où ?</label>
                   <input
@@ -1000,118 +1018,78 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
                     className={CLS_INPUT}
                   />
                 </div>
-                <ChoixOuTexte
-                  label="Depuis quand ?"
-                  options={OPTIONS_DEPUIS_QUAND}
-                  value={anamnese.cognition?.suiviPsyDepuisQuand}
-                  onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsyDepuisQuand: v } }))}
-                />
-                <ChoixUnique
-                  label="Fréquence"
-                  options={OPTIONS_SUIVI_PSY_FREQUENCE}
-                  value={anamnese.cognition?.suiviPsyFrequence}
-                  onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsyFrequence: v } }))}
-                />
               </div>
-            )}
-          </div>
+              <ChoixOuTexte
+                label="Depuis quand ?"
+                options={OPTIONS_DEPUIS_QUAND}
+                value={anamnese.cognition?.suiviPsyDepuisQuand}
+                onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsyDepuisQuand: v } }))}
+              />
+              <ChoixUnique
+                label="Fréquence"
+                options={OPTIONS_SUIVI_PSY_FREQUENCE}
+                value={anamnese.cognition?.suiviPsyFrequence}
+                onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, suiviPsyFrequence: v } }))}
+              />
+            </div>
+          )}
+        </div>
 
+        <div>
           <ChoixUnique
             label="Pourquoi le bénéficiaire est-il là aujourd'hui ?"
             options={OPTIONS_ORIGINE_DEMARCHE}
             value={anamnese.cognition?.origineDemarche}
-            onChange={v => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, origineDemarche: v } }))}
+            onChange={v => setAnamnese(a => ({
+              ...a,
+              // La précision ne vaut que pour « Autre » : on l'efface si on
+              // change d'avis, pour ne pas garder un texte qui ne s'affiche plus.
+              cognition: { ...a.cognition, origineDemarche: v, origineDemarcheDetail: v === OPTION_ORIGINE_AUTRE ? a.cognition?.origineDemarcheDetail : undefined },
+            }))}
           />
-          <p className="text-xs text-gray-400 -mt-2">La motivation intrinsèque influence l'implication dans le suivi</p>
+          {anamnese.cognition?.origineDemarche === OPTION_ORIGINE_AUTRE && (
+            <input
+              type="text"
+              value={anamnese.cognition?.origineDemarcheDetail ?? ''}
+              onChange={e => setAnamnese(a => ({ ...a, cognition: { ...a.cognition, origineDemarcheDetail: e.target.value } }))}
+              placeholder="Précisez : orienté par une structure, une association..."
+              aria-label="Précision sur l'origine de la démarche"
+              className={`mt-2 ${CLS_INPUT}`}
+            />
+          )}
+          <p className="text-xs text-gray-400 mt-1.5">La motivation intrinsèque influence l'implication dans le suivi.</p>
         </div>
-      </div>
-
-      {/* ── TRAITEMENTS ── */}
-      <div className="border border-gray-100 rounded-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-amber-50 to-yellow-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
-          <span className="text-lg">💊</span>
-          <div>
-            <div className="font-semibold text-dark text-sm">Traitements médicamenteux</div>
-            <div className="text-xs text-gray-500">Nom · Dose · Effet secondaire notable</div>
-          </div>
-        </div>
-        <div className="p-4">
-          <ListeTraitementsForm value={traitements} onChange={setTraitements} />
-        </div>
-      </div>
-
-      {/* ── ANTÉCÉDENTS MÉDICAUX ── */}
-      <div className="border border-gray-100 rounded-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-50 to-slate-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
-          <span className="text-lg">🏥</span>
-          <div>
-            <div className="font-semibold text-dark text-sm">Antécédents médicaux</div>
-            <div className="text-xs text-gray-500">Pathologies, chirurgies, fractures, prothèses, hospitalisations, accidents...</div>
-          </div>
-        </div>
-        <div className="p-4 space-y-3">
-          <div>
-            <label className={CLS_LABEL}>Allergies connues</label>
-            <input name="allergies" value={form.allergies} onChange={handleChange}
-              placeholder="Aspirine, latex..." className={CLS_INPUT} />
-          </div>
-          <ListeAntecedentsForm value={antecedents} onChange={setAntecedents} />
-        </div>
-      </div>
-
-      {/* ── ANTÉCÉDENTS DE CHUTES ── */}
-      <div className="border border-gray-100 rounded-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-red-50 to-orange-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
-          <span className="text-lg">⚠️</span>
-          <div>
-            <div className="font-semibold text-dark text-sm">Antécédents de chutes</div>
-            <div className="text-xs text-gray-500">Nombre, période, circonstances...</div>
-          </div>
-        </div>
-        <div className="p-4">
-          <ChutesForm
-            value={anamnese.chutes ?? {}}
-            onChange={chutes => setAnamnese(a => ({ ...a, chutes }))}
-          />
-        </div>
-      </div>
+      </Carte>
       </>}
 
       {(showAll || step === 3) && <>
       {/* ── AUTONOMIE & MODE DE VIE ── */}
-      <div className="border border-gray-100 rounded-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
-          <span className="text-lg">🏠</span>
-          <div>
-            <div className="font-semibold text-dark text-sm">Autonomie & mode de vie</div>
-            <div className="text-xs text-gray-500">Situation, aides, évaluation GIR</div>
+      <Carte id="rubrique-autonomie" titre="Autonomie et mode de vie" aide="Situation de vie, aides, mobilité et évaluation GIR.">
+        <ChoixUnique
+          label="Situation de vie"
+          options={OPTIONS_SITUATION_VIE}
+          value={anamnese.autonomie?.situationVie}
+          onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, situationVie: v } }))}
+        />
+        <div className="border-t border-gray-100 pt-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-gray-700">Aide à domicile ?</span>
+            <ToggleOuiNon
+              value={anamnese.autonomie?.aideADomicile}
+              onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, aideADomicile: v } }))}
+            />
           </div>
-        </div>
-        <div className="p-4 space-y-4">
-          <ChoixUnique
-            label="Situation de vie"
-            options={OPTIONS_SITUATION_VIE}
-            value={anamnese.autonomie?.situationVie}
-            onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, situationVie: v } }))}
-          />
-          <div className="border-t border-gray-100 pt-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium text-gray-700">Aide à domicile ?</span>
-              <ToggleOuiNon
-                value={anamnese.autonomie?.aideADomicile}
-                onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, aideADomicile: v } }))}
+          {anamnese.autonomie?.aideADomicile === 'oui' && (
+            <div className="mt-2 space-y-3">
+              <ChoixMultiple
+                label="Type d'aide"
+                options={OPTIONS_TYPE_AIDE_DOMICILE}
+                value={anamnese.autonomie?.aideADomicileTypes ?? []}
+                onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, aideADomicileTypes: v } }))}
+                avecChampLibre
+                placeholderCustom="Type d'aide personnalisé..."
               />
-            </div>
-            {anamnese.autonomie?.aideADomicile === 'oui' && (
-              <div className="mt-2 space-y-3">
-                <ChoixMultiple
-                  label="Type d'aide"
-                  options={OPTIONS_TYPE_AIDE_DOMICILE}
-                  value={anamnese.autonomie?.aideADomicileTypes ?? []}
-                  onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, aideADomicileTypes: v } }))}
-                  avecChampLibre
-                  placeholderCustom="Type d'aide personnalisé..."
-                />
+              <div className="grid sm:grid-cols-[1fr_auto] gap-3 items-end">
                 <ChoixUnique
                   label="Fréquence"
                   options={OPTIONS_FREQUENCE_AIDE}
@@ -1119,7 +1097,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
                   onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, aideADomicileFrequence: v } }))}
                 />
                 <div>
-                  <label className={CLS_LABEL}>Nombre d'heures / semaine</label>
+                  <label className={CLS_LABEL}>Heures / semaine</label>
                   <input
                     type="number"
                     value={anamnese.autonomie?.aideADomicileHeures ?? ''}
@@ -1128,59 +1106,51 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
                   />
                 </div>
               </div>
-            )}
-          </div>
-          <ChoixUnique
-            label="Aide à la marche"
-            options={OPTIONS_AIDE_MARCHE}
-            value={anamnese.autonomie?.aideMarche}
-            onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, aideMarche: v } }))}
+            </div>
+          )}
+        </div>
+        <div className="border-t border-gray-100 pt-3">
+          <AidesMobiliteForm
+            value={anamnese.autonomie ?? {}}
+            onChange={patch => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, ...patch } }))}
           />
-          <div className="border-t border-gray-100 pt-3">
-            <label className={CLS_LABEL}>Évaluation GIR (Grille AGGIR)</label>
-            <GIRWidget
-              value={anamnese.autonomie?.gir ?? null}
-              onChange={gir => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, gir } }))}
-            />
-          </div>
-          <div className="border-t border-gray-100 pt-3">
-            <ContactsSanteForm
-              value={anamnese.autonomie?.contactsSante ?? []}
-              onChange={v => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, contactsSante: v } }))}
-            />
-          </div>
         </div>
-      </div>
+        <div className="border-t border-gray-100 pt-3">
+          <label className={CLS_LABEL}>Évaluation GIR (grille AGGIR)</label>
+          <GIRWidget
+            value={anamnese.autonomie?.gir ?? null}
+            onChange={gir => setAnamnese(a => ({ ...a, autonomie: { ...a.autonomie, gir } }))}
+          />
+        </div>
+      </Carte>
 
-      {/* ── HABITUDES DE VIE ── */}
-      <div className="border border-gray-100 rounded-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-emerald-50 to-teal-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
-          <span className="text-lg">🍽️</span>
-          <div>
-            <div className="font-semibold text-dark text-sm">Habitudes de vie</div>
-            <div className="text-xs text-gray-500">Alimentation, sommeil, énergie</div>
-          </div>
-        </div>
-        <div className="p-4 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <ChoixUnique
-              label="Nombre de repas par jour"
-              options={OPTIONS_REPAS}
-              value={anamnese.habitudesVie?.nombreRepas}
-              onChange={v => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, nombreRepas: v } }))}
-            />
-            <ChoixUnique
-              label="Hydratation estimée"
-              options={OPTIONS_HYDRATATION}
-              value={anamnese.habitudesVie?.hydratation}
-              onChange={v => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, hydratation: v } }))}
-            />
-          </div>
+      {/* ── HABITUDES DE VIE ── (plus compacte, 25/11/2026) */}
+      <Carte id="rubrique-habitudes" titre="Habitudes de vie" aide="Alimentation, sommeil, énergie.">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <ChoixUnique
+            label="Repas par jour"
+            options={OPTIONS_REPAS}
+            value={anamnese.habitudesVie?.nombreRepas}
+            onChange={v => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, nombreRepas: v } }))}
+          />
+          <ChoixUnique
+            label="Hydratation estimée"
+            options={OPTIONS_HYDRATATION}
+            value={anamnese.habitudesVie?.hydratation}
+            onChange={v => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, hydratation: v } }))}
+          />
           <Echelle5
             label="Qualité du sommeil (1-5)"
             value={anamnese.habitudesVie?.qualiteSommeil}
             onChange={n => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, qualiteSommeil: n } }))}
           />
+          <Echelle5
+            label="Niveau d'appétit (1-5)"
+            value={anamnese.habitudesVie?.niveauAppetit}
+            onChange={n => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, niveauAppetit: n } }))}
+          />
+        </div>
+        <div className="grid sm:grid-cols-3 gap-4 border-t border-gray-100 pt-3">
           <div>
             <label className={CLS_LABEL}>Heures de sommeil / nuit</label>
             <input
@@ -1190,83 +1160,69 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
               className={NUM_INPUT_CLS}
             />
           </div>
-          <Echelle5
-            label="Niveau d'appétit (1-5)"
-            value={anamnese.habitudesVie?.niveauAppetit}
-            onChange={n => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, niveauAppetit: n } }))}
-          />
-          <div className="border-t border-gray-100 pt-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium text-gray-700">Variation de poids involontaire ?</span>
-              <ToggleOuiNon
-                value={anamnese.habitudesVie?.variationPoids}
-                onChange={v => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, variationPoids: v } }))}
-              />
-            </div>
+          <div>
+            <div className={CLS_LABEL}>Variation de poids involontaire ?</div>
+            <ToggleOuiNon
+              value={anamnese.habitudesVie?.variationPoids}
+              onChange={v => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, variationPoids: v } }))}
+            />
             {anamnese.habitudesVie?.variationPoids === 'oui' && (
-              <div className="mt-2">
-                <label className={CLS_LABEL}>Combien de kg ?</label>
-                <input
-                  type="number"
-                  value={anamnese.habitudesVie?.variationPoidsKg ?? ''}
-                  onChange={e => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, variationPoidsKg: e.target.value === '' ? null : Number(e.target.value) } }))}
-                  className={NUM_INPUT_CLS}
-                />
-              </div>
+              <input
+                type="number"
+                value={anamnese.habitudesVie?.variationPoidsKg ?? ''}
+                onChange={e => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, variationPoidsKg: e.target.value === '' ? null : Number(e.target.value) } }))}
+                placeholder="kg"
+                aria-label="Variation de poids en kg"
+                className={`mt-2 ${NUM_INPUT_CLS}`}
+              />
             )}
           </div>
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium text-gray-700">Tabagisme ?</span>
-              <ToggleOuiNon
-                value={anamnese.habitudesVie?.tabagisme}
-                onChange={v => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, tabagisme: v } }))}
-              />
-            </div>
-            <p className="text-xs text-gray-400 mt-1.5">Aide à comprendre l'essoufflement à l'effort</p>
+            <div className={CLS_LABEL}>Tabagisme ?</div>
+            <ToggleOuiNon
+              value={anamnese.habitudesVie?.tabagisme}
+              onChange={v => setAnamnese(a => ({ ...a, habitudesVie: { ...a.habitudesVie, tabagisme: v } }))}
+            />
+            <p className="text-xs text-gray-400 mt-1.5">Aide à comprendre l'essoufflement à l'effort.</p>
           </div>
         </div>
-      </div>
+      </Carte>
 
-      {/* ── ACTIVITÉ PHYSIQUE ACTUELLE ── */}
-      <div className="border border-gray-100 rounded-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-cyan-50 to-sky-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
-          <span className="text-lg">🏃</span>
-          <div>
-            <div className="font-semibold text-dark text-sm">Activité physique actuelle</div>
-            <div className="text-xs text-gray-500">Habitudes sportives passées et présentes</div>
-          </div>
-        </div>
-        <div className="p-4 space-y-4">
-          <ChoixMultiple
-            label="Activités pratiquées actuellement"
-            options={OPTIONS_ACTIVITES}
-            value={anamnese.activitePhysique?.activitesActuelles ?? []}
-            onChange={v => setAnamnese(a => ({ ...a, activitePhysique: { ...a.activitePhysique, activitesActuelles: v } }))}
-            avecChampLibre
-          />
+      {/* ── ACTIVITÉ PHYSIQUE ── */}
+      <Carte id="rubrique-activite" titre="Activité physique" aide="Activités pratiquées aujourd'hui et par le passé.">
+        <ChoixMultiple
+          label="Activités pratiquées actuellement"
+          options={OPTIONS_ACTIVITES}
+          value={anamnese.activitePhysique?.activitesActuelles ?? []}
+          onChange={v => setAnamnese(a => ({ ...a, activitePhysique: { ...a.activitePhysique, activitesActuelles: v } }))}
+          avecChampLibre
+        />
+        <div className="border-t border-gray-100 pt-3">
           <ActivitesPrecedentesForm
             value={anamnese.activitePhysique?.activitesPrecedentes ?? []}
             onChange={v => setAnamnese(a => ({ ...a, activitePhysique: { ...a.activitePhysique, activitesPrecedentes: v } }))}
           />
-          <div className="border-t border-gray-100 pt-3">
-            <ChoixMultiple
-              label="Matériel disponible à domicile"
-              options={OPTIONS_MATERIEL}
-              value={anamnese.activitePhysique?.materielDisponible ?? []}
-              onChange={v => setAnamnese(a => ({ ...a, activitePhysique: { ...a.activitePhysique, materielDisponible: v } }))}
-              avecChampLibre
-              placeholderCustom="Matériel personnalisé..."
-            />
-          </div>
         </div>
-      </div>
+      </Carte>
+
+      {/* ── MATÉRIEL ── (rubrique à part depuis le 25/11/2026 : c'est ce que
+          l'enseignant cherche en préparant un programme) */}
+      <Carte id="rubrique-materiel" titre="Matériel à disposition" aide="Ce que le bénéficiaire a chez lui pour les exercices. Repris dans sa fiche.">
+        <ChoixMultiple
+          label=""
+          options={OPTIONS_MATERIEL}
+          value={anamnese.activitePhysique?.materielDisponible ?? []}
+          onChange={v => setAnamnese(a => ({ ...a, activitePhysique: { ...a.activitePhysique, materielDisponible: v } }))}
+          avecChampLibre
+          placeholderCustom="Matériel personnalisé..."
+        />
+      </Carte>
 
       <SectionSedentarite
         value={anamnese.sedentariteReponses ?? EMPTY_SED}
         onChange={setSedData}
       />
-      <label className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700 select-none -mt-2">
+      <label className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700 select-none">
         <input type="checkbox" checked={anamnese.sedentariteVisibleBeneficiaire === true} className="w-4 h-4 accent-primary"
           onChange={e => setAnamnese(a => ({ ...a, sedentariteVisibleBeneficiaire: e.target.checked }))} />
         Partager le niveau d'activité avec le bénéficiaire
@@ -1275,7 +1231,7 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
         value={anamnese.fatigueReponses ?? Array(9).fill(null)}
         onChange={setFSSData}
       />
-      <label className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700 select-none -mt-2">
+      <label className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700 select-none">
         <input type="checkbox" checked={anamnese.fatigueVisibleBeneficiaire === true} className="w-4 h-4 accent-primary"
           onChange={e => setAnamnese(a => ({ ...a, fatigueVisibleBeneficiaire: e.target.checked }))} />
         Partager le niveau de fatigue avec le bénéficiaire
@@ -1288,102 +1244,108 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
 
       {(showAll || step === 5) && <>
       {!showAll && (
-        <div className="border border-gray-100 rounded-2xl overflow-hidden">
-          <div className="bg-gradient-to-r from-teal-50 to-cyan-50 px-4 py-3 flex items-center gap-2.5 border-b border-gray-100">
-            <span className="text-lg">📋</span>
-            <div>
-              <div className="font-semibold text-dark text-sm">Récapitulatif</div>
-              <div className="text-xs text-gray-500">Vérifiez les informations avant de créer la fiche</div>
-            </div>
-          </div>
-          <div className="p-4 space-y-3 text-sm text-gray-600">
-            <p><span className="font-medium text-gray-700">Identité :</span> {form.prenom || '—'} {form.nom || '—'}{form.dateNaissance ? ` · né(e) le ${new Date(form.dateNaissance).toLocaleDateString('fr-FR')}` : ''}</p>
+        <Carte id="rubrique-recapitulatif" titre="Récapitulatif" aide="Vérifiez les informations avant d'enregistrer la fiche.">
+          <dl className="grid sm:grid-cols-[180px_1fr] gap-x-4 gap-y-2 text-sm">
+            <LigneRecap terme="Identité">
+              {form.prenom || '—'} {form.nom || '—'}{form.dateNaissance ? ` · né(e) le ${new Date(form.dateNaissance).toLocaleDateString('fr-FR')}` : ''}
+            </LigneRecap>
             {(form.email || form.telephone) && (
-              <p><span className="font-medium text-gray-700">Contact :</span> {[form.email, form.telephone].filter(Boolean).join(' · ')}</p>
+              <LigneRecap terme="Contact">{[form.telephone, form.email].filter(Boolean).join(' · ')}</LigneRecap>
             )}
             {(form.adresseRue || form.adresseVille) && (
-              <p><span className="font-medium text-gray-700">Adresse :</span> {[form.adresseRue, form.adresseCodePostal, form.adresseVille].filter(Boolean).join(' ')}</p>
+              <LigneRecap terme="Adresse">{[form.adresseRue, form.adresseCodePostal, form.adresseVille].filter(Boolean).join(' ')}</LigneRecap>
             )}
-            {imc !== null && imcCat && (
-              <p><span className="font-medium text-gray-700">IMC :</span> {imc} — {imcCat.label}</p>
+            {contactsSante.length > 0 && (
+              <LigneRecap terme="Professionnels">
+                {contactsSante.map(c => [c.profession, [c.prenom, c.nom].filter(Boolean).join(' ')].filter(Boolean).join(' : ')).join(' · ')}
+              </LigneRecap>
             )}
-            <p><span className="font-medium text-gray-700">Traitements :</span> {traitements.length > 0 ? `${traitements.length} renseigné(s)` : 'aucun'}</p>
-            <p><span className="font-medium text-gray-700">Antécédents médicaux :</span> {antecedents.length > 0 ? `${antecedents.length} renseigné(s)` : 'aucun'}</p>
+            <LigneRecap terme="Service à la personne">
+              {beneficiaireSap ? 'SAP' : 'Hors SAP'}{ibanClean ? ' · IBAN renseigné' : ''}
+            </LigneRecap>
+            {imc !== null && <LigneRecap terme="IMC">{imc.toLocaleString('fr-FR')}</LigneRecap>}
+            <LigneRecap terme="Traitements">{traitements.length > 0 ? `${traitements.length} renseigné(s)` : 'aucun'}</LigneRecap>
+            <LigneRecap terme="Antécédents médicaux">{antecedents.length > 0 ? `${antecedents.length} renseigné(s)` : 'aucun'}</LigneRecap>
             {anamnese.contreIndications === 'oui' && (
-              <p className="text-red-600"><span className="font-medium">⚠️ Contre-indications :</span> {anamnese.contreIndicationsDetail || 'oui (détail non précisé)'}</p>
+              <LigneRecap terme="Contre-indications" alerte>{anamnese.contreIndicationsDetail || 'oui (détail non précisé)'}</LigneRecap>
             )}
             {anamnese.chutes?.aChutes === 'oui' && (
-              <p><span className="font-medium text-gray-700">Chutes :</span> oui — {anamnese.chutes.chutesDetail?.length ?? 0} chute(s)</p>
+              <LigneRecap terme="Chutes">oui — {anamnese.chutes.chutesDetail?.length ?? 0} chute(s)</LigneRecap>
             )}
-            {structureId && (
-              <p><span className="font-medium text-gray-700">Structure :</span> {structures.find(s => s.id === structureId)?.nom ?? '—'}</p>
+            {(aidesMobilite.length > 0 || anamnese.autonomie?.aideMarche === 'Aucune') && (
+              <LigneRecap terme="Aides à la mobilité">{aidesMobilite.length > 0 ? aidesMobilite.join(', ') : 'aucune'}</LigneRecap>
             )}
-          </div>
-        </div>
+            {anamnese.autonomie?.gir?.niveau != null && (
+              <LigneRecap terme="GIR">
+                {anamnese.autonomie.gir.niveau}{anamnese.autonomie.gir.mode === 'calcule' ? ' (estimation)' : ''}
+              </LigneRecap>
+            )}
+            {materiel.length > 0 && <LigneRecap terme="Matériel">{materiel.join(', ')}</LigneRecap>}
+            {objectifs.length > 0 && (
+              <LigneRecap terme="Objectifs">
+                <ol className="list-decimal pl-4">{objectifs.map((o, i) => <li key={`${o}-${i}`}>{sansEmoji(o)}</li>)}</ol>
+              </LigneRecap>
+            )}
+            <LigneRecap terme="Suivi">
+              {structureId ? (structures.find(s => s.id === structureId)?.nom ?? 'Structure') : 'Indépendant'}
+            </LigneRecap>
+          </dl>
+        </Carte>
       )}
 
       {/* ── RGPD + DROIT À L'IMAGE ── */}
-      <div className="border border-blue-100 rounded-2xl overflow-hidden">
-        <div className="bg-blue-50 px-4 py-3 flex items-center gap-2.5">
-          <span className="text-lg">🔒</span>
-          <div>
-            <div className="font-semibold text-dark text-sm">Consentement &amp; protection des données</div>
-            <div className="text-xs text-gray-500">Conformément au RGPD</div>
-          </div>
+      <Carte id="rubrique-rgpd" titre="Consentement et protection des données" aide="Conformément au RGPD.">
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-600 leading-relaxed">
+          <div className="font-semibold text-gray-700 mb-1.5">À lire au bénéficiaire</div>
+          <p>"Dans le cadre de votre suivi en APA, je collecte vos données personnelles et de santé. Utilisées uniquement pour votre suivi. Droits d'accès, rectification, effacement : <strong>{emailPraticien}</strong>"</p>
         </div>
-        <div className="p-4 space-y-4">
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-600 leading-relaxed">
-            <div className="font-semibold text-gray-700 mb-1.5">📋 À lire au bénéficiaire</div>
-            <p>"Dans le cadre de votre suivi en APA, je collecte vos données personnelles et de santé. Utilisées uniquement pour votre suivi. Droits d'accès, rectification, effacement : <strong>{emailPraticien}</strong>"</p>
-          </div>
-          <div className="space-y-2.5">
-            {([
-              { key: 'consentementObtenu', label: 'Le bénéficiaire a été informé et a consenti' },
-              { key: 'droitAcces',         label: "Droit d'accès expliqué" },
-              { key: 'droitRectification', label: 'Droit de rectification expliqué' },
-              { key: 'droitEffacement',    label: "Droit à l'effacement expliqué" },
-            ] as const).map(({ key, label }) => (
-              <label key={key} className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700 select-none">
-                <input type="checkbox" checked={rgpd[key]} className="w-4 h-4 accent-primary"
-                  onChange={e => {
-                    const coche = e.target.checked;
-                    // La date de recueil suit la case du consentement.
-                    setRgpd(r => key === 'consentementObtenu'
-                      ? avecConsentement(r, coche, new Date().toISOString().slice(0, 10))
-                      : { ...r, [key]: coche });
-                  }} />
-                {label}
-              </label>
-            ))}
-            {/* Droit à l'image */}
-            <label className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700 select-none">
-              <input type="checkbox" checked={droitImage} className="w-4 h-4 accent-primary"
-                onChange={e => setDroitImage(e.target.checked)} />
-              Droit à l'image accordé (photos/vidéos en séance)
+        <div className="space-y-2.5">
+          {([
+            { key: 'consentementObtenu', label: 'Le bénéficiaire a été informé et a consenti' },
+            { key: 'droitAcces',         label: "Droit d'accès expliqué" },
+            { key: 'droitRectification', label: 'Droit de rectification expliqué' },
+            { key: 'droitEffacement',    label: "Droit à l'effacement expliqué" },
+          ] as const).map(({ key, label }) => (
+            <label key={key} className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700 select-none">
+              <input type="checkbox" checked={rgpd[key]} className="w-4 h-4 accent-primary"
+                onChange={e => {
+                  const coche = e.target.checked;
+                  // La date de recueil suit la case du consentement.
+                  setRgpd(r => key === 'consentementObtenu'
+                    ? avecConsentement(r, coche, new Date().toISOString().slice(0, 10))
+                    : { ...r, [key]: coche });
+                }} />
+              {label}
             </label>
-          </div>
-          <div>
-            <div className="text-xs font-medium text-gray-600 mb-2">Mode de recueil</div>
-            <div className="flex gap-2">
-              {(['oral_note', 'ecrit', 'numerique'] as const).map(m => (
-                <button key={m} type="button" onClick={() => setRgpd(r => ({ ...r, methodeConsentement: m }))}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                    rgpd.methodeConsentement === m ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200'
-                  }`}>
-                  {m === 'oral_note' ? 'Oral noté' : m === 'ecrit' ? 'Écrit' : 'Numérique'}
-                </button>
-              ))}
-            </div>
-          </div>
-          {!rgpd.consentementObtenu && (
-            <p className="text-xs text-warning font-medium">
-              {enModification
-                ? '⚠️ Sans consentement, les données de santé ne peuvent pas être collectées légalement.'
-                : '⚠️ Obligatoire pour créer la fiche : sans consentement, les données de santé ne peuvent pas être collectées légalement.'}
-            </p>
-          )}
+          ))}
+          {/* Droit à l'image */}
+          <label className="flex items-center gap-2.5 cursor-pointer text-sm text-gray-700 select-none">
+            <input type="checkbox" checked={droitImage} className="w-4 h-4 accent-primary"
+              onChange={e => setDroitImage(e.target.checked)} />
+            Droit à l'image accordé (photos/vidéos en séance)
+          </label>
         </div>
-      </div>
+        <div>
+          <div className="text-xs font-medium text-gray-600 mb-2">Mode de recueil</div>
+          <div className="flex gap-2">
+            {(['oral_note', 'ecrit', 'numerique'] as const).map(m => (
+              <button key={m} type="button" onClick={() => setRgpd(r => ({ ...r, methodeConsentement: m }))}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  rgpd.methodeConsentement === m ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200'
+                }`}>
+                {m === 'oral_note' ? 'Oral noté' : m === 'ecrit' ? 'Écrit' : 'Numérique'}
+              </button>
+            ))}
+          </div>
+        </div>
+        {!rgpd.consentementObtenu && (
+          <p className="text-xs text-warning font-medium">
+            {enModification
+              ? '⚠️ Sans consentement, les données de santé ne peuvent pas être collectées légalement.'
+              : '⚠️ Obligatoire pour créer la fiche : sans consentement, les données de santé ne peuvent pas être collectées légalement.'}
+          </p>
+        )}
+      </Carte>
 
       </>}
 
@@ -1404,5 +1366,14 @@ const ParticipantForm = forwardRef<ParticipantFormHandle, Props>(function Partic
     </Wrapper>
   );
 });
+
+function LigneRecap({ terme, alerte, children }: { terme: string; alerte?: boolean; children: React.ReactNode }) {
+  return (
+    <>
+      <dt className={`font-medium ${alerte ? 'text-red-600' : 'text-gray-700'}`}>{terme}</dt>
+      <dd className={alerte ? 'text-red-600' : 'text-gray-600'}>{children}</dd>
+    </>
+  );
+}
 
 export default ParticipantForm;

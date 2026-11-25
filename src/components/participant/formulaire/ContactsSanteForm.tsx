@@ -8,9 +8,12 @@ export const OPTIONS_PROFESSION_SANTE = ['Médecin traitant', 'Kinésithérapeut
 export function ContactsSanteForm({
   value,
   onChange,
+  sansTitre,
 }: {
   value: ContactSante[];
   onChange: (v: ContactSante[]) => void;
+  /** La rubrique porte déjà le titre (formulaire bénéficiaire, 25/11/2026). */
+  sansTitre?: boolean;
 }) {
   const items = value ?? [];
 
@@ -23,7 +26,7 @@ export function ContactsSanteForm({
 
   return (
     <div>
-      <label className={CLS_LABEL}>Professionnels de santé à contacter</label>
+      {!sansTitre && <label className={CLS_LABEL}>Professionnels de santé à contacter</label>}
       {items.map((item, idx) => (
         <div key={idx} className="border border-gray-100 rounded-xl p-3.5 mb-2 bg-gray-50">
           <div className="flex items-center justify-between gap-2 mb-2.5">
