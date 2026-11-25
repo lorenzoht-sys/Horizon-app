@@ -230,6 +230,7 @@ export function useDemarrage() {
 
   return {
     chargement,
+    praticienId: donnees?.praticienId ?? null,
     visible,
     premiersPas,
     etapes,
