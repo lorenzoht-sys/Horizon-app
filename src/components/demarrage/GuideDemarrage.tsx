@@ -49,6 +49,8 @@ const STYLE_APPEL = `
 // et le passent à GuideDemarrageVue : un seul chargement des comptages.
 export type EtatGuide = ReturnType<typeof useDemarrage>;
 
+const cleOuvertureAuto = (id: string) => `horizon:demarrage:ouvert-auto:${id}`;
+
 export function GuideDemarrage(props: { mobile?: boolean; replie?: boolean }) {
   const guide = useDemarrage();
   return <GuideDemarrageVue guide={guide} {...props} />;
@@ -59,6 +61,20 @@ export function GuideDemarrageVue({ guide, mobile = false, replie = false }: { g
   const [installation, setInstallation] = useState(false);
   const [deplie, setDeplie] = useState(false);
   const bravoMontre = useRef<Bravo | null>(null);
+
+  // Première arrivée sur le tableau de bord (25/11/2026, demande de Lorenzo) : le guide s'ouvre
+  // de lui-même, c'est la suite logique de l'écran d'accueil. Une seule fois par appareil ; aux
+  // visites suivantes, la ligne et son bouton « Voir le guide » qui brille prennent le relais.
+  const { praticienId, premiersPas } = guide;
+  useEffect(() => {
+    if (!replie || !premiersPas || !praticienId) return;
+    const cle = cleOuvertureAuto(praticienId);
+    try {
+      if (localStorage.getItem(cle)) return;
+      localStorage.setItem(cle, '1');
+    } catch { /* stockage indisponible (navigation privée) : on ouvre quand même */ }
+    setDeplie(true);
+  }, [replie, premiersPas, praticienId]);
 
   // Une étape vient d'être réussie : une seule notification, sobre. L'anneau
   // avance en même temps (faitesAvant), c'est assez pour se sentir progresser.
@@ -135,6 +151,7 @@ export function GuideDemarrageVue({ guide, mobile = false, replie = false }: { g
         mobile={mobile}
         onAction={agir}
         onMasquer={masquer}
+        onReduire={replie ? () => setDeplie(false) : undefined}
       />
       )}
       <FenetreInstallation

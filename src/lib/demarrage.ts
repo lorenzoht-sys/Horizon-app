@@ -223,7 +223,7 @@ export function enPremiersPas(params: { visible: boolean; termine: boolean; bila
 }
 
 /** Phrase sous « Bonjour » en premiers pas, à la place du résumé d'une journée encore vide. */
-export const PHRASE_PREMIERS_PAS = 'Votre espace est prêt. Ouvrez le guide juste en dessous : il vous montre chaque étape.';
+export const PHRASE_PREMIERS_PAS = 'Votre espace est prêt. Le guide juste en dessous vous montre chaque étape.';
 
 export function doitAfficherGuide(params: {
   etat: EtatDemarrage;

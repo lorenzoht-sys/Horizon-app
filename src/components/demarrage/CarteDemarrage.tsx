@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { AlertCircle, ArrowRight, Check, ChevronDown, Clock, Lightbulb, Lock, PartyPopper, X } from 'lucide-react';
+import { AlertCircle, ArrowRight, Check, ChevronDown, ChevronUp, Clock, Lightbulb, Lock, PartyPopper, X } from 'lucide-react';
 import {
   guideEtape,
   messageProgression,
@@ -33,11 +33,13 @@ interface Props {
   faitesAvant?: number;
   onAction: (etape: Etape) => void;
   onMasquer: () => void;
+  /** Tableau de bord (guide replié par défaut) : revenir à la ligne, sans masquer le guide. */
+  onReduire?: () => void;
 }
 
 const EASE = [0.25, 0.1, 0.25, 1] as const;
 
-export function CarteDemarrage({ etapes, progression, prenom, manquesFacturation = [], mobile = false, faitesAvant, onAction, onMasquer }: Props) {
+export function CarteDemarrage({ etapes, progression, prenom, manquesFacturation = [], mobile = false, faitesAvant, onAction, onMasquer, onReduire }: Props) {
   const reduit = useReducedMotion();
   const [listeOuverte, setListeOuverte] = useState(!mobile);
   const [selectionId, setSelectionId] = useState<Etape['id'] | null>(null);
@@ -116,6 +118,17 @@ export function CarteDemarrage({ etapes, progression, prenom, manquesFacturation
           )}
         </div>
         {termine && !mobile && <BoutonFermer onClick={onMasquer} />}
+        {!termine && onReduire && (
+          <button
+            type="button"
+            onClick={onReduire}
+            className="flex flex-shrink-0 items-center gap-1.5 self-start rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+            style={{ padding: '6px 10px', fontSize: 12.5, fontWeight: 600 }}
+          >
+            <ChevronUp size={16} aria-hidden="true" />
+            <span>Réduire</span>
+          </button>
+        )}
         {!termine && (
           <button
             type="button"
