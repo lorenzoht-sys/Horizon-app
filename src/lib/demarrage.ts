@@ -12,6 +12,8 @@
 // permet pas de détecter d'un autre appareil (installée sur le téléphone, le
 // poste de bureau n'en sait rien). Le praticien peut donc la déclarer faite.
 
+import { lirePratique, type Pratique } from './onboarding';
+
 export type IdEtape =
   | 'compte'
   | 'beneficiaire'
@@ -38,6 +40,12 @@ export interface EtatDemarrage {
   reaffiche?: boolean;
   /** Déclaré par le praticien, ou constaté (application lancée depuis l'écran d'accueil). */
   applicationInstallee?: boolean;
+  /**
+   * Lieux d'exercice et publics déclarés à l'accueil (OnboardingPage, 25/11/2026).
+   * Conservé ici à chaque écriture du guide : sans cela, masquer le guide
+   * effacerait ce que le praticien a dit de sa pratique.
+   */
+  pratique?: Pratique;
 }
 
 export interface EntreesDemarrage {
@@ -370,6 +378,8 @@ export function lireEtatDemarrage(brut: unknown): EtatDemarrage {
   if (o.masque === true) etat.masque = true;
   if (o.reaffiche === true) etat.reaffiche = true;
   if (o.applicationInstallee === true) etat.applicationInstallee = true;
+  const pratique = lirePratique(o.pratique);
+  if (pratique) etat.pratique = pratique;
   return etat;
 }
 
@@ -385,6 +395,7 @@ export function fusionnerEtats(base: EtatDemarrage | null, local: EtatDemarrage)
     masque: base.masque,
     reaffiche: base.reaffiche,
     applicationInstallee: base.applicationInstallee || local.applicationInstallee,
+    pratique: base.pratique ?? local.pratique,
   });
 }
 
