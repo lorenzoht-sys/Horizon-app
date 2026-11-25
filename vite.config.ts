@@ -23,8 +23,12 @@ export default defineConfig({
       includeAssets: ['icon-horizon.png.png', 'favicon.ico'],
 
       manifest: {
-        name: "Mouv'APA Suivis",
-        short_name: 'MouvAPA',
+        // « Horizon » partout (25/11/2026) : l'ancien nom (« Mouv'APA Suivis »,
+        // nom court « MouvAPA ») s'affichait sous l'icône des praticiens qui
+        // avaient ajouté l'application à leur écran d'accueil sur Android.
+        // iOS lit apple-mobile-web-app-title (index.html), pas ce manifeste.
+        name: 'Horizon',
+        short_name: 'Horizon',
         description: "Suivi patient en Activité Physique Adaptée",
         // Explicites (pas les défauts du plugin) : ce manifeste est celui du
         // praticien, distinct de public/manifest-patient.webmanifest
