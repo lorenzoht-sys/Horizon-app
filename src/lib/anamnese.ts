@@ -179,8 +179,19 @@ export function getAntecedentTitre(a: AntecedentMedical): string {
   return label.split(' ').slice(1).join(' ') || label;
 }
 
+// Localisation ajoutée le 25/11/2026 : saisie dans le formulaire depuis
+// longtemps mais affichée nulle part (compte rendu de Pierre).
 export function getAntecedentSousLigne(a: AntecedentMedical): string {
-  return [a.date, a.consequence].filter(Boolean).join(' · ');
+  return [a.localisation, a.date, a.consequence].filter(Boolean).join(' · ');
+}
+
+/** Libellés (sans émoji) de la catégorie principale puis des catégories associées. */
+export function getAntecedentCategories(a: AntecedentMedical): string[] {
+  const types = [a.type, ...(a.typesAssocies ?? []).filter(t => t !== a.type)];
+  return types.map(t => {
+    const label = TYPES_ANTECEDENT_LABELS[t] ?? t;
+    return label.split(' ').slice(1).join(' ') || label;
+  });
 }
 
 // Organisation des séances : nouvelle source = fiche patient (anamnese), avec

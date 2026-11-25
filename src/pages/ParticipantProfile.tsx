@@ -47,6 +47,7 @@ import { CarteDisponibilites } from './fiche-beneficiaire/CarteDisponibilites';
 import { CarteJournalFusion } from './fiche-beneficiaire/CarteJournalFusion';
 import { CarteProfilFonctionnel } from './fiche-beneficiaire/CarteProfilFonctionnel';
 import { CarteSante } from './fiche-beneficiaire/CarteSante';
+import { CarteAutonomieObjectifs } from './fiche-beneficiaire/CarteAutonomieObjectifs';
 import { CarteStats } from './fiche-beneficiaire/CarteStats';
 import { SectionRappelsPatient } from './fiche-beneficiaire/SectionRappelsPatient';
 import { TabsSection } from './fiche-beneficiaire/TabsSection';
@@ -880,6 +881,7 @@ export default function ParticipantProfile() {
         {/* Colonne gauche */}
         <div className="flex flex-col gap-3">
           <CarteSante participant={participant} bilanInitial={bilanInitial} onModifier={() => navigate(`/participants/${id}/modifier`)} />
+          <CarteAutonomieObjectifs participant={participant} onModifier={() => navigate(`/participants/${id}/modifier`)} />
           <CarteDisponibilites
             participant={participant}
             onSave={data => updateParticipant(id!, data)}

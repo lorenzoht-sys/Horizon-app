@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Check } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Participant } from '../../types';
@@ -26,7 +26,18 @@ export default function ParticipantFormStepper({ initial, draftKey, onSave, onCa
   const [completion, setCompletion] = useState({ filled: 0, total: 1 });
   const [isSaving, setIsSaving] = useState(false);
   const formRef = useRef<ParticipantFormHandle>(null);
+  const hautRef = useRef<HTMLDivElement>(null);
+  const premierRendu = useRef(true);
   const LAST = STEPS.length - 1;
+
+  // Compte rendu de Pierre (25/11/2026) : « Suivant » laissait la nouvelle
+  // étape affichée en bas. La zone qui défile est la div de App.tsx, pas la
+  // fenêtre : window.scrollTo n'y fait rien, on remonte donc le premier
+  // parent qui défile réellement.
+  useEffect(() => {
+    if (premierRendu.current) { premierRendu.current = false; return; }
+    remonterEnHaut(hautRef.current);
+  }, [step]);
 
   async function handleSubmit(data: Omit<Participant, 'id' | 'token' | 'bilans'>) {
     supprimerBrouillonParticipant(draftKey);
@@ -60,7 +71,7 @@ export default function ParticipantFormStepper({ initial, draftKey, onSave, onCa
   const pct = completion.total > 0 ? Math.round((completion.filled / completion.total) * 100) : 0;
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div ref={hautRef} className="max-w-2xl mx-auto">
       {/* Stepper header */}
       <div className="flex items-center mb-6 overflow-x-auto pb-1 scrollbar-hide">
         {STEPS.map((label, i) => (
@@ -104,7 +115,8 @@ export default function ParticipantFormStepper({ initial, draftKey, onSave, onCa
       </div>
 
       {/* Contenu de l'étape */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6 space-y-6">
+      {/* Plus de grand cadre blanc : chaque rubrique est une Carte (25/11/2026). */}
+      <div className="mb-6">
         <ParticipantForm
           ref={formRef}
           step={(step + 1) as 1 | 2 | 3 | 4 | 5}
@@ -126,12 +138,29 @@ export default function ParticipantFormStepper({ initial, draftKey, onSave, onCa
         </button>
 
         {step < LAST ? (
-          <button
-            onClick={() => setStep(s => s + 1)}
-            className="px-6 py-2.5 bg-primary text-white rounded-xl font-semibold hover:bg-dark transition-colors"
-          >
-            Suivant →
-          </button>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {/* Modification : enregistrer sans parcourir les cinq étapes (compte
+                rendu de Pierre, 25/11/2026). Même submit() que le bouton final :
+                l'état de toutes les étapes vit dans ParticipantForm, rien n'est
+                perdu, et une erreur ramène à l'étape concernée. */}
+            {isEdition && (
+              <button
+                onClick={handleCreer}
+                disabled={isSaving}
+                data-testid="enregistrer-modifications-etape"
+                className="px-4 py-2.5 border border-success text-success rounded-xl font-semibold hover:bg-success/5 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <Check size={16} />
+                {isSaving ? 'Enregistrement...' : 'Enregistrer les modifications'}
+              </button>
+            )}
+            <button
+              onClick={() => setStep(s => s + 1)}
+              className="px-6 py-2.5 bg-primary text-white rounded-xl font-semibold hover:bg-dark transition-colors"
+            >
+              Suivant →
+            </button>
+          </div>
         ) : (
           <button
             onClick={handleCreer}
@@ -139,10 +168,23 @@ export default function ParticipantFormStepper({ initial, draftKey, onSave, onCa
             className="px-6 py-2.5 bg-success text-white rounded-xl font-semibold hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Check size={16} />
-            {isSaving ? 'Enregistrement...' : (isEdition ? 'Enregistrer' : 'Créer la fiche')}
+            {isSaving ? 'Enregistrement...' : (isEdition ? 'Enregistrer les modifications' : 'Créer la fiche')}
           </button>
         )}
       </div>
     </div>
   );
+}
+
+function remonterEnHaut(depuis: HTMLElement | null) {
+  let el = depuis?.parentElement ?? null;
+  while (el) {
+    const { overflowY } = getComputedStyle(el);
+    if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
+      el.scrollTo({ top: 0 });
+      return;
+    }
+    el = el.parentElement;
+  }
+  window.scrollTo({ top: 0 });
 }

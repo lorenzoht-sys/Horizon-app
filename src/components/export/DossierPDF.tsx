@@ -11,9 +11,10 @@ import {
   formatMomentsTraitement,
   getAntecedentTitre,
   getAntecedentSousLigne,
+  getAntecedentCategories,
   getTraitementsActifs,
 } from '../../lib/anamnese';
-import { TYPES_ANTECEDENT_LABELS } from '../../types';
+import { aidesMobiliteDepuis, categorieIMC } from '../../lib/formulaireBeneficiaire';
 import { PdfFooter, LOGO_H } from './PdfShared';
 import { computeTinettiScores } from '../../data/tinetti';
 import { TEST_LABELS } from '../../data/profiles';
@@ -97,12 +98,10 @@ function fmtDate(d: string | null | undefined): string {
   } catch { return String(d); }
 }
 
+// Seuils et libellés partagés avec le formulaire depuis le 25/11/2026
+// (src/lib/formulaireBeneficiaire.ts) : le PDF s'arrêtait à « Obésité sévère ».
 function getCategorieIMC(imc: number): string {
-  if (imc < 18.5) return 'Insuffisance pondérale';
-  if (imc < 25)   return 'Poids normal';
-  if (imc < 30)   return 'Surpoids';
-  if (imc < 35)   return 'Obésité modérée';
-  return 'Obésité sévère';
+  return categorieIMC(imc).label;
 }
 
 function computeEvolution(initial: number | null, dernier: number | null, lower: boolean): string {
@@ -451,7 +450,7 @@ export default function DossierPDF({
               head={['Antécédent', 'Type', 'Date', 'Détails']}
               rows={antecedentsStructures.map(a => [
                 getAntecedentTitre(a) + (a.douleur === 'oui' ? ' (douleur associée)' : ''),
-                (TYPES_ANTECEDENT_LABELS[a.type] ?? a.type).replace(/^\S+\s/, ''),
+                getAntecedentCategories(a).join(', '),
                 a.date ?? '—',
                 [getAntecedentSousLigne(a), a.notes].filter(Boolean).join(' · ') || '—',
               ])}
@@ -476,7 +475,7 @@ export default function DossierPDF({
         {(autonomie?.aideADomicile === 'oui' || autonomie?.situationVie || autonomie?.aideMarche) && (
           <Card title="Autonomie & vie quotidienne" wrap={false}>
             <Row label="Situation de vie" value={autonomie?.situationVie} />
-            <Row label="Aide à la marche" value={autonomie?.aideMarche} />
+            <Row label="Aides à la mobilité" value={aidesMobiliteDepuis(autonomie).join(', ') || autonomie?.aideMarche} />
             {autonomie?.aideADomicile === 'oui' && (
               <>
                 <Row label="Aide à domicile" value={

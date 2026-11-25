@@ -166,7 +166,7 @@ export default function GIRWidget({ value, onChange }: Props) {
       <div className="flex flex-col sm:flex-row gap-2">
         {[
           { key: 'direct'  as const, label: '✅ Oui — je connais le GIR' },
-          { key: 'calcule' as const, label: '📋 Non — évaluer maintenant' },
+          { key: 'calcule' as const, label: '📋 Non — estimer maintenant' },
           { key: 'passe'   as const, label: '⏭ Passer cette étape' },
         ].map(({ key, label }) => (
           <button
@@ -289,8 +289,12 @@ export default function GIRWidget({ value, onChange }: Props) {
                 </span>
                 <p className="text-sm text-gray-700 flex-1">{GIR_DESC[calculatedGIR]}</p>
               </div>
-              <p className="text-xs text-gray-400 italic">
-                GIR calculé automatiquement — à confirmer par un professionnel habilité
+              {/* Vérification du 25/11/2026 (compte rendu de Pierre) : ce calcul
+                  est une formule simplifiée, pas l'algorithme officiel AGGIR
+                  (pondérations par groupe). On le dit, plutôt que de laisser
+                  croire à un GIR officiel. */}
+              <p className="text-xs text-gray-500 italic">
+                Estimation indicative (calcul simplifié, pas l'algorithme officiel AGGIR). Seule une évaluation par un professionnel habilité fait foi.
               </p>
             </div>
           ) : filledDiscr > 0 ? (

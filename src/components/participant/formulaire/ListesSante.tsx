@@ -40,7 +40,9 @@ export function ListeTraitementsForm({
       {/* Traitements en cours */}
       {actifs.length > 0 && (
         <div className="mb-2">
-          <div className="grid gap-1.5 mb-1" style={{ gridTemplateColumns: '1fr 1fr 1fr auto' }}>
+          {/* En-têtes masqués sur petit écran : les champs s'empilent et
+              gardent leur placeholder (25/11/2026). */}
+          <div className="hidden sm:grid gap-1.5 mb-1 grid-cols-[1fr_1fr_1fr_auto]">
             <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1">Médicament</span>
             <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1">Dose</span>
             <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1">Effet secondaire notable</span>
@@ -62,14 +64,14 @@ export function ListeTraitementsForm({
                     className="text-gray-500 hover:text-gray-700 text-sm px-2">Annuler</button>
                 </div>
               ) : (
-                <div className="border border-gray-100 rounded-lg p-2 bg-white">
-                  <div className="grid gap-1.5 items-center" style={{ gridTemplateColumns: '1fr 1fr 1fr auto' }}>
+                <div className="rounded-lg p-2 bg-white" style={{ border: '1px solid #E2EEEE' }}>
+                  <div className="grid gap-1.5 items-center grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto]">
                     <input type="text" value={item.nom} onChange={e => upd(item.id, { nom: e.target.value })}
-                      placeholder="Metformine" className={CLS_CELL} />
+                      placeholder="Médicament (ex : Metformine)" aria-label="Médicament" className={CLS_CELL} />
                     <input type="text" value={item.dose ?? ''} onChange={e => upd(item.id, { dose: e.target.value })}
-                      placeholder="500mg × 2/j" className={CLS_CELL} />
+                      placeholder="Dose (ex : 500 mg × 2/j)" aria-label="Dose" className={CLS_CELL} />
                     <input type="text" value={item.effetSecondaire ?? ''} onChange={e => upd(item.id, { effetSecondaire: e.target.value })}
-                      placeholder="Troubles digestifs" className={CLS_CELL} />
+                      placeholder="Effet secondaire (ex : troubles digestifs)" aria-label="Effet secondaire notable" className={CLS_CELL} />
                     <div className="flex items-center gap-1">
                       <span className="text-[10px] font-semibold text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">En cours ✅</span>
                       <button type="button" onClick={() => setStoppingId(item.id)}
@@ -148,6 +150,44 @@ export const TYPES_ANTECEDENT: TypeAntecedent[] = [
   'pathologie_chronique', 'chirurgie', 'fracture', 'prothese', 'hospitalisation', 'accident', 'autre',
 ];
 
+/** Catégories cochées : la principale (`type`) d'abord, puis les associées. */
+function categoriesDe(a: AntecedentMedical): TypeAntecedent[] {
+  return [a.type, ...(a.typesAssocies ?? []).filter(t => t !== a.type)];
+}
+
+/**
+ * Coche ou décoche une catégorie. « Autre » est la valeur par défaut d'un
+ * nouvel antécédent : choisir une vraie catégorie la remplace au lieu de
+ * s'y ajouter. Décocher la dernière catégorie revient à « Autre ».
+ */
+function basculerCategorie(a: AntecedentMedical, t: TypeAntecedent): Pick<AntecedentMedical, 'type' | 'typesAssocies'> {
+  const actuelles = categoriesDe(a);
+  let suivantes: TypeAntecedent[];
+  if (actuelles.includes(t)) suivantes = actuelles.filter(x => x !== t);
+  else if (actuelles.length === 1 && actuelles[0] === 'autre') suivantes = [t];
+  else suivantes = [...actuelles, t];
+  if (suivantes.length === 0) suivantes = ['autre'];
+  return { type: suivantes[0], typesAssocies: suivantes.length > 1 ? suivantes.slice(1) : undefined };
+}
+
+const PLACEHOLDER_PRECISION: Partial<Record<TypeAntecedent, string>> = {
+  pathologie_chronique: 'Ex : diabète de type 2, BPCO, arthrose...',
+  chirurgie: 'Ex : ligamentoplastie, pontage...',
+  fracture: 'Ex : col du fémur, poignet...',
+  prothese: 'Ex : prothèse totale de hanche...',
+  hospitalisation: 'Ex : pneumopathie, chute...',
+  accident: 'Ex : accident de la route...',
+};
+
+const AVEC_LOCALISATION: TypeAntecedent[] = ['fracture', 'prothese', 'chirurgie', 'accident'];
+
+// Compte rendu de Pierre (25/11/2026) : on tapait « Fracture » dans le titre
+// puis on recliquait « Fracture » dans la catégorie. La catégorie vient donc
+// en premier, et le titre devient une précision facultative : la fiche
+// affiche déjà le nom de la catégorie quand il est vide (getAntecedentTitre).
+// Plusieurs catégories possibles pour un même événement (`typesAssocies`,
+// jsonb, sans migration) ; `type` reste la principale pour les lectures
+// existantes (icône, PDF, assistant).
 export function ListeAntecedentsForm({
   value,
   onChange,
@@ -164,45 +204,46 @@ export function ListeAntecedentsForm({
   return (
     <div>
       {items.map((item, i) => {
-        const showLocalisation = item.type === 'fracture' || item.type === 'prothese';
+        const categories = categoriesDe(item);
+        const showLocalisation = categories.some(c => AVEC_LOCALISATION.includes(c));
         const notesPlaceholder = item.type === 'pathologie_chronique'
-          ? 'Stade, depuis quand... (ex : stade 2, depuis 2018)'
-          : 'Détails, séquelles...';
+          ? 'Notes : stade, depuis quand... (ex : stade 2, depuis 2018)'
+          : 'Notes complémentaires...';
         // Compat anciennes données : le champ s'appelait "notes_evolution"
         const notesValue = item.notes ?? (item as unknown as { notes_evolution?: string }).notes_evolution ?? '';
 
         return (
-          <div key={item.id} className="border border-gray-100 rounded-xl p-3.5 mb-3 bg-gray-50">
+          <div key={item.id} className="rounded-xl p-3.5 mb-3 bg-white" style={{ border: '1px solid #E2EEEE' }}>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-gray-400">Antécédent {i + 1}</span>
+              <span className="text-xs font-bold" style={{ color: 'var(--color-ink-2)' }}>Antécédent {i + 1}</span>
               <button type="button" onClick={() => remove(item.id)}
-                className="text-xs text-red-400 hover:text-red-600">🗑️ Supprimer</button>
+                className="text-xs text-red-500 hover:text-red-700">Supprimer</button>
             </div>
 
-            <div className="mb-2.5">
-              <label className="text-[11px] font-medium text-gray-500 mb-1 block">Titre de l'antécédent *</label>
-              <input type="text" value={item.titre ?? ''} onChange={e => upd(item.id, { titre: e.target.value })}
-                placeholder="Ex: Opération genou droit, Fracture col fémur, Prothèse hanche..." className={`w-full ${CLS_CELL}`} />
-            </div>
-
+            <label className="text-[11px] font-medium text-gray-500 mb-1 block">
+              Catégorie <span className="font-normal">(plusieurs possibles)</span>
+            </label>
             <div className="flex flex-wrap gap-1.5 mb-2.5">
-              {TYPES_ANTECEDENT.map(t => (
-                <button key={t} type="button" onClick={() => upd(item.id, { type: t })}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                    item.type === t
-                      ? 'bg-primary text-white border-primary'
-                      : 'border-gray-200 text-gray-600 hover:border-primary/50 hover:bg-white'
-                  }`}>
-                  {TYPES_ANTECEDENT_LABELS[t]}
-                </button>
-              ))}
+              {TYPES_ANTECEDENT.map(t => {
+                const actif = categories.includes(t);
+                return (
+                  <button key={t} type="button" aria-pressed={actif} onClick={() => upd(item.id, basculerCategorie(item, t))}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                      actif
+                        ? 'bg-primary text-white border-primary'
+                        : 'border-gray-200 text-gray-600 hover:border-primary/50 hover:bg-gray-50'
+                    }`}>
+                    {TYPES_ANTECEDENT_LABELS[t]}
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="grid grid-cols-2 gap-2 mb-2">
+            <div className={`grid gap-2 mb-2 ${showLocalisation ? 'sm:grid-cols-2' : ''}`}>
               <div>
-                <label className="text-[11px] font-medium text-gray-500 mb-1 block">Date / Année</label>
-                <input type="text" value={item.date ?? ''} onChange={e => upd(item.id, { date: e.target.value })}
-                  placeholder="2019" className={`w-full ${CLS_CELL}`} />
+                <label className="text-[11px] font-medium text-gray-500 mb-1 block">Précision <span className="font-normal">(facultatif)</span></label>
+                <input type="text" value={item.titre ?? ''} onChange={e => upd(item.id, { titre: e.target.value })}
+                  placeholder={PLACEHOLDER_PRECISION[item.type] ?? 'Ex : opération du genou droit...'} className={`w-full ${CLS_CELL}`} />
               </div>
               {showLocalisation && (
                 <div>
@@ -213,10 +254,17 @@ export function ListeAntecedentsForm({
               )}
             </div>
 
-            <div className="mb-2">
-              <label className="text-[11px] font-medium text-gray-500 mb-1 block">Conséquences / séquelles</label>
-              <input type="text" value={item.consequence ?? ''} onChange={e => upd(item.id, { consequence: e.target.value })}
-                placeholder="Douleur résiduelle, mobilité réduite..." className={`w-full ${CLS_CELL}`} />
+            <div className="grid sm:grid-cols-[120px_1fr] gap-2 mb-2">
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 mb-1 block">Date / Année</label>
+                <input type="text" value={item.date ?? ''} onChange={e => upd(item.id, { date: e.target.value })}
+                  placeholder="2019" className={`w-full ${CLS_CELL}`} />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-gray-500 mb-1 block">Conséquences / séquelles</label>
+                <input type="text" value={item.consequence ?? ''} onChange={e => upd(item.id, { consequence: e.target.value })}
+                  placeholder="Douleur résiduelle, mobilité réduite..." className={`w-full ${CLS_CELL}`} />
+              </div>
             </div>
 
             <div className="flex items-center gap-2 mb-2">
@@ -224,19 +272,10 @@ export function ListeAntecedentsForm({
               {(['oui', 'non'] as const).map(v => {
                 const isActive = item.douleur === v;
                 return (
-                  <button key={v} type="button" onClick={() => upd(item.id, { douleur: item.douleur === v ? undefined : v })}
-                    style={{
-                      padding: '6px 14px',
-                      borderRadius: '8px',
-                      border: '1.5px solid',
-                      borderColor: isActive ? '#2BBFBF' : '#D1D5DB',
-                      background: isActive ? '#2BBFBF' : '#FFFFFF',
-                      color: isActive ? '#FFFFFF' : '#374151',
-                      fontWeight: isActive ? '600' : '400',
-                      fontSize: '12px',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}>
+                  <button key={v} type="button" aria-pressed={isActive} onClick={() => upd(item.id, { douleur: item.douleur === v ? undefined : v })}
+                    className={`px-3.5 py-1 rounded-lg text-xs border transition-colors ${
+                      isActive ? 'bg-primary text-white border-primary font-semibold' : 'border-gray-300 text-gray-700 bg-white'
+                    }`}>
                     {v === 'oui' ? 'Oui' : 'Non'}
                   </button>
                 );
@@ -248,7 +287,7 @@ export function ListeAntecedentsForm({
               value={notesValue}
               onChange={e => upd(item.id, { notes: e.target.value })}
               placeholder={notesPlaceholder}
-              className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-[12px] text-gray-500 focus:outline-none focus:border-primary"
+              className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-[12px] text-gray-600 focus:outline-none focus:border-primary"
             />
           </div>
         );
