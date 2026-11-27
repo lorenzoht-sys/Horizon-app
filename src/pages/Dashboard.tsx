@@ -97,6 +97,7 @@ export default function Dashboard() {
   const [aArchiver, setAArchiver] = useState<{ id: string; nom: string } | null>(null);
   const [archivageEnCours, setArchivageEnCours] = useState(false);
   const [showCreateStructure, setShowCreateStructure] = useState(false);
+  const [memoOuvert, setMemoOuvert] = useState(false);
   const [activeTab, setActiveTab] = useState<DashTab>('tous');
   const [minLoadDone, setMinLoadDone] = useState(false);
   const [retours, setRetours] = useState<Record<string, { borgRpe: number; bienEtre: number }[]>>({});
@@ -189,26 +190,29 @@ export default function Dashboard() {
     if (action === 'dictee') navigate(`/participant/${p.id}`, { state: { ouvrir: 'dictee' } });
   }
 
+  // ── Données de la page ────────────────────────────────────────────────────
+  // Calculées avant le retour du squelette : « Tout confirmer » est un hook et
+  // doit être appelé à chaque rendu (règle des hooks ; placé après le retour, il
+  // faisait planter le tableau de bord à la fin du chargement).
+  const aujourdhui = dateCivileParis(maintenant);
+  const heure = heureLocale(maintenant);
+  const actifs = new Set(participantsActifs.map(p => p.id));
+  const aConfirmer = seancesNonConfirmees(seances, aujourdhui, heure).filter(s => actifs.has(s.participantId));
+  const toutConfirmer = useToutConfirmer({ seances: aConfirmer, factures, marquer: marquerRealiseesEnGroupe });
+
   if (participantsLoading || !minLoadDone) {
     return <PageWrapper><DashboardSkeleton /></PageWrapper>;
   }
 
-  // ── Données de la page ────────────────────────────────────────────────────
-  const aujourdhui = dateCivileParis(maintenant);
-  const heure = heureLocale(maintenant);
   const nomDe = (id: string) => {
     const p = participants.find(x => x.id === id);
     return p ? `${p.prenom} ${p.nom}` : 'Bénéficiaire';
   };
-  const actifs = new Set(participantsActifs.map(p => p.id));
 
   const journee = seancesDuJour(aujourdhui).filter(s => s.statut !== 'annulee');
   const prochain = prochainRendezVous(seances.filter(s => actifs.has(s.participantId)), aujourdhui, heure);
   const participantProchain = prochain ? participants.find(p => p.id === prochain.participantId) ?? null : null;
   const prochainAujourdhui = prochain && prochain.date === aujourdhui ? prochain : null;
-  const aConfirmer = seancesNonConfirmees(seances, aujourdhui, heure).filter(s => actifs.has(s.participantId));
-  const [memoOuvert, setMemoOuvert] = useState(false);
-  const toutConfirmer = useToutConfirmer({ seances: aConfirmer, factures, marquer: marquerRealiseesEnGroupe });
   const nbBilansAujourdhui = journee.filter(s => s.type !== 'seance' && s.statut === 'planifiee' && s.heureDebut.slice(0, 5) > heure).length;
 
   const bilansAPrevoir = prochainsBilans(participantsActifs, aujourdhui);
