@@ -8,7 +8,6 @@ import { useFactures } from '../hooks/useFactures';
 import { EBAUCHE_FACTURATION_VISIBLE } from '../lib/featuresFacturation';
 import { useCoursCollectifs } from '../hooks/useCoursCollectifs';
 import { coursCollectifsStructureFacturables } from '../lib/coursCollectifs';
-import { supabase } from '../lib/supabase';
 import { lireStructure } from '../lib/acces/structures';
 import { getAppHost } from '../lib/config';
 import { dbToStructure } from '../lib/mappers';
@@ -49,7 +48,7 @@ export default function StructureDetail() {
 
   // Fetch direct si pas encore dans le hook (chargement initial ou navigation directe)
   useEffect(() => {
-    if (hookStructure || locationStructure || !id || !supabase) return;
+    if (hookStructure || locationStructure || !id) return;
     lireStructure(id).then(({ data }) => {
       if (data) setStructureFetchee(dbToStructure(data));
     });

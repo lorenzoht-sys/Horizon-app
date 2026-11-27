@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParticipants } from '../../../hooks/useParticipants';
 import type { Participant } from '../../../types';
-import { supabase, getAuthHeader } from '../../../lib/supabase';
+import { getAuthHeader } from '../../../lib/supabase';
 import { ajouterJournalAssistant } from '../../../lib/acces/assistant';
 import { getContreIndications } from '../../../lib/anamnese';
 import { libelleAge } from '../../../lib/age';
@@ -71,15 +71,13 @@ export function EcranAssistant({
       const brut: string | undefined = data.text;
       const responseText: string = brut != null ? reinsererIdentite(brut, identite) : (data.error ? `Erreur : ${data.error}` : 'Pas de réponse.');
       setMessages(prev => [...prev, { role: 'assistant', content: responseText, ...(brut != null ? { contenuIA: brut } : {}) }]);
-      if (supabase) {
-        try {
-          await ajouterJournalAssistant({
-            patient_id: selectedPatient?.id ?? null,
-            question: trimmed,
-            reponse: responseText,
-          });
-        } catch { /* non bloquant */ }
-      }
+      try {
+        await ajouterJournalAssistant({
+          patient_id: selectedPatient?.id ?? null,
+          question: trimmed,
+          reponse: responseText,
+        });
+      } catch { /* non bloquant */ }
     } catch (err) {
       setMessages(prev => [...prev, { role: 'assistant', content: `Erreur : ${err instanceof Error ? err.message : String(err)}` }]);
     } finally {

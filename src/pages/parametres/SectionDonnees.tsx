@@ -2,7 +2,6 @@ import { useState, useRef, type ChangeEvent } from 'react';
 import { Download, FileUp } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Participant } from '../../types';
-import { supabase } from '../../lib/supabase';
 import { exporterParticipantsComplets, restaurerParticipant, restaurerBilan, restaurerProgramme } from '../../lib/acces/sauvegarde';
 import { dbToParticipant, participantToDb, bilanToDb, programmeToDb } from '../../lib/mappers';
 
@@ -22,7 +21,6 @@ export function SectionDonnees() {
   const importRef = useRef<HTMLInputElement>(null);
 
   async function handleExport() {
-    if (!supabase) { toast.error('Supabase non configuré'); return; }
     setExporting(true);
     try {
       const { data, error } = await exporterParticipantsComplets();
@@ -66,7 +64,7 @@ export function SectionDonnees() {
   }
 
   async function handleImportConfirm() {
-    if (!pendingFile || !supabase) return;
+    if (!pendingFile) return;
     setImporting(true);
     try {
       const text = await pendingFile.text();

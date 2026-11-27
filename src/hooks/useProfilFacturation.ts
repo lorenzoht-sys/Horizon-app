@@ -32,7 +32,6 @@ export function useProfilFacturation() {
   const [erreur, setErreur] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
-    if (!supabase) { setChargement(false); return; }
     const user = await utilisateurCourant();
     if (!user) { setErreur('Utilisateur non connecté'); setChargement(false); return; }
     const { data, error } = await supabase
@@ -58,7 +57,6 @@ export function useProfilFacturation() {
 
   /** Contrôle la forme, écrit, puis RELIT la ligne : ce qui s'affiche est ce qui est en base. */
   const enregistrer = useCallback(async (formulaire: FormulaireFacturation): Promise<ResultatEnregistrement> => {
-    if (!supabase) return { ok: false, message: 'Base de données indisponible' };
     const erreurs = validerFormulaire(formulaire);
     if (Object.keys(erreurs).length > 0) return { ok: false, message: 'Veuillez corriger les erreurs', erreurs };
 

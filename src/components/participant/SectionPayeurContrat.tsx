@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { supabase } from '../../lib/supabase';
 import { lirePayeurContrat, majPayeurContrat } from '../../lib/acces/contrats';
 import {
   lirePayeur, messagePayeurLisible, payeurVersMiseAJour, resumePayeur, validerPayeur,
@@ -19,7 +18,6 @@ export default function SectionPayeurContrat({ contratId }: { contratId: string 
   const [enCours, setEnCours] = useState(false);
 
   const charger = useCallback(async () => {
-    if (!supabase) return;
     const { data, error } = await lirePayeurContrat(contratId);
     if (error) { console.error('[SectionPayeurContrat] lecture :', error); return; }
     setEnBase(lirePayeur(data as Record<string, unknown> | null));
@@ -35,7 +33,7 @@ export default function SectionPayeurContrat({ contratId }: { contratId: string 
   }
 
   async function enregistrer() {
-    if (!f || !supabase) return;
+    if (!f) return;
     const e = validerPayeur(f);
     if (Object.keys(e).length > 0) { setErreurs(e); return; }
     setEnCours(true);

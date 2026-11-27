@@ -140,10 +140,6 @@ export async function enregistrerSettingsPraticien(
   settings: SettingsPraticien,
   userId: string,
 ): Promise<void> {
-  if (!supabase) {
-    ecrireCacheSettingsPraticien(settings);
-    return;
-  }
   const { error } = await supabase
     .from('praticiens')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -155,7 +151,6 @@ export async function enregistrerSettingsPraticien(
 
 /** Pourquoi l'hydratation n'a pas rempli le cache. */
 type EchecHydratation =
-  | 'supabase-absent'   // pas de client configuré (mode local)
   | 'session-absente'   // pas encore connecté — normal
   | 'fiche-absente'     // compte sans ligne `praticiens` — onboarding à faire
   | 'erreur';           // réseau, RLS, ou base indisponible
@@ -187,7 +182,6 @@ type ResultatHydratation =
  * distinguer est la seule façon de ne signaler que la seconde.
  */
 export async function hydraterSettingsPraticien(): Promise<ResultatHydratation> {
-  if (!supabase) return { ok: false, echec: 'supabase-absent' };
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return { ok: false, echec: 'session-absente' };

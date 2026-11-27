@@ -27,10 +27,6 @@ export function useAppRole(): { role: AppRole; estAdmin: boolean; chargement: bo
     let annule = false;
 
     (async () => {
-      if (!supabase) {
-        if (!annule) setChargement(false);
-        return;
-      }
       const { data, error } = await supabase.rpc('app_role_courant');
       if (annule) return;
       // En cas d'erreur on retombe sur `null`, jamais sur 'admin' : le mode

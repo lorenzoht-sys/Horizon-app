@@ -22,25 +22,21 @@ export function useCompteRenduSeance(participantId: string) {
   useEffect(() => {
     if (!participantId) return;
 
-    if (supabase) {
-      setLoading(true);
-      supabase
-        .from('comptes_rendus_seances')
-        .select('*')
-        .eq('participant_id', participantId)
-        .order('date_seance', { ascending: false })
-        .then(({ data, error }) => {
-          setLoading(false);
-          if (error) {
-            console.error('Erreur chargement comptes rendus:', error);
-            setCompteRendus(loadFromLS(participantId));
-            return;
-          }
-          setCompteRendus((data ?? []).map(dbToCompteRendu));
-        });
-    } else {
-      setCompteRendus(loadFromLS(participantId));
-    }
+    setLoading(true);
+    supabase
+      .from('comptes_rendus_seances')
+      .select('*')
+      .eq('participant_id', participantId)
+      .order('date_seance', { ascending: false })
+      .then(({ data, error }) => {
+        setLoading(false);
+        if (error) {
+          console.error('Erreur chargement comptes rendus:', error);
+          setCompteRendus(loadFromLS(participantId));
+          return;
+        }
+        setCompteRendus((data ?? []).map(dbToCompteRendu));
+      });
   }, [participantId]);
 
   const ajouterCompteRendu = useCallback(async (data: CompteRenduSeanceInsert): Promise<CompteRenduSeance> => {
@@ -51,14 +47,12 @@ export function useCompteRenduSeance(participantId: string) {
       updatedAt: new Date().toISOString(),
     };
 
-    if (supabase) {
-      const { error } = await supabase
-        .from('comptes_rendus_seances')
-        .insert(compteRenduToDb(nouveau));
-      if (error) {
-        console.error('Erreur sauvegarde compte rendu:', error);
-        throw new Error(error.message);
-      }
+    const { error } = await supabase
+      .from('comptes_rendus_seances')
+      .insert(compteRenduToDb(nouveau));
+    if (error) {
+      console.error('Erreur sauvegarde compte rendu:', error);
+      throw new Error(error.message);
     }
 
     setCompteRendus(prev => {

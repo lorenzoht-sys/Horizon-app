@@ -21,5 +21,11 @@ export default defineConfig({
       'supabase/functions/**/*.test.ts',
     ],
     environment: 'node',
+    // src/lib/supabase.ts exige ces deux variables depuis le retrait du mode sans
+    // base (27/11/2026). Valeurs fictives : aucun test unitaire n'appelle le réseau.
+    env: {
+      VITE_SUPABASE_URL: 'http://127.0.0.1:54321',
+      VITE_SUPABASE_ANON_KEY: 'cle-anonyme-de-test',
+    },
   },
 });

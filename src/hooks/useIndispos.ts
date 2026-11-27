@@ -6,7 +6,6 @@ export function useIndispos() {
   const [indispos, setIndispos] = useState<Indisponibilite[]>([]);
 
   useEffect(() => {
-    if (!supabase) return;
     let cancelled = false;
     supabase
       .from('indisponibilites')

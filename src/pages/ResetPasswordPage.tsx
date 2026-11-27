@@ -140,10 +140,6 @@ export default function ResetPasswordPage({ typeLien, erreurLien, onMotDePasseDe
       setErreur('Les deux mots de passe ne correspondent pas.');
       return;
     }
-    if (!supabase) {
-      setErreur('Service indisponible. Réessayez plus tard.');
-      return;
-    }
 
     setEnCours(true);
     const { error } = await supabase.auth.updateUser({ password: motDePasse });

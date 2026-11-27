@@ -40,7 +40,6 @@ export function useRappelPreferences(participantId?: string) {
   const [loading, setLoading] = useState(true);
 
   const charger = useCallback(async () => {
-    if (!supabase) { setLoading(false); return; }
     setLoading(true);
 
     if (participantId) {
@@ -78,7 +77,6 @@ export function useRappelPreferences(participantId?: string) {
   useEffect(() => { void charger(); }, [charger]);
 
   async function enregistrer(next: RappelPreferences): Promise<boolean> {
-    if (!supabase) return false;
     const user = await utilisateurCourant();
     if (!user) return false;
 
@@ -111,7 +109,7 @@ export function useRappelPreferences(participantId?: string) {
 
   // Supprime la surcharge propre à ce patient → retombe sur les réglages globaux.
   async function reinitialiser(): Promise<boolean> {
-    if (!supabase || !participantId) return false;
+    if (!participantId) return false;
     const { error } = await supabase.from('rappel_preferences').delete().eq('participant_id', participantId);
     if (error) return false;
     await charger();

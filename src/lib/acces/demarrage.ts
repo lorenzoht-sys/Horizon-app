@@ -6,11 +6,11 @@
 //
 // Filtre explicite par praticien_id en plus de la RLS : un membre d'organisation
 // peut LIRE des bénéficiaires partagés, qui ne doivent pas cocher SES étapes.
-import { clientSupabase } from '../supabase';
+import { supabase } from '../supabase';
 import { SELECT_PROFIL } from '../facturesAValider';
 
 const compter = (table: string, praticienId: string) =>
-  clientSupabase().from(table).select('id', { count: 'exact', head: true }).eq('praticien_id', praticienId);
+  supabase.from(table).select('id', { count: 'exact', head: true }).eq('praticien_id', praticienId);
 
 export const compterBeneficiaires = (praticienId: string) => compter('participants', praticienId);
 export const compterBilans = (praticienId: string) => compter('bilans', praticienId);
@@ -22,7 +22,7 @@ export const compterSeances = (praticienId: string) =>
   compter('seances', praticienId).eq('bilan_auto', false);
 
 export const lireDernierBeneficiaireActif = (praticienId: string) =>
-  clientSupabase()
+  supabase
     .from('participants')
     .select('id')
     .eq('praticien_id', praticienId)
@@ -33,7 +33,7 @@ export const lireDernierBeneficiaireActif = (praticienId: string) =>
 
 /** Profil de facturation, date de création du compte. Sans la colonne demarrage : voir ci-dessous. */
 export const lireProfilDemarrage = (praticienId: string) =>
-  clientSupabase()
+  supabase
     .from('praticiens')
     .select(`created_at, ${SELECT_PROFIL}`)
     .eq('id', praticienId)
@@ -44,7 +44,7 @@ export const lireProfilDemarrage = (praticienId: string) =>
 // guide se replie sur la copie locale (src/hooks/useDemarrage.ts). Ce repli est un
 // filet, pas un mode normal : la migration doit précéder le code.
 export const lireEtatGuide = (praticienId: string) =>
-  clientSupabase().from('praticiens').select('demarrage').eq('id', praticienId).maybeSingle();
+  supabase.from('praticiens').select('demarrage').eq('id', praticienId).maybeSingle();
 
 export const ecrireEtatGuide = (praticienId: string, etat: object) =>
-  clientSupabase().from('praticiens').update({ demarrage: etat }).eq('id', praticienId).select('id');
+  supabase.from('praticiens').update({ demarrage: etat }).eq('id', praticienId).select('id');

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../../lib/supabase';
 import { utilisateurCourant } from '../../../lib/session';
 import { EVENT_SETTINGS_PRATICIEN, chargerSettingsPraticien, enregistrerSettingsPraticien, hydraterSettingsPraticien, type SettingsPraticien } from '../../../lib/settingsPraticien';
 
@@ -63,7 +62,6 @@ export function usePraticienSettings() {
   }, []);
 
   async function sauvegarderSettings(form: SettingsPraticien) {
-    if (!supabase) throw new Error('Supabase non configuré');
     const user = await utilisateurCourant();
     if (!user) throw new Error('Non connecté');
     // Base d'abord, cache ensuite — l'ordre est garanti par le module.

@@ -76,7 +76,7 @@ export function useProgrammeV2(participantId: string) {
   const [seancesAutonomesStats, setSeancesAutonomesStats] = useState<Record<string, SeancesAutonomesStats>>({});
 
   const load = useCallback(async () => {
-    if (!participantId || !supabase) { setLoading(false); return; }
+    if (!participantId) { setLoading(false); return; }
     setLoading(true);
 
     // Load programmes that have the 'type' column set (= V2 programmes)
@@ -173,8 +173,6 @@ export function useProgrammeV2(participantId: string) {
     }>;
     planning: Partial<Record<JourProgramme, string | null>>;
   }): Promise<boolean> => {
-    if (!supabase) return false;
-
     const progId = uuidv4();
 
     // 1. Create programme
@@ -276,8 +274,6 @@ export function useProgrammeV2(participantId: string) {
       planning: Partial<Record<JourProgramme, string | null>>;
     }
   ): Promise<boolean> => {
-    if (!supabase) return false;
-
     // 1. Mettre à jour les infos du programme
     const { error: progError } = await supabase.from('programmes').update({
       nom: data.nom,
@@ -344,7 +340,6 @@ export function useProgrammeV2(participantId: string) {
   // ── Toggle actif ─────────────────────────────────────────────────────────────
 
   const toggleActif = useCallback(async (id: string, actif: boolean) => {
-    if (!supabase) return;
     await supabase.from('programmes').update({ actif }).eq('id', id);
     setProgrammes(prev => prev.map(p => p.id === id ? { ...p, actif } : p));
   }, []);
@@ -352,7 +347,6 @@ export function useProgrammeV2(participantId: string) {
   // ── Delete ───────────────────────────────────────────────────────────────────
 
   const deleteProgrammeV2 = useCallback(async (id: string) => {
-    if (!supabase) return;
     // Cascade handles seances, planning, exercices
     await supabase.from('programmes').delete().eq('id', id);
     setProgrammes(prev => prev.filter(p => p.id !== id));

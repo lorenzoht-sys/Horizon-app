@@ -3,7 +3,6 @@ import { Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import type { Indisponibilite, JourSemaine } from '../../types';
-import { supabase } from '../../lib/supabase';
 import { listerIndisponibilites, ajouterIndisponibilite, supprimerIndisponibilite } from '../../lib/acces/indisponibilites';
 
 const JOURS_LABELS: Record<JourSemaine | 'dim', string> = {
@@ -94,7 +93,6 @@ export function SectionIndisponibilites() {
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    if (!supabase) return;
     listerIndisponibilites()
       .then(({ data, error }) => {
         if (error) { console.error('Erreur chargement indispos:', error); return; }
@@ -110,26 +108,22 @@ export function SectionIndisponibilites() {
   }, []);
 
   async function handleSave(item: Indisponibilite) {
-    if (supabase) {
-      const { error } = await ajouterIndisponibilite({
-        id: item.id,
-        jour: item.jour,
-        heure_debut: item.heureDebut,
-        heure_fin: item.heureFin,
-        recurrente: item.recurrente,
-        label: item.label || null,
-      });
-      if (error) { toast.error('Erreur lors de la sauvegarde'); return; }
-    }
+    const { error } = await ajouterIndisponibilite({
+      id: item.id,
+      jour: item.jour,
+      heure_debut: item.heureDebut,
+      heure_fin: item.heureFin,
+      recurrente: item.recurrente,
+      label: item.label || null,
+    });
+    if (error) { toast.error('Erreur lors de la sauvegarde'); return; }
     setIndispos(prev => [...prev, item]);
     setShowModal(false);
     toast.success('Indisponibilité ajoutée');
   }
 
   async function handleDelete(id: string) {
-    if (supabase) {
-      await supprimerIndisponibilite(id);
-    }
+    await supprimerIndisponibilite(id);
     setIndispos(prev => prev.filter(i => i.id !== id));
   }
 

@@ -40,7 +40,6 @@ export function useFacturesAValider() {
   const [enCours, setEnCours] = useState<Set<string>>(new Set());
 
   const charger = useCallback(async () => {
-    if (!supabase) { setChargement(false); return; }
     const user = await utilisateurCourant();
     if (!user) { setBrouillons([]); setProfil(null); setChargement(false); return; }
     const [fb, pr] = await Promise.all([
@@ -74,7 +73,6 @@ export function useFacturesAValider() {
 
   /** Valide UNE facture : numéro attribué, facture verrouillée. Ne lève jamais. */
   const validerUne = useCallback(async (id: string): Promise<{ numero: string } | { erreur: string }> => {
-    if (!supabase) return { erreur: 'Base de données indisponible' };
     setEnCours(prev => new Set(prev).add(id));
     try {
       const { data, error } = await supabase.rpc('valider_facture', { p_facture_id: id });
@@ -105,7 +103,6 @@ export function useFacturesAValider() {
  * crédité (lignes_facture.ligne_origine_id). Lecture sous la RLS du praticien.
  */
 export async function chargerLignesAvoir(factureId: string, avoirIds: string[]): Promise<{ lignes: LigneOrigine[]; credits: Credit[] } | { erreur: string }> {
-  if (!supabase) return { erreur: 'Base de données indisponible' };
   const { data, error } = await supabase.from('lignes_facture')
     .select('id, libelle, quantite, prix_unitaire, montant, seance_id, seances(date, heure_debut)')
     .eq('facture_id', factureId);
@@ -129,7 +126,6 @@ export async function chargerLignesAvoir(factureId: string, avoirIds: string[]):
 }
 
 export async function telechargerPdfFacture(pdfPath: string, numero: string): Promise<{ ok: true } | { erreur: string }> {
-  if (!supabase) return { erreur: 'Base de données indisponible' };
   const { data, error } = await supabase.storage.from('factures').download(pdfPath);
   if (error || !data) return { erreur: 'Le PDF est introuvable ou inaccessible' };
   const url = URL.createObjectURL(data);
@@ -153,7 +149,6 @@ export function useFacturesValidees() {
   useEffect(() => {
     let annule = false;
     (async () => {
-      if (!supabase) { setChargement(false); return; }
       // Mêmes raisons que pour les brouillons (voir l'en-tête) : seulement les factures du praticien connecté.
       const user = await utilisateurCourant();
       if (annule) return;
@@ -183,7 +178,6 @@ export function useFacturesValidees() {
    * paiements) et le statut suit par trigger. On relit ensuite la liste : ce qui s'affiche est la base.
    */
   const marquerPayee = useCallback(async (factureId: string, date: string, moyen: string): Promise<{ ok: true } | { erreur: string }> => {
-    if (!supabase) return { erreur: 'Base de données indisponible' };
     const { error } = await supabase.rpc('marquer_facture_payee', { p_facture_id: factureId, p_date: date, p_moyen: moyen });
     if (error) return { erreur: error.message };
     setVersion(v => v + 1);
@@ -196,7 +190,6 @@ export function useFacturesValidees() {
    */
   const envoyer = useCallback(async (factureId: string, envoiId: string, email?: string, enregistrerEmail = false):
     Promise<{ ok: true; destinataire: string; enregistree: boolean } | { code?: string; erreur: string }> => {
-    if (!supabase) return { erreur: 'Base de données indisponible' };
     const { data, error } = await supabase.functions.invoke('facturation-envoi', {
       body: { facture_id: factureId, envoi_id: envoiId, ...(email ? { email, enregistrer_email: enregistrerEmail } : {}) },
     });
@@ -215,7 +208,6 @@ export function useFacturesValidees() {
    */
   const creerAvoir = useCallback(async (factureId: string, lignes: Choix[], geste: number, motif: string, totalAttendu: number):
     Promise<{ ok: true; numero: string; total: number; origineAnnulee: boolean; aRembourser: number } | { erreur: string }> => {
-    if (!supabase) return { erreur: 'Base de données indisponible' };
     const { data, error } = await supabase.rpc('creer_avoir', {
       p_facture_id: factureId,
       p_lignes: lignes.map(l => ({ ligne_id: l.ligneId, quantite: l.quantite })),
@@ -231,7 +223,6 @@ export function useFacturesValidees() {
 
   /** « Refaire la facture du mois » (PR 9) : après une annulation totale, recrée le brouillon depuis les séances libérées. */
   const refaireFacture = useCallback(async (contratId: string, periode: string): Promise<{ ok: true; cree: boolean } | { erreur: string }> => {
-    if (!supabase) return { erreur: 'Base de données indisponible' };
     const { data, error } = await supabase.rpc('generer_brouillon_facture', { p_contrat_id: contratId, p_periode: periode });
     if (error) return { erreur: error.message };
     setVersion(v => v + 1);

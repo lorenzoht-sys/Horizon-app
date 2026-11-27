@@ -42,14 +42,13 @@ export function useFactures() {
   const [praticienId, setPraticienId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!supabase) return;
     utilisateurCourant().then((user) => {
       if (user) setPraticienId(user.id);
     });
   }, []);
 
   const chargerFactures = useCallback(async () => {
-    if (!supabase || !praticienId) return;
+    if (!praticienId) return;
     setLoading(true);
     try {
       const { data } = await supabase
@@ -88,7 +87,7 @@ export function useFactures() {
     montantTotal: number;
     dateEcheance?: string;
   }): Promise<FactureSuivi | null> {
-    if (!supabase || !praticienId) return null;
+    if (!praticienId) return null;
     const today = new Date().toISOString().slice(0, 10);
     const statut: FactureSuivi['statut'] =
       data.dateEcheance && data.dateEcheance < today ? 'en_retard' : 'a_envoyer';
@@ -138,7 +137,7 @@ export function useFactures() {
     montantTotal: number;
     dateEcheance?: string;
   }): Promise<FactureSuivi | null> {
-    if (!supabase || !praticienId) return null;
+    if (!praticienId) return null;
 
     const today = new Date().toISOString().slice(0, 10);
     const statut: FactureSuivi['statut'] =
@@ -176,7 +175,6 @@ export function useFactures() {
 
   // Marquer une facture comme envoyée
   async function marquerEnvoyee(id: string, dateEnvoi: string): Promise<void> {
-    if (!supabase) return;
     const { error } = await supabase
       .from('factures_suivi')
       .update({ statut: 'envoyee', date_envoi: dateEnvoi })
@@ -190,7 +188,6 @@ export function useFactures() {
 
   // Supprimer une facture
   async function supprimerFacture(id: string): Promise<void> {
-    if (!supabase) return;
     await supabase.from('factures_suivi').delete().eq('id', id);
     setFactures(prev => prev.filter(f => f.id !== id));
   }

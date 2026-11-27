@@ -11,14 +11,13 @@ export function useTemplatesStructure(structureId: string | undefined) {
   const [praticienId, setPraticienId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!supabase) return;
     utilisateurCourant().then((user) => {
       if (user) setPraticienId(user.id);
     });
   }, []);
 
   const charger = useCallback(async () => {
-    if (!supabase || !structureId) return;
+    if (!structureId) return;
     setLoading(true);
     try {
       const { data } = await supabase
@@ -39,7 +38,7 @@ export function useTemplatesStructure(structureId: string | undefined) {
     contenuTexte: string;
     formatOrigine: 'pdf' | 'docx' | null;
   }): Promise<TemplateStructure | null> {
-    if (!supabase || !praticienId || !structureId) return null;
+    if (!praticienId || !structureId) return null;
     const row = {
       id: uuidv4(),
       praticien_id: praticienId,
@@ -63,7 +62,6 @@ export function useTemplatesStructure(structureId: string | undefined) {
   }
 
   async function supprimerTemplate(id: string): Promise<void> {
-    if (!supabase) return;
     await supabase.from('templates_structure').delete().eq('id', id);
     setTemplates(prev => prev.filter(t => t.id !== id));
   }

@@ -27,7 +27,6 @@ export function useChiffreAffaires(mois: string) {
   useEffect(() => {
     let annule = false;
     (async () => {
-      if (!supabase) { setChargement(false); return; }
       setChargement(true);
       const { debut, fin } = plageHistorique(mois, 12);
       const [ca, ext, ben] = await Promise.all([
@@ -57,7 +56,6 @@ export function useChiffreAffaires(mois: string) {
 
   /** Ajoute une saisie au mois affiché. Ne lève jamais. */
   const ajouter = useCallback(async (v: { participantId: string; libelle: string; montant: number }): Promise<{ erreur?: string }> => {
-    if (!supabase) return { erreur: 'Base de données indisponible' };
     const user = await utilisateurCourant();
     if (!user) return { erreur: 'Session expirée' };
     const { error } = await supabase.from('ca_externe').insert({
@@ -69,7 +67,6 @@ export function useChiffreAffaires(mois: string) {
   }, [mois, recharger]);
 
   const modifier = useCallback(async (id: string, v: { participantId: string; libelle: string; montant: number }): Promise<{ erreur?: string }> => {
-    if (!supabase) return { erreur: 'Base de données indisponible' };
     const { error } = await supabase.from('ca_externe').update({ participant_id: v.participantId, libelle: v.libelle, montant: v.montant }).eq('id', id);
     if (error) return { erreur: error.message };
     recharger();
@@ -77,7 +74,6 @@ export function useChiffreAffaires(mois: string) {
   }, [recharger]);
 
   const supprimer = useCallback(async (id: string): Promise<{ erreur?: string }> => {
-    if (!supabase) return { erreur: 'Base de données indisponible' };
     const { error } = await supabase.from('ca_externe').delete().eq('id', id);
     if (error) return { erreur: error.message };
     recharger();
@@ -100,7 +96,6 @@ export function useCaDouzeMois(): { lignes: LigneCA[]; chargement: boolean } {
   useEffect(() => {
     let annule = false;
     (async () => {
-      if (!supabase) { setChargement(false); return; }
       const maintenant = new Date();
       const mois = `${maintenant.getFullYear()}-${String(maintenant.getMonth() + 1).padStart(2, '0')}-01`;
       const { debut, fin } = plageHistorique(mois, 12);

@@ -2,7 +2,7 @@ import type { User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
 /**
- * Praticien connecté, ou null (pas de session, ou Supabase non configuré).
+ * Praticien connecté, ou null (pas de session).
  *
  * ── Pourquoi ce point d'entrée unique (2026-11-10) ──────────────────────
  * 31 endroits du front appelaient `supabase.auth.getUser()` directement,
@@ -18,7 +18,6 @@ import { supabase } from './supabase';
  * jamais par `supabase.auth.getUser()`.
  */
 export async function utilisateurCourant(): Promise<User | null> {
-  if (!supabase) return null;
   const { data: { user } } = await supabase.auth.getUser();
   return user;
 }

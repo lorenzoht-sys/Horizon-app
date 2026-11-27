@@ -12,7 +12,6 @@ import PageWrapper from '../components/layout/PageWrapper';
 import { ArrowLeft } from 'lucide-react';
 import type { Bilan, TestKey } from '../types';
 import { toast } from 'sonner';
-import { supabase } from '../lib/supabase';
 import { utilisateurCourant } from '../lib/session';
 import { idSeanceDepuisRecherche, validerSeanceDuBilan } from '../lib/liaisonSeanceBilan';
 
@@ -33,7 +32,7 @@ export default function NewBilan() {
 
   // Si pas de brouillon localStorage → vérifier Supabase (cross-device recovery)
   useEffect(() => {
-    if (!id || brouillonSauve || !supabase) return;
+    if (!id || brouillonSauve) return;
     setCheckingCloud(true);
     (async () => {
       try {

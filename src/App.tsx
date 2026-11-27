@@ -178,7 +178,6 @@ function MapFallback() {
 
 // Vérifie si le praticien connecté a déjà rempli son profil
 async function needsOnboarding(userId: string): Promise<boolean> {
-  if (!supabase) return false;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (supabase as any)
@@ -279,12 +278,6 @@ export default function App() {
   }, [isLoggedIn]);
 
   useEffect(() => {
-    if (!supabase) {
-      setIsLoggedIn(localStorage.getItem('isLoggedIn') === 'true');
-      setAuthLoading(false);
-      return;
-    }
-
     // Timeout de sécurité : si Supabase ne répond pas dans les 5 s → on débloque quand même
     const safetyTimer = setTimeout(() => {
       console.warn('[App] getSession timeout — déblocage forcé');
@@ -294,7 +287,7 @@ export default function App() {
     const checkSession = async () => {
       try {
         const result = await Promise.race([
-          supabase!.auth.getSession(),
+          supabase.auth.getSession(),
           new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('timeout')), 4500)
           ),
@@ -345,7 +338,6 @@ export default function App() {
         // Restaurer les brouillons cloud dans localStorage (après logout ou changement d'appareil)
         void loadAllBrouillonsFromSupabase(session.user.id);
         localStorage.removeItem('settings_praticien');
-        localStorage.removeItem('isLoggedIn');
         setIsLoggedIn(true);
         needsOnboarding(session.user.id).then(setShowOnboarding);
       } else if (event === 'SIGNED_OUT') {
@@ -356,7 +348,6 @@ export default function App() {
         effacerTousEtatsSession();
         setCurrentUserId(null);
         localStorage.removeItem('settings_praticien');
-        localStorage.removeItem('isLoggedIn');
         setIsLoggedIn(false);
         setShowOnboarding(false);
       }
@@ -374,28 +365,22 @@ export default function App() {
     // Ne pas effacer les brouillons : ils sont isolés par userId (brouillon_bilan_{userId}_*)
     // et seront restaurés depuis Supabase à la prochaine connexion.
     effacerTousEtatsSession();
-    if (supabase) {
-      void supabase.auth.signOut();
-    } else {
-      setCurrentUserId(null);
-      localStorage.removeItem('isLoggedIn');
-    }
+    void supabase.auth.signOut();
     setIsLoggedIn(false);
     setShowOnboarding(false);
   }
 
-  // Session praticien fermée après une heure sans interaction. Sans Supabase
-  // (mode local de démonstration), il n'y a pas de session à protéger.
+  // Session praticien fermée après une heure sans interaction.
   // Portée « local » : seul cet appareil est déconnecté. La portée par défaut
   // révoquerait aussi la session du téléphone que le praticien utilise ailleurs.
   function deconnecterPourInactivite() {
     effacerTousEtatsSession();
-    if (supabase) void supabase.auth.signOut({ scope: 'local' });
+    void supabase.auth.signOut({ scope: 'local' });
     setIsLoggedIn(false);
     setShowOnboarding(false);
   }
   useDeconnexionInactivite(
-    !supabase || authLoading ? 'inconnu' : isLoggedIn ? 'connecte' : 'deconnecte',
+    authLoading ? 'inconnu' : isLoggedIn ? 'connecte' : 'deconnecte',
     deconnecterPourInactivite,
   );
 
@@ -487,13 +472,11 @@ export default function App() {
                 // fois `isLoggedIn` et `showOnboarding` établis : plus tôt, le
                 // catch-all verrait `isLoggedIn` encore faux et renverrait sur
                 // /login — un aller-retour visible juste après un succès.
-                if (supabase) {
-                  const { data } = await supabase.auth.getSession();
-                  if (data.session) {
-                    setCurrentUserId(data.session.user.id);
-                    setShowOnboarding(await needsOnboarding(data.session.user.id));
-                    setIsLoggedIn(true);
-                  }
+                const { data } = await supabase.auth.getSession();
+                if (data.session) {
+                  setCurrentUserId(data.session.user.id);
+                  setShowOnboarding(await needsOnboarding(data.session.user.id));
+                  setIsLoggedIn(true);
                 }
                 // Si la session a disparu entre-temps, le catch-all enverra
                 // sur /login : le praticien se connectera avec son nouveau

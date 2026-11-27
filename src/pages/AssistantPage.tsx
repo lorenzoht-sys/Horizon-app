@@ -7,7 +7,7 @@ import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
 import { useStructures } from '../hooks/useStructures';
 import { partagerDocument } from '../lib/partageDocument';
-import { supabase, getAuthHeader } from '../lib/supabase';
+import { getAuthHeader } from '../lib/supabase';
 import { listerJournalAssistant, ajouterJournalAssistant, supprimerJournalAssistant, lireComptesRendusRecents, lireSeancesPatientRecentes, lireNotesRecentes, lireSeancesPlanifieesDepuis, lireExercicesRealises, partagerAvecBeneficiaire, partagerAvecStructure } from '../lib/acces/assistant';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { toast } from 'sonner';
@@ -73,7 +73,6 @@ function newId() { return String(++_msgId); }
 function loadPraticienPrenom(): string {
   return chargerSettingsPraticien().prenom;
 }
-
 
 // ── PatientChips ──────────────────────────────────────────────────────────────
 
@@ -180,7 +179,6 @@ export default function AssistantPage() {
   useEffect(() => { loadLogs(); }, []);
 
   async function loadLogs() {
-    if (!supabase) return;
     try {
       const { data } = await listerJournalAssistant();
       if (data) setLogs(data as AssistantLog[]);
@@ -188,7 +186,6 @@ export default function AssistantPage() {
   }
 
   async function handleDeleteLog(logId: string) {
-    if (!supabase) return;
     if (!window.confirm('Supprimer cette question de l’historique ?')) return;
     const precedent = logs;
     setLogs(prev => prev.filter(l => l.id !== logId));
@@ -225,12 +222,12 @@ export default function AssistantPage() {
     const seuilPlanningISO = seuilPlanning.toISOString().slice(0, 10);
 
     const [crRes, spRes, notesRes, seancesRes, programmeRes] = await Promise.allSettled([
-      supabase ? lireComptesRendusRecents(patientId) : Promise.resolve({ data: null }),
-      supabase ? lireSeancesPatientRecentes(patientId) : Promise.resolve({ data: null }),
-      supabase ? lireNotesRecentes(patientId) : Promise.resolve({ data: null }),
+      lireComptesRendusRecents(patientId),
+      lireSeancesPatientRecentes(patientId),
+      lireNotesRecentes(patientId),
       // Colonnes explicites : motif_annulation/motif_annulation_detail sont internes
       // au praticien et ne doivent jamais transiter par le prompt IA (cf. assistantContexte.ts).
-      supabase ? lireSeancesPlanifieesDepuis(patientId, seuilPlanningISO) : Promise.resolve({ data: null }),
+      lireSeancesPlanifieesDepuis(patientId, seuilPlanningISO),
       chargerProgrammeActif(patientId),
     ]);
     const programme = programmeRes.status === 'fulfilled' ? programmeRes.value : null;
@@ -258,7 +255,7 @@ export default function AssistantPage() {
       const j30 = new Date(); j30.setDate(j30.getDate() - 30);
       const sp30 = spData.filter(s => new Date(s.date_seance as string) >= j30);
       let taux30j: number | null = null;
-      if (supabase && sp30.length > 0) {
+      if (sp30.length > 0) {
         const erRes = await lireExercicesRealises(sp30.map(s => s.id));
         const erRows = (erRes.data ?? []) as { seance_patient_id: string; realise: boolean }[];
         const total = erRows.length;
@@ -356,7 +353,7 @@ export default function AssistantPage() {
 
     // Charger les extras avant de lancer l'action (même chemin que selectPatient,
     // pour ne pas dupliquer ces requêtes avec une deuxième implémentation).
-    const extras = supabase ? await loadPatientExtras(patient.id) : { compteRendus: [], notesManuelles: [], programme: null, loading: false };
+    const extras = await loadPatientExtras(patient.id);
 
     await runAction(actionType, patient, extras);
   }
@@ -468,7 +465,6 @@ export default function AssistantPage() {
   }
 
   async function saveLog(question: string, reponse: string, patientId: string | null, action: ActionType) {
-    if (!supabase) return;
     try {
       await ajouterJournalAssistant({ patient_id: patientId, question, reponse, action_type: action });
       await loadLogs();
@@ -741,7 +737,6 @@ export default function AssistantPage() {
                             destinataire: `${patient.prenom} ${patient.nom} (bénéficiaire)`,
                             texteInitial: msg.content,
                             onConfirmer: async (texteFinal) => {
-                              if (!supabase) return;
                               const date = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
                               const resultat = await partagerDocument(
                                 () => partagerAvecBeneficiaire({
@@ -774,7 +769,6 @@ export default function AssistantPage() {
                             destinataire: `${nomStructure} (structure)`,
                             texteInitial: msg.content,
                             onConfirmer: async (texteFinal) => {
-                              if (!supabase) return;
                               const resultat = await partagerDocument(
                                 () => partagerAvecStructure({
                                   participant_id: patient.id,

@@ -12,14 +12,13 @@ export function useStructures() {
   const [praticienId, setPraticienId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!supabase) return;
     utilisateurCourant().then((user) => {
       if (user) setPraticienId(user.id);
     });
   }, []);
 
   const charger = useCallback(async () => {
-    if (!supabase || !praticienId) return;
+    if (!praticienId) return;
     setLoading(true);
     try {
       const { data } = await supabase
@@ -64,8 +63,8 @@ export function useStructures() {
     tarifSeance?: number;
     frequenceFacturation?: Structure['frequenceFacturation'];
   }): Promise<Structure | null> {
-    if (!supabase || !praticienId) {
-      console.error('[useStructures] pas de supabase ou praticienId:', { supabase: !!supabase, praticienId });
+    if (!praticienId) {
+      console.error('[useStructures] pas de supabase ou praticienId:', { supabase: true, praticienId });
       return null;
     }
     const row = {
@@ -90,7 +89,6 @@ export function useStructures() {
   }
 
   async function mettreAJour(id: string, data: Partial<Omit<Structure, 'id' | 'praticienId' | 'tokenAcces' | 'createdAt'>>): Promise<void> {
-    if (!supabase) return;
     const { error } = await supabase.from('structures').update(structureToDb(data as any)).eq('id', id);
     if (!error) {
       setStructures(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
@@ -98,13 +96,11 @@ export function useStructures() {
   }
 
   async function supprimerStructure(id: string): Promise<void> {
-    if (!supabase) return;
     await supabase.from('structures').delete().eq('id', id);
     setStructures(prev => prev.filter(s => s.id !== id));
   }
 
   async function regenererToken(id: string): Promise<string | null> {
-    if (!supabase) return null;
     // Générer un nouveau token côté client (hex 32 bytes via crypto API)
     const array = new Uint8Array(32);
     crypto.getRandomValues(array);

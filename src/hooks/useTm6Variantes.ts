@@ -18,7 +18,6 @@ export function useTm6Variantes() {
   const [loading, setLoading] = useState(true);
 
   const fetch = useCallback(async () => {
-    if (!supabase) return;
     const { data } = await supabase.from('tm6_variantes').select('*').order('nom');
     if (data) setVariantes(data.map(rowToVariante));
     setLoading(false);
@@ -31,7 +30,6 @@ export function useTm6Variantes() {
     typeMesure: Tm6Variante['typeMesure'],
     distanceRef?: number | null,
   ): Promise<Tm6Variante | undefined> {
-    if (!supabase) return;
     const { data } = await supabase.from('tm6_variantes').insert({
       nom,
       type_mesure: typeMesure,
@@ -42,7 +40,6 @@ export function useTm6Variantes() {
   }
 
   async function supprimer(id: string) {
-    if (!supabase) return;
     await supabase.from('tm6_variantes').delete().eq('id', id);
     setVariantes(prev => prev.filter(v => v.id !== id));
   }

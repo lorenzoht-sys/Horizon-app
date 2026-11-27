@@ -216,14 +216,6 @@ export default function DicteePostSeance({ participant, onClose: fermerParent, o
     setEtat('processing');
     setErreurAnalyse(null);
 
-    if (!supabase) {
-      setFormData({ ...emptyForm(), observations: transcription });
-      setAiFields(allFalse());
-      setErreurAnalyse("Supabase non configuré — analyse IA désactivée. Remplissez le formulaire manuellement.");
-      setEtat('review');
-      return;
-    }
-
     try {
       const programmeActif = participant.programmes?.find(p => p.actif);
       const { data, error } = await supabase.functions.invoke('analyser-seance', {

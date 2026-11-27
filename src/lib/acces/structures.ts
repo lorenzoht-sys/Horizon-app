@@ -1,4 +1,4 @@
 // Table `structures` : lecture directe d'une structure partenaire.
-import { clientSupabase } from '../supabase';
+import { supabase } from '../supabase';
 
-export const lireStructure = (id: string) => clientSupabase().from('structures').select('*').eq('id', id).single();
+export const lireStructure = (id: string) => supabase.from('structures').select('*').eq('id', id).single();

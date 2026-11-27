@@ -37,7 +37,6 @@ export function SectionAlertesPraticien() {
   }, []);
 
   async function activer() {
-    if (!supabase) { setEtat('erreur'); return; }
     setEnCours(true);
     const res = await activerRappelsPush();
     if (res.ok) {
@@ -64,7 +63,6 @@ export function SectionAlertesPraticien() {
   }
 
   async function desactiver() {
-    if (!supabase) return;
     setEnCours(true);
     const endpoint = await desactiverRappelsPush();
     if (endpoint) {

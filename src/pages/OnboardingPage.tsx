@@ -16,7 +16,6 @@ import {
   ArrowLeft, ArrowRight, BadgeCheck, Briefcase, Building2, Check, Dumbbell, FileText, Footprints,
   HeartPulse, Hand, Hospital, House, LoaderCircle, Mail, MapPin, Medal, Phone, Receipt, Sparkles, Users,
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import { lirePraticien, enregistrerPraticien } from '../lib/acces/praticien';
 import { utilisateurCourant } from '../lib/session';
 import { lireEtatDemarrage } from '../lib/demarrage';
@@ -79,7 +78,6 @@ export default function OnboardingPage({ onComplete }: Props) {
   // Un praticien invité peut avoir une fiche déjà partiellement remplie :
   // on la reprend plutôt que de lui faire tout ressaisir.
   useEffect(() => {
-    if (!supabase) return;
     utilisateurCourant().then(user => {
       if (!user) return;
       setEmail(user.email ?? null);
@@ -108,7 +106,6 @@ export default function OnboardingPage({ onComplete }: Props) {
   const precedent = () => { setErreur(''); setEtape(Math.max(0, etape - 1)); };
 
   const enregistrer = async () => {
-    if (!supabase) { setTermine(true); return; }
     setEnregistrement(true);
     const user = await utilisateurCourant();
     if (!user) { onComplete(); navigate('/'); return; }
