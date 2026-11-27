@@ -10,6 +10,7 @@ import { buildAssistantPromptMobile, historiquePourIA } from '../../../utils/pro
 import { identiteDe, masquerIdentiteConnue, reinsererIdentite, versParticipantIA } from '../../../utils/pseudonymiserIA';
 import RappelNomsIA from '../../../components/ui/RappelNomsIA';
 import { C } from './communs';
+import { IconChevronRight, IconSearch, IconSend, IconSettings } from '@tabler/icons-react';
 
 // ── EcranAssistant ────────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ export function EcranAssistant({
             onClick={onOuvrirSettings}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', padding: 6 }}
           >
-            <i className="ti ti-settings" style={{ fontSize: 18 }} />
+            <IconSettings size={18} />
           </button>
         </div>
         {/* Sélecteur patient */}
@@ -129,7 +130,7 @@ export function EcranAssistant({
               </>
             ) : (
               <>
-                <i className="ti ti-search" style={{ fontSize: 15, color: 'rgba(255,255,255,0.4)' }} />
+                <IconSearch size={15} style={{ color: 'rgba(255,255,255,0.4)' }} />
                 <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Sélectionner un patient (optionnel)</span>
               </>
             )}
@@ -142,7 +143,7 @@ export function EcranAssistant({
               ✕
             </button>
           ) : (
-            <i className="ti ti-chevron-right" style={{ fontSize: 14, color: 'rgba(255,255,255,0.3)' }} />
+            <IconChevronRight size={14} style={{ color: 'rgba(255,255,255,0.3)' }} />
           )}
         </button>
       </div>
@@ -224,7 +225,7 @@ export function EcranAssistant({
               color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}
           >
-            <i className="ti ti-send" style={{ fontSize: 17 }} />
+            <IconSend size={17} />
           </button>
         </div>
       </div>

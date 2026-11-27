@@ -17,14 +17,6 @@ function MapResizer() {
   return null;
 }
 
-// Fix Leaflet icons
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
-
 const JOURS: { val: JourSemaine; label: string }[] = [
   { val: 'lun', label: 'L' }, { val: 'mar', label: 'M' },
   { val: 'mer', label: 'Me' }, { val: 'jeu', label: 'J' },

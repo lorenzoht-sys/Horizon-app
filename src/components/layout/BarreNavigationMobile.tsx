@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { URLS_MOBILE, ongletDepuisUrl, type OngletMobile } from '../../lib/routesMobile';
+import { IconHome, IconMap2, IconMenu2, IconPlus, IconUsers, type TablerIcon } from '@tabler/icons-react';
 
 // Barre du bas, partagée par l'interface mobile (AppMobile) et par le cadre
 // commun sous 768 px (App.tsx), qui y remplace la barre latérale. Mêmes
@@ -13,14 +14,14 @@ import { URLS_MOBILE, ongletDepuisUrl, type OngletMobile } from '../../lib/route
 // seulement — plus depuis cette barre ni depuis EcranPlus (jamais listé
 // là), voir ParticipantProfile.tsx pour l'autre point d'entrée mobile
 // (masqué sous 768px, pas retiré : encore utilisé par le desktop).
-const ONGLETS: { id: OngletMobile; icon: string; label: string; url: string; principal?: boolean }[] = [
-  { id: 'accueil',       icon: 'ti-home',   label: 'Accueil',   url: URLS_MOBILE.accueil },
-  { id: 'beneficiaires', icon: 'ti-users',  label: 'Bénéfic.',  url: URLS_MOBILE.beneficiaires },
-  { id: 'saisie',        icon: 'ti-plus',   label: 'Créer',     url: URLS_MOBILE.saisie, principal: true },
+const ONGLETS: { id: OngletMobile; Icone: TablerIcon; label: string; url: string; principal?: boolean }[] = [
+  { id: 'accueil',       Icone: IconHome,   label: 'Accueil',   url: URLS_MOBILE.accueil },
+  { id: 'beneficiaires', Icone: IconUsers,  label: 'Bénéfic.',  url: URLS_MOBILE.beneficiaires },
+  { id: 'saisie',        Icone: IconPlus,   label: 'Créer',     url: URLS_MOBILE.saisie, principal: true },
   // « Agenda » remplacé par « Carte » le 2026-11-24 (arbitrage de Pierre) : les rendez-vous se gèrent
   // depuis l'accueil et le « + » ; l'agenda reste dans « Plus ».
-  { id: 'carte',         icon: 'ti-map-2',  label: 'Carte',     url: URLS_MOBILE.carte },
-  { id: 'plus',          icon: 'ti-menu-2', label: 'Plus',      url: URLS_MOBILE.plus },
+  { id: 'carte',         Icone: IconMap2,   label: 'Carte',     url: URLS_MOBILE.carte },
+  { id: 'plus',          Icone: IconMenu2,  label: 'Plus',      url: URLS_MOBILE.plus },
 ];
 
 const PRIMAIRE = 'var(--color-teal)';
@@ -54,10 +55,10 @@ export default function BarreNavigationMobile() {
           >
             {item.principal ? (
               <div style={{ width: 48, height: 48, borderRadius: '50%', background: PRIMAIRE, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: -20, boxShadow: '0 4px 12px rgba(43,191,191,0.4)' }}>
-                <i className="ti ti-plus" style={{ fontSize: 22, color: 'white' }} aria-hidden="true" />
+                <IconPlus size={22} style={{ color: 'white' }} aria-hidden="true" />
               </div>
             ) : (
-              <i className={`ti ${item.icon}`} style={{ fontSize: 22, color: estActif ? PRIMAIRE : ATTENUE }} aria-hidden="true" />
+              <item.Icone size={22} style={{ color: estActif ? PRIMAIRE : ATTENUE }} aria-hidden="true" />
             )}
             <span style={{ fontSize: 10, fontWeight: estActif ? 700 : 400, color: estActif ? PRIMAIRE : ATTENUE }}>
               {item.label}

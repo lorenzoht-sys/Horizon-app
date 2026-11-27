@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AuthLeftPanel from '../components/layout/AuthLeftPanel';
 import './LoginPage.css';
+import { IconArrowLeft, IconSend } from '@tabler/icons-react';
 
 const inputStyle: CSSProperties = {
   width: '100%', padding: '11px 16px',
@@ -30,7 +31,7 @@ function SuccessScreen({ email }: { email: string }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         margin: '0 auto 20px',
       }}>
-        <i className="ti ti-send" style={{ fontSize: 28, color: 'var(--color-teal)' }} aria-hidden="true" />
+        <IconSend size={28} style={{ color: 'var(--color-teal)' }} aria-hidden="true" />
       </div>
       <div style={{ fontFamily: "var(--font-sans)", fontSize: 20, fontWeight: 700, color: '#032c28', marginBottom: 10 }}>
         Lien envoyé !
@@ -51,7 +52,7 @@ function SuccessScreen({ email }: { email: string }) {
         fontSize: 14, fontWeight: 700, textDecoration: 'none',
         fontFamily: "var(--font-sans)",
       }}>
-        <i className="ti ti-arrow-left" style={{ fontSize: 15 }} aria-hidden="true" />
+        <IconArrowLeft size={15} aria-hidden="true" />
         Retour à la connexion
       </Link>
     </div>
@@ -162,7 +163,7 @@ export default function ForgotPasswordPage() {
 
             <div style={{ textAlign: 'center', fontSize: 13, color: '#8B9BB4' }}>
               <Link to="/login" style={{ color: 'var(--color-teal)', fontWeight: 700, textDecoration: 'none' }}>
-                <i className="ti ti-arrow-left" style={{ fontSize: 13, marginRight: 4 }} aria-hidden="true" />
+                <IconArrowLeft size={13} style={{ marginRight: 4, verticalAlign: '-0.15em' }} aria-hidden="true" />
                 Retour à la connexion
               </Link>
             </div>

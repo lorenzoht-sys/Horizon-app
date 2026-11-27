@@ -8,6 +8,7 @@ import { resoudreTranscriptionFinale } from '../lib/dicteeTranscription';
 import { ecrireEtatSession, effacerEtatSession, lireEtatSession } from '../lib/etatSession';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+import { IconMicrophone } from '@tabler/icons-react';
 
 interface Props {
   participant: Participant;
@@ -360,7 +361,7 @@ export default function DicteePostSeance({ participant, onClose: fermerParent, o
                     style={{ width: 96, height: 96, minWidth: 96, minHeight: 96 }}
                     aria-label="Démarrer la dictée"
                   >
-                    <i className="ti ti-microphone text-gray-500" style={{ fontSize: 38 }} aria-hidden="true" />
+                    <IconMicrophone size={38} className="text-gray-500" aria-hidden="true" />
                   </button>
                   <p className="text-sm font-semibold text-gray-700 mb-1">Dicter le compte-rendu</p>
                   <p className="text-xs text-gray-400 text-center max-w-xs leading-relaxed">
@@ -397,7 +398,7 @@ export default function DicteePostSeance({ participant, onClose: fermerParent, o
                   style={{ width: 96, height: 96, minWidth: 96, minHeight: 96 }}
                   aria-label="Arrêter l'enregistrement"
                 >
-                  <i className="ti ti-microphone text-white" style={{ fontSize: 38 }} aria-hidden="true" />
+                  <IconMicrophone size={38} className="text-white" aria-hidden="true" />
                 </button>
               </div>
 

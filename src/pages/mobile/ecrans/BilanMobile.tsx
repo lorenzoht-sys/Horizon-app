@@ -9,6 +9,7 @@ import { idSeanceDepuisRecherche, validerSeanceDuBilan } from '../../../lib/liai
 import ModalRepriseBrouillon from '../../../components/bilan/ModalRepriseBrouillon';
 import { getBrouillon, supprimerBrouillon } from '../../../hooks/useBrouillonBilan';
 import { C, EcranChargement } from './communs';
+import { IconArrowLeft } from '@tabler/icons-react';
 
 // ── Nouveau bilan mobile ───────────────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ export function ChoixBeneficiaireBilanMobile({ onBack, onChoisir }: { onBack: ()
     <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 22, color: C.text }} />
+          <IconArrowLeft size={22} style={{ color: C.text }} />
         </button>
         <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Nouveau bilan</div>
       </div>
@@ -96,7 +97,7 @@ export function BilanMobile({ participantId, onTermine }: { participantId: strin
     <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <button onClick={onTermine} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 22, color: C.text }} />
+          <IconArrowLeft size={22} style={{ color: C.text }} />
         </button>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Bilan — {participant.prenom} {participant.nom}</div>

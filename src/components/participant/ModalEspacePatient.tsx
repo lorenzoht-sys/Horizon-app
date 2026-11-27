@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import type { Participant, VisibiliteBeneficiaire } from '../../types';
 import { getAppHost, getAppOrigin } from '../../lib/config';
+import { IconCopy, IconMessage, IconShare } from '@tabler/icons-react';
 
 const VISIBILITE_DEFAULT: VisibiliteBeneficiaire = {
   bilans: true, rdv: true, programme: true, messagePraticien: true, messagePierre: true, carteSante: true,
@@ -183,7 +184,7 @@ export default function ModalEspacePatient({ participant, onClose, onUpdate }: P
             border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}>
-            <i className="ti ti-share" style={{ fontSize: 15 }} aria-hidden="true" />
+            <IconShare size={15} aria-hidden="true" />
             Envoyer
           </button>
           <button onClick={copierLien} style={{
@@ -206,7 +207,7 @@ export default function ModalEspacePatient({ participant, onClose, onUpdate }: P
             border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700,
             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}>
-            <i className="ti ti-copy" style={{ fontSize: 15 }} aria-hidden="true" />
+            <IconCopy size={15} aria-hidden="true" />
             Copier le code
           </button>
           {participant.telephone && (
@@ -216,7 +217,7 @@ export default function ModalEspacePatient({ participant, onClose, onUpdate }: P
               fontSize: 13, fontWeight: 600, cursor: 'pointer', color: 'var(--color-ink-2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}>
-              <i className="ti ti-message" style={{ fontSize: 15 }} aria-hidden="true" />
+              <IconMessage size={15} aria-hidden="true" />
               Envoyer SMS
             </button>
           )}

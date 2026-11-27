@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { creerPraticien } from '../lib/acces/praticien';
 import AuthLeftPanel from '../components/layout/AuthLeftPanel';
 import LegalFooterLinks from '../components/legal/LegalFooterLinks';
+import { IconEye, IconEyeOff } from '@tabler/icons-react';
 import './LoginPage.css';
 
 const inputStyle: CSSProperties = {
@@ -197,7 +198,7 @@ export default function RegisterPage() {
                     cursor: 'pointer', color: '#8B9BB4', padding: 0,
                   }}
                 >
-                  <i className={`ti ${showPwd ? 'ti-eye-off' : 'ti-eye'}`} style={{ fontSize: 15 }} aria-hidden="true" />
+                  {showPwd ? <IconEyeOff size={15} aria-hidden="true" /> : <IconEye size={15} aria-hidden="true" />}
                 </button>
               </div>
             </div>
@@ -223,7 +224,7 @@ export default function RegisterPage() {
                     cursor: 'pointer', color: '#8B9BB4', padding: 0,
                   }}
                 >
-                  <i className={`ti ${showConf ? 'ti-eye-off' : 'ti-eye'}`} style={{ fontSize: 15 }} aria-hidden="true" />
+                  {showConf ? <IconEyeOff size={15} aria-hidden="true" /> : <IconEye size={15} aria-hidden="true" />}
                 </button>
               </div>
             </div>
