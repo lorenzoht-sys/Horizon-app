@@ -7,13 +7,13 @@ Ne pas modifier à la main : relancer le script après chaque chantier.
 
 | Élément | Nombre |
 | --- | --- |
-| Fichiers du front (hors tests) | 359 (71 165 lignes) |
+| Fichiers du front (hors tests) | 363 (71 681 lignes) |
 | Routes API (`api/`) | 12 |
 | Edge Functions | 3 |
 | Tables (schéma public) | 62 |
 | Tables lues ou écrites directement par le front | 47 |
 | Fonctions SQL appelées en RPC par le front | 8 |
-| Tests unitaires | 115 fichiers |
+| Tests unitaires | 116 fichiers |
 | Scénarios e2e | 44 fichiers |
 
 ## Table par table
@@ -109,7 +109,7 @@ Plus les accès sont regroupés dans `hooks/`, plus un changement de source de d
 
 | Couche | Fichiers avec accès direct | Appels `.from()` |
 | --- | --- | --- |
-| `src/hooks/` | 27 | 156 |
+| `src/hooks/` | 27 | 157 |
 | `src/pages/` | 0 | 0 |
 | `src/components/` | 0 | 0 |
 | `src/lib/` | 12 | 50 |
@@ -179,5 +179,5 @@ Ce sont les zones où une modification a le plus de chances d'avoir des effets d
 
 ## Couverture de tests
 
-- 115 fichiers de tests unitaires (Vitest), 44 scénarios e2e (Playwright), plus le harnais RLS (`tests/security/`).
-- Modules de `src/lib/` sans test unitaire à côté (19 sur 73) : `lib/acces/assistant`, `lib/acces/contrats`, `lib/acces/demarrage`, `lib/acces/indisponibilites`, `lib/acces/praticien`, `lib/acces/sauvegarde`, `lib/acces/structures`, `lib/analyse-tournee`, `lib/anamnese`, `lib/bibliothequeExercices`, `lib/installationPwa`, `lib/leafletInit`, `lib/liaisonSeanceBilan`, `lib/libellesBibliotheque`, `lib/patientApi`, `lib/push`, `lib/sentry`, `lib/settingsPraticien`, `lib/structureApi`.
+- 116 fichiers de tests unitaires (Vitest), 44 scénarios e2e (Playwright), plus le harnais RLS (`tests/security/`).
+- Modules de `src/lib/` sans test unitaire à côté (19 sur 74) : `lib/acces/assistant`, `lib/acces/contrats`, `lib/acces/demarrage`, `lib/acces/indisponibilites`, `lib/acces/praticien`, `lib/acces/sauvegarde`, `lib/acces/structures`, `lib/analyse-tournee`, `lib/anamnese`, `lib/bibliothequeExercices`, `lib/installationPwa`, `lib/leafletInit`, `lib/liaisonSeanceBilan`, `lib/libellesBibliotheque`, `lib/patientApi`, `lib/push`, `lib/sentry`, `lib/settingsPraticien`, `lib/structureApi`.
