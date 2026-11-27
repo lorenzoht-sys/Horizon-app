@@ -1,5 +1,4 @@
 @import './styles/tokens.css';
-@import './styles/polices.css';
 @import './styles/charteFormulaire.css';
 
 @tailwind base;
