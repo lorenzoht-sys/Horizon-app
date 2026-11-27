@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build && node scripts/pwa-manifest-postbuild.mjs",
     "lint": "eslint .",
+    "lint:hooks": "eslint src -c eslint.hooks.config.js --no-inline-config",
     "preview": "vite preview",
     "typecheck:api": "tsc -p api/tsconfig.json --noEmit",
     "typecheck:e2e": "tsc -p e2e/tsconfig.json --noEmit",

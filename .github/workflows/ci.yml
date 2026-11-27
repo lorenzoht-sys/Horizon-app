@@ -5,6 +5,12 @@ on:
     branches: [main, consolidation]
   pull_request:
 
+# Droits du jeton GitHub réduits à la lecture par défaut (27/11/2026, dépôt public).
+# Seul le job e2e demande plus (resynchronisation de la branche staging), dans son
+# propre bloc `permissions`.
+permissions:
+  contents: read
+
 jobs:
   # Vérifications statiques : toujours exécutées, ne dépendent d'aucun
   # environnement de staging. Volontairement SANS `npm run lint` (erreurs
@@ -147,6 +153,9 @@ jobs:
           cache: npm
 
       - run: npm ci
+      # Bloquant : un hook appelé après un retour anticipé fait planter l'écran
+      # (PR #226, 27/11/2026). Voir eslint.hooks.config.js.
+      - run: npm run lint:hooks
       - run: npm run build
       # Suivi du nettoyage (docs/NETTOYAGE.md) : poids du front affiché dans
       # le résumé du job, et inventaire du code mort. Informatifs pour
