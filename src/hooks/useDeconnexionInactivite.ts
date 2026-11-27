@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   etatInactivite, lireDerniereActivite, noterActivite, oublierActivite,
@@ -21,7 +21,9 @@ const EVENEMENTS = ['pointerdown', 'keydown', 'touchstart', 'wheel'] as const;
  */
 export function useDeconnexionInactivite(etat: EtatConnexion, deconnecter: () => void) {
   const deconnecterRef = useRef(deconnecter);
-  deconnecterRef.current = deconnecter;
+  // Dernière version du rappel, sans relancer l'effet : écrite après le rendu
+  // (React interdit d'écrire une ref pendant le rendu).
+  useLayoutEffect(() => { deconnecterRef.current = deconnecter; });
 
   useEffect(() => {
     if (etat === 'inconnu') return;

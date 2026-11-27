@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useParticipants } from '../hooks/useParticipants';
 import { useContrats } from '../hooks/useContrats';
@@ -182,15 +182,9 @@ export default function ContratNouveauPage() {
   }
 
   // Créneaux libres récurrents dans la zone du nouveau patient (rayon 5 km, repli ville)
-  const creneauxSuggeres = useMemo(() =>
-    getTrousRecurrents(
-      seances,
-      participants,
-      participant?.adresseVille ?? '',
-      participant?.coordonnees ?? undefined,
-    ),
-    [seances, participants, participant?.adresseVille, participant?.coordonnees]
-  );
+  // Calcul léger (quelques centaines de séances) : sans useMemo, que React
+  // Compiler refusait de conserver.
+  const creneauxSuggeres = getTrousRecurrents(seances, participants, participant?.adresseVille ?? '', participant?.coordonnees);
 
   if (!participant) {
     return (

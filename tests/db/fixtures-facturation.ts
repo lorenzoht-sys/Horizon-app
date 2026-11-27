@@ -11,7 +11,6 @@ import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { Client } from 'pg';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { describe } from 'vitest';
 
 export const DB_URL = process.env.FACTURATION_TEST_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
 export const API_URL = process.env.FACTURATION_TEST_API_URL ?? 'http://127.0.0.1:54321';

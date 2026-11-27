@@ -182,36 +182,7 @@ export default function DicteePostSeance({ participant, onClose: fermerParent, o
     return () => clearInterval(iv);
   }, [isRecording]);
 
-  // Déclencher l'analyse dès que l'enregistrement s'est arrêté
-  useEffect(() => {
-    if (!isRecording && analysePending) {
-      setAnalysePending(false);
-      const { texte } = resoudreTranscriptionFinale(finalTranscript, interimTranscript);
-      if (texte) {
-        analyserTranscription(texte);
-      } else {
-        toast.error("Aucune parole détectée. Réessayez en parlant, puis attendez un instant avant d'arrêter.");
-        setEtat('idle');
-      }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRecording, analysePending]);
-
-  // Rendre visible toute erreur du hook (permission refusée, coupure système…)
-  // — la bannière inline peut être hors champ sur mobile, le toast ne l'est pas.
-  useEffect(() => {
-    if (speechError) toast.error(speechError);
-  }, [speechError]);
-
-  // Si le système a coupé l'enregistrement (écran verrouillé, focus perdu…)
-  // sans que l'utilisateur ait cliqué sur "Arrêter", l'écran restait figé
-  // sur "Enregistrement en cours" alors que le micro n'écoutait plus.
-  useEffect(() => {
-    if (!isRecording && etat === 'recording' && !analysePending && speechError) {
-      setEtat('idle');
-    }
-  }, [isRecording, etat, analysePending, speechError]);
-
+  // Déclarée avant l'effet qui l'appelle.
   const analyserTranscription = useCallback(async (transcription: string) => {
     setEtat('processing');
     setErreurAnalyse(null);
@@ -243,6 +214,36 @@ export default function DicteePostSeance({ participant, onClose: fermerParent, o
       setEtat('review');
     }
   }, [participant]);
+
+  // Déclencher l'analyse dès que l'enregistrement s'est arrêté
+  useEffect(() => {
+    if (!isRecording && analysePending) {
+      setAnalysePending(false);
+      const { texte } = resoudreTranscriptionFinale(finalTranscript, interimTranscript);
+      if (texte) {
+        analyserTranscription(texte);
+      } else {
+        toast.error("Aucune parole détectée. Réessayez en parlant, puis attendez un instant avant d'arrêter.");
+        setEtat('idle');
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRecording, analysePending]);
+
+  // Rendre visible toute erreur du hook (permission refusée, coupure système…)
+  // — la bannière inline peut être hors champ sur mobile, le toast ne l'est pas.
+  useEffect(() => {
+    if (speechError) toast.error(speechError);
+  }, [speechError]);
+
+  // Si le système a coupé l'enregistrement (écran verrouillé, focus perdu…)
+  // sans que l'utilisateur ait cliqué sur "Arrêter", l'écran restait figé
+  // sur "Enregistrement en cours" alors que le micro n'écoutait plus.
+  useEffect(() => {
+    if (!isRecording && etat === 'recording' && !analysePending && speechError) {
+      setEtat('idle');
+    }
+  }, [isRecording, etat, analysePending, speechError]);
 
   function handleToggleMic() {
     if (isRecording) {

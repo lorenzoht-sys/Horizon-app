@@ -43,8 +43,6 @@ test.describe('Bibliothèque (exercices, modèles) sur mobile (route fusionnée 
     await expect(page.getByText('Bientôt en version mobile')).toHaveCount(0);
 
     const nomExercice = `E2E exercice bibliothèque ${Date.now()}`;
-    let dossierId: string | null = null;
-    let modeleId: string | null = null;
     try {
       // ── Onglet Exercices (par défaut) — panneau « Filtres » (refonte du
       // 2026-10-26 : un seul filtre Type remplace Catégorie + Famille). ──
@@ -174,7 +172,7 @@ test.describe('Bibliothèque (exercices, modèles) sur mobile (route fusionnée 
         if (praticienId) {
           const { data: dossier } = await admin.from('dossiers_exercices')
             .select('id').eq('praticien_id', praticienId).eq('nom', nomDossier).maybeSingle();
-          dossierId = dossier?.id ?? null;
+          const dossierId = dossier?.id;
           if (dossierId) {
             try { await admin.from('dossier_exercice_membres').delete().eq('dossier_id', dossierId); } catch { /* non bloquant */ }
             await admin.from('dossiers_exercices').delete().eq('id', dossierId);
@@ -182,7 +180,7 @@ test.describe('Bibliothèque (exercices, modèles) sur mobile (route fusionnée 
 
           const { data: modele } = await admin.from('programmes_modeles')
             .select('id').eq('praticien_id', praticienId).eq('nom', nomModele).maybeSingle();
-          modeleId = modele?.id ?? null;
+          const modeleId = modele?.id;
           if (modeleId) {
             await admin.from('programmes_modeles').delete().eq('id', modeleId);
           }

@@ -12,7 +12,7 @@ function loadFromLS(participantId: string): CompteRenduSeance[] {
 }
 
 function saveToLS(participantId: string, data: CompteRenduSeance[]) {
-  try { localStorage.setItem(lsKey(participantId), JSON.stringify(data)); } catch {}
+  try { localStorage.setItem(lsKey(participantId), JSON.stringify(data)); } catch { /* stockage du navigateur plein ou désactivé (navigation privée) : sans conséquence */ }
 }
 
 export function useCompteRenduSeance(participantId: string) {

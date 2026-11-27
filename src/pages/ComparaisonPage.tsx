@@ -268,7 +268,7 @@ function ResumeIA({ participant, bilans }: { participant: Participant; bilans: B
         resumePro: reinsererIdentite(parsed.resumePro ?? '', identite),
         messagePatient: reinsererIdentite(parsed.messagePatient ?? '', identite),
       });
-    } catch (e) {
+    } catch {
       toast.error("Erreur lors de la génération IA");
     } finally {
       setLoading(false);

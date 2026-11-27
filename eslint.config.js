@@ -18,5 +18,15 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Espaces insécables : typographie française voulue (« … », « 14 h »), dans
+      // les commentaires, le JSX, les gabarits et les expressions régulières.
+      'no-irregular-whitespace': ['error', { skipComments: true, skipJSXText: true, skipTemplates: true, skipRegExps: true }],
+      // Préfixe « _ » : paramètre imposé par une signature (mock, callback) ou
+      // propriété écartée par déstructuration ({ cle: _cle, ...reste }).
+      '@typescript-eslint/no-unused-vars': ['error', {
+        argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_', ignoreRestSiblings: true,
+      }],
+    },
   },
 ])
