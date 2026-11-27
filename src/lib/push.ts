@@ -30,14 +30,14 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   return outputArray;
 }
 
-export type RaisonEchecActivation =
+type RaisonEchecActivation =
   | 'non_supporte'
   | 'ios_non_installee'
   | 'permission_refusee'
   | 'cle_manquante'
   | 'erreur';
 
-export type ActivationRappelsResultat =
+type ActivationRappelsResultat =
   | { ok: true; subscription: PushSubscriptionJSON }
   | { ok: false; raison: RaisonEchecActivation };
 
@@ -82,7 +82,7 @@ export async function activerRappelsPush(): Promise<ActivationRappelsResultat> {
   }
 }
 
-export type EtatAbonnementPush = 'abonne' | 'non_abonne' | 'non_supporte';
+type EtatAbonnementPush = 'abonne' | 'non_abonne' | 'non_supporte';
 
 export async function etatAbonnementPush(): Promise<EtatAbonnementPush> {
   if (!pushSupporte()) return 'non_supporte';

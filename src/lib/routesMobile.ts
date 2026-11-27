@@ -13,7 +13,7 @@
 
 export type OngletMobile = 'accueil' | 'beneficiaires' | 'saisie' | 'agenda' | 'carte' | 'assistant' | 'plus';
 
-export type EcranMobile =
+type EcranMobile =
   | { ecran: 'accueil' }
   | { ecran: 'beneficiaires' }
   | { ecran: 'saisie' }

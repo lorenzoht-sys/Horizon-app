@@ -2,25 +2,7 @@
 // côté client : le fichier n'est jamais envoyé à un serveur pour cette étape,
 // il reste en mémoire le temps de l'extraction puis n'est plus référencé.
 
-// pdfjs-dist (≈ 420 Ko) est chargé au premier PDF déposé, comme mammoth pour
-// les .docx : importé en tête de fichier, il partait avec la fenêtre de
-// compte rendu dès son ouverture (nettoyage, lot 1 bis, 2026-11-17).
-async function chargerPdfjs() {
-  const [pdfjsLib, { default: pdfWorkerUrl }] = await Promise.all([
-    import('pdfjs-dist'),
-    import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
-  ]);
-  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-  return pdfjsLib;
-}
-
-export type TemplateFormat = 'pdf' | 'docx';
-
-export interface TemplateExtraction {
-  texte: string;
-  format: TemplateFormat;
-  avertissement: string | null;
-}
+type TemplateFormat = 'pdf' | 'docx';
 
 export function detecterFormat(file: File): TemplateFormat | null {
   const nom = file.name.toLowerCase();
@@ -29,39 +11,3 @@ export function detecterFormat(file: File): TemplateFormat | null {
   return null;
 }
 
-async function extraireTextePdf(file: File): Promise<string> {
-  const pdfjsLib = await chargerPdfjs();
-  const buffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-  const pages: string[] = [];
-  for (let n = 1; n <= pdf.numPages; n++) {
-    const page = await pdf.getPage(n);
-    const contenu = await page.getTextContent();
-    const texte = contenu.items.map(item => ('str' in item ? item.str : '')).join(' ');
-    pages.push(texte);
-  }
-  return pages.join('\n\n').trim();
-}
-
-async function extraireTexteDocx(file: File): Promise<string> {
-  const mammoth = await import('mammoth');
-  const buffer = await file.arrayBuffer();
-  const result = await mammoth.extractRawText({ arrayBuffer: buffer });
-  return result.value.trim();
-}
-
-/** Extrait le texte d'un template uploadé (PDF ou Word). */
-export async function extraireTexteTemplate(file: File): Promise<TemplateExtraction> {
-  const format = detecterFormat(file);
-  if (!format) {
-    throw new Error('Format de fichier non supporté — utilisez un PDF ou un document Word (.docx)');
-  }
-
-  const texte = format === 'pdf' ? await extraireTextePdf(file) : await extraireTexteDocx(file);
-
-  const avertissement = texte.length < 30
-    ? 'Le texte extrait est très court — si le PDF est un document scanné (image), l\'extraction peut être incomplète ou vide. Vérifiez le résultat avant de continuer.'
-    : null;
-
-  return { texte, format, avertissement };
-}

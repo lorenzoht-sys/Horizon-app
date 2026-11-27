@@ -15,26 +15,10 @@ export function addMinutes(heure: string, minutes: number): string {
   return minutesEnHeure(heureEnMinutes(heure) + minutes);
 }
 
-// Arrondit au quart d'heure SUPÉRIEUR (jamais inférieur) — un horaire déjà
-// rond (ex: 10h00) reste inchangé. Utilisé par le planificateur pour ne
-// jamais faire arriver Pierre avant l'heure réellement calculée.
-export function arrondirAuQuartHeureSup(minutes: number): number {
-  return Math.ceil(minutes / 15) * 15;
-}
-
-export function diffMinutes(debut: string, fin: string): number {
-  return Math.max(0, heureEnMinutes(fin) - heureEnMinutes(debut));
-}
-
-export function estDansPlage(heure: string, debut: string, fin: string): boolean {
-  const h = heureEnMinutes(heure);
-  return h >= heureEnMinutes(debut) && h < heureEnMinutes(fin);
-}
-
 // ── Aimantation au pas (grille de planification manuelle) ────────────────────
 // Pas de la grille de placement manuel (glisser-déposer / clic sur frise) —
 // configurable ici plutôt qu'en valeur en dur éparpillée dans les composants.
-export const PAS_MINUTES = 15;
+const PAS_MINUTES = 15;
 
 // Arrondit au multiple de PAS_MINUTES le plus proche (contrairement à
 // arrondirAuQuartHeureSup qui arrondit toujours au-dessus).
@@ -42,7 +26,7 @@ export function arrondirAuPas(minutes: number, pas: number = PAS_MINUTES): numbe
   return Math.round(minutes / pas) * pas;
 }
 
-export interface FenetreMinutes {
+interface FenetreMinutes {
   debut: number;
   fin: number;
 }
@@ -75,7 +59,7 @@ export function heuresChevauchent(debutA: string, finA: string, debutB: string, 
   return debutA < finB && finA > debutB;
 }
 
-export interface CreneauCandidat {
+interface CreneauCandidat {
   date: string;
   heureDebut: string;
   heureFin: string;
@@ -190,7 +174,7 @@ export function trouverSerieRecurrente(seances: Seance[], reference: Seance): Se
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export interface BlocRecurrent {
+interface BlocRecurrent {
   seance: Seance;
   totalOccurrences: number;
 }
@@ -254,61 +238,13 @@ export class ChevauchementError extends Error {
   }
 }
 
-export const PLAGES = {
-  matin:       { debut: '08:00', fin: '12:00', label: 'Matin (8h-12h)' },
-  'apres-midi': { debut: '13:30', fin: '18:00', label: 'Après-midi (13h30-18h)' },
-  soiree:      { debut: '18:00', fin: '21:00', label: 'Soirée (18h-21h)' },
-} as const;
-
 const JOURS_NUM: Record<string, number> = {
   dim: 0, lun: 1, mar: 2, mer: 3, jeu: 4, ven: 5, sam: 6,
-};
-
-export const LABELS_JOURS_COURT: Record<string, string> = {
-  lun: 'Lun', mar: 'Mar', mer: 'Mer', jeu: 'Jeu', ven: 'Ven', sam: 'Sam', dim: 'Dim',
-};
-
-export const LABELS_JOURS_LONG: Record<string, string> = {
-  lun: 'Lundi', mar: 'Mardi', mer: 'Mercredi',
-  jeu: 'Jeudi', ven: 'Vendredi', sam: 'Samedi', dim: 'Dimanche',
 };
 
 function toJoursNums(joursFixe: string | string[]): Set<number> {
   const jours = Array.isArray(joursFixe) ? joursFixe : [joursFixe];
   return new Set(jours.map(j => JOURS_NUM[j] ?? 1));
-}
-
-// Accepte un ou plusieurs jours
-export function calculerNombreSeances(
-  dateDebut: string,
-  dateFin: string,
-  joursFixe: string | string[]
-): number {
-  const joursNums = toJoursNums(joursFixe);
-  let count = 0;
-  const current = new Date(dateDebut);
-  const fin = new Date(dateFin);
-  while (current <= fin) {
-    if (joursNums.has(current.getDay())) count++;
-    current.setDate(current.getDate() + 1);
-  }
-  return count;
-}
-
-export function calculerDateFin(
-  dateDebut: string,
-  joursFixe: string | string[],
-  nbSeances: number
-): string {
-  if (nbSeances <= 0) return dateDebut;
-  const joursNums = toJoursNums(joursFixe);
-  let count = 0;
-  const current = new Date(dateDebut);
-  while (count < nbSeances) {
-    if (joursNums.has(current.getDay())) count++;
-    if (count < nbSeances) current.setDate(current.getDate() + 1);
-  }
-  return current.toISOString().split('T')[0];
 }
 
 // Estimation du nombre de séances sur une période, à partir d'une fréquence
@@ -377,7 +313,7 @@ export function calculerDebutReprise(aujourdhuiStr: string, dateReprisePrevue?: 
   return aujourdhuiStr;
 }
 
-export function lundiDeLaSemaine(dateStr: string): string {
+function lundiDeLaSemaine(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00');
   const dow = d.getDay();
   const back = dow === 0 ? 6 : dow - 1;
@@ -412,20 +348,6 @@ export function estSemaineDue(
   );
   const semaineIndex = Math.round(diffJours / 7);
   return ((semaineIndex % cycle) + cycle) % cycle === 0;
-}
-
-// Pour des dates déjà triées chronologiquement (ex : genererDatesSeances),
-// renvoie le rang 0-based de chaque date au sein de sa semaine (lundi-dimanche)
-// — utilisé pour appliquer une durée individuelle par séance de la semaine
-// (Contrat.dureesSeances : séance 1, séance 2...).
-export function indexerParSemaine(dates: string[]): number[] {
-  const compteurParSemaine = new Map<string, number>();
-  return dates.map(date => {
-    const semaine = lundiDeLaSemaine(date);
-    const i = compteurParSemaine.get(semaine) ?? 0;
-    compteurParSemaine.set(semaine, i + 1);
-    return i;
-  });
 }
 
 // ── Séances restant à planifier (indicateur carte bénéficiaire) ──────────────

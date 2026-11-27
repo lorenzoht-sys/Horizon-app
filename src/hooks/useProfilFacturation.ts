@@ -21,7 +21,7 @@ import {
 // On n'écrit QUE les colonnes de facturation (formulaireVersMiseAJour), jamais un `select *`
 // renvoyé tel quel : l'identité reste la propriété de la page Paramètres.
 
-export type ResultatEnregistrement =
+type ResultatEnregistrement =
   | { ok: true }
   | { ok: false; message: string; erreurs?: ErreursFormulaire };
 

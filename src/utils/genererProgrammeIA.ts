@@ -24,7 +24,7 @@ import {
 
 // ─── Types (déplacés depuis ProgrammePage.tsx — importés par les deux appelants) ──
 
-export interface ConfigGenerationIA {
+interface ConfigGenerationIA {
   objectif: string;
   frequence: number;
   duree: number;
@@ -66,9 +66,8 @@ export interface ProgrammeIA {
 // ─── Contexte patient ─────────────────────────────────────────────────────────
 
 // Typé sur ParticipantIA (liste blanche, pseudonymiserIA.ts) : le prénom, le
-// nom et la date de naissance ne sont pas lisibles ici. Exporté pour le test
-// de non-fuite de l'identité.
-export function buildContextePatient(patient: ParticipantIA, dernierBilan: Bilan | null): string {
+// nom et la date de naissance ne sont pas lisibles ici.
+function buildContextePatient(patient: ParticipantIA, dernierBilan: Bilan | null): string {
   const age = libelleAgeIA(patient.age);
   const traitements = (patient.traitements ?? []).map(t => t.nom).filter(Boolean).join(', ');
   const antecedents = [patient.antecedentsMedicaux, patient.antecedentsChirurgicaux].filter(Boolean).join(' · ');
@@ -169,10 +168,9 @@ Réponds UNIQUEMENT en JSON valide (aucun backtick, aucun commentaire) avec cett
 
 // ─── Étape 2 — Génération structurée ──────────────────────────────────────────
 
-/** Exporté pour le test de non-fuite de l'identité. `programmesExistants` :
- *  leurs noms ont pu être générés avec le prénom avant ce chantier, d'où le
+/** `programmesExistants` : leurs noms ont pu être générés avec le prénom avant ce chantier, d'où le
  *  masquage par l'appelant (genererProgrammeStructure). */
-export function construirePrompt(
+function construirePrompt(
   patient: ParticipantIA,
   config: ConfigGenerationIA,
   reponsesClarification: string,
@@ -359,7 +357,7 @@ export async function genererProgrammeStructure(
 
 // ─── Étape 3 — Mapping vers createProgramme() (useProgrammeV2.ts) ────────────
 
-export interface PayloadCreateProgramme {
+interface PayloadCreateProgramme {
   nom: string;
   objectif?: string;
   messageMotivation?: string;

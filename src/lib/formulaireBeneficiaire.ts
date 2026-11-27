@@ -7,7 +7,7 @@ import type { AutonomieData } from '../types';
 
 // ─── IMC ──────────────────────────────────────────────────────────────────────
 
-export interface CategorieIMC {
+interface CategorieIMC {
   label: string;
   couleur: string;
 }

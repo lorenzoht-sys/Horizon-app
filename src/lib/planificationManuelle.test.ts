@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Seance } from '../types';
 import {
-  calculerFutures, estDeplacementNoop, estDeplacementExistant,
+  calculerFutures, estDeplacementNoop,
   planDeplacerUnique, planDeplacerSerie, planEditerUnique, planEditerSerie,
   planSupprimerUnique, planSupprimerSerie, planActionSurSelection, optionsPorteePourAction, executerOperations,
 } from './planificationManuelle';
@@ -517,13 +517,6 @@ describe('Cas 11 — intégrité générale : jamais de création, déplacement/
     for (const op of toutesLesOperations) {
       expect(['update', 'delete']).toContain(op.type);
     }
-  });
-});
-
-describe('Cas 12 — la création normale (glisser un bénéficiaire) fonctionne toujours', () => {
-  it('estDeplacementExistant distingue correctement les deux gestes de drag', () => {
-    expect(estDeplacementExistant({ type: 'nouvelle' })).toBe(false);
-    expect(estDeplacementExistant({ type: 'existante', seanceId: 'x' })).toBe(true);
   });
 });
 

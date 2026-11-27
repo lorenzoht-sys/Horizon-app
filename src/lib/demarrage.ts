@@ -248,7 +248,7 @@ export function doitAfficherGuide(params: {
 // à mettre à jour si un libellé change). Le mobile a parfois d'autres écrans,
 // d'où deux jeux de gestes.
 
-export interface GuideEtape {
+interface GuideEtape {
   /** Pourquoi c'est utile, en une ou deux phrases. */
   pourquoi: string;
   /** Les gestes à faire, dans l'ordre. */
@@ -347,7 +347,7 @@ export function phraseManquesFacturation(manquants: string[]): string | null {
   return `Il manque encore : ${liste}.${identite ? ' Le SIRET et le nom se renseignent dans « Paramètres ».' : ''}`;
 }
 
-export type Destination =
+type Destination =
   | { type: 'route'; url: string }
   | { type: 'installation' };
 

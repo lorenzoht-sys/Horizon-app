@@ -27,7 +27,7 @@ export interface FactureEnvoi {
   destinataire: { email?: string | null };
 }
 
-export interface MessageResend {
+interface MessageResend {
   from: string;
   to: string[];
   reply_to?: string;

@@ -16,7 +16,7 @@ export interface RappelPreferences {
   rappelJourSeanceHeure: string; // "HH:MM" (colonne TIME, secondes tronquées pour l'UI)
 }
 
-export const RAPPEL_PREFS_DEFAUT: RappelPreferences = {
+const RAPPEL_PREFS_DEFAUT: RappelPreferences = {
   rappelSeanceActif: true,
   rappelSeanceDelaiHeures: 2,
   rappelJourSeanceActif: true,

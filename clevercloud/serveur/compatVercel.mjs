@@ -15,7 +15,7 @@ const TAILLE_MAX_CORPS = 1_000_000; // 1 Mo : les routes n'échangent que du JSO
 export class CorpsTropGros extends Error {}
 
 /** Lit le corps et le décode comme Vercel : JSON, texte ou formulaire. */
-export async function lireCorps(req) {
+async function lireCorps(req) {
   if (req.method === 'GET' || req.method === 'HEAD') return undefined;
   const morceaux = [];
   let taille = 0;

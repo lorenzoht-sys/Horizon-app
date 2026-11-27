@@ -14,7 +14,7 @@ import {
 // Vercel plafonne le nombre de fonctions. La règle « quelles factures comptent » est dans la fonction SQL.
 // Les saisies externes ne sont PAS des pièces comptables : on les modifie et on les supprime librement.
 
-export interface Beneficiaire { id: string; nom: string }
+interface Beneficiaire { id: string; nom: string }
 
 export function useChiffreAffaires(mois: string) {
   const [lignes, setLignes] = useState<LigneCA[]>([]);

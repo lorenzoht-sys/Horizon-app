@@ -12,7 +12,7 @@ export interface SeanceActive {
   progNom: string;
 }
 
-export interface ExState {
+interface ExState {
   id: string;
   realise: boolean | null;
   commentaire: string;

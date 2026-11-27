@@ -119,7 +119,7 @@ export function entreesCoursDuParticipant(
 
 // ── Présence ANNONCÉE par les bénéficiaires (vue praticien) ─────────────────
 
-export interface ResumeAnnonces {
+interface ResumeAnnonces {
   vient: number;
   neVientPas: number;
   /** Pas de réponse : ceux à relancer. */
@@ -162,7 +162,7 @@ export function libelleCompactAnnonces(r: ResumeAnnonces): string {
 
 // ── Synthèse d'assiduité (dossier PDF) ──────────────────────────────────────
 
-export interface SyntheseCours {
+interface SyntheseCours {
   realises: number;
   presents: number;
   absents: number;

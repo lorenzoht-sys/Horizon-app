@@ -50,7 +50,8 @@ l'instant.
 2. **Cinq bibliothèques PDF** pour des usages voisins : `@react-pdf/renderer`
    (exports), `jspdf` + `html2canvas` (rapport d'évolution, statistiques),
    `pdfmake` (assistant : 1,8 Mo à lui seul), `pdf-lib` (formulaires, serveur),
-   `pdfjs-dist` + `mammoth` (lecture de modèles).
+   `pdfjs-dist` + `mammoth` (lecture de modèles, retirées le 27/11/2026 : leur
+   seul appelant n'était plus utilisé).
 3. **L'image Docker de Clever Cloud embarque 545 Mo de bibliothèques**, dont le
    serveur n'utilise que 8 (Supabase, pdf-lib, fontkit, date-fns, Sentry,
    web-push, jose, ical-generator) : ≈ 136 Mo. Déploiements plus lents, sans

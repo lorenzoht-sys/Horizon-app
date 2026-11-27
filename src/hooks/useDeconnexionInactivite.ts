@@ -5,7 +5,7 @@ import {
   DELAI_INACTIVITE_MS,
 } from '../lib/inactivite';
 
-export type EtatConnexion = 'inconnu' | 'connecte' | 'deconnecte';
+type EtatConnexion = 'inconnu' | 'connecte' | 'deconnecte';
 
 const ID_TOAST_PREAVIS = 'preavis-inactivite';
 // Écrire dans localStorage à chaque mouvement serait inutilement coûteux.

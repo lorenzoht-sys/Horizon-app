@@ -3,7 +3,7 @@ import { CLS_CELL, CLS_LABEL } from './communs';
 
 // ─── CONTACTS SANTÉ (médecin traitant, kiné...) — Aide à domicile ──────────────
 
-export const OPTIONS_PROFESSION_SANTE = ['Médecin traitant', 'Kinésithérapeute', 'Infirmier(e)', 'Autre'];
+const OPTIONS_PROFESSION_SANTE = ['Médecin traitant', 'Kinésithérapeute', 'Infirmier(e)', 'Autre'];
 
 export function ContactsSanteForm({
   value,

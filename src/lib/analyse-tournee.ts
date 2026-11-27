@@ -9,7 +9,7 @@ const RAYON_ZONE_KM = 5;
 const HEURE_DEBUT_TRAVAIL = '08:00'; // plage de travail du praticien — début
 const HEURE_FIN_TRAVAIL   = '19:00'; // plage de travail du praticien — fin
 
-export interface CreneauLibre {
+interface CreneauLibre {
   jourSemaine: number;        // 0=dim…6=sam (JS Date.getDay())
   nomJour: string;            // 'Lundi', 'Mardi'…
   heureDebut: string;
@@ -75,133 +75,13 @@ const DOW_TO_DISPO: Record<number, string> = {
   0: 'Dim', 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam',
 };
 
-export type DisposPatient = {
+type DisposPatient = {
   joursDisponibles?: string[];
   creneauxParJour?: Record<string, { debut: string; fin: string }[]>;
 };
 
 // Slot interne incluant le participantId pour la marge dynamique.
 type SlotInternal = { debut: number; fin: number; participantId: string };
-
-/**
- * Créneaux libres récurrents sur l'ensemble du planning de Pierre (sans filtre zone).
- * Utilisé en fallback quand aucune séance n'existe dans la zone du nouveau patient.
- * Même logique que getTrousRecurrents mais toutes séances confondues.
- */
-export function getCreneauxLibresGlobal(
-  seances: Seance[],
-  participants: Participant[],
-  newPatientCoords?: { lat: number; lng: number },
-  newPatientDispos?: DisposPatient,
-  indisponibilites?: JourSemaine[],
-): CreneauLibre[] {
-  const seancesActives = seances.filter(s => s.statut !== 'annulee');
-  if (seancesActives.length === 0) return [];
-
-  const participantParId = new Map<string, Participant>();
-  for (const p of participants) participantParId.set(p.id, p);
-
-  const parJour = new Map<number, SlotInternal[]>();
-  const datesParJour = new Map<number, Set<string>>();
-  for (const s of seancesActives) {
-    const dow = new Date(s.date + 'T12:00').getDay();
-    const slots = parJour.get(dow) ?? [];
-    slots.push({ debut: heureEnMinutes(s.heureDebut), fin: heureEnMinutes(s.heureFin), participantId: s.participantId });
-    parJour.set(dow, slots);
-    const dates = datesParJour.get(dow) ?? new Set();
-    dates.add(s.date);
-    datesParJour.set(dow, dates);
-  }
-
-  const debutTravailMin = heureEnMinutes(HEURE_DEBUT_TRAVAIL);
-  const finTravailMin   = heureEnMinutes(HEURE_FIN_TRAVAIL);
-  const result: CreneauLibre[] = [];
-  const DEBUG_JOURS = new Set([1, 2, 3, 4]); // Lun–Jeu pour Paruit
-
-  for (const [dow, slots] of parJour) {
-    const nbDates = datesParJour.get(dow)?.size ?? 0;
-    if (nbDates < 2) {
-      if (DEBUG_JOURS.has(dow)) console.log(`[PARUIT][${NOMS_JOURS[dow]}] IGNORÉ — seulement ${nbDates} date(s) (seuil=2)`);
-      continue;
-    }
-
-    slots.sort((a, b) => a.debut - b.debut);
-    const fusionnes: SlotInternal[] = [];
-    for (const s of slots) {
-      if (fusionnes.length === 0 || s.debut > fusionnes[fusionnes.length - 1].fin) {
-        fusionnes.push({ ...s });
-      } else {
-        const last = fusionnes[fusionnes.length - 1];
-        if (s.fin > last.fin) {
-          last.fin = s.fin;
-          last.participantId = s.participantId;
-        }
-      }
-    }
-
-    if (DEBUG_JOURS.has(dow)) {
-      console.log(`[PARUIT][${NOMS_JOURS[dow]}] séances fusionnées (${nbDates} dates) :`,
-        fusionnes.map(f => `${minutesEnHeure(f.debut)}-${minutesEnHeure(f.fin)}`).join(', '));
-    }
-
-    const troursAvant: string[] = [];
-    if (fusionnes[0].debut - debutTravailMin >= TROU_MIN_SUGGESTION_MINUTES) {
-      result.push({ jourSemaine: dow, nomJour: NOMS_JOURS[dow], heureDebut: HEURE_DEBUT_TRAVAIL, heureFin: minutesEnHeure(fusionnes[0].debut), dureeMinutes: fusionnes[0].debut - debutTravailMin });
-      troursAvant.push(`08:00-${minutesEnHeure(fusionnes[0].debut)} (${fusionnes[0].debut - debutTravailMin}min)`);
-    }
-    for (let i = 0; i < fusionnes.length - 1; i++) {
-      const coordsPrev = participantParId.get(fusionnes[i].participantId)?.coordonnees;
-      const marge = margeTrajet(coordsPrev, newPatientCoords);
-      const debutCreneau = arrondirA5Min(fusionnes[i].fin + marge);
-      const gap = fusionnes[i + 1].debut - debutCreneau;
-      if (DEBUG_JOURS.has(dow)) {
-        console.log(`[PARUIT][${NOMS_JOURS[dow]}] trou entre séances : fin=${minutesEnHeure(fusionnes[i].fin)} +marge${marge}min → debut=${minutesEnHeure(debutCreneau)}, gap=${gap}min (seuil=${TROU_MIN_SUGGESTION_MINUTES}min) → ${gap >= TROU_MIN_SUGGESTION_MINUTES ? 'RETENU' : 'REJETÉ'}`);
-      }
-      if (gap >= TROU_MIN_SUGGESTION_MINUTES) {
-        result.push({ jourSemaine: dow, nomJour: NOMS_JOURS[dow], heureDebut: minutesEnHeure(debutCreneau), heureFin: minutesEnHeure(fusionnes[i + 1].debut), dureeMinutes: gap });
-        troursAvant.push(`${minutesEnHeure(debutCreneau)}-${minutesEnHeure(fusionnes[i + 1].debut)} (${gap}min)`);
-      }
-    }
-    const last = fusionnes[fusionnes.length - 1];
-    const coordsPrev = participantParId.get(last.participantId)?.coordonnees;
-    const margeApres = margeTrajet(coordsPrev, newPatientCoords);
-    const debutApres = arrondirA5Min(last.fin + margeApres);
-    const gapApres = finTravailMin - debutApres;
-    if (DEBUG_JOURS.has(dow)) {
-      console.log(`[PARUIT][${NOMS_JOURS[dow]}] trou après dernière séance : fin=${minutesEnHeure(last.fin)} +marge${margeApres}min → debut=${minutesEnHeure(debutApres)}, gap=${gapApres}min → ${gapApres >= TROU_MIN_SUGGESTION_MINUTES ? 'RETENU' : 'REJETÉ'}`);
-    }
-    if (gapApres >= TROU_MIN_SUGGESTION_MINUTES) {
-      result.push({ jourSemaine: dow, nomJour: NOMS_JOURS[dow], heureDebut: minutesEnHeure(debutApres), heureFin: HEURE_FIN_TRAVAIL, dureeMinutes: gapApres });
-      troursAvant.push(`${minutesEnHeure(debutApres)}-19:00 (${gapApres}min)`);
-    }
-  }
-
-  const sorted = result.sort((a, b) =>
-    a.jourSemaine !== b.jourSemaine ? a.jourSemaine - b.jourSemaine : a.heureDebut.localeCompare(b.heureDebut)
-  );
-
-  const filtres = filtrerParIndispos(sorted, indisponibilites);
-
-  if (!newPatientDispos) return filtres;
-
-  const { joursDisponibles = [], creneauxParJour = {} } = newPatientDispos;
-  const final = filtres.filter(c => {
-    const cleJour = DOW_TO_DISPO[c.jourSemaine];
-    if (!cleJour) return false;
-    if (joursDisponibles.length > 0 && !joursDisponibles.includes(cleJour)) return false;
-    const slots = creneauxParJour[cleJour];
-    if (!slots || slots.length === 0) return true;
-    const debutC = heureEnMinutes(c.heureDebut);
-    const finC   = heureEnMinutes(c.heureFin);
-    const ok = slots.some(s => heureEnMinutes(s.debut) < finC && heureEnMinutes(s.fin) > debutC);
-    if (DEBUG_JOURS.has(c.jourSemaine)) {
-      console.log(`[PARUIT][${c.nomJour}] trou ${c.heureDebut}-${c.heureFin} vs dispos Paruit [${slots.map(s=>`${s.debut}-${s.fin}`).join(',')}] → ${ok ? 'GARDÉ' : 'FILTRÉ'}`);
-    }
-    return ok;
-  });
-  console.log(`[PARUIT] résultat final : ${final.length} créneau(x) proposé(s)`, final.map(c => `${c.nomJour} ${c.heureDebut}-${c.heureFin}`));
-  return final;
-}
 
 export function getTrousRecurrents(
   seances: Seance[],

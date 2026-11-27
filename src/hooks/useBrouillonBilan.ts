@@ -40,18 +40,6 @@ export function setCurrentUserId(id: string | null): void {
   _currentUserId = id;
 }
 
-/** Supprime tous les brouillons du localStorage (toutes clés bilan_*) */
-export function clearAllBrouillons(): void {
-  const toRemove: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && (key.startsWith('brouillon_bilan_') || key.startsWith('bilan_en_cours_'))) {
-      toRemove.push(key);
-    }
-  }
-  toRemove.forEach(k => localStorage.removeItem(k));
-}
-
 const cle = (participantId: string) =>
   `brouillon_bilan_${_currentUserId ?? 'anon'}_${participantId}`;
 
@@ -60,7 +48,7 @@ export function getBilanEnCoursKey(participantId: string): string {
   return `bilan_en_cours_${_currentUserId ?? 'anon'}_${participantId}`;
 }
 
-export function calculerCompletion(data: Partial<BilanForm>): number {
+function calculerCompletion(data: Partial<BilanForm>): number {
   const vals = [
     data.equilibre?.droite, data.equilibre?.gauche,
     data.chairStand30,

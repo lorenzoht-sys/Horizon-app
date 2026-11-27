@@ -3,8 +3,8 @@ import type { TraitementPatient, AntecedentMedical, TypeAntecedent, MomentPrise 
 import { TYPES_ANTECEDENT_LABELS, MOMENTS_PRISE_LABELS } from '../../../types';
 import { CLS_CELL, genId } from './communs';
 
-export const FREQUENCES_TRAITEMENT = ['1x/jour', '2x/jour', '3x/jour', 'À la demande', 'Autre'];
-export const MOMENTS_PRISE: MomentPrise[] = ['matin', 'midi', 'soir', 'nuit', 'avant_repas', 'apres_repas'];
+const FREQUENCES_TRAITEMENT = ['1x/jour', '2x/jour', '3x/jour', 'À la demande', 'Autre'];
+const MOMENTS_PRISE: MomentPrise[] = ['matin', 'midi', 'soir', 'nuit', 'avant_repas', 'apres_repas'];
 
 export function ListeTraitementsForm({
   value,
@@ -146,7 +146,7 @@ export function ListeTraitementsForm({
   );
 }
 
-export const TYPES_ANTECEDENT: TypeAntecedent[] = [
+const TYPES_ANTECEDENT: TypeAntecedent[] = [
   'pathologie_chronique', 'chirurgie', 'fracture', 'prothese', 'hospitalisation', 'accident', 'autre',
 ];
 

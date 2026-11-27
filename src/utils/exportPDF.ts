@@ -58,7 +58,7 @@ export async function exportFicheBilanBeneficiairePDF(
 // normalisés vers la même forme avant le rendu (src/lib/programmePDF.ts),
 // ProgrammePDF.tsx ne connaît que cette forme unique.
 
-export interface ExportProgrammeData {
+interface ExportProgrammeData {
   programme: Programme | ProgrammeV2;
   exercices: Exercice[];
   participant: Participant;

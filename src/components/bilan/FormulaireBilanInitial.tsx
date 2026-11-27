@@ -41,7 +41,7 @@ export interface FormulaireFlat {
 
 // ─── Interfaces listes dynamiques ────────────────────────────────────────────
 
-export interface OperationMedicale {
+interface OperationMedicale {
   id: string;
   type: string;
   date?: string;

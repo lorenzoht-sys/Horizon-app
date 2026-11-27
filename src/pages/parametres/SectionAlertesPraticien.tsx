@@ -19,7 +19,7 @@ import { SectionTitle } from './communs';
 // que par un appel à une route API — le praticien a déjà une session
 // Supabase, contrairement au bénéficiaire (jeton JWT maison).
 
-export type EtatAlertesPraticien = 'verification' | 'actif' | 'inactif' | 'ios' | 'non_supporte' | 'refuse' | 'erreur';
+type EtatAlertesPraticien = 'verification' | 'actif' | 'inactif' | 'ios' | 'non_supporte' | 'refuse' | 'erreur';
 
 export function SectionAlertesPraticien() {
   const [etat, setEtat] = useState<EtatAlertesPraticien>('verification');

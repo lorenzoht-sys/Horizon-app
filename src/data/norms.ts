@@ -53,12 +53,3 @@ export const NORMS = {
   tm6: { min: 0, mid: 400, max: 700 },
   memoire: { min: 0, mid: 3, max: 5 },
 };
-
-export const RADAR_LABELS = [
-  'Équilibre',
-  'Force MI',
-  'Force Mains',
-  'Mobilité',
-  'Souplesse',
-  'Endurance',
-];

@@ -20,7 +20,7 @@ const hmac = (cle, texte) => crypto.createHmac('sha256', cle).update(texte).dige
 const sha256 = donnees => crypto.createHash('sha256').update(donnees).digest('hex');
 
 /** Encodage RFC 3986 exigé par la signature V4 (encodeURIComponent laisse !'()* ). */
-export function encoder(texte) {
+function encoder(texte) {
   return encodeURIComponent(texte).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 const encoderChemin = chemin => chemin.split('/').map(encoder).join('/');

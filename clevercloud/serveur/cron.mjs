@@ -11,7 +11,7 @@
 // Ne JAMAIS activer CRON_INTERNE tant que le job pg_cron tourne encore sur
 // la même base : les deux déclencheurs s'additionneraient.
 
-export const MINUTE_DECLENCHEMENT = 15;
+const MINUTE_DECLENCHEMENT = 15;
 
 /** Délai (ms) jusqu'au prochain passage à HH:15:00. */
 export function delaiAvantProchainPassage(maintenant = new Date()) {

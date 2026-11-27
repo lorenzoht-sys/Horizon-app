@@ -8,7 +8,7 @@ import { IconChevronRight } from '@tabler/icons-react';
 
 // ── EcranPatients ─────────────────────────────────────────────────────────────
 
-export type FiltrePatients = 'tous' | 'ci' | 'bilan' | 'seance';
+type FiltrePatients = 'tous' | 'ci' | 'bilan' | 'seance';
 
 export function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => void }) {
   const { participantsActifs: participants } = useParticipants();

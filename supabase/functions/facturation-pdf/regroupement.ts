@@ -28,7 +28,7 @@ export interface LigneRegroupable {
   seanceType?: string | null;
 }
 
-export const LIBELLE_ACCOMPAGNEMENT = 'Accompagnement en activité physique adaptée';
+const LIBELLE_ACCOMPAGNEMENT = 'Accompagnement en activité physique adaptée';
 
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 

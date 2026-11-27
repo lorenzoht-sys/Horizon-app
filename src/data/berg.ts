@@ -1,6 +1,6 @@
 import type { BergData, BergScore } from '../types';
 
-export interface BergItemDef {
+interface BergItemDef {
   index: number;
   label: string;
   options: { v: BergScore; label: string }[];
@@ -149,10 +149,6 @@ export const BERG_ITEMS: BergItemDef[] = [
   },
 ];
 
-export function emptyBergData(): BergData {
-  return { items: Array(14).fill(null) };
-}
-
 export function computeBergScore(berg: BergData | null | undefined): number | null {
   if (!berg) return null;
   const filled = berg.items.filter((v): v is BergScore => v !== null);
@@ -160,11 +156,3 @@ export function computeBergScore(berg: BergData | null | undefined): number | nu
   return filled.reduce((s, v) => s + v, 0 as number);
 }
 
-export type BergRisque = 'faible' | 'modere' | 'eleve';
-
-export function bergRisque(score: number | null): BergRisque | null {
-  if (score === null) return null;
-  if (score >= 49) return 'faible';
-  if (score >= 45) return 'modere';
-  return 'eleve';
-}

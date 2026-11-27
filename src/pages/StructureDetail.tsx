@@ -27,7 +27,7 @@ function premierJour(y: number, m: number) { return `${y}-${String(m).padStart(2
 function dernierJour(y: number, m: number) { const d = new Date(y, m, 0); return d.toISOString().slice(0, 10); }
 function moisPrec(y: number, m: number) { return m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 }; }
 
-// Chargement différé : pdfjs-dist/mammoth/docx sont lourds, à ne charger
+// Chargement différé : pdf-lib est lourd, à ne charger
 // que si Pierre clique réellement sur "Générer un compte rendu".
 const GenererCompteRenduModal = lazy(() => import('../components/structures/GenererCompteRenduModal'));
 

@@ -10,7 +10,5 @@ export const lirePraticien = (id: string, colonnes: string) => table().select(co
 /** Crée ou met à jour le profil et renvoie la ligne complète. */
 export const enregistrerPraticien = (ligne: object) => table().upsert(ligne).select().single();
 
-export const creerPraticien = (ligne: object) => table().insert(ligne);
-
 export const majTokenPlanning = (id: string, token: string) =>
   clientSupabase().from('praticiens').update({ token_planning_ics: token }).eq('id', id);

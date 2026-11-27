@@ -139,7 +139,7 @@ export function erreurEtape(etape: Etape, r: ReponsesOnboarding): string | null 
 }
 
 /** Adresse complète (les trois morceaux), condition du profil de facturation. */
-export function adresseComplete(r: ReponsesOnboarding): boolean {
+function adresseComplete(r: ReponsesOnboarding): boolean {
   return !vide(r.adresseRue) && /^\d{5}$/.test(r.adresseCodePostal.trim()) && !vide(r.adresseVille);
 }
 

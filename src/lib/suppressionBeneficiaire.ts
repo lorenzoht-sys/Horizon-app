@@ -5,7 +5,7 @@
 // déjà rédigé pour le praticien et compté ; on le reprend tel quel. Une autre contrainte de clé étrangère
 // (filet de sécurité) reçoit une phrase équivalente. Tout autre refus garde son texte, préfixé.
 
-export interface ErreurBase {
+interface ErreurBase {
   message: string;
   code?: string;
 }

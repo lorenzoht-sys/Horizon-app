@@ -20,12 +20,12 @@ const IADL_ITEMS: { key: keyof IadlData; label: string }[] = [
   { key: 'argent',        label: 'Gestion des finances' },
 ];
 
-export const EMPTY_ADL: AdlData = {
+const EMPTY_ADL: AdlData = {
   bain: false, habillage: false, toilette: false,
   transfert: false, continence: false, alimentation: false,
 };
 
-export const EMPTY_IADL: IadlData = {
+const EMPTY_IADL: IadlData = {
   telephone: false, courses: false, cuisine: false, menage: false,
   linge: false, transport: false, medicaments: false, argent: false,
 };

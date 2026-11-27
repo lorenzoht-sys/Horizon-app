@@ -17,13 +17,13 @@ export interface LogHistorique {
  *  façon et se règlent avec la même règle de regroupement.
  *  entries[0] = version la plus récente ; les suivantes sont les versions
  *  antérieures (dont la version d'origine), repliables sous la première. */
-export interface FilHistorique {
+interface FilHistorique {
   question: string;
   entries: LogHistorique[];
   derniereActivite: string;
 }
 
-export interface GroupeBeneficiaire {
+interface GroupeBeneficiaire {
   patientId: string | null;
   fils: FilHistorique[];
   derniereActivite: string;

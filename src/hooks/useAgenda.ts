@@ -16,7 +16,6 @@ function addMinutes(heure: string, minutes: number): string {
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 
-export { addMinutes };
 
 export function useAgenda() {
   const [seances, setSeances] = useState<Seance[]>([]);

@@ -7,7 +7,7 @@
 // qu'interimTranscript. Plutôt que de perdre ce texte silencieusement, on
 // l'utilise en repli.
 
-export interface ResultatTranscription {
+interface ResultatTranscription {
   texte: string | null;
   aUtiliseSecoursInterim: boolean;
 }

@@ -31,14 +31,6 @@ export function jourLocal(d: Date = new Date()): string {
 }
 
 /**
- * Le prochain cours à venir : planifié, aujourd'hui ou plus tard, le plus proche.
- * (Même règle que « prochain rendez-vous » : la date compte, pas l'heure.)
- */
-export function prochainCours(cours: CoursPatientRecord[], aujourdhui: string): CoursPatientRecord | null {
-  return prochainsCours(cours, aujourdhui, 1)[0] ?? null;
-}
-
-/**
  * Les prochains cours à venir (planifiés, aujourd'hui ou plus tard), du plus proche au plus
  * lointain, au plus `n` : ceux auxquels le bénéficiaire peut répondre « Je viens / Je ne
  * viens pas ». Un groupe hebdomadaire peut vouloir répondre plusieurs semaines à l'avance.

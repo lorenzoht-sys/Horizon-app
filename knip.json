@@ -19,9 +19,6 @@
     "tests/**/*.ts",
     "supabase/functions/**/*.ts"
   ],
-  "ignoreFiles": [
-    "src/pages/RegisterPage.tsx"
-  ],
   "ignoreDependencies": [
     "buffer"
   ],

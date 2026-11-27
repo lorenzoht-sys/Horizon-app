@@ -10,7 +10,7 @@ import type { Bilan } from '../types';
  * module est la source unique des libellés, partagée par la saisie et ces restitutions.
  */
 
-export type ApleyResultat = NonNullable<Bilan['apley']>;
+type ApleyResultat = NonNullable<Bilan['apley']>;
 export type CoteApley = 'haut_d' | 'haut_g' | 'bas_d' | 'bas_g';
 
 export interface NiveauApley { key: string; label: string; sub: string; score: number }

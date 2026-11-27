@@ -25,9 +25,9 @@
 
 /** Ce qui a echoue. Chaque cas a son message : « absent » et « invalide »
  *  demandent deux gestes differents a l'utilisateur. */
-export type EchecSiret = 'absent' | 'format' | 'longueur' | 'cle';
+type EchecSiret = 'absent' | 'format' | 'longueur' | 'cle';
 
-export interface ResultatSiret {
+interface ResultatSiret {
   valide: boolean;
   /** Saisie normalisee (espaces retires), a enregistrer telle quelle. */
   siret: string;

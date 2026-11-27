@@ -6,13 +6,13 @@ import { libellesSignalementAbsence } from '../../lib/libellesSignalementAbsence
 import { patientAnnoncerPresence, patientSignalerAbsence } from '../../lib/patientApi';
 import { C, fmt, fmtCourt, fmtHeure } from './communs';
 
-export const MESSAGE_ECHEC_ANNONCE = "Votre réponse n'a pas pu être enregistrée. Réessayez.";
+const MESSAGE_ECHEC_ANNONCE = "Votre réponse n'a pas pu être enregistrée. Réessayez.";
 
 // « Je viens » / « Je ne viens pas », modifiable jusqu'au DÉBUT du cours. Distinct de la présence
 // que constate le praticien le jour du cours. Mise à jour immédiate, retour en arrière si
 // l'enregistrement échoue ; si le serveur dit que le cours a commencé (409), les boutons
 // disparaissent. Le serveur fait foi : rien de ce qui s'affiche ici n'autorise quoi que ce soit.
-export function BoutonsPresence({ cours, token, maintenantMs, sombre, onReponse }: {
+function BoutonsPresence({ cours, token, maintenantMs, sombre, onReponse }: {
   cours: CoursPatientRecord;
   token: string;
   maintenantMs: number;
@@ -102,8 +102,8 @@ export function BoutonsPresence({ cours, token, maintenantMs, sombre, onReponse 
   );
 }
 
-export const MESSAGE_ECHEC_SIGNALEMENT = "Votre signalement n'a pas pu être enregistré. Réessayez.";
-export const MESSAGE_TROP_DE_TENTATIVES = 'Trop de tentatives pour le moment — merci de réessayer dans quelques minutes.';
+const MESSAGE_ECHEC_SIGNALEMENT = "Votre signalement n'a pas pu être enregistré. Réessayez.";
+const MESSAGE_TROP_DE_TENTATIVES = 'Trop de tentatives pour le moment — merci de réessayer dans quelques minutes.';
 
 // « Prévenir mon praticien de mon absence » / rétractation, pour la prochaine séance
 // individuelle planifiée — même patron que BoutonsPresence (cours
@@ -223,13 +223,13 @@ export function CarteAutresCoursAVenir({ cours, token, maintenantMs, onReponse }
   );
 }
 
-export const COULEURS_PRESENCE_PATIENT: Record<PresenceCoursPatient, { fond: string; texte: string }> = {
+const COULEURS_PRESENCE_PATIENT: Record<PresenceCoursPatient, { fond: string; texte: string }> = {
   present: { fond: '#DCFCE7', texte: '#166534' },
   absent:  { fond: '#FEF0EF', texte: '#B42318' },
   excuse:  { fond: '#FEF5E7', texte: '#92400E' },
 };
 
-export const NB_COURS_VISIBLES = 5;
+const NB_COURS_VISIBLES = 5;
 
 export function CarteMesCours({ cours }: { cours: CoursPatientRecord[] }) {
   const [toutVoir, setToutVoir] = useState(false);

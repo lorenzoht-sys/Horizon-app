@@ -5,7 +5,7 @@
 // ModalPresenceCoursCollectif pour que la saisie (la modale) et la lecture (fiche
 // du bénéficiaire, journal) parlent exactement le même langage.
 
-export interface NiveauRessenti {
+interface NiveauRessenti {
   label: string;
   valeur: number;
   couleur: string;

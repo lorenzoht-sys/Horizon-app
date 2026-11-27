@@ -65,7 +65,7 @@ function rowToProgrammeV2(
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
-export interface SeancesAutonomesStats {
+interface SeancesAutonomesStats {
   count: number;
   dates: string[];
 }

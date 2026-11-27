@@ -12,7 +12,7 @@ import { C, fmt, fmtCourt, fmtHeure, fmtMoisAnnee, loadPraticien } from './commu
 
 // L'heure change pendant que la page est ouverte : à l'heure du cours, les boutons doivent
 // disparaître sans que le bénéficiaire ait à recharger. (Le serveur refuse de toute façon.)
-export function useMaintenant(pasMs: number = 30_000): number {
+function useMaintenant(pasMs: number = 30_000): number {
   const [maintenant, setMaintenant] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setMaintenant(Date.now()), pasMs);

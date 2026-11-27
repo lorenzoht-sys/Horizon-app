@@ -32,7 +32,7 @@ export function ajouterJours(jour: string, n: number): string {
   return new Date(versUtc(jour) + n * 86400000).toISOString().slice(0, 10);
 }
 
-export function ecartJours(de: string, a: string): number {
+function ecartJours(de: string, a: string): number {
   return Math.round((versUtc(a) - versUtc(de)) / 86400000);
 }
 
@@ -69,12 +69,12 @@ export function formaterHeures(minutes: number): string {
 // ─── Présence ────────────────────────────────────────────────────────────────
 
 /** Taux de présence : réalisées / (réalisées + annulées). Null s'il n'y a rien à compter. */
-export function taux(realisees: number, annulees: number): number | null {
+function taux(realisees: number, annulees: number): number | null {
   const total = realisees + annulees;
   return total > 0 ? Math.round((realisees / total) * 100) : null;
 }
 
-export interface Presence {
+interface Presence {
   realisees: number;
   annulees: number;
   /** Séances passées restées « planifiées » : ni réalisées ni annulées, donc non comptées. */
@@ -126,7 +126,7 @@ export function activiteMoisADate(seances: readonly SeanceStat[], cours: readonl
   };
 }
 
-export interface Semaine {
+interface Semaine {
   /** Lundi de la semaine. */
   debut: string;
   /** « 17/11 » */
@@ -163,11 +163,11 @@ export function semaines(seances: readonly SeanceStat[], cours: readonly CoursSt
 // ─── Argent ──────────────────────────────────────────────────────────────────
 
 /** Ligne de chiffre_affaires_mensuel (factures émises au mois de la prestation, HT, + CA externe). */
-export interface LigneCAStat { mois: string; participantId: string; horizon: number; externe: number }
+interface LigneCAStat { mois: string; participantId: string; horizon: number; externe: number }
 /** Brouillon de facture : le mois en cours se construit au fil des séances réalisées. */
-export interface BrouillonStat { periode: string; totalHt: number }
+interface BrouillonStat { periode: string; totalHt: number }
 
-export interface MoisCA {
+interface MoisCA {
   /** « AAAA-MM » */
   mois: string;
   /** Factures émises (HT, avoirs déduits) + CA externe saisi. */
@@ -191,7 +191,7 @@ type FactureStat = {
   dateEmission: string; datePaiement: string | null; factureOrigineId: string | null;
 };
 
-export interface Encaissements {
+interface Encaissements {
   /** Reste dû TTC sur les factures émises non soldées, avoirs déduits. */
   resteDu: number;
   nbAttente: number;
@@ -243,7 +243,7 @@ export function valeurSeances(seances: readonly SeanceStat[], tarifs: Readonly<R
 
 // ─── Annulations ─────────────────────────────────────────────────────────────
 
-export interface Annulations {
+interface Annulations {
   annulees: number;
   /** Séances passées comptées (réalisées + annulées). */
   total: number;
@@ -273,7 +273,7 @@ export function annulations(seances: readonly SeanceStat[], aujourdhui: string, 
 
 // ─── D'où vient le chiffre d'affaires ────────────────────────────────────────
 
-export interface SourceCA {
+interface SourceCA {
   cle: string;
   libelle: string;
   montant: number;
@@ -324,7 +324,7 @@ export function partPremierBeneficiaire(lignes: readonly LigneCAStat[]): number 
 
 // ─── Portefeuille ────────────────────────────────────────────────────────────
 
-export interface Portefeuille {
+interface Portefeuille {
   /** Bénéficiaires avec un contrat actif. */
   actifs: number;
   /** Premier contrat commencé dans les `jours` derniers jours. */
@@ -369,7 +369,7 @@ export function portefeuille(
 
 // ─── Par structure ───────────────────────────────────────────────────────────
 
-export interface LigneStructure {
+interface LigneStructure {
   cle: string;
   libelle: string;
   beneficiaires: number;
@@ -419,7 +419,7 @@ export function parStructure(args: {
 
 // ─── Assiduité ───────────────────────────────────────────────────────────────
 
-export interface Assiduite {
+interface Assiduite {
   participantId: string;
   realisees: number;
   annulees: number;
@@ -488,7 +488,7 @@ const MESURES: MesureTest[] = [
   { cle: 'memoire', libelle: 'Mémoire', lire: scoreMemoire, plusPetitEstMieux: false, seuil: 1, unite: ' point' },
 ];
 
-export interface ResultatTest {
+interface ResultatTest {
   cle: string;
   libelle: string;
   progressent: number;

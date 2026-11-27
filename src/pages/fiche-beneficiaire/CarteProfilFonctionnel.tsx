@@ -9,7 +9,7 @@ import { SectionLabel } from './communs';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-export function tm6Extra(b: Bilan): string | null {
+function tm6Extra(b: Bilan): string | null {
   const parts: string[] = [];
   const r = resultatTm6(b.tm6);
   if (r.type !== 'distance' && r.valeur != null) parts.push(`${r.modeLabel} : ${r.texte}`);
@@ -19,17 +19,17 @@ export function tm6Extra(b: Bilan): string | null {
   return parts.length ? parts.join(' · ') : null;
 }
 
-export function tinettiVal(b: Bilan): number | null {
+function tinettiVal(b: Bilan): number | null {
   const s = computeTinettiScores(b.tinetti);
   return s?.complet ? s.scoreTotal : null;
 }
 
-export function tinettiExtra(b: Bilan): string | null {
+function tinettiExtra(b: Bilan): string | null {
   const val = tinettiVal(b);
   return val !== null ? tinettiRisque(val).label : null;
 }
 
-export const TESTS_TABLEAU: {
+const TESTS_TABLEAU: {
   label: string; normeKey: string; unite: string; lower: boolean;
   getVal: (b: Bilan) => number | null; getExtra?: (b: Bilan) => string | null;
 }[] = [
@@ -48,7 +48,7 @@ export const TESTS_TABLEAU: {
   { label: 'Tinetti POMA', normeKey: 'tinetti',          unite: '/28',   lower: false, getVal: tinettiVal, getExtra: tinettiExtra },
 ];
 
-export const NORMES_LABEL: Record<string, string> = {
+const NORMES_LABEL: Record<string, string> = {
   equilibreUnipodal: '≥ 40s',
   chairStand30:      '≥ 14 rép.',
   handGrip:          '≥ 32 kg',
@@ -60,20 +60,20 @@ export const NORMES_LABEL: Record<string, string> = {
   tinetti:           '≥ 24/28',
 };
 
-export const DOT_COLORS = {
+const DOT_COLORS = {
   vert:   '#4CAF50',
   orange: '#E8951A',
   rouge:  '#E24B4A',
 };
 
 
-export function noteToDot(note: 1|2|3|4|5): string {
+function noteToDot(note: 1|2|3|4|5): string {
   if (note >= 4) return DOT_COLORS.vert;
   if (note === 3) return DOT_COLORS.orange;
   return DOT_COLORS.rouge;
 }
 
-export function noteToLabel(note: 1|2|3|4|5): string {
+function noteToLabel(note: 1|2|3|4|5): string {
   if (note >= 4) return 'Dans les normes';
   if (note === 3) return 'À surveiller';
   return 'En difficulté';

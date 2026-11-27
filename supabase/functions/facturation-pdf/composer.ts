@@ -22,7 +22,7 @@ import fontkit from '@pdf-lib/fontkit';
 import { lignesAffichees, lirePresentation, type Presentation } from './regroupement.ts';
 import { PLUS_JAKARTA_SANS_BOLD, PLUS_JAKARTA_SANS_REGULAR } from './polices.ts';
 
-export interface AdressePdf {
+interface AdressePdf {
   rue?: string | null;
   code_postal?: string | null;
   ville?: string | null;
@@ -191,7 +191,7 @@ export function trierLignes(lignes: LignePdf[]): LignePdf[] {
 
 // ---------- contenu (testable sans PDF) ----------
 
-export interface BlocsFacture {
+interface BlocsFacture {
   titre: string;
   emetteur: string[];
   mentionsSap: string[];

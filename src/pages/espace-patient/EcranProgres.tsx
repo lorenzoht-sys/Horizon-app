@@ -9,7 +9,7 @@ import { C, fmtCourt, fmtMoisAnnee } from './communs';
 // ── ÉCRAN 2 — Mes progrès ─────────────────────────────────────────────────────
 
 // Traduction des tests en langage patient
-export const TEST_LABELS_PATIENT: Record<string, { label: string; emoji: string; description: string }> = {
+const TEST_LABELS_PATIENT: Record<string, { label: string; emoji: string; description: string }> = {
   equilibre:  { label: 'Équilibre sur un pied',        emoji: '🦵', description: 'Durée d\'équilibre unipodal' },
   chairStand: { label: 'Force pour se lever',          emoji: '💪', description: 'Lever de chaise 30 secondes' },
   handGrip:   { label: 'Force des mains',              emoji: '✊', description: 'Préhension de la main' },
@@ -17,7 +17,7 @@ export const TEST_LABELS_PATIENT: Record<string, { label: string; emoji: string;
   tm6:        { label: 'Endurance à la marche',        emoji: '🏃', description: 'Distance de marche en 6 minutes' },
 };
 
-export type ProgItem = {
+type ProgItem = {
   key: string;
   label: string;
   emoji: string;
@@ -27,7 +27,7 @@ export type ProgItem = {
   lowerBetter: boolean;
 };
 
-export function calculerProgressions(bilanInitial: Bilan, dernierBilan: Bilan): ProgItem[] {
+function calculerProgressions(bilanInitial: Bilan, dernierBilan: Bilan): ProgItem[] {
   const items: ProgItem[] = [];
 
   const eq0 = bilanInitial.equilibre?.droite, eq1 = dernierBilan.equilibre?.droite;
@@ -53,7 +53,7 @@ export function calculerProgressions(bilanInitial: Bilan, dernierBilan: Bilan): 
   return items;
 }
 
-export function CarteProgression({ item }: { item: ProgItem }) {
+function CarteProgression({ item }: { item: ProgItem }) {
   const delta = item.lowerBetter ? item.val0 - item.val1 : item.val1 - item.val0;
   const improved = delta > 0;
   const stable = Math.abs(delta) < 0.1;
@@ -139,7 +139,7 @@ export function CarteProgression({ item }: { item: ProgItem }) {
  * On dit qu'il manque des réponses, sans chiffre et sans jugement — et sans
  * demander au bénéficiaire une action qui revient au praticien.
  */
-export function LigneQuestionnaireIncomplet({ libelle }: { libelle: string }) {
+function LigneQuestionnaireIncomplet({ libelle }: { libelle: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
       <span style={{ fontSize: 13, color: C.muted }}>{libelle}</span>
@@ -153,7 +153,7 @@ export function LigneQuestionnaireIncomplet({ libelle }: { libelle: string }) {
 /** Page « Progrès » sans contenu à montrer. Le texte dit POURQUOI elle est
  *  vide : « aucun bilan » et « bilans non partagés » se ressemblent à l'écran
  *  mais ne veulent pas dire la même chose. */
-export function EtatVideProgres({ emoji, titre, texte }: { emoji: string; titre: string; texte: React.ReactNode }) {
+function EtatVideProgres({ emoji, titre, texte }: { emoji: string; titre: string; texte: React.ReactNode }) {
   return (
     <div style={{ textAlign: 'center', padding: '60px 20px' }}>
       <div style={{ fontSize: 48, marginBottom: 16 }}>{emoji}</div>

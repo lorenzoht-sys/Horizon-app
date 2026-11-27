@@ -13,20 +13,6 @@ const CAT: Record<CategorieExercice, { icon: string; label: string; color: strin
   memoire:   { icon: '🧠', label: 'Mémoire',    color: '#534AB7' },
 };
 
-// Ré-exports pour compatibilité
-export const CATEGORIE_LABELS = Object.fromEntries(
-  Object.entries(CAT).map(([k, v]) => [k, v.icon + ' ' + v.label])
-) as Record<CategorieExercice, string>;
-
-export const CATEGORIE_COLORS: Record<CategorieExercice, string> = {
-  equilibre: 'bg-blue-100 text-blue-700',
-  force:     'bg-green-100 text-green-700',
-  mobilite:  'bg-yellow-100 text-yellow-700',
-  souplesse: 'bg-orange-100 text-orange-700',
-  endurance: 'bg-red-light text-red-700',
-  memoire:   'bg-purple-100 text-purple-700',
-};
-
 // Couleurs alignées sur les pastilles de filtre de ExercicesPage.tsx
 // (PROFILS_HANDICAP et PROFILS_PATHOLOGIE) : c'est la même notion de profil,
 // vue depuis la carte.

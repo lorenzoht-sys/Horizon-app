@@ -59,7 +59,7 @@ export const EMPTY_WIZARD: WizardData = {
   planning: {},
 };
 
-export function newExercice(): FormExercice {
+function newExercice(): FormExercice {
   return {
     tempId: uuidv4(),
     nom: '',
@@ -73,7 +73,7 @@ export function newExercice(): FormExercice {
   };
 }
 
-export function newSeance(label: string): FormSeance {
+function newSeance(label: string): FormSeance {
   return { tempId: uuidv4(), nom: label, exercices: [] };
 }
 
@@ -918,7 +918,7 @@ function Step4({ data }: { data: WizardData }) {
 
 const STEP_LABELS = ['Informations', 'Séances', 'Planning', 'Récapitulatif'];
 
-export interface ProgrammeWizardModalProps {
+interface ProgrammeWizardModalProps {
   step: number;
   onStepChange: (step: number) => void;
   data: WizardData;

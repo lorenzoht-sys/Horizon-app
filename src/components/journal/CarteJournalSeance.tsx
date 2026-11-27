@@ -15,13 +15,13 @@ export type { JournalEntry };
 // uniquement les couleurs plates du thème (bg-amber-light, text-red, etc.),
 // jamais `amber-*`/`red-*` avec un chiffre.
 
-export const PROGRESSION_CONFIG: Record<string, { emoji: string; label: string; color: string }> = {
+const PROGRESSION_CONFIG: Record<string, { emoji: string; label: string; color: string }> = {
   'en progrès': { emoji: '📈', label: 'En progrès', color: '#22C55E' },
   'stable':     { emoji: '➡️', label: 'Stable',     color: '#6B7280' },
   'régression': { emoji: '📉', label: 'Régression', color: '#EF4444' },
 };
 
-export const HUMEUR_EMOJI: Record<string, string> = {
+const HUMEUR_EMOJI: Record<string, string> = {
   'très bien': '😊', bien: '🙂', moyen: '😐', fatigué: '😓',
 };
 

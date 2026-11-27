@@ -102,4 +102,4 @@ export function ActivitesPrecedentesForm({
   );
 }
 
-export const NIVEAUX_ACTIVITE: NiveauActivite[] = ['Loisir', 'Compétition', 'Professionnel'];
+const NIVEAUX_ACTIVITE: NiveauActivite[] = ['Loisir', 'Compétition', 'Professionnel'];

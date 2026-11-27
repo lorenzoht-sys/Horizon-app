@@ -5,7 +5,7 @@
 // l'appelant (AssistantPage.tsx) ne ferme la modale de relecture qu'en cas de
 // succès — sinon le texte édité serait perdu si l'utilisateur doit réessayer.
 
-export interface ResultatPartage {
+interface ResultatPartage {
   succes: boolean;
   message: string;
 }

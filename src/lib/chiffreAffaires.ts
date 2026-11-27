@@ -16,7 +16,7 @@ export interface LigneCA {
   externe: number;
 }
 
-export interface CaBeneficiaire {
+interface CaBeneficiaire {
   participantId: string;
   nom: string;
   horizon: number;
@@ -24,7 +24,7 @@ export interface CaBeneficiaire {
   total: number;
 }
 
-export interface DetailMois {
+interface DetailMois {
   mois: string;
   horizon: number;
   externe: number;
@@ -137,12 +137,6 @@ export function historique(lignes: LigneCA[], finMois: string, n = 12): { mois: 
     const d = detailDuMois(lignes, mois, {});
     return { mois, horizon: d.horizon, externe: d.externe, total: d.total };
   });
-}
-
-/** Format « 2026-10 » → total, utilisé par le tableau de bord de « Mes stats ». */
-export function caParMoisCle(lignes: LigneCA[]): Record<string, number> {
-  const parMois = totauxParMois(lignes);
-  return Object.fromEntries(Object.entries(parMois).map(([mois, total]) => [mois.slice(0, 7), total]));
 }
 
 // ── Saisie externe ────────────────────────────────────────────────────────────────────────────

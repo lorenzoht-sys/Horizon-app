@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Bilan, Seance } from '../types';
 import {
   echeanceBilan, bilanAFaire, resultatsCles, prochaineSeance, libelleRendezVous,
-  seancesNonConfirmees, bornesSemaine, elementsATraiter, regrouperASurveiller,
+  seancesNonConfirmees, elementsATraiter, regrouperASurveiller,
 } from './tableauDeBord';
 
 const JOUR = '2026-11-23'; // lundi
@@ -90,13 +90,6 @@ describe('seancesNonConfirmees', () => {
       seance('plus-tard', JOUR, '15:00'),
     ], JOUR, '12:00');
     expect(r.map(s => s.id).sort()).toEqual(['hier', 'matin', 'vieille']);
-  });
-});
-
-describe('bornesSemaine', () => {
-  it('du lundi au dimanche, dimanche compris dans la semaine qui finit', () => {
-    expect(bornesSemaine(JOUR)).toEqual({ lundi: '2026-11-23', dimanche: '2026-11-29' });
-    expect(bornesSemaine('2026-11-29')).toEqual({ lundi: '2026-11-23', dimanche: '2026-11-29' });
   });
 });
 

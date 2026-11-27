@@ -43,9 +43,9 @@ export function ChoixSaisie({ onPatient, onBilan, onSeance }: { onPatient: () =>
 // complet, et inversement. Le consentement reste obligatoire des deux côtés —
 // le formulaire complet normalise le `rgpd` du brouillon et refuse la
 // création sans lui (src/lib/consentementRgpd.ts, testé).
-export const CLE_BROUILLON_CREATION = 'nouveau';
+const CLE_BROUILLON_CREATION = 'nouveau';
 
-export function texteBrouillon(v: unknown): string {
+function texteBrouillon(v: unknown): string {
   return typeof v === 'string' ? v : '';
 }
 

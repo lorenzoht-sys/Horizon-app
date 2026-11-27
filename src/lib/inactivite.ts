@@ -17,7 +17,7 @@ export const DELAI_INACTIVITE_MS = 60 * 60_000;
 export const PREAVIS_INACTIVITE_MS = 2 * 60_000;
 export const CLE_DERNIERE_ACTIVITE = 'horizon_derniere_activite';
 
-export type EtatInactivite = 'actif' | 'preavis' | 'expire';
+type EtatInactivite = 'actif' | 'preavis' | 'expire';
 
 export function etatInactivite(
   derniereActivite: number,

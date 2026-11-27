@@ -47,7 +47,7 @@ const STYLE_APPEL = `
 // après l'essai d'un grand bandeau déplié d'office (« trop terne et trop voyant »). Les écrans qui
 // adaptent aussi leur contenu à ce mode (tableau de bord, Aujourd'hui) lisent le guide eux-mêmes
 // et le passent à GuideDemarrageVue : un seul chargement des comptages.
-export type EtatGuide = ReturnType<typeof useDemarrage>;
+type EtatGuide = ReturnType<typeof useDemarrage>;
 
 const cleOuvertureAuto = (id: string) => `horizon:demarrage:ouvert-auto:${id}`;
 

@@ -18,7 +18,7 @@ const SAUT = new Set(['connection', 'keep-alive', 'proxy-authenticate', 'proxy-a
 // Au-delà, PostgREST est considéré comme bloqué : sans délai, chaque requête en
 // attente garderait une connexion ouverte et l'application finirait saturée.
 // Large devant les requêtes du front (la plus longue relevée dure quelques secondes).
-export const DELAI_POSTGREST_MS = 30_000;
+const DELAI_POSTGREST_MS = 30_000;
 
 /**
  * Transmet la requête telle quelle à PostgREST, en flux, sans la lire.

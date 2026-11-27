@@ -3,7 +3,7 @@ import type { Participant, CategorieExercice } from '../../types';
 import type { ProgrammePourPDF, ExercicePourPDF } from '../../lib/programmePDF';
 import { PdfHeader, PdfFooter, type PdfPraticienSettings } from './PdfShared';
 
-export interface ProgrammePDFData {
+interface ProgrammePDFData {
   participant: Participant;
   /** Déjà normalisé (V1 → une séance implicite, ou V2 filtré aux séances
    *  voulues) — voir src/lib/programmePDF.ts. Ce composant ne connaît plus
