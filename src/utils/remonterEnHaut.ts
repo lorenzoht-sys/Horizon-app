@@ -2,8 +2,7 @@
 // la div de App.tsx (overflow auto), pas la fenêtre : window.scrollTo n'y fait
 // rien. Utilisé par les formulaires en étapes à chaque changement d'étape
 // (compte rendu de Pierre, 25/11/2026 ; même demande pour le bilan).
-export
-function remonterEnHaut(depuis: HTMLElement | null) {
+export function remonterEnHaut(depuis: HTMLElement | null) {
   let el = depuis?.parentElement ?? null;
   while (el) {
     const { overflowY } = getComputedStyle(el);
