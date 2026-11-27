@@ -91,7 +91,6 @@ export function useProgrammesModeles() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!supabase) { setLoading(false); return; }
     setLoading(true);
 
     // RLS scope déjà à praticien_id = auth.uid(), pas de filtre applicatif nécessaire.
@@ -147,7 +146,6 @@ export function useProgrammesModeles() {
   // à l'insertion n'est plus ignoré en silence : le modèle incomplet est supprimé (par son identifiant,
   // les séances, exercices et planning suivent par ON DELETE CASCADE) et l'appelant reçoit null.
   const createModele = useCallback(async (data: ProgrammeModeleFormData): Promise<string | null> => {
-    if (!supabase) return null;
     let echecs = 0;
 
     const modeleId = uuidv4();
@@ -223,8 +221,6 @@ export function useProgrammesModeles() {
   // ── Update ───────────────────────────────────────────────────────────────────
 
   const updateModele = useCallback(async (id: string, data: ProgrammeModeleFormData): Promise<boolean> => {
-    if (!supabase) return false;
-
     const { error: modeleError } = await supabase.from('programmes_modeles').update({
       nom: data.nom,
       objectif: data.objectif ?? null,
@@ -285,7 +281,6 @@ export function useProgrammesModeles() {
   // ── Delete ───────────────────────────────────────────────────────────────────
 
   const deleteModele = useCallback(async (id: string) => {
-    if (!supabase) return;
     // Cascade gère seances, planning, exercices.
     await supabase.from('programmes_modeles').delete().eq('id', id);
     setModeles(prev => prev.filter(m => m.id !== id));
@@ -296,7 +291,6 @@ export function useProgrammesModeles() {
   // fonction Postgres dupliquer_programme_modele (transaction unique).
 
   const appliquerModele = useCallback(async (modeleId: string, participantId: string): Promise<string | null> => {
-    if (!supabase) return null;
     const { data, error } = await supabase.rpc('dupliquer_programme_modele', {
       p_modele_id: modeleId,
       p_participant_id: participantId,

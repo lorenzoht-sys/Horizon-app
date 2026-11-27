@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { initialesPraticien } from '../../lib/initiales';
 import { IndicateurConnexion, BoutonInstallerApp } from '../pwa/PWAComponents';
-import { supabase } from '../../lib/supabase';
 import { lirePraticien } from '../../lib/acces/praticien';
 import { utilisateurCourant } from '../../lib/session';
 import LegalFooterLinks from '../legal/LegalFooterLinks';
@@ -45,7 +44,6 @@ export default function Sidebar({ onLogout }: Props) {
   const { pathname } = useLocation();
 
   async function fetchPraticien() {
-    if (!supabase) return;
     const user = await utilisateurCourant();
     if (!user) return;
     const { data } = await lirePraticien(user.id, 'prenom, nom, titre, siret, numero_sap');

@@ -23,11 +23,10 @@ export function useAgenda() {
   // un écran pouvait agir sur une liste encore vide : activer les bilans
   // automatiques avant la fin du chargement répondait « planifiez un premier
   // bilan » alors qu'un bilan de référence existait (vu en e2e, mobile/35).
-  const [seancesChargees, setSeancesChargees] = useState(!supabase);
+  const [seancesChargees, setSeancesChargees] = useState(false);
   const { participants } = useParticipants();
 
   useEffect(() => {
-    if (!supabase) return;
     let cancelled = false;
     supabase
       .from('seances')
@@ -44,14 +43,12 @@ export function useAgenda() {
 
   async function creerSeance(data: Omit<Seance, 'id'>): Promise<Seance> {
     const nouvelle: Seance = { ...data, id: uuidv4() };
-    if (supabase) {
-      const { error } = await supabase.from('seances').insert(seanceToDb(nouvelle));
-      if (error) {
-        console.error('Erreur création séance:', error);
-        const message = messageErreurSeance(error);
-        toast.error(message);
-        throw new Error(message);
-      }
+    const { error } = await supabase.from('seances').insert(seanceToDb(nouvelle));
+    if (error) {
+      console.error('Erreur création séance:', error);
+      const message = messageErreurSeance(error);
+      toast.error(message);
+      throw new Error(message);
     }
     setSeances(prev => [...prev, nouvelle]);
     return nouvelle;
@@ -66,14 +63,12 @@ export function useAgenda() {
       if (conflits.length > 0) throw new ChevauchementError(conflits);
     }
     const nouvelles: Seance[] = data.map(d => ({ ...d, id: uuidv4() }));
-    if (supabase) {
-      const { error } = await supabase.from('seances').insert(nouvelles.map(s => seanceToDb(s)));
-      if (error) {
-        console.error('Erreur bulk création séances:', error);
-        const message = messageErreurSeance(error);
-        toast.error(message);
-        throw new Error(message);
-      }
+    const { error } = await supabase.from('seances').insert(nouvelles.map(s => seanceToDb(s)));
+    if (error) {
+      console.error('Erreur bulk création séances:', error);
+      const message = messageErreurSeance(error);
+      toast.error(message);
+      throw new Error(message);
     }
     setSeances(prev => [...prev, ...nouvelles]);
     return nouvelles;
@@ -93,10 +88,8 @@ export function useAgenda() {
     );
     if (deplace) updates = { ...updates, bilanAuto: false };
     const merged = { ...current, ...updates };
-    if (supabase) {
-      const { error } = await supabase.from('seances').update(seanceToDb(merged)).eq('id', id);
-      if (error) { console.error('Erreur modification séance:', error); toast.error(messageErreurSeance(error)); return false; }
-    }
+    const { error } = await supabase.from('seances').update(seanceToDb(merged)).eq('id', id);
+    if (error) { console.error('Erreur modification séance:', error); toast.error(messageErreurSeance(error)); return false; }
     setSeances(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
     return true;
   }
@@ -113,25 +106,20 @@ export function useAgenda() {
     const modifiees: string[] = [];
     for (let i = 0; i < ids.length; i += 25) {
       const lot = ids.slice(i, i + 25);
-      if (supabase) {
-        const { data, error } = await supabase.from('seances')
-          .update({ statut: 'realisee' })
-          .in('id', lot)
-          .eq('statut', 'planifiee')
-          .select('id');
-        if (error) {
-          console.error('Erreur confirmation groupée:', error);
-          toast.error(messageErreurSeance(error));
-          setSeances(prev => prev.map(s => modifiees.includes(s.id) ? { ...s, statut: 'realisee' } : s));
-          return { faites, echec: true };
-        }
-        const ok = ((data ?? []) as { id: string }[]).map(r => r.id);
-        modifiees.push(...ok);
-        faites += ok.length;
-      } else {
-        modifiees.push(...lot);
-        faites += lot.length;
+      const { data, error } = await supabase.from('seances')
+        .update({ statut: 'realisee' })
+        .in('id', lot)
+        .eq('statut', 'planifiee')
+        .select('id');
+      if (error) {
+        console.error('Erreur confirmation groupée:', error);
+        toast.error(messageErreurSeance(error));
+        setSeances(prev => prev.map(s => modifiees.includes(s.id) ? { ...s, statut: 'realisee' } : s));
+        return { faites, echec: true };
       }
+      const ok = ((data ?? []) as { id: string }[]).map(r => r.id);
+      modifiees.push(...ok);
+      faites += ok.length;
       onAvancement?.(faites);
     }
     setSeances(prev => prev.map(s => modifiees.includes(s.id) ? { ...s, statut: 'realisee' } : s));
@@ -139,10 +127,8 @@ export function useAgenda() {
   }
 
   async function supprimerSeance(id: string) {
-    if (supabase) {
-      const { error } = await supabase.from('seances').delete().eq('id', id);
-      if (error) { console.error('Erreur suppression séance:', error); toast.error(messageErreurSeance(error)); return; }
-    }
+    const { error } = await supabase.from('seances').delete().eq('id', id);
+    if (error) { console.error('Erreur suppression séance:', error); toast.error(messageErreurSeance(error)); return; }
     setSeances(prev => prev.filter(s => s.id !== id));
   }
 
@@ -153,11 +139,9 @@ export function useAgenda() {
   // désactiver l'option à cet instant le supprimait (vu en e2e, test
   // mobile/35). Renvoie true si la séance a bien été retirée.
   async function supprimerBilanAuto(id: string): Promise<boolean> {
-    if (supabase) {
-      const { data, error } = await supabase.from('seances').delete().eq('id', id).eq('bilan_auto', true).select('id');
-      if (error) { console.error('Erreur suppression séance:', error); toast.error(messageErreurSeance(error)); return false; }
-      if (!data || data.length === 0) return false;
-    }
+    const { data, error } = await supabase.from('seances').delete().eq('id', id).eq('bilan_auto', true).select('id');
+    if (error) { console.error('Erreur suppression séance:', error); toast.error(messageErreurSeance(error)); return false; }
+    if (!data || data.length === 0) return false;
     setSeances(prev => prev.filter(s => s.id !== id));
     return true;
   }

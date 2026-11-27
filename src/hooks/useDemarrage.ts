@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { supabase } from '../lib/supabase';
 import { utilisateurCourant } from '../lib/session';
 import {
   compterBeneficiaires,
@@ -87,7 +86,6 @@ function ecrireLocal(id: string, etat: EtatDemarrage) {
 }
 
 async function charger(): Promise<Donnees | null> {
-  if (!supabase) return null;
   const user = await utilisateurCourant();
   if (!user) return null;
   const id = user.id;

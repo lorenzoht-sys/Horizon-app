@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import PageWrapper from '../components/layout/PageWrapper';
 import { SectionApplication } from '../components/pwa/PWAComponents';
 import { SectionPriseEnMain } from './parametres/SectionPriseEnMain';
-import { supabase } from '../lib/supabase';
 import { lirePraticien } from '../lib/acces/praticien';
 import { utilisateurCourant } from '../lib/session';
 import { type SettingsPraticien, DEFAULTS_SETTINGS as DEFAULTS, rowToSettings, enregistrerSettingsPraticien } from '../lib/settingsPraticien';
@@ -65,7 +64,6 @@ export default function SettingsPage() {
   const siretInitial = useRef('');
 
   useEffect(() => {
-    if (!supabase) { setLoading(false); return; }
     void (async () => {
       const user = await utilisateurCourant();
       if (!user) { setLoading(false); return; }
@@ -162,11 +160,9 @@ export default function SettingsPage() {
     const toSave = { ...form, siret: validerSiret(form.siret).siret };
 
     let userId = '';
-    if (supabase) {
-      const user = await utilisateurCourant();
-      if (!user) { toast.error('Utilisateur non connecté'); return; }
-      userId = user.id;
-    }
+    const user = await utilisateurCourant();
+    if (!user) { toast.error('Utilisateur non connecté'); return; }
+    userId = user.id;
 
     // La construction de la ligne et l'ordre base-puis-cache vivent dans
     // `settingsPraticien` : cet ecran et l'ecran mobile en avaient chacun

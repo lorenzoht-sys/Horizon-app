@@ -45,7 +45,7 @@ export function ressentisPreoccupants(retours: readonly { borgRpe: number; bienE
 // Par lots : la liste d'identifiants part dans l'URL, PostgREST refuse la
 // requête (400) quand elle devient trop longue.
 async function chargerExercicesRealises(seancePatientIds: string[]): Promise<ExerciceRealise[]> {
-  if (!supabase || seancePatientIds.length === 0) return [];
+  if (seancePatientIds.length === 0) return [];
   const client = supabase;
   const reponses = await Promise.all(enLots(seancePatientIds).map(lot => client
     .from('exercices_realises')
@@ -58,7 +58,7 @@ async function chargerExercicesRealises(seancePatientIds: string[]): Promise<Exe
 export async function chargerRetoursParBeneficiaire(
   participantIds: string[],
 ): Promise<Record<string, { borgRpe: number; bienEtre: number }[]>> {
-  if (!supabase || participantIds.length === 0) return {};
+  if (participantIds.length === 0) return {};
   const client = supabase;
   // Chaque bénéficiaire est dans un seul lot : l'ordre par date de ses
   // retours est conservé.
@@ -77,7 +77,6 @@ export async function chargerRetoursParBeneficiaire(
 
 /** 30 derniers ressentis d'un bénéficiaire. null si la lecture a échoué. */
 export async function chargerRetoursSeance(participantId: string): Promise<RetourSeance[] | null> {
-  if (!supabase) return null;
   const { data } = await supabase
     .from('retours_seance')
     .select('id, date, borg_rpe, bien_etre')
@@ -95,7 +94,6 @@ export async function chargerRetoursSeance(participantId: string): Promise<Retou
 
 /** 30 dernières séances réalisées par un bénéficiaire, avec le nombre d'exercices cochés. */
 export async function chargerSeancesStats(participantId: string): Promise<SeancePatientStat[]> {
-  if (!supabase) return [];
   const { data } = await supabase.from('seances_patient')
     .select('id, seance_id, programme_id, date_seance, statut, commentaire_patient, duree_minutes')
     .eq('participant_id', participantId)
@@ -125,7 +123,6 @@ export async function chargerSeancesStats(participantId: string): Promise<Seance
 
 /** Nombre d'appareils du bénéficiaire abonnés aux rappels. null si Supabase n'est pas configuré. */
 export async function compterAppareilsRappels(participantId: string): Promise<number | null> {
-  if (!supabase) return null;
   const { count } = await supabase
     .from('push_subscriptions')
     .select('id', { count: 'exact', head: true })

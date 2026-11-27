@@ -73,10 +73,6 @@ export default function ForgotPasswordPage() {
       setError('Veuillez saisir votre adresse email.');
       return;
     }
-    if (!supabase) {
-      setError('Service indisponible. Veuillez réessayer plus tard.');
-      return;
-    }
 
     setLoading(true);
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {

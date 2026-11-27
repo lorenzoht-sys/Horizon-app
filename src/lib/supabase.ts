@@ -90,25 +90,20 @@ export const erreurLienAuth: ErreurLienAuth = lireErreurLienAuth(
   typeof window !== 'undefined' ? window.location.search : '',
 );
 
-export const supabase = SUPABASE_URL && SUPABASE_ANON_KEY
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-  : null;
-
-/**
- * Client Supabase non nul, pour la couche d'accès aux données
- * (src/lib/acces/, src/hooks/). Lève si l'application tourne sans Supabase
- * configuré : l'appelant doit avoir vérifié `supabase` avant.
- */
-export function clientSupabase() {
-  if (!supabase) throw new Error('Supabase non configuré');
-  return supabase;
+// Supabase est obligatoire (27/11/2026). Un « mode local » sans base, avec des
+// bénéficiaires fictifs en localStorage, doublait chaque hook d'une branche que la
+// production n'exécutait jamais ; il est retiré. Sans les deux variables, l'application
+// s'arrête ici avec un message clair plutôt que de tourner à vide.
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error('VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY sont obligatoires (voir .env.example).');
 }
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // En-tête Authorization à ajouter aux appels /api/claude (T6 — sécurisation
 // Horizon) : le proxy IA vérifie cette session praticien avant d'utiliser
 // la clé Anthropic. Objet vide si aucune session (le serveur renverra 401).
 export async function getAuthHeader(): Promise<Record<string, string>> {
-  if (!supabase) return {};
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   return token ? { Authorization: `Bearer ${token}` } : {};

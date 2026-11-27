@@ -33,7 +33,6 @@ export function useContrats() {
   const [contrats, setContrats] = useState<Contrat[]>([]);
 
   useEffect(() => {
-    if (!supabase) return;
     let cancelled = false;
     supabase
       .from('contrats')
@@ -55,10 +54,8 @@ export function useContrats() {
     const tauxHebdo = data.nbSeancesSemaine / CYCLE_SEMAINES[periodicite];
     const nbSeances = calculerNbSeancesEstime(data.dateDebut, data.dateFin, tauxHebdo);
     let praticienId: string | undefined;
-    if (supabase) {
-      const user = await utilisateurCourant();
-      praticienId = user?.id;
-    }
+    const user = await utilisateurCourant();
+    praticienId = user?.id;
 
     const contrat: Contrat = {
       id: uuidv4(),
@@ -81,22 +78,18 @@ export function useContrats() {
       exclureTournee: data.exclureTournee ?? false,
     };
 
-    if (supabase) {
-      const { error } = await supabase.from('contrats').insert(contratToDb(contrat));
-      if (error) {
-        console.error('Erreur création contrat:', error);
-        throw new Error(error.message);
-      }
+    const { error } = await supabase.from('contrats').insert(contratToDb(contrat));
+    if (error) {
+      console.error('Erreur création contrat:', error);
+      throw new Error(error.message);
     }
     setContrats(prev => [...prev, contrat]);
     return contrat;
   }
 
   async function modifierStatut(id: string, statut: StatutContrat) {
-    if (supabase) {
-      const { error } = await supabase.from('contrats').update({ statut }).eq('id', id);
-      if (error) { console.error('Erreur modification statut contrat:', error); toast.error('Erreur : ' + error.message); return; }
-    }
+    const { error } = await supabase.from('contrats').update({ statut }).eq('id', id);
+    if (error) { console.error('Erreur modification statut contrat:', error); toast.error('Erreur : ' + error.message); return; }
     setContrats(prev => prev.map(c => c.id === id ? { ...c, statut } : c));
   }
 
@@ -105,12 +98,10 @@ export function useContrats() {
   // même update que le statut pour ne jamais laisser un état intermédiaire
   // "suspendu sans date de reprise connue" visible ailleurs.
   async function mettreEnPause(id: string, dateReprisePrevue: string | null): Promise<boolean> {
-    if (supabase) {
-      const { error } = await supabase.from('contrats')
-        .update({ statut: 'suspendu', date_reprise_prevue: dateReprisePrevue })
-        .eq('id', id);
-      if (error) { console.error('Erreur mise en pause contrat:', error); toast.error('Erreur : ' + error.message); return false; }
-    }
+    const { error } = await supabase.from('contrats')
+      .update({ statut: 'suspendu', date_reprise_prevue: dateReprisePrevue })
+      .eq('id', id);
+    if (error) { console.error('Erreur mise en pause contrat:', error); toast.error('Erreur : ' + error.message); return false; }
     setContrats(prev => prev.map(c => c.id === id ? { ...c, statut: 'suspendu', dateReprisePrevue: dateReprisePrevue ?? undefined } : c));
     return true;
   }
@@ -128,10 +119,8 @@ export function useContrats() {
   async function reprendreContrat(id: string, nouvelleDateFin?: string): Promise<boolean> {
     const patch: Record<string, unknown> = { statut: 'actif', date_reprise_prevue: null };
     if (nouvelleDateFin) patch.date_fin = nouvelleDateFin;
-    if (supabase) {
-      const { error } = await supabase.from('contrats').update(patch).eq('id', id);
-      if (error) { console.error('Erreur reprise contrat:', error); toast.error('Erreur : ' + error.message); return false; }
-    }
+    const { error } = await supabase.from('contrats').update(patch).eq('id', id);
+    if (error) { console.error('Erreur reprise contrat:', error); toast.error('Erreur : ' + error.message); return false; }
     setContrats(prev => prev.map(c => c.id === id
       ? { ...c, statut: 'actif' as const, dateReprisePrevue: undefined, ...(nouvelleDateFin ? { dateFin: nouvelleDateFin } : {}) }
       : c));
@@ -139,37 +128,29 @@ export function useContrats() {
   }
 
   async function modifierDateFin(id: string, dateFin: string): Promise<boolean> {
-    if (supabase) {
-      const { error } = await supabase.from('contrats').update({ date_fin: dateFin }).eq('id', id);
-      if (error) { console.error('Erreur modification date de fin contrat:', error); toast.error('Erreur : ' + error.message); return false; }
-    }
+    const { error } = await supabase.from('contrats').update({ date_fin: dateFin }).eq('id', id);
+    if (error) { console.error('Erreur modification date de fin contrat:', error); toast.error('Erreur : ' + error.message); return false; }
     setContrats(prev => prev.map(c => c.id === id ? { ...c, dateFin } : c));
     return true;
   }
 
   async function toggleExclureTournee(id: string, exclureTournee: boolean) {
-    if (supabase) {
-      const { error } = await supabase.from('contrats').update({ exclure_tournee: exclureTournee }).eq('id', id);
-      if (error) { console.error('Erreur modification exclure_tournee:', error); toast.error('Erreur : ' + error.message); return; }
-    }
+    const { error } = await supabase.from('contrats').update({ exclure_tournee: exclureTournee }).eq('id', id);
+    if (error) { console.error('Erreur modification exclure_tournee:', error); toast.error('Erreur : ' + error.message); return; }
     setContrats(prev => prev.map(c => c.id === id ? { ...c, exclureTournee } : c));
   }
 
   /** null = revenir au choix du profil de facturation. Mise à jour ciblée, hors contratToDb. */
   async function modifierPresentationFacture(id: string, presentationFacture: 'detaillee' | 'globale' | null): Promise<boolean> {
-    if (supabase) {
-      const { error } = await supabase.from('contrats').update({ presentation_facture: presentationFacture }).eq('id', id);
-      if (error) { console.error('Erreur modification presentation_facture:', error); toast.error('Erreur : ' + error.message); return false; }
-    }
+    const { error } = await supabase.from('contrats').update({ presentation_facture: presentationFacture }).eq('id', id);
+    if (error) { console.error('Erreur modification presentation_facture:', error); toast.error('Erreur : ' + error.message); return false; }
     setContrats(prev => prev.map(c => c.id === id ? { ...c, presentationFacture } : c));
     return true;
   }
 
   async function supprimerContrat(id: string) {
-    if (supabase) {
-      const { error } = await supabase.from('contrats').delete().eq('id', id);
-      if (error) { console.error('Erreur suppression contrat:', error); toast.error('Erreur : ' + error.message); return; }
-    }
+    const { error } = await supabase.from('contrats').delete().eq('id', id);
+    if (error) { console.error('Erreur suppression contrat:', error); toast.error('Erreur : ' + error.message); return; }
     setContrats(prev => prev.filter(c => c.id !== id));
   }
 
@@ -177,10 +158,8 @@ export function useContrats() {
     const contrat = contrats.find(c => c.id === contratId);
     if (!contrat) return;
     const newCount = Math.min(contrat.nombreSeancesRealisees + 1, contrat.nombreSeancesTotal);
-    if (supabase) {
-      const { error } = await supabase.from('contrats').update({ nombre_seances_realisees: newCount }).eq('id', contratId);
-      if (error) { console.error('Erreur incrémentation séances:', error); toast.error('Erreur : ' + error.message); return; }
-    }
+    const { error } = await supabase.from('contrats').update({ nombre_seances_realisees: newCount }).eq('id', contratId);
+    if (error) { console.error('Erreur incrémentation séances:', error); toast.error('Erreur : ' + error.message); return; }
     setContrats(prev => prev.map(c =>
       c.id === contratId ? { ...c, nombreSeancesRealisees: newCount } : c
     ));

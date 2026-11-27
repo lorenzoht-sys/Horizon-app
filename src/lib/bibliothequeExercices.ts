@@ -60,7 +60,6 @@ function rowToExercicePersonnalise(row: Record<string, unknown>): Exercice {
  * mémoire "bug-catalogue-exercices-patient-v1".
  */
 export async function loadExercicesPraticien(): Promise<Exercice[]> {
-  if (!supabase) return EXERCICES_BASE;
   try {
     const { data, error } = await supabase
       .from('exercices_personnalises')
@@ -95,7 +94,6 @@ export async function loadExercicesPraticien(): Promise<Exercice[]> {
  * exercice n'a pas été sauvegardé.
  */
 export async function saveExercicePersonnalise(ex: Omit<Exercice, 'id'>): Promise<Exercice | null> {
-  if (!supabase) return null;
   try {
     const user = await utilisateurCourant();
     if (!user) return null;
@@ -161,7 +159,6 @@ export function migrationExercicesDejaFaite(): boolean {
  * pouvoir réessayer au prochain clic.
  */
 export async function migrerExercicesLocalStorageVersSupabase(): Promise<{ count: number } | null> {
-  if (!supabase) return null;
   const locaux = getExercicesLocaux();
   if (locaux.length === 0) {
     localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
@@ -222,7 +219,6 @@ function rowToDossierExercice(row: Record<string, unknown>): DossierExercice {
 }
 
 export async function loadDossiersExercices(): Promise<DossierExercice[]> {
-  if (!supabase) return [];
   try {
     const { data, error } = await supabase
       .from('dossiers_exercices')
@@ -237,7 +233,6 @@ export async function loadDossiersExercices(): Promise<DossierExercice[]> {
 }
 
 export async function creerDossierExercice(nom: string, ordre: number): Promise<DossierExercice | null> {
-  if (!supabase) return null;
   try {
     const user = await utilisateurCourant();
     if (!user) return null;
@@ -261,7 +256,6 @@ export async function creerDossierExercice(nom: string, ordre: number): Promise<
 
 /** Met à jour le champ ordre de plusieurs dossiers en une fois (tri manuel). */
 export async function reordonnerDossiersExercices(ordres: { id: string; ordre: number }[]): Promise<boolean> {
-  if (!supabase) return false;
   try {
     for (const { id, ordre } of ordres) {
       const { error } = await supabase.from('dossiers_exercices').update({ ordre }).eq('id', id);
@@ -294,7 +288,6 @@ function rowToDossierExerciceMembre(row: Record<string, unknown>): DossierExerci
 
 /** Charge tous les rattachements exercice↔dossier du praticien courant. */
 export async function loadMembresDossiers(): Promise<DossierExerciceMembre[]> {
-  if (!supabase) return [];
   try {
     const { data, error } = await supabase
       .from('dossier_exercice_membres')
@@ -313,7 +306,6 @@ export async function loadMembresDossiers(): Promise<DossierExerciceMembre[]> {
 export async function ajouterExerciceADossier(
   dossierId: string, exerciceRef: string, typeExercice: TypeExerciceRef, ordre = 0,
 ): Promise<DossierExerciceMembre | null> {
-  if (!supabase) return null;
   try {
     const user = await utilisateurCourant();
     if (!user) return null;
@@ -339,7 +331,6 @@ export async function ajouterExerciceADossier(
 export async function retirerExerciceDeDossier(
   dossierId: string, exerciceRef: string, typeExercice: TypeExerciceRef,
 ): Promise<boolean> {
-  if (!supabase) return false;
   const { error } = await supabase
     .from('dossier_exercice_membres')
     .delete()

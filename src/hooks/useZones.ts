@@ -10,7 +10,6 @@ export function useZones() {
   const [zones, setZones] = useState<ZoneGeographique[]>([]);
 
   useEffect(() => {
-    if (!supabase) return;
     let cancelled = false;
     supabase
       .from('zones_geographiques')
@@ -86,23 +85,21 @@ export function useZones() {
       };
     });
 
-    if (supabase) {
-      await supabase.from('zones_geographiques').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      if (nouvelles.length > 0) {
-        await supabase.from('zones_geographiques').insert(nouvelles.map(zoneToDb));
-      }
+    await supabase.from('zones_geographiques').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    if (nouvelles.length > 0) {
+      await supabase.from('zones_geographiques').insert(nouvelles.map(zoneToDb));
     }
     setZones(nouvelles);
     return nouvelles;
   }
 
   async function renommerZone(id: string, nom: string) {
-    if (supabase) await supabase.from('zones_geographiques').update({ nom }).eq('id', id);
+    await supabase.from('zones_geographiques').update({ nom }).eq('id', id);
     setZones(prev => prev.map(z => z.id === id ? { ...z, nom } : z));
   }
 
   async function assignerJours(id: string, jours: JourSemaine[]) {
-    if (supabase) await supabase.from('zones_geographiques').update({ jours_assignes: jours }).eq('id', id);
+    await supabase.from('zones_geographiques').update({ jours_assignes: jours }).eq('id', id);
     setZones(prev => prev.map(z => z.id === id ? { ...z, joursAssignes: jours } : z));
   }
 
@@ -114,10 +111,8 @@ export function useZones() {
         : z.participantIds.filter(id => id !== participantId),
     }));
 
-    if (supabase) {
-      for (const z of newZones) {
-        await supabase.from('zones_geographiques').update({ participant_ids: z.participantIds }).eq('id', z.id);
-      }
+    for (const z of newZones) {
+      await supabase.from('zones_geographiques').update({ participant_ids: z.participantIds }).eq('id', z.id);
     }
     setZones(newZones);
   }

@@ -11,7 +11,7 @@ export function idSeanceDepuisRecherche(search: string): string | null {
 
 /** Ne touche qu'une séance encore « planifiée » : un bilan refait ne rouvre ni n'écrase rien. */
 export async function validerSeanceDuBilan(seanceId: string | null, participantId: string): Promise<void> {
-  if (!seanceId || !supabase) return;
+  if (!seanceId) return;
   const { error } = await supabase
     .from('seances')
     .update({ statut: 'realisee' })

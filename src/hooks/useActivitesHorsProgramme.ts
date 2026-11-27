@@ -37,14 +37,13 @@ export function useActivitesHorsProgramme(participantId: string) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!supabase) return;
     utilisateurCourant().then((user) => {
       if (user) setPraticienId(user.id);
     });
   }, []);
 
   const load = useCallback(async () => {
-    if (!participantId || !supabase) { setLoading(false); return; }
+    if (!participantId) { setLoading(false); return; }
     setLoading(true);
 
     const [testsActRes, testsResRes, exActRes, exValRes] = await Promise.all([
@@ -78,7 +77,7 @@ export function useActivitesHorsProgramme(participantId: string) {
   useEffect(() => { void load(); }, [load]);
 
   const toggleTestEtalon = useCallback(async (testId: string, actif: boolean) => {
-    if (!supabase || !praticienId) return;
+    if (!praticienId) return;
     await supabase.from('tests_etalons_activations').upsert({
       participant_id: participantId, test_id: testId, praticien_id: praticienId, actif,
     }, { onConflict: 'participant_id,test_id' });
@@ -86,7 +85,7 @@ export function useActivitesHorsProgramme(participantId: string) {
   }, [participantId, praticienId]);
 
   const assignerExerciceLibre = useCallback(async (ex: Exercice) => {
-    if (!supabase || !praticienId) return;
+    if (!praticienId) return;
     await supabase.from('exercices_libres_activations').upsert({
       participant_id: participantId,
       exercice_id: ex.id,
@@ -101,7 +100,6 @@ export function useActivitesHorsProgramme(participantId: string) {
   }, [participantId, praticienId, load]);
 
   const toggleExerciceLibre = useCallback(async (exerciceId: string, actif: boolean) => {
-    if (!supabase) return;
     await supabase.from('exercices_libres_activations').update({ actif })
       .eq('participant_id', participantId).eq('exercice_id', exerciceId);
     setExercicesActivations(prev => prev.map(e => e.exerciceId === exerciceId ? { ...e, actif } : e));

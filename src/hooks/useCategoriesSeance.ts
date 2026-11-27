@@ -16,7 +16,6 @@ export function useCategoriesSeance() {
   const [categories, setCategories] = useState<CategorieSeance[]>([]);
 
   useEffect(() => {
-    if (!supabase) return;
     let cancelled = false;
     supabase
       .from('categories_seance')
@@ -32,29 +31,25 @@ export function useCategoriesSeance() {
 
   async function creerCategorie(nom: string, couleur: string, estBilan = false): Promise<CategorieSeance | null> {
     const nouvelle: CategorieSeance = { id: uuidv4(), nom: nom.trim(), couleur, estBilan };
-    if (supabase) {
-      const { error } = await supabase.from('categories_seance')
-        .insert({ id: nouvelle.id, nom: nouvelle.nom, couleur, est_bilan: estBilan });
-      if (error) {
-        console.error('Erreur création catégorie de séance:', error);
-        toast.error('Impossible de créer la catégorie.');
-        return null;
-      }
+    const { error } = await supabase.from('categories_seance')
+      .insert({ id: nouvelle.id, nom: nouvelle.nom, couleur, est_bilan: estBilan });
+    if (error) {
+      console.error('Erreur création catégorie de séance:', error);
+      toast.error('Impossible de créer la catégorie.');
+      return null;
     }
     setCategories(prev => [...prev, nouvelle]);
     return nouvelle;
   }
 
   async function modifierCategorie(id: string, patch: { nom?: string; couleur?: string }): Promise<boolean> {
-    if (supabase) {
-      const { error } = await supabase.from('categories_seance')
-        .update({ ...(patch.nom !== undefined ? { nom: patch.nom.trim() } : {}), ...(patch.couleur ? { couleur: patch.couleur } : {}) })
-        .eq('id', id);
-      if (error) {
-        console.error('Erreur modification catégorie de séance:', error);
-        toast.error('Impossible de modifier la catégorie.');
-        return false;
-      }
+    const { error } = await supabase.from('categories_seance')
+      .update({ ...(patch.nom !== undefined ? { nom: patch.nom.trim() } : {}), ...(patch.couleur ? { couleur: patch.couleur } : {}) })
+      .eq('id', id);
+    if (error) {
+      console.error('Erreur modification catégorie de séance:', error);
+      toast.error('Impossible de modifier la catégorie.');
+      return false;
     }
     setCategories(prev => prev.map(c => c.id === id
       ? { ...c, ...(patch.nom !== undefined ? { nom: patch.nom.trim() } : {}), ...(patch.couleur ? { couleur: patch.couleur } : {}) }
@@ -66,13 +61,11 @@ export function useCategoriesSeance() {
   // Le state des séances (useAgenda) n'est pas rafraîchi ici : l'appelant retire la couleur à l'affichage
   // puisque la catégorie n'existe plus dans `categories`.
   async function supprimerCategorie(id: string): Promise<boolean> {
-    if (supabase) {
-      const { error } = await supabase.from('categories_seance').delete().eq('id', id);
-      if (error) {
-        console.error('Erreur suppression catégorie de séance:', error);
-        toast.error('Impossible de supprimer la catégorie.');
-        return false;
-      }
+    const { error } = await supabase.from('categories_seance').delete().eq('id', id);
+    if (error) {
+      console.error('Erreur suppression catégorie de séance:', error);
+      toast.error('Impossible de supprimer la catégorie.');
+      return false;
     }
     setCategories(prev => prev.filter(c => c.id !== id));
     return true;
@@ -82,14 +75,12 @@ export function useCategoriesSeance() {
   // marqueur des autres, par identifiant explicite, puis on le pose.
   async function definirCategorieBilan(id: string): Promise<boolean> {
     const autres = categories.filter(c => c.estBilan && c.id !== id).map(c => c.id);
-    if (supabase) {
-      for (const autreId of autres) {
-        const { error } = await supabase.from('categories_seance').update({ est_bilan: false }).eq('id', autreId);
-        if (error) { console.error('Erreur catégorie Bilan:', error); toast.error('Impossible de définir la catégorie Bilan.'); return false; }
-      }
-      const { error } = await supabase.from('categories_seance').update({ est_bilan: true }).eq('id', id);
+    for (const autreId of autres) {
+      const { error } = await supabase.from('categories_seance').update({ est_bilan: false }).eq('id', autreId);
       if (error) { console.error('Erreur catégorie Bilan:', error); toast.error('Impossible de définir la catégorie Bilan.'); return false; }
     }
+    const { error } = await supabase.from('categories_seance').update({ est_bilan: true }).eq('id', id);
+    if (error) { console.error('Erreur catégorie Bilan:', error); toast.error('Impossible de définir la catégorie Bilan.'); return false; }
     setCategories(prev => prev.map(c => ({ ...c, estBilan: c.id === id })));
     return true;
   }

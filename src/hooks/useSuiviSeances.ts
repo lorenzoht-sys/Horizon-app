@@ -25,7 +25,6 @@ export function useSuiviSeances(mois: string) {
   useEffect(() => {
     let annule = false;
     (async () => {
-      if (!supabase) { setChargement(false); return; }
       setChargement(true);
       const moi = (await utilisateurCourant())?.id;
       const fin = finSeancesPassees(mois, dateCivileParis());
@@ -98,7 +97,6 @@ export function useSuiviSeances(mois: string) {
 
   /** Confirme une séance passée : réalisée (elle part dans le brouillon du mois) ou annulée. */
   const confirmerSeance = useCallback(async (seanceId: string, statut: 'realisee' | 'annulee'): Promise<string | null> => {
-    if (!supabase) return 'Base de données indisponible';
     const { error } = await supabase.from('seances').update({ statut }).eq('id', seanceId).eq('statut', 'planifiee');
     if (error) return error.message;
     setVersion(v => v + 1);

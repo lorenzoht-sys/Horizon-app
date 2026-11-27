@@ -21,7 +21,7 @@ export function useProgramme(participantId: string) {
   // qu'après un rechargement complet de la page — programmeActif restait
   // celui, périmé, de l'effet ci-dessous, exécuté une seule fois au montage.
   const load = useCallback(async () => {
-    if (!participantId || !supabase) return;
+    if (!participantId) return;
     const { data, error } = await supabase
       .from('programmes')
       .select('*')
@@ -36,22 +36,18 @@ export function useProgramme(participantId: string) {
   const programmeActif = programmes.find(p => p.actif) ?? null;
 
   async function upsertProgramme(prog: Programme) {
-    if (supabase) {
-      const { error } = await supabase.from('programmes').upsert(programmeToDb(prog));
-      if (error) {
-        console.error('Erreur sauvegarde programme:', error);
-        throw new Error(error.message);
-      }
+    const { error } = await supabase.from('programmes').upsert(programmeToDb(prog));
+    if (error) {
+      console.error('Erreur sauvegarde programme:', error);
+      throw new Error(error.message);
     }
   }
 
   async function deleteProgrammeDb(id: string) {
-    if (supabase) {
-      const { error } = await supabase.from('programmes').delete().eq('id', id);
-      if (error) {
-        console.error('Erreur suppression programme:', error);
-        throw new Error(error.message);
-      }
+    const { error } = await supabase.from('programmes').delete().eq('id', id);
+    if (error) {
+      console.error('Erreur suppression programme:', error);
+      throw new Error(error.message);
     }
   }
 
@@ -64,13 +60,11 @@ export function useProgramme(participantId: string) {
       actif: true,
       suiviSemaines: [],
     };
-    if (supabase) {
-      await supabase.from('programmes').update({ actif: false }).eq('participant_id', participantId);
-      const { error } = await supabase.from('programmes').upsert(programmeToDb(newProg));
-      if (error) {
-        console.error('Erreur création programme:', error);
-        throw new Error(error.message);
-      }
+    await supabase.from('programmes').update({ actif: false }).eq('participant_id', participantId);
+    const { error } = await supabase.from('programmes').upsert(programmeToDb(newProg));
+    if (error) {
+      console.error('Erreur création programme:', error);
+      throw new Error(error.message);
     }
     setProgrammes(prev => [...prev.map(p => ({ ...p, actif: false })), newProg]);
     return newProg;

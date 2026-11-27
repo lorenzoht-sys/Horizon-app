@@ -1,4 +1,3 @@
-import { supabase } from '../../lib/supabase';
 import { lireProgrammeActif, lireSeancesProgramme, lireExercicesProgramme, lirePlanningProgramme } from '../../lib/acces/assistant';
 import { EXERCICES_BASE } from '../../data/exercices';
 import { formatExerciceV1Ligne, formatExerciceV2Ligne, type ProgrammeResume } from '../../utils/assistantContexte';
@@ -11,8 +10,6 @@ import { formatExerciceV1Ligne, formatExerciceV2Ligne, type ProgrammeResume } fr
  *  NULL = V1 legacy avec exercices catalogués ; `type` renseigné = V2 avec
  *  séances + planning dans des tables séparées). */
 export async function chargerProgrammeActif(patientId: string): Promise<ProgrammeResume | null> {
-  if (!supabase) return null;
-
   const { data: progRows } = await lireProgrammeActif(patientId);
   const row = progRows?.[0] as Record<string, unknown> | undefined;
   if (!row) return null;

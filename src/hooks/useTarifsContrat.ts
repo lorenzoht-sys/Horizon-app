@@ -14,7 +14,6 @@ import { dateCivileParis, jourPrecedent, messageErreurTarif, planChangementTarif
  * parallèle.
  */
 export async function chargerTarifsContrat(contratId: string): Promise<TarifContrat[]> {
-  if (!supabase) return [];
   const { data, error } = await supabase
     .from('tarifs_contrats')
     .select('*')
@@ -40,7 +39,6 @@ export async function fermerEtCreerNouvelleVersion(
   nouveauxFraisDeplacement: number,
   dateEffet: string = dateCivileParis(),
 ): Promise<boolean> {
-  if (!supabase) return false;
   const plan = planChangementTarif(versionActuelle, dateEffet);
   if ('erreur' in plan) { toast.error(plan.erreur); return false; }
 
@@ -118,7 +116,7 @@ export function useTarifsContrat(contratId: string | undefined) {
    * Aucune ligne existante n'est modifiée ; les brouillons de la période sont recalculés par la base.
    */
   async function couvrirDebutContrat(dateDebutContrat: string): Promise<boolean> {
-    if (!contratId || !supabase) return false;
+    if (!contratId) return false;
     const premiere = [...versions].sort((a, b) => a.dateDebutValidite.localeCompare(b.dateDebutValidite))[0];
     if (!premiere || premiere.dateDebutValidite <= dateDebutContrat) return false;
     const { error } = await supabase.from('tarifs_contrats').insert(tarifContratToDb({
@@ -151,7 +149,7 @@ export function useTarifsDesContrats(contratIds: readonly string[]): Record<stri
     let annule = false;
     (async () => {
       const ids = cle ? cle.split(',') : [];
-      if (!supabase || ids.length === 0) { setTarifs({}); return; }
+      if (ids.length === 0) { setTarifs({}); return; }
       const { data, error } = await supabase
         .from('tarifs_contrats')
         .select('*')

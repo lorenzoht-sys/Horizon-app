@@ -31,7 +31,6 @@ export function useCoursCollectifs() {
   const [loading, setLoading] = useState(true);
 
   const charger = useCallback(async () => {
-    if (!supabase) { setLoading(false); return; }
     setLoading(true);
     const [coursRes, partRes] = await Promise.all([
       supabase.from('cours_collectifs').select('*').order('date', { ascending: false }),
@@ -47,7 +46,6 @@ export function useCoursCollectifs() {
   useEffect(() => { void charger(); }, [charger]);
 
   async function creerCoursCollectif(data: CreerCoursCollectifData): Promise<CoursCollectif | null> {
-    if (!supabase) return null;
     const user = await utilisateurCourant();
     if (!user) return null;
 
@@ -99,7 +97,6 @@ export function useCoursCollectifs() {
   }
 
   async function modifierStatutCours(coursId: string, statut: StatutCoursCollectif): Promise<boolean> {
-    if (!supabase) return false;
     const { error } = await supabase.from('cours_collectifs').update({ statut }).eq('id', coursId);
     if (error) {
       console.error('Erreur modification statut cours collectif:', error);
@@ -116,7 +113,6 @@ export function useCoursCollectifs() {
    * sont pas modifiables ici : ils engagent les inscriptions et la facturation.
    */
   async function modifierCours(coursId: string, patch: ModificationCours): Promise<boolean> {
-    if (!supabase) return false;
     const { error } = await supabase.from('cours_collectifs').update({
       titre: patch.titre,
       date: patch.date,
@@ -136,7 +132,6 @@ export function useCoursCollectifs() {
     participationId: string,
     patch: { statutPresence?: StatutPresenceCours; ressentiBorg?: number | null; ressentiBienetre?: number | null; notes?: string | null },
   ): Promise<boolean> {
-    if (!supabase) return false;
     const dbPatch: Record<string, unknown> = {};
     if (patch.statutPresence !== undefined) dbPatch.statut_presence = patch.statutPresence;
     if (patch.ressentiBorg !== undefined) dbPatch.ressenti_borg = patch.ressentiBorg;

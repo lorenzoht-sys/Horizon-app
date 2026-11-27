@@ -8,7 +8,6 @@ export function useJournalSeance() {
   const [notes, setNotes] = useState<NoteSeance[]>([]);
 
   useEffect(() => {
-    if (!supabase) return;
     let cancelled = false;
     supabase
       .from('notes_seances')
@@ -24,12 +23,10 @@ export function useJournalSeance() {
 
   async function ajouterNote(note: Omit<NoteSeance, 'id'>): Promise<NoteSeance> {
     const nouvelle: NoteSeance = { ...note, id: uuidv4() };
-    if (supabase) {
-      const { error } = await supabase.from('notes_seances').insert(noteSeanceToDb(nouvelle));
-      if (error) {
-        console.error('Erreur ajout note séance:', error);
-        throw new Error(error.message);
-      }
+    const { error } = await supabase.from('notes_seances').insert(noteSeanceToDb(nouvelle));
+    if (error) {
+      console.error('Erreur ajout note séance:', error);
+      throw new Error(error.message);
     }
     setNotes(prev => [nouvelle, ...prev]);
     return nouvelle;

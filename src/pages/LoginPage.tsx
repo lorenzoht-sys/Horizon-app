@@ -23,14 +23,12 @@ export default function LoginPage({ onLogin }: Props) {
     if (!email || !password) { setError('Veuillez remplir tous les champs'); return; }
     setLoading(true);
 
-    if (supabase) {
-      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
-      if (!authError) {
-        onLogin();
-        navigate('/');
-        setLoading(false);
-        return;
-      }
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    if (!authError) {
+      onLogin();
+      navigate('/');
+      setLoading(false);
+      return;
     }
 
     setError('Email ou mot de passe incorrect');

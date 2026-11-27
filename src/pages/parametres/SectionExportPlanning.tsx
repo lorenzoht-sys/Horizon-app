@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Copy, RefreshCw, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '../../lib/supabase';
 import { lirePraticien, majTokenPlanning } from '../../lib/acces/praticien';
 import { utilisateurCourant } from '../../lib/session';
 import { getAppHost } from '../../lib/config';
@@ -15,7 +14,6 @@ export function SectionExportPlanning() {
   const [working, setWorking] = useState(false);
 
   useEffect(() => {
-    if (!supabase) { setLoading(false); return; }
     void (async () => {
       const user = await utilisateurCourant();
       if (!user) { setLoading(false); return; }
@@ -32,7 +30,6 @@ export function SectionExportPlanning() {
   }
 
   async function activerOuRegenerer(regeneration: boolean) {
-    if (!supabase) return;
     if (regeneration && !window.confirm(
       "Régénérer le lien invalidera immédiatement l'ancien : il faudra reconfigurer l'abonnement dans Google Agenda ou Calendrier iPhone. Continuer ?"
     )) {

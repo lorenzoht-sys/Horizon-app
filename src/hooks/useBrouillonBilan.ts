@@ -116,7 +116,6 @@ export async function syncBrouillonToSupabase(
   brouillon: BrouillonBilan,
   praticienId: string
 ): Promise<boolean> {
-  if (!supabase) return false;
   try {
     const { error } = await supabase
       .from('bilans_brouillons')
@@ -141,7 +140,6 @@ export async function loadBrouillonFromSupabase(
   participantId: string,
   praticienId: string
 ): Promise<BrouillonBilan | null> {
-  if (!supabase) return null;
   try {
     const { data, error } = await supabase
       .from('bilans_brouillons')
@@ -169,7 +167,6 @@ export async function deleteBrouillonFromSupabase(
   participantId: string,
   praticienId: string
 ): Promise<void> {
-  if (!supabase) return;
   try {
     await supabase
       .from('bilans_brouillons')
@@ -183,7 +180,6 @@ export async function deleteBrouillonFromSupabase(
  *  Appelé après SIGNED_IN pour récupérer les drafts après logout ou changement d'appareil.
  *  Fail silently si la table bilans_brouillons n'existe pas encore. */
 export async function loadAllBrouillonsFromSupabase(praticienId: string): Promise<void> {
-  if (!supabase) return;
   try {
     const { data, error } = await supabase
       .from('bilans_brouillons')
