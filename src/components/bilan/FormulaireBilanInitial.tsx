@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { sansEmoji } from '../../lib/formulaireBeneficiaire';
 import { getBilanEnCoursKey } from '../../hooks/useBrouillonBilan';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -192,8 +193,8 @@ function ListeOperations({
                     padding: '6px 12px',
                     borderRadius: '8px',
                     border: '1.5px solid',
-                    borderColor: op.complication === true ? '#2BBFBF' : '#D1D5DB',
-                    background: op.complication === true ? '#2BBFBF' : '#FFFFFF',
+                    borderColor: op.complication === true ? 'var(--vert-action)' : 'var(--trait-champ)',
+                    background: op.complication === true ? 'var(--vert-action)' : '#FFFFFF',
                     color: op.complication === true ? '#FFFFFF' : '#374151',
                     fontWeight: op.complication === true ? '600' : '400',
                     fontSize: '12px',
@@ -210,8 +211,8 @@ function ListeOperations({
                     padding: '6px 12px',
                     borderRadius: '8px',
                     border: '1.5px solid',
-                    borderColor: op.complication === false ? '#2BBFBF' : '#D1D5DB',
-                    background: op.complication === false ? '#2BBFBF' : '#FFFFFF',
+                    borderColor: op.complication === false ? 'var(--vert-action)' : 'var(--trait-champ)',
+                    background: op.complication === false ? 'var(--vert-action)' : '#FFFFFF',
                     color: op.complication === false ? '#FFFFFF' : '#374151',
                     fontWeight: op.complication === false ? '600' : '400',
                     fontSize: '12px',
@@ -276,8 +277,8 @@ function BoutonOuiNon({
               padding: '6px 16px',
               borderRadius: '12px',
               border: '1.5px solid',
-              borderColor: isActive ? '#2BBFBF' : '#D1D5DB',
-              background: isActive ? '#2BBFBF' : '#FFFFFF',
+              borderColor: isActive ? 'var(--vert-action)' : 'var(--trait-champ)',
+              background: isActive ? 'var(--vert-action)' : '#FFFFFF',
               color: isActive ? '#FFFFFF' : '#374151',
               fontWeight: isActive ? '600' : '400',
               fontSize: '14px',
@@ -645,9 +646,9 @@ function BlocQuestions({
   const showContent = !bloc.questionCle || gateValue === 'oui';
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-      <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-5 py-3.5 border-b border-gray-100">
-        <h3 className="font-heading font-semibold text-dark text-[15px]">{bloc.titre}</h3>
+    <div className="bg-white rounded-[20px] overflow-hidden border border-[color:var(--trait)]">
+      <div className="px-5 pt-5">
+        <h3 className="font-heading font-extrabold text-base" style={{ color: 'var(--encre)' }}>{sansEmoji(bloc.titre)}</h3>
       </div>
       <div className="p-5 flex flex-col gap-4">
         {bloc.questionCle && (

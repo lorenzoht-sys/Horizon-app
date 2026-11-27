@@ -16,7 +16,12 @@ export default {
       // ET l'échelle numérique de Tailwind. Ne jamais remplacer ces quatre clés par
       // une chaîne. Garde-fou : src/lib/tailwindEchelles.test.ts.
       colors: {
-        primary:          '#2BB89A',
+        // Variables RGB depuis le 25/11/2026 (charte graphique) : même valeur
+        // qu'avant partout (src/styles/tokens.css), mais les formulaires
+        // (.charte-formulaire, src/styles/charteFormulaire.css) prennent le
+        // vert d'action #147A64, lisible avec du texte blanc (5,3:1 au lieu
+        // de 2,5:1). <alpha-value> garde les opacités (bg-primary/5…).
+        primary:          'rgb(var(--rgb-primary) / <alpha-value>)',
         'primary-light':  '#E6F5F1',
         'primary-dark':   '#1A9A7F',
         secondary:        '#1A9A7F',
@@ -29,7 +34,7 @@ export default {
         'text-secondary': '#5A6B7A',
         'text-muted':     '#9DAFC0',
         border:           'rgba(0,0,0,0.06)',
-        success:          '#27AE60',
+        success:          'rgb(var(--rgb-success) / <alpha-value>)',
         warning:          '#F0A429',
         danger:           '#E8544A',
         ink:              '#1A2332',

@@ -28,7 +28,7 @@ export default function ModalRepriseBrouillon({
   brouillon, participantNom, onReprendre, onRecommencer, onFermer,
 }: Props) {
   return (
-    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-gray-100">
+    <div className="charte-formulaire bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-gray-100">
       <div className="flex items-start justify-between mb-1">
         <div className="text-3xl">📋</div>
         {onFermer && (

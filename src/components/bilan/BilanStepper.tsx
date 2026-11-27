@@ -16,6 +16,9 @@ import Step_ResultsIA from './steps/Step_ResultsIA';
 import FormulaireBilanInitial, { type FormulaireFlat } from './FormulaireBilanInitial';
 import { ALL_TESTS } from '../../data/profiles';
 import { Check } from 'lucide-react';
+import { EtapesFormulaire } from '../ui/EtapesFormulaire';
+import { BTN_PRINCIPAL, BTN_SECONDAIRE } from '../ui/boutonsFormulaire';
+import { remonterEnHaut } from '../../utils/remonterEnHaut';
 import { libelleAge } from '../../lib/age';
 
 type BilanForm = Omit<Bilan, 'id'>;
@@ -72,6 +75,14 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
   const isInitial     = nextTrimestre === 0;
 
   const [step, setStep] = useState<number>(() => brouillon?.etapeActuelle ?? 0);
+  // Retour en haut à chaque changement d'étape (même correction que le
+  // formulaire bénéficiaire, 25/11/2026 : « Suivant » laissait la page en bas).
+  const hautRef = useRef<HTMLDivElement>(null);
+  const etapeInitiale = useRef(true);
+  useEffect(() => {
+    if (etapeInitiale.current) { etapeInitiale.current = false; return; }
+    remonterEnHaut(hautRef.current);
+  }, [step]);
   const [form, setForm] = useState<BilanForm>(() => {
     const empty = emptyBilan(nextTrimestre);
     return brouillon?.data ? mergerBrouillon(empty, brouillon.data) : empty;
@@ -281,37 +292,11 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      {/* Stepper header */}
-      <div className="flex items-center mb-8 overflow-x-auto pb-1">
-        {STEPS.map((label, i) => (
-          <div key={label} className="flex items-center flex-1 last:flex-none min-w-0">
-            <div className="flex flex-col items-center flex-shrink-0">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
-                i < step ? 'bg-success text-white' : i === step ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'
-              }`}>
-                {i < step ? <Check size={14} /> : i + 1}
-              </div>
-              <span className={`text-xs mt-1 font-medium hidden sm:block text-center leading-tight max-w-[72px] ${
-                i === step ? 'text-primary' : 'text-gray-400'
-              }`}>
-                {label}
-              </span>
-            </div>
-            {i < STEPS.length - 1 && (
-              <div className={`flex-1 h-0.5 mx-2 min-w-2 ${i < step ? 'bg-success' : 'bg-gray-200'}`} />
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Indicateur mobile */}
-      <p className="text-xs text-gray-400 text-center mb-4 sm:hidden">
-        Étape {step + 1} / {STEPS.length} — {STEPS[step]}
-      </p>
+    <div ref={hautRef} className="max-w-2xl mx-auto charte-formulaire">
+      <EtapesFormulaire etapes={STEPS} courante={step} />
 
       {/* Contenu */}
-      <div className={`mb-6 ${isInitial && step === 0 ? '' : 'bg-white rounded-2xl border border-gray-100 p-6'}`}>
+      <div className={`mb-6 ${isInitial && step === 0 ? '' : 'bg-white rounded-[20px] border border-[color:var(--trait)] p-5 sm:p-6'}`}>
         {isInitial ? renderInitialStep() : renderTrimestrielStep()}
       </div>
 
@@ -319,7 +304,7 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
       <div className="flex items-center justify-between gap-3">
         <button
           onClick={step === 0 ? onCancel : () => setStep(s => s - 1)}
-          className="px-5 py-2.5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors font-medium"
+          className={BTN_SECONDAIRE}
         >
           {step === 0 ? 'Annuler' : '← Retour'}
         </button>
@@ -347,7 +332,7 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
         {step < LAST ? (
           <button
             onClick={handleNextStep}
-            className="px-6 py-2.5 bg-primary text-white rounded-xl font-semibold hover:bg-dark transition-colors"
+            className={BTN_PRINCIPAL}
           >
             Suivant →
           </button>
@@ -355,7 +340,7 @@ export default function BilanStepper({ participant, onSave, onCancel, brouillon 
           <button
             onClick={handleSave}
             disabled={isFinalSaving}
-            className="px-6 py-2.5 bg-success text-white rounded-xl font-semibold hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            className={BTN_PRINCIPAL}
           >
             <Check size={16} />
             {isFinalSaving ? 'Enregistrement...' : 'Enregistrer le bilan'}

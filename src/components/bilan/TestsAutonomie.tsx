@@ -51,8 +51,8 @@ function RadioScore({
             onClick={() => onChange(opt.score)}
             style={{
               padding: '6px 10px', borderRadius: 10, border: '1.5px solid',
-              borderColor: value === opt.score ? '#2BBFBF' : '#D1D5DB',
-              background: value === opt.score ? '#2BBFBF' : '#FFFFFF',
+              borderColor: value === opt.score ? 'var(--vert-action)' : 'var(--trait-champ)',
+              background: value === opt.score ? 'var(--vert-action)' : '#FFFFFF',
               color: value === opt.score ? '#FFFFFF' : '#374151',
               fontWeight: value === opt.score ? 600 : 400,
               fontSize: 12, cursor: 'pointer',
@@ -128,9 +128,9 @@ export function SectionSedentarite({ value, onChange }: { value: SedentariteRepo
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-      <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-5 py-3.5 border-b border-gray-100">
-        <h3 className="font-heading font-semibold text-dark text-[15px]">📊 Niveau d'activité physique</h3>
+    <div className="bg-white rounded-[20px] overflow-hidden border border-[color:var(--trait)]">
+      <div className="px-5 pt-5">
+        <h3 className="font-heading font-extrabold text-base" style={{ color: 'var(--encre)' }}>Niveau d'activité physique</h3>
         <p className="text-xs text-gray-400 mt-0.5">Test d'auto-évaluation (d'après Ricci &amp; Gagnon)</p>
       </div>
       <div className="p-5 flex flex-col gap-5">
@@ -153,8 +153,8 @@ export function SectionSedentarite({ value, onChange }: { value: SedentariteRepo
                     onClick={() => set({ b_pratique: v })}
                     style={{
                       padding: '6px 20px', borderRadius: 10, border: '1.5px solid',
-                      borderColor: value.b_pratique === v ? '#2BBFBF' : '#D1D5DB',
-                      background: value.b_pratique === v ? '#2BBFBF' : '#FFFFFF',
+                      borderColor: value.b_pratique === v ? 'var(--vert-action)' : 'var(--trait-champ)',
+                      background: value.b_pratique === v ? 'var(--vert-action)' : '#FFFFFF',
                       color: value.b_pratique === v ? '#FFFFFF' : '#374151',
                       fontWeight: value.b_pratique === v ? 600 : 400,
                       fontSize: 13, cursor: 'pointer', transition: 'all 0.15s ease',
@@ -209,9 +209,9 @@ export function SectionFatigue({ value, onChange }: { value: (number | null)[]; 
   const profil = etat.etat === 'complet' ? getFSSProfil(etat.score) : null;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-      <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-5 py-3.5 border-b border-gray-100">
-        <h3 className="font-heading font-semibold text-dark text-[15px]">😴 Fatigue perçue</h3>
+    <div className="bg-white rounded-[20px] overflow-hidden border border-[color:var(--trait)]">
+      <div className="px-5 pt-5">
+        <h3 className="font-heading font-extrabold text-base" style={{ color: 'var(--encre)' }}>Fatigue perçue</h3>
         <p className="text-xs text-gray-400 mt-0.5">Échelle de sévérité de la fatigue (FSS)</p>
       </div>
       <div className="p-5 flex flex-col gap-4">
@@ -234,8 +234,8 @@ export function SectionFatigue({ value, onChange }: { value: (number | null)[]; 
                     onClick={() => setReponse(idx, n)}
                     style={{
                       width: 36, height: 36, borderRadius: 8, border: '1.5px solid',
-                      borderColor: val === n ? '#2BBFBF' : '#D1D5DB',
-                      background: val === n ? '#2BBFBF' : '#FFFFFF',
+                      borderColor: val === n ? 'var(--vert-action)' : 'var(--trait-champ)',
+                      background: val === n ? 'var(--vert-action)' : '#FFFFFF',
                       color: val === n ? '#FFFFFF' : '#374151',
                       fontWeight: val === n ? 600 : 400,
                       cursor: 'pointer', fontSize: 14,
