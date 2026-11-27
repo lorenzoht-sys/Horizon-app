@@ -68,7 +68,8 @@ test.describe('Bibliothèque (exercices, modèles) sur mobile (route fusionnée 
       // un exercice — sans passer par le glisser-déposer (non tactile). ──
       await page.getByRole('button', { name: /Créer un dossier/ }).click();
       await page.getByPlaceholder('Nom du dossier').fill(nomDossier);
-      await page.getByRole('button', { name: 'Créer', exact: true }).click();
+      // Dans la page : l'onglet « + » de la barre du bas s'appelle aussi « Créer » (#226).
+      await page.getByRole('main').getByRole('button', { name: 'Créer', exact: true }).click();
       await expect(page.getByText('Dossier créé')).toBeVisible({ timeout: 10000 });
       // Attend la disparition du toast avant de continuer : sinon il traîne
       // en bas d'écran pendant les vérifications suivantes (recouvrement,

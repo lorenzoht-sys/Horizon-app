@@ -16,8 +16,10 @@ import { URLS_MOBILE, ongletDepuisUrl, type OngletMobile } from '../../lib/route
 const ONGLETS: { id: OngletMobile; icon: string; label: string; url: string; principal?: boolean }[] = [
   { id: 'accueil',       icon: 'ti-home',   label: 'Accueil',   url: URLS_MOBILE.accueil },
   { id: 'beneficiaires', icon: 'ti-users',  label: 'Bénéfic.',  url: URLS_MOBILE.beneficiaires },
-  { id: 'saisie',        icon: 'ti-plus',   label: 'Saisie',    url: URLS_MOBILE.saisie, principal: true },
-  { id: 'agenda',        icon: 'ti-calendar', label: 'Agenda',  url: URLS_MOBILE.agenda },
+  { id: 'saisie',        icon: 'ti-plus',   label: 'Créer',     url: URLS_MOBILE.saisie, principal: true },
+  // « Agenda » remplacé par « Carte » le 2026-11-24 (arbitrage de Pierre) : les rendez-vous se gèrent
+  // depuis l'accueil et le « + » ; l'agenda reste dans « Plus ».
+  { id: 'carte',         icon: 'ti-map-2',  label: 'Carte',     url: URLS_MOBILE.carte },
   { id: 'plus',          icon: 'ti-menu-2', label: 'Plus',      url: URLS_MOBILE.plus },
 ];
 

@@ -5,6 +5,9 @@ import { useAgenda } from '../hooks/useAgenda';
 import { useContrats } from '../hooks/useContrats';
 import { useStructures } from '../hooks/useStructures';
 import { useFacturesAValider, useFacturesValidees } from '../hooks/useFacturesAValider';
+import { useToutConfirmer } from '../hooks/useToutConfirmer';
+import { DialogueToutConfirmer } from '../components/tableau-de-bord/DialogueToutConfirmer';
+import { DialogueMemoSeance } from '../components/tableau-de-bord/DialogueMemoSeance';
 import { useJournalSeance } from '../hooks/useJournalSeance';
 import ParticipantCard from '../components/participant/ParticipantCard';
 import { contratsDesBeneficiairesActifs, filtrerParNom } from '../lib/archivage';
@@ -75,7 +78,7 @@ export default function Dashboard() {
   // participantsActifs (exclut les archivés) est la seule population de cet écran du quotidien :
   // les archivés ont leur page (/archives).
   const { participants, participantsActifs, participantsArchives, loading: participantsLoading, addParticipant, archiverParticipant } = useParticipants();
-  const { seancesDuJour, seances, modifierSeance, patientsARelancer } = useAgenda();
+  const { seancesDuJour, seances, modifierSeance, marquerRealiseesEnGroupe, patientsARelancer } = useAgenda();
   const { notes } = useJournalSeance();
   // Premiers pas (25/11/2026, voir enPremiersPas) : la phrase d'accueil renvoie au guide, dont le
   // bouton « Voir le guide » brille. Le guide est lu ici et passé à GuideDemarrageVue : un seul chargement.
@@ -94,6 +97,7 @@ export default function Dashboard() {
   const [aArchiver, setAArchiver] = useState<{ id: string; nom: string } | null>(null);
   const [archivageEnCours, setArchivageEnCours] = useState(false);
   const [showCreateStructure, setShowCreateStructure] = useState(false);
+  const [memoOuvert, setMemoOuvert] = useState(false);
   const [activeTab, setActiveTab] = useState<DashTab>('tous');
   const [minLoadDone, setMinLoadDone] = useState(false);
   const [retours, setRetours] = useState<Record<string, { borgRpe: number; bienEtre: number }[]>>({});
@@ -186,24 +190,29 @@ export default function Dashboard() {
     if (action === 'dictee') navigate(`/participant/${p.id}`, { state: { ouvrir: 'dictee' } });
   }
 
+  // ── Données de la page ────────────────────────────────────────────────────
+  // Calculées avant le retour du squelette : « Tout confirmer » est un hook et
+  // doit être appelé à chaque rendu (règle des hooks ; placé après le retour, il
+  // faisait planter le tableau de bord à la fin du chargement).
+  const aujourdhui = dateCivileParis(maintenant);
+  const heure = heureLocale(maintenant);
+  const actifs = new Set(participantsActifs.map(p => p.id));
+  const aConfirmer = seancesNonConfirmees(seances, aujourdhui, heure).filter(s => actifs.has(s.participantId));
+  const toutConfirmer = useToutConfirmer({ seances: aConfirmer, factures, marquer: marquerRealiseesEnGroupe });
+
   if (participantsLoading || !minLoadDone) {
     return <PageWrapper><DashboardSkeleton /></PageWrapper>;
   }
 
-  // ── Données de la page ────────────────────────────────────────────────────
-  const aujourdhui = dateCivileParis(maintenant);
-  const heure = heureLocale(maintenant);
   const nomDe = (id: string) => {
     const p = participants.find(x => x.id === id);
     return p ? `${p.prenom} ${p.nom}` : 'Bénéficiaire';
   };
-  const actifs = new Set(participantsActifs.map(p => p.id));
 
   const journee = seancesDuJour(aujourdhui).filter(s => s.statut !== 'annulee');
   const prochain = prochainRendezVous(seances.filter(s => actifs.has(s.participantId)), aujourdhui, heure);
   const participantProchain = prochain ? participants.find(p => p.id === prochain.participantId) ?? null : null;
   const prochainAujourdhui = prochain && prochain.date === aujourdhui ? prochain : null;
-  const aConfirmer = seancesNonConfirmees(seances, aujourdhui, heure).filter(s => actifs.has(s.participantId));
   const nbBilansAujourdhui = journee.filter(s => s.type !== 'seance' && s.statut === 'planifiee' && s.heureDebut.slice(0, 5) > heure).length;
 
   const bilansAPrevoir = prochainsBilans(participantsActifs, aujourdhui);
@@ -302,6 +311,7 @@ export default function Dashboard() {
                 dernierRessenti={participantProchain ? retours[participantProchain.id]?.[0] ?? null : null}
                 delai={prochain ? delaiRendezVous(prochain, aujourdhui, heure) : ''}
                 quand={prochain ? libelleRendezVous(prochain, aujourdhui) : ''}
+                onModifierMemo={prochain ? () => setMemoOuvert(true) : undefined}
               />
             </div>
             <div className="lg:col-span-7 flex flex-col [&>section]:flex-1">
@@ -312,7 +322,7 @@ export default function Dashboard() {
           {/* Ce qui attend un geste */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-[18px] items-start">
             <CarteAConfirmer seances={aConfirmer} participants={participants} aujourdhui={aujourdhui}
-              enCours={confirmationEnCours} onMarquerRealisee={s => setAValider(s)} />
+              enCours={confirmationEnCours} onMarquerRealisee={s => setAValider(s)} onToutConfirmer={toutConfirmer.ouvrir} />
             <CarteProchainsBilans bilans={bilansAPrevoir} participants={participants} />
             <CarteFactures resume={resume} chargement={chargementBrouillons || chargementFactures} />
           </div>
@@ -479,6 +489,25 @@ export default function Dashboard() {
           onConfirmer={() => void marquerRealisee(aValider)}
           onAnnuler={() => setAValider(null)}
         />
+      )}
+
+      {memoOuvert && prochain && (
+        <DialogueMemoSeance
+          nom={participantProchain ? `${participantProchain.prenom} ${participantProchain.nom}` : 'Bénéficiaire'}
+          objectifInitial={prochain.objectif ?? ''}
+          noteInitiale={prochain.notes ?? ''}
+          onEnregistrer={async v => {
+            const ok = await modifierSeance(prochain.id, { objectif: v.objectif || undefined, notes: v.notes || undefined });
+            if (ok) toast.success('Mémo enregistré');
+            return ok;
+          }}
+          onAnnuler={() => setMemoOuvert(false)}
+        />
+      )}
+
+      {toutConfirmer.ouvert && (
+        <DialogueToutConfirmer plan={toutConfirmer.plan} enCours={toutConfirmer.enCours} avancement={toutConfirmer.avancement}
+          onConfirmer={() => void toutConfirmer.confirmer()} onAnnuler={toutConfirmer.fermer} />
       )}
 
       {actionRapide && (

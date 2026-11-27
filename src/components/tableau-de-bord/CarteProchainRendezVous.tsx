@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { MapPin } from 'lucide-react';
+import { MapPin, PenLine } from 'lucide-react';
 import type { Participant, Seance } from '../../types';
 import type { ContexteBeneficiaire } from '../../lib/tableauDeBord';
 import { LABEL_TYPE } from '../../lib/agendaCommun';
@@ -12,7 +12,7 @@ import { niveauBienEtre, niveauEffort } from '../../lib/ressentiCours';
 
 const AVATAR_COLORS = ['#2BB89A', '#1D9E9E', '#7D3C98', '#E67E22', '#C2187A', '#1A7F5A'];
 
-export function CarteProchainRendezVous({ seance, participant, contexte, dernierRessenti, delai, quand }: {
+export function CarteProchainRendezVous({ seance, participant, contexte, dernierRessenti, delai, quand, onModifierMemo }: {
   seance: Seance | null;
   participant: Participant | null;
   contexte: ContexteBeneficiaire;
@@ -21,6 +21,8 @@ export function CarteProchainRendezVous({ seance, participant, contexte, dernier
   delai: string;
   /** « Aujourd’hui · 14:30 » */
   quand: string;
+  /** « Modifier » le mémo (2026-11-24) : objectif et note de cette séance. */
+  onModifierMemo?: () => void;
 }) {
   if (!seance || !participant) {
     return (
@@ -42,6 +44,7 @@ export function CarteProchainRendezVous({ seance, participant, contexte, dernier
   const effort = dernierRessenti ? niveauEffort(dernierRessenti.borgRpe) : null;
   const lignes: { cle: string; titre: string; couleur: string; texte: string }[] = [];
   if (seance.objectif?.trim()) lignes.push({ cle: 'seance', titre: 'Objectif de la séance', couleur: '#147A64', texte: seance.objectif.trim() });
+  if (seance.notes?.trim()) lignes.push({ cle: 'note', titre: 'Ma note', couleur: '#147A64', texte: seance.notes.trim() });
   if (contexte.objectif) lignes.push({ cle: 'objectif', titre: 'Son objectif', couleur: '#147A64', texte: `« ${contexte.objectif} »` });
   if (contexte.vigilance) lignes.push({ cle: 'vigilance', titre: 'À garder en tête', couleur: '#8A5300', texte: contexte.vigilance });
   if (bienEtre || effort) {
@@ -73,20 +76,31 @@ export function CarteProchainRendezVous({ seance, participant, contexte, dernier
         </div>
       </div>
 
-      {lignes.length > 0 ? (
-        <dl className="m-0 grid gap-x-3 gap-y-1.5 text-[13px] bg-white rounded-[14px] px-3.5 py-3" style={{ gridTemplateColumns: 'auto 1fr' }}>
-          {lignes.map(l => (
-            <div key={l.cle} className="contents">
-              <dt className="font-bold whitespace-nowrap" style={{ color: l.couleur }}>{l.titre}</dt>
-              <dd className="m-0" style={{ color: 'var(--color-ink)' }}>{l.texte}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : (
-        <p className="m-0 text-[13px] bg-white rounded-[14px] px-3.5 py-3" style={{ color: '#3D4C5A' }}>
-          Astuce : notez l’objectif personnel de {participant.prenom} lors du bilan, il s’affichera ici avant chaque séance.
-        </p>
-      )}
+      <div className="bg-white rounded-[14px] px-3.5 py-3 flex flex-col gap-2">
+        {onModifierMemo && (
+          <div className="flex items-center justify-between gap-2 -mt-0.5">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider" style={{ color: 'var(--color-ink-2)' }}>Mémo</span>
+            <button type="button" onClick={onModifierMemo}
+              className="inline-flex items-center gap-1 h-8 px-2.5 -mr-1.5 rounded-[9px] text-[12px] font-bold hover:bg-[#E6F5F1]" style={{ color: '#147A64' }}>
+              <PenLine size={13} aria-hidden="true" /> {lignes.length > 0 ? 'Modifier' : 'Ajouter une note'}
+            </button>
+          </div>
+        )}
+        {lignes.length > 0 ? (
+          <dl className="m-0 grid gap-x-3 gap-y-1.5 text-[13px]" style={{ gridTemplateColumns: 'auto 1fr' }}>
+            {lignes.map(l => (
+              <div key={l.cle} className="contents">
+                <dt className="font-bold whitespace-nowrap" style={{ color: l.couleur }}>{l.titre}</dt>
+                <dd className="m-0 whitespace-pre-line" style={{ color: 'var(--color-ink)' }}>{l.texte}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="m-0 text-[13px]" style={{ color: '#3D4C5A' }}>
+            Astuce : notez l’objectif personnel de {participant.prenom} lors du bilan, il s’affichera ici avant chaque séance.
+          </p>
+        )}
+      </div>
 
       {adresse && (
         <p className="m-0 flex items-center gap-1.5 text-[13px]" style={{ color: '#3D4C5A' }}>

@@ -11,7 +11,7 @@
 // desktop, c'est LA MÊME : tourner le téléphone affiche la version desktop
 // du même écran, et revenir en portrait rouvre l'écran mobile.
 
-export type OngletMobile = 'accueil' | 'beneficiaires' | 'saisie' | 'agenda' | 'assistant' | 'plus';
+export type OngletMobile = 'accueil' | 'beneficiaires' | 'saisie' | 'agenda' | 'carte' | 'assistant' | 'plus';
 
 export type EcranMobile =
   | { ecran: 'accueil' }
@@ -19,7 +19,10 @@ export type EcranMobile =
   | { ecran: 'saisie' }
   | { ecran: 'plus' }
   // `date` (AAAA-MM-JJ) : jour à afficher à l'ouverture, null = aujourd'hui.
-  | { ecran: 'agenda'; date: string | null }
+  // `seanceId` : séance à ouvrir directement dans la fenêtre de l'agenda ; `creation` : ouvre la
+  // création d'une séance ; `retour` : écran où revenir une fois la fenêtre fermée (2026-11-24,
+  // retour de Pierre : gérer un rendez-vous et créer une séance depuis l'accueil et le « + »).
+  | { ecran: 'agenda'; date: string | null; seanceId?: string | null; creation?: 'seance' | null; retour?: 'accueil' | 'saisie' | null }
   | { ecran: 'assistant'; beneficiaireId: string | null }
   | { ecran: 'parametres' }
   | { ecran: 'nouveauBeneficiaire' }
@@ -44,6 +47,11 @@ export const URLS_MOBILE = {
   // push « absence signalée » (urlNotificationAbsencePraticien,
   // api/_lib/absenceSignalee.ts, qui construit la même URL côté serveur).
   agendaJour: (date: string) => `/agenda?date=${encodeURIComponent(date)}`,
+  // Ouvre une séance dans la fenêtre de l'agenda, puis revient à l'accueil à la fermeture.
+  agendaSeance: (seanceId: string) => `/agenda?seance=${encodeURIComponent(seanceId)}&retour=accueil`,
+  // « + » › Nouvelle séance : la création de l'agenda, puis retour à l'écran « + ».
+  nouvelleSeance: '/agenda?nouvelle=seance&retour=saisie',
+  carte: '/map',
   assistant: '/assistant',
   parametres: '/settings',
   archives: '/archives',
@@ -58,7 +66,9 @@ export const URLS_MOBILE = {
 } as const;
 
 // Écrans de l'espace pro sans version téléphone (le préfixe suffit).
-const PREFIXES_DESKTOP_SEULEMENT = ['/agenda-v2', '/map', '/zones', '/stats', '/admin'];
+// /map en est sorti le 2026-11-24 : la carte des bénéficiaires remplace « Agenda » dans la barre du
+// bas (arbitrage de Pierre) ; sa page est une mise en page simple, servie par l'interface unique.
+const PREFIXES_DESKTOP_SEULEMENT = ['/agenda-v2', '/zones', '/stats', '/admin'];
 
 /**
  * Routes servies par l'interface UNIQUE (responsive) même sous 768 px.
@@ -101,7 +111,9 @@ export function estRouteInterfaceUnique(pathname: string): boolean {
     // Profil de facturation (étape 4), atteint depuis Paramètres : formulaire d'une colonne,
     // construit responsive, sans barre fixe en bas. /settings lui-même reste géré par
     // l'écran 'parametres' (SettingsPage sans barre), seule cette sous-page passe ici.
-    /^\/settings\/facturation\/?$/.test(pathname)
+    /^\/settings\/facturation\/?$/.test(pathname) ||
+    // Carte des bénéficiaires (2026-11-24) : onglet de la barre du bas.
+    /^\/map\/?$/.test(pathname)
   );
 }
 
@@ -140,7 +152,17 @@ export function ecranMobileDepuisUrl(pathname: string, search: string): EcranMob
   }
   // Ancienne Tournée (retirée 2026-10-25) : un lien ou favori /tournee ouvre l'agenda.
   if (chemin === '/tournee') return { ecran: 'agenda', date: null };
-  if (chemin === '/agenda') return { ecran: 'agenda', date: dateAgendaValide(params.get('date')) };
+  if (chemin === '/agenda') {
+    const retour = params.get('retour');
+    const seanceId = params.get('seance');
+    return {
+      ecran: 'agenda',
+      date: dateAgendaValide(params.get('date')),
+      ...(seanceId ? { seanceId } : {}),
+      ...(params.get('nouvelle') === 'seance' ? { creation: 'seance' as const } : {}),
+      ...(retour === 'accueil' || retour === 'saisie' ? { retour } : {}),
+    };
+  }
   if (chemin === '/assistant') return { ecran: 'assistant', beneficiaireId: params.get('beneficiaire') || null };
   if (chemin === '/settings') return { ecran: 'parametres' };
   if (chemin === '/participants/nouveau') return { ecran: 'nouveauBeneficiaire' };
@@ -167,6 +189,7 @@ export function ecranMobileDepuisUrl(pathname: string, search: string): EcranMob
 
 /** Onglet de la barre du bas à mettre en évidence pour cette URL. */
 export function ongletDepuisUrl(pathname: string, search: string): OngletMobile | null {
+  if (/^\/map\/?$/.test(pathname)) return 'carte';
   if (estRouteInterfaceUnique(pathname)) return 'beneficiaires';
   const e = ecranMobileDepuisUrl(pathname, search);
   switch (e.ecran) {

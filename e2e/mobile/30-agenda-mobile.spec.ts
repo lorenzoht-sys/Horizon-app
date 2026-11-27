@@ -33,10 +33,12 @@ test.describe('Agenda mobile (écran natif, vue Jour — MVP)', () => {
 
     await loginPraticien(page);
 
-    // ── Ouvrir l'agenda depuis l'onglet « Agenda » de la barre du bas ────────
+    // ── Ouvrir l'agenda depuis « Plus » (onglet de la barre jusqu'au 2026-11-24) ────────
     await page.goto('/');
-    await page.getByRole('navigation', { name: 'Navigation principale' }).getByRole('button', { name: 'Agenda' }).click();
-    // .first() : « Agenda » est aussi le libellé de l'onglet de la barre du bas (qui remplace Tournée).
+    // Agenda déplacé dans « Plus » le 2026-11-24 (la Carte prend sa place dans la barre).
+    await page.getByRole('navigation', { name: 'Navigation principale' }).getByRole('button', { name: 'Plus' }).click();
+    await page.getByRole('button', { name: 'Agenda', exact: true }).click();
+    // .first() : « Agenda » peut apparaître plusieurs fois à l'écran.
     await expect(page.getByText('Agenda', { exact: true }).first()).toBeVisible();
 
     // ── Changer de jour (flèches) ────────────────────────────────────────────
@@ -207,8 +209,10 @@ test.describe('Agenda mobile — vue Mois', () => {
 
     await loginPraticien(page);
     await page.goto('/');
-    await page.getByRole('navigation', { name: 'Navigation principale' }).getByRole('button', { name: 'Agenda' }).click();
-    // .first() : « Agenda » est aussi le libellé de l'onglet de la barre du bas (qui remplace Tournée).
+    // Agenda déplacé dans « Plus » le 2026-11-24 (la Carte prend sa place dans la barre).
+    await page.getByRole('navigation', { name: 'Navigation principale' }).getByRole('button', { name: 'Plus' }).click();
+    await page.getByRole('button', { name: 'Agenda', exact: true }).click();
+    // .first() : « Agenda » peut apparaître plusieurs fois à l'écran.
     await expect(page.getByText('Agenda', { exact: true }).first()).toBeVisible();
 
     let seanceCreee = false;
