@@ -1,0 +1,23 @@
+# Dependabot (27/11/2026, sécurisation du dépôt public).
+#
+# - npm : AUCUNE PR de montée de version ordinaire (open-pull-requests-limit: 0). Seules les
+#   mises à jour de SÉCURITÉ sont proposées, à condition d'activer « Dependabot security
+#   updates » dans Settings › Code security du dépôt. `npm audit --audit-level=high`
+#   (security.yml) reste le contrôle bloquant. SheetJS (xlsx, installé depuis cdn.sheetjs.com)
+#   est invisible pour Dependabot comme pour npm audit : veille manuelle.
+# - GitHub Actions : une PR groupée par mois pour les actions utilisées par les workflows.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']

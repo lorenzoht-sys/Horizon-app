@@ -10,12 +10,15 @@ import { dbToParticipant, participantToDb, bilanToDb } from '../lib/mappers';
 import { separerParArchivage } from '../lib/archivage';
 import { messageSuppressionBeneficiaire } from '../lib/suppressionBeneficiaire';
 
+// Bénéficiaires fictifs du mode local (sans Supabase). Adresses en example.com
+// (27/11/2026) : une adresse gmail plausible peut appartenir à une vraie
+// personne, et le dépôt est public.
 const DEMO_PATIENTS: Participant[] = [
   {
     id: 'demo-1', token: 'demo-tok-1',
     prenom: 'Martine', nom: 'Lefebvre',
     dateNaissance: '1948-03-12', dateCreation: '2026-01-08',
-    email: 'martine.lefebvre@gmail.com', telephone: '06 12 34 56 78',
+    email: 'martine.lefebvre@example.com', telephone: '06 12 34 56 78',
     adresseVille: 'Nantes', taille: 162, poids: 68,
     tags: [], testsActifs: [],
     bilans: [{
@@ -32,7 +35,7 @@ const DEMO_PATIENTS: Participant[] = [
     id: 'demo-2', token: 'demo-tok-2',
     prenom: 'Jean-Pierre', nom: 'Morel',
     dateNaissance: '1955-07-22', dateCreation: '2026-01-15',
-    email: 'jp.morel@orange.fr', telephone: '06 23 45 67 89',
+    email: 'jp.morel@example.com', telephone: '06 23 45 67 89',
     adresseVille: 'Saint-Nazaire',
     tags: [], testsActifs: [], bilans: [],
   },
@@ -40,7 +43,7 @@ const DEMO_PATIENTS: Participant[] = [
     id: 'demo-3', token: 'demo-tok-3',
     prenom: 'Sophie', nom: 'Bernard',
     dateNaissance: '1978-11-05', dateCreation: '2026-02-03',
-    email: 'sophie.bernard@gmail.com', telephone: '06 34 56 78 90',
+    email: 'sophie.bernard@example.com', telephone: '06 34 56 78 90',
     adresseVille: 'Nantes', taille: 168, poids: 62,
     tags: [], testsActifs: [],
     bilans: [{
@@ -65,7 +68,7 @@ const DEMO_PATIENTS: Participant[] = [
     id: 'demo-5', token: 'demo-tok-5',
     prenom: 'Isabelle', nom: 'Martin',
     dateNaissance: '1960-09-30', dateCreation: '2026-03-01',
-    email: 'i.martin@wanadoo.fr', telephone: '06 56 78 90 12',
+    email: 'i.martin@example.com', telephone: '06 56 78 90 12',
     adresseVille: 'Rezé',
     tags: [], testsActifs: [],
     bilans: [{

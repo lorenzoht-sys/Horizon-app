@@ -11,6 +11,10 @@ on:
     - cron: '0 6 * * 1'
   workflow_dispatch:
 
+# Droits du jeton GitHub réduits à la lecture par défaut (27/11/2026, dépôt public).
+permissions:
+  contents: read
+
 jobs:
   # Vérifications statiques + tests de sécurité : gitleaks (secrets dans
   # l'historique), npm audit, typecheck des routes api/*, build + recherche
@@ -23,6 +27,10 @@ jobs:
   audit:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    # gitleaks-action lit les commits de la PR et y commente un secret trouvé.
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
