@@ -10,8 +10,9 @@ import { getServiceClient, getClientIp } from '../_lib/patientAuth.js';
 import { validateStructureToken, logStructureAccess, getStructureToken, checkStructureRateLimit } from '../_lib/structureAuth.js';
 import { withSentry } from '../_lib/sentry.js';
 import { COLONNES_SEANCE_EXPOSEE } from '../_lib/colonnesSeancesExposees.js';
+import type { LigneBase, ReponseApi, RequeteApi } from '../_lib/http.js';
 
-export default withSentry(async function handler(req: any, res: any) {
+export default withSentry(async function handler(req: RequeteApi, res: ReponseApi) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -103,11 +104,11 @@ export default withSentry(async function handler(req: any, res: any) {
   ]);
 
   const participants = participantsRes.data ?? [];
-  const ids = participants.map((p: any) => p.id);
+  const ids = (participants as unknown as LigneBase[]).map(p => p.id as string);
 
-  let seances: any[] = [];
-  let factures: any[] = [];
-  let documents: any[] = [];
+  let seances: unknown[] = [];
+  let factures: unknown[] = [];
+  let documents: unknown[] = [];
 
   if (ids.length > 0) {
     const [seancesRes, facturesRes, documentsRes] = await Promise.all([

@@ -78,6 +78,7 @@ import {
   type Tache,
 } from '../_lib/cronTaches.js';
 import { MARGE_RENOUVELLEMENT_JOURS, renouvelerContratsEligibles } from '../_lib/renouvellementContrats.js';
+import type { ReponseApi, RequeteApi } from '../_lib/http.js';
 import { actualiserStatutsFactures, executerFacturationMensuelle } from '../_lib/facturationMensuelle.js';
 import { chargerIdsParticipantsArchives, exclureBeneficiairesArchives } from '../_lib/participantsArchives.js';
 import {
@@ -90,7 +91,7 @@ import {
   type RowPrefs,
 } from '../_lib/rappels.js';
 
-export default withSentry(async function handler(req: any, res: any) {
+export default withSentry(async function handler(req: RequeteApi, res: ReponseApi) {
   if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -220,7 +221,7 @@ async function chargerPrefsGlobales(supabase: SupabaseClient, praticienIds: stri
     .select('*')
     .is('participant_id', null)
     .in('praticien_id', praticienIds);
-  return new Map((data ?? []).map((r: any) => [r.praticien_id as string, r as RowPrefs]));
+  return new Map(((data ?? []) as (RowPrefs & { praticien_id: string })[]).map(r => [r.praticien_id, r]));
 }
 
 async function chargerPrefsParticipants(supabase: SupabaseClient, participantIds: string[]): Promise<Map<string, RowPrefs>> {
@@ -229,7 +230,7 @@ async function chargerPrefsParticipants(supabase: SupabaseClient, participantIds
     .from('rappel_preferences')
     .select('*')
     .in('participant_id', participantIds);
-  return new Map((data ?? []).map((r: any) => [r.participant_id as string, r as RowPrefs]));
+  return new Map(((data ?? []) as (RowPrefs & { participant_id: string })[]).map(r => [r.participant_id, r]));
 }
 
 interface LigneSeanceRappel { id: string; participant_id: string; praticien_id: string | null; date: string; heure_debut: string }
@@ -355,7 +356,7 @@ export async function traiterRappelsVeilleSeance(
     .order('envoye_le', { ascending: false });
 
   const dernierEnvoiParPatient = new Map<string, string>();
-  for (const r of (derniersRappels ?? []) as any[]) {
+  for (const r of (derniersRappels ?? []) as { participant_id: string; envoye_le: string }[]) {
     if (!dernierEnvoiParPatient.has(r.participant_id)) {
       dernierEnvoiParPatient.set(r.participant_id, r.envoye_le);
     }

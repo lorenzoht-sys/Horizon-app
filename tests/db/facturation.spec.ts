@@ -69,6 +69,8 @@ async function transaction<T>(fn: (c: Client) => Promise<T>): Promise<T> {
   }
 }
 
+// Lignes SQL brutes lues par pg dans un test : leur forme est celle de la requête écrite juste à côté.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Ligne = Record<string, any>;
 async function q(c: Client, sql: string, params: unknown[] = []): Promise<Ligne[]> {
   return (await c.query(sql, params)).rows;

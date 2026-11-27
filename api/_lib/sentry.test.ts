@@ -57,8 +57,8 @@ describe('withSentry — tag route', () => {
 
   it('ne contient que le chemin, sans la query string', async () => {
     const handler = withSentry(() => { throw new Error('boum'); });
-    const res = { headersSent: false, status: vi.fn().mockReturnThis(), json: vi.fn() };
-    await handler({ url: '/api/planning/ics?token=jeton-agenda' }, res);
+    const res = { headersSent: false, status: vi.fn().mockReturnThis(), json: vi.fn(), send: vi.fn(), setHeader: vi.fn() };
+    await handler({ url: '/api/planning/ics?token=jeton-agenda', headers: {}, query: {} }, res);
     expect(captureException).toHaveBeenCalledTimes(1);
     expect(captureException.mock.calls[0][1]).toEqual({ tags: { route: '/api/planning/ics' } });
     expect(res.status).toHaveBeenCalledWith(500);

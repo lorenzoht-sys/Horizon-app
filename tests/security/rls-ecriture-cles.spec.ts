@@ -333,6 +333,8 @@ describe.skipIf(!ACTIF)('Écriture croisée par clé étrangère (lot J)', () =>
       process.env.SUPABASE_SERVICE_ROLE_KEY = SERVICE_KEY;
       const { default: handler } = await import('../../api/structure/data.js');
       const { data: s } = await admin.from('structures').select('token_acces').eq('id', o.A.structure).single();
+      // Réponse JSON brute de la route, inspectée champ par champ par les assertions.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let corps: any = null;
       let statut = 0;
       const res = { status(n: number) { statut = n; return this; }, json(b: unknown) { corps = b; return this; }, setHeader() { return this; } };

@@ -22,7 +22,7 @@ export interface SessionResultat {
 // Connexion patient par code d'accès (code_acces, unique, 8 caractères).
 // Rate limiting : 5 tentatives / 15 min / IP (identique à l'ancien
 // api/patient/login.ts).
-export async function connexionParCode(supabase: SupabaseClient, code: string, ip: string): Promise<SessionResultat> {
+export async function connexionParCode(supabase: SupabaseClient, code: unknown, ip: string): Promise<SessionResultat> {
   // Normalisation : les codes sont générés en majuscules (src/utils/codeAcces.ts).
   const codeEntre = typeof code === 'string' ? code.trim().toUpperCase() : '';
   if (!codeEntre) {
@@ -65,7 +65,7 @@ export async function connexionParCode(supabase: SupabaseClient, code: string, i
 export async function accesViaPraticien(
   supabase: SupabaseClient,
   praticienToken: string,
-  participantId: string,
+  participantId: unknown,
   ip: string,
 ): Promise<SessionResultat> {
   if (!participantId || typeof participantId !== 'string') {

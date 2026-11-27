@@ -9,6 +9,7 @@ import {
   dateCivileValide, texteDansLaBorne, MESSAGE_TEXTE_TROP_LONG,
   EXERCICES_PAR_SEANCE_MAX, DUREE_SEANCE_MAX_MINUTES,
 } from '../_lib/saisiePatient.js';
+import type { ReponseApi, RequeteApi } from '../_lib/http.js';
 
 const STATUTS_VALIDES = ['terminee', 'partielle', 'en_cours'];
 
@@ -22,7 +23,7 @@ export function tousExercicesAutorises(idsRecus: string[], idsAutorises: string[
   return idsRecus.every(id => autorises.has(id));
 }
 
-export default withSentry(async function handler(req: any, res: any) {
+export default withSentry(async function handler(req: RequeteApi, res: ReponseApi) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -44,7 +45,7 @@ export default withSentry(async function handler(req: any, res: any) {
     !programmeId || typeof programmeId !== 'string' ||
     !seanceId || typeof seanceId !== 'string' ||
     !dateCivileValide(dateSeance) ||
-    !STATUTS_VALIDES.includes(statut) ||
+    typeof statut !== 'string' || !STATUTS_VALIDES.includes(statut) ||
     !Array.isArray(exercices) || exercices.length > EXERCICES_PAR_SEANCE_MAX
   ) {
     return res.status(400).json({ error: 'Paramètres invalides' });

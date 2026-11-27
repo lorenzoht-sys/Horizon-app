@@ -18,14 +18,16 @@
 //     de 12 fonctions serverless. Voir la section « actions admin.* ».
 
 import { getServiceClient, getClientIp, logAuditEvent } from './_lib/patientAuth.js';
-import { exigerAdmin } from './_lib/adminAuth.js';
+import { exigerAdmin, type AdminAutorise } from './_lib/adminAuth.js';
 import { withSentry } from './_lib/sentry.js';
+import type { CorpsJson, ReponseApi, RequeteApi } from './_lib/http.js';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
 
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MINUTES = 15;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default withSentry(async function handler(req: any, res: any) {
+export default withSentry(async function handler(req: RequeteApi, res: ReponseApi) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -81,7 +83,7 @@ export default withSentry(async function handler(req: any, res: any) {
 // du 2026-08-29 et verrouillé par le describe « [RÔLES] un compte admin ne
 // lit aucune donnée clinique » de tests/security/rls.spec.ts.
 
-async function handleAdmin(req: any, res: any, body: any) {
+async function handleAdmin(req: RequeteApi, res: ReponseApi, body: CorpsJson) {
   let supabase;
   try {
     supabase = getServiceClient();
@@ -122,9 +124,14 @@ async function handleAdmin(req: any, res: any, body: any) {
 //
 // `maintenant` est un paramètre plutôt qu'un `Date.now()` interne : sans
 // ça, le comportement autour d'un bannissement expiré n'est pas testable.
+type CompteAuth = {
+  id: string; email?: string | null; banned_until?: string | null;
+  created_at?: string | null; last_sign_in_at?: string | null; email_confirmed_at?: string | null;
+};
+type FichePraticien = { email?: string | null; prenom?: string | null; nom?: string | null };
 export function construireCompte(
-  u: Record<string, any>,
-  praticien: Record<string, any> | undefined,
+  u: CompteAuth,
+  praticien: FichePraticien | undefined,
   appRole: string | null,
   maintenant: number,
 ) {
@@ -157,7 +164,7 @@ export function construireCompte(
 // applicative : aucune migration n'a été nécessaire, et l'état affiché est
 // celui qui gouverne réellement la connexion, pas une copie qui pourrait en
 // diverger.
-async function handleAdminComptes(res: any, supabase: any, auth: any, ip: string) {
+async function handleAdminComptes(res: ReponseApi, supabase: SupabaseClient, auth: AdminAutorise, ip: string) {
   // PAGINATION : 1000 comptes suffisent très largement à l'échelle visée.
   // Au-delà, cette liste serait silencieusement tronquée — d'où le
   // `tronquee` renvoyé au client, pour que la limite soit visible plutôt
@@ -173,15 +180,15 @@ async function handleAdminComptes(res: any, supabase: any, auth: any, ip: string
   const { data: praticiens } = await supabase.from('praticiens').select('id, prenom, nom, email');
   const { data: roles } = await supabase.from('user_roles').select('user_id, app_role');
 
-  const parId = new Map<string, Record<string, any>>(
-    (praticiens ?? []).map((p: any) => [p.id as string, p as Record<string, any>]),
+  const parId = new Map<string, FichePraticien>(
+    ((praticiens ?? []) as (FichePraticien & { id: string })[]).map(p => [p.id, p]),
   );
   const roleParId = new Map<string, string>(
-    (roles ?? []).map((r: any) => [r.user_id as string, r.app_role as string]),
+    ((roles ?? []) as { user_id: string; app_role: string }[]).map(r => [r.user_id, r.app_role]),
   );
 
   const maintenant = Date.now();
-  const comptes = users.map((u: any) =>
+  const comptes = users.map((u: User) =>
     construireCompte(u, parId.get(u.id), roleParId.get(u.id) ?? null, maintenant),
   );
 
@@ -200,7 +207,7 @@ async function handleAdminComptes(res: any, supabase: any, auth: any, ip: string
 
 // admin.desactiver / admin.reactiver — bannissement réversible du compte auth.
 async function handleAdminStatut(
-  res: any, supabase: any, auth: any, ip: string, body: any, desactiver: boolean,
+  res: ReponseApi, supabase: SupabaseClient, auth: AdminAutorise, ip: string, body: CorpsJson, desactiver: boolean,
 ) {
   const cibleId = typeof body.praticienId === 'string' ? body.praticienId.trim() : '';
   if (!cibleId) {
@@ -274,7 +281,7 @@ async function handleAdminStatut(
 // l'echec, et le compte apparait dans la liste avec emailConfirme a faux —
 // visible, rattrapable par une seconde invitation.
 async function handleAdminInviter(
-  req: any, res: any, supabase: any, auth: any, ip: string, body: any,
+  req: RequeteApi, res: ReponseApi, supabase: SupabaseClient, auth: AdminAutorise, ip: string, body: CorpsJson,
 ) {
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   if (!email || !EMAIL_REGEX.test(email)) {
@@ -353,7 +360,7 @@ export function resoudreOrigineApp(req: {
 // Endpoint public : pas de JWT à vérifier, donc rate limiting par IP sur
 // organisation_demande_attempts (table dédiée, volontairement séparée de
 // patient_login_attempts — voir 20260714_mode_organisation_demande_attempts.sql).
-async function handleDemande(req: any, res: any, body: any) {
+async function handleDemande(req: RequeteApi, res: ReponseApi, body: CorpsJson) {
   let supabase;
   try {
     supabase = getServiceClient();
