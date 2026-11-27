@@ -15,28 +15,22 @@ import { skipUnlessPraticien, loginPraticien, env } from '../helpers.js';
 // EcranPaysage (bascule desktop en dessous de 768 px) est hors périmètre —
 // voir le chantier.
 
-// Bruit connu, indépendant de l'écran testé : `extraHTTPHeaders` (le bypass
-// de la protection de déploiement Vercel, voir playwright.config.ts)
-// s'applique à TOUTE requête sortante, y compris celles vers les polices
-// tierces (Google Fonts, cdn.jsdelivr.net). Ces origines ne whitelistent pas
-// l'en-tête `x-vercel-set-bypass-cookie` dans leur préflight CORS, qui
-// échoue donc systématiquement — sur desktop comme sur mobile, avant même
-// ce chantier. Aucune spec desktop ne vérifiait la console jusqu'ici, ce
-// bruit était invisible. Ignoré ici pour ne garder que les vraies erreurs.
-function estBruitCorsPolicesTierces(texte: string): boolean {
-  return (
-    (texte.includes('blocked by CORS policy') && texte.includes('x-vercel-set-bypass-cookie')) ||
-    texte === 'Failed to load resource: net::ERR_FAILED' ||
-    // Barre d'outils des Previews Vercel : injectée par la plateforme, bloquée
-    // par la CSP de l'application (attendu). Elle n'existe pas en production.
-    (texte.includes('https://vercel.live/') && texte.includes('Content Security Policy'))
-  );
+// Bruit connu, indépendant de l'écran testé. Jusqu'au 27/11/2026, on ignorait
+// aussi l'échec CORS des polices tierces (Google Fonts, cdn.jsdelivr.net) :
+// l'en-tête de contournement Vercel (`extraHTTPHeaders`, playwright.config.ts)
+// partait vers ces origines, qui le refusaient. Polices et icônes sont
+// désormais servies par l'application : ce bruit n'existe plus, et une
+// erreur de chargement redevient une vraie erreur.
+function estBruitConnu(texte: string): boolean {
+  // Barre d'outils des Previews Vercel : injectée par la plateforme, bloquée
+  // par la CSP de l'application (attendu). Elle n'existe pas en production.
+  return texte.includes('https://vercel.live/') && texte.includes('Content Security Policy');
 }
 
 function ecouterErreursConsole(page: Page): string[] {
   const erreurs: string[] = [];
   page.on('console', msg => {
-    if (msg.type() === 'error' && !estBruitCorsPolicesTierces(msg.text())) erreurs.push(msg.text());
+    if (msg.type() === 'error' && !estBruitConnu(msg.text())) erreurs.push(msg.text());
   });
   page.on('pageerror', err => erreurs.push(`pageerror: ${err.message}`));
   return erreurs;

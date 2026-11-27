@@ -4,6 +4,7 @@ import { useAgenda } from '../../../hooks/useAgenda';
 import { getContreIndications } from '../../../lib/anamnese';
 import { libelleAge } from '../../../lib/age';
 import { C, card, formatDateCourt } from './communs';
+import { IconChevronRight } from '@tabler/icons-react';
 
 // ── EcranPatients ─────────────────────────────────────────────────────────────
 
@@ -82,7 +83,7 @@ export function EcranPatients({ onVoirFiche }: { onVoirFiche: (id: string) => vo
                   </div>
                 )}
               </div>
-              <i className="ti ti-chevron-right" style={{ fontSize: 18, color: '#D0DCDC' }} />
+              <IconChevronRight size={18} style={{ color: '#D0DCDC' }} />
             </div>
           );
         })}

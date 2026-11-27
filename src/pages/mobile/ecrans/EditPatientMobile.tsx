@@ -5,6 +5,7 @@ import type { Participant } from '../../../types';
 import { useEtatSession } from '../../../hooks/useEtatSession';
 import { formaterDateNaissanceAffichage, masquerSaisieDateNaissance, messageErreurDateNaissance, parserDateNaissanceSaisie } from '../../../utils/dateNaissance';
 import { C, EcranChargement } from './communs';
+import { IconArrowLeft } from '@tabler/icons-react';
 
 // ── Modification fiche patient mobile ────────────────────────────────────────
 
@@ -129,7 +130,7 @@ export function EditPatientMobile({ participant, onBack: retourParent }: { parti
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 40 }}>
       <div style={{ background: C.dark, paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 20, color: 'rgba(255,255,255,0.7)' }} aria-hidden="true" />
+          <IconArrowLeft size={20} style={{ color: 'rgba(255,255,255,0.7)' }} aria-hidden="true" />
         </button>
         <div style={{ fontSize: 18, fontWeight: 700, color: 'white' }}>Modifier la fiche</div>
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{participant.prenom} {participant.nom}</div>

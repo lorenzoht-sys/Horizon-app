@@ -8,6 +8,7 @@ import { getBrouillonParticipant, sauvegarderBrouillonParticipant, supprimerBrou
 import { formaterDateNaissanceAffichage, masquerSaisieDateNaissance, messageErreurDateNaissance, parserDateNaissanceSaisie } from '../../../utils/dateNaissance';
 import { BlocConsentementMobile } from './BlocConsentementMobile';
 import { C } from './communs';
+import { IconArrowLeft, IconChevronRight } from '@tabler/icons-react';
 
 // ── EcranSaisie ───────────────────────────────────────────────────────────────
 
@@ -21,17 +22,17 @@ export function ChoixSaisie({ onPatient, onBilan, onSeance }: { onPatient: () =>
       <button onClick={onSeance} style={btn}>
         <span style={{ fontSize: 28 }}>📅</span>
         <div><div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Nouvelle séance</div><div style={{ fontSize: 12, color: C.muted }}>Planifier un rendez-vous ou un bilan</div></div>
-        <i className="ti ti-chevron-right" style={{ fontSize: 18, color: '#D0DCDC', marginLeft: 'auto' }} />
+        <IconChevronRight size={18} style={{ color: '#D0DCDC', marginLeft: 'auto' }} />
       </button>
       <button onClick={onBilan} style={btn}>
         <span style={{ fontSize: 28 }}>📋</span>
         <div><div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Nouveau bilan</div><div style={{ fontSize: 12, color: C.muted }}>Bilan initial ou trimestriel</div></div>
-        <i className="ti ti-chevron-right" style={{ fontSize: 18, color: '#D0DCDC', marginLeft: 'auto' }} />
+        <IconChevronRight size={18} style={{ color: '#D0DCDC', marginLeft: 'auto' }} />
       </button>
       <button onClick={onPatient} style={btn}>
         <span style={{ fontSize: 28 }}>👤</span>
         <div><div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Nouveau bénéficiaire</div><div style={{ fontSize: 12, color: C.muted }}>Créer une fiche bénéficiaire</div></div>
-        <i className="ti ti-chevron-right" style={{ fontSize: 18, color: '#D0DCDC', marginLeft: 'auto' }} />
+        <IconChevronRight size={18} style={{ color: '#D0DCDC', marginLeft: 'auto' }} />
       </button>
     </div>
   );
@@ -176,7 +177,7 @@ export function NouveauPatientMobile({ onBack: retourParent, onCree }: { onBack:
     <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 44px) + 12px)', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: 22, color: C.text }} />
+          <IconArrowLeft size={22} style={{ color: C.text }} />
         </button>
         <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Nouveau bénéficiaire</div>
       </div>

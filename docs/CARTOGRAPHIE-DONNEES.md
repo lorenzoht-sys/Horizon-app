@@ -1,20 +1,20 @@
 # Cartographie des données d'Horizon (générée)
 
-Générée par `node scripts/cartographie.mjs` le 2026-11-12.
+Générée par `node scripts/cartographie.mjs` le 2026-11-27.
 Ne pas modifier à la main : relancer le script après chaque chantier.
 
 ## Chiffres clés
 
 | Élément | Nombre |
 | --- | --- |
-| Fichiers du front (hors tests) | 320 (65 445 lignes) |
+| Fichiers du front (hors tests) | 363 (71 681 lignes) |
 | Routes API (`api/`) | 12 |
 | Edge Functions | 3 |
 | Tables (schéma public) | 62 |
 | Tables lues ou écrites directement par le front | 47 |
 | Fonctions SQL appelées en RPC par le front | 8 |
-| Tests unitaires | 98 fichiers |
-| Scénarios e2e | 41 fichiers |
+| Tests unitaires | 116 fichiers |
+| Scénarios e2e | 44 fichiers |
 
 ## Table par table
 
@@ -34,7 +34,7 @@ Functions (clé `service_role`, RLS contournée : le contrôle est dans le code)
 | `claude_rate_limit` | 0 | 0 | — | api/_lib/rateLimit |
 | `comptes_rendus_seances` | 5 | 2 | hooks/useCompteRenduSeance, lib/acces/assistant | — |
 | `compteurs_facture` | 0 | 0 | — | — |
-| `contrats` | 5 | 2 | hooks/useContrats, lib/acces/contrats | api/_lib/facturationMensuelle, api/_lib/renouvellementContrats, api/seances/supprimer-planifiees, supabase/functions/facturation-envoi/index |
+| `contrats` | 5 | 2 | hooks/useContrats, hooks/useSuiviSeances, lib/acces/contrats | api/_lib/facturationMensuelle, api/_lib/renouvellementContrats, api/seances/supprimer-planifiees, supabase/functions/facturation-envoi/index |
 | `cours_collectifs` | 2 | 0 | hooks/useCoursCollectifs | api/_lib/planningIcs |
 | `documents_partages` | 1 | 0 | lib/acces/assistant | api/structure/data |
 | `documents_patient` | 2 | 1 | hooks/useDocumentsBeneficiaire, lib/acces/assistant | api/patient/me |
@@ -57,12 +57,12 @@ Functions (clé `service_role`, RLS contournée : le contrôle est dans le code)
 | `organisation_membres` | 4 | 0 | — | — |
 | `organisations` | 2 | 0 | — | api/organisation |
 | `paiements` | 4 | 3 | — | — |
-| `participants` | 5 | 5 | hooks/useChiffreAffaires, hooks/useParticipants, hooks/useSuiviSeances, lib/acces/sauvegarde | api/_lib/participantsArchives, api/_lib/patientSession, api/_lib/renouvellementContrats, api/patient/activite, api/patient/me, api/patient/retour-seance, api/structure/data, supabase/functions/facturation-envoi/index |
+| `participants` | 5 | 5 | hooks/useChiffreAffaires, hooks/useParticipants, hooks/useSuiviSeances, lib/acces/demarrage, lib/acces/sauvegarde | api/_lib/participantsArchives, api/_lib/patientSession, api/_lib/renouvellementContrats, api/patient/activite, api/patient/me, api/patient/retour-seance, api/structure/data, supabase/functions/facturation-envoi/index |
 | `participations_cours_collectifs` | 2 | 0 | hooks/useCoursCollectifs | api/_lib/coursPatient, api/patient/activite |
 | `patient_activite_rate_limit` | 0 | 0 | — | api/_lib/activiteRateLimit |
 | `patient_login_attempts` | 0 | 0 | — | api/_lib/patientAuth |
 | `praticien_push_subscriptions` | 4 | 0 | lib/praticienPush | api/_lib/notifications |
-| `praticiens` | 4 | 2 | App, hooks/useDocumentsBeneficiaire, hooks/useFacturesAValider, hooks/useProfilFacturation, lib/acces/praticien, lib/settingsPraticien | api/_lib/planningIcs, api/organisation, api/patient/me, api/structure/data |
+| `praticiens` | 4 | 2 | App, hooks/useDocumentsBeneficiaire, hooks/useFacturesAValider, hooks/useProfilFacturation, lib/acces/demarrage, lib/acces/praticien, lib/settingsPraticien | api/_lib/planningIcs, api/organisation, api/patient/me, api/structure/data |
 | `programme_exercices` | 3 | 0 | hooks/useProgrammeV2, lib/acces/assistant | api/patient/me, api/patient/seance |
 | `programme_modele_exercices` | 1 | 0 | hooks/useProgrammesModeles | — |
 | `programme_modele_planning` | 1 | 0 | hooks/useProgrammesModeles | — |
@@ -75,11 +75,11 @@ Functions (clé `service_role`, RLS contournée : le contrôle est dans le code)
 | `rappel_preferences` | 1 | 2 | hooks/useRappelPreferences | api/cron/rappels |
 | `rappels_envoyes` | 2 | 0 | — | api/cron/rappels |
 | `retours_seance` | 2 | 0 | lib/suiviBeneficiaire | api/patient/retour-seance |
-| `seances` | 5 | 7 | hooks/useAgenda, lib/acces/assistant, lib/liaisonSeanceBilan | api/_lib/planningIcs, api/_lib/renouvellementContrats, api/cron/rappels, api/patient/activite, api/patient/me, api/seances/supprimer-planifiees, api/structure/data |
+| `seances` | 5 | 7 | hooks/useAgenda, hooks/useSuiviSeances, lib/acces/assistant, lib/liaisonSeanceBilan | api/_lib/planningIcs, api/_lib/renouvellementContrats, api/cron/rappels, api/patient/activite, api/patient/me, api/seances/supprimer-planifiees, api/structure/data |
 | `seances_patient` | 4 | 0 | hooks/useProgrammeV2, lib/acces/assistant, lib/suiviBeneficiaire | api/patient/me, api/patient/retour-seance, api/patient/seance |
 | `structure_access_logs` | 1 | 0 | — | api/_lib/structureAuth |
 | `structures` | 1 | 0 | hooks/useStructures, lib/acces/structures | api/_lib/structureAuth |
-| `tarifs_contrats` | 2 | 4 | hooks/useTarifsContrat | — |
+| `tarifs_contrats` | 2 | 4 | hooks/useSuiviSeances, hooks/useTarifsContrat | — |
 | `templates_structure` | 1 | 0 | hooks/useTemplatesStructure | — |
 | `tests_etalons_activations` | 2 | 0 | hooks/useActivitesHorsProgramme | api/patient/activite, api/patient/me |
 | `tests_etalons_resultats` | 2 | 0 | hooks/useActivitesHorsProgramme | api/patient/activite, api/patient/me |
@@ -109,10 +109,10 @@ Plus les accès sont regroupés dans `hooks/`, plus un changement de source de d
 
 | Couche | Fichiers avec accès direct | Appels `.from()` |
 | --- | --- | --- |
-| `src/hooks/` | 27 | 149 |
+| `src/hooks/` | 27 | 157 |
 | `src/pages/` | 0 | 0 |
 | `src/components/` | 0 | 0 |
-| `src/lib/` | 11 | 46 |
+| `src/lib/` | 12 | 50 |
 | `src/data/` | 0 | 0 |
 | `src/utils/` | 0 | 0 |
 
@@ -152,8 +152,7 @@ Les tables d'une route incluent celles de ses helpers `api/_lib/` importés, com
 | api-adresse.data.gouv.fr | utils/geocodeAdresse |
 | img.youtube.com | pages/ExercicesPage, programme/ExerciceCard |
 | maps.google.com | pages/ParticipantProfile |
-| unpkg.com | pages/ZonesPage |
-| www.google.com | pages/mobile/ecrans/EcranAujourdhui |
+| www.google.com | components/tableau-de-bord/CarteProchainRendezVous, pages/mobile/ecrans/EcranAujourdhui |
 | www.openstreetmap.org | components/map/MapView, pages/ZonesPage |
 | www.youtube-nocookie.com | components/YoutubePlayer |
 | youtu.be | utils/exportPDF |
@@ -165,20 +164,20 @@ Ce sont les zones où une modification a le plus de chances d'avoir des effets d
 | Fichier | Lignes | Tables touchées directement |
 | --- | --- | --- |
 | `src/data/exercices.ts` | 1 947 | — |
-| `src/pages/StatsPage.tsx` | 1 470 | — |
-| `src/pages/ParticipantProfile.tsx` | 1 465 | — |
-| `src/components/participant/ParticipantForm.tsx` | 1 409 | — |
-| `src/types/index.ts` | 1 211 | — |
-| `src/components/programme/ProgrammeWizard.tsx` | 1 022 | — |
-| `src/pages/AgendaV2Page.tsx` | 1 022 | — |
+| `src/pages/ParticipantProfile.tsx` | 1 484 | — |
+| `src/components/participant/ParticipantForm.tsx` | 1 380 | — |
+| `src/pages/StatsPage.tsx` | 1 370 | — |
+| `src/types/index.ts` | 1 226 | — |
+| `src/pages/AgendaV2Page.tsx` | 1 047 | — |
+| `src/components/programme/ProgrammeWizard.tsx` | 1 033 | — |
 | `src/data/exercicesMouvApa.ts` | 943 | — |
-| `src/pages/PortailStructure.tsx` | 893 | — |
+| `src/pages/PortailStructure.tsx` | 928 | — |
 | `src/components/participant/ContratsTab.tsx` | 890 | — |
-| `src/pages/AssistantPage.tsx` | 879 | — |
+| `src/pages/AssistantPage.tsx` | 887 | — |
 | `src/components/bilan/FormulaireBilanInitial.tsx` | 812 | — |
 | `src/pages/ExercicesPage.tsx` | 807 | — |
 
 ## Couverture de tests
 
-- 98 fichiers de tests unitaires (Vitest), 41 scénarios e2e (Playwright), plus le harnais RLS (`tests/security/`).
-- Modules de `src/lib/` sans test unitaire à côté (16 sur 61) : `lib/acces/assistant`, `lib/acces/contrats`, `lib/acces/indisponibilites`, `lib/acces/praticien`, `lib/acces/sauvegarde`, `lib/acces/structures`, `lib/analyse-tournee`, `lib/anamnese`, `lib/bibliothequeExercices`, `lib/liaisonSeanceBilan`, `lib/libellesBibliotheque`, `lib/patientApi`, `lib/push`, `lib/sentry`, `lib/settingsPraticien`, `lib/structureApi`.
+- 116 fichiers de tests unitaires (Vitest), 44 scénarios e2e (Playwright), plus le harnais RLS (`tests/security/`).
+- Modules de `src/lib/` sans test unitaire à côté (19 sur 74) : `lib/acces/assistant`, `lib/acces/contrats`, `lib/acces/demarrage`, `lib/acces/indisponibilites`, `lib/acces/praticien`, `lib/acces/sauvegarde`, `lib/acces/structures`, `lib/analyse-tournee`, `lib/anamnese`, `lib/bibliothequeExercices`, `lib/installationPwa`, `lib/leafletInit`, `lib/liaisonSeanceBilan`, `lib/libellesBibliotheque`, `lib/patientApi`, `lib/push`, `lib/sentry`, `lib/settingsPraticien`, `lib/structureApi`.

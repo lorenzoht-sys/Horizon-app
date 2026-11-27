@@ -2,6 +2,7 @@ import { useParticipants } from '../../../hooks/useParticipants';
 import { initialesPraticien } from '../../../lib/initiales';
 import { URLS_MOBILE } from '../../../lib/routesMobile';
 import { C, usePraticienSettings } from './communs';
+import { IconArchive, IconBuilding, IconCalendar, IconChevronRight, IconDumbbell, IconLogout, IconSettings, type TablerIcon } from '@tabler/icons-react';
 
 // ── Composants UI réutilisables ───────────────────────────────────────────────
 
@@ -20,16 +21,16 @@ export function SectionMobile({ titre, children }: { titre: string; children: Re
   );
 }
 
-export function ItemMobile({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
+export function ItemMobile({ Icone, label, onClick }: { Icone: TablerIcon; label: string; onClick: () => void }) {
   return (
     <button onClick={onClick} style={{
       width: '100%', display: 'flex', alignItems: 'center', gap: 14,
       padding: '13px 16px', background: 'none', border: 'none',
       borderBottom: `1px solid #F4FAFA`, cursor: 'pointer', textAlign: 'left',
     }}>
-      <i className={`ti ${icon}`} style={{ fontSize: 20, color: C.primary }} aria-hidden="true" />
+      <Icone size={20} style={{ color: C.primary }} aria-hidden="true" />
       <span style={{ fontSize: 15, fontWeight: 500, color: C.text, flex: 1 }}>{label}</span>
-      <i className="ti ti-chevron-right" style={{ fontSize: 16, color: '#D0DCDC' }} aria-hidden="true" />
+      <IconChevronRight size={16} style={{ color: '#D0DCDC' }} aria-hidden="true" />
     </button>
   );
 }
@@ -83,27 +84,27 @@ export function EcranPlus({ onLogout, onNaviguer }: { onLogout: () => void; onNa
           2026-11-24 (arbitrage de Pierre) : la Carte prend la place de l'Agenda dans la barre, et
           l'Agenda revient ici. */}
       <SectionMobile titre="Mon activité">
-        <ItemMobile icon="ti-calendar" label="Agenda" onClick={() => onNaviguer(URLS_MOBILE.agenda)} />
+        <ItemMobile Icone={IconCalendar} label="Agenda" onClick={() => onNaviguer(URLS_MOBILE.agenda)} />
       </SectionMobile>
 
       {/* Section Bénéficiaires */}
       <SectionMobile titre="Bénéficiaires">
         <ItemMobile
-          icon="ti-archive"
+          Icone={IconArchive}
           label={`Bénéficiaires archivés${participantsArchives.length > 0 ? ` (${participantsArchives.length})` : ''}`}
           onClick={() => onNaviguer(URLS_MOBILE.archives)}
         />
-        <ItemMobile icon="ti-building" label="Structures" onClick={() => onNaviguer('/structures')} />
+        <ItemMobile Icone={IconBuilding} label="Structures" onClick={() => onNaviguer('/structures')} />
       </SectionMobile>
 
       {/* Section Contenu */}
       <SectionMobile titre="Contenu">
-        <ItemMobile icon="ti-dumbbell" label="Bibliothèque exercices" onClick={() => onNaviguer('/bibliotheque')} />
+        <ItemMobile Icone={IconDumbbell} label="Bibliothèque exercices" onClick={() => onNaviguer('/bibliotheque')} />
       </SectionMobile>
 
       {/* Section Compte */}
       <SectionMobile titre="Compte">
-        <ItemMobile icon="ti-settings" label="Paramètres" onClick={() => onNaviguer(URLS_MOBILE.parametres)} />
+        <ItemMobile Icone={IconSettings} label="Paramètres" onClick={() => onNaviguer(URLS_MOBILE.parametres)} />
       </SectionMobile>
 
       {/* Déconnexion */}
@@ -114,7 +115,7 @@ export function EcranPlus({ onLogout, onNaviguer }: { onLogout: () => void; onNa
         display: 'flex', alignItems: 'center', gap: 14,
         color: '#E85050', fontSize: 15,
       }}>
-        <i className="ti ti-logout" style={{ fontSize: 20 }} aria-hidden="true" />
+        <IconLogout size={20} aria-hidden="true" />
         Déconnexion
       </button>
 
