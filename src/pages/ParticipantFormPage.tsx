@@ -36,8 +36,8 @@ export default function ParticipantFormPage() {
         toast.success(`${data.prenom} ${data.nom} ajouté(e) !`);
         navigate(`/participant/${p.id}`);
       }
-    } catch (error: any) {
-      toast.error(error?.message || "Erreur lors de l'enregistrement");
+    } catch (error) {
+      toast.error((error as { message?: string } | null)?.message || "Erreur lors de l'enregistrement");
     }
   }
 

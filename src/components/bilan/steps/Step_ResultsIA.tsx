@@ -142,8 +142,8 @@ export default function Step_ResultsIA({ form, update, participant, previous }: 
           ? form.notesProfessionnelles
           : resultat.textePro,
       });
-    } catch (e: any) {
-      setError(e?.message ?? 'Erreur lors de la génération');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur lors de la génération');
     } finally {
       setGenerating(false);
     }

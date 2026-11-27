@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { utilisateurCourant } from '../lib/session';
 import type { Exercice } from '../types';
+import type { LigneDb } from '../lib/ligneDb';
 
 interface TestEtalonResultatRow {
   testId: string;
@@ -54,20 +55,20 @@ export function useActivitesHorsProgramme(participantId: string) {
     ]);
 
     const actMap: Record<string, boolean> = {};
-    for (const row of testsActRes.data ?? []) actMap[(row as any).test_id] = (row as any).actif;
+    for (const row of (testsActRes.data ?? []) as LigneDb[]) actMap[row.test_id] = row.actif;
     setTestsActivations(actMap);
 
-    setTestsResultats((testsResRes.data ?? []).map((r: any) => ({
+    setTestsResultats((testsResRes.data ?? []).map((r: LigneDb) => ({
       testId: r.test_id, valeur: r.valeur, dateTest: r.date_test,
     })));
 
-    setExercicesActivations((exActRes.data ?? []).map((r: any) => ({
+    setExercicesActivations((exActRes.data ?? []).map((r: LigneDb) => ({
       id: r.id, exerciceId: r.exercice_id, nom: r.nom,
       description: r.description, consigneSecurite: r.consigne_securite,
       categorie: r.categorie, actif: r.actif,
     })));
 
-    setExercicesValidations((exValRes.data ?? []).map((r: any) => ({
+    setExercicesValidations((exValRes.data ?? []).map((r: LigneDb) => ({
       exerciceId: r.exercice_id, date: r.date, fait: r.fait,
     })));
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useConnexion } from '../../hooks/useConnexion';
+import { abonnerInstallation, applicationInstalleeIci, inviteNativeDisponible, lancerInstallation } from '../../lib/installationPwa';
 
 function formatHeure(date: Date): string {
   return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -156,36 +157,17 @@ export function NotificationMiseAJour() {
 // ── Bouton installer l'app ────────────────────────────────────────────────────
 
 export function BoutonInstallerApp({ compact = false }: { compact?: boolean }) {
-  const [promptInstall, setPromptInstall] = useState<any>(null);
-  const [installe, setInstalle] = useState(false);
+  // L'invite native est captée dès le chargement par src/lib/installationPwa.ts
+  // (le navigateur ne l'émet qu'une fois). Ce bouton écoutait l'événement
+  // lui-même jusqu'au 27/11/2026 et le manquait s'il était monté après.
+  const [, rafraichir] = useState(0);
+  useEffect(() => abonnerInstallation(() => rafraichir(n => n + 1)), []);
 
-  useEffect(() => {
-    const onPrompt = (e: Event) => {
-      e.preventDefault();
-      setPromptInstall(e);
-    };
-    const onInstalled = () => {
-      setInstalle(true);
-      setPromptInstall(null);
-    };
-    window.addEventListener('beforeinstallprompt', onPrompt);
-    window.addEventListener('appinstalled', onInstalled);
-    return () => {
-      window.removeEventListener('beforeinstallprompt', onPrompt);
-      window.removeEventListener('appinstalled', onInstalled);
-    };
-  }, []);
-
-  if (!promptInstall || installe) return null;
+  if (!inviteNativeDisponible() || applicationInstalleeIci()) return null;
 
   return (
     <button
-      onClick={async () => {
-        promptInstall.prompt();
-        const { outcome } = await promptInstall.userChoice;
-        if (outcome === 'accepted') setInstalle(true);
-        setPromptInstall(null);
-      }}
+      onClick={() => { void lancerInstallation(); }}
       style={{
         display: 'flex', alignItems: 'center', gap: 6,
         padding: compact ? '6px 12px' : '10px 16px',

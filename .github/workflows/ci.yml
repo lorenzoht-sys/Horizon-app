@@ -153,9 +153,9 @@ jobs:
           cache: npm
 
       - run: npm ci
-      # Bloquant : un hook appelé après un retour anticipé fait planter l'écran
-      # (PR #226, 27/11/2026). Voir eslint.hooks.config.js.
-      - run: npm run lint:hooks
+      # ESLint bloquant depuis le 27/11/2026 (0 erreur). Deux règles restent en
+      # avertissement, voir eslint.config.js.
+      - run: npm run lint
       - run: npm run build
       # Suivi du nettoyage (docs/NETTOYAGE.md) : poids du front affiché dans le
       # résumé du job.

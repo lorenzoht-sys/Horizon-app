@@ -10,6 +10,7 @@ import { COLONNES_SEANCE_EXPOSEE } from '../_lib/colonnesSeancesExposees.js';
 import { lireLignesCoursPatient, construireCoursPatient } from '../_lib/coursPatient.js';
 import { captureMessage } from '../_lib/sentry.js';
 import { lireFacturesPatient } from '../_lib/facturesPatient.js';
+import type { LigneBase, ReponseApi, RequeteApi } from '../_lib/http.js';
 
 // Contrôle de partage bénéficiaire — voir supabase/migrations/20260713_visibilite_beneficiaire.sql
 // et src/types/index.ts (VisibiliteBeneficiaire, Bilan.visibleBeneficiaire).
@@ -100,15 +101,15 @@ function retirerClesFlat(flat: Record<string, unknown> | undefined, cles: string
  *  et les flags sédentarité/fatigue de l'anamnèse du participant. Mutation
  *  en place — le bilan n'est jamais renvoyé tel quel, seulement sa version
  *  filtrée. */
-export function filtrerBilan(bilan: any, sedentariteVisible: boolean, fatigueVisible: boolean): any {
+export function filtrerBilan(bilan: LigneBase, sedentariteVisible: boolean, fatigueVisible: boolean): LigneBase {
   retirerColonnes(bilan, COLONNES_BILAN_INTERNES);
-  const visible = bilan.visible_beneficiaire ?? {};
+  const visible = (bilan.visible_beneficiaire ?? {}) as Record<string, unknown>;
   for (const [resultat, colonnes] of Object.entries(COLONNES_PAR_RESULTAT)) {
     if (visible[resultat] !== true) {
       for (const col of colonnes) bilan[col] = null;
     }
   }
-  const flat = bilan.bilan_initial_data?.formulaireFlat?.data;
+  const flat = (bilan.bilan_initial_data as { formulaireFlat?: { data?: Record<string, unknown> } } | null)?.formulaireFlat?.data;
   if (!sedentariteVisible) {
     for (const col of COLONNES_SEDENTARITE) bilan[col] = null;
     retirerClesFlat(flat, ['sedentariteScore', 'sedentariteProfil', 'sedentariteReponses']);
@@ -120,7 +121,7 @@ export function filtrerBilan(bilan: any, sedentariteVisible: boolean, fatigueVis
   return bilan;
 }
 
-export default withSentry(async function handler(req: any, res: any) {
+export default withSentry(async function handler(req: RequeteApi, res: ReponseApi) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -229,7 +230,7 @@ export default withSentry(async function handler(req: any, res: any) {
   }
 
   const bilans = visibilite.bilans
-    ? (bilansRes.data ?? []).map((b: any) => filtrerBilan(b, sedentariteVisible, fatigueVisible))
+    ? (bilansRes.data ?? []).map((b: LigneBase) => filtrerBilan(b, sedentariteVisible, fatigueVisible))
     : [];
   const seances = visibilite.rdv ? (seancesRes.data ?? []) : [];
   // Les cours suivent le réglage « rendez-vous ». Une erreur sur CETTE lecture ne doit
@@ -241,11 +242,11 @@ export default withSentry(async function handler(req: any, res: any) {
   const coursCollectifs = visibilite.rdv && !coursRes.error ? construireCoursPatient(coursRes.data ?? []) : [];
 
   const programmes = visibilite.programme ? (programmesRes.data ?? []) : [];
-  const v2ProgrammeIds = programmes.filter((p: any) => p.type != null).map((p: any) => p.id);
+  const v2ProgrammeIds = (programmes as LigneBase[]).filter(p => p.type != null).map(p => p.id as string);
 
-  let programmeSeances: any[] = [];
-  let programmePlanning: any[] = [];
-  let programmeExercices: any[] = [];
+  let programmeSeances: LigneBase[] = [];
+  let programmePlanning: LigneBase[] = [];
+  let programmeExercices: LigneBase[] = [];
 
   if (v2ProgrammeIds.length > 0) {
     const [seancesV2Res, planningRes] = await Promise.all([
@@ -255,7 +256,7 @@ export default withSentry(async function handler(req: any, res: any) {
     programmeSeances = seancesV2Res.data ?? [];
     programmePlanning = planningRes.data ?? [];
 
-    const seanceIds = programmeSeances.map((s: any) => s.id);
+    const seanceIds = programmeSeances.map(s => s.id as string);
     if (seanceIds.length > 0) {
       const exRes = await supabase
         .from('programme_exercices')
@@ -274,13 +275,13 @@ export default withSentry(async function handler(req: any, res: any) {
     .limit(15);
 
   const seancesPatient = spRes.data ?? [];
-  let exercicesRealises: any[] = [];
+  let exercicesRealises: LigneBase[] = [];
 
   if (seancesPatient.length > 0) {
     const erRes = await supabase
       .from('exercices_realises')
       .select('seance_patient_id, realise')
-      .in('seance_patient_id', seancesPatient.map((s: any) => s.id));
+      .in('seance_patient_id', (seancesPatient as LigneBase[]).map(s => s.id as string));
     exercicesRealises = erRes.data ?? [];
   }
 
@@ -294,7 +295,7 @@ export default withSentry(async function handler(req: any, res: any) {
 
   const seancesAutonomesCount: Record<string, number> = {};
   for (const row of allSpRes.data ?? []) {
-    const progId = (row as any).programme_id as string;
+    const progId = (row as LigneBase).programme_id as string;
     seancesAutonomesCount[progId] = (seancesAutonomesCount[progId] ?? 0) + 1;
   }
 
@@ -314,7 +315,7 @@ export default withSentry(async function handler(req: any, res: any) {
     seancesPatient,
     exercicesRealises,
     seancesAutonomesCount,
-    testsEtalonsActifs: (testsActifsRes.data ?? []).map((r: any) => r.test_id as string),
+    testsEtalonsActifs: ((testsActifsRes.data ?? []) as LigneBase[]).map(r => r.test_id as string),
     testsEtalonsResultats: testsResultatsRes.data ?? [],
     exercicesLibresActifs: exLibresActifsRes.data ?? [],
     exercicesLibresValidations: exLibresValidationsRes.data ?? [],

@@ -27,6 +27,15 @@ export default defineConfig([
       '@typescript-eslint/no-unused-vars': ['error', {
         argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_', ignoreRestSiblings: true,
       }],
+      // En avertissement le temps d'un chantier dédié (27/11/2026, 60 cas) :
+      // - set-state-in-effect : le chargement de données des hooks pose
+      //   « setLoading(true) » dans un effet ; le réécrire change l'affichage des
+      //   états de chargement, à faire écran par écran avec l'e2e ;
+      // - only-export-components : constantes exportées depuis un fichier de
+      //   composant ; ne gêne que le rechargement à chaud en développement.
+      // Toute autre règle est bloquante en CI (npm run lint).
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
 ])

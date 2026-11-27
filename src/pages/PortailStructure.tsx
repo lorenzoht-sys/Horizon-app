@@ -6,6 +6,8 @@ import { useDevice } from '../hooks/useDevice';
 import type { Participant, Seance, Bilan } from '../types';
 import { libelleAge } from '../lib/age';
 import { distanceTm6 } from '../lib/tm6';
+import type { LigneDb } from '../lib/ligneDb';
+import type { DocumentPartage, FactureStructure } from '../lib/structureApi';
 
 type Praticien = { prenom: string; nom: string; titre?: string | null; email?: string | null; telephone?: string | null };
 
@@ -23,7 +25,7 @@ const LABELS_DOCUMENTS: Record<string, string> = {
   compte_rendu_famille: 'Compte-rendu famille',
 };
 
-function telechargerDocument(d: any, nomPatient: string) {
+function telechargerDocument(d: DocumentPartage, nomPatient: string) {
   const blob = new Blob([d.contenu ?? ''], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -252,8 +254,8 @@ export default function PortailStructure() {
   const [praticien, setPraticien] = useState<Praticien | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [seances, setSeances] = useState<Seance[]>([]);
-  const [factures, setFactures] = useState<any[]>([]);
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [factures, setFactures] = useState<FactureStructure[]>([]);
+  const [documents, setDocuments] = useState<DocumentPartage[]>([]);
   const [loading, setLoading] = useState(true);
   const [erreur, setErreur] = useState(false);
   const [tab, setTab] = useState<Tab>('patients');
@@ -276,7 +278,7 @@ export default function PortailStructure() {
         setStructure(str);
         if (pra) setPraticien(pra);
 
-        const parts: Participant[] = (pData ?? []).map((row: any) => ({
+        const parts: Participant[] = (pData ?? []).map((row: LigneDb) => ({
           ...dbToParticipant(row),
           bilans: (row.bilans ?? []).map(dbToBilan),
           programmes: (row.programmes ?? []).map(dbToProgramme),
@@ -327,7 +329,7 @@ export default function PortailStructure() {
   if (selectedPatient) {
     const statutSel = statutPatient(selectedPatient, seances.filter(s => s.participantId === selectedPatient.id));
     const programmeActifSel = selectedPatient.programmes?.filter(pr => pr.actif).sort((a, b) => b.dateCreation.localeCompare(a.dateCreation))[0] ?? null;
-    const documentsPatient = documents.filter((d: any) => d.participant_id === selectedPatient.id);
+    const documentsPatient = documents.filter((d: DocumentPartage) => d.participant_id === selectedPatient.id);
 
     const patientHeader = (
       <div style={{ background: C.dark, padding: isMobile ? '14px 16px' : '20px 24px', position: 'sticky', top: 0, zIndex: 20 }}>
@@ -384,7 +386,7 @@ export default function PortailStructure() {
         {documentsPatient.length === 0 ? (
           <div style={{ fontSize: 13, color: C.muted }}>Aucun document partagé pour ce bénéficiaire.</div>
         ) : (
-          documentsPatient.map((d: any) => (
+          documentsPatient.map((d: DocumentPartage) => (
             <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: `1px solid ${C.bg}`, gap: 10 }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: C.dark }}>📄 {LABELS_DOCUMENTS[d.type_document] ?? 'Document'}</div>
@@ -435,7 +437,7 @@ export default function PortailStructure() {
   // Total 2026 factures
   const totalAnnee = factures
     .filter(f => f.periode_annee === new Date().getFullYear() && f.statut === 'envoyee')
-    .reduce((s: number, f: any) => s + Number(f.montant_total), 0);
+    .reduce((s: number, f: FactureStructure) => s + Number(f.montant_total), 0);
 
   // Bénéficiaires suivis / accompagnements terminés (archivés côté praticien). Les chiffres et la
   // progression portent sur les personnes suivies ; l'historique des séances et des documents
@@ -838,7 +840,7 @@ export default function PortailStructure() {
                 Votre praticien APA peut partager des comptes-rendus depuis son interface.
               </div>
             ) : (
-              documents.map((d: any) => {
+              documents.map((d: DocumentPartage) => {
                 const p = participants.find(x => x.id === d.participant_id);
                 const nomPatient = p ? `${p.prenom} ${p.nom}` : 'Patient';
                 return (
@@ -876,7 +878,7 @@ export default function PortailStructure() {
                 </div>
               </div>
             ) : (
-              factures.map((f: any) => (
+              factures.map((f: FactureStructure) => (
                 <div key={f.id} style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 16, padding: 16, marginBottom: 10 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: C.dark }}>{fmtMois(f.periode_mois, f.periode_annee)}</div>

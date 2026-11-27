@@ -341,7 +341,7 @@ describe('notification du praticien', () => {
     const alerte = vi.fn(async () => ({ nbEnvoyes: 2, nbEchecs: 0 }));
     const bilan = await genererBrouillonsDuMois(client, SEPT, { envoyerAlerte: alerte });
     expect(alerte).toHaveBeenCalledTimes(2);
-    const parPraticien = Object.fromEntries(alerte.mock.calls.map((c: any[]) => [c[1], c[2]]));
+    const parPraticien = Object.fromEntries(alerte.mock.calls.map((c: unknown[]) => [c[1], c[2]]));
     expect(parPraticien['pra-A']).toEqual({ titre: 'Horizon', corps: '3 factures à valider pour septembre 2026', url: URL_NOTIFICATION_FACTURES_A_VALIDER, tag: 'factures-a-valider-2026-09' });
     expect(parPraticien['pra-B'].corps).toBe('1 facture à valider pour septembre 2026');   // singulier
     expect(bilan.notifications).toEqual({ praticiens: 2, envoyes: 4, echecs: 0 });

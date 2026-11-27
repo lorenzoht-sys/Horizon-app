@@ -28,6 +28,8 @@ const decrire = describe.skipIf(!DISPONIBLE);
 // réuni avec ce lot sur main le 2026-11-12 : plus aucune fuite attendue.
 export const FUITES_CONSTATEES: Record<string, string> = {};
 
+// Lignes SQL brutes lues par pg dans un test : leur forme est celle de la requête écrite juste à côté.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Ligne = Record<string, any>;
 const q = async (sql: string, params: unknown[] = []) => (await pg(c => c.query(sql, params))).rows as Ligne[];
 

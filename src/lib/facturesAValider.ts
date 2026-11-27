@@ -4,6 +4,7 @@
 
 // Regroupement de la présentation globale : le MÊME module que le PDF (Edge Function), sans dépendance.
 import { lirePresentation, type Presentation } from '../../supabase/functions/facturation-pdf/regroupement.ts';
+import type { LigneDb } from './ligneDb';
 export { lignesAffichees, type Presentation } from '../../supabase/functions/facturation-pdf/regroupement.ts';
 
 export interface LigneBrouillon {
@@ -256,7 +257,7 @@ export function trierLignes(lignes: LigneBrouillon[]): LigneBrouillon[] {
 
 // ── Lecture des lignes brutes de PostgREST ────────────────────────────────────────────────────
 
-type Brut = Record<string, any>;
+type Brut = Record<string, LigneDb>;
 const nombre = (v: unknown) => Number(v ?? 0);
 const un = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? v[0] ?? null : v ?? null);
 

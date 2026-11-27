@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useParticipants } from '../../../hooks/useParticipants';
-import { v4 as uuidv4 } from 'uuid';
 import { erreurConsentementCreation, normaliserRgpd } from '../../../lib/consentementRgpd';
 import type { RgpdConsent } from '../../../types';
 import { getBrouillonParticipant, sauvegarderBrouillonParticipant, supprimerBrouillonParticipant } from '../../../hooks/useBrouillonParticipant';
@@ -159,9 +158,7 @@ export function NouveauPatientMobile({ onBack: retourParent, onCree }: { onBack:
         dateCreation: new Date().toISOString(),
         rgpd,
         droitImage,
-        bilans: [],
-        token: uuidv4().slice(0, 12),
-      } as any);
+      });
       supprimerBrouillonParticipant(CLE_BROUILLON_CREATION);
       toast.success(`${form.prenom} ${form.nom} créé(e) ✅`);
       onCree(cree.id);

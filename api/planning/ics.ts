@@ -18,8 +18,9 @@
 import { getServiceClient } from '../_lib/patientAuth.js';
 import { withSentry } from '../_lib/sentry.js';
 import { validatePraticienIcsToken, chargerSeancesPourIcs, chargerAutresEvenementsPourIcs, genererCalendrierPlanning } from '../_lib/planningIcs.js';
+import type { ReponseApi, RequeteApi } from '../_lib/http.js';
 
-export default withSentry(async function handler(req: any, res: any) {
+export default withSentry(async function handler(req: RequeteApi, res: ReponseApi) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

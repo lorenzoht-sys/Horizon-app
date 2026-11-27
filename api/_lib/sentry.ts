@@ -6,6 +6,7 @@
 // ni comportement modifié.
 
 import * as Sentry from '@sentry/node';
+import type { ReponseApi, RequeteApi } from './http.js';
 
 let initialized = false;
 
@@ -96,7 +97,7 @@ export async function captureMessage(
   }
 }
 
-type Handler = (req: any, res: any) => unknown | Promise<unknown>;
+type Handler = (req: RequeteApi, res: ReponseApi) => unknown | Promise<unknown>;
 
 // Capture toute exception non gérée par un handler /api/*, la journalise
 // dans Sentry (si configuré), puis répond 500. N'altère pas le comportement

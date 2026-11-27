@@ -1,7 +1,10 @@
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
+import type { Content } from 'pdfmake/interfaces';
 
-(pdfMake as any).vfs = (pdfFonts as any).pdfMake?.vfs ?? (pdfFonts as any).default?.pdfMake?.vfs;
+// pdfmake 0.3 : vfs_fonts exporte directement le système de fichiers des polices,
+// à déclarer par addVirtualFileSystem (l'ancienne propriété `vfs` est ignorée).
+pdfMake.addVirtualFileSystem(pdfFonts);
 
 export { pdfMake };
 
@@ -24,8 +27,8 @@ function cleanText(text: string): string {
 }
 
 /** Convertit le Markdown en tableau de blocs pdfmake */
-export function mdToPdfMake(md: string): object[] {
-  const content: object[] = [];
+export function mdToPdfMake(md: string): Content[] {
+  const content: Content[] = [];
   const lines = md.split('\n');
   let i = 0;
   while (i < lines.length) {

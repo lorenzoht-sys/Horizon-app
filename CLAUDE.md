@@ -19,7 +19,7 @@ token). **L'application traite des données de santé.**
 ```bash
 npm run dev             # Vite seul : les routes /api/* ne tournent pas en local
 npm run build           # tsc -b + vite build + postbuild manifeste PWA
-npm run lint            # ESLint (erreurs pré-existantes, absent de la CI)
+npm run lint            # ESLint, bloquant en CI (2 règles en avertissement, voir eslint.config.js)
 npm run typecheck:api   # tsc sur api/
 npm run typecheck:e2e   # tsc sur e2e/
 npm run test:unit       # Vitest (api/, src/lib/, src/utils/, supabase/functions/, tests/security/)
@@ -30,7 +30,7 @@ npm run test:e2e        # Playwright : sans E2E_BASE_URL, tout est skip
 
 Un seul test : `npx vitest run api/_lib/rappels.test.ts` ou `npx playwright test e2e/06-connexion-patient.spec.ts`.
 
-La CI (`.github/workflows/ci.yml`) enchaîne build, `typecheck:api`, `typecheck:e2e` et `test:unit:ci`, puis l'e2e sur le Preview Vercel du commit testé. `security.yml` fait tourner le harnais RLS.
+La CI (`.github/workflows/ci.yml`) enchaîne ESLint, build, knip (code mort), `typecheck:api`, `typecheck:e2e` et `test:unit:ci`, puis l'e2e sur le Preview Vercel du commit testé. `security.yml` fait tourner le harnais RLS.
 
 ## Structure
 

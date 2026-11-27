@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useLayoutEffect } from 'react';
+import { constructeurReconnaissance, type ReconnaissanceVocale } from '../lib/reconnaissanceVocale';
 
 interface SpeechRecognitionHook {
   isRecording: boolean;
@@ -26,7 +27,7 @@ export function useSpeechRecognition(): SpeechRecognitionHook {
   const isSupported = typeof window !== 'undefined' &&
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
-  const recognitionRef    = useRef<any>(null);
+  const recognitionRef    = useRef<ReconnaissanceVocale | null>(null);
   const wantsRecordingRef = useRef(false);
   const accumulatedRef    = useRef('');
   const stopTimeoutRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -34,16 +35,16 @@ export function useSpeechRecognition(): SpeechRecognitionHook {
   // Ref vers la fonction de setup pour éviter les closures périmées sur iOS.
   // Écrite après chaque rendu (React interdit d'écrire une ref pendant le rendu) ;
   // elle n'est lue qu'au clic sur le micro, donc toujours à jour.
-  const setupRecognitionRef = useRef<(r: any) => void>(null!);
+  const setupRecognitionRef = useRef<(r: ReconnaissanceVocale) => void>(null!);
   useLayoutEffect(() => {
-    setupRecognitionRef.current = (recognition: any) => {
+    setupRecognitionRef.current = (recognition: ReconnaissanceVocale) => {
       recognition.lang            = 'fr-FR';
       recognition.continuous      = !isIOSDevice; // iOS : sessions courtes
       recognition.interimResults  = true;
 
       recognition.onstart = () => setIsRecording(true);
 
-      recognition.onresult = (e: any) => {
+      recognition.onresult = (e) => {
         let newFinal = '';
         let currentInterim = '';
         for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -60,7 +61,7 @@ export function useSpeechRecognition(): SpeechRecognitionHook {
         setInterimTranscript(currentInterim);
       };
 
-      recognition.onerror = (e: any) => {
+      recognition.onerror = (e) => {
         // Sur iOS, 'no-speech' est normal en fin de session — ne pas afficher d'erreur
         if (e.error === 'no-speech') return;
         const messages: Record<string, string> = {
@@ -78,7 +79,7 @@ export function useSpeechRecognition(): SpeechRecognitionHook {
         if (isIOSDevice && wantsRecordingRef.current) {
           setInterimTranscript('');
           setTimeout(() => {
-            const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            const SR = constructeurReconnaissance();
             if (!SR || !wantsRecordingRef.current) {
               setIsRecording(false);
               return;
@@ -112,7 +113,7 @@ export function useSpeechRecognition(): SpeechRecognitionHook {
   });
 
   const startRecording = useCallback(() => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SR = constructeurReconnaissance();
     if (!SR) {
       setError('Fonctionnalité disponible sur Chrome ou Safari uniquement');
       return;

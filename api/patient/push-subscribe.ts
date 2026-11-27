@@ -10,8 +10,9 @@
 
 import { getServiceClient, verifyPatientToken, extractBearerToken } from '../_lib/patientAuth.js';
 import { withSentry } from '../_lib/sentry.js';
+import type { ReponseApi, RequeteApi } from '../_lib/http.js';
 
-export default withSentry(async function handler(req: any, res: any) {
+export default withSentry(async function handler(req: RequeteApi, res: ReponseApi) {
   if (req.method !== 'POST' && req.method !== 'DELETE') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -36,7 +37,8 @@ export default withSentry(async function handler(req: any, res: any) {
   }
 
   if (req.method === 'POST') {
-    const { subscription } = req.body ?? {};
+    // Forme attendue d'un PushSubscription sérialisé ; chaque champ est vérifié juste après.
+    const subscription = req.body?.subscription as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } } | undefined;
     const endpoint = subscription?.endpoint;
     const p256dh = subscription?.keys?.p256dh;
     const authKey = subscription?.keys?.auth;

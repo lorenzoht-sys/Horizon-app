@@ -57,10 +57,12 @@ export default function ImportExcelModal({ onClose, participants, addParticipant
         try {
           await addParticipant(data);
           nbSucces++;
-        } catch (error: any) {
+        } catch (error) {
+          // Erreur Supabase (PostgrestError : message, details) ou erreur JS.
+          const e = error as { message?: string; details?: string } | null;
           erreursSupabase.push({
             ligne: i + 2,
-            message: `${data.prenom} ${data.nom} — ${error?.message || error?.details || JSON.stringify(error)}`,
+            message: `${data.prenom} ${data.nom} — ${e?.message || e?.details || JSON.stringify(error)}`,
           });
         }
         setProgress({ done: i + 1, total });

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../lib/supabase';
 import { utilisateurCourant } from '../lib/session';
-import { dbToStructure, structureToDb } from '../lib/mappers';
+import { dbToStructure, structurePartielleToDb, structureToDb } from '../lib/mappers';
 import type { Structure } from '../types';
 
 
@@ -89,7 +89,7 @@ export function useStructures() {
   }
 
   async function mettreAJour(id: string, data: Partial<Omit<Structure, 'id' | 'praticienId' | 'tokenAcces' | 'createdAt'>>): Promise<void> {
-    const { error } = await supabase.from('structures').update(structureToDb(data as any)).eq('id', id);
+    const { error } = await supabase.from('structures').update(structurePartielleToDb(data)).eq('id', id);
     if (!error) {
       setStructures(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
     }

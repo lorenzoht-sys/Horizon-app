@@ -46,7 +46,8 @@ export function getContreIndications(
   const bilan = bilanInitial !== undefined ? bilanInitial : (participant.bilans.find(b => b.type === 'initial') ?? null);
   const data = bilan?.bilanInitialData?.formulaireFlat?.data;
   const actif = data?.contreIndications === 'oui';
-  return { actif, detail: actif ? (data?.contreIndicationsDetail ?? null) : null };
+  const detail = data?.contreIndicationsDetail;
+  return { actif, detail: actif && typeof detail === 'string' ? detail : null };
 }
 
 // Tests Ricci & Gagnon (sédentarité) et FSS (fatigue) : nouvelle source = fiche

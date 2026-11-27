@@ -74,29 +74,33 @@ describe('filtrerBilan — résultats physiques', () => {
   });
 });
 
+// Données du formulaire initial renvoyées dans la ligne filtrée.
+const flatDe = (r: Record<string, unknown>) =>
+  (r.bilan_initial_data as { formulaireFlat: { data: Record<string, unknown> } }).formulaireFlat.data;
+
 describe('filtrerBilan — sédentarité / fatigue (colonnes ET repli formulaireFlat)', () => {
   it('retire sédentarité des deux emplacements quand non partagée', () => {
     const r = filtrerBilan(bilanBrut(), false, true);
     expect(r.sedentarite_score).toBeNull();
     expect(r.sedentarite_profil).toBeNull();
     expect(r.sedentarite_reponses).toBeNull();
-    expect(r.bilan_initial_data.formulaireFlat.data.sedentariteScore).toBeUndefined();
-    expect(r.bilan_initial_data.formulaireFlat.data.sedentariteProfil).toBeUndefined();
-    expect(r.bilan_initial_data.formulaireFlat.data.sedentariteReponses).toBeUndefined();
+    expect(flatDe(r).sedentariteScore).toBeUndefined();
+    expect(flatDe(r).sedentariteProfil).toBeUndefined();
+    expect(flatDe(r).sedentariteReponses).toBeUndefined();
   });
 
   it('retire fatigue des deux emplacements quand non partagée', () => {
     const r = filtrerBilan(bilanBrut(), true, false);
     expect(r.fatigue_score).toBeNull();
     expect(r.fatigue_profil).toBeNull();
-    expect(r.bilan_initial_data.formulaireFlat.data.fatigueScore).toBeUndefined();
+    expect(flatDe(r).fatigueScore).toBeUndefined();
   });
 
   it('laisse passer sédentarité ET fatigue quand les deux sont partagées', () => {
     const r = filtrerBilan(bilanBrut(), true, true);
     expect(r.sedentarite_profil).toBe('inactif');
     expect(r.fatigue_profil).toBe('fatigue_probable');
-    expect(r.bilan_initial_data.formulaireFlat.data.sedentariteProfil).toBe('inactif');
+    expect(flatDe(r).sedentariteProfil).toBe('inactif');
   });
 
   it('ne plante pas si bilan_initial_data est absent', () => {

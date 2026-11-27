@@ -35,7 +35,7 @@ interface BlocConditionnel {
 }
 
 export interface FormulaireFlat {
-  data: Record<string, any>;
+  data: Record<string, unknown>;
   reponsesClés: Record<string, OuiNon | null>;
 }
 
@@ -251,6 +251,16 @@ function ListeOperations({
 
 const SCALE5_COLORS = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#16A34A'];
 
+// Les réponses du formulaire sont stockées telles quelles (jsonb) : on ne
+// présente à un champ que ce qu'il sait afficher.
+function valeurChamp(v: unknown): string | number {
+  return typeof v === 'string' || typeof v === 'number' ? v : '';
+}
+
+function valeurOuiNon(v: unknown): OuiNon | boolean | null {
+  return v === 'oui' || v === 'non' || typeof v === 'boolean' ? v : null;
+}
+
 function BoutonOuiNon({
   value,
   onChange,
@@ -396,8 +406,8 @@ function RenduInput({
   onChange,
 }: {
   question: Question;
-  value: any;
-  onChange: (v: any) => void;
+  value: unknown;
+  onChange: (v: unknown) => void;
 }) {
   const fieldCls =
     'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary';
@@ -418,7 +428,7 @@ function RenduInput({
           {lbl}
           <input
             type={question.type}
-            value={value ?? ''}
+            value={valeurChamp(value)}
             onChange={e => onChange(e.target.value)}
             placeholder={question.placeholder}
             className={fieldCls}
@@ -433,7 +443,7 @@ function RenduInput({
           {lbl}
           <input
             type={question.type}
-            value={value ?? ''}
+            value={valeurChamp(value)}
             onChange={e => onChange(e.target.value)}
             className={fieldCls}
           />
@@ -446,7 +456,7 @@ function RenduInput({
           {lbl}
           <input
             type="number"
-            value={value ?? ''}
+            value={valeurChamp(value)}
             onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}
             placeholder={question.placeholder ?? '—'}
             className="w-36 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary"
@@ -459,7 +469,7 @@ function RenduInput({
         <div>
           {lbl}
           <textarea
-            value={value ?? ''}
+            value={valeurChamp(value)}
             onChange={e => onChange(e.target.value)}
             placeholder={question.placeholder}
             rows={3}
@@ -472,7 +482,7 @@ function RenduInput({
       return (
         <div>
           {lbl}
-          <BoutonOuiNon value={value ?? null} onChange={onChange} />
+          <BoutonOuiNon value={valeurOuiNon(value)} onChange={onChange} />
         </div>
       );
 
@@ -499,7 +509,7 @@ function RenduInput({
       );
 
     case 'echelle-10': {
-      const v = value ?? null;
+      const v = typeof value === 'number' ? value : null;
       const getColor = (n: number) =>
         n === 0 ? '#3B6D11' : n <= 3 ? '#F59E0B' : n <= 6 ? '#EF8C00' : n <= 8 ? '#EF4444' : '#991B1B';
       const getLibelle = (n: number) =>
@@ -598,9 +608,9 @@ function RenduQuestion({
   onChange,
 }: {
   question: Question;
-  value: any;
-  data: Record<string, any>;
-  onChange: (v: any) => void;
+  value: unknown;
+  data: Record<string, unknown>;
+  onChange: (v: unknown) => void;
 }) {
   // Masquer si condition interne non remplie
   if (question.conditionnelSi) {
@@ -638,8 +648,8 @@ function BlocQuestions({
   onGateChange,
 }: {
   bloc: BlocConditionnel;
-  data: Record<string, any>;
-  onChange: (field: string, value: any) => void;
+  data: Record<string, unknown>;
+  onChange: (field: string, value: unknown) => void;
   gateValue?: OuiNon | null;
   onGateChange?: (v: OuiNon) => void;
 }) {
@@ -722,7 +732,7 @@ export default function FormulaireBilanInitial({ participantId, onFlat, initialF
   const [reponsesClés, setReponsesClés] = useState<Record<string, OuiNon | null>>(
     initialFlat?.reponsesClés ?? CLÉS_INITIALES
   );
-  const [data, setData] = useState<Record<string, any>>(initialFlat?.data ?? {});
+  const [data, setData] = useState<Record<string, unknown>>(initialFlat?.data ?? {});
   const [restored, setRestored] = useState(false);
 
   // Restaurer depuis localStorage (< 24h)
@@ -732,7 +742,7 @@ export default function FormulaireBilanInitial({ participantId, onFlat, initialF
       const saved = localStorage.getItem(getBilanEnCoursKey(participantId));
       if (saved) {
         const parsed = JSON.parse(saved) as {
-          data: Record<string, any>;
+          data: Record<string, unknown>;
           reponsesClés: Record<string, OuiNon | null>;
           timestamp: number;
         };
@@ -748,7 +758,7 @@ export default function FormulaireBilanInitial({ participantId, onFlat, initialF
   }, [participantId, initialFlat, restored]);
 
   const notify = useCallback(
-    (d: Record<string, any>, r: Record<string, OuiNon | null>) => {
+    (d: Record<string, unknown>, r: Record<string, OuiNon | null>) => {
       try {
         localStorage.setItem(
           getBilanEnCoursKey(participantId),
@@ -770,7 +780,7 @@ export default function FormulaireBilanInitial({ participantId, onFlat, initialF
     setReponsesClés(prev => ({ ...prev, [field]: prev[field] === value ? null : value }));
   }
 
-  function setField(field: string, value: any) {
+  function setField(field: string, value: unknown) {
     setData(prev => ({ ...prev, [field]: value }));
   }
 

@@ -1,6 +1,7 @@
 import type { Participant, Bilan, Programme, Contrat, Seance, NoteSeance, ZoneGeographique, Structure, TemplateStructure, DisponibilitesPatient, JourSemaine, CreneauPreference, EvenementAgenda, VisibiliteBeneficiaire, TarifContrat, CoursCollectif, ParticipationCoursCollectif, CategorieSeance, BilansAuto } from '../types';
 import type { CompteRenduSeance } from '../types/seance';
 import { tm6EnPas } from './tm6';
+import type { LigneDb } from './ligneDb';
 
 // ── Conversion anamnese.organisation → DisponibilitesPatient ──────────────────
 // Retourne undefined si les données sont absentes ou incomplètes (patient sans
@@ -10,7 +11,7 @@ const JOUR_FORM_TO_DB: Record<string, JourSemaine> = {
   lun: 'lun', mar: 'mar', mer: 'mer', jeu: 'jeu', ven: 'ven', sam: 'sam',
 };
 
-function orgToDisponibilites(org: any): DisponibilitesPatient | undefined {
+function orgToDisponibilites(org: LigneDb): DisponibilitesPatient | undefined {
   if (!org || typeof org !== 'object') return undefined;
 
   // Jours disponibles — au moins un requis, sinon undefined
@@ -39,7 +40,7 @@ function orgToDisponibilites(org: any): DisponibilitesPatient | undefined {
 }
 
 // Participant: Supabase row → TypeScript type
-export function dbToParticipant(row: any): Participant {
+export function dbToParticipant(row: LigneDb): Participant {
   return {
     id: row.id,
     nom: row.nom,
@@ -187,7 +188,7 @@ export function participantToDb(p: Omit<Participant, 'bilans' | 'programmes'>): 
   };
 }
 
-export function dbToBilan(row: any): Bilan {
+export function dbToBilan(row: LigneDb): Bilan {
   return {
     id: row.id,
     date: row.date,
@@ -323,7 +324,7 @@ export function bilanToDb(participantId: string, b: Omit<Bilan, 'id'> & { id?: s
   };
 }
 
-export function dbToProgramme(row: any): Programme {
+export function dbToProgramme(row: LigneDb): Programme {
   return {
     id: row.id,
     participantId: row.participant_id,
@@ -370,7 +371,7 @@ function normaliserJoursFixe(raw: string[] | null | undefined): (JourSemaine | '
   }).filter(j => JOURS_VALIDES.includes(j));
 }
 
-export function dbToContrat(row: any): Contrat {
+export function dbToContrat(row: LigneDb): Contrat {
   const joursFixe = normaliserJoursFixe(row.jours_fixe);
   return {
     id: row.id,
@@ -428,7 +429,7 @@ export function contratToDb(c: Contrat): Record<string, unknown> {
   };
 }
 
-export function dbToTarifContrat(row: any): TarifContrat {
+export function dbToTarifContrat(row: LigneDb): TarifContrat {
   return {
     id: row.id,
     contratId: row.contrat_id,
@@ -450,7 +451,7 @@ export function tarifContratToDb(t: Omit<TarifContrat, 'id' | 'createdAt'>): Rec
   };
 }
 
-export function dbToCoursCollectif(row: any): CoursCollectif {
+export function dbToCoursCollectif(row: LigneDb): CoursCollectif {
   return {
     id: row.id,
     praticienId: row.praticien_id,
@@ -481,7 +482,7 @@ export function coursCollectifToDb(c: Omit<CoursCollectif, 'createdAt'>): Record
   };
 }
 
-export function dbToParticipationCoursCollectif(row: any): ParticipationCoursCollectif {
+export function dbToParticipationCoursCollectif(row: LigneDb): ParticipationCoursCollectif {
   return {
     id: row.id,
     coursId: row.cours_id,
@@ -513,7 +514,7 @@ export function participationCoursCollectifToDb(p: Omit<ParticipationCoursCollec
   };
 }
 
-export function dbToSeance(row: any): Seance {
+export function dbToSeance(row: LigneDb): Seance {
   return {
     id: row.id,
     participantId: row.participant_id,
@@ -563,15 +564,15 @@ export function seanceToDb(s: Omit<Seance, 'id'> & { id?: string }): Record<stri
   };
 }
 
-export function dbToCategorieSeance(row: any): CategorieSeance {
+export function dbToCategorieSeance(row: LigneDb): CategorieSeance {
   return { id: row.id, nom: row.nom, couleur: row.couleur ?? '#6B7280', estBilan: !!row.est_bilan };
 }
 
-export function dbToBilansAuto(row: any): BilansAuto {
+export function dbToBilansAuto(row: LigneDb): BilansAuto {
   return { participantId: row.participant_id, actif: !!row.actif, frequenceMois: row.frequence_mois };
 }
 
-export function dbToEvenementAgenda(row: any): EvenementAgenda {
+export function dbToEvenementAgenda(row: LigneDb): EvenementAgenda {
   return {
     id: row.id,
     type: row.type,
@@ -605,7 +606,7 @@ export function evenementAgendaToDb(e: Omit<EvenementAgenda, 'id'> & { id?: stri
   };
 }
 
-export function dbToNoteSeance(row: any): NoteSeance {
+export function dbToNoteSeance(row: LigneDb): NoteSeance {
   return {
     id: row.id,
     seanceId: row.seance_id,
@@ -635,7 +636,7 @@ export function noteSeanceToDb(n: Omit<NoteSeance, 'id'> & { id?: string }): Rec
   };
 }
 
-export function dbToZone(row: any): ZoneGeographique {
+export function dbToZone(row: LigneDb): ZoneGeographique {
   return {
     id: row.id,
     nom: row.nom,
@@ -658,7 +659,7 @@ export function zoneToDb(z: ZoneGeographique): Record<string, unknown> {
   };
 }
 
-export function dbToCompteRendu(row: any): CompteRenduSeance {
+export function dbToCompteRendu(row: LigneDb): CompteRenduSeance {
   return {
     id: row.id,
     participantId: row.participant_id,
@@ -694,7 +695,7 @@ export function compteRenduToDb(cr: CompteRenduSeance): Record<string, unknown> 
   };
 }
 
-export function dbToStructure(row: any): Structure {
+export function dbToStructure(row: LigneDb): Structure {
   return {
     id: row.id,
     praticienId: row.praticien_id,
@@ -729,7 +730,25 @@ export function structureToDb(s: Partial<Structure> & { nom: string; contactEmai
   };
 }
 
-export function dbToTemplateStructure(row: any): TemplateStructure {
+// Mise à jour partielle : seulement les champs fournis. structureToDb, faite pour
+// la création, remplit les absents par défaut ; utilisée pour une modification,
+// elle remettait `type` à null et `actif` à vrai à chaque enregistrement de la
+// fiche (corrigé le 27/11/2026).
+const COLONNES_STRUCTURE = {
+  nom: 'nom', type: 'type', adresse: 'adresse', contactNom: 'contact_nom',
+  contactEmail: 'contact_email', contactTelephone: 'contact_telephone',
+  tarifSeance: 'tarif_seance', frequenceFacturation: 'frequence_facturation', actif: 'actif',
+} as const satisfies Partial<Record<keyof Structure, string>>;
+
+export function structurePartielleToDb(s: Partial<Structure>): Record<string, unknown> {
+  const ligne: Record<string, unknown> = {};
+  for (const [champ, colonne] of Object.entries(COLONNES_STRUCTURE)) {
+    if (champ in s) ligne[colonne] = s[champ as keyof typeof COLONNES_STRUCTURE] ?? null;
+  }
+  return ligne;
+}
+
+export function dbToTemplateStructure(row: LigneDb): TemplateStructure {
   return {
     id: row.id,
     praticienId: row.praticien_id,

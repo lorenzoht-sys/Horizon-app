@@ -33,9 +33,11 @@ import { dateParisCivile } from '../_lib/rappels.js';
 import { envoyerAlertePraticien } from '../_lib/notifications.js';
 import { urlPdfFacturePatient } from '../_lib/facturesPatient.js';
 import { dateCivileValide, texteDansLaBorne, MESSAGE_TEXTE_TROP_LONG } from '../_lib/saisiePatient.js';
+import type { ReponseApi, RequeteApi } from '../_lib/http.js';
 
 const TYPES_VALIDES = ['test-etalon', 'exercice-libre', 'cours-presence', 'seance-absence', 'facture-pdf'] as const;
 type TypeActivite = (typeof TYPES_VALIDES)[number];
+const estTypeActivite = (v: unknown): v is TypeActivite => (TYPES_VALIDES as readonly unknown[]).includes(v);
 
 // Un événement d'audit par type, utilisé pour le refus par rate limit (avant
 // même de savoir si l'action elle-même aurait réussi) et repris tel quel
@@ -48,7 +50,7 @@ const EVENEMENT_PAR_TYPE: Record<TypeActivite, AuditEventType> = {
   'facture-pdf': 'patient_facture_pdf',
 };
 
-export default withSentry(async function handler(req: any, res: any) {
+export default withSentry(async function handler(req: RequeteApi, res: ReponseApi) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const token = extractBearerToken(req);
@@ -64,7 +66,7 @@ export default withSentry(async function handler(req: any, res: any) {
   const body = req.body ?? {};
   const { type } = body;
 
-  if (!TYPES_VALIDES.includes(type)) {
+  if (!estTypeActivite(type)) {
     return res.status(400).json({ error: `type requis : ${TYPES_VALIDES.map(t => `"${t}"`).join(', ')}` });
   }
 
@@ -85,7 +87,7 @@ export default withSentry(async function handler(req: any, res: any) {
   // c'est le NOMBRE de requêtes qu'on borne, pas leur issue.
   const ipRateLimit = getClientIp(req);
   if (!(await checkActiviteRateLimit(supabase, participantId, type))) {
-    await logAuditEvent(supabase, EVENEMENT_PAR_TYPE[type as TypeActivite], participantId, ipRateLimit, false, { motif: 'rate_limit' });
+    await logAuditEvent(supabase, EVENEMENT_PAR_TYPE[type], participantId, ipRateLimit, false, { motif: 'rate_limit' });
     return res.status(429).json({ error: 'Trop de requêtes. Réessayez dans quelques minutes.' });
   }
   await recordActiviteAttempt(supabase, participantId, type);
