@@ -3,7 +3,7 @@
 
 interface BrouillonParticipant {
   step: number;
-  data: Record<string, any>;
+  data: Record<string, unknown>;
   timestamp: number;
 }
 
@@ -25,7 +25,7 @@ export function getBrouillonParticipant(draftKey: string): BrouillonParticipant 
   }
 }
 
-export function sauvegarderBrouillonParticipant(draftKey: string, step: number, data: Record<string, any>): void {
+export function sauvegarderBrouillonParticipant(draftKey: string, step: number, data: Record<string, unknown>): void {
   try {
     localStorage.setItem(cle(draftKey), JSON.stringify({ step, data, timestamp: Date.now() }));
   } catch {

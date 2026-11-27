@@ -226,20 +226,20 @@ export default function BilanDetail() {
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
-              p: ({children}: any) => <p style={{fontSize:'14px', lineHeight:'1.7', color:'#111827', marginBottom:'8px'}}>{children}</p>,
-              strong: ({children}: any) => <strong style={{fontWeight:'600', color:'#111827'}}>{children}</strong>,
-              ul: ({children}: any) => <ul style={{paddingLeft:'18px', marginBottom:'8px'}}>{children}</ul>,
-              li: ({children}: any) => <li style={{fontSize:'14px', lineHeight:'1.7', color:'#111827', marginBottom:'4px'}}>{children}</li>,
-              table: ({children}: any) => (
+              p: ({children}) => <p style={{fontSize:'14px', lineHeight:'1.7', color:'#111827', marginBottom:'8px'}}>{children}</p>,
+              strong: ({children}) => <strong style={{fontWeight:'600', color:'#111827'}}>{children}</strong>,
+              ul: ({children}) => <ul style={{paddingLeft:'18px', marginBottom:'8px'}}>{children}</ul>,
+              li: ({children}) => <li style={{fontSize:'14px', lineHeight:'1.7', color:'#111827', marginBottom:'4px'}}>{children}</li>,
+              table: ({children}) => (
                 <div style={{overflowX:'auto', marginBottom:'16px', marginTop:'8px'}}>
                   <table style={{width:'100%', borderCollapse:'collapse', fontSize:'13px', border:'0.5px solid #E5E7EB', borderRadius:'8px', overflow:'hidden'}}>{children}</table>
                 </div>
               ),
-              thead: ({children}: any) => <thead style={{background:'#F9FAFB'}}>{children}</thead>,
-              tbody: ({children}: any) => <tbody>{children}</tbody>,
-              tr: ({children}: any) => <tr style={{borderBottom:'0.5px solid #E5E7EB'}}>{children}</tr>,
-              th: ({children}: any) => <th style={{padding:'8px 12px', fontWeight:'500', color:'#6B7280', textAlign:'left', fontSize:'12px', letterSpacing:'0.03em'}}>{children}</th>,
-              td: ({children}: any) => <td style={{padding:'8px 12px', color:'#111827', fontSize:'13px', verticalAlign:'top'}}>{children}</td>,
+              thead: ({children}) => <thead style={{background:'#F9FAFB'}}>{children}</thead>,
+              tbody: ({children}) => <tbody>{children}</tbody>,
+              tr: ({children}) => <tr style={{borderBottom:'0.5px solid #E5E7EB'}}>{children}</tr>,
+              th: ({children}) => <th style={{padding:'8px 12px', fontWeight:'500', color:'#6B7280', textAlign:'left', fontSize:'12px', letterSpacing:'0.03em'}}>{children}</th>,
+              td: ({children}) => <td style={{padding:'8px 12px', color:'#111827', fontSize:'13px', verticalAlign:'top'}}>{children}</td>,
             }}
           >{bilan.messageClient}</ReactMarkdown>
         </div>

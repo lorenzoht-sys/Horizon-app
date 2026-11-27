@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Mic, MicOff, RefreshCw, CheckCircle, Plus, Trash2, PenLine } from 'lucide-react';
 import type { Participant } from '../types';
-import type { ExerciceRealise, CompteRenduSeanceInsert } from '../types/seance';
+import type { ExerciceRealise, CompteRenduSeanceInsert, HumeurPatient, ProgressionSeance } from '../types/seance';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import RappelNomsIA from './ui/RappelNomsIA';
 import { resoudreTranscriptionFinale } from '../lib/dicteeTranscription';
@@ -81,12 +81,15 @@ function allFalse(): AiFilledFields {
   };
 }
 
+// Exercice tel que renvoyé par la fonction analyser-seance (champs facultatifs).
+type ExerciceIA = { nom?: string; series?: number; repetitions?: number; duree_secondes?: number; commentaire?: string };
+
 function aiToFormData(ai: Record<string, unknown>): FormCR {
-  const exercices = (ai.exercices_realises as any[] | undefined) ?? [];
+  const exercices = (ai.exercices_realises as ExerciceIA[] | undefined) ?? [];
   return {
     dateSeance: (ai.date_seance as string) ?? new Date().toISOString().slice(0, 10),
     dureeMinutes: ai.duree_minutes != null ? String(ai.duree_minutes) : '',
-    exercicesRealises: exercices.map((e: any) => ({
+    exercicesRealises: exercices.map(e => ({
       nom: e.nom ?? '',
       series: e.series != null ? String(e.series) : '',
       repetitions: e.repetitions != null ? String(e.repetitions) : '',
@@ -103,7 +106,7 @@ function aiToFormData(ai: Record<string, unknown>): FormCR {
 }
 
 function computeFilledFields(ai: Record<string, unknown>): AiFilledFields {
-  const exercices = (ai.exercices_realises as any[] | undefined) ?? [];
+  const exercices = (ai.exercices_realises as ExerciceIA[] | undefined) ?? [];
   return {
     dateSeance: Boolean(ai.date_seance),
     dureeMinutes: ai.duree_minutes != null,
@@ -287,8 +290,8 @@ export default function DicteePostSeance({ participant, onClose: fermerParent, o
         exercicesRealises: exercices,
         observations: formData.observations,
         douleursSignalees: formData.douleursSignalees || null,
-        humeurPatient: (formData.humeurPatient as any) || null,
-        progression: (formData.progression as any) || null,
+        humeurPatient: (formData.humeurPatient as HumeurPatient) || null,
+        progression: (formData.progression as ProgressionSeance) || null,
         pointsAttention: formData.pointsAttention || null,
         prochaineSeanceNotes: formData.prochaineSeanceNotes || null,
       });

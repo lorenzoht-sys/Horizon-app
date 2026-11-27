@@ -237,7 +237,7 @@ export interface ProfilEnrichi {
 
 export interface BilanInitialData {
   formulaireFlat?: {
-    data: Record<string, any>;
+    data: Record<string, unknown>;
     reponsesClés: Record<string, 'oui' | 'non' | null>;
   };
 }

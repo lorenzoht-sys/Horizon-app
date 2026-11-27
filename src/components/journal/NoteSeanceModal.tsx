@@ -3,6 +3,7 @@ import { X, Mic, MicOff } from 'lucide-react';
 import type { NoteSeance, RessentiSeance } from '../../types';
 import { useJournalSeance } from '../../hooks/useJournalSeance';
 import { toast } from 'sonner';
+import { constructeurReconnaissance } from '../../lib/reconnaissanceVocale';
 
 interface Props {
   participantId: string;
@@ -58,7 +59,7 @@ export default function NoteSeanceModal({ participantId, participantNom, seance,
   }
 
   function demarrerDictee() {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SR = constructeurReconnaissance();
     if (!SR) { toast('Dictée vocale non supportée sur ce navigateur'); return; }
     const recognition = new SR();
     recognition.lang = 'fr-FR';
@@ -66,7 +67,7 @@ export default function NoteSeanceModal({ participantId, participantNom, seance,
     recognition.interimResults = false;
     recognition.onstart  = () => setEnEcoute(true);
     recognition.onend    = () => setEnEcoute(false);
-    recognition.onresult = (e: any) => {
+    recognition.onresult = (e) => {
       const texte = e.results[0][0].transcript;
       setNote(prev => prev ? `${prev} ${texte}` : texte);
     };

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { utilisateurCourant } from '../lib/session';
+import type { LigneDb } from '../lib/ligneDb';
 
 interface FactureSuivi {
   id: string;
@@ -18,7 +19,7 @@ interface FactureSuivi {
   createdAt: string;
 }
 
-function dbToFacture(row: any): FactureSuivi {
+function dbToFacture(row: LigneDb): FactureSuivi {
   return {
     id: row.id,
     praticienId: row.praticien_id ?? null,

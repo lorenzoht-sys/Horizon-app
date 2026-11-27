@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  dbToBilan, bilanToDb, normaliserVisibilite,
-  dbToParticipationCoursCollectif, participationCoursCollectifToDb,
-  dbToSeance, seanceToDb,
-  dbToParticipant, participantToDb,
-} from './mappers';
+import { dbToBilan, bilanToDb, normaliserVisibilite, dbToParticipationCoursCollectif, participationCoursCollectifToDb, dbToSeance, seanceToDb, dbToParticipant, participantToDb, structurePartielleToDb } from './mappers';
 import { ALL_TESTS } from '../data/profiles';
 import type { Bilan, TestKey } from '../types';
 
@@ -328,5 +323,18 @@ describe('dbToParticipant / participantToDb — beneficiaireSap (décision 3 du 
   it('« Hors SAP » par défaut : ligne sans la colonne, fiche sans le champ (restauration d\'une ancienne sauvegarde)', () => {
     expect(dbToParticipant({ id: 'p1', nom: 'X', prenom: 'Y' }).beneficiaireSap).toBe(false);
     expect(participantToDb({ id: 'p1', nom: 'X', prenom: 'Y' } as never).beneficiaire_sap).toBe(false);
+  });
+});
+
+describe('structurePartielleToDb', () => {
+  it("n'écrit que les champs fournis : type et actif restent intacts à l'enregistrement de la fiche", () => {
+    const ligne = structurePartielleToDb({ nom: 'EHPAD Les Tilleuls', contactEmail: 'contact@example.com', tarifSeance: 50 });
+    expect(ligne).toEqual({ nom: 'EHPAD Les Tilleuls', contact_email: 'contact@example.com', tarif_seance: 50 });
+    expect(ligne).not.toHaveProperty('actif');
+    expect(ligne).not.toHaveProperty('type');
+  });
+
+  it('un champ vidé (undefined) est effacé en base', () => {
+    expect(structurePartielleToDb({ contactNom: undefined })).toEqual({ contact_nom: null });
   });
 });

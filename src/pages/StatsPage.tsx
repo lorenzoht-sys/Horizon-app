@@ -21,7 +21,7 @@ import { useFacturesAValider, useFacturesValidees } from '../hooks/useFacturesAV
 import { useStructures } from '../hooks/useStructures';
 import { useFactures } from '../hooks/useFactures';
 import { EBAUCHE_FACTURATION_VISIBLE } from '../lib/featuresFacturation';
-import type { Participant, Contrat } from '../types';
+import type { Participant, Contrat, Seance } from '../types';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import { cleanTextPdf } from '../utils/pdfText';
@@ -187,7 +187,7 @@ function SectionFactures({
   participants, seances, contratActif,
 }: {
   participants: Participant[];
-  seances: any[];
+  seances: Seance[];
   contrats?: Contrat[];
   contratActif: (id: string) => Contrat | undefined;
 }) {

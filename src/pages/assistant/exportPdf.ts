@@ -1,4 +1,5 @@
 import { toast } from 'sonner';
+import type { TDocumentDefinitions } from 'pdfmake/interfaces';
 import { pdfMake, mdToPdfMake } from '../../utils/markdownToPdf';
 import { type ActionType } from '../../utils/promptAssistant';
 
@@ -11,7 +12,7 @@ export function downloadPDF(patientNom: string, type: ActionType, markdownConten
   const label   = type === 'compte_rendu' ? 'CR-medecin' : 'CR-famille';
   const filename = `${label}_${patientNom.replace(/ /g, '-')}_${date}.pdf`;
 
-  const docDefinition = {
+  const docDefinition: TDocumentDefinitions = {
     // Marges en points (1mm ≈ 2.835pt) : 40pt ≈ 14mm, 55pt ≈ 19mm, 45pt ≈ 16mm
     pageMargins: [40, 55, 40, 45] as [number, number, number, number],
 
@@ -45,7 +46,7 @@ export function downloadPDF(patientNom: string, type: ActionType, markdownConten
     },
   };
 
-  pdfMake.createPdf(docDefinition as any).download(filename);
+  pdfMake.createPdf(docDefinition).download(filename);
   } catch (err) {
     console.error('Erreur PDF:', err);
     toast.error('Erreur lors de la génération du PDF. Réessayez.');
