@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useLayoutEffect } from 'react';
 
 interface SpeechRecognitionHook {
   isRecording: boolean;
@@ -31,81 +31,85 @@ export function useSpeechRecognition(): SpeechRecognitionHook {
   const accumulatedRef    = useRef('');
   const stopTimeoutRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Ref vers la fonction de setup pour éviter les closures périmées sur iOS
+  // Ref vers la fonction de setup pour éviter les closures périmées sur iOS.
+  // Écrite après chaque rendu (React interdit d'écrire une ref pendant le rendu) ;
+  // elle n'est lue qu'au clic sur le micro, donc toujours à jour.
   const setupRecognitionRef = useRef<(r: any) => void>(null!);
-  setupRecognitionRef.current = (recognition: any) => {
-    recognition.lang            = 'fr-FR';
-    recognition.continuous      = !isIOSDevice; // iOS : sessions courtes
-    recognition.interimResults  = true;
+  useLayoutEffect(() => {
+    setupRecognitionRef.current = (recognition: any) => {
+      recognition.lang            = 'fr-FR';
+      recognition.continuous      = !isIOSDevice; // iOS : sessions courtes
+      recognition.interimResults  = true;
 
-    recognition.onstart = () => setIsRecording(true);
+      recognition.onstart = () => setIsRecording(true);
 
-    recognition.onresult = (e: any) => {
-      let newFinal = '';
-      let currentInterim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) {
-          newFinal += e.results[i][0].transcript;
-        } else {
-          currentInterim += e.results[i][0].transcript;
-        }
-      }
-      if (newFinal) {
-        accumulatedRef.current += newFinal + ' ';
-        setFinalTranscript(accumulatedRef.current);
-      }
-      setInterimTranscript(currentInterim);
-    };
-
-    recognition.onerror = (e: any) => {
-      // Sur iOS, 'no-speech' est normal en fin de session — ne pas afficher d'erreur
-      if (e.error === 'no-speech') return;
-      const messages: Record<string, string> = {
-        'not-allowed':    "Microphone non autorisé. Autorisez l'accès dans les paramètres du navigateur.",
-        'audio-capture':  "Impossible d'accéder au microphone.",
-        'network':        'Erreur réseau lors de la reconnaissance.',
-      };
-      setError(messages[e.error] ?? `Erreur microphone : ${e.error}`);
-      wantsRecordingRef.current = false;
-      setIsRecording(false);
-    };
-
-    recognition.onend = () => {
-      // Sur iOS : redémarrer automatiquement si l'utilisateur veut toujours dicter
-      if (isIOSDevice && wantsRecordingRef.current) {
-        setInterimTranscript('');
-        setTimeout(() => {
-          const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-          if (!SR || !wantsRecordingRef.current) {
-            setIsRecording(false);
-            return;
+      recognition.onresult = (e: any) => {
+        let newFinal = '';
+        let currentInterim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) {
+            newFinal += e.results[i][0].transcript;
+          } else {
+            currentInterim += e.results[i][0].transcript;
           }
-          const newRec = new SR();
-          setupRecognitionRef.current(newRec);
-          recognitionRef.current = newRec;
-          try {
-            newRec.start();
-          } catch {
-            setIsRecording(false);
+        }
+        if (newFinal) {
+          accumulatedRef.current += newFinal + ' ';
+          setFinalTranscript(accumulatedRef.current);
+        }
+        setInterimTranscript(currentInterim);
+      };
+
+      recognition.onerror = (e: any) => {
+        // Sur iOS, 'no-speech' est normal en fin de session — ne pas afficher d'erreur
+        if (e.error === 'no-speech') return;
+        const messages: Record<string, string> = {
+          'not-allowed':    "Microphone non autorisé. Autorisez l'accès dans les paramètres du navigateur.",
+          'audio-capture':  "Impossible d'accéder au microphone.",
+          'network':        'Erreur réseau lors de la reconnaissance.',
+        };
+        setError(messages[e.error] ?? `Erreur microphone : ${e.error}`);
+        wantsRecordingRef.current = false;
+        setIsRecording(false);
+      };
+
+      recognition.onend = () => {
+        // Sur iOS : redémarrer automatiquement si l'utilisateur veut toujours dicter
+        if (isIOSDevice && wantsRecordingRef.current) {
+          setInterimTranscript('');
+          setTimeout(() => {
+            const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            if (!SR || !wantsRecordingRef.current) {
+              setIsRecording(false);
+              return;
+            }
+            const newRec = new SR();
+            setupRecognitionRef.current(newRec);
+            recognitionRef.current = newRec;
+            try {
+              newRec.start();
+            } catch {
+              setIsRecording(false);
+              wantsRecordingRef.current = false;
+            }
+          }, 150);
+        } else {
+          // Si l'utilisateur n'a pas demandé l'arrêt (wantsRecordingRef toujours
+          // vrai), la session a été coupée par le système — écran verrouillé,
+          // onglet mis en arrière-plan... Android Chrome ne prévient pas
+          // autrement. On le signale plutôt que de couper en silence.
+          // On NE vide PAS interimTranscript ici : c'est le seul texte qui
+          // reste si le dernier segment n'a jamais été marqué "final" (voir
+          // resoudreTranscriptionFinale, utilisé par DicteePostSeance).
+          if (wantsRecordingRef.current) {
+            setError("L'enregistrement a été interrompu. Réessayez.");
             wantsRecordingRef.current = false;
           }
-        }, 150);
-      } else {
-        // Si l'utilisateur n'a pas demandé l'arrêt (wantsRecordingRef toujours
-        // vrai), la session a été coupée par le système — écran verrouillé,
-        // onglet mis en arrière-plan... Android Chrome ne prévient pas
-        // autrement. On le signale plutôt que de couper en silence.
-        // On NE vide PAS interimTranscript ici : c'est le seul texte qui
-        // reste si le dernier segment n'a jamais été marqué "final" (voir
-        // resoudreTranscriptionFinale, utilisé par DicteePostSeance).
-        if (wantsRecordingRef.current) {
-          setError("L'enregistrement a été interrompu. Réessayez.");
-          wantsRecordingRef.current = false;
+          setIsRecording(false);
         }
-        setIsRecording(false);
-      }
+      };
     };
-  };
+  });
 
   const startRecording = useCallback(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;

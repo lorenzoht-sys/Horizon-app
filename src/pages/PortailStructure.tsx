@@ -86,6 +86,14 @@ function statutPatient(p: Participant, _seancesPatient: Seance[]): { emoji: stri
 
 // ── Composant Vue détail patient (progression, programme, séances) ───────────
 
+function Barre({ valeur }: { valeur: number }) {
+  return (
+    <div style={{ flex: 1, height: 8, background: '#EEF5F5', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ width: `${valeur}%`, height: '100%', background: 'var(--color-teal)', borderRadius: 8 }} />
+    </div>
+  );
+}
+
 function VueProgressPatient({ p, seances }: { p: Participant; seances: Seance[] }) {
   const C = { dark: 'var(--color-ink)', border: '#E0EEEE', muted: '#8FA8A8' };
 
@@ -99,8 +107,8 @@ function VueProgressPatient({ p, seances }: { p: Participant; seances: Seance[] 
   const scoreIni = ini ? scoreGlobal(ini) : null;
   const scoreAct = act ? scoreGlobal(act) : null;
 
-  let ameliores: string[] = [];
-  let vigilance: string[] = [];
+  const ameliores: string[] = [];
+  const vigilance: string[] = [];
   let tendance: { emoji: string; label: string; color: string } | null = null;
   if (aDeuxBilans && ini && act) {
     const dIni = scoresParDomaine(ini);
@@ -145,12 +153,6 @@ function VueProgressPatient({ p, seances }: { p: Participant; seances: Seance[] 
   const tauxPresence = seancesMoisToutes.length > 0
     ? Math.round((seancesMoisRealisees.length / seancesMoisToutes.length) * 100)
     : null;
-
-  const Barre = ({ valeur }: { valeur: number }) => (
-    <div style={{ flex: 1, height: 8, background: '#EEF5F5', borderRadius: 8, overflow: 'hidden' }}>
-      <div style={{ width: `${valeur}%`, height: '100%', background: 'var(--color-teal)', borderRadius: 8 }} />
-    </div>
-  );
 
   return (
     <div style={{ fontFamily: "var(--font-sans)" }}>
@@ -757,7 +759,7 @@ export default function PortailStructure() {
                 const aDeuxBilans = !!(ini && act && ini.id !== act.id);
                 const scoreAct = act ? scoreGlobal(act) : null;
 
-                let lignesDomaines: { emoji: string; texte: string }[] = [];
+                const lignesDomaines: { emoji: string; texte: string }[] = [];
                 let tendanceTexte: { emoji: string; label: string; color: string } | null = null;
                 if (aDeuxBilans && ini && act) {
                   const dIni = scoresParDomaine(ini);

@@ -53,9 +53,8 @@ export function useContrats() {
     // dilué par la taille du cycle (1 séance toutes les 2 semaines = taux 0.5).
     const tauxHebdo = data.nbSeancesSemaine / CYCLE_SEMAINES[periodicite];
     const nbSeances = calculerNbSeancesEstime(data.dateDebut, data.dateFin, tauxHebdo);
-    let praticienId: string | undefined;
     const user = await utilisateurCourant();
-    praticienId = user?.id;
+    const praticienId = user?.id;
 
     const contrat: Contrat = {
       id: uuidv4(),

@@ -159,5 +159,5 @@ function playBeep() {
       osc.start(ctx.currentTime + d);
       osc.stop(ctx.currentTime + d + 0.25);
     });
-  } catch (_) {}
+  } catch { /* Web Audio indisponible : le chrono reste muet */ }
 }

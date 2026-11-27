@@ -42,7 +42,7 @@ function parseDate(raw: unknown): string {
   const s = String(raw).trim();
 
   // JJ/MM/AAAA · JJ-MM-AAAA · JJ.MM.AAAA
-  const m1 = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  const m1 = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
   if (m1) return `${m1[3]}-${m1[2].padStart(2, '0')}-${m1[1].padStart(2, '0')}`;
 
   // Already ISO AAAA-MM-JJ

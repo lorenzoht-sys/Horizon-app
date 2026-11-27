@@ -54,7 +54,8 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     throw new Error(
       `[e2e] Cible injoignable : ${base}\n` +
         `${err instanceof Error ? err.message : String(err)}${cause}\n` +
-        `Le déploiement existe-t-il encore ?`
+        `Le déploiement existe-t-il encore ?`,
+      { cause: err },
     );
   }
 
@@ -63,7 +64,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   // Une cible protégée finit sur le domaine d'authentification de Vercel,
   // pas sur celui du déploiement. Les redirections internes à l'application
   // (ex. `/` vers `/login`) restent sur le même hôte et ne comptent pas.
-  let horsDomaine = false;
+  let horsDomaine: boolean;
   try {
     horsDomaine = new URL(reponse.url || base).host !== new URL(base).host;
   } catch {

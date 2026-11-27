@@ -159,10 +159,9 @@ export default function SettingsPage() {
     }
     const toSave = { ...form, siret: validerSiret(form.siret).siret };
 
-    let userId = '';
     const user = await utilisateurCourant();
     if (!user) { toast.error('Utilisateur non connecté'); return; }
-    userId = user.id;
+    const userId = user.id;
 
     // La construction de la ligne et l'ordre base-puis-cache vivent dans
     // `settingsPraticien` : cet ecran et l'ecran mobile en avaient chacun

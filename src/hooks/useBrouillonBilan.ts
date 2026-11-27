@@ -222,7 +222,7 @@ export function getAllBrouillons(): BrouillonBilan[] {
       if (!raw) continue;
       const b: BrouillonBilan = JSON.parse(raw);
       if (!b.estTermine) result.push(b);
-    } catch {}
+    } catch { /* brouillon illisible : ignoré, les autres restent proposés */ }
   }
   return result.sort((a, b) => b.dateDerniereModif.localeCompare(a.dateDerniereModif));
 }

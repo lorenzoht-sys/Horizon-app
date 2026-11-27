@@ -93,7 +93,7 @@ export function EcranDocuments({ bilans, participant, programmeActif, documentsP
     setGenPDF(true);
     try {
       let s: Record<string, string> = {};
-      try { s = JSON.parse(localStorage.getItem('settings_praticien') ?? '{}'); } catch {}
+      try { s = JSON.parse(localStorage.getItem('settings_praticien') ?? '{}'); } catch { /* réglages illisibles : valeurs vides */ }
       const settings = {
         prenom: s.prenom ?? '',
         nom: s.nom ?? '',
@@ -195,7 +195,7 @@ export function EcranDocuments({ bilans, participant, programmeActif, documentsP
                   <button
                     onClick={() => setDocumentsDeplies(prev => {
                       const next = new Set(prev);
-                      next.has(doc.id) ? next.delete(doc.id) : next.add(doc.id);
+                      if (next.has(doc.id)) next.delete(doc.id); else next.add(doc.id);
                       return next;
                     })}
                     style={{

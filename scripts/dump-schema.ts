@@ -316,7 +316,7 @@ async function dumpTriggers(client: Client): Promise<string[]> {
   return out;
 }
 
-async function dumpRlsAndPolicies(client: Client, tables: string[]): Promise<string[]> {
+async function dumpRlsAndPolicies(client: Client): Promise<string[]> {
   const { rows: rls } = await client.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>(`
     SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
     FROM pg_class c
@@ -417,7 +417,7 @@ async function main() {
     sections.push(constraints.fk);
     sections.push(await dumpIndexes(client));
     sections.push(await dumpTriggers(client));
-    sections.push(await dumpRlsAndPolicies(client, tables));
+    sections.push(await dumpRlsAndPolicies(client));
     sections.push(await dumpGrants(client));
 
     const header =

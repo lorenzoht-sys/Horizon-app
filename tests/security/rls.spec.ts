@@ -77,7 +77,6 @@ const PATIENT_SECRET = process.env.PATIENT_SESSION_SECRET;
 const PRATICIEN_A_EMAIL = process.env.E2E_PRATICIEN_EMAIL ?? 'staging.praticien@example.com';
 const PRATICIEN_A_PASSWORD = process.env.E2E_PRATICIEN_PASSWORD;
 const PATIENT_A_CODE = process.env.E2E_PATIENT_CODE ?? 'CAME2E26';
-const PATIENT_B_CODE = process.env.E2E_PATIENT_CODE_2 ?? 'JUNE2E27';
 
 // Connexion Postgres DIRECTE au projet de staging. Volontairement nommée
 // différemment de DATABASE_URL (que scripts/dump-schema.ts utilise pour la

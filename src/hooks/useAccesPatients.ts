@@ -17,7 +17,7 @@ interface SessionPatient {
 }
 
 export function sauvegarderSessionPatient(session: SessionPatient): void {
-  try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch {}
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch { /* stockage du navigateur plein ou désactivé (navigation privée) : sans conséquence */ }
 }
 
 export function getSessionPatient(): SessionPatient | null {
@@ -26,5 +26,5 @@ export function getSessionPatient(): SessionPatient | null {
 }
 
 export function purgerSessionPatient(): void {
-  try { localStorage.removeItem(SESSION_KEY); } catch {}
+  try { localStorage.removeItem(SESSION_KEY); } catch { /* stockage du navigateur plein ou désactivé (navigation privée) : sans conséquence */ }
 }
