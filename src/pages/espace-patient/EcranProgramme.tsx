@@ -7,7 +7,7 @@ import { exportProgrammePDF } from '../../utils/pdfALaDemande';
 import { ModeSeance, type SeanceActive } from './ModeSeance';
 import { C, type SeancePatientRecord, fmtCourt, loadPraticien } from './communs';
 
-export function fmtHistoDate(iso: string): string {
+function fmtHistoDate(iso: string): string {
   return new Date(iso + 'T12:00').toLocaleDateString('fr-FR', {
     weekday: 'short', day: 'numeric', month: 'short',
   });
@@ -15,30 +15,30 @@ export function fmtHistoDate(iso: string): string {
 
 // ── Helpers planning V2 ───────────────────────────────────────────────────────
 
-export const JOURS_JS_TO_FR: JourProgramme[] = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
-export const JOUR_COURT_FR: Record<JourProgramme, string> = {
+const JOURS_JS_TO_FR: JourProgramme[] = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+const JOUR_COURT_FR: Record<JourProgramme, string> = {
   lundi: 'Lun', mardi: 'Mar', mercredi: 'Mer', jeudi: 'Jeu',
   vendredi: 'Ven', samedi: 'Sam', dimanche: 'Dim',
 };
 
-export function getTodayJour(): JourProgramme {
+function getTodayJour(): JourProgramme {
   return JOURS_JS_TO_FR[new Date().getDay()];
 }
 
-export function getSeancesAujourdHuiV2(prog: ProgrammeV2): ProgrammeSeanceV2[] {
+function getSeancesAujourdHuiV2(prog: ProgrammeV2): ProgrammeSeanceV2[] {
   const today = getTodayJour();
   const seanceIds = prog.planning.filter(p => p.jour === today).map(p => p.seanceId);
   return prog.seances.filter(s => seanceIds.includes(s.id));
 }
 
-export function getJoursActifsV2(prog: ProgrammeV2): JourProgramme[] {
+function getJoursActifsV2(prog: ProgrammeV2): JourProgramme[] {
   const active = new Set(prog.planning.map(p => p.jour));
   return JOURS_PROGRAMME.filter(j => active.has(j));
 }
 
 // ── Carte exercice patient ────────────────────────────────────────────────────
 
-export function CarteExercicePatient({ ex, index }: { ex: ProgrammeV2['seances'][0]['exercices'][0]; index: number }) {
+function CarteExercicePatient({ ex, index }: { ex: ProgrammeV2['seances'][0]['exercices'][0]; index: number }) {
   return (
     <div style={{ background: 'white', border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden', marginBottom: 12 }}>
       <div style={{

@@ -21,7 +21,7 @@
 //
 // Journaux : identifiants de facture seulement, jamais de contenu.
 
-export const INTERVALLE_MS = 15_000;
+const INTERVALLE_MS = 15_000;
 const LOT = 20;
 // Au-delà, une facture en échec répété n'est plus retentée jusqu'au redémarrage :
 // une erreur durable (données incohérentes) ne doit pas boucler toutes les 15 s.

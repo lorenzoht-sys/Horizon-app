@@ -205,9 +205,9 @@ export interface TinettiData {
   notes: string;
 }
 
-export type TypeQuestion = 'texte' | 'note' | 'oui_non';
+type TypeQuestion = 'texte' | 'note' | 'oui_non';
 
-export interface QuestionPerso {
+interface QuestionPerso {
   id: string;
   label: string;
   type: TypeQuestion;
@@ -386,45 +386,6 @@ export interface TestEtalon {
   unite: string; // ex: 'répétitions', 'pas'
   consigne: string;
   consigneSecurite: string;
-}
-
-export interface TestEtalonActivation {
-  id: string;
-  participantId: string;
-  testId: string;
-  praticienId: string;
-  actif: boolean;
-  createdAt: string;
-}
-
-export interface TestEtalonResultat {
-  id: string;
-  participantId: string;
-  testId: string;
-  valeur: number;
-  dateTest: string;
-}
-
-export interface ExerciceLibreActivation {
-  id: string;
-  participantId: string;
-  praticienId: string;
-  exerciceId: string;
-  nom: string;
-  description?: string;
-  consigneSecurite?: string;
-  categorie?: string;
-  actif: boolean;
-  createdAt: string;
-}
-
-export interface ExerciceLibreValidation {
-  id: string;
-  participantId: string;
-  exerciceId: string;
-  date: string;
-  fait: boolean;
-  note?: string;
 }
 
 export interface SuiviJour {

@@ -1,10 +1,5 @@
-import type { AntecedentMedical, Bilan, JourSemaine, MomentPrise, OrganisationData, Participant, PeriodiciteContrat, SedentariteReponses, TraitementPatient } from '../types';
+import type { AntecedentMedical, Bilan, MomentPrise, OrganisationData, Participant, PeriodiciteContrat, SedentariteReponses, TraitementPatient } from '../types';
 import { MOMENTS_PRISE_LABELS, TYPES_ANTECEDENT_LABELS } from '../types';
-
-// Disponibilités : 'Lun'/'Mar'/... (OPTIONS_JOURS_DISPONIBLES, ParticipantForm.tsx) → JourSemaine.
-const JOUR_DISPO_TO_JOUR_SEMAINE: Record<string, JourSemaine> = {
-  Lun: 'lun', Mar: 'mar', Mer: 'mer', Jeu: 'jeu', Ven: 'ven', Sam: 'sam',
-};
 
 // Fréquence des séances : couvre à la fois le rythme hebdomadaire et
 // l'espacement bi/tri-mensuel — partagé entre la fiche patient
@@ -146,15 +141,6 @@ export function formatMomentsTraitement(moments?: MomentPrise[] | null): string 
   return moments.map(m => MOMENTS_PRISE_LABELS[m] ?? m).join(' + ');
 }
 
-export function formatTraitementLigne(t: TraitementPatient): string {
-  const nomDose = [t.nom, t.dose].filter(Boolean).join(' ');
-  const frequence = t.frequence ? ` — ${t.frequence}` : '';
-  const moments = (t.moments?.length ?? 0) > 0
-    ? ` (${t.moments!.map(m => (MOMENTS_PRISE_LABELS[m] ?? m).toLowerCase()).join(' + ')})`
-    : '';
-  return `${nomDose}${frequence}${moments}`;
-}
-
 // Lignes actives / arrêtées, en ignorant celles ajoutées via "+ Ajouter" dans
 // la fiche patient mais jamais renseignées (nom vide) — sinon une section
 // "Traitements en cours" vide s'affiche dans la fiche, les exports PDF et le
@@ -213,18 +199,4 @@ export function getOrganisation(
     dureeSeance: (data?.dureeSeance as string | null | undefined) ?? null,
     contraintes: (data?.contraintes as string | undefined) ?? '',
   };
-}
-
-// Jours disponibles du patient, normalisés en JourSemaine ('lun'..'sam') —
-// utilisé par le formulaire de contrat (placement initial) et le planificateur
-// de tournée (src/lib/planificateur.ts), pour choisir les jours réels de
-// passage à partir de la fréquence du contrat (nbSeancesSemaine).
-export function getJoursDisponiblesCourts(
-  participant: Participant,
-  bilanInitial?: Bilan | null
-): JourSemaine[] {
-  const jours = getOrganisation(participant, bilanInitial).joursDisponibles ?? [];
-  return jours
-    .map(j => JOUR_DISPO_TO_JOUR_SEMAINE[j])
-    .filter((j): j is JourSemaine => Boolean(j));
 }

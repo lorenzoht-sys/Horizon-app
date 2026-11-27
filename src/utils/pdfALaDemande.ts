@@ -10,11 +10,9 @@
 // chez les appelants. Les types sont importés en `import type`, effacés à la
 // compilation : ils n'entraînent aucun chargement.
 
-import type { ExportFicheBilanData, ExportProgrammeData } from './exportPDF';
+import type { ExportFicheBilanData } from './exportPDF';
 import type { DossierPDFData } from '../components/export/DossierPDF';
 import type { ContratPDFData } from '../components/export/ContratPDF';
-
-export type { ExportFicheBilanData, ExportProgrammeData, DossierPDFData, ContratPDFData };
 
 export async function exportFicheBilanPDF(data: ExportFicheBilanData, fileName: string): Promise<void> {
   return (await import('./exportPDF')).exportFicheBilanPDF(data, fileName);

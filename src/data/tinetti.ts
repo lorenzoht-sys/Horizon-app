@@ -115,7 +115,7 @@ export function emptyTinettiData(): TinettiData {
   };
 }
 
-export interface TinettiScores {
+interface TinettiScores {
   scoreEquilibre: number;
   scoreMarche: number;
   scoreTotal: number;
@@ -140,7 +140,7 @@ export function computeTinettiScores(t: TinettiData | undefined | null): Tinetti
   };
 }
 
-export interface TinettiRisque { label: string; color: string; bg: string }
+interface TinettiRisque { label: string; color: string; bg: string }
 
 export function tinettiRisque(scoreTotal: number): TinettiRisque {
   if (scoreTotal >= 24) return { label: 'Risque de chute faible', color: '#065F46', bg: '#D1FAE5' };

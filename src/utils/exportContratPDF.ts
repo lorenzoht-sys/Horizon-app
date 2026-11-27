@@ -2,7 +2,6 @@ import React from 'react';
 import { pdf } from '@react-pdf/renderer';
 import ContratPDF, { type ContratPDFData } from '../components/export/ContratPDF';
 
-export type { ContratPDFData };
 
 export async function exportContratPDF(
   data: ContratPDFData,

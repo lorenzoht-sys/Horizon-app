@@ -52,7 +52,7 @@ export const CHAMP_MAX_LENGTH = {
   objectifProgramme: 500,
 } as const;
 
-export type NomChamp = keyof typeof CHAMP_MAX_LENGTH;
+type NomChamp = keyof typeof CHAMP_MAX_LENGTH;
 
 /** Caractères invisibles retirés avant toute analyse.
  *
@@ -134,7 +134,7 @@ export function detecterInjection(texte: string): string | null {
   return null;
 }
 
-export type ResultatValidation =
+type ResultatValidation =
   | { ok: true; champs: Record<NomChamp, string> }
   | { ok: false; statut: 400 | 413; message: string; motif?: string };
 

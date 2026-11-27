@@ -440,10 +440,11 @@ export default function App() {
             compte praticien, ce qui vidait de son sens le contrôle des
             comptes par un admin. Un compte inconnu avait d'ailleurs été
             trouvé en production.
-            RegisterPage.tsx est CONSERVÉE volontairement : elle sera
-            réutilisée comme page « définir mon mot de passe » au bout du
-            lien d'invitation (option 2, voir docs/archive/PLAN-BETA.md). Ne pas la
-            supprimer, et ne pas remettre cette route en l'état. */}
+            Ne pas remettre cette route en l'état. RegisterPage.tsx, gardée
+            pour devenir la page « définir mon mot de passe » de l'invitation,
+            a été supprimée le 2026-11-27 : écrite pour supabase.auth.signUp,
+            elle n'aurait pas survécu au passage à Better Auth (migration HDS),
+            et l'historique git la conserve. */}
         <Route path="/forgot-password" element={
           isLoggedIn ? <Navigate to="/" replace /> : <ForgotPasswordPage />
         } />

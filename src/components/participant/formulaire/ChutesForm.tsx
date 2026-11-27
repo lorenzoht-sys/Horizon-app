@@ -5,7 +5,7 @@ import { CLS_CELL, genId } from './communs';
 
 // ─── ANTÉCÉDENTS DE CHUTES (MOD3) ───────────────────────────────────────────────
 
-export function ChuteCard({
+function ChuteCard({
   item,
   index,
   onChange,

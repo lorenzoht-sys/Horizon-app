@@ -1,5 +1,4 @@
 import type { Exercice, FamilleExercice, MaterielExercice, TypeProgramme, JourProgramme } from '../types';
-import { famillesDe, positionDe } from './exercicesMouvApa';
 
 // ── Modèles de programme Mouv'APA (2026-10-25) ────────────────────────────────
 //
@@ -319,7 +318,7 @@ export const MODELES_MOUVAPA: ModeleMouvApa[] = [
 
 // ── Résolution et conversion vers le format « Mes modèles » ───────────────────
 
-export interface ExerciceResolu {
+interface ExerciceResolu {
   exercice: Exercice;
   series: number;
   repetitions: number | null;
@@ -372,14 +371,6 @@ export function dureeIndicative(modele: ModeleMouvApa, catalogue: Exercice[]): n
   return Math.max(5, Math.round(sec / 60 / 5) * 5);
 }
 
-export function famillesDuModele(modele: ModeleMouvApa, catalogue: Exercice[]): FamilleExercice[] {
-  const set = new Set<FamilleExercice>([modele.famille]);
-  for (const r of resoudreExercices(modele, catalogue)) famillesDe(r.exercice).forEach(f => set.add(f));
-  return [...set];
-}
-
-export { positionDe };
-
 // Libellés de catégorie stockés dans programme_modele_exercices.categorie : les mêmes que ceux écrits
 // par l'éditeur de modèles (CAT_DB_TO_LABEL, ProgrammeWizard.tsx), pour un affichage identique.
 const CATEGORIE_LIBELLE: Record<Exercice['categorie'], string> = {
@@ -387,9 +378,9 @@ const CATEGORIE_LIBELLE: Record<Exercice['categorie'], string> = {
   souplesse: 'Souplesse', endurance: 'Endurance', memoire: 'Coordination',
 };
 
-export const PLANNING_PAR_DEFAUT: JourProgramme[] = ['lundi', 'mercredi', 'vendredi'];
+const PLANNING_PAR_DEFAUT: JourProgramme[] = ['lundi', 'mercredi', 'vendredi'];
 
-export interface DonneesModeleCopie {
+interface DonneesModeleCopie {
   nom: string;
   objectif?: string;
   type: TypeProgramme;

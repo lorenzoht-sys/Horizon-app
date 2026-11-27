@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-  prochainsCours, prochainCours, debutCoursParis, reponseEncoreOuverte, NB_COURS_A_REPONDRE,
+  prochainsCours, debutCoursParis, reponseEncoreOuverte, NB_COURS_A_REPONDRE,
   type CoursPatientRecord,
 } from './coursPatient';
 import { patientAnnoncerPresence } from './patientApi';
@@ -30,11 +30,6 @@ describe('prochainsCours — les 4 prochains cours à venir', () => {
     expect(prochainsCours(liste, '2026-09-21')).toEqual([]);
   });
 
-  it('prochainCours reste le premier de la liste', () => {
-    const liste = [cours({ coursId: 'loin', date: '2026-10-01' }), cours({ coursId: 'proche', date: '2026-09-23' })];
-    expect(prochainCours(liste, '2026-09-21')?.coursId).toBe('proche');
-    expect(prochainCours([], '2026-09-21')).toBeNull();
-  });
 });
 
 // Mêmes cas que api/_lib/presenceAnnoncee.test.ts : le calcul client est le MIROIR du serveur.

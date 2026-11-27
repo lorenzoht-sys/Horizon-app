@@ -8,7 +8,7 @@ import { dbToParticipant, participantToDb, bilanToDb, programmeToDb } from '../.
 
 // ── Section import / export JSON ───────────────────────────────────────────────
 
-export interface ImportStats {
+interface ImportStats {
   patients: number;
   bilans: number;
   programmes: number;

@@ -6,7 +6,7 @@ import { C } from './communs';
 
 // ── Rappels (notifications push) ────────────────────────────────────────────
 
-export type EtatRappels = 'verification' | 'actif' | 'inactif' | 'ios' | 'non_supporte' | 'refuse' | 'erreur';
+type EtatRappels = 'verification' | 'actif' | 'inactif' | 'ios' | 'non_supporte' | 'refuse' | 'erreur';
 
 export function SectionRappels({ token }: { token: string }) {
   const [etat, setEtat] = useState<EtatRappels>('verification');

@@ -25,7 +25,7 @@ export interface FiltresExercices {
 
 export const FILTRES_VIDES: FiltresExercices = { recherche: '', origine: 'tous', type: null, position: null, materiel: null };
 
-export const normaliserTexte = (t: string) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+const normaliserTexte = (t: string) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 
 export function correspondType(ex: Exercice, type: FamilleExercice): boolean {
   return famillesDe(ex).includes(type) || (FAMILLES_PAR_CATEGORIE[ex.categorie] ?? []).includes(type);

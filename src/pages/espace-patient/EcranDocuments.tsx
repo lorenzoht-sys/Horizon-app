@@ -14,7 +14,7 @@ import { C, fmtCourt, fmtMoisAnnee, loadPraticien } from './communs';
 
 // Factures et avoirs émis (point D, D2) : liste déjà filtrée par le serveur (documents_du_beneficiaire).
 // Le PDF s'ouvre par une URL signée de 60 s, demandée au clic et jamais conservée.
-export function SectionFactures({ factures, token, avecMarge }: { factures: FacturePatient[]; token: string; avecMarge: boolean }) {
+function SectionFactures({ factures, token, avecMarge }: { factures: FacturePatient[]; token: string; avecMarge: boolean }) {
   const [enCours, setEnCours] = useState<string | null>(null);
   const fmtEuro = (n: number) => n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
   async function ouvrir(f: FacturePatient) {

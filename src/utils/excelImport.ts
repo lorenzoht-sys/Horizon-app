@@ -9,7 +9,7 @@ export interface ImportError {
   message: string;
 }
 
-export interface ImportResult {
+interface ImportResult {
   succes: Omit<Participant, 'id' | 'token' | 'bilans'>[];
   erreurs: ImportError[];
   ignores: ImportError[];

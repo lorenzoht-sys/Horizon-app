@@ -1,7 +1,7 @@
 // Détection des champs AcroForm d'un PDF template uploadé. Seul le PDF
 // interactif (formulaire avec champs) est supporté : un PDF statique ou
 // un Word ne peuvent pas être remplis fidèlement, donc non supportés ici.
-// pdf-lib est chargé en lazy (comme mammoth ailleurs) pour ne pas alourdir
+// pdf-lib est chargé en lazy pour ne pas alourdir
 // le bundle initial.
 
 import { detecterFormat } from './extractTemplateText';

@@ -6,19 +6,19 @@ import type { Indisponibilite, JourSemaine } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { listerIndisponibilites, ajouterIndisponibilite, supprimerIndisponibilite } from '../../lib/acces/indisponibilites';
 
-export const JOURS_LABELS: Record<JourSemaine | 'dim', string> = {
+const JOURS_LABELS: Record<JourSemaine | 'dim', string> = {
   lun: 'Lundi', mar: 'Mardi', mer: 'Mercredi', jeu: 'Jeudi',
   ven: 'Vendredi', sam: 'Samedi', dim: 'Dimanche',
 };
 
 // ── Section indisponibilités — données Supabase ────────────────────────────────
 
-export interface ModalIndispoProps {
+interface ModalIndispoProps {
   onSave: (item: Indisponibilite) => void;
   onClose: () => void;
 }
 
-export function ModalAjoutIndispo({ onSave, onClose }: ModalIndispoProps) {
+function ModalAjoutIndispo({ onSave, onClose }: ModalIndispoProps) {
   const [form, setForm] = useState<Omit<Indisponibilite, 'id'>>({
     jour: 'lun', heureDebut: '12:00', heureFin: '14:00',
     recurrente: true, label: '',

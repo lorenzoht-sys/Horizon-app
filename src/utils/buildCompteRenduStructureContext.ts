@@ -66,7 +66,7 @@ function buildProgrammeText(programme: Programme | null, programmesV2: Programme
   ].filter(Boolean).join('\n');
 }
 
-export interface ApercuDonneesPatient {
+interface ApercuDonneesPatient {
   nbBilans: number;
   dernierBilanDate: string | null;
   aProgression: boolean;

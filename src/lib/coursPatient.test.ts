@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { prochainCours, historiqueCours, jourLocal, type CoursPatientRecord } from './coursPatient';
+import { historiqueCours, jourLocal, type CoursPatientRecord } from './coursPatient';
 
 function cours(over: Partial<CoursPatientRecord> = {}): CoursPatientRecord {
   return {
@@ -7,39 +7,6 @@ function cours(over: Partial<CoursPatientRecord> = {}): CoursPatientRecord {
     statut: 'planifie', presence: null, ressentiBorg: null, ressentiBienetre: null, presenceAnnoncee: null, ...over,
   };
 }
-
-describe('prochainCours', () => {
-  it('le plus proche des cours planifiés à venir', () => {
-    const liste = [
-      cours({ coursId: 'loin', date: '2026-10-15' }),
-      cours({ coursId: 'proche', date: '2026-09-23' }),
-      cours({ coursId: 'milieu', date: '2026-10-01' }),
-    ];
-    expect(prochainCours(liste, '2026-09-21')?.coursId).toBe('proche');
-  });
-
-  it("un cours d'aujourd'hui compte comme à venir (comme « prochain rendez-vous »)", () => {
-    expect(prochainCours([cours({ date: '2026-09-21' })], '2026-09-21')?.coursId).toBe('c1');
-  });
-
-  it('même jour : le plus tôt', () => {
-    const liste = [cours({ coursId: 'apres', heureDebut: '15:00' }), cours({ coursId: 'avant', heureDebut: '09:00' })];
-    expect(prochainCours(liste, '2026-09-22')?.coursId).toBe('avant');
-  });
-
-  it('ignore les cours annulés, réalisés, et planifiés dont la date est passée', () => {
-    const liste = [
-      cours({ coursId: 'annule', statut: 'annule', date: '2026-09-25' }),
-      cours({ coursId: 'realise', statut: 'realise', date: '2026-09-25' }),
-      cours({ coursId: 'passe', statut: 'planifie', date: '2026-09-01' }),
-    ];
-    expect(prochainCours(liste, '2026-09-21')).toBeNull();
-  });
-
-  it('aucun cours : null', () => {
-    expect(prochainCours([], '2026-09-21')).toBeNull();
-  });
-});
 
 describe('historiqueCours', () => {
   it('réalisés et annulés, du plus récent au plus ancien', () => {

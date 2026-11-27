@@ -65,7 +65,7 @@ function fmt(d: string): string {
 
 /** Formate TOUS les scores d'un bilan en texte lisible pour le prompt.
  *  Utilise les vrais noms TypeScript : tug3m, chairStand30, handGrip.droite, etc. */
-export function buildBilanText(bilan: Bilan): string {
+function buildBilanText(bilan: Bilan): string {
   const lines: string[] = [];
   if (bilan.tug3m != null)                    lines.push(`TUG 3m : ${bilan.tug3m}s`);
   if (bilan.chairStand30 != null)             lines.push(`Chair Stand 30s : ${bilan.chairStand30} rép.`);
@@ -88,7 +88,7 @@ export function buildBilanText(bilan: Bilan): string {
 }
 
 /** Calcule et formate l'évolution entre deux bilans. */
-export function buildEvolution(ancien: Bilan, recent: Bilan): string {
+function buildEvolution(ancien: Bilan, recent: Bilan): string {
   const lines: string[] = [];
   function cmp(
     label: string,
@@ -294,7 +294,7 @@ export function buildActionPrompt(action: ActionType, patient: ParticipantIA, ex
 
 // ─── Historique de conversation ──────────────────────────────────────────────
 
-export interface MessageHistoriqueIA {
+interface MessageHistoriqueIA {
   role: string;
   content: string;
   /** Version envoyable du message, quand elle est connue à sa création :

@@ -63,7 +63,7 @@ function formatJour(iso: string): string {
   return `${j}/${m}/${a}`;
 }
 
-export type PlanChangementTarif =
+type PlanChangementTarif =
   | { erreur: string }
   | {
       /** Version en vigueur à clore la veille de la date d'effet. */

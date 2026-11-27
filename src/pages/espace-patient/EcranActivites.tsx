@@ -133,9 +133,9 @@ export function EcranActivites({
   );
 }
 
-export type EtapeTestEtalon = 'consigne' | 'chrono' | 'resultat';
+type EtapeTestEtalon = 'consigne' | 'chrono' | 'resultat';
 
-export function TestEtalonModal({ token, test, dernierResultat, onAnnuler, onEnregistre }: {
+function TestEtalonModal({ token, test, dernierResultat, onAnnuler, onEnregistre }: {
   token: string;
   test: { id: string; nom: string; dureeSecondes: number; unite: string; consigne: string; consigneSecurite: string };
   dernierResultat: TestEtalonResultatRecord | null;

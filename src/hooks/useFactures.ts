@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { utilisateurCourant } from '../lib/session';
 
-export interface FactureSuivi {
+interface FactureSuivi {
   id: string;
   praticienId: string | null;
   participantId: string | null;   // null pour les factures de structure

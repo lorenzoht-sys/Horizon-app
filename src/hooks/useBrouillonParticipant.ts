@@ -1,7 +1,7 @@
 // Brouillon (localStorage) pour le formulaire participant en plusieurs étapes
 // (page "Nouveau participant" / "Modifier le participant")
 
-export interface BrouillonParticipant {
+interface BrouillonParticipant {
   step: number;
   data: Record<string, any>;
   timestamp: number;

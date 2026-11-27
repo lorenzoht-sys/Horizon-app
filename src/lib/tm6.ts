@@ -14,8 +14,8 @@ import type { Bilan } from '../types';
 
 type Tm6 = Bilan['tm6'];
 export type Tm6Mesure = NonNullable<Tm6['mesuresParMinute']>[number];
-export type Tm6MesureKind = NonNullable<Tm6Mesure['kind']>;
-export type Tm6Mode = 'standard' | 'stepper' | 'marche_sur_place';
+type Tm6MesureKind = NonNullable<Tm6Mesure['kind']>;
+type Tm6Mode = 'standard' | 'stepper' | 'marche_sur_place';
 
 const vide = (): { bpm: number | null; spo2: number | null } => ({ bpm: null, spo2: null });
 const aDonnee = (m: { bpm: number | null; spo2: number | null }) => m.bpm != null || m.spo2 != null;
@@ -94,9 +94,9 @@ export function ecrireMesures(mesures: Tm6Mesure[]): Partial<Tm6> {
 
 // ── Type de résultat ─────────────────────────────────────────────────────────
 
-export type Tm6TypeResultat = 'distance' | 'pas' | 'tours';
+type Tm6TypeResultat = 'distance' | 'pas' | 'tours';
 
-export interface Tm6Resultat {
+interface Tm6Resultat {
   type: Tm6TypeResultat;
   /** null = pas de résultat saisi. */
   valeur: number | null;
@@ -111,7 +111,7 @@ export interface Tm6Resultat {
   texte: string;
 }
 
-export const TM6_MODE_LABELS: Record<Tm6Mode, string> = {
+const TM6_MODE_LABELS: Record<Tm6Mode, string> = {
   standard: 'Marche',
   stepper: 'Stepper',
   marche_sur_place: 'Marche sur place',

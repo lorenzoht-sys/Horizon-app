@@ -8,7 +8,7 @@ import { IconArchive, IconBuilding, IconCalendar, IconChevronRight, IconDumbbell
 
 
 
-export function SectionMobile({ titre, children }: { titre: string; children: React.ReactNode }) {
+function SectionMobile({ titre, children }: { titre: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 16 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-ink-2)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, paddingLeft: 4 }}>
@@ -21,7 +21,7 @@ export function SectionMobile({ titre, children }: { titre: string; children: Re
   );
 }
 
-export function ItemMobile({ Icone, label, onClick }: { Icone: TablerIcon; label: string; onClick: () => void }) {
+function ItemMobile({ Icone, label, onClick }: { Icone: TablerIcon; label: string; onClick: () => void }) {
   return (
     <button onClick={onClick} style={{
       width: '100%', display: 'flex', alignItems: 'center', gap: 14,

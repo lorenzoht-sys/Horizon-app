@@ -22,7 +22,7 @@ export interface LigneOrigine {
 /** Ligne d'un avoir déjà émis qui crédite une ligne de l'origine. */
 export interface Credit { ligneOrigineId: string; quantite: number }
 
-export interface Montants { totalHt: number; montantTva: number; total: number }
+interface Montants { totalHt: number; montantTva: number; total: number }
 
 export interface Choix { ligneId: string; quantite: number }
 
@@ -40,7 +40,7 @@ export function quantiteRestante(ligne: LigneOrigine, credits: Credit[]): number
   return Math.max(eur(cts(ligne.quantite) - deja), 0);
 }
 
-export interface CalculAvoir {
+interface CalculAvoir {
   totalHt: number;
   montantTva: number;
   total: number;

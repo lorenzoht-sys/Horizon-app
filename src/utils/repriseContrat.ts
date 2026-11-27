@@ -40,7 +40,7 @@ export function prolongerDateFinUnAn(dateFinActuelle: string): string {
   return d.toISOString().split('T')[0];
 }
 
-export type DecisionReprise =
+type DecisionReprise =
   /** Cas normal : le contrat n'est pas expiré, on reprend tel quel. */
   | { type: 'reprend'; debutGeneration: string; finGeneration: string }
   /** Durée indéterminée expirée pendant la pause : prolongée silencieusement,

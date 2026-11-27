@@ -3,13 +3,13 @@ import { supabase } from '../lib/supabase';
 import { utilisateurCourant } from '../lib/session';
 import type { Exercice } from '../types';
 
-export interface TestEtalonResultatRow {
+interface TestEtalonResultatRow {
   testId: string;
   valeur: number;
   dateTest: string;
 }
 
-export interface ExerciceLibreActivationRow {
+interface ExerciceLibreActivationRow {
   id: string;
   exerciceId: string;
   nom: string;
@@ -19,7 +19,7 @@ export interface ExerciceLibreActivationRow {
   actif: boolean;
 }
 
-export interface ExerciceLibreValidationRow {
+interface ExerciceLibreValidationRow {
   exerciceId: string;
   date: string;
   fait: boolean;

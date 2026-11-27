@@ -89,11 +89,11 @@ export const SED_TOTAL_MAX = 45;
 export const FSS_TOTAL_MAX = 63;
 export const FSS_NB_ITEMS = 9;
 /** Seuil de fatigue probable — 4 par item en moyenne, sur 9 items. */
-export const FSS_SEUIL = 36;
+const FSS_SEUIL = 36;
 
-export type ItemSedentarite = keyof SedentariteReponses;
+type ItemSedentarite = keyof SedentariteReponses;
 
-export const LIBELLES_ITEMS_SED: Record<ItemSedentarite, string> = {
+const LIBELLES_ITEMS_SED: Record<ItemSedentarite, string> = {
   a_sedentarite: 'Temps passé en position assise',
   b_pratique: "Pratique d'une activité physique",
   b_freq: 'Fréquence de pratique',
@@ -127,7 +127,7 @@ export const FSS_QUESTIONS = [
  * `b_pratique` vaut 'non'. Les exiger dans ce cas rendrait tout questionnaire
  * de non-pratiquant définitivement incomplet.
  */
-export function itemsSedRequis(r: SedentariteReponses): ItemSedentarite[] {
+function itemsSedRequis(r: SedentariteReponses): ItemSedentarite[] {
   const requis: ItemSedentarite[] = ['a_sedentarite', 'b_pratique'];
   if (r.b_pratique === 'oui') requis.push('b_freq', 'b_duree', 'b_effort');
   requis.push('c_intensite', 'c_travaux', 'c_marche', 'c_etages');

@@ -3,7 +3,7 @@
 // le token est transmis dans l'en-tête "x-structure-token" et validé côté
 // serveur (clé service_role, jamais exposée ici).
 
-export interface StructureDataResponse {
+interface StructureDataResponse {
   structure: { id: string; nom: string; actif: boolean; tarifSeance: number };
   praticien: { prenom: string; nom: string; titre?: string | null; email?: string | null; telephone?: string | null } | null;
   participants: Record<string, unknown>[];

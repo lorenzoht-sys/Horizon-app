@@ -52,7 +52,7 @@ export function beneficiaireFictif(overrides: Partial<Participant> = {}): Partic
 }
 
 /** Toutes les valeurs qui ne doivent jamais apparaître dans un prompt. */
-export function valeursInterdites(): string[] {
+function valeursInterdites(): string[] {
   return Object.values(IDENTIFIANTS_FICTIFS);
 }
 

@@ -25,7 +25,7 @@ export function formaterDateNaissanceAffichage(iso: string): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
 }
 
-export type ResultatDateNaissance =
+type ResultatDateNaissance =
   | { statut: 'incomplete' }
   | { statut: 'invalide' }
   | { statut: 'future' }

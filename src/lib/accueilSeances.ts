@@ -17,7 +17,7 @@ import type { Seance } from '../types';
  */
 
 /** Délai après la fin prévue pendant lequel une séance non clôturée reste en avant. */
-export const DELAI_GARDE_MINUTES = 60;
+const DELAI_GARDE_MINUTES = 60;
 
 function enMinutes(heure: string): number {
   const [h, m] = heure.split(':').map(Number);

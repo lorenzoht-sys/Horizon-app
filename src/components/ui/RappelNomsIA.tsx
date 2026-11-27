@@ -6,7 +6,7 @@
 // sans blocage ni détection.
 import type { CSSProperties } from 'react';
 
-export const TEXTE_RAPPEL_NOMS_IA = "Évitez de citer le nom du bénéficiaire : il est déjà connu d'Horizon.";
+const TEXTE_RAPPEL_NOMS_IA = "Évitez de citer le nom du bénéficiaire : il est déjà connu d'Horizon.";
 
 export default function RappelNomsIA({ className, style }: { className?: string; style?: CSSProperties }) {
   return (

@@ -1,64 +1,6 @@
-import type { ProfilPatient, TagPatient, TestKey } from '../types';
-
-export interface ProfileConfig {
-  label: string;
-  emoji: string;
-  description: string;
-  testsInclus: string;
-  color: string;
-  testsDefaut: TestKey[];
-  introMessage: string;
-}
+import type { TagPatient, TestKey } from '../types';
 
 export const ALL_TESTS: TestKey[] = ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse', 'tm6', 'memoire', 'apley', 'tinetti', 'eva', 'berg', 'moca', 'marche10m', 'adl'];
-
-export const PROFILES: Record<ProfilPatient, ProfileConfig> = {
-  senior_chutes: {
-    label: 'Sénior — Prévention des chutes',
-    emoji: '🧓',
-    description: 'Équilibre, mémoire, endurance, force',
-    testsInclus: 'Équilibre · Chair Stand · Hand Grip · TUG · Souplesse · TM6 · Mémoire',
-    color: '#1A5F9E',
-    testsDefaut: ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse', 'tm6', 'memoire'],
-    introMessage: 'Bravo {prenom}, votre équilibre et votre forme progressent !',
-  },
-  post_operatoire: {
-    label: 'Post-opératoire / Rééducation',
-    emoji: '🏥',
-    description: 'Force, mobilité, TUG, souplesse',
-    testsInclus: 'Équilibre · Chair Stand · Hand Grip · TUG · Souplesse',
-    color: '#BA7517',
-    testsDefaut: ['equilibre', 'chairStand', 'handGrip', 'tug', 'souplesse'],
-    introMessage: 'Belle progression dans votre récupération, {prenom} !',
-  },
-  pathologie_chronique: {
-    label: 'Pathologie chronique',
-    emoji: '💊',
-    description: 'Endurance, force, TUG (cardio, BPCO…)',
-    testsInclus: 'Chair Stand · TUG · TM6',
-    color: '#534AB7',
-    testsDefaut: ['chairStand', 'tug', 'tm6'],
-    introMessage: 'Votre endurance s\'améliore semaine après semaine, {prenom} !',
-  },
-  adulte_blessure: {
-    label: 'Adulte actif — Reprise blessure',
-    emoji: '🏃',
-    description: 'Souplesse, endurance, TUG',
-    testsInclus: 'TUG · Souplesse · TM6',
-    color: '#3B6D11',
-    testsDefaut: ['tug', 'souplesse', 'tm6'],
-    introMessage: 'Votre retour au sport se passe très bien, {prenom} !',
-  },
-  personnalise: {
-    label: 'Personnalisé',
-    emoji: '⚙️',
-    description: 'Je choisis les tests librement',
-    testsInclus: 'Tous les tests disponibles',
-    color: '#5F5E5A',
-    testsDefaut: ALL_TESTS,
-    introMessage: 'Super bilan ce trimestre, {prenom} !',
-  },
-};
 
 export const TEST_LABELS: Record<TestKey, string> = {
   equilibre:  'Équilibre unipodal',
@@ -79,7 +21,7 @@ export const TEST_LABELS: Record<TestKey, string> = {
 
 // ── Système de tags multiples ──────────────────────────────────
 
-export interface TagConfig {
+interface TagConfig {
   label: string;
   emoji: string;
   description: string;
@@ -124,11 +66,6 @@ export const TAG_CONFIG: Record<TagPatient, TagConfig> = {
 };
 
 export const TAG_ORDER: TagPatient[] = ['senior', 'post_op', 'chronique', 'adulte_blessure'];
-
-// Union des tests selon les tags cochés
-export function buildTestsActifs(tags: TagPatient[]): TestKey[] {
-  return [...new Set(tags.filter(tag => tag in TAG_CONFIG).flatMap(tag => TAG_CONFIG[tag].tests))];
-}
 
 // Tag le plus "médical" pour le message client (priorité)
 const TAG_PRIORITY: TagPatient[] = ['post_op', 'chronique', 'senior', 'adulte_blessure'];

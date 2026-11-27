@@ -23,7 +23,7 @@ import { CLE_JOUR_PAR_DOW, LABEL_TYPE_EVENEMENT, formatDate as formatDateAgenda,
 import { URLS_MOBILE } from '../../../lib/routesMobile';
 import { C, card, formatDateLong } from './communs';
 
-export function formatMoisAnnee(d: Date) {
+function formatMoisAnnee(d: Date) {
   return d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
 }
 
@@ -31,7 +31,7 @@ export function formatMoisAnnee(d: Date) {
 // porte la couleur de la catégorie choisie par le praticien (gris sans catégorie) : on lit le planning
 // d'un coup d'œil sans ouvrir chaque séance. Les actions rapides évitent la modale pour le quotidien :
 // valider une séance réalisée, ouvrir la fiche, ouvrir le bilan lié.
-export function CarteSeanceAgenda({ seance, participant, categorie, avecDate, onOuvrir, onValider, onFiche, onBilan }: {
+function CarteSeanceAgenda({ seance, participant, categorie, avecDate, onOuvrir, onValider, onFiche, onBilan }: {
   seance: Seance;
   participant: Participant | undefined;
   categorie: CategorieSeance | undefined;
@@ -113,7 +113,7 @@ export function CarteSeanceAgenda({ seance, participant, categorie, avecDate, on
 // une carte dans la colonne desktop). Seules les indisponibilités du
 // praticien sont affichées (encart simple, pas la trame horaire visuelle).
 
-export type ItemJour =
+type ItemJour =
   | { kind: 'seance'; heureDebut: string; seance: Seance }
   | { kind: 'cours'; heureDebut: string; cours: CoursCollectif; nbInscrits: number }
   | { kind: 'evenement'; heureDebut: string; evenement: EvenementAgenda };

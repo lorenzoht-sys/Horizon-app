@@ -11,10 +11,10 @@ import { addMinutes, trouveChevauchement } from '../utils/horaires';
 // ajoutant N mois à la date précédente : sinon un 31 janvier devient 28 février puis 28 mai et la
 // série dérive.
 
-export const HORIZON_MOIS = 12;
+const HORIZON_MOIS = 12;
 export const FREQUENCES_BILAN_MOIS = [1, 2, 3, 4, 6, 12] as const;
-export const DUREE_BILAN_PAR_DEFAUT = 60;
-export const HEURE_BILAN_PAR_DEFAUT = '09:00';
+const DUREE_BILAN_PAR_DEFAUT = 60;
+const HEURE_BILAN_PAR_DEFAUT = '09:00';
 // Si le créneau visé est pris, on essaie les suivants du même jour par pas de 30 min.
 const PAS_DECALAGE_MIN = 30;
 const NB_DECALAGES_MAX = 6;
@@ -71,7 +71,7 @@ export function datesBilansAPrevoir(params: {
   return dates;
 }
 
-export interface BilanAPoser {
+interface BilanAPoser {
   date: string;
   heureDebut: string;
   heureFin: string;

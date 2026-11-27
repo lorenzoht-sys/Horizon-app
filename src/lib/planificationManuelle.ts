@@ -7,16 +7,6 @@
 // vérifiable à la lecture du type, pas seulement par test.
 import type { Seance } from '../types';
 import { addMinutes, dateDansMemeSemaine, trouveChevauchement, trouverSerieRecurrente } from '../utils/horaires';
-import type { DragPayload } from '../components/planning/FrisePlanningJour';
-
-// Discrimine le geste au drop — glisser un bénéficiaire (création) glisser
-// une séance déjà posée (déplacement). Extrait en fonction pure pour être
-// couvert par un test dédié : c'est le seul point qui décide si un drop doit
-// finir en création (bulkCreerSeances, via la modale de confirmation) ou en
-// déplacement (planDeplacerUnique/planDeplacerSerie, jamais de création).
-export function estDeplacementExistant(payload: DragPayload): payload is { type: 'existante'; seanceId: string } {
-  return payload.type === 'existante';
-}
 
 export interface MiseAJourSeance {
   date: string;
@@ -43,16 +33,16 @@ export interface MiseAJourSeance {
   contratId?: string;
 }
 
-export type OperationSeance =
+type OperationSeance =
   | { type: 'update'; id: string; updates: Partial<Seance> }
   | { type: 'delete'; id: string };
 
-export interface ConflitPlan {
+interface ConflitPlan {
   date: string;
   occupePar: string; // participantId de la séance déjà en place
 }
 
-export type PlanSerie =
+type PlanSerie =
   | { ok: true; operations: OperationSeance[] }
   | { ok: false; conflits: ConflitPlan[] };
 
@@ -138,7 +128,7 @@ export function planSupprimerSerie(futures: Seance[]): OperationSeance[] {
 // "et les suivantes" alors que 2 seulement étaient voulues) : cette option
 // intermédiaire permet de cocher précisément un sous-ensemble non contigu
 // (ex : la 1ère et la 3ème occurrence, pas la 2ème) plutôt que tout ou rien.
-export type ActionSeance =
+type ActionSeance =
   | { type: 'deplacer'; dowCible: number; heureDebut: string }
   | { type: 'editer'; dowCible: number; updates: MiseAJourSeance }
   | { type: 'supprimer' };

@@ -10,7 +10,7 @@ import { dbToCategorieSeance } from '../lib/mappers';
 // tant que le praticien n'en crée pas.
 
 export const COULEUR_CATEGORIE_PAR_DEFAUT = '#6B7280';
-export const COULEUR_CATEGORIE_BILAN = '#8B5CF6';
+const COULEUR_CATEGORIE_BILAN = '#8B5CF6';
 
 export function useCategoriesSeance() {
   const [categories, setCategories] = useState<CategorieSeance[]>([]);

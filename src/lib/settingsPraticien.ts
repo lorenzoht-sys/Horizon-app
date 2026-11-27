@@ -27,7 +27,7 @@
 
 import { supabase } from './supabase';
 
-export const CLE_SETTINGS_PRATICIEN = 'settings_praticien';
+const CLE_SETTINGS_PRATICIEN = 'settings_praticien';
 
 /** Événement émis après écriture du cache, pour les composants qui l'écoutent. */
 export const EVENT_SETTINGS_PRATICIEN = 'settings_praticien_updated';
@@ -103,7 +103,7 @@ export function ecrireCacheSettingsPraticien(settings: SettingsPraticien): void 
 }
 
 /** Réglages → colonnes de `praticiens`. Miroir de `rowToSettings`. */
-export function settingsToRow(s: SettingsPraticien, id: string): Record<string, unknown> {
+function settingsToRow(s: SettingsPraticien, id: string): Record<string, unknown> {
   return {
     id,
     prenom:              s.prenom,
@@ -154,13 +154,13 @@ export async function enregistrerSettingsPraticien(
 }
 
 /** Pourquoi l'hydratation n'a pas rempli le cache. */
-export type EchecHydratation =
+type EchecHydratation =
   | 'supabase-absent'   // pas de client configuré (mode local)
   | 'session-absente'   // pas encore connecté — normal
   | 'fiche-absente'     // compte sans ligne `praticiens` — onboarding à faire
   | 'erreur';           // réseau, RLS, ou base indisponible
 
-export type ResultatHydratation =
+type ResultatHydratation =
   | { ok: true }
   | { ok: false; echec: EchecHydratation; message?: string };
 

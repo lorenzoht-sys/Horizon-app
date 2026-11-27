@@ -6,7 +6,7 @@
 import type { CoursPatientRecord, ReponseAnnonceeCours } from './coursPatient';
 import type { FacturePatient } from './facturesPatient';
 
-export interface PatientMeResponse {
+interface PatientMeResponse {
   participantId: string;
   participant: Record<string, unknown>;
   /** Prénom du praticien (seul), null s'il n'est pas renseigné. Optionnel : absent d'une ancienne réponse. */
@@ -37,7 +37,7 @@ export interface PatientMeResponse {
   exercicesLibresValidations: { exercice_id: string; date: string; fait: boolean; note: string | null }[];
 }
 
-export interface SeanceAEnregistrer {
+interface SeanceAEnregistrer {
   programmeId: string;
   seanceId: string;
   dateSeance: string;
@@ -203,7 +203,7 @@ export async function patientDesactiverRappels(token: string, endpoint: string):
   }
 }
 
-export type ResultatAnnoncePresence =
+type ResultatAnnoncePresence =
   | { ok: true; presenceAnnoncee: ReponseAnnonceeCours }
   | {
       ok: false;
@@ -237,7 +237,7 @@ export async function patientAnnoncerPresence(
   }
 }
 
-export type ResultatSignalementAbsence =
+type ResultatSignalementAbsence =
   | { ok: true; seanceId: string; absenceSignalee: boolean }
   | {
       ok: false;
@@ -272,7 +272,7 @@ export async function patientSignalerAbsence(
   }
 }
 
-export type ResultatUrlPdfFacture =
+type ResultatUrlPdfFacture =
   | { ok: true; url: string }
   /** 0 = réseau injoignable. 404 = facture inconnue ou non visible. 409 = PDF en préparation. 429 = trop de requêtes. */
   | { ok: false; status: number; error?: string };

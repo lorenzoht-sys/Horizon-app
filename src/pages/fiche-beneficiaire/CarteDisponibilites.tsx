@@ -7,7 +7,7 @@ import type { Participant } from '../../types';
 
 export const JOURS_DISPO_LIST = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
 
-export const HEURES_DISPO = (() => {
+const HEURES_DISPO = (() => {
   const h: string[] = [];
   for (let m = 7 * 60; m <= 20 * 60; m += 30)
     h.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);

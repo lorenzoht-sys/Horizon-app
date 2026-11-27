@@ -6,7 +6,7 @@ import type { OptionPortee } from './planificationManuelle';
 // écran mobile natif de l'Agenda) — sans changement de comportement, copie
 // exacte de ce qui vivait directement dans AgendaV2Page.tsx.
 
-export const TODAY = new Date().toISOString().slice(0, 10);
+const TODAY = new Date().toISOString().slice(0, 10);
 
 export const LABEL_TYPE: Record<TypeSeance, string> = {
   seance: 'Séance',

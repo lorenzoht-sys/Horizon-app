@@ -30,7 +30,7 @@ import { DialogueToutConfirmer } from '../../../components/tableau-de-bord/Dialo
 import { useToutConfirmer } from '../../../hooks/useToutConfirmer';
 import { DialogueMemoSeance } from '../../../components/tableau-de-bord/DialogueMemoSeance';
 
-export function ouvrirMaps(adresse: string) {
+function ouvrirMaps(adresse: string) {
   window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adresse)}`, '_blank');
 }
 

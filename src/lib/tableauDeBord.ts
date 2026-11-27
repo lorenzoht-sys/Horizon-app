@@ -27,7 +27,7 @@ function enSemaines(jours: number): string {
 
 export type EtatEcheance = 'initial' | 'retard' | 'bientot' | 'a_jour';
 
-export interface EcheanceBilan {
+interface EcheanceBilan {
   etat: EtatEcheance;
   libelle: string;
 }
@@ -66,7 +66,7 @@ export const LIBELLE_NIVEAU: Record<Niveau, string> = {
   difficulte: 'En difficulté',
 };
 
-export interface ResultatCle {
+interface ResultatCle {
   cle: string;
   libelle: string;
   valeur: string;
@@ -142,16 +142,6 @@ export function seancesNonConfirmees(seances: readonly Seance[], aujourdhui: str
   ));
 }
 
-/** Lundi et dimanche de la semaine d'une date (AAAA-MM-JJ). */
-export function bornesSemaine(aujourdhui: string): { lundi: string; dimanche: string } {
-  const d = new Date(`${aujourdhui}T12:00:00`);
-  const decalage = d.getDay() === 0 ? -6 : 1 - d.getDay();
-  const lundi = new Date(d); lundi.setDate(d.getDate() + decalage);
-  const dimanche = new Date(lundi); dimanche.setDate(lundi.getDate() + 6);
-  const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
-  return { lundi: iso(lundi), dimanche: iso(dimanche) };
-}
-
 // ── « À surveiller » ─────────────────────────────────────────────────────────
 // Remplace les bandeaux empilés (contrats, ressentis, bilans en cours) par une seule ligne de
 // pastilles, une action par point. Ordre : la santé, puis l'administratif. Les séances à
@@ -170,7 +160,7 @@ export interface ElementATraiter {
   gravite: 'haute' | 'normale';
 }
 
-export interface EntreesATraiter {
+interface EntreesATraiter {
   ressentis: { id: string; nom: string }[];
   brouillons: { participantId: string; nom: string; etape: number }[];
   contratsARenouveler: { participantId: string; nom: string; joursRestants: number }[];
@@ -248,7 +238,7 @@ export function prochainRendezVous(seances: readonly Seance[], aujourdhui: strin
     .sort((a, b) => a.date.localeCompare(b.date) || a.heureDebut.localeCompare(b.heureDebut))[0] ?? null;
 }
 
-export interface ResumeJournee {
+interface ResumeJournee {
   nbRendezVous: number;
   /** Délai avant le prochain rendez-vous du jour, null s'il n'y en a plus. */
   prochainDans: string | null;
@@ -451,7 +441,7 @@ const LIBELLES_GROUPE: Record<TypeATraiter, [string, string]> = {
 // Santé d'abord, puis l'administratif.
 const ORDRE_GROUPES: TypeATraiter[] = ['douleur', 'ressentis', 'brouillon', 'contrat', 'contrat_jours', 'relancer'];
 
-export interface GroupeASurveiller {
+interface GroupeASurveiller {
   type: TypeATraiter;
   gravite: 'haute' | 'normale';
   /** « 5 bilans commencés », « 1 contrat bientôt terminé » */

@@ -196,7 +196,7 @@ export function validerFormulaire(f: FormulaireFacturation): ErreursFormulaire {
 
 // ── Obligations pour valider une facture ──────────────────────────────────────────────────────
 
-export interface ManqueObligatoire {
+interface ManqueObligatoire {
   /** Libellé affiché. */
   libelle: string;
   /** Où le corriger : ce formulaire (champ) ou Paramètres. */
@@ -208,7 +208,7 @@ export interface ManqueObligatoire {
  * Profil tel que valider_facture le verra APRÈS enregistrement de ce formulaire : l'identité lue
  * de la base + les valeurs saisies. Sert au bandeau « il manque… » affiché AVANT d'enregistrer.
  */
-export function profilApresEnregistrement(identite: IdentiteProfil, f: FormulaireFacturation): ProfilFacturation {
+function profilApresEnregistrement(identite: IdentiteProfil, f: FormulaireFacturation): ProfilFacturation {
   const vide = (v: string) => v.trim() === '';
   return {
     nom: identite.nom, siret: identite.siret,

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   ajouterMois,
-  caParMoisCle,
   detailDuMois,
   historique,
   libelleMois,
@@ -86,9 +85,6 @@ describe('agrégation', () => {
     expect(h[1]).toMatchObject({ mois: '2026-08-01', total: 45 });
     expect(h[2]).toMatchObject({ mois: '2026-07-01', total: 0 });
     expect(h[11].mois).toBe('2025-10-01');
-  });
-  it('format AAAA-MM pour « Mes stats »', () => {
-    expect(caParMoisCle(lignes)).toEqual({ '2026-09': 295, '2026-08': 45 });
   });
 });
 

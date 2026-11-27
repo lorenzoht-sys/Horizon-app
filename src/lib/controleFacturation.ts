@@ -25,9 +25,9 @@ export interface ContratIncomplet {
   premierTarif: string | null;
 }
 
-export type StatutDossier = 'bloque' | 'a_verifier' | 'pret';
+type StatutDossier = 'bloque' | 'a_verifier' | 'pret';
 
-export interface DossierControle {
+interface DossierControle {
   participantId: string;
   statut: StatutDossier;
   aCorriger: number;
@@ -35,7 +35,7 @@ export interface DossierControle {
   factures: number;
 }
 
-export interface SyntheseControle {
+interface SyntheseControle {
   dossiers: DossierControle[];
   prets: number;
   aVerifier: number;

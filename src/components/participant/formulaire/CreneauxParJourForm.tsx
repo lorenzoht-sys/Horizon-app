@@ -68,10 +68,10 @@ export function CreneauxParJourForm({
     </div>
   );
 }
-export const JOURS_LABELS_COMPLET: Record<string, string> = {
+const JOURS_LABELS_COMPLET: Record<string, string> = {
   Lun: 'Lundi', Mar: 'Mardi', Mer: 'Mercredi', Jeu: 'Jeudi', Ven: 'Vendredi', Sam: 'Samedi', Dim: 'Dimanche',
 };
-export const OPTIONS_HEURES = (() => {
+const OPTIONS_HEURES = (() => {
   const heures: string[] = [];
   for (let m = 7 * 60; m <= 20 * 60; m += 30) {
     heures.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);

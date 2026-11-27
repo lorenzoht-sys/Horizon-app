@@ -8,7 +8,7 @@
 // Confirmation formulée sans accord (« Absence signalée à … ») pour ne pas
 // présumer du genre du praticien.
 
-export interface LibellesSignalementAbsence {
+interface LibellesSignalementAbsence {
   bouton: string;
   annuler: string;
   confirmation: string;

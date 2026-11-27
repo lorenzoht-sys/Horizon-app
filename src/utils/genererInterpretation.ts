@@ -52,12 +52,12 @@ const LABELS_VALEURS: Record<string, string> = {
 // ─── Construction du prompt ───────────────────────────────────────────────────
 
 /** Ce que le prompt a le droit de lire : le type exclut prénom et nom, qui
- *  ne doivent jamais partir vers Anthropic. Exporté pour être testé. */
-export type ResultatsBilanIA = Omit<ResultatsBilan, 'participant'> & {
+ *  ne doivent jamais partir vers Anthropic. */
+type ResultatsBilanIA = Omit<ResultatsBilan, 'participant'> & {
   participant: Omit<ResultatsBilan['participant'], 'prenom' | 'nom'>;
 };
 
-export function construirePrompt(r: ResultatsBilanIA): string {
+function construirePrompt(r: ResultatsBilanIA): string {
   const notesTexte = (Object.entries(r.notes) as [keyof NotesBilan, number | undefined][])
     .filter(([, v]) => v !== undefined)
     .map(([k, v]) => `  ${LABELS_NOTES[k]}: ${v}/5`)
@@ -152,5 +152,3 @@ export async function genererInterpretation(
     };
   }
 }
-
-export type { ResultatsBilan };

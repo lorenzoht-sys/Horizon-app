@@ -11,7 +11,7 @@
 
 const SESSION_KEY = 'horizon_patient_session';
 
-export interface SessionPatient {
+interface SessionPatient {
   patientId: string;
   token: string;
 }

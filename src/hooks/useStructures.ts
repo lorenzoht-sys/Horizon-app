@@ -5,7 +5,6 @@ import { utilisateurCourant } from '../lib/session';
 import { dbToStructure, structureToDb } from '../lib/mappers';
 import type { Structure } from '../types';
 
-export type { Structure };
 
 export function useStructures() {
   const [structures, setStructures] = useState<Structure[]>([]);

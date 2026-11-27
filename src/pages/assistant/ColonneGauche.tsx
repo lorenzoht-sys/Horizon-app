@@ -6,7 +6,7 @@ import type { Participant } from '../../types';
 import { libelleAge } from '../../lib/age';
 import { type AssistantLog, type PatientExtras } from './communs';
 
-export function fmt(d: string): string {
+function fmt(d: string): string {
   return new Date(d + (d.includes('T') ? '' : 'T12:00')).toLocaleDateString('fr-FR', {
     day: 'numeric', month: 'long', year: 'numeric',
   });
@@ -14,7 +14,7 @@ export function fmt(d: string): string {
 
 // ── Indicateur contexte chargé ────────────────────────────────────────────────
 
-export function ContextIndicator({ patient, extras }: { patient: Participant; extras: PatientExtras }) {
+function ContextIndicator({ patient, extras }: { patient: Participant; extras: PatientExtras }) {
   const hasBilans = patient.bilans.length > 0;
   const dernierBilan = [...patient.bilans].sort((a, b) => b.date.localeCompare(a.date))[0];
   const hasObjectif = !!(patient.objectifsPatient || patient.bilans[0]?.bilanInitialData?.formulaireFlat?.data);
@@ -48,7 +48,7 @@ export function ContextIndicator({ patient, extras }: { patient: Participant; ex
 /** Une ligne d'historique (question restaurable + suppression). Le conteneur est un
  *  `div role="button"` (pas un `<button>`) car il contient lui-même un bouton de
  *  suppression — un bouton dans un bouton serait invalide en HTML. */
-export function LigneHistorique({
+function LigneHistorique({
   log, onRestoreLog, onDeleteLog,
 }: {
   log: AssistantLog;

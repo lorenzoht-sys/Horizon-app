@@ -24,10 +24,10 @@ import type { Bilan } from '../types';
 import { resultatTm6 } from './tm6';
 
 /** Les cinq résultats partageables, dans l'ordre d'affichage. */
-export const CLES_PARTAGE = ['equilibre', 'force', 'handGrip', 'mobilite', 'endurance'] as const;
-export type ClePartage = (typeof CLES_PARTAGE)[number];
+const CLES_PARTAGE = ['equilibre', 'force', 'handGrip', 'mobilite', 'endurance'] as const;
+type ClePartage = (typeof CLES_PARTAGE)[number];
 
-export const LIBELLES_PARTAGE: Record<ClePartage, string> = {
+const LIBELLES_PARTAGE: Record<ClePartage, string> = {
   equilibre: 'Équilibre',
   force: 'Force jambes',
   handGrip: 'Force mains',
@@ -35,7 +35,7 @@ export const LIBELLES_PARTAGE: Record<ClePartage, string> = {
   endurance: 'Endurance',
 };
 
-export type EtatResultat = {
+type EtatResultat = {
   cle: ClePartage;
   label: string;
   /** Le test a une valeur dans ce bilan. Sinon il n'y a rien à partager. */
@@ -73,7 +73,7 @@ export function etatPartageBilan(bilan: Bilan): EtatResultat[] {
   }));
 }
 
-export type ResumePartage = {
+type ResumePartage = {
   /** Résultats saisis ET partagés. */
   partages: number;
   /** Résultats saisis mais non partagés — ceux que le praticien peut cocher. */
@@ -107,7 +107,7 @@ export function auMoinsUnResultatPartage(bilans: Bilan[]): boolean {
   return bilans.some(bilanADuContenuVisible);
 }
 
-export type EtatProgres =
+type EtatProgres =
   /** Aucun bilan : il n'y a rien, et il n'y a rien à attendre. */
   | { etat: 'aucun_bilan' }
   /** Des bilans existent, aucun résultat n'est partagé. */
@@ -147,16 +147,3 @@ export function etatProgresBeneficiaire(bilans: Bilan[], nbProgressions: number)
  * Côté praticien uniquement : nomme exactement les cases à cocher pour que la
  * progression apparaisse.
  */
-export function resultatsNonComparables(bilanInitial: Bilan, dernierBilan: Bilan): EtatResultat[] {
-  const initial = etatPartageBilan(bilanInitial);
-  const dernier = etatPartageBilan(dernierBilan);
-  return CLES_PARTAGE.flatMap(cle => {
-    const a = initial.find(e => e.cle === cle)!;
-    const b = dernier.find(e => e.cle === cle)!;
-    // Mesuré des deux côtés, partagé d'un seul : une case manque.
-    if (a.renseigne && b.renseigne && a.partage !== b.partage) {
-      return [a.partage ? b : a];
-    }
-    return [];
-  });
-}

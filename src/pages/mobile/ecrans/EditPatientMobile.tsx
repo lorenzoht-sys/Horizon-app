@@ -9,7 +9,7 @@ import { IconArrowLeft } from '@tabler/icons-react';
 
 // ── Modification fiche patient mobile ────────────────────────────────────────
 
-export function EditPatientMobile({ participant, onBack: retourParent }: { participant: import('../../../types').Participant; onBack: () => void }) {
+function EditPatientMobile({ participant, onBack: retourParent }: { participant: import('../../../types').Participant; onBack: () => void }) {
   const { updateParticipant } = useParticipants();
   const [loading, setLoading] = useState(false);
   // Conservée si l'interface est remplacée (rotation du téléphone).

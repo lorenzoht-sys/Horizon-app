@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 
-export interface SpeechRecognitionHook {
+interface SpeechRecognitionHook {
   isRecording: boolean;
   finalTranscript: string;
   interimTranscript: string;

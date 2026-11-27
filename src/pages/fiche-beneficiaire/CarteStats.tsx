@@ -6,7 +6,7 @@ import { calculerStatutSeancesSemaine } from '../../utils/horaires';
 import type { Participant, Contrat, Seance } from '../../types';
 import { SectionLabel } from './communs';
 
-export function formatDateCourt(date: string): string {
+function formatDateCourt(date: string): string {
   return new Date(date + 'T12:00').toLocaleDateString('fr-FR', {
     weekday: 'short', day: 'numeric', month: 'short',
   });

@@ -29,12 +29,6 @@ export interface SeancePatientStat {
   nbTotal: number;
 }
 
-export interface AssiduiteBeneficiaire {
-  nb: number;
-  taux: number | null;
-  derniere: string | null;
-}
-
 interface ExerciceRealise { seance_patient_id: string; realise: boolean }
 
 /**
@@ -48,31 +42,6 @@ export function ressentisPreoccupants(retours: readonly { borgRpe: number; bienE
   return last3.every(r => r.borgRpe >= 8) || last3.every(r => r.bienEtre >= 4);
 }
 
-/** Assiduité par bénéficiaire à partir des séances et de leurs exercices cochés. */
-export function agregerAssiduite(
-  seances: readonly { id: string; participantId: string; date: string }[],
-  exercices: readonly ExerciceRealise[],
-): Record<string, AssiduiteBeneficiaire> {
-  const parBeneficiaire: Record<string, { spId: string; date: string }[]> = {};
-  for (const sp of seances) {
-    if (!parBeneficiaire[sp.participantId]) parBeneficiaire[sp.participantId] = [];
-    parBeneficiaire[sp.participantId].push({ spId: sp.id, date: sp.date });
-  }
-  const resultat: Record<string, AssiduiteBeneficiaire> = {};
-  for (const [pid, sessions] of Object.entries(parBeneficiaire)) {
-    const ids = new Set(sessions.map(s => s.spId));
-    const items = exercices.filter(e => ids.has(e.seance_patient_id));
-    const realises = items.filter(e => e.realise).length;
-    const derniere = [...sessions].sort((a, b) => b.date.localeCompare(a.date))[0]?.date ?? null;
-    resultat[pid] = {
-      nb: sessions.length,
-      taux: items.length > 0 ? Math.round((realises / items.length) * 100) : null,
-      derniere,
-    };
-  }
-  return resultat;
-}
-
 // Par lots : la liste d'identifiants part dans l'URL, PostgREST refuse la
 // requête (400) quand elle devient trop longue.
 async function chargerExercicesRealises(seancePatientIds: string[]): Promise<ExerciceRealise[]> {
@@ -83,24 +52,6 @@ async function chargerExercicesRealises(seancePatientIds: string[]): Promise<Exe
     .select('seance_patient_id, realise')
     .in('seance_patient_id', lot)));
   return reponses.flatMap(r => (r.data ?? []) as unknown as ExerciceRealise[]);
-}
-
-/** Assiduité des 7 derniers jours, tous bénéficiaires du praticien (tableau de bord). */
-export async function chargerAssiduite7Jours(): Promise<Record<string, AssiduiteBeneficiaire>> {
-  if (!supabase) return {};
-  const j7 = new Date(); j7.setDate(j7.getDate() - 7);
-  const isoJ7 = j7.toISOString().split('T')[0];
-  const { data } = await supabase.from('seances_patient')
-    .select('id, participant_id, date_seance')
-    .gte('date_seance', isoJ7)
-    .order('date_seance', { ascending: false });
-  const lignes = (data ?? []) as unknown as { id: string; participant_id: string; date_seance: string }[];
-  if (lignes.length === 0) return {};
-  const exercices = await chargerExercicesRealises(lignes.map(s => s.id));
-  return agregerAssiduite(
-    lignes.map(s => ({ id: s.id, participantId: s.participant_id, date: s.date_seance })),
-    exercices,
-  );
 }
 
 /** Ressentis récents de plusieurs bénéficiaires, du plus récent au plus ancien pour chacun. */

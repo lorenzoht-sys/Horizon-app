@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface DuboisMISData {
+interface DuboisMISData {
   rappelImmediatLibre: number | null;
   rappelImmediatIndice: number | null;
   rappelDiffereLibre: number | null;

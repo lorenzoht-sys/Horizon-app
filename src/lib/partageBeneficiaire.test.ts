@@ -5,7 +5,6 @@ import {
   bilanADuContenuVisible,
   auMoinsUnResultatPartage,
   etatProgresBeneficiaire,
-  resultatsNonComparables,
 } from './partageBeneficiaire';
 import type { Bilan } from '../types';
 
@@ -85,35 +84,5 @@ describe('Pourquoi la page « Progrès » est vide', () => {
     const b = bilan({ visibleBeneficiaire: { equilibre: true } });
 
     expect(etatProgresBeneficiaire([b, b], 3)).toEqual({ etat: 'progressions' });
-  });
-});
-
-describe('Cases manquantes pour rendre une progression comparable', () => {
-  it('nomme le bilan où la case manque', () => {
-    const initial = bilan({ id: 'b1', visibleBeneficiaire: { force: true } });
-    const dernier = bilan({ id: 'b2', visibleBeneficiaire: { force: true, equilibre: true } });
-
-    const manquants = resultatsNonComparables(initial, dernier);
-
-    // « force » est partagé des deux côtés : comparable, donc absent.
-    // « equilibre » ne l'est que sur le dernier : c'est l'initial qui manque.
-    expect(manquants.map(m => m.cle)).toEqual(['equilibre']);
-    expect(manquants[0].partage).toBe(false);
-  });
-
-  it('ignore un test mesuré d’un seul côté', () => {
-    // Rien à cocher : le test n'existe pas dans le bilan initial.
-    const initial = bilan({ id: 'b1', tm6: undefined });
-    const dernier = bilan({ id: 'b2', visibleBeneficiaire: { endurance: true } });
-
-    expect(resultatsNonComparables(initial, dernier).map(m => m.cle)).not.toContain('endurance');
-  });
-
-  it('ne renvoie rien quand tout est partagé des deux côtés', () => {
-    const partout = { equilibre: true, force: true, handGrip: true, mobilite: true, endurance: true };
-    const initial = bilan({ id: 'b1', visibleBeneficiaire: partout });
-    const dernier = bilan({ id: 'b2', visibleBeneficiaire: partout });
-
-    expect(resultatsNonComparables(initial, dernier)).toEqual([]);
   });
 });

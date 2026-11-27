@@ -21,17 +21,6 @@ export function loadExercices(): Exercice[] {
   }
 }
 
-export function saveCustomExercice(ex: Exercice) {
-  try {
-    const raw = localStorage.getItem(CUSTOM_KEY);
-    const custom: Exercice[] = raw ? JSON.parse(raw) : [];
-    custom.push({ ...ex, custom: true });
-    localStorage.setItem(CUSTOM_KEY, JSON.stringify(custom));
-  } catch {
-    console.error('Erreur sauvegarde exercice');
-  }
-}
-
 // ── Bibliothèque Supabase (côté praticien uniquement) ───────────────────────
 // exercices_personnalises n'a pas de trigger connu pour remplir praticien_id
 // automatiquement (aucune contrainte FK ni trigger confirmés côté base,

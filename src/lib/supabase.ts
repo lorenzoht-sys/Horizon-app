@@ -19,7 +19,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config';
 // `onAuthStateChange` l'émet bien, mais `getSession()` peut résoudre avant
 // et faire croire à une connexion ordinaire : c'est une course. Le relevé
 // du fragment, lui, est décidé une fois pour toutes au chargement.
-export type TypeLienAuth = 'recovery' | 'invite' | null;
+type TypeLienAuth = 'recovery' | 'invite' | null;
 
 /**
  * Lit le `type` d'un fragment d'URL Supabase.
@@ -93,8 +93,6 @@ export const erreurLienAuth: ErreurLienAuth = lireErreurLienAuth(
 export const supabase = SUPABASE_URL && SUPABASE_ANON_KEY
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
-
-export const isSupabaseConfigured = Boolean(supabase);
 
 /**
  * Client Supabase non nul, pour la couche d'accès aux données
